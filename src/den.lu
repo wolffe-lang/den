@@ -1,0 +1,32 @@
+//! member: false
+// M0 is a refusal scaffold, not a VCS implementation.
+fn destination(command: str) -> str {
+    match command {
+        "init" | "hash-object" | "cat-file" | "write-tree" | "commit-tree" | "mktag" => "M1, vc02",
+        "add" | "rm" | "mv" | "status" | "commit" | "restore" => "M2, vc03",
+        "diff" => "M2, vc04",
+        "log" | "show" => "M2, vc05",
+        "branch" | "tag" | "switch" | "checkout" | "reset" => "M3, vc06",
+        "merge" | "revert" => "M3, vc07",
+        "rebase" | "cherry-pick" => "M3, vc08",
+        "blame" => "M3, vc09",
+        "stash" | "notes" | "rev-parse" => "M3, vc10",
+        "verify-pack" => "M4, vc11",
+        "gc" | "repack" | "fsck" | "count-objects" => "M4, vc12",
+        "fetch" => "M5, vc13",
+        "push" | "remote" => "M5, vc14",
+        "clone" | "pull" => "M5, vc15",
+        _ => "unplanned command",
+    }
+}
+
+fn main() -> int {
+    let args = env_args()
+    if args.len == 1 && args[0] == "--version" {
+        print("den 0.0.0 (built with wolf 0.2.35)")
+        return 0
+    }
+    let command = if args.len == 0 then "<command>" else args[0]
+    eprint("den: not yet implemented: {command} ({destination(command)})")
+    2
+}

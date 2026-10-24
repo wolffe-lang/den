@@ -1,0 +1,44 @@
+#!/bin/sh
+# Secondary reference: wolffe-lang/lope bc388673 tools/mkstatic.
+# Adapted from wolffe-lang/aspen 476edee3 tools/mkaspen; own code.
+# mkden — den as a fully static x86-64 Linux executable, the shape PAX
+# runs (pax's tools/mkpelt, lope's tools/mkstatic): the release tier, linked
+# through a `cc` that adds `-static` (tools/build --static), checked to be
+# ET_EXEC with no PT_INTERP, BUILT TWICE and refused unless both digests
+# agree, and written to OUTDIR/sums.txt as `den <sha256> <bytes>`, with
+# the stripped size beside it.
+#
+#   tools/mkden OUTDIR
+#
+# Build on a baseline x86-64 glibc (the CI runner's Ubuntu; an Ubuntu
+# container on kasumi), never on kasumi's CachyOS x86-64-v4 glibc (px10).
+set -eu
+DEN_ROOT=$(cd "$(dirname "$0")/.." && pwd)
+out=${1:?usage: mkden OUTDIR}
+cd "$DEN_ROOT"
+mkdir -p "$out"
+digest() { sha256sum "$1" | cut -d' ' -f1; }
+tools/build --static
+cp target/static/den "$out/den.first"
+tools/build --static
+bin="$out/den"
+cp target/static/den "$bin"
+a=$(digest "$out/den.first")
+b=$(digest "$bin")
+rm -f "$out/den.first"
+if [ "$a" != "$b" ]; then
+    echo "mkden: REFUSED — two builds differ: $a, then $b" >&2
+    exit 1
+fi
+readelf -hW "$bin" | grep -Eq 'Type: +EXEC' || { echo "mkden: $bin is not ET_EXEC" >&2; exit 1; }
+if readelf -lW "$bin" | grep -q INTERP; then
+    echo "mkden: $bin has a PT_INTERP (not static)" >&2
+    exit 1
+fi
+"$bin" --version
+bytes=$(wc -c <"$bin" | tr -d ' ')
+strip -o "$out/den.stripped" "$bin"
+sbytes=$(wc -c <"$out/den.stripped" | tr -d ' ')
+printf 'den %s %s\n' "$b" "$bytes" | tee "$out/sums.txt"
+printf 'den (built twice, the same digest); stripped: %s bytes, sha256 %s\n' "$sbytes" "$(digest "$out/den.stripped")"
+printf 'linked against: %s\n' "$(cc -print-file-name=libc.a)"

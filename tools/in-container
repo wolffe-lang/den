@@ -1,0 +1,8 @@
+#!/bin/sh
+# Own code, scent b6f63a4 tools/in-container pattern. Call under host flock.
+set -eu
+root=$(cd "$(dirname "$0")/.." && pwd)
+engine=${DEN_ENGINE:-podman}
+image=localhost/den-vc00
+"$engine" image inspect "$image" >/dev/null 2>&1 || "$engine" build --cpuset-cpus "${DEN_CPUS:-12-15}" -t "$image" -f "$root/ci/oracle.Containerfile" "$root/ci"
+exec "$engine" run --rm --cpuset-cpus "${DEN_CPUS:-12-15}" --ulimit core=0:0 -e DEN_IN_CONTAINER=1 -e LC_ALL=C -v "$root:/work/den:Z" -w /work/den "$image" "$@"

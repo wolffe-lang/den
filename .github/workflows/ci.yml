@@ -1,0 +1,165 @@
+# den — CI.
+#
+# Two hosts: linux x86-64 and macOS arm64, from the release archives
+# pinned BY DIGEST in wolf-toolchain.toml (tools/fetch-toolchain refuses
+# a mismatch; nothing is built from source but den itself).
+#
+# THE TIERS (ruling #92, wolf-lang's shape as lope has it; ci/tiers.py,
+# proven by ci/tiers-test.py in `plan-test`):
+#   tier full     every job: a push to trunk, the nightly, a dispatch, a
+#                 pull request carrying the `full-matrix` label, or one
+#                 whose change ci/tiers.py cannot read or class.
+#   tier pr       any other pull-request run: the linux x86-64 gauntlet
+#                 and the planner's test.
+#   tier noop     prose alone (README, CHANGELOG, docs/, notes/), or a
+#                 label other than `full-matrix`.
+#   tier partial  a dispatch naming jobs (`-f jobs=linux`).
+# A lane's PR merges on a green `tier full` at its head; the label is added
+# once the head is the one to merge, never at open. A red nightly opens an
+# issue (`nightly-red`).
+#
+# Every step runs bare and its exit code is read directly: no pipes. Every
+# step after the toolchain runs whatever failed before it (`!cancelled()`),
+# so each gate reports on its own; the job is red if any one is.
+
+name: ci
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+  push:
+    branches: [trunk]
+  schedule:
+    - cron: "23 4 * * *"
+  workflow_dispatch:
+    inputs:
+      jobs:
+        description: "the jobs to run (job ids, space-separated); empty: every job"
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+# One group per pull-request branch and tier, cancel-in-progress; the full
+# run and the pr run in separate groups (adding the label must not cancel
+# the pr run at the same head); every other run a group of its own run id.
+concurrency:
+  group: ${{ github.event_name == 'pull_request' && format('ci-pr-{0}-{1}', github.head_ref, (github.event.action == 'labeled' && github.event.label.name != 'full-matrix') && format('noop-{0}', github.run_id) || (contains(github.event.pull_request.labels.*.name, 'full-matrix') && 'full' || 'pr')) || format('ci-{0}-{1}', github.event_name, github.run_id) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  plan:
+    name: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      tier: ${{ steps.plan.outputs.tier }}
+      jobs: ${{ steps.plan.outputs.jobs }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - id: plan
+        env:
+          EVENT: ${{ github.event_name }}
+          ACTION: ${{ github.event.action }}
+          LABEL: ${{ github.event.label.name }}
+          LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          IN_JOBS: ${{ inputs.jobs }}
+        run: python3 ci/tiers.py plan --merge --github-output "$GITHUB_OUTPUT"
+
+  plan-test:
+    name: the planner's own test
+    needs: plan
+    if: contains(fromJSON(needs.plan.outputs.jobs || '[]'), 'plan-test')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 ci/tiers-test.py
+
+  linux:
+    name: linux x86-64 (every gate)
+    needs: plan
+    if: contains(fromJSON(needs.plan.outputs.jobs || '[]'), 'linux')
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: the pinned toolchain, by digest
+        run: tools/fetch-toolchain
+
+      - name: the toolchain answers to its pin
+        if: ${{ !cancelled() }}
+        run: |
+          .wolf-bin/wolf --version
+          .wolf-bin/lupin --version
+          cat .wolf-bin/std/STD-REV
+
+  macos:
+    name: macOS arm64
+    needs: plan
+    if: contains(fromJSON(needs.plan.outputs.jobs || '[]'), 'macos')
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: the pinned toolchain, by digest
+        run: tools/fetch-toolchain
+
+      - name: the toolchain answers to its pin
+        if: ${{ !cancelled() }}
+        run: |
+          .wolf-bin/wolf --version
+          .wolf-bin/lupin --version
+          cat .wolf-bin/std/STD-REV
+
+      - name: the oracle, from Homebrew (tree 2.3.2)
+        if: ${{ !cancelled() }}
+        run: |
+          brew install tree
+          tree --version
+          tree --version | grep -q '^tree v2\.3\.2 '
+
+  tier:
+    name: tier ${{ needs.plan.outputs.tier || 'unplanned' }}
+    if: ${{ !cancelled() }}
+    needs:
+      - plan
+      - plan-test
+      - linux
+      - macos
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: every chosen job succeeded, every other was skipped
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: python3 ci/tiers.py verdict
+
+  # A red nightly opens an issue (ruling #92): a scheduled run has no lane
+  # watching it, so the red has to come and find one. One open issue per
+  # workflow, its title the dedupe key (ci/nightly-red.sh).
+  nightly-red:
+    name: nightly red, an issue
+    needs: tier
+    if: ${{ failure() && github.event_name == 'schedule' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: open or update the nightly-red issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          WORKFLOW: ${{ github.workflow }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: ci/nightly-red.sh
