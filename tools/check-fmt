@@ -6,4 +6,4 @@ DEN_ROOT=$(cd "$(dirname "$0")/.." && pwd)
 export DEN_ROOT
 cd "$DEN_ROOT"
 . tools/lib-toolchain.sh
-"$WOLF" fmt --check src
+"$WOLF" fmt --check src probes

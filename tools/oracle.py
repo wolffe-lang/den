@@ -66,7 +66,13 @@ def selftest():
     assert before!=after
     mutated=capture([sys.executable,'-I','-c','from pathlib import Path;Path(".git/HEAD").write_bytes(b"b");print("a",end="")'],root)
     assert before['stdout']==mutated['stdout'] and before!=mutated
-    print('selftest: stdout byte and repository-only byte plants rejected; exact review binding passes')
+    fixture=R/'target/corpus'
+    fake=root/'den'
+    fake.write_text('#!/bin/sh\nprintf "den 0.0.1 (built with wolf 0.2.35)\\n"\n')
+    fake.chmod(0o755)
+    version={'name':'selftest-version','repo':'two','args':['--version'],'kind':'version'}
+    assert one(version,fixture,str(fake),os.environ['DEN_GIT'])=='FAIL'
+    print('selftest: actual classifier rejects planted one-byte version; stdout/repository plants rejected; exact review binding passes')
 
 def main():
     ap=argparse.ArgumentParser();ap.add_argument('--filter',default='');ap.add_argument('--selftest',action='store_true')

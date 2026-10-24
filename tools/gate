@@ -19,7 +19,24 @@ export DEN_GIT
 tools/check-fmt
 tools/build --all
 tools/check-test
+TLS_PROBE_LOCAL_ONLY=1 tools/probe-tls
 tools/corpus target/corpus --prove-twice
 tools/oracle --selftest
 tools/oracle
+if tools/oracle --filter hash-object --strict; then
+    echo "gate: strict not-yet unexpectedly passed" >&2
+    exit 1
+else
+    rc=$?
+    [ "$rc" = 1 ] || exit "$rc"
+    echo "gate: strict not-yet rejected as intended"
+fi
+if tools/oracle --filter no-such-case; then
+    echo "gate: empty selection unexpectedly passed" >&2
+    exit 1
+else
+    rc=$?
+    [ "$rc" = 1 ] || exit "$rc"
+    echo "gate: empty selection rejected as intended"
+fi
 tools/mkden target/dist

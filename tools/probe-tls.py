@@ -2,7 +2,7 @@
 import json,os,pathlib,re,socket,ssl,subprocess,time
 R=pathlib.Path(__file__).resolve().parent.parent;T=R/'target/tls';rows=[]
 def run(*args):subprocess.run(args,check=True,cwd=R,capture_output=True)
-run('openssl','req','-x509','-newkey','ed25519','-nodes','-keyout',str(T/'key.pem'),'-out',str(T/'cert.pem'),'-subj','/CN=localhost','-days','2','-addext','subjectAltName=DNS:localhost','-addext','basicConstraints=critical,CA:TRUE')
+run('openssl','req','-x509','-newkey',('rsa:2048' if os.environ.get('TLS_PROBE_RSA') else 'ed25519'),'-nodes','-keyout',str(T/'key.pem'),'-out',str(T/'cert.pem'),'-subj','/CN=localhost','-days','2','-addext','subjectAltName=DNS:localhost','-addext','basicConstraints=critical,CA:TRUE')
 run('openssl','x509','-in',str(T/'cert.pem'),'-outform','DER','-out',str(T/'anchor.der'))
 (T/'random').write_bytes(os.urandom(32));(T/'scalar').write_bytes(os.urandom(32))
 # Concatenated DER anchors: the std TLS API accepts explicit roots, not PEM.
@@ -18,7 +18,9 @@ with (T/'server.log').open('wb') as log:
    try:
     with socket.create_connection(('127.0.0.1',port),timeout=.1):break
    except OSError:time.sleep(.05)
-  for name,addr,host,anchor in [('local',f'127.0.0.1:{port}','localhost',str(T/'anchor.der')),('github','github.com:443','github.com',str(T/'roots.der'))]:
+  cases=[('local-rsa' if os.environ.get('TLS_PROBE_RSA') else 'local',f'127.0.0.1:{port}','localhost',str(T/'anchor.der'))]
+  if not os.environ.get('TLS_PROBE_RSA') and not os.environ.get('TLS_PROBE_LOCAL_ONLY'):cases.append(('github','github.com:443','github.com',str(T/'roots.der')))
+  for name,addr,host,anchor in cases:
    for tier in ('native','checked'):
     args=[]
     env={**os.environ,'TZ':'UTC','TLS_PROBE_ADDR':addr,'TLS_PROBE_HOST':host,'TLS_PROBE_ROOTS':anchor}
@@ -30,10 +32,17 @@ with (T/'server.log').open('wb') as log:
      data=p.stdout+p.stderr;status=p.returncode
     except subprocess.TimeoutExpired as e:data=(e.stdout or b'')+(e.stderr or b'')+b'\nTIMEOUT 120s\n';status=124
     (R/f'target/probes/tls-{name}-{tier}.log').write_bytes(data)
-    row={'server':name,'tier':tier,'exit':status,'seconds':round(time.monotonic()-start,3)}
+    verdict='exit('+str(status)+')'
+    if tier=='checked':
+     for line in data.splitlines():
+      if line.startswith(b'{'):verdict=json.loads(line).get('verdict','missing')
+    row={'server':name,'tier':tier,'exit':status,'verdict':verdict,'seconds':round(time.monotonic()-start,3)}
     print(json.dumps(row),flush=True);rows.append(row)
  finally:
   server.terminate()
   try:server.wait(timeout=5)
   except subprocess.TimeoutExpired:server.kill();server.wait()
-(T/'rows.json').write_text(json.dumps(rows,indent=2)+'\n')
+(T/('rows-rsa.json' if os.environ.get('TLS_PROBE_RSA') else 'rows.json')).write_text(json.dumps(rows,indent=2)+'\n')
+
+print('TLS observations: '+json.dumps({v:sum(r['verdict']==v for r in rows) for v in sorted({r['verdict'] for r in rows})}),flush=True)
+if not os.environ.get('TLS_PROBE_RSA') and not any(r['server']=='local' and r['tier']=='native' and r['exit']==0 for r in rows):raise SystemExit('TLS local native handshake FAILED')

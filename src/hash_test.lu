@@ -7,13 +7,24 @@ fn main() {
     let short = "abc"
     let long = "abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq"
     let a = sha2.to_hex(hash.sum1(short.bytes()))
-    let b = sha2.to_hex(sha2.sum256(short.bytes()))
+    let b = sha2.to_hex(hash.sum256(short.bytes()))
     assert(a == "a9993e364706816aba3e25717850c26c9cd0d89d")
     assert(b == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
     assert(sha2.to_hex(hash.sum1(long.bytes())) == "84983e441c3bd26ebaae4aa1f95129e5e54670f1")
     assert(
-        sha2.to_hex(sha2.sum256(long.bytes())) ==
+        sha2.to_hex(hash.sum256(long.bytes())) ==
             "248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1",
     )
+    assert(sha2.to_hex(hash.sum1("".bytes())) == "da39a3ee5e6b4b0d3255bfef95601890afd80709")
+    assert(
+        sha2.to_hex(hash.sum256("".bytes())) ==
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    )
+    for split in [0, 1, 7, 55, 56] {
+        var d = hash.new1()
+        hash.update1(mut d, long.bytes()[0..split])
+        hash.update1(mut d, long.bytes()[split..long.len])
+        assert(sha2.to_hex(hash.final1(take d)) == "84983e441c3bd26ebaae4aa1f95129e5e54670f1")
+    }
     print("FIPS SHA-1 abc={a}; SHA-256 abc={b}; 56-byte vectors pass")
 }
