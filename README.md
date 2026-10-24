@@ -52,7 +52,7 @@ Inside that container, after setting `DEN_GIT` to the pinned built Git:
 ```sh
 tools/env COMMAND ARGS...          # fixed identity, dates, locale, hooks and HOME
 tools/corpus target/corpus --prove-twice
-tools/oracle                      # every case, explicit M0 classifications
+tools/oracle                      # every case, explicit parity/refusal classifications
 tools/oracle --filter status       # only matching names; empty selection is an error
 tools/oracle --strict              # refuses every not-yet result as well
 tools/probe                       # native + conform-run --checked JSON verdicts
@@ -89,7 +89,7 @@ byte-identical; `exact` mode also compares compressed representation. The one-by
 version plant was rejected by the CI differential gate (run 40130445507,
 closed-unmerged PR #2). The selftest also rejects repository-only corruption.
 
-The case list is `tests/cases.json`; `--strict` intentionally fails at M0.
+The case list is `tests/cases.json`; `--strict` intentionally fails while named not-yet rows remain.
 The 86-case normal gate proves only its named surface, not complete Git parity. Unimplemented
 commands and raw-byte path limitations must not be presented as supported.
 
@@ -140,8 +140,8 @@ unmerged PR #5. Object checked refusals: zero; the older TLS checked-budget
 refusal stays separately loud.
 
 On hasu, three whole-object release runs per input (first excluded) give these
-peak RSS values at 100,000,000 bytes: random write/read **787,856/655,228 KiB**;
-zero write/read **461,432/426,880 KiB**. Doubling 50 MB to 100 MB stays below
+peak RSS values at 100,000,000 bytes: random write/read **787,892/655,276 KiB**;
+zero write/read **461,368/426,968 KiB**. Doubling 50 MB to 100 MB stays below
 2.7x RSS for each path. `tools/objects-bench.py` checks this and the compressed
 size ceiling; raw measurements are in `notes/vc02-evidence/`. No streaming or
 large-object checked execution is claimed.
@@ -212,7 +212,7 @@ dependency; a future C-facing libden would need a C ABI/allocator boundary.
 and the final verdict. Normal PRs run Linux; trunk/nightly/dispatch and a
 `full-matrix` label add the nonblocking macOS field observation. The label is
 added at the final head by the orchestrator, never by a lane. A failed nightly
-opens or updates a `nightly-red` issue. No local Mac builds were used for M0.
+opens or updates a `nightly-red` issue. No local Mac builds were used for these milestones.
 
 `packaging/den.rb` and `packaging/PKGBUILD` are **drafts, not published**. They
 refer to a future v0.1.0 tag that does not exist and deliberately contain an
