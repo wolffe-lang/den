@@ -1,0 +1,48 @@
+//! member: false
+
+// Test-only file driver; not linked into the den CLI.
+use hash
+use std.x.crypto.sha2
+use zlib
+
+fn run(args: List[str]) -> () ! {
+    invalid,
+    io,
+    truncated,
+    bad_header,
+    dictionary,
+    checksum,
+    limit,
+    unsupported_level,
+} {
+    if args.len != 5 { return invalid }
+    let cap = args[3].to_int() else |_| { return invalid }
+    let level = args[4].to_int() else |_| { return invalid }
+    let input = fs_read_bytes(args[1]) else |_| { return io }
+    if args[0] == "hash" {
+        print(sha2.to_hex(hash.sum1(input)))
+    } else if args[0] == "inflate" || args[0] == "inflate_raw" {
+        let result = if args[0] == "inflate" {
+            zlib.inflate(input, cap)?
+        } else {
+            zlib.inflate_raw(input, cap)?
+        }
+        fs_write_bytes(args[2], result.data) else |_| { return io }
+        print("{result.consumed} {result.data.len}")
+    } else if args[0] == "deflate" || args[0] == "deflate_raw" {
+        let result = if args[0] == "deflate" {
+            zlib.deflate(input, level, cap)?
+        } else {
+            zlib.deflate_raw(input, level, cap)?
+        }
+        fs_write_bytes(args[2], result) else |_| { return io }
+        print("{input.len} {result.len}")
+    } else {
+        return invalid
+    }
+}
+
+fn main() -> int {
+    run(env_args()) else |e| { eprint("{e}"); return 1 }
+    0
+}

@@ -1,0 +1,235 @@
+// Bounded LZ77 and canonical prefix encoding, original from RFC 1951.
+// Hash chains inspect at most 32 candidates; one-byte lazy lookahead.
+
+/// Invalid limit, unsupported compression level, or output cap reached.
+pub error DeflateErrors = {invalid, unsupported_level, limit}
+
+struct Writer {
+    data: List[byte],
+    pending: int,
+    used: int,
+    cap: int,
+}
+
+fn octet(mut w: Writer, value: int) -> () ! {limit} {
+    if w.data.len == w.cap { return limit }
+    (mut w.data).push(value as byte)
+}
+
+fn put(mut w: Writer, value: int, width: int) -> () ! {limit} {
+    w.pending = w.pending | value << w.used
+    w.used += width
+    while w.used >= 8 {
+        octet(mut w, w.pending & 255)?
+        w.pending = w.pending >> 8
+        w.used -= 8
+    }
+}
+
+fn finish_byte(mut w: Writer) -> () ! {limit} {
+    if w.used != 0 {
+        octet(mut w, w.pending)?
+        w.pending = 0
+        w.used = 0
+    }
+}
+
+fn code(mut w: Writer, value: int, width: int) -> () ! {limit} {
+    var reversed = 0
+    var n = value
+    for _ in 0..width { reversed = reversed * 2 + (n & 1); n = n >> 1 }
+    put(mut w, reversed, width)?
+}
+
+struct Token {
+    value: int,
+    distance: int,
+}
+
+fn hash3(src: List[byte], pos: int) -> int {
+    (src[pos] as int * 251 + src[pos + 1] as int) * 251 + src[pos + 2] as int & 32767
+}
+
+fn insert(src: List[byte], pos: int, mut heads: List[int], mut links: List[int]) {
+    if src.len - pos >= 3 {
+        let h = hash3(src, pos)
+        links[pos & 32767] = heads[h]
+        heads[h] = pos
+    }
+}
+
+fn longest(src: List[byte], pos: int, end: int, heads: List[int], links: List[int]) -> Token {
+    var best = Token { value: 0, distance: 0 }
+    if end - pos < 3 { return best }
+    var candidate = heads[hash3(src, pos)]
+    var trials = 0
+    let bound = if end - pos < 258 then end - pos else 258
+    while candidate >= 0 && candidate < pos && pos - candidate <= 32768 && trials < 32 {
+        if src[candidate] == src[pos] && src[candidate + best.value] == src[pos + best.value] {
+            var length = 0
+            while length < bound && src[candidate + length] == src[pos + length] { length += 1 }
+            if length >= 3 && length > best.value {
+                best = Token { value: length, distance: pos - candidate }
+                if length == bound { break }
+            }
+        }
+        let next = links[candidate & 32767]
+        if next >= candidate { break }
+        candidate = next
+        trials += 1
+    }
+    best
+}
+
+fn tokens(
+    src: List[byte],
+    start: int,
+    end: int,
+    mut heads: List[int],
+    mut links: List[int],
+) -> List[Token] {
+    var result = List[Token]()
+    var pos = start
+    while pos < end {
+        var found = longest(src, pos, end, heads, links)
+        insert(src, pos, mut heads, mut links)
+        if found.value >= 3 && found.value < 258 && end - pos > 3 {
+            let next = longest(src, pos + 1, end, heads, links)
+            if next.value > found.value + 1 { found.value = 0 }
+        }
+        if found.value < 3 {
+            (mut result).push(Token { value: src[pos] as int, distance: 0 })
+            pos += 1
+        } else {
+            (mut result).push(found)
+            for i in 1..found.value { insert(src, pos + i, mut heads, mut links) }
+            pos += found.value
+        }
+    }
+    result
+}
+
+fn length_code(length: int, bases: List[int]) -> int {
+    var n = 28
+    while bases[n] > length { n -= 1 }
+    n
+}
+
+fn distance_code(distance: int) -> int {
+    var n = 0
+    while n < 29 && distance_base(n + 1) <= distance { n += 1 }
+    n
+}
+
+fn fixed_code(mut w: Writer, s: int) -> () ! {limit} {
+    if s < 144 {
+        code(mut w, 48 + s, 8)?
+    } else if s < 256 {
+        code(mut w, 400 + s - 144, 9)?
+    } else if s < 280 {
+        code(mut w, s - 256, 7)?
+    } else {
+        code(mut w, 192 + s - 280, 8)?
+    }
+}
+
+fn fixed_cost(ts: List[Token], bases: List[int]) -> int {
+    var cost: int = 10
+    for t in ts {
+        if t.distance == 0 {
+            cost += if t.value < 144 then 8 else 9
+        } else {
+            let lc = length_code(t.value, bases)
+            cost += (if lc + 257 < 280 then 7 else 8) +
+                length_extra(lc) +
+                5 +
+                distance_extra(distance_code(t.distance))
+        }
+    }
+    cost
+}
+
+fn emit_fixed(mut w: Writer, ts: List[Token], bases: List[int], final_block: int) -> () ! {limit} {
+    put(mut w, final_block + 2, 3)?
+    for t in ts {
+        if t.distance == 0 {
+            fixed_code(mut w, t.value)?
+        } else {
+            let lc = length_code(t.value, bases)
+            let dc = distance_code(t.distance)
+            fixed_code(mut w, lc + 257)?
+            put(mut w, t.value - bases[lc], length_extra(lc))?
+            code(mut w, dc, 5)?
+            put(mut w, t.distance - distance_base(dc), distance_extra(dc))?
+        }
+    }
+    fixed_code(mut w, 256)?
+}
+
+fn stored(mut w: Writer, src: List[byte], start: int, end: int, final_block: int) -> () ! {limit} {
+    put(mut w, final_block, 3)?
+    finish_byte(mut w)?
+    let n = end - start
+    put(mut w, n, 16)?
+    put(mut w, 65535 - n, 16)?
+    if n > w.cap - w.data.len { return limit }
+    for i in start..end { (mut w.data).push(src[i]) }
+}
+
+fn encode(src: List[byte], level: int, max_output: int, wrapped: bool) -> List[byte] ! {
+    invalid,
+    unsupported_level,
+    limit,
+} {
+    if max_output < 0 { return invalid }
+    if level != -1 && level != 0 && level != 1 { return unsupported_level }
+    var w = Writer { data: List[byte](), pending: 0, used: 0, cap: max_output }
+    if wrapped { octet(mut w, 120)?; octet(mut w, 1)? }
+    region match_state {
+        var heads = List[int]()
+        var links = List[int]()
+        if level != 0 {
+            for _ in 0..32768 { (mut heads).push(-1); (mut links).push(-1) }
+        }
+        let bases = length_base()
+        var start = 0
+        loop {
+            let n = if src.len - start < 32768 then src.len - start else 32768
+            let end = start + n
+            let final_block = if end == src.len then 1 else 0
+            if level == 0 {
+                stored(mut w, src, start, end, final_block)?
+            } else {
+                region block {
+                    let ts = tokens(src, start, end, mut heads, mut links)
+                    let stored_cost = 3 + (8 - (w.used + 3) % 8) % 8 + 32 + n * 8
+                    if fixed_cost(ts, bases) <= stored_cost {
+                        emit_fixed(mut w, ts, bases, final_block)?
+                    } else {
+                        stored(mut w, src, start, end, final_block)?
+                    }
+                }
+            }
+            start = end
+            if final_block == 1 { break }
+        }
+    }
+    finish_byte(mut w)?
+    if wrapped {
+        let sum = adler32(src)
+        for n in 0..4 { octet(mut w, sum >> (3 - n) * 8 & 255)? }
+    }
+    w.data
+}
+
+/// Encode RFC 1951, with level 0 stored or -1/1 bounded lazy LZ77.
+/// Other levels return unsupported_level; max_output is inclusive.
+pub fn deflate_raw(src: List[byte], level: int, max_output: int) -> List[byte] ! DeflateErrors {
+    encode(src, level, max_output, false)?
+}
+
+/// Encode RFC 1950 with Adler checksum. Default level -1 means level 1.
+/// Returned bytes own storage; negative cap is invalid, overflow is limit.
+pub fn deflate(src: List[byte], level: int, max_output: int) -> List[byte] ! DeflateErrors {
+    encode(src, level, max_output, true)?
+}
