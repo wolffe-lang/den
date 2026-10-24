@@ -4,19 +4,20 @@ A version control system in [wolf](https://github.com/wolffe-lang/wolf-lang),
 working toward Git-compatible repositories and wire protocols. Where a wolf
 keeps what it has.
 
-**State: M1 codec, not yet an object store. No VCS command works yet.** `den --version` prints
-`den 0.0.0 (built with wolf 0.2.35)`. Every other command refuses by name,
-with its destination milestone/lane, on stderr and exits 2. This is not a
-replacement for Git. The module/lane map and measured surfaces are in
-[MAP](docs/MAP.md); documented formats and generated oracle bytes are in
-[FORMATS](docs/FORMATS.md).
+**State: M1 loose objects and a measured plumbing subset.** `init`,
+`hash-object`, `cat-file -p/-t/-s`, `mktree`, `commit-tree`, `mktag`, and
+`write-tree` over a minimal Git-written flat index v2 now work on the tested
+surface below. This is not a replacement for Git. Packs, index writing,
+porcelain and transports remain named refusals. `den --version` prints
+`den 0.0.0 (built with wolf 0.2.35)`. See [MAP](docs/MAP.md) for the public API
+and limits and [FORMATS](docs/FORMATS.md) for measured bytes.
 
 ## Machines and pins
 
 | Role | Machine / identity |
 |---|---|
 | Behavioral oracle | Git 2.56.0, signed kernel.org tarball; default build (Rust, gettext, HTTPS enabled), Ubuntu 24.04 image by digest |
-| Development witnesses | hasu CPUs 0–5 (codec), kasumi CPUs 12–15 (M0); Linux x86-64, rootless pinned container under flock |
+| Development witnesses | hasu CPUs 0–5 (codec and objects), kasumi CPUs 12–15 (M0); Linux x86-64, rootless pinned container under flock |
 | CI PR gate | ubuntu-24.04, same container and oracle, planner's own tests |
 | CI full field leg | macOS arm64, Homebrew Git; nonblocking observation, not the oracle |
 | Toolchain | wolf 0.2.35 cf0c13d3, lupin 0.1.56 tag 28547b4 (binary embeds 294d626), bundled std 2386522e |
@@ -40,7 +41,8 @@ The gate fetches the complete toolchain archives, builds/verifies the signed
 oracle, checks formatting, builds native/release, runs SHA tests on native and
 the actual checked machine, gates a local TLS handshake (checked budget refusal
 counted), constructs the corpus twice, runs codec native/release/checked tests, independent zlib cross-tests, Git
-object interop and deterministic fuzz, then harness selftests and the matrix,
+object interop and deterministic fuzz, then object native/release/actual-checked tests, binary object interop, atomic
+write failure/race/interruption witnesses, harness selftests and the matrix,
 and builds the static Linux binary twice. `tools/mkden OUTDIR`
 checks ET_EXEC/no PT_INTERP and prints both full and stripped binary digests.
 Baseline Ubuntu libraries are used, never the host's architecture-tuned glibc.
@@ -72,9 +74,9 @@ Index inode/ctime fields are not claimed reproducible across fresh copies.
 | Matrix class | Cases | Meaning |
 |---|---:|---|
 | version shape | 1 | own version line and status, not equality with `git --version` |
-| parity | 0 | stdout, stderr, status and all .git file bytes agree |
+| parity | 57 | stdout, stderr, status and all .git file bytes agree |
 | reviewed | 0 | exact accepted differences, listed individually below |
-| not yet | 31 | exact named scaffold refusal; no repository writes |
+| not yet | 28 | 25 later commands and 3 unsupported compression settings; no writes |
 | unexpected failures | 0 | any new mismatch makes the gate red |
 
 **Accepted review rows: none.** [Review mechanism](tests/review/README.md).
@@ -88,8 +90,61 @@ version plant was rejected by the CI differential gate (run 40130445507,
 closed-unmerged PR #2). The selftest also rejects repository-only corruption.
 
 The case list is `tests/cases.json`; `--strict` intentionally fails at M0.
-A green normal gate proves the scaffold/harness, not Git parity. Unimplemented
+The 86-case normal gate proves only its named surface, not complete Git parity. Unimplemented
 commands and raw-byte path limitations must not be presented as supported.
+
+## Loose objects and plumbing
+
+Objects carry owned binary bytes and algorithm-tagged IDs. The SHA-1 store
+validates zlib checksums, canonical framing, declared length and the independent
+OID, with inclusive caller limits. Trees retain non-UTF-8 basenames and Git's
+directory-aware order. Commit/tag parsers round-trip unknown headers and
+SP-prefixed continuations. SHA-256 IDs are representable; SHA-256 repositories
+are explicitly refused before writes.
+
+Plain/bare `init`, quiet mode, initial branches and reinit use the measured
+empty-template surface: HEAD/config only, plus empty directories (including
+empty hooks). `hash-object` supports binary files/stdin, -w and -t;
+`cat-file` resolves full/abbreviated loose IDs, HEAD and loose refs. `mktree`
+supports raw names with -z and --missing. `commit-tree` supports ordered -p,
+-m and -F messages, configured identities and raw Git timestamps. `mktag`
+checks required headers, target type and a restricted identity syntax.
+`write-tree` validates a Git-written flat index v2, including checksum and
+padding; it never modifies the index. TREE is recognized, every unknown
+extension is a named refusal.
+
+This is deliberately bounded: no packs/alternates/linked-worktree commondir,
+revision expressions, index writing or nested index paths; no general date
+parser, signing, filters, nonempty templates, config includes/escaped values,
+quoted mktree input (use -z), or full malformed-object diagnostic vocabulary.
+Ambiguous blob/tree prefixes have measured Git diagnostics; history-object
+ambiguity hints are a named refusal. Unsupported paths are never successful
+no-ops. Generic object APIs retain bytes; commit-tree alone reproduces Git's
+measured invalid-UTF-8 repair and warning. Explicit ISO-8859-1 leaves bytes
+unchanged. These limits are future work, not reviewed parity exceptions.
+
+Writes use an exclusive 0444 temporary file, complete write, file sync, close,
+atomic no-replace hard-link install, temporary removal and directory sync.
+A racing valid object wins; corrupt existing data is refused, not replaced.
+Ordinary error paths clean up. Abrupt death can leave `tmp_den_*` files;
+never a truncated final object. This is a measured Unix guarantee, not a claim
+about Windows directory-sync support.
+
+`tools/check-objects` runs two native/release/actual-checked unit programs,
+an external-package API client, bidirectional Git interop/fsck, 22 malformed
+loose-object cases, unknown index extension/checksum/stage failures, 16 racing
+writers, injected write/sync/install failures, an unprivileged permission
+failure and interruption after a nonempty temporary write. The header plant
+failed at the known empty-blob OID assertion in CI run **40137248290**, closed
+unmerged PR #5. Object checked refusals: zero; the older TLS checked-budget
+refusal stays separately loud.
+
+On hasu, three whole-object release runs per input (first excluded) give these
+peak RSS values at 100,000,000 bytes: random write/read **787,856/655,228 KiB**;
+zero write/read **461,432/426,880 KiB**. Doubling 50 MB to 100 MB stays below
+2.7x RSS for each path. `tools/objects-bench.py` checks this and the compressed
+size ceiling; raw measurements are in `notes/vc02-evidence/`. No streaming or
+large-object checked execution is claimed.
 
 ## Zlib codec
 
@@ -107,8 +162,9 @@ rows, never intended traps on malformed input.
 
 Encoding supports **0** (stored) and **1** (bounded lazy LZ77, stored/fixed/dynamic
 block selection); **-1** selects 1. Every other level returns `unsupported_level`.
-No configuration parser exists yet: unsupported `core.compression` and
-`pack.compression` settings must remain named not-yet rows when plumbing lands.
+The object store accepts `core.compression` and `core.looseCompression` only
+at 1 or -1. Levels 0/6/9 have exact named not-yet matrix rows; pack settings
+remain outside this loose-only implementation.
 The whole-object API is not a streaming pack reader.
 
 `tools/check-codec` gates 52 independent small vectors, all lengths 3–258 and
@@ -145,7 +201,7 @@ Ed25519/OpenSSL handshake, but RSA-signed certificates and the observed GitHub
 chain return `unsupported_alg`; the checked TLS program exhausts its mem-phase
 budget before a handshake. HTTPS is deferred, not generically claimed absent.
 
-The zlib codec is implemented in `src/zlib`; its contract is below.
+The zlib codec is implemented in `src/zlib`; its contract is above.
 Non-UTF-8 path arguments, non-creating writable opens, argv[0] at this pin,
 regex and mmap have named upstream limitations in MAP. muzzle is not a
 dependency; a future C-facing libden would need a C ABI/allocator boundary.
