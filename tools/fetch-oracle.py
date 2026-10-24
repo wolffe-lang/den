@@ -29,7 +29,7 @@ for name, urlkey, digestkey in [('git.tar.xz','url','sha256'),('git.tar.sign','s
     for read in (1,2):
         have = sha(p); print(f'{name} read {read}: {have}', flush=True)
         if have != pin[digestkey]: sys.exit(f'REFUSED: {name} digest')
-keys = cache / 'keys'; keys.mkdir(mode=0o700, exist_ok=True)
+keys = R / 'target/oracle-keys'; keys.mkdir(mode=0o700, exist_ok=True)
 run('gpg','--homedir',str(keys),'--batch','--import',str(download/'key.asc'))
 with (download/'git.tar').open('wb') as out:
     run('xz','-dc',str(download/'git.tar.xz'),stdout=out)
