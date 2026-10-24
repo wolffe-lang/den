@@ -1,0 +1,3 @@
+temporary ownership round 0 PASS
+FAIL temporary ownership round 2 [{'writer': 11, 'status': 1, 'stdout': '', 'stderr': '6e6f745f666f756e640a'}]
+object temporary race: 3 rounds 96 writers FAIL

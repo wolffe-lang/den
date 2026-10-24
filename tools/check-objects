@@ -22,6 +22,7 @@ for tier in native release; do
     if [ "$tier" = release ]; then flag=--release; else flag=; fi
     "$WOLF" build $flag --deny-warnings probes/object-client/main.lu -o "target/$tier/object-client"
     tools/env python3 -I tools/objects-test.py --tier "$tier"
+    tools/env python3 -I tools/object-temp-race.py --tier "$tier" --rounds 16 --label "gate-$tier"
 done
 python3 -I - <<'PY'
 import json
