@@ -17,22 +17,18 @@ fn main() -> int ! object.ObjectErrors {
         oid.hex(oid.digest("sha256", [])?)? ==
             "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     )
-    assert(
-        (
-            oid.parse("sha1", "z") else |e| { assert("{e}" == "invalid_oid"); copy empty }
-        ).bytes.len ==
-            20,
-    )
+    var refused = false
+    let _ = oid.parse("sha1", "z") else |e| { refused = "{e}" == "invalid_oid"; copy empty }
+    assert(refused)
     let raw = object.frame("blob", [0 as byte, 255 as byte, 10 as byte])?
     let parsed = object.parse(raw, 3)?
     assert(parsed.data.len == 3 && parsed.data[1] == 255 as byte)
-    assert(
-        object.parse(
-            "blob 00\0".bytes(),
-            10,
-        ) else |e| { assert("{e}" == "bad_size"); parsed }.kind ==
-            "blob",
-    )
+    refused = false
+    let _ = object.parse("blob 00\0".bytes(), 10) else |e| {
+        refused = "{e}" == "bad_size"
+        copy parsed
+    }
+    assert(refused)
     let encoded = object.encode("blob", [], 100)?
     let result = object.decode(encoded, empty, 0)?
     assert(result.kind == "blob" && result.data.len == 0)

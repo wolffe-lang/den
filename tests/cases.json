@@ -1,34 +1,899 @@
 [
- {"name":"version","repo":"two","args":["--version"],"kind":"version"},
- {"name":"init","repo":"empty","args":["init","--template={template}"],"lane":"M1, vc02"},
- {"name":"hash-object","repo":"two","args":["hash-object","a.txt"],"lane":"M1, vc02"},
- {"name":"cat-type","repo":"two","args":["cat-file","-t","HEAD"],"lane":"M1, vc02"},
- {"name":"cat-size","repo":"two","args":["cat-file","-s","HEAD"],"lane":"M1, vc02"},
- {"name":"cat-pretty","repo":"two","args":["cat-file","-p","HEAD"],"lane":"M1, vc02"},
- {"name":"write-tree","repo":"two","args":["write-tree"],"lane":"M1, vc02"},
- {"name":"add","repo":"two","args":["add","a.txt"],"lane":"M2, vc03"},
- {"name":"status-short","repo":"two","args":["status","--short"],"prepare":"dirty","lane":"M2, vc03"},
- {"name":"status-long","repo":"two","args":["status"],"prepare":"dirty","lane":"M2, vc03"},
- {"name":"commit","repo":"two","args":["commit","--allow-empty","-m","second"],"lane":"M2, vc03"},
- {"name":"rm","repo":"two","args":["rm","b.txt"],"lane":"M2, vc03"},
- {"name":"mv","repo":"two","args":["mv","a.txt","c.txt"],"lane":"M2, vc03"},
- {"name":"restore","repo":"two","args":["restore","a.txt"],"prepare":"dirty","lane":"M2, vc03"},
- {"name":"diff","repo":"two","args":["diff"],"prepare":"dirty","lane":"M2, vc04"},
- {"name":"diff-renames","repo":"rename","args":["diff","HEAD~1","HEAD"],"lane":"M2, vc04"},
- {"name":"log-default","repo":"linear","args":["log","-n","2"],"lane":"M2, vc05"},
- {"name":"log-oneline","repo":"merge","args":["log","--oneline"],"lane":"M2, vc05"},
- {"name":"show","repo":"binary","args":["show","HEAD:raw.bin"],"lane":"M2, vc05"},
- {"name":"branch","repo":"merge","args":["branch"],"lane":"M3, vc06"},
- {"name":"tag","repo":"two","args":["tag","v0"],"lane":"M3, vc06"},
- {"name":"switch","repo":"merge","args":["switch","side"],"lane":"M3, vc06"},
- {"name":"reset","repo":"linear","args":["reset","--soft","HEAD~1"],"lane":"M3, vc06"},
- {"name":"merge","repo":"merge","args":["merge","side"],"lane":"M3, vc07"},
- {"name":"rebase","repo":"linear","args":["rebase","HEAD~1"],"lane":"M3, vc08"},
- {"name":"blame","repo":"two","args":["blame","a.txt"],"lane":"M3, vc09"},
- {"name":"stash","repo":"two","args":["stash","push","-m","scratch"],"prepare":"dirty","lane":"M3, vc10"},
- {"name":"notes","repo":"two","args":["notes","add","-m","note","HEAD"],"lane":"M3, vc10"},
- {"name":"rev-parse","repo":"empty","args":["rev-parse","HEAD^{tree}"],"lane":"M3, vc10"},
- {"name":"fsck","repo":"packed","args":["fsck","--full"],"lane":"M4, vc12"},
- {"name":"count-objects","repo":"thousand","args":["count-objects","-v"],"lane":"M4, vc12"},
- {"name":"diff-symlink","repo":"symlink","args":["diff","--stat"],"lane":"M2, vc04"}
+  {
+    "name": "version",
+    "repo": "two",
+    "args": [
+      "--version"
+    ],
+    "kind": "version"
+  },
+  {
+    "name": "init",
+    "repo": "empty",
+    "args": [
+      "init",
+      "--template={template}"
+    ],
+    "lane": "M1, vc02"
+  },
+  {
+    "name": "hash-object",
+    "repo": "two",
+    "args": [
+      "hash-object",
+      "a.txt"
+    ],
+    "lane": "M1, vc02"
+  },
+  {
+    "name": "cat-type",
+    "repo": "two",
+    "args": [
+      "cat-file",
+      "-t",
+      "HEAD"
+    ],
+    "lane": "M1, vc02"
+  },
+  {
+    "name": "cat-size",
+    "repo": "two",
+    "args": [
+      "cat-file",
+      "-s",
+      "HEAD"
+    ],
+    "lane": "M1, vc02"
+  },
+  {
+    "name": "cat-pretty",
+    "repo": "two",
+    "args": [
+      "cat-file",
+      "-p",
+      "HEAD"
+    ],
+    "lane": "M1, vc02"
+  },
+  {
+    "name": "write-tree",
+    "repo": "two",
+    "args": [
+      "write-tree"
+    ],
+    "lane": "M1, vc02"
+  },
+  {
+    "name": "add",
+    "repo": "two",
+    "args": [
+      "add",
+      "a.txt"
+    ],
+    "lane": "M2, vc03"
+  },
+  {
+    "name": "status-short",
+    "repo": "two",
+    "args": [
+      "status",
+      "--short"
+    ],
+    "prepare": "dirty",
+    "lane": "M2, vc03"
+  },
+  {
+    "name": "status-long",
+    "repo": "two",
+    "args": [
+      "status"
+    ],
+    "prepare": "dirty",
+    "lane": "M2, vc03"
+  },
+  {
+    "name": "commit",
+    "repo": "two",
+    "args": [
+      "commit",
+      "--allow-empty",
+      "-m",
+      "second"
+    ],
+    "lane": "M2, vc03"
+  },
+  {
+    "name": "rm",
+    "repo": "two",
+    "args": [
+      "rm",
+      "b.txt"
+    ],
+    "lane": "M2, vc03"
+  },
+  {
+    "name": "mv",
+    "repo": "two",
+    "args": [
+      "mv",
+      "a.txt",
+      "c.txt"
+    ],
+    "lane": "M2, vc03"
+  },
+  {
+    "name": "restore",
+    "repo": "two",
+    "args": [
+      "restore",
+      "a.txt"
+    ],
+    "prepare": "dirty",
+    "lane": "M2, vc03"
+  },
+  {
+    "name": "diff",
+    "repo": "two",
+    "args": [
+      "diff"
+    ],
+    "prepare": "dirty",
+    "lane": "M2, vc04"
+  },
+  {
+    "name": "diff-renames",
+    "repo": "rename",
+    "args": [
+      "diff",
+      "HEAD~1",
+      "HEAD"
+    ],
+    "lane": "M2, vc04"
+  },
+  {
+    "name": "log-default",
+    "repo": "linear",
+    "args": [
+      "log",
+      "-n",
+      "2"
+    ],
+    "lane": "M2, vc05"
+  },
+  {
+    "name": "log-oneline",
+    "repo": "merge",
+    "args": [
+      "log",
+      "--oneline"
+    ],
+    "lane": "M2, vc05"
+  },
+  {
+    "name": "show",
+    "repo": "binary",
+    "args": [
+      "show",
+      "HEAD:raw.bin"
+    ],
+    "lane": "M2, vc05"
+  },
+  {
+    "name": "branch",
+    "repo": "merge",
+    "args": [
+      "branch"
+    ],
+    "lane": "M3, vc06"
+  },
+  {
+    "name": "tag",
+    "repo": "two",
+    "args": [
+      "tag",
+      "v0"
+    ],
+    "lane": "M3, vc06"
+  },
+  {
+    "name": "switch",
+    "repo": "merge",
+    "args": [
+      "switch",
+      "side"
+    ],
+    "lane": "M3, vc06"
+  },
+  {
+    "name": "reset",
+    "repo": "linear",
+    "args": [
+      "reset",
+      "--soft",
+      "HEAD~1"
+    ],
+    "lane": "M3, vc06"
+  },
+  {
+    "name": "merge",
+    "repo": "merge",
+    "args": [
+      "merge",
+      "side"
+    ],
+    "lane": "M3, vc07"
+  },
+  {
+    "name": "rebase",
+    "repo": "linear",
+    "args": [
+      "rebase",
+      "HEAD~1"
+    ],
+    "lane": "M3, vc08"
+  },
+  {
+    "name": "blame",
+    "repo": "two",
+    "args": [
+      "blame",
+      "a.txt"
+    ],
+    "lane": "M3, vc09"
+  },
+  {
+    "name": "stash",
+    "repo": "two",
+    "args": [
+      "stash",
+      "push",
+      "-m",
+      "scratch"
+    ],
+    "prepare": "dirty",
+    "lane": "M3, vc10"
+  },
+  {
+    "name": "notes",
+    "repo": "two",
+    "args": [
+      "notes",
+      "add",
+      "-m",
+      "note",
+      "HEAD"
+    ],
+    "lane": "M3, vc10"
+  },
+  {
+    "name": "rev-parse",
+    "repo": "empty",
+    "args": [
+      "rev-parse",
+      "HEAD^{tree}"
+    ],
+    "lane": "M3, vc10"
+  },
+  {
+    "name": "fsck",
+    "repo": "packed",
+    "args": [
+      "fsck",
+      "--full"
+    ],
+    "lane": "M4, vc12"
+  },
+  {
+    "name": "count-objects",
+    "repo": "thousand",
+    "args": [
+      "count-objects",
+      "-v"
+    ],
+    "lane": "M4, vc12"
+  },
+  {
+    "name": "diff-symlink",
+    "repo": "symlink",
+    "args": [
+      "diff",
+      "--stat"
+    ],
+    "lane": "M2, vc04"
+  },
+  {
+    "name": "hash-empty",
+    "repo": "two",
+    "args": [
+      "hash-object",
+      "--stdin"
+    ],
+    "lane": "M1, vc02",
+    "stdin_hex": ""
+  },
+  {
+    "name": "hash-write-empty",
+    "repo": "two",
+    "args": [
+      "hash-object",
+      "-w",
+      "--stdin"
+    ],
+    "lane": "M1, vc02",
+    "stdin_hex": ""
+  },
+  {
+    "name": "hash-abc",
+    "repo": "two",
+    "args": [
+      "hash-object",
+      "--stdin"
+    ],
+    "lane": "M1, vc02",
+    "stdin_hex": "616263"
+  },
+  {
+    "name": "hash-write-abc",
+    "repo": "two",
+    "args": [
+      "hash-object",
+      "-w",
+      "--stdin"
+    ],
+    "lane": "M1, vc02",
+    "stdin_hex": "616263"
+  },
+  {
+    "name": "hash-nul",
+    "repo": "two",
+    "args": [
+      "hash-object",
+      "--stdin"
+    ],
+    "lane": "M1, vc02",
+    "stdin_hex": "610062"
+  },
+  {
+    "name": "hash-write-nul",
+    "repo": "two",
+    "args": [
+      "hash-object",
+      "-w",
+      "--stdin"
+    ],
+    "lane": "M1, vc02",
+    "stdin_hex": "610062"
+  },
+  {
+    "name": "hash-all-bytes",
+    "repo": "two",
+    "args": [
+      "hash-object",
+      "--stdin"
+    ],
+    "lane": "M1, vc02",
+    "stdin_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedfe0e1e2e3e4e5e6e7e8e9eaebecedeeeff0f1f2f3f4f5f6f7f8f9fafbfcfdfeff"
+  },
+  {
+    "name": "hash-write-all-bytes",
+    "repo": "two",
+    "args": [
+      "hash-object",
+      "-w",
+      "--stdin"
+    ],
+    "lane": "M1, vc02",
+    "stdin_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedfe0e1e2e3e4e5e6e7e8e9eaebecedeeeff0f1f2f3f4f5f6f7f8f9fafbfcfdfeff"
+  },
+  {
+    "name": "hash-utf8",
+    "repo": "two",
+    "args": [
+      "hash-object",
+      "--stdin"
+    ],
+    "lane": "M1, vc02",
+    "stdin_hex": "c3a9"
+  },
+  {
+    "name": "hash-write-utf8",
+    "repo": "two",
+    "args": [
+      "hash-object",
+      "-w",
+      "--stdin"
+    ],
+    "lane": "M1, vc02",
+    "stdin_hex": "c3a9"
+  },
+  {
+    "name": "hash-tree-empty",
+    "repo": "two",
+    "args": [
+      "hash-object",
+      "-t",
+      "tree",
+      "-w",
+      "--stdin"
+    ],
+    "lane": "M1, vc02",
+    "stdin_hex": ""
+  },
+  {
+    "name": "hash-unknown-type",
+    "repo": "two",
+    "args": [
+      "hash-object",
+      "-t",
+      "bad",
+      "--stdin"
+    ],
+    "lane": "M1, vc02",
+    "stdin_hex": "61"
+  },
+  {
+    "name": "hash-missing-file",
+    "repo": "two",
+    "args": [
+      "hash-object",
+      "missing-file"
+    ],
+    "lane": "M1, vc02",
+    "stdin_hex": ""
+  },
+  {
+    "name": "cat-p-blob",
+    "repo": "two",
+    "args": [
+      "cat-file",
+      "-p",
+      "{blob}"
+    ],
+    "lane": "M1, vc02",
+    "stdin_hex": ""
+  },
+  {
+    "name": "cat-p-tree",
+    "repo": "two",
+    "args": [
+      "cat-file",
+      "-p",
+      "{tree}"
+    ],
+    "lane": "M1, vc02",
+    "stdin_hex": ""
+  },
+  {
+    "name": "cat-p-commit",
+    "repo": "two",
+    "args": [
+      "cat-file",
+      "-p",
+      "{commit}"
+    ],
+    "lane": "M1, vc02",
+    "stdin_hex": ""
+  },
+  {
+    "name": "cat-p-missing",
+    "repo": "two",
+    "args": [
+      "cat-file",
+      "-p",
+      "missing"
+    ],
+    "lane": "M1, vc02",
+    "stdin_hex": ""
+  },
+  {
+    "name": "cat-p-zero",
+    "repo": "two",
+    "args": [
+      "cat-file",
+      "-p",
+      "0000000000000000000000000000000000000000"
+    ],
+    "lane": "M1, vc02",
+    "stdin_hex": ""
+  },
+  {
+    "name": "cat-s-blob",
+    "repo": "two",
+    "args": [
+      "cat-file",
+      "-s",
+      "{blob}"
+    ],
+    "lane": "M1, vc02",
+    "stdin_hex": ""
+  },
+  {
+    "name": "cat-s-tree",
+    "repo": "two",
+    "args": [
+      "cat-file",
+      "-s",
+      "{tree}"
+    ],
+    "lane": "M1, vc02",
+    "stdin_hex": ""
+  },
+  {
+    "name": "cat-s-commit",
+    "repo": "two",
+    "args": [
+      "cat-file",
+      "-s",
+      "{commit}"
+    ],
+    "lane": "M1, vc02",
+    "stdin_hex": ""
+  },
+  {
+    "name": "cat-s-missing",
+    "repo": "two",
+    "args": [
+      "cat-file",
+      "-s",
+      "missing"
+    ],
+    "lane": "M1, vc02",
+    "stdin_hex": ""
+  },
+  {
+    "name": "cat-s-zero",
+    "repo": "two",
+    "args": [
+      "cat-file",
+      "-s",
+      "0000000000000000000000000000000000000000"
+    ],
+    "lane": "M1, vc02",
+    "stdin_hex": ""
+  },
+  {
+    "name": "cat-t-blob",
+    "repo": "two",
+    "args": [
+      "cat-file",
+      "-t",
+      "{blob}"
+    ],
+    "lane": "M1, vc02",
+    "stdin_hex": ""
+  },
+  {
+    "name": "cat-t-tree",
+    "repo": "two",
+    "args": [
+      "cat-file",
+      "-t",
+      "{tree}"
+    ],
+    "lane": "M1, vc02",
+    "stdin_hex": ""
+  },
+  {
+    "name": "cat-t-commit",
+    "repo": "two",
+    "args": [
+      "cat-file",
+      "-t",
+      "{commit}"
+    ],
+    "lane": "M1, vc02",
+    "stdin_hex": ""
+  },
+  {
+    "name": "cat-t-missing",
+    "repo": "two",
+    "args": [
+      "cat-file",
+      "-t",
+      "missing"
+    ],
+    "lane": "M1, vc02",
+    "stdin_hex": ""
+  },
+  {
+    "name": "cat-t-zero",
+    "repo": "two",
+    "args": [
+      "cat-file",
+      "-t",
+      "0000000000000000000000000000000000000000"
+    ],
+    "lane": "M1, vc02",
+    "stdin_hex": ""
+  },
+  {
+    "name": "init-quiet",
+    "repo": "two",
+    "args": [
+      "init",
+      "-q"
+    ],
+    "lane": "M1, vc02",
+    "stdin_hex": ""
+  },
+  {
+    "name": "init-branch",
+    "repo": "two",
+    "args": [
+      "init",
+      "-b",
+      "topic"
+    ],
+    "lane": "M1, vc02",
+    "stdin_hex": ""
+  },
+  {
+    "name": "commit-tree-empty",
+    "repo": "two",
+    "args": [
+      "commit-tree",
+      "{tree}"
+    ],
+    "lane": "M1, vc02",
+    "stdin_hex": ""
+  },
+  {
+    "name": "commit-tree-stdin",
+    "repo": "two",
+    "args": [
+      "commit-tree",
+      "{tree}"
+    ],
+    "lane": "M1, vc02",
+    "stdin_hex": "616263"
+  },
+  {
+    "name": "commit-tree-binary",
+    "repo": "two",
+    "args": [
+      "commit-tree",
+      "{tree}"
+    ],
+    "lane": "M1, vc02",
+    "stdin_hex": "6100620a"
+  },
+  {
+    "name": "commit-tree-message",
+    "repo": "two",
+    "args": [
+      "commit-tree",
+      "{tree}",
+      "-m",
+      "one"
+    ],
+    "lane": "M1, vc02",
+    "stdin_hex": ""
+  },
+  {
+    "name": "commit-tree-paragraphs",
+    "repo": "two",
+    "args": [
+      "commit-tree",
+      "{tree}",
+      "-m",
+      "one",
+      "-m",
+      "two"
+    ],
+    "lane": "M1, vc02",
+    "stdin_hex": ""
+  },
+  {
+    "name": "commit-tree-empty-message",
+    "repo": "two",
+    "args": [
+      "commit-tree",
+      "{tree}",
+      "-m",
+      ""
+    ],
+    "lane": "M1, vc02",
+    "stdin_hex": ""
+  },
+  {
+    "name": "commit-tree-parent",
+    "repo": "two",
+    "args": [
+      "commit-tree",
+      "{tree}",
+      "-p",
+      "{commit}",
+      "-m",
+      "child"
+    ],
+    "lane": "M1, vc02",
+    "stdin_hex": ""
+  },
+  {
+    "name": "commit-tree-file",
+    "repo": "two",
+    "args": [
+      "commit-tree",
+      "{tree}",
+      "-F",
+      "a.txt"
+    ],
+    "lane": "M1, vc02",
+    "stdin_hex": ""
+  },
+  {
+    "name": "commit-tree-file-stdin",
+    "repo": "two",
+    "args": [
+      "commit-tree",
+      "{tree}",
+      "-F",
+      "-"
+    ],
+    "lane": "M1, vc02",
+    "stdin_hex": "616263"
+  },
+  {
+    "name": "mktree-empty",
+    "repo": "two",
+    "args": [
+      "mktree"
+    ],
+    "lane": "M1, vc02",
+    "stdin_hex": ""
+  },
+  {
+    "name": "mktag-empty",
+    "repo": "two",
+    "args": [
+      "mktag"
+    ],
+    "lane": "M1, vc02",
+    "stdin_hex": ""
+  },
+  {
+    "name": "mktag-invalid",
+    "repo": "two",
+    "args": [
+      "mktag"
+    ],
+    "lane": "M1, vc02",
+    "stdin_hex": "6261640a"
+  },
+  {
+    "name": "commit-tree-invalid-utf8-0",
+    "repo": "two",
+    "args": [
+      "commit-tree",
+      "{tree}"
+    ],
+    "lane": "M1, vc02",
+    "stdin_hex": "ff"
+  },
+  {
+    "name": "commit-tree-invalid-utf8-1",
+    "repo": "two",
+    "args": [
+      "commit-tree",
+      "{tree}"
+    ],
+    "lane": "M1, vc02",
+    "stdin_hex": "c3a9ff"
+  },
+  {
+    "name": "commit-tree-invalid-utf8-2",
+    "repo": "two",
+    "args": [
+      "commit-tree",
+      "{tree}"
+    ],
+    "lane": "M1, vc02",
+    "stdin_hex": "c080"
+  },
+  {
+    "name": "commit-tree-invalid-utf8-3",
+    "repo": "two",
+    "args": [
+      "commit-tree",
+      "{tree}"
+    ],
+    "lane": "M1, vc02",
+    "stdin_hex": "eda080"
+  },
+  {
+    "name": "commit-tree-invalid-utf8-4",
+    "repo": "two",
+    "args": [
+      "commit-tree",
+      "{tree}"
+    ],
+    "lane": "M1, vc02",
+    "stdin_hex": "f09f90ba80"
+  },
+  {
+    "name": "commit-tree-invalid-utf8-5",
+    "repo": "two",
+    "args": [
+      "commit-tree",
+      "{tree}"
+    ],
+    "lane": "M1, vc02",
+    "stdin_hex": "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedfe0e1e2e3e4e5e6e7e8e9eaebecedeeeff0f1f2f3f4f5f6f7f8f9fafbfcfdfeff"
+  },
+  {
+    "name": "compression-not-yet-0",
+    "repo": "two",
+    "args": [
+      "hash-object",
+      "-w",
+      "--stdin"
+    ],
+    "lane": "M1, vc02",
+    "stdin_hex": "616263",
+    "config_append": "\n[core]\ncompression=0\n",
+    "refusal_feature": "core.compression=0"
+  },
+  {
+    "name": "compression-not-yet-6",
+    "repo": "two",
+    "args": [
+      "hash-object",
+      "-w",
+      "--stdin"
+    ],
+    "lane": "M1, vc02",
+    "stdin_hex": "616263",
+    "config_append": "\n[core]\ncompression=6\n",
+    "refusal_feature": "core.compression=6"
+  },
+  {
+    "name": "compression-not-yet-9",
+    "repo": "two",
+    "args": [
+      "hash-object",
+      "-w",
+      "--stdin"
+    ],
+    "lane": "M1, vc02",
+    "stdin_hex": "616263",
+    "config_append": "\n[core]\ncompression=9\n",
+    "refusal_feature": "core.compression=9"
+  },
+  {
+    "name": "commit-tree-latin1",
+    "repo": "two",
+    "args": [
+      "commit-tree",
+      "{tree}"
+    ],
+    "lane": "M1, vc02",
+    "stdin_hex": "ff",
+    "config_append": "\n[i18n]\ncommitEncoding = ISO-8859-1\n"
+  },
+  {
+    "name": "hash-empty-tag",
+    "repo": "two",
+    "args": [
+      "hash-object",
+      "-w",
+      "--stdin",
+      "-t",
+      "tag"
+    ],
+    "lane": "M1, vc02",
+    "stdin_hex": ""
+  },
+  {
+    "name": "hash-empty-commit",
+    "repo": "two",
+    "args": [
+      "hash-object",
+      "-w",
+      "--stdin",
+      "-t",
+      "commit"
+    ],
+    "lane": "M1, vc02",
+    "stdin_hex": ""
+  }
 ]

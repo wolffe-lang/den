@@ -1,0 +1,26 @@
+#!/bin/sh
+set -eu
+DEN_ROOT=$(cd "$(dirname "$0")/.." && pwd)
+export DEN_ROOT
+cd "$DEN_ROOT"
+. tools/lib-toolchain.sh
+mkdir -p target/objects
+for test in object_test objects_test; do
+    "$WOLF" build --deny-warnings "src/$test.lu" -o "target/$test"
+    "target/$test"
+    "$WOLF" build --release --deny-warnings "src/$test.lu" -o "target/$test-release"
+    "target/$test-release"
+    "$WOLF" conform-run "src/$test.lu" --checked --json >"target/$test-checked.json"
+    cat "target/$test-checked.json"
+    python3 -I - "target/$test-checked.json" <<'PY'
+import json,sys
+rows=[json.loads(s) for s in open(sys.argv[1]) if s.startswith('{')]
+assert len(rows)==1 and rows[0]['verdict']=='exit(0)',rows
+PY
+done
+for tier in native release; do
+    if [ "$tier" = release ]; then flag=--release; else flag=; fi
+    "$WOLF" build $flag --deny-warnings probes/object-client/main.lu -o "target/$tier/object-client"
+    tools/env python3 -I tools/objects-test.py --tier "$tier"
+done
+echo 'objects: native/release API and e2e pass; checked programs pass; unsupported=0'

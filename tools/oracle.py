@@ -14,8 +14,8 @@ def snapshot(repo):
         elif p.is_file():result[key]={'mode':stat.S_IMODE(p.stat().st_mode),'hex':p.read_bytes().hex()}
     return result
 
-def capture(command,repo):
-    p=subprocess.run(command,cwd=repo,capture_output=True,timeout=60)
+def capture(command,repo,stdin=b''):
+    p=subprocess.run(command,cwd=repo,input=stdin,capture_output=True,timeout=60)
     return {'stdout':p.stdout.hex(),'stderr':p.stderr.hex(),'status':p.returncode,'repository':snapshot(repo)}
 
 def comparable(result, mode):
@@ -61,9 +61,17 @@ def one(case,base,den,git):
         if case.get('prepare')=='dirty':
             (repo/'a.txt').write_bytes(b'alpha changed\n')
             (repo/'untracked').write_bytes(b'untracked\n')
+        if case.get('config_append'):
+            with (repo/'.git/config').open('ab') as f:f.write(case['config_append'].encode())
     args=[a.replace('{template}',os.environ['DEN_EMPTY_TEMPLATE']) for a in case['args']]
-    restore(); expected=capture([git,*args],repo)
-    restore(); before=snapshot(repo); actual=capture([den,*args],repo)
+    replacements={}
+    for key,rev in [('tree','HEAD^{tree}'),('commit','HEAD'),('blob','HEAD:a.txt')]:
+        if any('{'+key+'}' in arg for arg in args):
+            replacements[key]=subprocess.check_output([git,'rev-parse',rev],cwd=base/case['repo']).decode().strip()
+    for key,value in replacements.items():args=[arg.replace('{'+key+'}',value) for arg in args]
+    stdin=bytes.fromhex(case.get('stdin_hex',''))
+    restore(); expected=capture([git,*args],repo,stdin)
+    restore(); before=snapshot(repo); actual=capture([den,*args],repo,stdin)
     (root/'git.json').write_text(json.dumps(expected,sort_keys=True)+'\n')
     (root/'den.json').write_text(json.dumps(actual,sort_keys=True)+'\n')
     if case.get('kind')=='version':
@@ -72,7 +80,7 @@ def one(case,base,den,git):
             and bytes.fromhex(expected['stdout']).startswith(b'git version ') and expected['status']==0)
         return 'shape-pass' if ok else 'FAIL'
     if equivalent(expected,actual,case.get('comparison','loose-object-raw')):return 'parity'
-    refusal=f"den: not yet implemented: {args[0]} ({case['lane']})\n".encode().hex()
+    refusal=f"den: not yet implemented: {case.get('refusal_feature',args[0])} ({case['lane']})\n".encode().hex()
     if (actual['status']==2 and actual['stdout']=='' and actual['stderr']==refusal
             and actual['repository']==before):return 'not-yet'
     p=R/'tests/review'/f"{case['name']}.json"
