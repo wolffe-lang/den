@@ -1,0 +1,89 @@
+=== wolf-std ===
+78b9d3cbc41d51db44d18c40b6694403644d1c83
+HEAD:std/x/crypto/curve25519/curve25519.lu:64://! decompression's sign bit per s5.1.3 — the choices Wycheproof's
+HEAD:std/x/crypto/curve25519/curve25519.lu:976:// Edwards points, decompression, and sign/verify below.
+HEAD:std/x/crypto/curve25519/curve25519.lu:1228:/// Compress a point to 32 bytes (RFC 8032 §5.1.2): the y-coordinate
+HEAD:std/x/crypto/curve25519/curve25519.lu:1231:fn ge_compress(p: Ge) -> List[byte] {
+HEAD:std/x/crypto/curve25519/curve25519.lu:1243:/// z^((p-5)/8) mod p — the exponent decompression's square root needs
+HEAD:std/x/crypto/curve25519/curve25519.lu:1310:/// The result of decompression: `ok` false means the 32 bytes are not
+HEAD:std/x/crypto/curve25519/curve25519.lu:1318:/// Decompress 32 bytes to a point (RFC 8032 §5.1.3): read y and the
+HEAD:std/x/crypto/curve25519/curve25519.lu:1323:fn ge_decompress(b: List[byte]) -> GeOpt {
+HEAD:std/x/crypto/curve25519/curve25519.lu:1441:/// A = [a]B compressed, where a is the clamped scalar. Traps `assert`
+HEAD:std/x/crypto/curve25519/curve25519.lu:1455:    ge_compress(ge_scalarmult(a, ge_base()))
+HEAD:std/x/crypto/curve25519/curve25519.lu:1482:    let big_a = ge_compress(ge_scalarmult(a, ge_base()))
+HEAD:std/x/crypto/curve25519/curve25519.lu:1484:    let big_r = ge_compress(ge_scalarmult(r, ge_base()))
+HEAD:std/x/crypto/curve25519/curve25519.lu:1493:/// cases patrol), and both A and R must decompress canonically. Returns
+HEAD:std/x/crypto/curve25519/curve25519.lu:1522:    let a_opt = ge_decompress(pubkey)
+HEAD:std/x/crypto/curve25519/curve25519.lu:1526:    let r_opt = ge_decompress(big_r)
+HEAD:std/x/crypto/p256/p256.lu:2066:/// Decode a 65-byte uncompressed SEC1 point (0x04 || X || Y), REJECTING
+HEAD:std/x/crypto/p256/p256.lu:2072:/// no uncompressed encoding here, so it is rejected by length. ct:
+HEAD:std/x/crypto/p256/p256.lu:2209:/// [1, n): the uncompressed SEC1 encoding of [d]G (0x04 || X || Y).
+HEAD:std/x/crypto/p256/p256.lu:2227:/// Encode a non-identity projective point as 65 uncompressed SEC1
+HEAD:std/x/crypto/p256/p256.lu:2359:/// 65-byte uncompressed SEC1 public key and the 64-byte r || s
+HEAD:std/x/crypto/sha2/sha2.lu:434:fn compress256(mut st: Sha256) {
+HEAD:std/x/crypto/sha2/sha2.lu:492:/// buffered until a 512-bit block is full, then compressed; calling
+HEAD:std/x/crypto/sha2/sha2.lu:504:            compress256(mut st)
+HEAD:std/x/crypto/sha2/sha2.lu:531:        compress256(mut s)
+HEAD:std/x/crypto/sha2/sha2.lu:537:    compress256(mut s)
+HEAD:std/x/crypto/sha2/sha2.lu:629:fn compress512(mut st: Sha512) {
+HEAD:std/x/crypto/sha2/sha2.lu:699:            compress512(mut st)
+HEAD:std/x/crypto/sha2/sha2.lu:725:        compress512(mut s)
+HEAD:std/x/crypto/sha2/sha2.lu:732:    compress512(mut s)
+HEAD:std/x/tls/cert/cert.lu:1277:/// 65-byte uncompressed point), and p256's on-curve check refuses any
+HEAD:std/x/tls/cert/cert.lu:1387:        // A P-256 uncompressed point is 65 bytes; any other length is a
+HEAD:std/x/tls/client/client.lu:83://! Negotiation: `illegal_parameter` (wrong version/compression/group
+HEAD:std/x/tls/client/client.lu:359:    compression: int,
+HEAD:std/x/tls/client/client.lu:500:        compression: comp,
+HEAD:std/x/tls/client/client.lu:515:/// legacy_version that is not 0x0303, a nonzero compression method, a
+HEAD:std/x/tls/client/client.lu:541:    if v.compression != 0 {
+HEAD:std/x/tls/handshake/handshake.lu:354:/// legacy_compression_method, and the extensions vector<8..2^16-1>.
+HEAD:std/x/tls/handshake/handshake.lu:376:/// `cipher_suite` (uint16), the null legacy_compression_method, and the
+HEAD:std/x/tls/handshake/handshake.lu:514:/// A single-element byte list (the null compression method, small
+HEAD:tests/x/crypto/p256/rfc6979_p256.lu:26:    // A.2.5's public key U = (Ux, Uy), uncompressed.
+HEAD:tests/x/tls/client/negative_battery.lu:1://! check: run(exit=0, stdout="downgrade-v12: downgrade\ndowngrade-sentinel: downgrade\nhelloretry: unexpected_message\nbad-suite: handshake_failure\nbad-group: illegal_parameter\nbad-version: illegal_parameter\nbad-compression: illegal_parameter\ntruncated-sh: decode_error\ntampered-record: bad_record_mac\nbad-finished: decrypt_error\nwrong-name: name_mismatch\nexpired: expired\nbad-sig-cv: bad_signature\nbattery: all rows named")
+HEAD:tests/x/tls/client/negative_battery.lu:18://!   wrong group / version / compression -> `illegal_parameter`
+HEAD:tests/x/tls/client/negative_battery.lu:37:/// group, version, compression — every negotiation lever in one place.
+HEAD:tests/x/tls/client/negative_battery.lu:43:    compression: int,
+HEAD:tests/x/tls/client/negative_battery.lu:90:    (mut body).push(compression as byte)
+HEAD:tests/x/tls/client/negative_battery.lu:166:    // ---- nonzero compression ----
+HEAD:tests/x/tls/client/negative_battery.lu:168:    print("bad-compression: {negotiate_name(sh_comp)}")
+HEAD:tests/x/tls/client/rfc8448_parse_vectors.lu:40:    assert(view.compression == 0, "SH compression")
+=== lobo ===
+866789c82e8f3d8b8dd6df2830176c093515aeb4
+HEAD:src/config/table.lu:430:        "on-the-fly compression",
+HEAD:src/config/table.lu:440:        "compressible MIME set",
+HEAD:src/config/table.lu:450:        "compression level",
+HEAD:src/config/table.lu:460:        "compression size floor",
+HEAD:src/config/table.lu:480:        "compression for proxied replies",
+HEAD:src/config/table.lu:490:        "compression opt-out by UA",
+HEAD:src/resolver/resolver.lu:189:/// The byte offset just past the name starting at `at` (compression
+HEAD:src/tls/tls.lu:310:        return hello_bad("truncated compression")
+HEAD:src/tls/tls.lu:315:        return hello_bad("bad compression vector")
+HEAD:tests/resolver/wire.lu:9://! byte; a hand-built answer with a compression pointer, a CNAME in
+HEAD:tests/rig/dnssrv/dnssrv.lu:148:/// compression pointer to offset 12 (so the client's pointer path is
+=== pax ===
+545703808b03675036c61c78d0bcce5150787cc0
+HEAD:kernel/initramfs/initramfs.lu:14://! archives are skipped, and more archives may follow. A compressed
+HEAD:kernel/initramfs/initramfs.lu:16://! is refused by name: PAX has no decompressor.
+HEAD:kernel/initramfs/initramfs.lu:39:pub error ArchiveError = {no_module, compressed, bad_magic, truncated, bad_hex, not_found, not_regular}
+HEAD:kernel/initramfs/initramfs.lu:118:/// Whether the bytes at `o` begin a compressed stream PAX cannot read:
+HEAD:kernel/initramfs/initramfs.lu:121:fn compressed_at(o: u64) -> bool {
+HEAD:kernel/initramfs/initramfs.lu:154:/// archive's end. Refusals: `compressed`, `bad_magic`, `truncated`.
+HEAD:kernel/initramfs/initramfs.lu:164:    if compressed_at(p) {
+HEAD:kernel/initramfs/initramfs.lu:165:        return compressed
+HEAD:kernel/initramfs/initramfs.lu:409:        compressed => C_COMPRESSED,
+HEAD:kernel/initramfs/initramfs.lu:443:const C_COMPRESSED: u64 = 2
+HEAD:kernel/initramfs/initramfs.lu:459:        compressed => C_COMPRESSED,
+HEAD:kernel/initramfs/initramfs.lu:473:        compressed => { return C_COMPRESSED },
+HEAD:kernel/initramfs/initramfs.lu:489:    if c == C_COMPRESSED {
+HEAD:kernel/initramfs/initramfs.lu:490:        return "a compressed archive (PAX has no decompressor)"
+=== boreutils ===
+e69051365add3408e9ce20dc77d7a56133f3ed96
+HEAD:src/checksum/blake.lu:2://! The last block is retained, padded with zeros and compressed with f=1.
+HEAD:src/checksum_counter_test.lu:43:    assert(high_answer != low_answer, "BLAKE2 compression must use the high counter word")
+HEAD:src/checksum_counter_test.lu:58:        "BLAKE2 compresses retained block before next byte",
+HEAD:src/checksum_stream_test.lu:25:// regression. Chunking is deliberate and independent of compression sizes.
+HEAD:src/sort.lu:66://! `--files0-from`, `--compress-program` and `--debug` are parsed, so a
+HEAD:src/sort.lu:364:        if k == "compress-program" {
+HEAD:src/sort.lu:365:            o.unsupported = "--compress-program"
+HEAD:src/sort.lu:456:    (mut s).push(bore.takes("", "compress-program"))
