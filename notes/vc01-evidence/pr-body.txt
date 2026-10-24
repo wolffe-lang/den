@@ -1,0 +1,105 @@
+Footprint: cross-cutting
+
+## Forbidden
+
+Clean-room RFC/specification/documentation and black-box oracles only. No codec
+or Git implementation source read, no RFC sample C copied, no production
+codec subprocess/FFI/dependency. No Mac builds, labels, trunk push, merge,
+release, host package installation or planning/memory edits. Runtime jobs use
+hasu CPUs 0–5 under hasu-A.lock, pinned Ubuntu and a 12-GiB container limit.
+
+## Inputs verified
+
+- `857b898`: prediction committed before implementation.
+- `bda287c`: primary RFC/FIPS/Git documentation provenance.
+- `fea43c1`: bounded stored/fixed/dynamic inflate and malformed vectors.
+- `ec14d23`: initial stored/fixed encoder and independent measurements.
+- `976b58d`: dynamic Huffman selection after fixed-only exceeded the size bar.
+- `34c22d8`: range tests, Git corpus interop and deterministic fuzz.
+- `b1458e4`: named validated loose-object raw-byte/oid parity mode.
+- `aef5f9f`: codec checked/native/release gates in CI.
+- `8c7cee3`: README refresh.
+- `c1c3d61`: API/limits and measurement tools.
+- `049b892`: targeted lazy-match invariant and strategy measurement.
+
+Base den fd0e398. Whole archives: wolf 0.2.35 cf0c13d3, lupin 0.1.56 tag
+28547b4 (binary embeds 294d626), bundled std 2386522e. Release API digests read
+twice; four raw responses retained. Signed Git 2.56.0 built and verified on
+hasu: binary SHA-256 c4848492938c4ebfffbefe1fbbaa68b9af90c86d1f6a20e76816c5ff37fcfa60.
+
+## Prediction
+
+Prediction precedes code in notes/vc01-evidence/prediction.txt. All three block
+forms and more than 25 malformed rows pass; four actual checked programs pass,
+so the predicted possible checked budget limit did not arise. Fixed-only size
+prediction missed zero/text fixtures (up to 1.3889x); work stopped to tune, and
+dynamic selection brought every nine-repo ratio to <=1.0068, with no waiver.
+Release random encode/decode 29.25/67.04 MB/s fits prediction; zero encoding
+157.47 MB/s exceeds the predicted 5–40 MB/s range. Peak RSS 427,792 KiB is
+below the predicted 600 MB. No streaming-pack claim.
+
+## Evidence index
+
+- Four checked programs; 52 independent vectors; all lengths 3–258 and every
+  distance range through 32768; 2,272 independent matrix calls per native tier,
+  both encoder directions validated with zlib 1.3. Codec unsupported rows: 0.
+- 1,067 loose objects and 31 packed entries inflated, reconstructed SHA-1 and
+  bytes compared to Git; all 1,098 objects rewritten by den and read by Git.
+  Nine scratch repositories pass fsck; truncated/checksum corruption refused.
+- Nine per-corpus size ratios against actual Git level-1 files:
+  binary .998192; empty 1; linear .998827; merge .997321; packed .998827;
+  rename .997917; symlink 1; thousand 1.006731; two .995885. Gate ceiling 1.25.
+- Deterministic fuzz on native and release: 250 rounds / 1,250 calls each;
+  78 valid mutations accepted, 672 invalid mutations refused. No traps.
+- 100,000,000-byte release file-driver measurements (3 runs, first warm-up):
+  random encode/decode 29.25/67.04 MB/s, peak RSS 427,792/426,292 KiB;
+  zero encode/decode 157.47/77.57 MB/s, peak RSS 197,476/328,852 KiB.
+  Encoded sizes 100,015,266 and 138,484; zlib level-1 ratios .999849/.317348.
+- CI plant PR #3, head 7fd2d47, run 40133795581, Linux every-gate job:
+  `wolf-trap: assert at src/zlib_test.lu:16:5`, exit 134. One-byte Adler seed
+  corruption; closed unmerged. Clean code committed first. Named raw parity
+  selftests also reject oid corruption, checksum corruption and trailing bytes.
+- Lazy/greedy release measurements: repeated text both 35,054 bytes; phrases
+  both 772,338 bytes, lazy 0.1215 s vs greedy 0.1017 s. The targeted 8,000-byte
+  lookahead witness gives 6,207 vs 6,610 bytes. No universal speed/size gain claimed.
+- Authoritative final whole gate: `notes/vc01-evidence/final-gate.log`; all
+  55 implementation/test/CI/pin input files match `tested-inputs.sha256` on the
+  Mac byte for byte after the run. Subsequent edits are documentation/evidence
+  only. Existing TLS checked-budget refusal remains loud and counted separately.
+  All codec checked programs pass. README read and refreshed.
+- Full gate includes planner, formatting, native/release scaffold, SHA,
+  local TLS, independently reproducible corpus, codec gates, named parity
+  selftests, 1 shape-pass/31 not-yet scaffold rows, strict/empty-filter refusal,
+  and two identical static builds (stripped 1,237,528 bytes).
+
+### Rulings and API handoff
+
+R-vc01-1 A adopted: max_output is inclusive; exact-cap success, the first byte
+beyond it is limit. Negative caps are invalid. API signatures match the adopted
+draft; DeflateErrors names its existing three-tag row to satisfy W0602, without
+changing that row. vc02 uses level 1, treats -1 as 1, rejects other settings by
+name, advances by consumed, and validates raw header/oid itself. No upstream
+issue found; no issue filed. R-vc01-1 A is recorded in API comments and MAP.
+
+## Done-when
+
+- [x] Prediction before code; primary specifications read and cited
+- [x] All inflate block forms and malformed classes on native and actual checked
+- [x] Independent bidirectional zlib and Git corpus/loose-object/fsck evidence
+- [x] Size stop honored and encoder tuned below 1.25 for all corpora
+- [x] 100-MB throughput/memory; deterministic native/release fuzz
+- [x] Codec CI gates; Adler plant seen red and closed unmerged
+- [x] README, MAP, SOURCES, FORMATS and CHANGELOG refreshed
+- [x] Final clean whole gate and tested-input manifest
+- [ ] Final head pushed; status read once; lane audit quoted
+- [ ] PR/full tier green — orchestrator owns label and watch
+
+The lane tool instructions prohibit Markdown report notes, so this PR and
+notes/vc01-evidence/pr-body.txt carry the five sections; no
+notes/vc01-the-codec.md was written.
+
+Prune after merge/evidence adoption: Mac plant worktree
+`/Users/mfwolffe/lanes/vc01/target/plant-adler`, then
+`/Users/mfwolffe/lanes/vc01`; hasu `/home/mfwolffe/lanes/vc01` (~1.3 GiB)
+and the lane image `localhost/den-vc01`. Preserve shared hasu-env and other
+lanes. No owned job remains running. No path outside the lane is to be pruned.

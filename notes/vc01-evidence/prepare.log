@@ -1,0 +1,1947 @@
+STEP 1/4: FROM docker.io/library/ubuntu:24.04@sha256:534baea6a22c03a63003dbc8dbe78fe34bc0d7e595d9a9dc9834884ff530eb55
+Trying to pull docker.io/library/ubuntu@sha256:534baea6a22c03a63003dbc8dbe78fe34bc0d7e595d9a9dc9834884ff530eb55...
+Getting image source signatures
+Copying blob sha256:a60ef8ec184edb5ed91f5983f00261359fb2fe20f603e8d488b9477d32fcad70
+Copying config sha256:69f919497cada9a8611f3de61df902d9f94bf20f84552ef5bd93125c38608ef9
+Writing manifest to image destination
+STEP 2/4: RUN taskset -c 0-5 apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends build-essential cargo rustc binutils clang lld ca-certificates curl git gnupg python3 gettext libssl-dev libcurl4-openssl-dev libexpat1-dev zlib1g-dev perl tcl libz-dev time xz-utils openssl && rm -rf /var/lib/apt/lists/*
+Get:1 http://security.ubuntu.com/ubuntu noble-security InRelease [126 kB]
+Get:2 http://archive.ubuntu.com/ubuntu noble InRelease [256 kB]
+Get:3 http://security.ubuntu.com/ubuntu noble-security/universe amd64 Packages [1549 kB]
+Get:4 http://archive.ubuntu.com/ubuntu noble-updates InRelease [126 kB]
+Get:5 http://archive.ubuntu.com/ubuntu noble-backports InRelease [126 kB]
+Get:6 http://archive.ubuntu.com/ubuntu noble/main amd64 Packages [1808 kB]
+Get:7 http://security.ubuntu.com/ubuntu noble-security/restricted amd64 Packages [2122 kB]
+Get:8 http://archive.ubuntu.com/ubuntu noble/restricted amd64 Packages [117 kB]
+Get:9 http://archive.ubuntu.com/ubuntu noble/multiverse amd64 Packages [331 kB]
+Get:10 http://archive.ubuntu.com/ubuntu noble/universe amd64 Packages [19.3 MB]
+Get:11 http://security.ubuntu.com/ubuntu noble-security/multiverse amd64 Packages [55.6 kB]
+Get:12 http://security.ubuntu.com/ubuntu noble-security/main amd64 Packages [1411 kB]
+Get:13 http://archive.ubuntu.com/ubuntu noble-updates/restricted amd64 Packages [2231 kB]
+Get:14 http://archive.ubuntu.com/ubuntu noble-updates/multiverse amd64 Packages [61.7 kB]
+Get:15 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 Packages [1733 kB]
+Get:16 http://archive.ubuntu.com/ubuntu noble-updates/universe amd64 Packages [2170 kB]
+Get:17 http://archive.ubuntu.com/ubuntu noble-backports/main amd64 Packages [49.0 kB]
+Get:18 http://archive.ubuntu.com/ubuntu noble-backports/multiverse amd64 Packages [669 B]
+Get:19 http://archive.ubuntu.com/ubuntu noble-backports/universe amd64 Packages [36.0 kB]
+Fetched 33.6 MB in 4s (9460 kB/s)
+Reading package lists...
+Reading package lists...
+Building dependency tree...
+Reading state information...
+The following additional packages will be installed:
+  adduser binutils-common binutils-x86-64-linux-gnu bzip2 clang-18 cpp cpp-13
+  cpp-13-x86-64-linux-gnu cpp-x86-64-linux-gnu dirmngr dpkg-dev g++ g++-13
+  g++-13-x86-64-linux-gnu g++-x86-64-linux-gnu gcc gcc-13 gcc-13-base
+  gcc-13-x86-64-linux-gnu gcc-x86-64-linux-gnu gettext-base git-man
+  gnupg-utils gpg gpg-agent gpgconf gpgsm keyboxd libasan8 libatomic1
+  libbinutils libbrotli1 libbsd0 libc-dev-bin libc6-dev libcc1-0
+  libclang-common-18-dev libclang-cpp18 libclang1-18 libcrypt-dev
+  libctf-nobfd0 libctf0 libcurl3t64-gnutls libcurl4t64 libdpkg-perl libedit2
+  liberror-perl libexpat1 libgc1 libgcc-13-dev libgdbm-compat4t64 libgdbm6t64
+  libgit2-1.7 libgomp1 libgprofng0 libgssapi-krb5-2 libhttp-parser2.9
+  libhwasan0 libicu74 libisl23 libitm1 libjansson4 libk5crypto3 libkeyutils1
+  libkrb5-3 libkrb5support0 libksba8 libldap2 libllvm17t64 libllvm18 liblsan0
+  liblzma5 libmpc3 libmpfr6 libnghttp2-14 libobjc-13-dev libobjc4
+  libperl5.38t64 libpsl5t64 libpython3-stdlib libpython3.12-minimal
+  libpython3.12-stdlib libquadmath0 libreadline8t64 librtmp1 libsasl2-2
+  libsasl2-modules-db libsframe1 libsqlite3-0 libssh-4 libssh2-1t64 libssl3t64
+  libstd-rust-1.75 libstd-rust-dev libstdc++-13-dev libtcl8.6 libtsan2
+  libubsan1 libxml2 linux-libc-dev lld-18 llvm-18-linker-tools
+  lto-disabled-list make media-types netbase patch perl-modules-5.38
+  pinentry-curses python3-minimal python3.12 python3.12-minimal
+  readline-common rpcsvc-proto tcl8.6 tzdata zlib1g
+Suggested packages:
+  liblocale-gettext-perl cron quota ecryptfs-utils binutils-doc gprofng-gui
+  bzip2-doc cargo-doc clang-18-doc wasi-libc cpp-doc gcc-13-locales cpp-13-doc
+  dbus-user-session libpam-systemd pinentry-gnome3 tor debian-keyring
+  g++-multilib g++-13-multilib gcc-13-doc gcc-multilib manpages-dev autoconf
+  automake libtool flex bison gdb gcc-doc gcc-13-multilib gdb-x86-64-linux-gnu
+  autopoint gettext-doc libasprintf-dev libgettextpo-dev git-daemon-run
+  | git-daemon-sysvinit git-doc git-email git-gui gitk gitweb git-cvs
+  git-mediawiki git-svn parcimonie xloadimage gpg-wks-server scdaemon
+  glibc-doc libcurl4-doc libidn-dev libkrb5-dev libldap2-dev librtmp-dev
+  libssh2-1-dev pkg-config bzr gdbm-l10n krb5-doc krb5-user libssl-doc
+  libstdc++-13-doc make-doc ed diffutils-doc perl-doc
+  libterm-readline-gnu-perl | libterm-readline-perl-perl
+  libtap-harness-archive-perl pinentry-doc python3-doc python3-tk python3-venv
+  python3.12-venv python3.12-doc binfmt-support readline-doc llvm-17 lld-17
+  clang-17 tcl-tclreadline
+Recommended packages:
+  llvm-18-dev fakeroot libalgorithm-merge-perl less ssh-client gnupg-l10n
+  gpg-wks-client manpages manpages-dev libc-devtools libclang-rt-18-dev
+  libfile-fcntllock-perl liblocale-gettext-perl krb5-locales libldap-common
+  publicsuffix libsasl2-modules
+The following NEW packages will be installed:
+  adduser binutils binutils-common binutils-x86-64-linux-gnu build-essential
+  bzip2 ca-certificates cargo clang clang-18 cpp cpp-13
+  cpp-13-x86-64-linux-gnu cpp-x86-64-linux-gnu curl dirmngr dpkg-dev g++
+  g++-13 g++-13-x86-64-linux-gnu g++-x86-64-linux-gnu gcc gcc-13 gcc-13-base
+  gcc-13-x86-64-linux-gnu gcc-x86-64-linux-gnu gettext gettext-base git
+  git-man gnupg gnupg-utils gpg gpg-agent gpgconf gpgsm keyboxd libasan8
+  libatomic1 libbinutils libbrotli1 libbsd0 libc-dev-bin libc6-dev libcc1-0
+  libclang-common-18-dev libclang-cpp18 libclang1-18 libcrypt-dev
+  libctf-nobfd0 libctf0 libcurl3t64-gnutls libcurl4-openssl-dev libcurl4t64
+  libdpkg-perl libedit2 liberror-perl libexpat1 libexpat1-dev libgc1
+  libgcc-13-dev libgdbm-compat4t64 libgdbm6t64 libgit2-1.7 libgomp1
+  libgprofng0 libgssapi-krb5-2 libhttp-parser2.9 libhwasan0 libicu74 libisl23
+  libitm1 libjansson4 libk5crypto3 libkeyutils1 libkrb5-3 libkrb5support0
+  libksba8 libldap2 libllvm17t64 libllvm18 liblsan0 libmpc3 libmpfr6
+  libnghttp2-14 libobjc-13-dev libobjc4 libperl5.38t64 libpsl5t64
+  libpython3-stdlib libpython3.12-minimal libpython3.12-stdlib libquadmath0
+  libreadline8t64 librtmp1 libsasl2-2 libsasl2-modules-db libsframe1
+  libsqlite3-0 libssh-4 libssh2-1t64 libssl-dev libstd-rust-1.75
+  libstd-rust-dev libstdc++-13-dev libtcl8.6 libtsan2 libubsan1 libxml2
+  linux-libc-dev lld lld-18 llvm-18-linker-tools lto-disabled-list make
+  media-types netbase openssl patch perl perl-modules-5.38 pinentry-curses
+  python3 python3-minimal python3.12 python3.12-minimal readline-common
+  rpcsvc-proto rustc tcl tcl8.6 time tzdata xz-utils zlib1g-dev
+The following packages will be upgraded:
+  liblzma5 libssl3t64 zlib1g
+3 upgraded, 135 newly installed, 0 to remove and 4 not upgraded.
+Need to get 267 MB of archives.
+After this operation, 1101 MB of additional disk space will be used.
+Get:1 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 libssl3t64 amd64 3.0.13-0ubuntu3.16 [1945 kB]
+Get:2 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 libpython3.12-minimal amd64 3.12.3-1ubuntu0.17 [839 kB]
+Get:3 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 libexpat1 amd64 2.6.1-2ubuntu0.6 [98.9 kB]
+Get:4 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 zlib1g amd64 1:1.3.dfsg-3.1ubuntu2.3 [63.2 kB]
+Get:5 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 python3.12-minimal amd64 3.12.3-1ubuntu0.17 [2335 kB]
+Get:6 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 python3-minimal amd64 3.12.3-0ubuntu2.1 [27.4 kB]
+Get:7 http://archive.ubuntu.com/ubuntu noble/main amd64 media-types all 10.1.0 [27.5 kB]
+Get:8 http://archive.ubuntu.com/ubuntu noble/main amd64 netbase all 6.4 [13.1 kB]
+Get:9 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 tzdata all 2026e-0ubuntu0.24.04.1 [282 kB]
+Get:10 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 liblzma5 amd64 5.6.1+really5.4.5-1ubuntu0.4 [128 kB]
+Get:11 http://archive.ubuntu.com/ubuntu noble/main amd64 readline-common all 8.2-4build1 [56.5 kB]
+Get:12 http://archive.ubuntu.com/ubuntu noble/main amd64 libreadline8t64 amd64 8.2-4build1 [153 kB]
+Get:13 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 libsqlite3-0 amd64 3.45.1-1ubuntu2.8 [702 kB]
+Get:14 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 libpython3.12-stdlib amd64 3.12.3-1ubuntu0.17 [2071 kB]
+Get:15 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 python3.12 amd64 3.12.3-1ubuntu0.17 [651 kB]
+Get:16 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 libpython3-stdlib amd64 3.12.3-0ubuntu2.1 [10.1 kB]
+Get:17 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 python3 amd64 3.12.3-0ubuntu2.1 [23.0 kB]
+Get:18 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 perl-modules-5.38 all 5.38.2-3.2ubuntu0.6 [3110 kB]
+Get:19 http://archive.ubuntu.com/ubuntu noble/main amd64 libgdbm6t64 amd64 1.23-5.1build1 [34.4 kB]
+Get:20 http://archive.ubuntu.com/ubuntu noble/main amd64 libgdbm-compat4t64 amd64 1.23-5.1build1 [6710 B]
+Get:21 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 libperl5.38t64 amd64 5.38.2-3.2ubuntu0.6 [4864 kB]
+Get:22 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 perl amd64 5.38.2-3.2ubuntu0.6 [231 kB]
+Get:23 http://archive.ubuntu.com/ubuntu noble/main amd64 adduser all 3.137ubuntu1 [101 kB]
+Get:24 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 openssl amd64 3.0.13-0ubuntu3.16 [1004 kB]
+Get:25 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 ca-certificates all 20260816ubuntu0.24.04.1 [139 kB]
+Get:26 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 libbsd0 amd64 0.12.1-1build1.1 [41.2 kB]
+Get:27 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 libkrb5support0 amd64 1.20.1-6ubuntu2.10 [34.9 kB]
+Get:28 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 libk5crypto3 amd64 1.20.1-6ubuntu2.10 [81.9 kB]
+Get:29 http://archive.ubuntu.com/ubuntu noble/main amd64 libkeyutils1 amd64 1.6.3-3build1 [9490 B]
+Get:30 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 libkrb5-3 amd64 1.20.1-6ubuntu2.10 [348 kB]
+Get:31 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 libgssapi-krb5-2 amd64 1.20.1-6ubuntu2.10 [143 kB]
+Get:32 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 libicu74 amd64 74.2-1ubuntu3.1 [10.9 MB]
+Get:33 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 libxml2 amd64 2.9.14+dfsg-1.3ubuntu3.10 [764 kB]
+Get:34 http://archive.ubuntu.com/ubuntu noble/main amd64 gettext-base amd64 0.21-14ubuntu2 [38.4 kB]
+Get:35 http://archive.ubuntu.com/ubuntu noble/main amd64 libedit2 amd64 3.1-20230828-1build1 [97.6 kB]
+Get:36 http://archive.ubuntu.com/ubuntu noble/main amd64 libjansson4 amd64 2.14-2build2 [32.8 kB]
+Get:37 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 libnghttp2-14 amd64 1.59.0-1ubuntu0.4 [74.6 kB]
+Get:38 http://archive.ubuntu.com/ubuntu noble/main amd64 libpsl5t64 amd64 0.21.2-1.1build1 [57.1 kB]
+Get:39 http://archive.ubuntu.com/ubuntu noble/main amd64 time amd64 1.9-0.2build1 [45.2 kB]
+Get:40 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 xz-utils amd64 5.6.1+really5.4.5-1ubuntu0.4 [267 kB]
+Get:41 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 binutils-common amd64 2.42-4ubuntu2.10 [240 kB]
+Get:42 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 libsframe1 amd64 2.42-4ubuntu2.10 [15.7 kB]
+Get:43 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 libbinutils amd64 2.42-4ubuntu2.10 [577 kB]
+Get:44 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 libctf-nobfd0 amd64 2.42-4ubuntu2.10 [98.0 kB]
+Get:45 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 libctf0 amd64 2.42-4ubuntu2.10 [94.5 kB]
+Get:46 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 libgprofng0 amd64 2.42-4ubuntu2.10 [849 kB]
+Get:47 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 binutils-x86-64-linux-gnu amd64 2.42-4ubuntu2.10 [2463 kB]
+Get:48 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 binutils amd64 2.42-4ubuntu2.10 [18.2 kB]
+Get:49 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 libc-dev-bin amd64 2.39-0ubuntu8.9 [20.4 kB]
+Get:50 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 linux-libc-dev amd64 6.8.0-147.147 [1595 kB]
+Get:51 http://archive.ubuntu.com/ubuntu noble/main amd64 libcrypt-dev amd64 1:4.4.36-4build1 [112 kB]
+Get:52 http://archive.ubuntu.com/ubuntu noble/main amd64 rpcsvc-proto amd64 1.4.2-0ubuntu7 [67.4 kB]
+Get:53 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 libc6-dev amd64 2.39-0ubuntu8.9 [2126 kB]
+Get:54 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 gcc-13-base amd64 13.3.0-6ubuntu2~24.04.1 [51.6 kB]
+Get:55 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 libisl23 amd64 0.26-3build1.1 [680 kB]
+Get:56 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 libmpfr6 amd64 4.2.1-1build1.1 [353 kB]
+Get:57 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 libmpc3 amd64 1.3.1-1build1.1 [54.6 kB]
+Get:58 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 cpp-13-x86-64-linux-gnu amd64 13.3.0-6ubuntu2~24.04.1 [10.7 MB]
+Get:59 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 cpp-13 amd64 13.3.0-6ubuntu2~24.04.1 [1042 B]
+Get:60 http://archive.ubuntu.com/ubuntu noble/main amd64 cpp-x86-64-linux-gnu amd64 4:13.2.0-7ubuntu1 [5326 B]
+Get:61 http://archive.ubuntu.com/ubuntu noble/main amd64 cpp amd64 4:13.2.0-7ubuntu1 [22.4 kB]
+Get:62 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 libcc1-0 amd64 14.2.0-4ubuntu2~24.04.1 [48.0 kB]
+Get:63 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 libgomp1 amd64 14.2.0-4ubuntu2~24.04.1 [148 kB]
+Get:64 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 libitm1 amd64 14.2.0-4ubuntu2~24.04.1 [29.7 kB]
+Get:65 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 libatomic1 amd64 14.2.0-4ubuntu2~24.04.1 [10.5 kB]
+Get:66 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 libasan8 amd64 14.2.0-4ubuntu2~24.04.1 [3027 kB]
+Get:67 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 liblsan0 amd64 14.2.0-4ubuntu2~24.04.1 [1322 kB]
+Get:68 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 libtsan2 amd64 14.2.0-4ubuntu2~24.04.1 [2772 kB]
+Get:69 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 libubsan1 amd64 14.2.0-4ubuntu2~24.04.1 [1184 kB]
+Get:70 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 libhwasan0 amd64 14.2.0-4ubuntu2~24.04.1 [1641 kB]
+Get:71 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 libquadmath0 amd64 14.2.0-4ubuntu2~24.04.1 [153 kB]
+Get:72 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 libgcc-13-dev amd64 13.3.0-6ubuntu2~24.04.1 [2681 kB]
+Get:73 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 gcc-13-x86-64-linux-gnu amd64 13.3.0-6ubuntu2~24.04.1 [21.1 MB]
+Get:74 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 gcc-13 amd64 13.3.0-6ubuntu2~24.04.1 [494 kB]
+Get:75 http://archive.ubuntu.com/ubuntu noble/main amd64 gcc-x86-64-linux-gnu amd64 4:13.2.0-7ubuntu1 [1212 B]
+Get:76 http://archive.ubuntu.com/ubuntu noble/main amd64 gcc amd64 4:13.2.0-7ubuntu1 [5018 B]
+Get:77 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 libstdc++-13-dev amd64 13.3.0-6ubuntu2~24.04.1 [2420 kB]
+Get:78 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 g++-13-x86-64-linux-gnu amd64 13.3.0-6ubuntu2~24.04.1 [12.2 MB]
+Get:79 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 g++-13 amd64 13.3.0-6ubuntu2~24.04.1 [16.0 kB]
+Get:80 http://archive.ubuntu.com/ubuntu noble/main amd64 g++-x86-64-linux-gnu amd64 4:13.2.0-7ubuntu1 [964 B]
+Get:81 http://archive.ubuntu.com/ubuntu noble/main amd64 g++ amd64 4:13.2.0-7ubuntu1 [1100 B]
+Get:82 http://archive.ubuntu.com/ubuntu noble/main amd64 make amd64 4.3-4.1build2 [180 kB]
+Get:83 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 libdpkg-perl all 1.22.6ubuntu6.6 [268 kB]
+Get:84 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 bzip2 amd64 1.0.8-5.1ubuntu0.1 [34.6 kB]
+Get:85 http://archive.ubuntu.com/ubuntu noble/main amd64 patch amd64 2.7.6-7build3 [104 kB]
+Get:86 http://archive.ubuntu.com/ubuntu noble/main amd64 lto-disabled-list all 47 [12.4 kB]
+Get:87 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 dpkg-dev all 1.22.6ubuntu6.6 [1074 kB]
+Get:88 http://archive.ubuntu.com/ubuntu noble/main amd64 build-essential amd64 12.10ubuntu1 [4928 B]
+Get:89 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 libllvm18 amd64 1:18.1.3-1ubuntu1 [27.5 MB]
+Get:90 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 libclang-cpp18 amd64 1:18.1.3-1ubuntu1 [13.5 MB]
+Get:91 http://archive.ubuntu.com/ubuntu noble/main amd64 libgc1 amd64 1:8.2.6-1build1 [90.3 kB]
+Get:92 http://archive.ubuntu.com/ubuntu noble-updates/universe amd64 libobjc4 amd64 14.2.0-4ubuntu2~24.04.1 [47.1 kB]
+Get:93 http://archive.ubuntu.com/ubuntu noble-updates/universe amd64 libobjc-13-dev amd64 13.3.0-6ubuntu2~24.04.1 [194 kB]
+Get:94 http://archive.ubuntu.com/ubuntu noble-updates/universe amd64 libclang-common-18-dev amd64 1:18.1.3-1ubuntu1 [736 kB]
+Get:95 http://archive.ubuntu.com/ubuntu noble-updates/universe amd64 llvm-18-linker-tools amd64 1:18.1.3-1ubuntu1 [1314 kB]
+Get:96 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 libclang1-18 amd64 1:18.1.3-1ubuntu1 [7803 kB]
+Get:97 http://archive.ubuntu.com/ubuntu noble-updates/universe amd64 clang-18 amd64 1:18.1.3-1ubuntu1 [80.0 kB]
+Get:98 http://archive.ubuntu.com/ubuntu noble/universe amd64 clang amd64 1:18.0-59~exp2 [5846 B]
+Get:99 http://archive.ubuntu.com/ubuntu noble/main amd64 libbrotli1 amd64 1.1.0-2build2 [331 kB]
+Get:100 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 libsasl2-modules-db amd64 2.1.28+dfsg1-5ubuntu3.1 [20.4 kB]
+Get:101 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 libsasl2-2 amd64 2.1.28+dfsg1-5ubuntu3.1 [53.2 kB]
+Get:102 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 libldap2 amd64 2.6.10+dfsg-0ubuntu0.24.04.1 [198 kB]
+Get:103 http://archive.ubuntu.com/ubuntu noble/main amd64 librtmp1 amd64 2.4+20151223.gitfa8646d.1-2build7 [56.3 kB]
+Get:104 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 libssh-4 amd64 0.10.6-2ubuntu0.5 [191 kB]
+Get:105 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 libcurl4t64 amd64 8.5.0-2ubuntu10.16 [344 kB]
+Get:106 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 curl amd64 8.5.0-2ubuntu10.16 [226 kB]
+Get:107 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 gpgconf amd64 2.4.4-2ubuntu17.6 [104 kB]
+Get:108 http://archive.ubuntu.com/ubuntu noble/main amd64 libksba8 amd64 1.6.6-1build1 [122 kB]
+Get:109 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 dirmngr amd64 2.4.4-2ubuntu17.6 [323 kB]
+Get:110 http://archive.ubuntu.com/ubuntu noble/main amd64 gettext amd64 0.21-14ubuntu2 [864 kB]
+Get:111 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 libcurl3t64-gnutls amd64 8.5.0-2ubuntu10.16 [337 kB]
+Get:112 http://archive.ubuntu.com/ubuntu noble/main amd64 liberror-perl all 0.17029-2 [25.6 kB]
+Get:113 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 git-man all 1:2.43.0-1ubuntu7.4 [1101 kB]
+Get:114 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 git amd64 1:2.43.0-1ubuntu7.4 [3681 kB]
+Get:115 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 gnupg-utils amd64 2.4.4-2ubuntu17.6 [109 kB]
+Get:116 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 gpg amd64 2.4.4-2ubuntu17.6 [565 kB]
+Get:117 http://archive.ubuntu.com/ubuntu noble/main amd64 pinentry-curses amd64 1.2.1-3ubuntu5 [35.2 kB]
+Get:118 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 gpg-agent amd64 2.4.4-2ubuntu17.6 [227 kB]
+Get:119 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 gpgsm amd64 2.4.4-2ubuntu17.6 [232 kB]
+Get:120 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 keyboxd amd64 2.4.4-2ubuntu17.6 [78.3 kB]
+Get:121 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 gnupg all 2.4.4-2ubuntu17.6 [359 kB]
+Get:122 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 libcurl4-openssl-dev amd64 8.5.0-2ubuntu10.16 [447 kB]
+Get:123 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 libexpat1-dev amd64 2.6.1-2ubuntu0.6 [147 kB]
+Get:124 http://archive.ubuntu.com/ubuntu noble/main amd64 libhttp-parser2.9 amd64 2.9.4-6build1 [22.3 kB]
+Get:125 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 libssh2-1t64 amd64 1.11.0-4.1ubuntu0.24.04.4 [121 kB]
+Get:126 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 libgit2-1.7 amd64 1.7.2+ds-1ubuntu3.3 [530 kB]
+Get:127 http://archive.ubuntu.com/ubuntu noble/main amd64 libllvm17t64 amd64 1:17.0.6-9ubuntu1 [26.2 MB]
+Get:128 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 libssl-dev amd64 3.0.13-0ubuntu3.16 [2409 kB]
+Get:129 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 libstd-rust-1.75 amd64 1.75.0+dfsg0ubuntu1-0ubuntu7.4 [20.2 MB]
+Get:130 http://archive.ubuntu.com/ubuntu noble/main amd64 libtcl8.6 amd64 8.6.14+dfsg-1build1 [988 kB]
+Get:131 http://archive.ubuntu.com/ubuntu noble-updates/universe amd64 lld-18 amd64 1:18.1.3-1ubuntu1 [1372 kB]
+Get:132 http://archive.ubuntu.com/ubuntu noble/universe amd64 lld amd64 1:18.0-59~exp2 [5494 B]
+Get:133 http://archive.ubuntu.com/ubuntu noble/main amd64 tcl8.6 amd64 8.6.14+dfsg-1build1 [14.7 kB]
+Get:134 http://archive.ubuntu.com/ubuntu noble/main amd64 tcl amd64 8.6.14build1 [4124 B]
+Get:135 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 zlib1g-dev amd64 1:1.3.dfsg-3.1ubuntu2.3 [894 kB]
+Get:136 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 libstd-rust-dev amd64 1.75.0+dfsg0ubuntu1-0ubuntu7.4 [40.8 MB]
+Get:137 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 rustc amd64 1.75.0+dfsg0ubuntu1-0ubuntu7.4 [3372 kB]
+Get:138 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 cargo amd64 1.75.0+dfsg0ubuntu1-0ubuntu7.4 [6217 kB]
+debconf: delaying package configuration, since apt-utils is not installed
+Fetched 267 MB in 17s (15.9 MB/s)
+(Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 4381 files and directories currently installed.)
+Preparing to unpack .../libssl3t64_3.0.13-0ubuntu3.16_amd64.deb ...
+Unpacking libssl3t64:amd64 (3.0.13-0ubuntu3.16) over (3.0.13-0ubuntu3.15) ...
+Setting up libssl3t64:amd64 (3.0.13-0ubuntu3.16) ...
+Selecting previously unselected package libpython3.12-minimal:amd64.
+(Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 4381 files and directories currently installed.)
+Preparing to unpack .../libpython3.12-minimal_3.12.3-1ubuntu0.17_amd64.deb ...
+Unpacking libpython3.12-minimal:amd64 (3.12.3-1ubuntu0.17) ...
+Selecting previously unselected package libexpat1:amd64.
+Preparing to unpack .../libexpat1_2.6.1-2ubuntu0.6_amd64.deb ...
+Unpacking libexpat1:amd64 (2.6.1-2ubuntu0.6) ...
+Preparing to unpack .../zlib1g_1%3a1.3.dfsg-3.1ubuntu2.3_amd64.deb ...
+Unpacking zlib1g:amd64 (1:1.3.dfsg-3.1ubuntu2.3) over (1:1.3.dfsg-3.1ubuntu2.2) ...
+Setting up zlib1g:amd64 (1:1.3.dfsg-3.1ubuntu2.3) ...
+Selecting previously unselected package python3.12-minimal.
+(Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 4689 files and directories currently installed.)
+Preparing to unpack .../python3.12-minimal_3.12.3-1ubuntu0.17_amd64.deb ...
+Unpacking python3.12-minimal (3.12.3-1ubuntu0.17) ...
+Setting up libpython3.12-minimal:amd64 (3.12.3-1ubuntu0.17) ...
+Setting up libexpat1:amd64 (2.6.1-2ubuntu0.6) ...
+Setting up python3.12-minimal (3.12.3-1ubuntu0.17) ...
+Selecting previously unselected package python3-minimal.
+(Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 4700 files and directories currently installed.)
+Preparing to unpack .../python3-minimal_3.12.3-0ubuntu2.1_amd64.deb ...
+Unpacking python3-minimal (3.12.3-0ubuntu2.1) ...
+Selecting previously unselected package media-types.
+Preparing to unpack .../media-types_10.1.0_all.deb ...
+Unpacking media-types (10.1.0) ...
+Selecting previously unselected package netbase.
+Preparing to unpack .../archives/netbase_6.4_all.deb ...
+Unpacking netbase (6.4) ...
+Selecting previously unselected package tzdata.
+Preparing to unpack .../tzdata_2026e-0ubuntu0.24.04.1_all.deb ...
+Unpacking tzdata (2026e-0ubuntu0.24.04.1) ...
+Preparing to unpack .../liblzma5_5.6.1+really5.4.5-1ubuntu0.4_amd64.deb ...
+Unpacking liblzma5:amd64 (5.6.1+really5.4.5-1ubuntu0.4) over (5.6.1+really5.4.5-1ubuntu0.3) ...
+Setting up liblzma5:amd64 (5.6.1+really5.4.5-1ubuntu0.4) ...
+Selecting previously unselected package readline-common.
+(Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 5263 files and directories currently installed.)
+Preparing to unpack .../0-readline-common_8.2-4build1_all.deb ...
+Unpacking readline-common (8.2-4build1) ...
+Selecting previously unselected package libreadline8t64:amd64.
+Preparing to unpack .../1-libreadline8t64_8.2-4build1_amd64.deb ...
+Adding 'diversion of /lib/x86_64-linux-gnu/libhistory.so.8 to /lib/x86_64-linux-gnu/libhistory.so.8.usr-is-merged by libreadline8t64'
+Adding 'diversion of /lib/x86_64-linux-gnu/libhistory.so.8.2 to /lib/x86_64-linux-gnu/libhistory.so.8.2.usr-is-merged by libreadline8t64'
+Adding 'diversion of /lib/x86_64-linux-gnu/libreadline.so.8 to /lib/x86_64-linux-gnu/libreadline.so.8.usr-is-merged by libreadline8t64'
+Adding 'diversion of /lib/x86_64-linux-gnu/libreadline.so.8.2 to /lib/x86_64-linux-gnu/libreadline.so.8.2.usr-is-merged by libreadline8t64'
+Unpacking libreadline8t64:amd64 (8.2-4build1) ...
+Selecting previously unselected package libsqlite3-0:amd64.
+Preparing to unpack .../2-libsqlite3-0_3.45.1-1ubuntu2.8_amd64.deb ...
+Unpacking libsqlite3-0:amd64 (3.45.1-1ubuntu2.8) ...
+Selecting previously unselected package libpython3.12-stdlib:amd64.
+Preparing to unpack .../3-libpython3.12-stdlib_3.12.3-1ubuntu0.17_amd64.deb ...
+Unpacking libpython3.12-stdlib:amd64 (3.12.3-1ubuntu0.17) ...
+Selecting previously unselected package python3.12.
+Preparing to unpack .../4-python3.12_3.12.3-1ubuntu0.17_amd64.deb ...
+Unpacking python3.12 (3.12.3-1ubuntu0.17) ...
+Selecting previously unselected package libpython3-stdlib:amd64.
+Preparing to unpack .../5-libpython3-stdlib_3.12.3-0ubuntu2.1_amd64.deb ...
+Unpacking libpython3-stdlib:amd64 (3.12.3-0ubuntu2.1) ...
+Setting up python3-minimal (3.12.3-0ubuntu2.1) ...
+Selecting previously unselected package python3.
+(Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 5706 files and directories currently installed.)
+Preparing to unpack .../0-python3_3.12.3-0ubuntu2.1_amd64.deb ...
+Unpacking python3 (3.12.3-0ubuntu2.1) ...
+Selecting previously unselected package perl-modules-5.38.
+Preparing to unpack .../1-perl-modules-5.38_5.38.2-3.2ubuntu0.6_all.deb ...
+Unpacking perl-modules-5.38 (5.38.2-3.2ubuntu0.6) ...
+Selecting previously unselected package libgdbm6t64:amd64.
+Preparing to unpack .../2-libgdbm6t64_1.23-5.1build1_amd64.deb ...
+Unpacking libgdbm6t64:amd64 (1.23-5.1build1) ...
+Selecting previously unselected package libgdbm-compat4t64:amd64.
+Preparing to unpack .../3-libgdbm-compat4t64_1.23-5.1build1_amd64.deb ...
+Unpacking libgdbm-compat4t64:amd64 (1.23-5.1build1) ...
+Selecting previously unselected package libperl5.38t64:amd64.
+Preparing to unpack .../4-libperl5.38t64_5.38.2-3.2ubuntu0.6_amd64.deb ...
+Unpacking libperl5.38t64:amd64 (5.38.2-3.2ubuntu0.6) ...
+Selecting previously unselected package perl.
+Preparing to unpack .../5-perl_5.38.2-3.2ubuntu0.6_amd64.deb ...
+Unpacking perl (5.38.2-3.2ubuntu0.6) ...
+Selecting previously unselected package adduser.
+Preparing to unpack .../6-adduser_3.137ubuntu1_all.deb ...
+Unpacking adduser (3.137ubuntu1) ...
+Setting up adduser (3.137ubuntu1) ...
+Selecting previously unselected package openssl.
+(Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 7787 files and directories currently installed.)
+Preparing to unpack .../000-openssl_3.0.13-0ubuntu3.16_amd64.deb ...
+Unpacking openssl (3.0.13-0ubuntu3.16) ...
+Selecting previously unselected package ca-certificates.
+Preparing to unpack .../001-ca-certificates_20260816ubuntu0.24.04.1_all.deb ...
+Unpacking ca-certificates (20260816ubuntu0.24.04.1) ...
+Selecting previously unselected package libbsd0:amd64.
+Preparing to unpack .../002-libbsd0_0.12.1-1build1.1_amd64.deb ...
+Unpacking libbsd0:amd64 (0.12.1-1build1.1) ...
+Selecting previously unselected package libkrb5support0:amd64.
+Preparing to unpack .../003-libkrb5support0_1.20.1-6ubuntu2.10_amd64.deb ...
+Unpacking libkrb5support0:amd64 (1.20.1-6ubuntu2.10) ...
+Selecting previously unselected package libk5crypto3:amd64.
+Preparing to unpack .../004-libk5crypto3_1.20.1-6ubuntu2.10_amd64.deb ...
+Unpacking libk5crypto3:amd64 (1.20.1-6ubuntu2.10) ...
+Selecting previously unselected package libkeyutils1:amd64.
+Preparing to unpack .../005-libkeyutils1_1.6.3-3build1_amd64.deb ...
+Unpacking libkeyutils1:amd64 (1.6.3-3build1) ...
+Selecting previously unselected package libkrb5-3:amd64.
+Preparing to unpack .../006-libkrb5-3_1.20.1-6ubuntu2.10_amd64.deb ...
+Unpacking libkrb5-3:amd64 (1.20.1-6ubuntu2.10) ...
+Selecting previously unselected package libgssapi-krb5-2:amd64.
+Preparing to unpack .../007-libgssapi-krb5-2_1.20.1-6ubuntu2.10_amd64.deb ...
+Unpacking libgssapi-krb5-2:amd64 (1.20.1-6ubuntu2.10) ...
+Selecting previously unselected package libicu74:amd64.
+Preparing to unpack .../008-libicu74_74.2-1ubuntu3.1_amd64.deb ...
+Unpacking libicu74:amd64 (74.2-1ubuntu3.1) ...
+Selecting previously unselected package libxml2:amd64.
+Preparing to unpack .../009-libxml2_2.9.14+dfsg-1.3ubuntu3.10_amd64.deb ...
+Unpacking libxml2:amd64 (2.9.14+dfsg-1.3ubuntu3.10) ...
+Selecting previously unselected package gettext-base.
+Preparing to unpack .../010-gettext-base_0.21-14ubuntu2_amd64.deb ...
+Unpacking gettext-base (0.21-14ubuntu2) ...
+Selecting previously unselected package libedit2:amd64.
+Preparing to unpack .../011-libedit2_3.1-20230828-1build1_amd64.deb ...
+Unpacking libedit2:amd64 (3.1-20230828-1build1) ...
+Selecting previously unselected package libjansson4:amd64.
+Preparing to unpack .../012-libjansson4_2.14-2build2_amd64.deb ...
+Unpacking libjansson4:amd64 (2.14-2build2) ...
+Selecting previously unselected package libnghttp2-14:amd64.
+Preparing to unpack .../013-libnghttp2-14_1.59.0-1ubuntu0.4_amd64.deb ...
+Unpacking libnghttp2-14:amd64 (1.59.0-1ubuntu0.4) ...
+Selecting previously unselected package libpsl5t64:amd64.
+Preparing to unpack .../014-libpsl5t64_0.21.2-1.1build1_amd64.deb ...
+Unpacking libpsl5t64:amd64 (0.21.2-1.1build1) ...
+Selecting previously unselected package time.
+Preparing to unpack .../015-time_1.9-0.2build1_amd64.deb ...
+Unpacking time (1.9-0.2build1) ...
+Selecting previously unselected package xz-utils.
+Preparing to unpack .../016-xz-utils_5.6.1+really5.4.5-1ubuntu0.4_amd64.deb ...
+Unpacking xz-utils (5.6.1+really5.4.5-1ubuntu0.4) ...
+Selecting previously unselected package binutils-common:amd64.
+Preparing to unpack .../017-binutils-common_2.42-4ubuntu2.10_amd64.deb ...
+Unpacking binutils-common:amd64 (2.42-4ubuntu2.10) ...
+Selecting previously unselected package libsframe1:amd64.
+Preparing to unpack .../018-libsframe1_2.42-4ubuntu2.10_amd64.deb ...
+Unpacking libsframe1:amd64 (2.42-4ubuntu2.10) ...
+Selecting previously unselected package libbinutils:amd64.
+Preparing to unpack .../019-libbinutils_2.42-4ubuntu2.10_amd64.deb ...
+Unpacking libbinutils:amd64 (2.42-4ubuntu2.10) ...
+Selecting previously unselected package libctf-nobfd0:amd64.
+Preparing to unpack .../020-libctf-nobfd0_2.42-4ubuntu2.10_amd64.deb ...
+Unpacking libctf-nobfd0:amd64 (2.42-4ubuntu2.10) ...
+Selecting previously unselected package libctf0:amd64.
+Preparing to unpack .../021-libctf0_2.42-4ubuntu2.10_amd64.deb ...
+Unpacking libctf0:amd64 (2.42-4ubuntu2.10) ...
+Selecting previously unselected package libgprofng0:amd64.
+Preparing to unpack .../022-libgprofng0_2.42-4ubuntu2.10_amd64.deb ...
+Unpacking libgprofng0:amd64 (2.42-4ubuntu2.10) ...
+Selecting previously unselected package binutils-x86-64-linux-gnu.
+Preparing to unpack .../023-binutils-x86-64-linux-gnu_2.42-4ubuntu2.10_amd64.deb ...
+Unpacking binutils-x86-64-linux-gnu (2.42-4ubuntu2.10) ...
+Selecting previously unselected package binutils.
+Preparing to unpack .../024-binutils_2.42-4ubuntu2.10_amd64.deb ...
+Unpacking binutils (2.42-4ubuntu2.10) ...
+Selecting previously unselected package libc-dev-bin.
+Preparing to unpack .../025-libc-dev-bin_2.39-0ubuntu8.9_amd64.deb ...
+Unpacking libc-dev-bin (2.39-0ubuntu8.9) ...
+Selecting previously unselected package linux-libc-dev:amd64.
+Preparing to unpack .../026-linux-libc-dev_6.8.0-147.147_amd64.deb ...
+Unpacking linux-libc-dev:amd64 (6.8.0-147.147) ...
+Selecting previously unselected package libcrypt-dev:amd64.
+Preparing to unpack .../027-libcrypt-dev_1%3a4.4.36-4build1_amd64.deb ...
+Unpacking libcrypt-dev:amd64 (1:4.4.36-4build1) ...
+Selecting previously unselected package rpcsvc-proto.
+Preparing to unpack .../028-rpcsvc-proto_1.4.2-0ubuntu7_amd64.deb ...
+Unpacking rpcsvc-proto (1.4.2-0ubuntu7) ...
+Selecting previously unselected package libc6-dev:amd64.
+Preparing to unpack .../029-libc6-dev_2.39-0ubuntu8.9_amd64.deb ...
+Unpacking libc6-dev:amd64 (2.39-0ubuntu8.9) ...
+Selecting previously unselected package gcc-13-base:amd64.
+Preparing to unpack .../030-gcc-13-base_13.3.0-6ubuntu2~24.04.1_amd64.deb ...
+Unpacking gcc-13-base:amd64 (13.3.0-6ubuntu2~24.04.1) ...
+Selecting previously unselected package libisl23:amd64.
+Preparing to unpack .../031-libisl23_0.26-3build1.1_amd64.deb ...
+Unpacking libisl23:amd64 (0.26-3build1.1) ...
+Selecting previously unselected package libmpfr6:amd64.
+Preparing to unpack .../032-libmpfr6_4.2.1-1build1.1_amd64.deb ...
+Unpacking libmpfr6:amd64 (4.2.1-1build1.1) ...
+Selecting previously unselected package libmpc3:amd64.
+Preparing to unpack .../033-libmpc3_1.3.1-1build1.1_amd64.deb ...
+Unpacking libmpc3:amd64 (1.3.1-1build1.1) ...
+Selecting previously unselected package cpp-13-x86-64-linux-gnu.
+Preparing to unpack .../034-cpp-13-x86-64-linux-gnu_13.3.0-6ubuntu2~24.04.1_amd64.deb ...
+Unpacking cpp-13-x86-64-linux-gnu (13.3.0-6ubuntu2~24.04.1) ...
+Selecting previously unselected package cpp-13.
+Preparing to unpack .../035-cpp-13_13.3.0-6ubuntu2~24.04.1_amd64.deb ...
+Unpacking cpp-13 (13.3.0-6ubuntu2~24.04.1) ...
+Selecting previously unselected package cpp-x86-64-linux-gnu.
+Preparing to unpack .../036-cpp-x86-64-linux-gnu_4%3a13.2.0-7ubuntu1_amd64.deb ...
+Unpacking cpp-x86-64-linux-gnu (4:13.2.0-7ubuntu1) ...
+Selecting previously unselected package cpp.
+Preparing to unpack .../037-cpp_4%3a13.2.0-7ubuntu1_amd64.deb ...
+Unpacking cpp (4:13.2.0-7ubuntu1) ...
+Selecting previously unselected package libcc1-0:amd64.
+Preparing to unpack .../038-libcc1-0_14.2.0-4ubuntu2~24.04.1_amd64.deb ...
+Unpacking libcc1-0:amd64 (14.2.0-4ubuntu2~24.04.1) ...
+Selecting previously unselected package libgomp1:amd64.
+Preparing to unpack .../039-libgomp1_14.2.0-4ubuntu2~24.04.1_amd64.deb ...
+Unpacking libgomp1:amd64 (14.2.0-4ubuntu2~24.04.1) ...
+Selecting previously unselected package libitm1:amd64.
+Preparing to unpack .../040-libitm1_14.2.0-4ubuntu2~24.04.1_amd64.deb ...
+Unpacking libitm1:amd64 (14.2.0-4ubuntu2~24.04.1) ...
+Selecting previously unselected package libatomic1:amd64.
+Preparing to unpack .../041-libatomic1_14.2.0-4ubuntu2~24.04.1_amd64.deb ...
+Unpacking libatomic1:amd64 (14.2.0-4ubuntu2~24.04.1) ...
+Selecting previously unselected package libasan8:amd64.
+Preparing to unpack .../042-libasan8_14.2.0-4ubuntu2~24.04.1_amd64.deb ...
+Unpacking libasan8:amd64 (14.2.0-4ubuntu2~24.04.1) ...
+Selecting previously unselected package liblsan0:amd64.
+Preparing to unpack .../043-liblsan0_14.2.0-4ubuntu2~24.04.1_amd64.deb ...
+Unpacking liblsan0:amd64 (14.2.0-4ubuntu2~24.04.1) ...
+Selecting previously unselected package libtsan2:amd64.
+Preparing to unpack .../044-libtsan2_14.2.0-4ubuntu2~24.04.1_amd64.deb ...
+Unpacking libtsan2:amd64 (14.2.0-4ubuntu2~24.04.1) ...
+Selecting previously unselected package libubsan1:amd64.
+Preparing to unpack .../045-libubsan1_14.2.0-4ubuntu2~24.04.1_amd64.deb ...
+Unpacking libubsan1:amd64 (14.2.0-4ubuntu2~24.04.1) ...
+Selecting previously unselected package libhwasan0:amd64.
+Preparing to unpack .../046-libhwasan0_14.2.0-4ubuntu2~24.04.1_amd64.deb ...
+Unpacking libhwasan0:amd64 (14.2.0-4ubuntu2~24.04.1) ...
+Selecting previously unselected package libquadmath0:amd64.
+Preparing to unpack .../047-libquadmath0_14.2.0-4ubuntu2~24.04.1_amd64.deb ...
+Unpacking libquadmath0:amd64 (14.2.0-4ubuntu2~24.04.1) ...
+Selecting previously unselected package libgcc-13-dev:amd64.
+Preparing to unpack .../048-libgcc-13-dev_13.3.0-6ubuntu2~24.04.1_amd64.deb ...
+Unpacking libgcc-13-dev:amd64 (13.3.0-6ubuntu2~24.04.1) ...
+Selecting previously unselected package gcc-13-x86-64-linux-gnu.
+Preparing to unpack .../049-gcc-13-x86-64-linux-gnu_13.3.0-6ubuntu2~24.04.1_amd64.deb ...
+Unpacking gcc-13-x86-64-linux-gnu (13.3.0-6ubuntu2~24.04.1) ...
+Selecting previously unselected package gcc-13.
+Preparing to unpack .../050-gcc-13_13.3.0-6ubuntu2~24.04.1_amd64.deb ...
+Unpacking gcc-13 (13.3.0-6ubuntu2~24.04.1) ...
+Selecting previously unselected package gcc-x86-64-linux-gnu.
+Preparing to unpack .../051-gcc-x86-64-linux-gnu_4%3a13.2.0-7ubuntu1_amd64.deb ...
+Unpacking gcc-x86-64-linux-gnu (4:13.2.0-7ubuntu1) ...
+Selecting previously unselected package gcc.
+Preparing to unpack .../052-gcc_4%3a13.2.0-7ubuntu1_amd64.deb ...
+Unpacking gcc (4:13.2.0-7ubuntu1) ...
+Selecting previously unselected package libstdc++-13-dev:amd64.
+Preparing to unpack .../053-libstdc++-13-dev_13.3.0-6ubuntu2~24.04.1_amd64.deb ...
+Unpacking libstdc++-13-dev:amd64 (13.3.0-6ubuntu2~24.04.1) ...
+Selecting previously unselected package g++-13-x86-64-linux-gnu.
+Preparing to unpack .../054-g++-13-x86-64-linux-gnu_13.3.0-6ubuntu2~24.04.1_amd64.deb ...
+Unpacking g++-13-x86-64-linux-gnu (13.3.0-6ubuntu2~24.04.1) ...
+Selecting previously unselected package g++-13.
+Preparing to unpack .../055-g++-13_13.3.0-6ubuntu2~24.04.1_amd64.deb ...
+Unpacking g++-13 (13.3.0-6ubuntu2~24.04.1) ...
+Selecting previously unselected package g++-x86-64-linux-gnu.
+Preparing to unpack .../056-g++-x86-64-linux-gnu_4%3a13.2.0-7ubuntu1_amd64.deb ...
+Unpacking g++-x86-64-linux-gnu (4:13.2.0-7ubuntu1) ...
+Selecting previously unselected package g++.
+Preparing to unpack .../057-g++_4%3a13.2.0-7ubuntu1_amd64.deb ...
+Unpacking g++ (4:13.2.0-7ubuntu1) ...
+Selecting previously unselected package make.
+Preparing to unpack .../058-make_4.3-4.1build2_amd64.deb ...
+Unpacking make (4.3-4.1build2) ...
+Selecting previously unselected package libdpkg-perl.
+Preparing to unpack .../059-libdpkg-perl_1.22.6ubuntu6.6_all.deb ...
+Unpacking libdpkg-perl (1.22.6ubuntu6.6) ...
+Selecting previously unselected package bzip2.
+Preparing to unpack .../060-bzip2_1.0.8-5.1ubuntu0.1_amd64.deb ...
+Unpacking bzip2 (1.0.8-5.1ubuntu0.1) ...
+Selecting previously unselected package patch.
+Preparing to unpack .../061-patch_2.7.6-7build3_amd64.deb ...
+Unpacking patch (2.7.6-7build3) ...
+Selecting previously unselected package lto-disabled-list.
+Preparing to unpack .../062-lto-disabled-list_47_all.deb ...
+Unpacking lto-disabled-list (47) ...
+Selecting previously unselected package dpkg-dev.
+Preparing to unpack .../063-dpkg-dev_1.22.6ubuntu6.6_all.deb ...
+Unpacking dpkg-dev (1.22.6ubuntu6.6) ...
+Selecting previously unselected package build-essential.
+Preparing to unpack .../064-build-essential_12.10ubuntu1_amd64.deb ...
+Unpacking build-essential (12.10ubuntu1) ...
+Selecting previously unselected package libllvm18:amd64.
+Preparing to unpack .../065-libllvm18_1%3a18.1.3-1ubuntu1_amd64.deb ...
+Unpacking libllvm18:amd64 (1:18.1.3-1ubuntu1) ...
+Selecting previously unselected package libclang-cpp18.
+Preparing to unpack .../066-libclang-cpp18_1%3a18.1.3-1ubuntu1_amd64.deb ...
+Unpacking libclang-cpp18 (1:18.1.3-1ubuntu1) ...
+Selecting previously unselected package libgc1:amd64.
+Preparing to unpack .../067-libgc1_1%3a8.2.6-1build1_amd64.deb ...
+Unpacking libgc1:amd64 (1:8.2.6-1build1) ...
+Selecting previously unselected package libobjc4:amd64.
+Preparing to unpack .../068-libobjc4_14.2.0-4ubuntu2~24.04.1_amd64.deb ...
+Unpacking libobjc4:amd64 (14.2.0-4ubuntu2~24.04.1) ...
+Selecting previously unselected package libobjc-13-dev:amd64.
+Preparing to unpack .../069-libobjc-13-dev_13.3.0-6ubuntu2~24.04.1_amd64.deb ...
+Unpacking libobjc-13-dev:amd64 (13.3.0-6ubuntu2~24.04.1) ...
+Selecting previously unselected package libclang-common-18-dev:amd64.
+Preparing to unpack .../070-libclang-common-18-dev_1%3a18.1.3-1ubuntu1_amd64.deb ...
+Unpacking libclang-common-18-dev:amd64 (1:18.1.3-1ubuntu1) ...
+Selecting previously unselected package llvm-18-linker-tools.
+Preparing to unpack .../071-llvm-18-linker-tools_1%3a18.1.3-1ubuntu1_amd64.deb ...
+Unpacking llvm-18-linker-tools (1:18.1.3-1ubuntu1) ...
+Selecting previously unselected package libclang1-18.
+Preparing to unpack .../072-libclang1-18_1%3a18.1.3-1ubuntu1_amd64.deb ...
+Unpacking libclang1-18 (1:18.1.3-1ubuntu1) ...
+Selecting previously unselected package clang-18.
+Preparing to unpack .../073-clang-18_1%3a18.1.3-1ubuntu1_amd64.deb ...
+Unpacking clang-18 (1:18.1.3-1ubuntu1) ...
+Selecting previously unselected package clang.
+Preparing to unpack .../074-clang_1%3a18.0-59~exp2_amd64.deb ...
+Unpacking clang (1:18.0-59~exp2) ...
+Selecting previously unselected package libbrotli1:amd64.
+Preparing to unpack .../075-libbrotli1_1.1.0-2build2_amd64.deb ...
+Unpacking libbrotli1:amd64 (1.1.0-2build2) ...
+Selecting previously unselected package libsasl2-modules-db:amd64.
+Preparing to unpack .../076-libsasl2-modules-db_2.1.28+dfsg1-5ubuntu3.1_amd64.deb ...
+Unpacking libsasl2-modules-db:amd64 (2.1.28+dfsg1-5ubuntu3.1) ...
+Selecting previously unselected package libsasl2-2:amd64.
+Preparing to unpack .../077-libsasl2-2_2.1.28+dfsg1-5ubuntu3.1_amd64.deb ...
+Unpacking libsasl2-2:amd64 (2.1.28+dfsg1-5ubuntu3.1) ...
+Selecting previously unselected package libldap2:amd64.
+Preparing to unpack .../078-libldap2_2.6.10+dfsg-0ubuntu0.24.04.1_amd64.deb ...
+Unpacking libldap2:amd64 (2.6.10+dfsg-0ubuntu0.24.04.1) ...
+Selecting previously unselected package librtmp1:amd64.
+Preparing to unpack .../079-librtmp1_2.4+20151223.gitfa8646d.1-2build7_amd64.deb ...
+Unpacking librtmp1:amd64 (2.4+20151223.gitfa8646d.1-2build7) ...
+Selecting previously unselected package libssh-4:amd64.
+Preparing to unpack .../080-libssh-4_0.10.6-2ubuntu0.5_amd64.deb ...
+Unpacking libssh-4:amd64 (0.10.6-2ubuntu0.5) ...
+Selecting previously unselected package libcurl4t64:amd64.
+Preparing to unpack .../081-libcurl4t64_8.5.0-2ubuntu10.16_amd64.deb ...
+Unpacking libcurl4t64:amd64 (8.5.0-2ubuntu10.16) ...
+Selecting previously unselected package curl.
+Preparing to unpack .../082-curl_8.5.0-2ubuntu10.16_amd64.deb ...
+Unpacking curl (8.5.0-2ubuntu10.16) ...
+Selecting previously unselected package gpgconf.
+Preparing to unpack .../083-gpgconf_2.4.4-2ubuntu17.6_amd64.deb ...
+Unpacking gpgconf (2.4.4-2ubuntu17.6) ...
+Selecting previously unselected package libksba8:amd64.
+Preparing to unpack .../084-libksba8_1.6.6-1build1_amd64.deb ...
+Unpacking libksba8:amd64 (1.6.6-1build1) ...
+Selecting previously unselected package dirmngr.
+Preparing to unpack .../085-dirmngr_2.4.4-2ubuntu17.6_amd64.deb ...
+Unpacking dirmngr (2.4.4-2ubuntu17.6) ...
+Selecting previously unselected package gettext.
+Preparing to unpack .../086-gettext_0.21-14ubuntu2_amd64.deb ...
+Unpacking gettext (0.21-14ubuntu2) ...
+Selecting previously unselected package libcurl3t64-gnutls:amd64.
+Preparing to unpack .../087-libcurl3t64-gnutls_8.5.0-2ubuntu10.16_amd64.deb ...
+Unpacking libcurl3t64-gnutls:amd64 (8.5.0-2ubuntu10.16) ...
+Selecting previously unselected package liberror-perl.
+Preparing to unpack .../088-liberror-perl_0.17029-2_all.deb ...
+Unpacking liberror-perl (0.17029-2) ...
+Selecting previously unselected package git-man.
+Preparing to unpack .../089-git-man_1%3a2.43.0-1ubuntu7.4_all.deb ...
+Unpacking git-man (1:2.43.0-1ubuntu7.4) ...
+Selecting previously unselected package git.
+Preparing to unpack .../090-git_1%3a2.43.0-1ubuntu7.4_amd64.deb ...
+Unpacking git (1:2.43.0-1ubuntu7.4) ...
+Selecting previously unselected package gnupg-utils.
+Preparing to unpack .../091-gnupg-utils_2.4.4-2ubuntu17.6_amd64.deb ...
+Unpacking gnupg-utils (2.4.4-2ubuntu17.6) ...
+Selecting previously unselected package gpg.
+Preparing to unpack .../092-gpg_2.4.4-2ubuntu17.6_amd64.deb ...
+Unpacking gpg (2.4.4-2ubuntu17.6) ...
+Selecting previously unselected package pinentry-curses.
+Preparing to unpack .../093-pinentry-curses_1.2.1-3ubuntu5_amd64.deb ...
+Unpacking pinentry-curses (1.2.1-3ubuntu5) ...
+Selecting previously unselected package gpg-agent.
+Preparing to unpack .../094-gpg-agent_2.4.4-2ubuntu17.6_amd64.deb ...
+Unpacking gpg-agent (2.4.4-2ubuntu17.6) ...
+Selecting previously unselected package gpgsm.
+Preparing to unpack .../095-gpgsm_2.4.4-2ubuntu17.6_amd64.deb ...
+Unpacking gpgsm (2.4.4-2ubuntu17.6) ...
+Selecting previously unselected package keyboxd.
+Preparing to unpack .../096-keyboxd_2.4.4-2ubuntu17.6_amd64.deb ...
+Unpacking keyboxd (2.4.4-2ubuntu17.6) ...
+Selecting previously unselected package gnupg.
+Preparing to unpack .../097-gnupg_2.4.4-2ubuntu17.6_all.deb ...
+Unpacking gnupg (2.4.4-2ubuntu17.6) ...
+Selecting previously unselected package libcurl4-openssl-dev:amd64.
+Preparing to unpack .../098-libcurl4-openssl-dev_8.5.0-2ubuntu10.16_amd64.deb ...
+Unpacking libcurl4-openssl-dev:amd64 (8.5.0-2ubuntu10.16) ...
+Selecting previously unselected package libexpat1-dev:amd64.
+Preparing to unpack .../099-libexpat1-dev_2.6.1-2ubuntu0.6_amd64.deb ...
+Unpacking libexpat1-dev:amd64 (2.6.1-2ubuntu0.6) ...
+Selecting previously unselected package libhttp-parser2.9:amd64.
+Preparing to unpack .../100-libhttp-parser2.9_2.9.4-6build1_amd64.deb ...
+Unpacking libhttp-parser2.9:amd64 (2.9.4-6build1) ...
+Selecting previously unselected package libssh2-1t64:amd64.
+Preparing to unpack .../101-libssh2-1t64_1.11.0-4.1ubuntu0.24.04.4_amd64.deb ...
+Unpacking libssh2-1t64:amd64 (1.11.0-4.1ubuntu0.24.04.4) ...
+Selecting previously unselected package libgit2-1.7:amd64.
+Preparing to unpack .../102-libgit2-1.7_1.7.2+ds-1ubuntu3.3_amd64.deb ...
+Unpacking libgit2-1.7:amd64 (1.7.2+ds-1ubuntu3.3) ...
+Selecting previously unselected package libllvm17t64:amd64.
+Preparing to unpack .../103-libllvm17t64_1%3a17.0.6-9ubuntu1_amd64.deb ...
+Unpacking libllvm17t64:amd64 (1:17.0.6-9ubuntu1) ...
+Selecting previously unselected package libssl-dev:amd64.
+Preparing to unpack .../104-libssl-dev_3.0.13-0ubuntu3.16_amd64.deb ...
+Unpacking libssl-dev:amd64 (3.0.13-0ubuntu3.16) ...
+Selecting previously unselected package libstd-rust-1.75:amd64.
+Preparing to unpack .../105-libstd-rust-1.75_1.75.0+dfsg0ubuntu1-0ubuntu7.4_amd64.deb ...
+Unpacking libstd-rust-1.75:amd64 (1.75.0+dfsg0ubuntu1-0ubuntu7.4) ...
+Selecting previously unselected package libtcl8.6:amd64.
+Preparing to unpack .../106-libtcl8.6_8.6.14+dfsg-1build1_amd64.deb ...
+Unpacking libtcl8.6:amd64 (8.6.14+dfsg-1build1) ...
+Selecting previously unselected package lld-18.
+Preparing to unpack .../107-lld-18_1%3a18.1.3-1ubuntu1_amd64.deb ...
+Unpacking lld-18 (1:18.1.3-1ubuntu1) ...
+Selecting previously unselected package lld:amd64.
+Preparing to unpack .../108-lld_1%3a18.0-59~exp2_amd64.deb ...
+Unpacking lld:amd64 (1:18.0-59~exp2) ...
+Selecting previously unselected package tcl8.6.
+Preparing to unpack .../109-tcl8.6_8.6.14+dfsg-1build1_amd64.deb ...
+Unpacking tcl8.6 (8.6.14+dfsg-1build1) ...
+Selecting previously unselected package tcl.
+Preparing to unpack .../110-tcl_8.6.14build1_amd64.deb ...
+Unpacking tcl (8.6.14build1) ...
+Selecting previously unselected package zlib1g-dev:amd64.
+Preparing to unpack .../111-zlib1g-dev_1%3a1.3.dfsg-3.1ubuntu2.3_amd64.deb ...
+Unpacking zlib1g-dev:amd64 (1:1.3.dfsg-3.1ubuntu2.3) ...
+Selecting previously unselected package libstd-rust-dev:amd64.
+Preparing to unpack .../112-libstd-rust-dev_1.75.0+dfsg0ubuntu1-0ubuntu7.4_amd64.deb ...
+Unpacking libstd-rust-dev:amd64 (1.75.0+dfsg0ubuntu1-0ubuntu7.4) ...
+Selecting previously unselected package rustc.
+Preparing to unpack .../113-rustc_1.75.0+dfsg0ubuntu1-0ubuntu7.4_amd64.deb ...
+Unpacking rustc (1.75.0+dfsg0ubuntu1-0ubuntu7.4) ...
+Selecting previously unselected package cargo.
+Preparing to unpack .../114-cargo_1.75.0+dfsg0ubuntu1-0ubuntu7.4_amd64.deb ...
+Unpacking cargo (1.75.0+dfsg0ubuntu1-0ubuntu7.4) ...
+Setting up libksba8:amd64 (1.6.6-1build1) ...
+Setting up pinentry-curses (1.2.1-3ubuntu5) ...
+Setting up media-types (10.1.0) ...
+Setting up time (1.9-0.2build1) ...
+Setting up libkeyutils1:amd64 (1.6.3-3build1) ...
+Setting up lto-disabled-list (47) ...
+Setting up libgdbm6t64:amd64 (1.23-5.1build1) ...
+Setting up libgdbm-compat4t64:amd64 (1.23-5.1build1) ...
+Setting up libbrotli1:amd64 (1.1.0-2build2) ...
+Setting up libsqlite3-0:amd64 (3.45.1-1ubuntu2.8) ...
+Setting up binutils-common:amd64 (2.42-4ubuntu2.10) ...
+Setting up libpsl5t64:amd64 (0.21.2-1.1build1) ...
+Setting up libnghttp2-14:amd64 (1.59.0-1ubuntu0.4) ...
+Setting up linux-libc-dev:amd64 (6.8.0-147.147) ...
+Setting up libctf-nobfd0:amd64 (2.42-4ubuntu2.10) ...
+Setting up gettext-base (0.21-14ubuntu2) ...
+Setting up libgomp1:amd64 (14.2.0-4ubuntu2~24.04.1) ...
+Setting up bzip2 (1.0.8-5.1ubuntu0.1) ...
+Setting up libsframe1:amd64 (2.42-4ubuntu2.10) ...
+Setting up libjansson4:amd64 (2.14-2build2) ...
+Setting up libkrb5support0:amd64 (1.20.1-6ubuntu2.10) ...
+Setting up libsasl2-modules-db:amd64 (2.1.28+dfsg1-5ubuntu3.1) ...
+Setting up tzdata (2026e-0ubuntu0.24.04.1) ...
+
+Current default time zone: 'Etc/UTC'
+Local time is now:      Sat Oct 24 21:07:58 UTC 2026.
+Universal Time is now:  Sat Oct 24 21:07:58 UTC 2026.
+Run 'dpkg-reconfigure tzdata' if you wish to change it.
+
+Setting up rpcsvc-proto (1.4.2-0ubuntu7) ...
+Setting up gcc-13-base:amd64 (13.3.0-6ubuntu2~24.04.1) ...
+Setting up make (4.3-4.1build2) ...
+Setting up libmpfr6:amd64 (4.2.1-1build1.1) ...
+Setting up librtmp1:amd64 (2.4+20151223.gitfa8646d.1-2build7) ...
+Setting up xz-utils (5.6.1+really5.4.5-1ubuntu0.4) ...
+update-alternatives: using /usr/bin/xz to provide /usr/bin/lzma (lzma) in auto mode
+update-alternatives: warning: skip creation of /usr/share/man/man1/lzma.1.gz because associated file /usr/share/man/man1/xz.1.gz (of link group lzma) doesn't exist
+update-alternatives: warning: skip creation of /usr/share/man/man1/unlzma.1.gz because associated file /usr/share/man/man1/unxz.1.gz (of link group lzma) doesn't exist
+update-alternatives: warning: skip creation of /usr/share/man/man1/lzcat.1.gz because associated file /usr/share/man/man1/xzcat.1.gz (of link group lzma) doesn't exist
+update-alternatives: warning: skip creation of /usr/share/man/man1/lzmore.1.gz because associated file /usr/share/man/man1/xzmore.1.gz (of link group lzma) doesn't exist
+update-alternatives: warning: skip creation of /usr/share/man/man1/lzless.1.gz because associated file /usr/share/man/man1/xzless.1.gz (of link group lzma) doesn't exist
+update-alternatives: warning: skip creation of /usr/share/man/man1/lzdiff.1.gz because associated file /usr/share/man/man1/xzdiff.1.gz (of link group lzma) doesn't exist
+update-alternatives: warning: skip creation of /usr/share/man/man1/lzcmp.1.gz because associated file /usr/share/man/man1/xzcmp.1.gz (of link group lzma) doesn't exist
+update-alternatives: warning: skip creation of /usr/share/man/man1/lzgrep.1.gz because associated file /usr/share/man/man1/xzgrep.1.gz (of link group lzma) doesn't exist
+update-alternatives: warning: skip creation of /usr/share/man/man1/lzegrep.1.gz because associated file /usr/share/man/man1/xzegrep.1.gz (of link group lzma) doesn't exist
+update-alternatives: warning: skip creation of /usr/share/man/man1/lzfgrep.1.gz because associated file /usr/share/man/man1/xzfgrep.1.gz (of link group lzma) doesn't exist
+Setting up perl-modules-5.38 (5.38.2-3.2ubuntu0.6) ...
+Setting up libquadmath0:amd64 (14.2.0-4ubuntu2~24.04.1) ...
+Setting up libssl-dev:amd64 (3.0.13-0ubuntu3.16) ...
+Setting up libmpc3:amd64 (1.3.1-1build1.1) ...
+Setting up libatomic1:amd64 (14.2.0-4ubuntu2~24.04.1) ...
+Setting up patch (2.7.6-7build3) ...
+Setting up libtcl8.6:amd64 (8.6.14+dfsg-1build1) ...
+Setting up libclang-common-18-dev:amd64 (1:18.1.3-1ubuntu1) ...
+Setting up libk5crypto3:amd64 (1.20.1-6ubuntu2.10) ...
+Setting up libgc1:amd64 (1:8.2.6-1build1) ...
+Setting up libsasl2-2:amd64 (2.1.28+dfsg1-5ubuntu3.1) ...
+Setting up libubsan1:amd64 (14.2.0-4ubuntu2~24.04.1) ...
+Setting up libicu74:amd64 (74.2-1ubuntu3.1) ...
+Setting up libhwasan0:amd64 (14.2.0-4ubuntu2~24.04.1) ...
+Setting up libcrypt-dev:amd64 (1:4.4.36-4build1) ...
+Setting up libasan8:amd64 (14.2.0-4ubuntu2~24.04.1) ...
+Setting up git-man (1:2.43.0-1ubuntu7.4) ...
+Setting up netbase (6.4) ...
+Setting up libkrb5-3:amd64 (1.20.1-6ubuntu2.10) ...
+Setting up libperl5.38t64:amd64 (5.38.2-3.2ubuntu0.6) ...
+Setting up libssh2-1t64:amd64 (1.11.0-4.1ubuntu0.24.04.4) ...
+Setting up libtsan2:amd64 (14.2.0-4ubuntu2~24.04.1) ...
+Setting up libbinutils:amd64 (2.42-4ubuntu2.10) ...
+Setting up libisl23:amd64 (0.26-3build1.1) ...
+Setting up libc-dev-bin (2.39-0ubuntu8.9) ...
+Setting up openssl (3.0.13-0ubuntu3.16) ...
+Setting up libbsd0:amd64 (0.12.1-1build1.1) ...
+Setting up readline-common (8.2-4build1) ...
+Setting up libxml2:amd64 (2.9.14+dfsg-1.3ubuntu3.10) ...
+Setting up libcc1-0:amd64 (14.2.0-4ubuntu2~24.04.1) ...
+Setting up libldap2:amd64 (2.6.10+dfsg-0ubuntu0.24.04.1) ...
+Setting up liblsan0:amd64 (14.2.0-4ubuntu2~24.04.1) ...
+Setting up libitm1:amd64 (14.2.0-4ubuntu2~24.04.1) ...
+Setting up libhttp-parser2.9:amd64 (2.9.4-6build1) ...
+Setting up gnupg-utils (2.4.4-2ubuntu17.6) ...
+Setting up libctf0:amd64 (2.42-4ubuntu2.10) ...
+Setting up tcl8.6 (8.6.14+dfsg-1build1) ...
+Setting up gettext (0.21-14ubuntu2) ...
+Setting up cpp-13-x86-64-linux-gnu (13.3.0-6ubuntu2~24.04.1) ...
+Setting up libedit2:amd64 (3.1-20230828-1build1) ...
+Setting up libobjc4:amd64 (14.2.0-4ubuntu2~24.04.1) ...
+Setting up ca-certificates (20260816ubuntu0.24.04.1) ...
+Updating certificates in /etc/ssl/certs...
+120 added, 0 removed; done.
+Setting up perl (5.38.2-3.2ubuntu0.6) ...
+Setting up libgprofng0:amd64 (2.42-4ubuntu2.10) ...
+Setting up libllvm17t64:amd64 (1:17.0.6-9ubuntu1) ...
+Setting up libgssapi-krb5-2:amd64 (1.20.1-6ubuntu2.10) ...
+Setting up libdpkg-perl (1.22.6ubuntu6.6) ...
+Setting up libssh-4:amd64 (0.10.6-2ubuntu0.5) ...
+Setting up libreadline8t64:amd64 (8.2-4build1) ...
+Setting up libgcc-13-dev:amd64 (13.3.0-6ubuntu2~24.04.1) ...
+Setting up tcl (8.6.14build1) ...
+Setting up gpgconf (2.4.4-2ubuntu17.6) ...
+Setting up libgit2-1.7:amd64 (1.7.2+ds-1ubuntu3.3) ...
+Setting up libc6-dev:amd64 (2.39-0ubuntu8.9) ...
+Setting up gpg (2.4.4-2ubuntu17.6) ...
+Setting up libobjc-13-dev:amd64 (13.3.0-6ubuntu2~24.04.1) ...
+Setting up libstdc++-13-dev:amd64 (13.3.0-6ubuntu2~24.04.1) ...
+Setting up libllvm18:amd64 (1:18.1.3-1ubuntu1) ...
+Setting up binutils-x86-64-linux-gnu (2.42-4ubuntu2.10) ...
+Setting up cpp-x86-64-linux-gnu (4:13.2.0-7ubuntu1) ...
+Setting up libclang1-18 (1:18.1.3-1ubuntu1) ...
+Setting up gpg-agent (2.4.4-2ubuntu17.6) ...
+Setting up libpython3.12-stdlib:amd64 (3.12.3-1ubuntu0.17) ...
+Setting up cpp-13 (13.3.0-6ubuntu2~24.04.1) ...
+Setting up libcurl4t64:amd64 (8.5.0-2ubuntu10.16) ...
+Setting up gcc-13-x86-64-linux-gnu (13.3.0-6ubuntu2~24.04.1) ...
+Setting up python3.12 (3.12.3-1ubuntu0.17) ...
+Setting up gpgsm (2.4.4-2ubuntu17.6) ...
+Setting up libstd-rust-1.75:amd64 (1.75.0+dfsg0ubuntu1-0ubuntu7.4) ...
+Setting up libcurl3t64-gnutls:amd64 (8.5.0-2ubuntu10.16) ...
+Setting up binutils (2.42-4ubuntu2.10) ...
+Setting up dpkg-dev (1.22.6ubuntu6.6) ...
+Setting up liberror-perl (0.17029-2) ...
+Setting up dirmngr (2.4.4-2ubuntu17.6) ...
+Setting up libstd-rust-dev:amd64 (1.75.0+dfsg0ubuntu1-0ubuntu7.4) ...
+Setting up libexpat1-dev:amd64 (2.6.1-2ubuntu0.6) ...
+Setting up libcurl4-openssl-dev:amd64 (8.5.0-2ubuntu10.16) ...
+Setting up gcc-13 (13.3.0-6ubuntu2~24.04.1) ...
+Setting up keyboxd (2.4.4-2ubuntu17.6) ...
+Setting up git (1:2.43.0-1ubuntu7.4) ...
+Setting up llvm-18-linker-tools (1:18.1.3-1ubuntu1) ...
+Setting up zlib1g-dev:amd64 (1:1.3.dfsg-3.1ubuntu2.3) ...
+Setting up cpp (4:13.2.0-7ubuntu1) ...
+Setting up gnupg (2.4.4-2ubuntu17.6) ...
+Setting up curl (8.5.0-2ubuntu10.16) ...
+Setting up libclang-cpp18 (1:18.1.3-1ubuntu1) ...
+Setting up libpython3-stdlib:amd64 (3.12.3-0ubuntu2.1) ...
+Setting up lld-18 (1:18.1.3-1ubuntu1) ...
+Setting up g++-13-x86-64-linux-gnu (13.3.0-6ubuntu2~24.04.1) ...
+Setting up gcc-x86-64-linux-gnu (4:13.2.0-7ubuntu1) ...
+Setting up lld:amd64 (1:18.0-59~exp2) ...
+Setting up clang-18 (1:18.1.3-1ubuntu1) ...
+Setting up python3 (3.12.3-0ubuntu2.1) ...
+Setting up gcc (4:13.2.0-7ubuntu1) ...
+Setting up clang (1:18.0-59~exp2) ...
+Setting up rustc (1.75.0+dfsg0ubuntu1-0ubuntu7.4) ...
+Setting up g++-x86-64-linux-gnu (4:13.2.0-7ubuntu1) ...
+Setting up g++-13 (13.3.0-6ubuntu2~24.04.1) ...
+Setting up cargo (1.75.0+dfsg0ubuntu1-0ubuntu7.4) ...
+Setting up g++ (4:13.2.0-7ubuntu1) ...
+update-alternatives: using /usr/bin/g++ to provide /usr/bin/c++ (c++) in auto mode
+update-alternatives: warning: skip creation of /usr/share/man/man1/c++.1.gz because associated file /usr/share/man/man1/g++.1.gz (of link group c++) doesn't exist
+Setting up build-essential (12.10ubuntu1) ...
+Processing triggers for libc-bin (2.39-0ubuntu8.9) ...
+Processing triggers for ca-certificates (20260816ubuntu0.24.04.1) ...
+Updating certificates in /etc/ssl/certs...
+0 added, 0 removed; done.
+Running hooks in /etc/ca-certificates/update.d...
+done.
+--> 6fb31b137a68
+STEP 3/4: ENV LC_ALL=C CARGO_INCREMENTAL=0
+--> ca6b0fa02529
+STEP 4/4: WORKDIR /work/den
+COMMIT localhost/den-vc01
+--> e0b967131f07
+Successfully tagged localhost/den-vc01:latest
+e0b967131f07ba884e1a91cad9a368191e693e618ce40c2a53a6fdb8b388efcb
+fetch-toolchain: https://github.com/wolffe-lang/wolf-lang/releases/download/v0.2.35/wolf-0.2.35-x86_64-unknown-linux-gnu.tar.gz
+fetch-toolchain: sha256 4cc4045bbbb605c07835bc4f32685953c784eeef4cd3139a48b457dfc90dad1a OK
+fetch-toolchain: https://github.com/wolffe-lang/wolf-interp/releases/download/v0.1.56/lupin-0.1.56-x86_64-unknown-linux-gnu.tar.gz
+fetch-toolchain: sha256 ad703550ac4787e8e4bb26989d591a731410274d7332f2b4e8b9a64c878822cc OK
+fetch-toolchain: the archive bundles std 2386522eb059cca5a84108562c2c0a0e72345d34; staging the pin instead
+fetch-toolchain: https://github.com/wolffe-lang/wolf-std at 2386522eb059cca5a84108562c2c0a0e72345d34
+fetch-toolchain: staged x86_64-unknown-linux-gnu into .wolf-bin/
+git.tar.xz read 1: 26c56c296b38c0695b26fa95f475f1d01704d2d38e73465ca30b0b2f5dc789d3
+git.tar.xz read 2: 26c56c296b38c0695b26fa95f475f1d01704d2d38e73465ca30b0b2f5dc789d3
+git.tar.sign read 1: bee7d2f96844063557b07b43811d81e1fc54563e0da2c36a975dfd432b196a5c
+git.tar.sign read 2: bee7d2f96844063557b07b43811d81e1fc54563e0da2c36a975dfd432b196a5c
+key.asc read 1: b19b7bca8b1a227e9e01510e338a7a94ccdc28f3f73b5c9b4e2b32f4a1102799
+key.asc read 2: b19b7bca8b1a227e9e01510e338a7a94ccdc28f3f73b5c9b4e2b32f4a1102799
+gpg: keybox '/work/den/target/oracle-keys/pubring.kbx' created
+gpg: key 20D04E5A713660A7: 89 signatures not checked due to missing keys
+gpg: /work/den/target/oracle-keys/trustdb.gpg: trustdb created
+gpg: key 20D04E5A713660A7: public key "Junio C Hamano <gitster@pobox.com>" imported
+gpg: Total number processed: 1
+gpg:               imported: 1
+gpg: no ultimately trusted keys found
+make: Entering directory '/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/source/git-2.56.0'
+GIT_VERSION=2.56.0
+    * new build flags
+    * new link flags
+    * new prefix flags
+    GEN command-list.h
+    CC hex.o
+    CC hex-ll.o
+    GEN hook-list.h
+    CC ident.o
+    CC json-writer.o
+    CC kwset.o
+    CC levenshtein.o
+    CC line-log.o
+    CC line-range.o
+    CC linear-assignment.o
+    CC list-objects-filter-options.o
+    CC list-objects-filter.o
+    CC list-objects.o
+    CC lockfile.o
+    CC log-tree.o
+    CC loose.o
+    CC ls-refs.o
+    CC mailinfo.o
+    CC mailmap.o
+    CC match-trees.o
+    CC mem-pool.o
+    CC merge-blobs.o
+    CC merge-ll.o
+    CC merge-ort.o
+    CC merge-ort-wrappers.o
+    CC merge.o
+    CC midx.o
+    CC midx-write.o
+    CC name-hash.o
+    CC negotiator/default.o
+    CC negotiator/noop.o
+    CC negotiator/skipping.o
+    CC notes-cache.o
+    CC notes-merge.o
+    CC notes-utils.o
+    CC notes.o
+    CC object-file-convert.o
+    CC object-file.o
+    CC object-name.o
+    CC object.o
+    CC odb.o
+    CC odb/source.o
+    CC odb/source-files.o
+    CC odb/source-inmemory.o
+    CC odb/source-loose.o
+    CC odb/source-packed.o
+    CC odb/streaming.o
+    CC odb/transaction.o
+    CC oid-array.o
+    CC oidmap.o
+    CC oidset.o
+    CC oidtree.o
+    CC pack-bitmap-write.o
+    CC pack-bitmap.o
+    CC pack-check.o
+    CC pack-mtimes.o
+    CC pack-objects.o
+    CC pack-refs.o
+    CC pack-revindex.o
+    CC pack-write.o
+    CC packfile.o
+    CC packfile-list.o
+    CC pager.o
+    CC parallel-checkout.o
+    CC parse.o
+    CC parse-options-cb.o
+    CC parse-options.o
+    CC patch-delta.o
+    CC patch-ids.o
+    CC path.o
+    CC path-walk.o
+    CC pathspec.o
+    CC pkt-line.o
+    CC preload-index.o
+    CC pretty.o
+    CC prio-queue.o
+    CC progress.o
+    CC promisor-remote.o
+    CC prompt.o
+    CC protocol.o
+    CC protocol-caps.o
+    CC prune-packed.o
+    CC pseudo-merge.o
+    CC quote.o
+    CC range-diff.o
+    CC reachable.o
+    CC read-cache.o
+    CC rebase-interactive.o
+    CC rebase.o
+    CC ref-filter.o
+    CC reflog-walk.o
+    CC reflog.o
+    CC refs.o
+    CC refs/debug.o
+    CC refs/files-backend.o
+    CC refs/reftable-backend.o
+    CC refs/iterator.o
+    CC refs/packed-backend.o
+    CC refs/ref-cache.o
+    CC refspec.o
+    CC reftable/basics.o
+    CC reftable/block.o
+    CC reftable/blocksource.o
+    CC reftable/error.o
+    CC reftable/fsck.o
+    CC reftable/iter.o
+    CC reftable/merged.o
+    CC reftable/pq.o
+    CC reftable/record.o
+    CC reftable/stack.o
+    CC reftable/system.o
+    CC reftable/table.o
+    CC reftable/tree.o
+    CC reftable/writer.o
+    CC remote.o
+    CC repack.o
+    CC repack-cruft.o
+    CC repack-filtered.o
+    CC repack-geometry.o
+    CC repack-midx.o
+    CC repack-promisor.o
+    CC replace-object.o
+    CC replay.o
+    CC repo-settings.o
+    CC repository.o
+    CC rerere.o
+    CC reset.o
+    CC resolve-undo.o
+    CC revision.o
+    CC run-command.o
+    CC send-pack.o
+    CC sequencer.o
+    CC serve.o
+    CC server-info.o
+    CC setup.o
+    CC shallow.o
+    CC sideband.o
+    CC sigchain.o
+    CC sparse-index.o
+    CC split-index.o
+    CC stable-qsort.o
+    CC statinfo.o
+    CC strbuf.o
+    CC string-list.o
+    CC strmap.o
+    CC strvec.o
+    CC sub-process.o
+    CC submodule-config.o
+    CC submodule.o
+    CC symlinks.o
+    CC tag.o
+    CC tempfile.o
+    CC thread-utils.o
+    CC tmp-objdir.o
+    CC trace.o
+    CC trace2.o
+    CC trace2/tr2_cfg.o
+    CC trace2/tr2_cmd_name.o
+    CC trace2/tr2_ctr.o
+    CC trace2/tr2_dst.o
+    CC trace2/tr2_sid.o
+    CC trace2/tr2_sysenv.o
+    CC trace2/tr2_tbuf.o
+    CC trace2/tr2_tgt_event.o
+    CC trace2/tr2_tgt_normal.o
+    CC trace2/tr2_tgt_perf.o
+    CC trace2/tr2_tls.o
+    CC trace2/tr2_tmr.o
+    CC trailer.o
+    CC transport-helper.o
+    CC transport.o
+    CC tree-diff.o
+    CC tree-walk.o
+    CC tree.o
+    CC unpack-trees.o
+    CC upload-pack.o
+    CC url.o
+    CC urlmatch.o
+    CC usage.o
+    CC userdiff.o
+    CC utf8.o
+    CC versioncmp.o
+    CC walker.o
+    CC wildmatch.o
+    CC worktree.o
+    CC wrapper.o
+    CC write-or-die.o
+    CC ws.o
+    CC wt-status.o
+    CC xdiff-interface.o
+    CC xdiff/xdiffi.o
+    CC xdiff/xemit.o
+    CC xdiff/xhistogram.o
+    CC xdiff/xmerge.o
+    CC xdiff/xpatience.o
+    CC xdiff/xprepare.o
+    CC xdiff/xutils.o
+    CC unix-socket.o
+    CC unix-stream-server.o
+    CC compat/simple-ipc/ipc-shared.o
+    CC compat/simple-ipc/ipc-unix-socket.o
+    CC sha1dc_git.o
+    CC sha1dc/sha1.o
+    CC sha1dc/ubc_check.o
+    CC sha256/block/sha256.o
+    CC compat/linux/procinfo.o
+    CC compat/fopen.o
+    CC compat/strlcpy.o
+    CC compat/qsort_s.o
+    CC compat/fsmonitor/fsm-listen-linux.o
+    CC compat/fsmonitor/fsm-health-linux.o
+    CC compat/fsmonitor/fsm-ipc-unix.o
+    CC compat/fsmonitor/fsm-settings-unix.o
+    CC compat/fsmonitor/fsm-path-utils-linux.o
+    CC http-backend.o
+    CC imap-send.o
+    CC http.o
+    CC sh-i18n--envsubst.o
+    CC shell.o
+    CC http-walker.o
+    CC http-fetch.o
+    CC http-push.o
+    CC remote-curl.o
+    * new script parameters
+    * new perl-specific parameters
+    GEN git-p4
+    GEN git-instaweb
+    CC git.o
+    CC builtin/add.o
+    CC builtin/am.o
+    CC builtin/annotate.o
+    CC builtin/apply.o
+    CC builtin/archive.o
+    CC builtin/backfill.o
+    CC builtin/bisect.o
+    CC builtin/blame.o
+    CC builtin/branch.o
+    CC builtin/bugreport.o
+    CC builtin/bundle.o
+    CC builtin/cat-file.o
+    CC builtin/check-attr.o
+    CC builtin/check-ignore.o
+    CC builtin/check-mailmap.o
+    CC builtin/check-ref-format.o
+    CC builtin/checkout--worker.o
+    CC builtin/checkout-index.o
+    CC builtin/checkout.o
+    CC builtin/clean.o
+    CC builtin/clone.o
+    CC builtin/column.o
+    CC builtin/commit-graph.o
+    CC builtin/commit-tree.o
+    CC builtin/commit.o
+    CC builtin/config.o
+    CC builtin/count-objects.o
+    CC builtin/credential-cache--daemon.o
+    CC builtin/credential-cache.o
+    CC builtin/credential-store.o
+    CC builtin/credential.o
+    CC builtin/describe.o
+    CC builtin/diagnose.o
+    CC builtin/diff-files.o
+    CC builtin/diff-index.o
+    CC builtin/diff-pairs.o
+    CC builtin/diff-tree.o
+    CC builtin/diff.o
+    CC builtin/difftool.o
+    CC builtin/fast-export.o
+    CC builtin/fast-import.o
+    CC builtin/fetch-pack.o
+    CC builtin/fetch.o
+    CC builtin/fmt-merge-msg.o
+    CC builtin/for-each-ref.o
+    CC builtin/for-each-repo.o
+    CC builtin/fsck.o
+    CC builtin/fsmonitor--daemon.o
+    CC builtin/gc.o
+    CC builtin/get-tar-commit-id.o
+    CC builtin/grep.o
+    CC builtin/hash-object.o
+    GEN config-list.h
+    CC builtin/history.o
+    CC builtin/hook.o
+    CC builtin/index-pack.o
+    CC builtin/init-db.o
+    CC builtin/interpret-trailers.o
+    CC builtin/last-modified.o
+    CC builtin/log.o
+    CC builtin/ls-files.o
+    CC builtin/ls-remote.o
+    CC builtin/ls-tree.o
+    CC builtin/mailinfo.o
+    CC builtin/mailsplit.o
+    CC builtin/merge-base.o
+    CC builtin/merge-file.o
+    CC builtin/merge-index.o
+    CC builtin/merge-ours.o
+    CC builtin/merge-recursive.o
+    CC builtin/merge-tree.o
+    CC builtin/merge.o
+    CC builtin/mktag.o
+    CC builtin/mktree.o
+    CC builtin/multi-pack-index.o
+    CC builtin/mv.o
+    CC builtin/name-rev.o
+    CC builtin/notes.o
+    CC builtin/pack-objects.o
+    CC builtin/pack-redundant.o
+    CC builtin/pack-refs.o
+    CC builtin/patch-id.o
+    CC builtin/prune-packed.o
+    CC builtin/prune.o
+    CC builtin/pull.o
+    CC builtin/push.o
+    CC builtin/range-diff.o
+    CC builtin/read-tree.o
+    CC builtin/rebase.o
+    CC builtin/receive-pack.o
+    CC builtin/reflog.o
+    CC builtin/refs.o
+    CC builtin/remote-ext.o
+    CC builtin/remote-fd.o
+    CC builtin/remote.o
+    CC builtin/repack.o
+    CC builtin/replace.o
+    CC builtin/replay.o
+    CC builtin/repo.o
+    CC builtin/rerere.o
+    CC builtin/reset.o
+    CC builtin/rev-list.o
+    CC builtin/rev-parse.o
+    CC builtin/revert.o
+    CC builtin/rm.o
+    CC builtin/send-pack.o
+    CC builtin/shortlog.o
+    CC builtin/show-branch.o
+    CC builtin/show-index.o
+    CC builtin/show-ref.o
+    CC builtin/sparse-checkout.o
+    CC builtin/stash.o
+    CC builtin/stripspace.o
+    CC builtin/submodule--helper.o
+    CC builtin/symbolic-ref.o
+    CC builtin/tag.o
+    CC builtin/unpack-file.o
+    CC builtin/unpack-objects.o
+    CC builtin/update-index.o
+    CC builtin/update-ref.o
+    CC builtin/update-server-info.o
+    CC builtin/upload-archive.o
+    CC builtin/upload-pack.o
+    CC builtin/url-parse.o
+    CC builtin/var.o
+    CC builtin/verify-commit.o
+    CC builtin/verify-pack.o
+    CC builtin/verify-tag.o
+    CC builtin/worktree.o
+    CC builtin/write-tree.o
+    GEN git-mergetool--lib
+    GEN git-sh-i18n
+    GEN git-sh-setup
+    CC scalar.o
+    CC daemon.o
+    CC common-main.o
+    CC abspath.o
+    CC add-interactive.o
+    CC add-patch.o
+    CC advice.o
+    CC alias.o
+    CC alloc.o
+    CC apply.o
+    CC archive-tar.o
+    CC archive-zip.o
+    CC archive.o
+    CC attr.o
+    CC base85.o
+    CC bisect.o
+    CC blame.o
+    CC blob.o
+    CC bloom.o
+    CC branch.o
+    CC bundle-uri.o
+    CC bundle.o
+    CC cache-tree.o
+    CC cbtree.o
+    CC chdir-notify.o
+    CC checkout.o
+    CC chunk-format.o
+    CC color.o
+    CC column.o
+    CC combine-diff.o
+    CC commit-graph.o
+    CC commit-reach.o
+    CC commit.o
+    CC common-exit.o
+    CC common-init.o
+    CC compat/nonblock.o
+    CC compat/obstack.o
+    CC compat/open.o
+    CC compat/terminal.o
+    CC compiler-tricks/not-constant.o
+    CC config.o
+    CC connect.o
+    CC connected.o
+    CC convert.o
+    CC copy.o
+    CC credential.o
+    CC csum-file.o
+    CC ctype.o
+    CC date.o
+    CC decorate.o
+    CC delta-islands.o
+    CC diagnose.o
+    CC diff-delta.o
+    CC diff-merges.o
+    CC diff-lib.o
+    CC diff-no-index.o
+    CC diff.o
+    CC diffcore-break.o
+    CC diffcore-delta.o
+    CC diffcore-order.o
+    CC diffcore-pickaxe.o
+    CC diffcore-rename.o
+    CC diffcore-rotate.o
+    CC dir-iterator.o
+    CC dir.o
+    CC editor.o
+    CC entry.o
+    CC environment.o
+    CC ewah/bitmap.o
+    CC ewah/ewah_bitmap.o
+    CC ewah/ewah_io.o
+    CC ewah/ewah_rlw.o
+    CC exec-cmd.o
+    CC fetch-negotiator.o
+    CC fetch-object-info.o
+    CC fetch-pack.o
+    CC fmt-merge-msg.o
+    CC fsck.o
+    CC fsmonitor.o
+    CC fsmonitor-ipc.o
+    CC fsmonitor-settings.o
+    CC gettext.o
+    CC git-zlib.o
+    CC gpg-interface.o
+    CC graph.o
+    CC grep.o
+    CC hash-lookup.o
+    CC hash.o
+    CC hashmap.o
+    CC help.o
+    CC hook.o
+    GEN version-def.h
+    GEN git-difftool--helper
+    GEN git-filter-branch
+    GEN git-merge-octopus
+    GEN git-merge-one-file
+    GEN git-merge-resolve
+    GEN git-mergetool
+    GEN git-quiltimport
+    GEN git-request-pull
+    GEN git-submodule
+    GEN git-web--browse
+    GEN GIT-PERL-HEADER
+    CC builtin/help.o
+    CC version.o
+    GEN git-archimport
+    GEN git-cvsexportcommit
+    GEN git-cvsimport
+    GEN git-cvsserver
+    GEN git-send-email
+    GEN git-svn
+    AR libgit.a
+    CARGO target/release/libgitcore.a
+    LINK git-daemon
+    LINK git-http-backend
+    LINK git-imap-send
+    LINK git-sh-i18n--envsubst
+    LINK git-shell
+    LINK git-http-fetch
+    LINK git-http-push
+    LINK git-remote-http
+    LINK git
+    LINK scalar
+    LN/CP git-remote-https
+    LN/CP git-remote-ftp
+    LN/CP git-remote-ftps
+    BUILTIN git-add
+    BUILTIN git-am
+    BUILTIN git-annotate
+    BUILTIN git-apply
+    BUILTIN git-archive
+    BUILTIN git-backfill
+    BUILTIN git-bisect
+    BUILTIN git-blame
+    BUILTIN git-branch
+    BUILTIN git-bugreport
+    BUILTIN git-bundle
+    BUILTIN git-cat-file
+    BUILTIN git-check-attr
+    BUILTIN git-check-ignore
+    BUILTIN git-check-mailmap
+    BUILTIN git-check-ref-format
+    BUILTIN git-checkout--worker
+    BUILTIN git-checkout-index
+    BUILTIN git-checkout
+    BUILTIN git-clean
+    BUILTIN git-clone
+    BUILTIN git-column
+    BUILTIN git-commit-graph
+    BUILTIN git-commit-tree
+    BUILTIN git-commit
+    BUILTIN git-config
+    BUILTIN git-count-objects
+    BUILTIN git-credential-cache--daemon
+    BUILTIN git-credential-cache
+    BUILTIN git-credential-store
+    BUILTIN git-credential
+    BUILTIN git-describe
+    BUILTIN git-diagnose
+    BUILTIN git-diff-files
+    BUILTIN git-diff-index
+    BUILTIN git-diff-pairs
+    BUILTIN git-diff-tree
+    BUILTIN git-diff
+    BUILTIN git-difftool
+    BUILTIN git-fast-export
+    BUILTIN git-fast-import
+    BUILTIN git-fetch-pack
+    BUILTIN git-fetch
+    BUILTIN git-fmt-merge-msg
+    BUILTIN git-for-each-ref
+    BUILTIN git-for-each-repo
+    BUILTIN git-fsck
+    BUILTIN git-fsmonitor--daemon
+    BUILTIN git-gc
+    BUILTIN git-get-tar-commit-id
+    BUILTIN git-grep
+    BUILTIN git-hash-object
+    BUILTIN git-help
+    BUILTIN git-history
+    BUILTIN git-hook
+    BUILTIN git-index-pack
+    BUILTIN git-init-db
+    BUILTIN git-interpret-trailers
+    BUILTIN git-last-modified
+    BUILTIN git-log
+    BUILTIN git-ls-files
+    BUILTIN git-ls-remote
+    BUILTIN git-ls-tree
+    BUILTIN git-mailinfo
+    BUILTIN git-mailsplit
+    BUILTIN git-merge-base
+    BUILTIN git-merge-file
+    BUILTIN git-merge-index
+    BUILTIN git-merge-ours
+    BUILTIN git-merge-recursive
+    BUILTIN git-merge-tree
+    BUILTIN git-merge
+    BUILTIN git-mktag
+    BUILTIN git-mktree
+    BUILTIN git-multi-pack-index
+    BUILTIN git-mv
+    BUILTIN git-name-rev
+    BUILTIN git-pack-objects
+    BUILTIN git-notes
+    BUILTIN git-pack-redundant
+    BUILTIN git-pack-refs
+    BUILTIN git-patch-id
+    BUILTIN git-prune-packed
+    BUILTIN git-prune
+    BUILTIN git-pull
+    BUILTIN git-push
+    BUILTIN git-range-diff
+    BUILTIN git-read-tree
+    BUILTIN git-rebase
+    BUILTIN git-receive-pack
+    BUILTIN git-reflog
+    BUILTIN git-refs
+    BUILTIN git-remote-ext
+    BUILTIN git-remote-fd
+    BUILTIN git-remote
+    BUILTIN git-repack
+    BUILTIN git-replace
+    BUILTIN git-replay
+    BUILTIN git-repo
+    BUILTIN git-rerere
+    BUILTIN git-reset
+    BUILTIN git-rev-list
+    BUILTIN git-rev-parse
+    BUILTIN git-revert
+    BUILTIN git-rm
+    BUILTIN git-send-pack
+    BUILTIN git-shortlog
+    BUILTIN git-show-branch
+    BUILTIN git-show-index
+    BUILTIN git-show-ref
+    BUILTIN git-sparse-checkout
+    BUILTIN git-stash
+    BUILTIN git-stripspace
+    BUILTIN git-submodule--helper
+    BUILTIN git-symbolic-ref
+    BUILTIN git-tag
+    BUILTIN git-unpack-file
+    BUILTIN git-unpack-objects
+    BUILTIN git-update-index
+    BUILTIN git-update-ref
+    BUILTIN git-update-server-info
+    BUILTIN git-upload-archive
+    BUILTIN git-upload-pack
+    BUILTIN git-url-parse
+    BUILTIN git-var
+    BUILTIN git-verify-commit
+    BUILTIN git-verify-pack
+    BUILTIN git-verify-tag
+    BUILTIN git-worktree
+    BUILTIN git-write-tree
+    BUILTIN git-cherry
+    BUILTIN git-cherry-pick
+    BUILTIN git-format-patch
+    BUILTIN git-format-rev
+    BUILTIN git-fsck-objects
+    BUILTIN git-init
+    BUILTIN git-maintenance
+    BUILTIN git-merge-subtree
+    BUILTIN git-restore
+    BUILTIN git-show
+    BUILTIN git-stage
+    BUILTIN git-status
+    BUILTIN git-switch
+    BUILTIN git-version
+    BUILTIN git-whatchanged
+make[1]: Entering directory '/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/source/git-2.56.0/git-gui'
+GITGUI_VERSION=0.21.0.285.g5dcb97-dirty
+    MSGFMT po/bg.msg
+    MSGFMT po/de.msg
+    MSGFMT po/el.msg
+    MSGFMT po/fr.msg
+    MSGFMT po/hu.msg
+    MSGFMT po/it.msg
+    MSGFMT po/ja.msg
+    MSGFMT po/nb.msg
+    MSGFMT po/pt_br.msg
+    MSGFMT po/pt_pt.msg
+    MSGFMT po/ru.msg
+    MSGFMT po/sv.msg
+    MSGFMT po/vi.msg
+    MSGFMT po/zh_cn.msg
+    GEN git-gui
+    GEN git-gui--askpass
+    GEN git-gui--askyesno
+    INDEX lib/
+make[1]: Leaving directory '/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/source/git-2.56.0/git-gui'
+make[1]: Entering directory '/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/source/git-2.56.0/gitk-git'
+    MSGFMT po/bg.msg
+    * new Tcl/Tk interpreter location
+    MSGFMT po/ca.msg
+    MSGFMT po/de.msg
+    MSGFMT po/es.msg
+    MSGFMT po/fr.msg
+    MSGFMT po/hu.msg
+    MSGFMT po/it.msg
+    MSGFMT po/ja.msg
+    MSGFMT po/pt_br.msg
+    MSGFMT po/pt_pt.msg
+    MSGFMT po/ru.msg
+    MSGFMT po/sv.msg
+    MSGFMT po/ta.msg
+    MSGFMT po/vi.msg
+    MSGFMT po/zh_cn.msg
+    GEN gitk-wish
+make[1]: Leaving directory '/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/source/git-2.56.0/gitk-git'
+make[1]: Entering directory '/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/source/git-2.56.0/templates'
+make[1]: Leaving directory '/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/source/git-2.56.0/templates'
+    CC oss-fuzz/dummy-cmd-main.o
+    CC oss-fuzz/fuzz-commit-graph.o
+    CC oss-fuzz/fuzz-config.o
+    CC oss-fuzz/fuzz-credential-from-url-gently.o
+    CC oss-fuzz/fuzz-date.o
+    CC oss-fuzz/fuzz-pack-headers.o
+    CC oss-fuzz/fuzz-pack-idx.o
+    CC oss-fuzz/fuzz-parse-attr-line.o
+    CC oss-fuzz/fuzz-reftable.o
+    CC oss-fuzz/fuzz-url-decode-mem.o
+    LINK oss-fuzz/fuzz-commit-graph
+    LINK oss-fuzz/fuzz-config
+    LINK oss-fuzz/fuzz-credential-from-url-gently
+    LINK oss-fuzz/fuzz-date
+    LINK oss-fuzz/fuzz-pack-headers
+    LINK oss-fuzz/fuzz-pack-idx
+    LINK oss-fuzz/fuzz-parse-attr-line
+    LINK oss-fuzz/fuzz-reftable
+    LINK oss-fuzz/fuzz-url-decode-mem
+    MKDIR -p po/build/locale/af/LC_MESSAGES
+    MSGFMT po/build/locale/af/LC_MESSAGES/git.mo
+    MKDIR -p po/build/locale/bg/LC_MESSAGES
+    MSGFMT po/build/locale/bg/LC_MESSAGES/git.mo
+    MKDIR -p po/build/locale/ca/LC_MESSAGES
+    MSGFMT po/build/locale/ca/LC_MESSAGES/git.mo
+    MKDIR -p po/build/locale/de/LC_MESSAGES
+    MSGFMT po/build/locale/de/LC_MESSAGES/git.mo
+    MKDIR -p po/build/locale/el/LC_MESSAGES
+    MSGFMT po/build/locale/el/LC_MESSAGES/git.mo
+    MKDIR -p po/build/locale/es/LC_MESSAGES
+    MSGFMT po/build/locale/es/LC_MESSAGES/git.mo
+    MKDIR -p po/build/locale/fr/LC_MESSAGES
+    MSGFMT po/build/locale/fr/LC_MESSAGES/git.mo
+    MKDIR -p po/build/locale/ga/LC_MESSAGES
+    MSGFMT po/build/locale/ga/LC_MESSAGES/git.mo
+    MKDIR -p po/build/locale/id/LC_MESSAGES
+    MSGFMT po/build/locale/id/LC_MESSAGES/git.mo
+    MKDIR -p po/build/locale/is/LC_MESSAGES
+    MSGFMT po/build/locale/is/LC_MESSAGES/git.mo
+    MKDIR -p po/build/locale/it/LC_MESSAGES
+    MSGFMT po/build/locale/it/LC_MESSAGES/git.mo
+    MKDIR -p po/build/locale/ko/LC_MESSAGES
+    MSGFMT po/build/locale/ko/LC_MESSAGES/git.mo
+    MKDIR -p po/build/locale/pl/LC_MESSAGES
+    MSGFMT po/build/locale/pl/LC_MESSAGES/git.mo
+    MKDIR -p po/build/locale/pt_BR/LC_MESSAGES
+    MSGFMT po/build/locale/pt_BR/LC_MESSAGES/git.mo
+    MKDIR -p po/build/locale/pt_PT/LC_MESSAGES
+    MSGFMT po/build/locale/pt_PT/LC_MESSAGES/git.mo
+    MKDIR -p po/build/locale/ru/LC_MESSAGES
+    MSGFMT po/build/locale/ru/LC_MESSAGES/git.mo
+    MKDIR -p po/build/locale/sv/LC_MESSAGES
+    MSGFMT po/build/locale/sv/LC_MESSAGES/git.mo
+    MKDIR -p po/build/locale/tr/LC_MESSAGES
+    MSGFMT po/build/locale/tr/LC_MESSAGES/git.mo
+    MKDIR -p po/build/locale/uk/LC_MESSAGES
+    MSGFMT po/build/locale/uk/LC_MESSAGES/git.mo
+    MKDIR -p po/build/locale/vi/LC_MESSAGES
+    MSGFMT po/build/locale/vi/LC_MESSAGES/git.mo
+    MKDIR -p po/build/locale/zh_CN/LC_MESSAGES
+    MSGFMT po/build/locale/zh_CN/LC_MESSAGES/git.mo
+    MKDIR -p po/build/locale/zh_TW/LC_MESSAGES
+    MSGFMT po/build/locale/zh_TW/LC_MESSAGES/git.mo
+    MKDIR -p perl/build/lib
+    GEN perl/build/lib/Git.pm
+    MKDIR -p perl/build/lib/Git
+    GEN perl/build/lib/Git/IndexInfo.pm
+    GEN perl/build/lib/Git/LoadCPAN.pm
+    GEN perl/build/lib/Git/I18N.pm
+    GEN perl/build/lib/Git/Packet.pm
+    GEN perl/build/lib/Git/SVN.pm
+    MKDIR -p perl/build/lib/Git/LoadCPAN
+    GEN perl/build/lib/Git/LoadCPAN/Error.pm
+    MKDIR -p perl/build/lib/Git/SVN
+    GEN perl/build/lib/Git/SVN/Fetcher.pm
+    GEN perl/build/lib/Git/SVN/Editor.pm
+    GEN perl/build/lib/Git/SVN/GlobSpec.pm
+    GEN perl/build/lib/Git/SVN/Log.pm
+    GEN perl/build/lib/Git/SVN/Migration.pm
+    GEN perl/build/lib/Git/SVN/Prompt.pm
+    GEN perl/build/lib/Git/SVN/Ra.pm
+    GEN perl/build/lib/Git/SVN/Utils.pm
+    MKDIR -p perl/build/lib/Git/LoadCPAN/Mail
+    GEN perl/build/lib/Git/LoadCPAN/Mail/Address.pm
+    MKDIR -p perl/build/lib/Git/SVN/Memoize
+    GEN perl/build/lib/Git/SVN/Memoize/YAML.pm
+    MKDIR -p perl/build/lib/FromCPAN
+    GEN perl/build/lib/FromCPAN/Error.pm
+    MKDIR -p perl/build/lib/FromCPAN/Mail
+    GEN perl/build/lib/FromCPAN/Mail/Address.pm
+    CC t/helper/test-fake-ssh.o
+    CC t/helper/test-tool.o
+    CC t/helper/test-advise.o
+    CC t/helper/test-bitmap.o
+    CC t/helper/test-bloom.o
+    CC t/helper/test-bundle-uri.o
+    CC t/helper/test-cache-tree.o
+    CC t/helper/test-chmtime.o
+    CC t/helper/test-config.o
+    CC t/helper/test-crontab.o
+    CC t/helper/test-csprng.o
+    CC t/helper/test-date.o
+    CC t/helper/test-delete-gpgsig.o
+    CC t/helper/test-delta.o
+    CC t/helper/test-dir-iterator.o
+    CC t/helper/test-drop-caches.o
+    CC t/helper/test-dump-cache-tree.o
+    CC t/helper/test-dump-fsmonitor.o
+    CC t/helper/test-dump-split-index.o
+    CC t/helper/test-dump-untracked-cache.o
+    CC t/helper/test-env-helper.o
+    CC t/helper/test-example-tap.o
+    CC t/helper/test-find-pack.o
+    CC t/helper/test-fsmonitor-client.o
+    CC t/helper/test-genrandom.o
+    CC t/helper/test-genzeros.o
+    CC t/helper/test-getcwd.o
+    CC t/helper/test-hash-speed.o
+    CC t/helper/test-hash.o
+    CC t/helper/test-hashmap.o
+    CC t/helper/test-hexdump.o
+    CC t/helper/test-json-writer.o
+    CC t/helper/test-lazy-init-name-hash.o
+    CC t/helper/test-match-trees.o
+    CC t/helper/test-mergesort.o
+    CC t/helper/test-mktemp.o
+    CC t/helper/test-name-hash.o
+    CC t/helper/test-online-cpus.o
+    CC t/helper/test-pack-deltas.o
+    CC t/helper/test-pack-mtimes.o
+    CC t/helper/test-parse-options.o
+    CC t/helper/test-parse-pathspec-file.o
+    CC t/helper/test-partial-clone.o
+    CC t/helper/test-path-utils.o
+    CC t/helper/test-path-walk.o
+    CC t/helper/test-pcre2-config.o
+    CC t/helper/test-pkt-line.o
+    CC t/helper/test-proc-receive.o
+    CC t/helper/test-progress.o
+    CC t/helper/test-reach.o
+    CC t/helper/test-read-cache.o
+    CC t/helper/test-read-graph.o
+    CC t/helper/test-read-midx.o
+    CC t/helper/test-ref-store.o
+    CC t/helper/test-reftable.o
+    CC t/helper/test-regex.o
+    CC t/helper/test-rot13-filter.o
+    CC t/helper/test-repository.o
+    CC t/helper/test-revision-walking.o
+    CC t/helper/test-run-command.o
+    CC t/helper/test-scrap-cache-tree.o
+    CC t/helper/test-serve-v2.o
+    CC t/helper/test-sha1.o
+    CC t/helper/test-sha256.o
+    CC t/helper/test-sigchain.o
+    CC t/helper/test-simple-ipc.o
+    CC t/helper/test-string-list.o
+    CC t/helper/test-submodule-config.o
+    CC t/helper/test-submodule-nested-repo-config.o
+    CC t/helper/test-submodule.o
+    CC t/helper/test-subprocess.o
+    CC t/helper/test-synthesize.o
+    CC t/helper/test-trace2.o
+    CC t/helper/test-truncate.o
+    CC t/helper/test-userdiff.o
+    CC t/helper/test-wildmatch.o
+    CC t/helper/test-windows-named-pipe.o
+    CC t/helper/test-write-cache.o
+    CC t/helper/test-xml-encode.o
+    CC t/helper/test-zlib.o
+    CC t/unit-tests/test-lib.o
+    GEN bin-wrappers/git
+    GEN bin-wrappers/scalar
+    GEN bin-wrappers/git-receive-pack
+    GEN bin-wrappers/git-shell
+    GEN bin-wrappers/git-upload-archive
+    GEN bin-wrappers/git-upload-pack
+    GEN bin-wrappers/git-cvsserver
+    GEN bin-wrappers/test-fake-ssh
+    GEN bin-wrappers/test-tool
+    * new test suites
+    LINK t/helper/test-fake-ssh
+    GEN t/unit-tests/clar-decls.h
+    GEN t/unit-tests/clar.suite
+    CC t/unit-tests/u-ctype.o
+    CC t/unit-tests/u-dir.o
+    CC t/unit-tests/u-example-decorate.o
+    CC t/unit-tests/u-hash.o
+    CC t/unit-tests/u-hashmap.o
+    CC t/unit-tests/u-list-objects-filter-options.o
+    CC t/unit-tests/u-mem-pool.o
+    CC t/unit-tests/u-odb-inmemory.o
+    CC t/unit-tests/u-oid-array.o
+    CC t/unit-tests/u-oidmap.o
+    CC t/unit-tests/u-oidtree.o
+    CC t/unit-tests/u-prio-queue.o
+    CC t/unit-tests/u-reftable-basics.o
+    CC t/unit-tests/u-reftable-block.o
+    CC t/unit-tests/u-reftable-merged.o
+    CC t/unit-tests/u-reftable-pq.o
+    CC t/unit-tests/u-reftable-readwrite.o
+    CC t/unit-tests/u-reftable-stack.o
+    CC t/unit-tests/u-reftable-table.o
+    CC t/unit-tests/u-reftable-tree.o
+    CC t/unit-tests/u-strbuf.o
+    CC t/unit-tests/u-strcmp-offset.o
+    CC t/unit-tests/u-string-list.o
+    CC t/unit-tests/u-strvec.o
+    CC t/unit-tests/u-trailer.o
+    CC t/unit-tests/u-urlmatch-normalization.o
+    CC t/unit-tests/u-utf8-width.o
+    CC t/unit-tests/clar/clar.o
+    CC t/unit-tests/lib-oid.o
+    CC t/unit-tests/lib-reftable.o
+    CC t/unit-tests/unit-test.o
+    LINK t/helper/test-tool
+    MKDIR -p t/unit-tests/bin
+    LINK t/unit-tests/bin/unit-tests
+    GEN gitweb/static/gitweb.js
+    GEN gitweb/gitweb.cgi
+make: Leaving directory '/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/source/git-2.56.0'
+make: Entering directory '/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/source/git-2.56.0'
+make[1]: Entering directory '/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/source/git-2.56.0/git-gui'
+make[1]: Leaving directory '/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/source/git-2.56.0/git-gui'
+make[1]: Entering directory '/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/source/git-2.56.0/gitk-git'
+make[1]: Leaving directory '/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/source/git-2.56.0/gitk-git'
+make[1]: Entering directory '/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/source/git-2.56.0/templates'
+make[1]: Leaving directory '/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/source/git-2.56.0/templates'
+install -d -m 755 '/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/share/gitweb'
+install -m 755 gitweb/gitweb.cgi '/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/share/gitweb'
+install -d -m 755 '/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/share/gitweb/static'
+install -m 644 gitweb/static/gitweb.js gitweb/static/gitweb.css gitweb/static/git-logo.png gitweb/static/git-favicon.png \
+	'/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/share/gitweb/static'
+install -d -m 755 '/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin'
+install -d -m 755 '/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/libexec/git-core'
+install   git-daemon git-http-backend git-imap-send git-sh-i18n--envsubst git-shell git-http-fetch git-http-push git-remote-http git-remote-https git-remote-ftp git-remote-ftps '/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/libexec/git-core'
+install git-difftool--helper git-filter-branch git-merge-octopus git-merge-one-file git-merge-resolve git-mergetool git-quiltimport git-request-pull git-submodule git-web--browse git-archimport git-cvsexportcommit git-cvsimport git-cvsserver git-send-email git-svn git-p4 git-instaweb '/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/libexec/git-core'
+install -m 644 git-mergetool--lib git-sh-i18n git-sh-setup '/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/libexec/git-core'
+install  git scalar git-receive-pack git-shell git-upload-archive git-upload-pack '/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin'
+install git-cvsserver '/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin'
+make -C templates DESTDIR='/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root' install
+make[1]: Entering directory '/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/source/git-2.56.0/templates'
+install -d -m 755 '/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/share/git-core/templates'
+(cd blt && tar cf - .) | \
+(cd '/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/share/git-core/templates' && umask 022 && tar xof -)
+make[1]: Leaving directory '/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/source/git-2.56.0/templates'
+install -d -m 755 '/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/libexec/git-core/mergetools'
+install -m 644 mergetools/* '/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/libexec/git-core/mergetools'
+install -d -m 755 '/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/share/locale'
+(cd po/build/locale && tar cf - .) | \
+(cd '/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/share/locale' && umask 022 && tar xof -)
+install -d -m 755 '/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/share/perl5'
+(cd perl/build/lib && tar cf - .) | \
+(cd '/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/share/perl5' && umask 022 && tar xof -)
+make -C gitk-git install
+make[1]: Entering directory '/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/source/git-2.56.0/gitk-git'
+install -d -m 755 '/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin'
+install -m 755 gitk-wish '/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin'/gitk
+install -d -m 755 '/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/share/gitk/lib/msgs'
+install -m 644 po/bg.msg '/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/share/gitk/lib/msgs' &&  install -m 644 po/ca.msg '/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/share/gitk/lib/msgs' &&  install -m 644 po/de.msg '/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/share/gitk/lib/msgs' &&  install -m 644 po/es.msg '/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/share/gitk/lib/msgs' &&  install -m 644 po/fr.msg '/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/share/gitk/lib/msgs' &&  install -m 644 po/hu.msg '/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/share/gitk/lib/msgs' &&  install -m 644 po/it.msg '/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/share/gitk/lib/msgs' &&  install -m 644 po/ja.msg '/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/share/gitk/lib/msgs' &&  install -m 644 po/pt_br.msg '/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/share/gitk/lib/msgs' &&  install -m 644 po/pt_pt.msg '/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/share/gitk/lib/msgs' &&  install -m 644 po/ru.msg '/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/share/gitk/lib/msgs' &&  install -m 644 po/sv.msg '/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/share/gitk/lib/msgs' &&  install -m 644 po/ta.msg '/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/share/gitk/lib/msgs' &&  install -m 644 po/vi.msg '/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/share/gitk/lib/msgs' &&  install -m 644 po/zh_cn.msg '/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/share/gitk/lib/msgs' && true
+make[1]: Leaving directory '/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/source/git-2.56.0/gitk-git'
+make -C git-gui gitexecdir='/opt/git/libexec/git-core' install
+make[1]: Entering directory '/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/source/git-2.56.0/git-gui'
+  DEST /work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/libexec/git-core
+    INSTALL 755 git-gui
+    INSTALL 755 git-gui--askpass
+    INSTALL 755 git-gui--askyesno
+    LINK        git-citool -> git-gui
+  DEST /work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/share/git-gui/lib
+    INSTALL 644 tclIndex
+    INSTALL 644 about.tcl
+    INSTALL 644 blame.tcl
+    INSTALL 644 branch.tcl
+    INSTALL 644 branch_checkout.tcl
+    INSTALL 644 branch_create.tcl
+    INSTALL 644 branch_delete.tcl
+    INSTALL 644 branch_rename.tcl
+    INSTALL 644 browser.tcl
+    INSTALL 644 checkout_op.tcl
+    INSTALL 644 choose_font.tcl
+    INSTALL 644 choose_repository.tcl
+    INSTALL 644 choose_rev.tcl
+    INSTALL 644 chord.tcl
+    INSTALL 644 class.tcl
+    INSTALL 644 commit.tcl
+    INSTALL 644 console.tcl
+    INSTALL 644 database.tcl
+    INSTALL 644 date.tcl
+    INSTALL 644 diff.tcl
+    INSTALL 644 encoding.tcl
+    INSTALL 644 error.tcl
+    INSTALL 644 index.tcl
+    INSTALL 644 line.tcl
+    INSTALL 644 logo.tcl
+    INSTALL 644 merge.tcl
+    INSTALL 644 mergetool.tcl
+    INSTALL 644 option.tcl
+    INSTALL 644 remote.tcl
+    INSTALL 644 remote_add.tcl
+    INSTALL 644 remote_branch_delete.tcl
+    INSTALL 644 search.tcl
+    INSTALL 644 shortcut.tcl
+    INSTALL 644 spellcheck.tcl
+    INSTALL 644 sshkey.tcl
+    INSTALL 644 status_bar.tcl
+    INSTALL 644 themed.tcl
+    INSTALL 644 tools.tcl
+    INSTALL 644 tools_dlg.tcl
+    INSTALL 644 transport.tcl
+    INSTALL 644 win32.tcl
+    INSTALL 644 git-gui.ico
+    INSTALL 644 win32_shortcut.js
+  DEST /work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/share/git-gui/lib/msgs
+    INSTALL 644 bg.msg
+    INSTALL 644 de.msg
+    INSTALL 644 el.msg
+    INSTALL 644 fr.msg
+    INSTALL 644 hu.msg
+    INSTALL 644 it.msg
+    INSTALL 644 ja.msg
+    INSTALL 644 nb.msg
+    INSTALL 644 pt_br.msg
+    INSTALL 644 pt_pt.msg
+    INSTALL 644 ru.msg
+    INSTALL 644 sv.msg
+    INSTALL 644 vi.msg
+    INSTALL 644 zh_cn.msg
+make[1]: Leaving directory '/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/source/git-2.56.0/git-gui'
+install -d -m 755 '/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/share/bash-completion/completions' && \
+install -m 644 contrib/completion/git-completion.bash '/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/share/bash-completion/completions/git'
+bindir=$(cd '/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin' && pwd) && \
+execdir=$(cd '/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/libexec/git-core' && pwd) && \
+destdir_from_execdir_SQ=$(echo 'libexec/git-core' | sed -e 's|[^/][^/]*|..|g') && \
+{ test "$bindir/" = "$execdir/" || \
+  for p in git scalar git-shell git-cvsserver; do \
+	rm -f "$execdir/$p" && \
+	test -n "" && \
+	ln -s "$destdir_from_execdir_SQ/bin/$p" "$execdir/$p" || \
+	{ test -z "" && \
+	  ln "$bindir/$p" "$execdir/$p" 2>/dev/null || \
+	  cp "$bindir/$p" "$execdir/$p" || exit; } \
+  done; \
+} && \
+for p in git-receive-pack git-upload-archive git-upload-pack; do \
+	rm -f "$bindir/$p" && \
+	test -n "" && \
+	ln -s "git" "$bindir/$p" || \
+	{ test -z "" && \
+	  ln "$bindir/git" "$bindir/$p" 2>/dev/null || \
+	  ln -s "git" "$bindir/$p" 2>/dev/null || \
+	  cp "$bindir/git" "$bindir/$p" || exit; }; \
+done && \
+for p in git-add git-am git-annotate git-apply git-archive git-backfill git-bisect git-blame git-branch git-bugreport git-bundle git-cat-file git-check-attr git-check-ignore git-check-mailmap git-check-ref-format git-checkout--worker git-checkout-index git-checkout git-clean git-clone git-column git-commit-graph git-commit-tree git-commit git-config git-count-objects git-credential-cache--daemon git-credential-cache git-credential-store git-credential git-describe git-diagnose git-diff-files git-diff-index git-diff-pairs git-diff-tree git-diff git-difftool git-fast-export git-fast-import git-fetch-pack git-fetch git-fmt-merge-msg git-for-each-ref git-for-each-repo git-fsck git-fsmonitor--daemon git-gc git-get-tar-commit-id git-grep git-hash-object git-help git-history git-hook git-index-pack git-init-db git-interpret-trailers git-last-modified git-log git-ls-files git-ls-remote git-ls-tree git-mailinfo git-mailsplit git-merge-base git-merge-file git-merge-index git-merge-ours git-merge-recursive git-merge-tree git-merge git-mktag git-mktree git-multi-pack-index git-mv git-name-rev git-notes git-pack-objects git-pack-redundant git-pack-refs git-patch-id git-prune-packed git-prune git-pull git-push git-range-diff git-read-tree git-rebase git-receive-pack git-reflog git-refs git-remote-ext git-remote-fd git-remote git-repack git-replace git-replay git-repo git-rerere git-reset git-rev-list git-rev-parse git-revert git-rm git-send-pack git-shortlog git-show-branch git-show-index git-show-ref git-sparse-checkout git-stash git-stripspace git-submodule--helper git-symbolic-ref git-tag git-unpack-file git-unpack-objects git-update-index git-update-ref git-update-server-info git-upload-archive git-upload-pack git-url-parse git-var git-verify-commit git-verify-pack git-verify-tag git-worktree git-write-tree git-cherry git-cherry-pick git-format-patch git-format-rev git-fsck-objects git-init git-maintenance git-merge-subtree git-restore git-show git-stage git-status git-switch git-version git-whatchanged; do \
+	rm -f "$execdir/$p" && \
+	if test -z ""; \
+	then \
+		test -n "" && \
+		ln -s "$destdir_from_execdir_SQ/bin/git" "$execdir/$p" || \
+		{ test -z "" && \
+		  ln "$execdir/git" "$execdir/$p" 2>/dev/null || \
+		  ln -s "git" "$execdir/$p" 2>/dev/null || \
+		  cp "$execdir/git" "$execdir/$p" || exit; }; \
+	fi \
+done && \
+remote_curl_aliases="git-remote-https git-remote-ftp git-remote-ftps" && \
+for p in $remote_curl_aliases; do \
+	rm -f "$execdir/$p" && \
+	test -n "" && \
+	ln -s "git-remote-http" "$execdir/$p" || \
+	{ test -z "" && \
+	  ln "$execdir/git-remote-http" "$execdir/$p" 2>/dev/null || \
+	  ln -s "git-remote-http" "$execdir/$p" 2>/dev/null || \
+	  cp "$execdir/git-remote-http" "$execdir/$p" || exit; } \
+done
+make: Leaving directory '/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/source/git-2.56.0'
+git version 2.56.0
+cpu: x86_64
+no commit associated with this build
+sizeof-long: 8
+sizeof-size_t: 8
+shell-path: /bin/sh
+rust: enabled
+feature: fsmonitor--daemon
+gettext: enabled
+libcurl: 8.5.0
+OpenSSL: OpenSSL 3.0.13 30 Jan 2024
+zlib: 1.3
+SHA-1: SHA1_DC
+SHA-256: SHA256_BLK
+default-ref-format: files
+default-hash: sha1
+[GNUPG:] NEWSIG
+[GNUPG:] KEY_CONSIDERED 96E07AF25771955980DAD10020D04E5A713660A7 0
+[GNUPG:] SIG_ID km/bUZa7nBDEy1dl+B52Sb/iJhQ 2026-09-28 1790571422
+[GNUPG:] GOODSIG B0B5E88696AFE6CB Junio C Hamano <gitster@pobox.com>
+[GNUPG:] VALIDSIG E1F036B1FEE7221FC778ECEFB0B5E88696AFE6CB 2026-09-28 1790571422 0 4 0 1 8 00 96E07AF25771955980DAD10020D04E5A713660A7
+[GNUPG:] KEY_CONSIDERED 96E07AF25771955980DAD10020D04E5A713660A7 0
+[GNUPG:] TRUST_UNDEFINED 0 pgp
+gpg: Signature made Mon Sep 28 04:57:02 2026 UTC
+gpg:                using RSA key E1F036B1FEE7221FC778ECEFB0B5E88696AFE6CB
+gpg: Good signature from "Junio C Hamano <gitster@pobox.com>" [unknown]
+gpg:                 aka "Junio C Hamano <jch@google.com>" [unknown]
+gpg:                 aka "Junio C Hamano <junio@pobox.com>" [unknown]
+gpg: WARNING: This key is not certified with a trusted signature!
+gpg:          There is no indication that the signature belongs to the owner.
+Primary key fingerprint: 96E0 7AF2 5771 9559 80DA  D100 20D0 4E5A 7136 60A7
+     Subkey fingerprint: E1F0 36B1 FEE7 221F C778  ECEF B0B5 E886 96AF E6CB
+oracle binary sha256 c4848492938c4ebfffbefe1fbbaa68b9af90c86d1f6a20e76816c5ff37fcfa60
+/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git

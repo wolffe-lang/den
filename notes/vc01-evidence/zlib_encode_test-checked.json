@@ -1,0 +1,1 @@
+{"commit":"cf0c13d","diagnostics":[],"file":"src/zlib_encode_test.lu","impl":"wolfgang","impl_version":"0.2.35","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"PASS encoder levels, binary data, exact and short caps\n","stdout_sha256":"e45ecf215dd4f2761ec4c6da215e2253c17f698ae96e2ec132a5310de82ce7f3","verdict":"exit(0)","warnings":[]}

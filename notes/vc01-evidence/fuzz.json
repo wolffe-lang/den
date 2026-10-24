@@ -1,0 +1,9 @@
+{
+  "seed": 1986211889,
+  "rounds": 250,
+  "calls": 1250,
+  "mutated_accepted": 78,
+  "mutated_rejected": 672,
+  "input_sha256": "d48dae08bc6f4026533938ef3261d82edd656a74ff3da739df222eeafe0195e6",
+  "zlib": "1.3"
+}

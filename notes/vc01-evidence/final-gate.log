@@ -1,0 +1,190 @@
+{"dataset": "text", "sha256": "e28ccc8a30959eb083a7492c37b5e64c6cd038a6dbce3266ede0d93627b93390", "bytes": 10200000, "strategy": "lazy", "encoded": 35054, "seconds": [0.06585362402256578, 0.07040434307418764, 0.0664835290517658], "median_seconds": 0.06844393606297672}
+{"dataset": "text", "sha256": "e28ccc8a30959eb083a7492c37b5e64c6cd038a6dbce3266ede0d93627b93390", "bytes": 10200000, "strategy": "greedy", "encoded": 35054, "seconds": [0.06717289600055665, 0.06728474306873977, 0.06776433205232024], "median_seconds": 0.06752453756053}
+{"dataset": "phrases", "sha256": "d3219376c29bc422680976d680174aa0d8c74b0e0241988ba3ad5ad84098613c", "bytes": 6000792, "strategy": "lazy", "encoded": 772338, "seconds": [0.1229423648910597, 0.1216878859559074, 0.12132386898156255], "median_seconds": 0.12150587746873498}
+{"dataset": "phrases", "sha256": "d3219376c29bc422680976d680174aa0d8c74b0e0241988ba3ad5ad84098613c", "bytes": 6000792, "strategy": "greedy", "encoded": 772338, "seconds": [0.10159236704930663, 0.1015436101006344, 0.10177783097606152], "median_seconds": 0.10166072053834796}
+{"dataset": "lazy-witness", "sha256": "195b3cb380382682a6c30e50626109405691ce11750e8df6e7295f7c83cbc0e8", "bytes": 8000, "strategy": "lazy", "encoded": 6207, "seconds": [0.001410790951922536, 0.0013727389741688967, 0.0011206319322809577], "median_seconds": 0.0012466854532249272}
+{"dataset": "lazy-witness", "sha256": "195b3cb380382682a6c30e50626109405691ce11750e8df6e7295f7c83cbc0e8", "bytes": 8000, "strategy": "greedy", "encoded": 6610, "seconds": [0.0010901920031756163, 0.0012484199833124876, 0.0010738009586930275], "median_seconds": 0.0011611104710027575}
+tiers-test: PASS T1 push is full
+tiers-test: PASS T1 schedule is full
+tiers-test: PASS T1 workflow_dispatch is full
+tiers-test: PASS T1 the full-matrix label is full
+tiers-test: PASS T1 another label is a noop
+tiers-test: PASS T1 a dispatch naming linux is partial
+tiers-test: PASS T1 a dispatch naming no job of the workflow is refused
+tiers-test: PASS T2 code is pr
+tiers-test: PASS T2 prose alone is a noop
+tiers-test: PASS T2 prose beside code is pr
+tiers-test: PASS T3 a path no rule names is full
+tiers-test: PASS T3 unreadable paths are full
+tiers-test: PASS T4 the jobs, in order: ['plan', 'plan-test', 'linux', 'macos', 'tier', 'nightly-red']
+tiers-test: PASS T4 plan-test needs the plan and runs only when it is named
+tiers-test: PASS T4 linux needs the plan and runs only when it is named
+tiers-test: PASS T4 macos needs the plan and runs only when it is named
+tiers-test: PASS T4 tier needs every job, runs unless cancelled, checks the verdict
+tiers-test: PASS T4 cancel-in-progress for pull requests only
+tiers-test: PASS T4 the trunk push, the nightly, the label and the dispatch input
+tiers-test: PASS T6 a green full
+tiers-test: PASS T6 a green pr
+tiers-test: PASS T6 a green noop
+tiers-test: PASS T6 a green partial
+tiers-test: PASS T6 a chosen job failed
+tiers-test: PASS T6 a chosen job skipped
+tiers-test: PASS T6 a job that ran unasked
+tiers-test: PASS T6 a full that chose less
+tiers-test: PASS T6 a failed plan
+tiers-test: PASS T6 a plan with no tier
+tiers-test: PASS T8 no open issue: one is opened, labelled nightly-red, titled 'nightly red: ci on trunk'
+tiers-test: PASS T8 an open issue: a comment on it, no new issue
+tiers-test: PASS T8 a label that already exists is no failure
+tiers-test: PASS T8 the script refuses to run without REPO, WORKFLOW and RUN_URL
+tiers-test: PASS T8 the workflow's name is ci, the title's
+tiers-test: PASS T8 nightly-red runs after the verdict, on a red schedule only, may write issues
+tiers-test: every check passes
+fetch-toolchain: .wolf-bin/ already holds the pin (x86_64-unknown-linux-gnu)
+git version 2.56.0
+cpu: x86_64
+no commit associated with this build
+sizeof-long: 8
+sizeof-size_t: 8
+shell-path: /bin/sh
+rust: enabled
+feature: fsmonitor--daemon
+gettext: enabled
+libcurl: 8.5.0
+OpenSSL: OpenSSL 3.0.13 30 Jan 2024
+zlib: 1.3
+SHA-1: SHA1_DC
+SHA-256: SHA256_BLK
+default-ref-format: files
+default-hash: sha1
+/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git
+build: target/native/den
+build: target/release/den
+FIPS SHA-1 abc=a9993e364706816aba3e25717850c26c9cd0d89d; SHA-256 abc=ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad; 56-byte vectors pass
+{"commit":"cf0c13d","diagnostics":[],"file":"src/hash_test.lu","impl":"wolfgang","impl_version":"0.2.35","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"FIPS SHA-1 abc=a9993e364706816aba3e25717850c26c9cd0d89d; SHA-256 abc=ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad; 56-byte vectors pass\n","stdout_sha256":"59204e6e0720b78f4497b398e519ffe27d8d7050e64ff506f52e63275861a567","verdict":"exit(0)","warnings":[]}
+{"server": "local", "tier": "native", "exit": 0, "verdict": "exit(0)", "seconds": 0.017}
+{"server": "local", "tier": "checked", "exit": 0, "verdict": "unsupported", "seconds": 2.441}
+TLS observations: {"exit(0)": 1, "unsupported": 1}
+corpus: 9 repositories, oids identical in two independent builds
+zlib empty and Adler known answers pass
+{"commit":"cf0c13d","diagnostics":[],"file":"src/zlib_test.lu","impl":"wolfgang","impl_version":"0.2.35","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"zlib empty and Adler known answers pass\n","stdout_sha256":"9e31e8266f8dadcbcb90806dbda3ccca94ace6ff971450bf8366e6f0d345702d","verdict":"exit(0)","warnings":[]}
+PASS empty
+PASS stored
+PASS fixed
+PASS dynamic
+PASS concat
+PASS trailing
+PASS padding-0
+PASS padding-1
+PASS padding-2
+PASS padding-3
+PASS padding-4
+PASS padding-5
+PASS padding-6
+PASS padding-7
+PASS cross-block-overlap
+PASS single-eob-empty-distance
+PASS negative-limit
+PASS header-truncated-0
+PASS header-truncated-1
+PASS method
+PASS window
+PASS fcheck
+PASS dictionary
+PASS checksum
+PASS checksum-short-0
+PASS checksum-short-1
+PASS checksum-short-2
+PASS checksum-short-3
+PASS reserved
+PASS stored-short
+PASS stored-inverse
+PASS stored-payload-short
+PASS limit-stored
+PASS limit-literal
+PASS limit-overlap
+PASS reserved-length-286
+PASS reserved-length-287
+PASS reserved-distance-30
+PASS reserved-distance-31
+PASS distance-before-start
+PASS hlit-reserved
+PASS empty-code-tree
+PASS incomplete-code-tree
+PASS oversubscribed-code-tree
+PASS repeat-without-previous
+PASS repeat-overflow
+PASS missing-eob
+PASS oversubscribed-literal-tree
+PASS incomplete-literal-tree
+PASS oversubscribed-distance-tree
+PASS incomplete-distance-tree
+PASS empty-distance-used
+{"commit":"cf0c13d","diagnostics":[],"file":"src/zlib_vectors_test.lu","impl":"wolfgang","impl_version":"0.2.35","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"PASS empty\nPASS stored\nPASS fixed\nPASS dynamic\nPASS concat\nPASS trailing\nPASS padding-0\nPASS padding-1\nPASS padding-2\nPASS padding-3\nPASS padding-4\nPASS padding-5\nPASS padding-6\nPASS padding-7\nPASS cross-block-overlap\nPASS single-eob-empty-distance\nPASS negative-limit\nPASS header-truncated-0\nPASS header-truncated-1\nPASS method\nPASS window\nPASS fcheck\nPASS dictionary\nPASS checksum\nPASS checksum-short-0\nPASS checksum-short-1\nPASS checksum-short-2\nPASS checksum-short-3\nPASS reserved\nPASS stored-short\nPASS stored-inverse\nPASS stored-payload-short\nPASS limit-stored\nPASS limit-literal\nPASS limit-overlap\nPASS reserved-length-286\nPASS reserved-length-287\nPASS reserved-distance-30\nPASS reserved-distance-31\nPASS distance-before-start\nPASS hlit-reserved\nPASS empty-code-tree\nPASS incomplete-code-tree\nPASS oversubscribed-code-tree\nPASS repeat-without-previous\nPASS repeat-overflow\nPASS missing-eob\nPASS oversubscribed-literal-tree\nPASS incomplete-literal-tree\nPASS oversubscribed-distance-tree\nPASS incomplete-distance-tree\nPASS empty-distance-used\n","stdout_sha256":"124e40cf7c36bb00edc0629cf34d1b392af2d7f52cd753cf20bd2ed3feda2e21","verdict":"exit(0)","warnings":[]}
+PASS encoder levels, binary data, exact and short caps
+{"commit":"cf0c13d","diagnostics":[],"file":"src/zlib_encode_test.lu","impl":"wolfgang","impl_version":"0.2.35","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"PASS encoder levels, binary data, exact and short caps\n","stdout_sha256":"e45ecf215dd4f2761ec4c6da215e2253c17f698ae96e2ec132a5310de82ce7f3","verdict":"exit(0)","warnings":[]}
+PASS length-limited tree; complete header; empty distance encoder; lazy lookahead
+{"commit":"cf0c13d","diagnostics":[],"file":"src/zlib/huffman_test.lu","impl":"wolfgang","impl_version":"0.2.35","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"PASS length-limited tree; complete header; empty distance encoder; lazy lookahead\n","stdout_sha256":"3048d939e109a989de1ccc8340537507c44d919ffb3cfce8169a4bddc31c504e","verdict":"exit(0)","warnings":[]}
+{"zlib_compile": "1.3", "zlib_runtime": "1.3", "calls": 2272, "vectors": 52, "sizes": [{"name": "random-0", "raw": 0, "den": 8, "zlib": 8, "ratio": 1.0, "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"}, {"name": "zero-0", "raw": 0, "den": 8, "zlib": 8, "ratio": 1.0, "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"}, {"name": "alphabet-0", "raw": 0, "den": 8, "zlib": 8, "ratio": 1.0, "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"}, {"name": "random-1", "raw": 1, "den": 9, "zlib": 9, "ratio": 1.0, "sha256": "8e35c2cd3bf6641bdb0e2050b76932cbb2e6034a0ddacc1d9bea82a6ba57f7cf"}, {"name": "zero-1", "raw": 1, "den": 9, "zlib": 9, "ratio": 1.0, "sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"}, {"name": "alphabet-1", "raw": 1, "den": 9, "zlib": 9, "ratio": 1.0, "sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"}, {"name": "random-2", "raw": 2, "den": 10, "zlib": 10, "ratio": 1.0, "sha256": "895b2d89dba4e26a4c4987c86bb370a095ef4b4ade238644efee19ba8578c783"}, {"name": "zero-2", "raw": 2, "den": 10, "zlib": 10, "ratio": 1.0, "sha256": "96a296d224f285c67bee93c30f8a309157f0daa35dc5b87e410b78630a09cfc7"}, {"name": "alphabet-2", "raw": 2, "den": 10, "zlib": 10, "ratio": 1.0, "sha256": "b413f47d13ee2fe6c845b2ee141af81de858df4ec549a58b7970bb96645bc8d2"}, {"name": "random-3", "raw": 3, "den": 11, "zlib": 11, "ratio": 1.0, "sha256": "9c129d5b08976a0ad859acf127b97e7f8979975ed614691b0ca792fdc778fdd2"}, {"name": "zero-3", "raw": 3, "den": 11, "zlib": 11, "ratio": 1.0, "sha256": "709e80c88487a2411e1ee4dfb9f22a861492d20c4765150c0c794abd70f8147c"}, {"name": "alphabet-3", "raw": 3, "den": 11, "zlib": 11, "ratio": 1.0, "sha256": "ae4b3280e56e2faf83f414a6e3dabe9d5fbe18976544c05fed121accb85b53fc"}, {"name": "random-55", "raw": 55, "den": 65, "zlib": 66, "ratio": 0.9848484848484849, "sha256": "73d7a44ae821762a9bfe4365b6967288854ae747fae20067c3b0dfa6b5e77e7e"}, {"name": "zero-55", "raw": 55, "den": 11, "zlib": 12, "ratio": 0.9166666666666666, "sha256": "02779466cdec163811d078815c633f21901413081449002f24aa3e80f0b88ef7"}, {"name": "alphabet-55", "raw": 55, "den": 63, "zlib": 63, "ratio": 1.0, "sha256": "463eb28e72f82e0a96c0a4cc53690c571281131f672aa229e0d45ae59b598b59"}, {"name": "random-56", "raw": 56, "den": 67, "zlib": 67, "ratio": 1.0, "sha256": "19ff0b046584a55ab4b10e4c533256dbc15090f5d5366f0a4c7fd9233a8eac07"}, {"name": "zero-56", "raw": 56, "den": 11, "zlib": 12, "ratio": 0.9166666666666666, "sha256": "d4817aa5497628e7c77e6b606107042bbba3130888c5f47a375e6179be789fbb"}, {"name": "alphabet-56", "raw": 56, "den": 64, "zlib": 64, "ratio": 1.0, "sha256": "da2ae4d6b36748f2a318f23e7ab1dfdf45acdc9d049bd80e59de82a60895f562"}, {"name": "random-63", "raw": 63, "den": 74, "zlib": 74, "ratio": 1.0, "sha256": "bb7c39966559182e70977c3818e9805668dc25ba830953e93cba3fa007a8ed19"}, {"name": "zero-63", "raw": 63, "den": 11, "zlib": 12, "ratio": 0.9166666666666666, "sha256": "c7723fa1e0127975e49e62e753db53924c1bd84b8ac1ac08df78d09270f3d971"}, {"name": "alphabet-63", "raw": 63, "den": 71, "zlib": 71, "ratio": 1.0, "sha256": "29af2686fd53374a36b0846694cc342177e428d1647515f078784d69cdb9e488"}, {"name": "random-64", "raw": 64, "den": 75, "zlib": 75, "ratio": 1.0, "sha256": "7327a60a7ff31a1e169bb6f967fcae7181e4e6fbf5ee8525b086c4a19c5630e5"}, {"name": "zero-64", "raw": 64, "den": 11, "zlib": 12, "ratio": 0.9166666666666666, "sha256": "f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b"}, {"name": "alphabet-64", "raw": 64, "den": 72, "zlib": 72, "ratio": 1.0, "sha256": "fdeab9acf3710362bd2658cdc9a29e8f9c757fcf9811603a8c447cd1d9151108"}, {"name": "random-65", "raw": 65, "den": 76, "zlib": 76, "ratio": 1.0, "sha256": "a85ef94410637a5c3e35e4502a97f051a4f8702b64a70bdc10a8bcd3f37fd359"}, {"name": "zero-65", "raw": 65, "den": 11, "zlib": 12, "ratio": 0.9166666666666666, "sha256": "98ce42deef51d40269d542f5314bef2c7468d401ad5d85168bfab4c0108f75f7"}, {"name": "alphabet-65", "raw": 65, "den": 73, "zlib": 73, "ratio": 1.0, "sha256": "4bfd2c8b6f1eec7a2afeb48b934ee4b2694182027e6d0fc075074f2fabb31781"}, {"name": "random-257", "raw": 257, "den": 268, "zlib": 268, "ratio": 1.0, "sha256": "7f4d26c155a72ce7498626f672fd39d9990999722db64c2b6128a15ffa987f34"}, {"name": "zero-257", "raw": 257, "den": 11, "zlib": 12, "ratio": 0.9166666666666666, "sha256": "6c934d0cdf9dba94b474d6d1929f16739bd9a8ed31d0c3bcaf82c283fb7a3568"}, {"name": "alphabet-257", "raw": 257, "den": 268, "zlib": 268, "ratio": 1.0, "sha256": "54acfbfedc4d8da40f76f275e1a98f10af8ef1fb9fb39e5a67a00aabcbe6597c"}, {"name": "random-258", "raw": 258, "den": 269, "zlib": 269, "ratio": 1.0, "sha256": "058d95cc6facaf5976e2a89cc4009994e92b6677838cfeb4d3e3a7c81296121c"}, {"name": "zero-258", "raw": 258, "den": 11, "zlib": 12, "ratio": 0.9166666666666666, "sha256": "6bd3749a368b56ead82399ee6d06456c94bde1edab4477a48d4b48ea5e032053"}, {"name": "alphabet-258", "raw": 258, "den": 269, "zlib": 269, "ratio": 1.0, "sha256": "e0fc851f4da9255114157e2ec86ff8b643e6bc8aaf9b81f2e847022e72919631"}, {"name": "random-259", "raw": 259, "den": 270, "zlib": 270, "ratio": 1.0, "sha256": "123029fc28624e295989d31e5c161327e880072fb8d842d8d8e60f8c2635e012"}, {"name": "zero-259", "raw": 259, "den": 10, "zlib": 12, "ratio": 0.8333333333333334, "sha256": "6d38a4fbdd3f2075a63519fdb87338feae247d0a6573315cf0e98c3c504047fc"}, {"name": "alphabet-259", "raw": 259, "den": 270, "zlib": 270, "ratio": 1.0, "sha256": "c38540a189764c27bd40bee5e0719f51455107734ef5ac97c6dc7fc0295a3046"}, {"name": "random-32767", "raw": 32767, "den": 32778, "zlib": 32783, "ratio": 0.9998474819266083, "sha256": "da5b48437c105999e8de3ab27b6a0d9b097149a5520cefeb607e6039ab5bc56a"}, {"name": "zero-32767", "raw": 32767, "den": 52, "zlib": 165, "ratio": 0.3151515151515151, "sha256": "65dd4ac834511120d81d123f3e01b8acf90c895e88ace62916581fc8e952a62a"}, {"name": "alphabet-32767", "raw": 32767, "den": 453, "zlib": 620, "ratio": 0.7306451612903225, "sha256": "4c54428c15a7211d7542745daea2b61407c301dc1655e67de34480a42ca8a162"}, {"name": "random-32768", "raw": 32768, "den": 32779, "zlib": 32784, "ratio": 0.999847486578819, "sha256": "3fb59fe6bd1ce2e3ff48effac04620d7270519da7a0728061d079eba4851aed8"}, {"name": "zero-32768", "raw": 32768, "den": 52, "zlib": 163, "ratio": 0.31901840490797545, "sha256": "c35020473aed1b4642cd726cad727b63fff2824ad68cedd7ffb73c7cbd890479"}, {"name": "alphabet-32768", "raw": 32768, "den": 454, "zlib": 620, "ratio": 0.7322580645161291, "sha256": "e11360251d1173650cdcd20f111d8f1ca2e412f572e8b36a4dc067121c1799b8"}, {"name": "random-32769", "raw": 32769, "den": 32782, "zlib": 32785, "ratio": 0.9999084947384475, "sha256": "181fddfb0343e96e0f93d8e1c490f87b9d5e35d4fb4a396af5555813794f3046"}, {"name": "zero-32769", "raw": 32769, "den": 54, "zlib": 164, "ratio": 0.32926829268292684, "sha256": "7ef43086d6ff0877a42e27bfa629270eacb2e6a327950020a4e426f0281a1e63"}, {"name": "alphabet-32769", "raw": 32769, "den": 456, "zlib": 621, "ratio": 0.7342995169082126, "sha256": "b93c16c99895f1593347ab57af0c0a82f9672ecb3debb59d124e1b38f3871f01"}, {"name": "random-65535", "raw": 65535, "den": 65551, "zlib": 65561, "ratio": 0.9998474702948399, "sha256": "653e707639965ef33f532ddfe5b70832eff946e39ef0c83dd9aded72877caaf5"}, {"name": "zero-65535", "raw": 65535, "den": 97, "zlib": 306, "ratio": 0.31699346405228757, "sha256": "9f797b60edaf440d5831da53c35f4d4847a2f55adc64cfe887a7bcfcd9eca495"}, {"name": "alphabet-65535", "raw": 65535, "den": 596, "zlib": 858, "ratio": 0.6946386946386947, "sha256": "5f1bf999bcba5e05d4c34a13710d2e4bff005877874dcce49ac87af61076231e"}, {"name": "random-65536", "raw": 65536, "den": 65552, "zlib": 65562, "ratio": 0.9998474726213356, "sha256": "6afcbdb0ec4e3c66ab545a9b6dbd56f7125f24afe59535bf38deedc870c5f8b1"}, {"name": "zero-65536", "raw": 65536, "den": 97, "zlib": 307, "ratio": 0.31596091205211724, "sha256": "de2f256064a0af797747c2b97505dc0b9f3df0de4f489eac731c23ae9ca9cc31"}, {"name": "alphabet-65536", "raw": 65536, "den": 596, "zlib": 858, "ratio": 0.6946386946386947, "sha256": "7daca2095d0438260fa849183dfc67faa459fdf4936e1bc91eec6b281b27e4c2"}, {"name": "long-distance", "raw": 65536, "den": 33034, "zlib": 65562, "ratio": 0.5038589426802111, "sha256": "75dc3b4f77c85ba237cf5c83a856c48fade7218119a092d33170727b0e7da74e"}, {"name": "text", "raw": 102000, "den": 420, "zlib": 723, "ratio": 0.5809128630705395, "sha256": "7e433c0542d76a190c0840c4667cb15fe27b4b12b2cffc8f2cc8db6e95b6c93e"}]}
+{"counts": {"loose": 1067, "pack_entries": 31, "written": 1098, "corrupt_refused": 18}, "sizes": [{"corpus": "binary", "den": 552, "git_level1": 553, "ratio": 0.9981916817359855, "max_object_ratio": 1.0}, {"corpus": "empty", "den": 139, "git_level1": 139, "ratio": 1.0, "max_object_ratio": 1.0}, {"corpus": "linear", "den": 2554, "git_level1": 2557, "ratio": 0.9988267500977708, "max_object_ratio": 1.0}, {"corpus": "merge", "den": 1117, "git_level1": 1120, "ratio": 0.9973214285714286, "max_object_ratio": 1.0}, {"corpus": "packed", "den": 2554, "git_level1": 2557, "ratio": 0.9988267500977708, "max_object_ratio": 1.0}, {"corpus": "rename", "den": 479, "git_level1": 480, "ratio": 0.9979166666666667, "max_object_ratio": 1.0}, {"corpus": "symlink", "den": 295, "git_level1": 295, "ratio": 1.0, "max_object_ratio": 1.0}, {"corpus": "thousand", "den": 43676, "git_level1": 43384, "ratio": 1.0067305919232896, "max_object_ratio": 1.011984403857993}, {"corpus": "two", "den": 242, "git_level1": 243, "ratio": 0.9958847736625515, "max_object_ratio": 1.0}], "zlib": "1.3"}
+fuzz 0 calls 5
+fuzz 50 calls 255
+fuzz 100 calls 505
+fuzz 150 calls 755
+fuzz 200 calls 1005
+{"seed": 1986211889, "rounds": 250, "calls": 1250, "mutated_accepted": 78, "mutated_rejected": 672, "input_sha256": "d48dae08bc6f4026533938ef3261d82edd656a74ff3da739df222eeafe0195e6", "zlib": "1.3"}
+{"zlib_compile": "1.3", "zlib_runtime": "1.3", "calls": 2272, "vectors": 52, "sizes": [{"name": "random-0", "raw": 0, "den": 8, "zlib": 8, "ratio": 1.0, "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"}, {"name": "zero-0", "raw": 0, "den": 8, "zlib": 8, "ratio": 1.0, "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"}, {"name": "alphabet-0", "raw": 0, "den": 8, "zlib": 8, "ratio": 1.0, "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"}, {"name": "random-1", "raw": 1, "den": 9, "zlib": 9, "ratio": 1.0, "sha256": "8e35c2cd3bf6641bdb0e2050b76932cbb2e6034a0ddacc1d9bea82a6ba57f7cf"}, {"name": "zero-1", "raw": 1, "den": 9, "zlib": 9, "ratio": 1.0, "sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"}, {"name": "alphabet-1", "raw": 1, "den": 9, "zlib": 9, "ratio": 1.0, "sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"}, {"name": "random-2", "raw": 2, "den": 10, "zlib": 10, "ratio": 1.0, "sha256": "895b2d89dba4e26a4c4987c86bb370a095ef4b4ade238644efee19ba8578c783"}, {"name": "zero-2", "raw": 2, "den": 10, "zlib": 10, "ratio": 1.0, "sha256": "96a296d224f285c67bee93c30f8a309157f0daa35dc5b87e410b78630a09cfc7"}, {"name": "alphabet-2", "raw": 2, "den": 10, "zlib": 10, "ratio": 1.0, "sha256": "b413f47d13ee2fe6c845b2ee141af81de858df4ec549a58b7970bb96645bc8d2"}, {"name": "random-3", "raw": 3, "den": 11, "zlib": 11, "ratio": 1.0, "sha256": "9c129d5b08976a0ad859acf127b97e7f8979975ed614691b0ca792fdc778fdd2"}, {"name": "zero-3", "raw": 3, "den": 11, "zlib": 11, "ratio": 1.0, "sha256": "709e80c88487a2411e1ee4dfb9f22a861492d20c4765150c0c794abd70f8147c"}, {"name": "alphabet-3", "raw": 3, "den": 11, "zlib": 11, "ratio": 1.0, "sha256": "ae4b3280e56e2faf83f414a6e3dabe9d5fbe18976544c05fed121accb85b53fc"}, {"name": "random-55", "raw": 55, "den": 65, "zlib": 66, "ratio": 0.9848484848484849, "sha256": "73d7a44ae821762a9bfe4365b6967288854ae747fae20067c3b0dfa6b5e77e7e"}, {"name": "zero-55", "raw": 55, "den": 11, "zlib": 12, "ratio": 0.9166666666666666, "sha256": "02779466cdec163811d078815c633f21901413081449002f24aa3e80f0b88ef7"}, {"name": "alphabet-55", "raw": 55, "den": 63, "zlib": 63, "ratio": 1.0, "sha256": "463eb28e72f82e0a96c0a4cc53690c571281131f672aa229e0d45ae59b598b59"}, {"name": "random-56", "raw": 56, "den": 67, "zlib": 67, "ratio": 1.0, "sha256": "19ff0b046584a55ab4b10e4c533256dbc15090f5d5366f0a4c7fd9233a8eac07"}, {"name": "zero-56", "raw": 56, "den": 11, "zlib": 12, "ratio": 0.9166666666666666, "sha256": "d4817aa5497628e7c77e6b606107042bbba3130888c5f47a375e6179be789fbb"}, {"name": "alphabet-56", "raw": 56, "den": 64, "zlib": 64, "ratio": 1.0, "sha256": "da2ae4d6b36748f2a318f23e7ab1dfdf45acdc9d049bd80e59de82a60895f562"}, {"name": "random-63", "raw": 63, "den": 74, "zlib": 74, "ratio": 1.0, "sha256": "bb7c39966559182e70977c3818e9805668dc25ba830953e93cba3fa007a8ed19"}, {"name": "zero-63", "raw": 63, "den": 11, "zlib": 12, "ratio": 0.9166666666666666, "sha256": "c7723fa1e0127975e49e62e753db53924c1bd84b8ac1ac08df78d09270f3d971"}, {"name": "alphabet-63", "raw": 63, "den": 71, "zlib": 71, "ratio": 1.0, "sha256": "29af2686fd53374a36b0846694cc342177e428d1647515f078784d69cdb9e488"}, {"name": "random-64", "raw": 64, "den": 75, "zlib": 75, "ratio": 1.0, "sha256": "7327a60a7ff31a1e169bb6f967fcae7181e4e6fbf5ee8525b086c4a19c5630e5"}, {"name": "zero-64", "raw": 64, "den": 11, "zlib": 12, "ratio": 0.9166666666666666, "sha256": "f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b"}, {"name": "alphabet-64", "raw": 64, "den": 72, "zlib": 72, "ratio": 1.0, "sha256": "fdeab9acf3710362bd2658cdc9a29e8f9c757fcf9811603a8c447cd1d9151108"}, {"name": "random-65", "raw": 65, "den": 76, "zlib": 76, "ratio": 1.0, "sha256": "a85ef94410637a5c3e35e4502a97f051a4f8702b64a70bdc10a8bcd3f37fd359"}, {"name": "zero-65", "raw": 65, "den": 11, "zlib": 12, "ratio": 0.9166666666666666, "sha256": "98ce42deef51d40269d542f5314bef2c7468d401ad5d85168bfab4c0108f75f7"}, {"name": "alphabet-65", "raw": 65, "den": 73, "zlib": 73, "ratio": 1.0, "sha256": "4bfd2c8b6f1eec7a2afeb48b934ee4b2694182027e6d0fc075074f2fabb31781"}, {"name": "random-257", "raw": 257, "den": 268, "zlib": 268, "ratio": 1.0, "sha256": "7f4d26c155a72ce7498626f672fd39d9990999722db64c2b6128a15ffa987f34"}, {"name": "zero-257", "raw": 257, "den": 11, "zlib": 12, "ratio": 0.9166666666666666, "sha256": "6c934d0cdf9dba94b474d6d1929f16739bd9a8ed31d0c3bcaf82c283fb7a3568"}, {"name": "alphabet-257", "raw": 257, "den": 268, "zlib": 268, "ratio": 1.0, "sha256": "54acfbfedc4d8da40f76f275e1a98f10af8ef1fb9fb39e5a67a00aabcbe6597c"}, {"name": "random-258", "raw": 258, "den": 269, "zlib": 269, "ratio": 1.0, "sha256": "058d95cc6facaf5976e2a89cc4009994e92b6677838cfeb4d3e3a7c81296121c"}, {"name": "zero-258", "raw": 258, "den": 11, "zlib": 12, "ratio": 0.9166666666666666, "sha256": "6bd3749a368b56ead82399ee6d06456c94bde1edab4477a48d4b48ea5e032053"}, {"name": "alphabet-258", "raw": 258, "den": 269, "zlib": 269, "ratio": 1.0, "sha256": "e0fc851f4da9255114157e2ec86ff8b643e6bc8aaf9b81f2e847022e72919631"}, {"name": "random-259", "raw": 259, "den": 270, "zlib": 270, "ratio": 1.0, "sha256": "123029fc28624e295989d31e5c161327e880072fb8d842d8d8e60f8c2635e012"}, {"name": "zero-259", "raw": 259, "den": 10, "zlib": 12, "ratio": 0.8333333333333334, "sha256": "6d38a4fbdd3f2075a63519fdb87338feae247d0a6573315cf0e98c3c504047fc"}, {"name": "alphabet-259", "raw": 259, "den": 270, "zlib": 270, "ratio": 1.0, "sha256": "c38540a189764c27bd40bee5e0719f51455107734ef5ac97c6dc7fc0295a3046"}, {"name": "random-32767", "raw": 32767, "den": 32778, "zlib": 32783, "ratio": 0.9998474819266083, "sha256": "da5b48437c105999e8de3ab27b6a0d9b097149a5520cefeb607e6039ab5bc56a"}, {"name": "zero-32767", "raw": 32767, "den": 52, "zlib": 165, "ratio": 0.3151515151515151, "sha256": "65dd4ac834511120d81d123f3e01b8acf90c895e88ace62916581fc8e952a62a"}, {"name": "alphabet-32767", "raw": 32767, "den": 453, "zlib": 620, "ratio": 0.7306451612903225, "sha256": "4c54428c15a7211d7542745daea2b61407c301dc1655e67de34480a42ca8a162"}, {"name": "random-32768", "raw": 32768, "den": 32779, "zlib": 32784, "ratio": 0.999847486578819, "sha256": "3fb59fe6bd1ce2e3ff48effac04620d7270519da7a0728061d079eba4851aed8"}, {"name": "zero-32768", "raw": 32768, "den": 52, "zlib": 163, "ratio": 0.31901840490797545, "sha256": "c35020473aed1b4642cd726cad727b63fff2824ad68cedd7ffb73c7cbd890479"}, {"name": "alphabet-32768", "raw": 32768, "den": 454, "zlib": 620, "ratio": 0.7322580645161291, "sha256": "e11360251d1173650cdcd20f111d8f1ca2e412f572e8b36a4dc067121c1799b8"}, {"name": "random-32769", "raw": 32769, "den": 32782, "zlib": 32785, "ratio": 0.9999084947384475, "sha256": "181fddfb0343e96e0f93d8e1c490f87b9d5e35d4fb4a396af5555813794f3046"}, {"name": "zero-32769", "raw": 32769, "den": 54, "zlib": 164, "ratio": 0.32926829268292684, "sha256": "7ef43086d6ff0877a42e27bfa629270eacb2e6a327950020a4e426f0281a1e63"}, {"name": "alphabet-32769", "raw": 32769, "den": 456, "zlib": 621, "ratio": 0.7342995169082126, "sha256": "b93c16c99895f1593347ab57af0c0a82f9672ecb3debb59d124e1b38f3871f01"}, {"name": "random-65535", "raw": 65535, "den": 65551, "zlib": 65561, "ratio": 0.9998474702948399, "sha256": "653e707639965ef33f532ddfe5b70832eff946e39ef0c83dd9aded72877caaf5"}, {"name": "zero-65535", "raw": 65535, "den": 97, "zlib": 306, "ratio": 0.31699346405228757, "sha256": "9f797b60edaf440d5831da53c35f4d4847a2f55adc64cfe887a7bcfcd9eca495"}, {"name": "alphabet-65535", "raw": 65535, "den": 596, "zlib": 858, "ratio": 0.6946386946386947, "sha256": "5f1bf999bcba5e05d4c34a13710d2e4bff005877874dcce49ac87af61076231e"}, {"name": "random-65536", "raw": 65536, "den": 65552, "zlib": 65562, "ratio": 0.9998474726213356, "sha256": "6afcbdb0ec4e3c66ab545a9b6dbd56f7125f24afe59535bf38deedc870c5f8b1"}, {"name": "zero-65536", "raw": 65536, "den": 97, "zlib": 307, "ratio": 0.31596091205211724, "sha256": "de2f256064a0af797747c2b97505dc0b9f3df0de4f489eac731c23ae9ca9cc31"}, {"name": "alphabet-65536", "raw": 65536, "den": 596, "zlib": 858, "ratio": 0.6946386946386947, "sha256": "7daca2095d0438260fa849183dfc67faa459fdf4936e1bc91eec6b281b27e4c2"}, {"name": "long-distance", "raw": 65536, "den": 33034, "zlib": 65562, "ratio": 0.5038589426802111, "sha256": "75dc3b4f77c85ba237cf5c83a856c48fade7218119a092d33170727b0e7da74e"}, {"name": "text", "raw": 102000, "den": 420, "zlib": 723, "ratio": 0.5809128630705395, "sha256": "7e433c0542d76a190c0840c4667cb15fe27b4b12b2cffc8f2cc8db6e95b6c93e"}]}
+{"counts": {"loose": 1067, "pack_entries": 31, "written": 1098, "corrupt_refused": 18}, "sizes": [{"corpus": "binary", "den": 552, "git_level1": 553, "ratio": 0.9981916817359855, "max_object_ratio": 1.0}, {"corpus": "empty", "den": 139, "git_level1": 139, "ratio": 1.0, "max_object_ratio": 1.0}, {"corpus": "linear", "den": 2554, "git_level1": 2557, "ratio": 0.9988267500977708, "max_object_ratio": 1.0}, {"corpus": "merge", "den": 1117, "git_level1": 1120, "ratio": 0.9973214285714286, "max_object_ratio": 1.0}, {"corpus": "packed", "den": 2554, "git_level1": 2557, "ratio": 0.9988267500977708, "max_object_ratio": 1.0}, {"corpus": "rename", "den": 479, "git_level1": 480, "ratio": 0.9979166666666667, "max_object_ratio": 1.0}, {"corpus": "symlink", "den": 295, "git_level1": 295, "ratio": 1.0, "max_object_ratio": 1.0}, {"corpus": "thousand", "den": 43676, "git_level1": 43384, "ratio": 1.0067305919232896, "max_object_ratio": 1.011984403857993}, {"corpus": "two", "den": 242, "git_level1": 243, "ratio": 0.9958847736625515, "max_object_ratio": 1.0}], "zlib": "1.3"}
+fuzz 0 calls 5
+fuzz 50 calls 255
+fuzz 100 calls 505
+fuzz 150 calls 755
+fuzz 200 calls 1005
+{"seed": 1986211889, "rounds": 250, "calls": 1250, "mutated_accepted": 78, "mutated_rejected": 672, "input_sha256": "d48dae08bc6f4026533938ef3261d82edd656a74ff3da739df222eeafe0195e6", "zlib": "1.3"}
+codec: checked 4 programs pass; native and release independent gates pass; unsupported=0
+selftest: loose-object-raw accepts representation changes; checksum/oid/trailing and non-object bytes remain gated
+selftest: actual classifier rejects planted one-byte version; stdout/repository plants rejected; exact review binding passes
+shape-pass: version
+not-yet: init
+not-yet: hash-object
+not-yet: cat-type
+not-yet: cat-size
+not-yet: cat-pretty
+not-yet: write-tree
+not-yet: add
+not-yet: status-short
+not-yet: status-long
+not-yet: commit
+not-yet: rm
+not-yet: mv
+not-yet: restore
+not-yet: diff
+not-yet: diff-renames
+not-yet: log-default
+not-yet: log-oneline
+not-yet: show
+not-yet: branch
+not-yet: tag
+not-yet: switch
+not-yet: reset
+not-yet: merge
+not-yet: rebase
+not-yet: blame
+not-yet: stash
+not-yet: notes
+not-yet: rev-parse
+not-yet: fsck
+not-yet: count-objects
+not-yet: diff-symlink
+{"not-yet": 31, "shape-pass": 1}
+not-yet: hash-object
+{"not-yet": 1}
+gate: strict not-yet rejected as intended
+oracle: filter selected no cases
+gate: empty selection rejected as intended
+build: target/static/den
+build: target/static/den
+den 0.0.0 (built with wolf 0.2.35)
+den 03a0ff75f63a7833d8b4833338f3e356f485681ff5c1fddd8b7d56a11ea60651 14700920
+den (built twice, the same digest); stripped: 1237528 bytes, sha256 095edba57ef5fe7bed731c0e7875d76288b2edb7034b4007e6d54469f47a6693
+linked against: /usr/lib/gcc/x86_64-linux-gnu/13/../../../x86_64-linux-gnu/libc.a

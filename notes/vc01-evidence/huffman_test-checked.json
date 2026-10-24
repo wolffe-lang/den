@@ -1,0 +1,1 @@
+{"commit":"cf0c13d","diagnostics":[],"file":"src/zlib/huffman_test.lu","impl":"wolfgang","impl_version":"0.2.35","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"PASS length-limited tree; complete header; empty distance encoder; lazy lookahead\n","stdout_sha256":"3048d939e109a989de1ccc8340537507c44d919ffb3cfce8169a4bddc31c504e","verdict":"exit(0)","warnings":[]}

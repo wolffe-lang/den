@@ -1,0 +1,1 @@
+{"commit":"cf0c13d","diagnostics":[],"file":"src/zlib_test.lu","impl":"wolfgang","impl_version":"0.2.35","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"zlib empty and Adler known answers pass\n","stdout_sha256":"9e31e8266f8dadcbcb90806dbda3ccca94ace6ff971450bf8366e6f0d345702d","verdict":"exit(0)","warnings":[]}
