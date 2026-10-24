@@ -1,6 +1,6 @@
 # Map
 
-M0 is a scaffold. `den --version` works; all other commands refuse with
+The CLI remains a scaffold; M1 now includes the zlib codec. `den --version` works; all other commands refuse with
 exit 2 and the destination milestone/lane. No repository-writing feature is
 implemented. A successful M0 gate means the harness classified refusals
 honestly, not that den matches Git.
@@ -34,7 +34,7 @@ container on kasumi CPUs 12–15. “Checked” below means the observation's
 | Need | Exact surface; measured verdict | Witness / disposition |
 |---|---|---|
 | SHA-1 / SHA-256 | `hash.new1/update1/final1/sum1`, SHA-1 rounds from boreutils; `std.x.crypto.sha2.sum256`, exposed as `hash.sum256` | `hash`, `src/hash_test.lu`: empty, abc and 56-byte standard answers plus five streaming splits on native + checked; provenance correction R-vc00-1 |
-| zlib inflate/deflate | Absent; no `std.compress` module | `deflate`: E0301 native + checked; own-source grep finds cryptographic/DNS compression and configuration names, no zlib codec. vc01 is the component, not an FFI dependency |
+| zlib inflate/deflate | `src/zlib`: original RFC 1950/1951 codec, levels 0/1/-1 | Four checked programs pass; native/release independent zlib and Git interop. No `std.compress` dependency or FFI |
 | Files / metadata | `fs_fstat_record` returns all 20 words, with `have=1048575` here. ctime_s/ns [16/17], mtime_s/ns [14/15], dev [9], ino [10], mode [4], uid [6], gid [7], size [1] | `stat`: native + checked. mtime exactly 1700000001.987654321; size 6. Mode is permission bits only: construct Git's type bits from kind. Index words truncate to 32 bits, without a trapping signed cast |
 | File operations | `std.fs.create_new_with_mode`, `move_file`, `sync`, `sync_dir`, `symlink`, `read_link`, `lstat`, `realpath`, `entries`; builtin `fs_lock/unlock` | `files`: native + checked, exclusive creation, sync/rename, lock/unlock and symlink round trip. Unix advisory locks are not Git's `.lock`-file protocol; use exclusive create for that |
 | Write-only non-truncating open | Absent: modes 0/5 read only, 1 truncates, 2 appends, 3 reads+writes, 4 exclusive-create; 6/7 invalid | `open`: native + checked. Existing wolf-lang#908 covers the missing non-creating writable modes; #684 is st_blksize and #706 is rename-no-replace, not this API. Do not describe mode 3 as write-only. No new duplicate issue proposed |
@@ -72,39 +72,63 @@ separates standard-library wrappers from language builtins.
   wolf-std#99 (regex), #100 (big integers). zlib and Git globs are den work,
   not requests for unrelated standard-library features.
 
-## zlib component boundary
+## Zlib component boundary
 
-vc01 is a den module initially. RFC 1950 framing: validate CMF/FLG and FCHECK,
-reject preset dictionaries by name, validate big-endian Adler-32, report the
-number of input bytes consumed. RFC 1951 inflate first: stored/fixed/dynamic
-blocks, overlapping backreferences, bounded output and explicit malformed /
-truncated rows. A pack contains concatenated compressed streams, so callers
-must know exactly where each stream ends. Then a stored/fixed encoder and a
-bounded match finder; no C zlib linkage in the shipped tool.
+Implemented in `src/zlib/{inflate,deflate,huffman}.lu`. Public API:
 
-The oracle's default loose compression matches zlib level 1 on the measured
-95,232-byte payload (953 bytes compressed); core.compression=9 produces 627
-bytes (this corpus cannot distinguish levels 7–9), and an explicit loose
-level 0 produces 95,259 bytes. See FORMATS and raw summary. This measures the
-default rather than inferring the numeric setting from an FLEVEL bit.
+```wolf
+pub error InflateErrors = {truncated, bad_header, dictionary, checksum, invalid, limit}
+pub error DeflateErrors = {invalid, unsupported_level, limit}
+pub struct Inflated { data: List[byte], consumed: int }
+pub fn inflate(src: List[byte], max_output: int) -> Inflated ! InflateErrors
+pub fn inflate_raw(src: List[byte], max_output: int) -> Inflated ! InflateErrors
+pub fn deflate(src: List[byte], level: int, max_output: int) -> List[byte] ! DeflateErrors
+pub fn deflate_raw(src: List[byte], level: int, max_output: int) -> List[byte] ! DeflateErrors
+pub fn adler32(src: List[byte]) -> int
+```
 
-## Decisions proposed, not ruled
+The encoder's three-tag row has a public name to satisfy W0602 at the pinned
+compiler; its set is unchanged from the adopted API. Limits are inclusive
+(adopted R-vc01-1 A): output exactly at the cap succeeds; another byte
+is `limit`; a negative cap is `invalid`. Input is read-only, output owns its
+storage, and no source list is retained. `consumed` counts bytes, including
+partial final-byte padding and, for `inflate`, the framing/checksum. Raw
+inflate excludes framing. A caller advances by consumed, never by output size.
 
-- **R-vc00-1 — SHA provenance.** 575dc7b lacks the requested file. Options:
-  stop vendoring, or use the SHA implementation at b603bb8 as formatted at
-  f87dc76. Recommend the latter; provisionally adopted in headers/tests.
-- **R-vc00-2 — loose compressed bytes.** R4a asks for identical loose-file
-  bytes, while R9 permits a new fixed-Huffman deflater whose bytes differ.
-  Options: reproduce zlib 1.3's encoder exactly, or require identical raw
-  object bytes/oid plus valid interoperable zlib and record sizes. Recommend
-  the latter (pack-like representation distinction); vc01 draft is conditional
-  on that ruling. The current harness still compares every .git byte and
-  waives nothing. No standing parity bar has been silently weakened.
-- **R-vc00-3 — push wire protocol.** The v2 document defines fetch/ls-refs,
-  not a receive-pack push command. Options: defer push with all v0/v1, or
-  allow receive-pack's traditional advertisement/capabilities/status framing
-  for push while retaining v2-only fetch. Recommend the latter. vc14 must
-  settle this before claiming push; no wire implementation exists today.
+Inflate validates CM=8, CINFO<=7, FCHECK, FDICT and Adler; distance is bounded
+by the advertised window. Stored/fixed/dynamic blocks share prior history.
+Tree space accounting rejects oversubscription and incomplete trees except
+the RFC's one-bit single data symbol and empty distance alphabet. Empty
+distance codes cannot be used for matches. All source bounds are checked.
+
+Level 0 uses stored blocks. -1/1 uses a 32-KiB window, hash chains capped at
+32 candidates, one-byte lazy lookahead, and exact bit-cost selection among
+stored/fixed/dynamic output per 32-KiB block. Prefix lengths come from repeated
+lightest-node joins; positive weights are rounded up and halved if a depth
+exceeds the format bound, so construction terminates without recursion.
+Block/matcher scratch uses bounded regions; input/output are whole-object
+allocations. No pack-streaming claim. Other levels return `unsupported_level`.
+
+52 independent vectors and native/release range tests cover malformed input,
+checksums, levels, cap boundaries and consumed offsets. Four actual checked
+programs pass with zero unsupported rows. Every corpus loose object (1,067)
+and packed entry (31) is inflated, its reconstructed SHA-1 compared with Git,
+and all 1,098 objects are rewritten with den and read/fsck'd by Git. The nine
+corpus ratios are <=1.0068, below the 1.25 stop. Fixed-only output exceeded the
+bar on repeated-zero/text fixtures; preserved evidence drove dynamic selection.
+README has measured 100-MB throughput/memory; evidence holds every raw run.
+
+vc02 uses `deflate(raw, 1, cap)`, validates its own object header, and refuses
+other compression levels by name until implemented. It must check the raw
+object oid independently of the codec's Adler check. No API signature change
+is needed beyond referring to the equivalent `DeflateErrors` alias.
+
+### Settled M0 decisions
+
+- R-vc00-1: SHA-1 provenance is boreutils b603bb8 as formatted at f87dc76.
+- R-vc00-2: loose streams compare by raw bytes/oid and valid interoperable
+  compression, with measured sizes. Other on-disk artifacts stay exact.
+- R-vc00-3: fetch/ls-refs use protocol v2; push uses receive-pack framing.
 
 ## Harness and CI
 
@@ -118,7 +142,9 @@ subset; an empty selection fails. `--strict` fails on not-yet rows. Normal M0
 mode counts those separately: 1 version-shape pass, 31 not-yet, 0 parity or
 reviewed rows. Every unexpected mismatch fails. The gate also proves --strict refuses not-yet and an empty filter is an error; local native TLS is gated, with one actual checked budget refusal printed and counted. Review JSON binds the case
 hash and the complete Git/den stdout, stderr, status and .git file maps, with
-reason and issue/ruling; there is no wildcard, normalization or excluded file.
+reason and issue/ruling; there is no wildcard or excluded file. Named `loose-object-raw` comparison
+validates checksum/header/oid and compares raw bytes; compressed evidence
+remains in the captures. All non-object file bytes and modes remain exact.
 A review stops matching when either side changes. The seed template is empty
 so the harness never reads Git's sample hook scripts.
 

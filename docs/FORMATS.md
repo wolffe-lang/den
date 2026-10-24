@@ -56,8 +56,10 @@ hash-object; its extra-header and missing-tagger errors need separate cases.
 **Measured loose compression.** Default matches zlib level 1, not level 6,
 on the recorded payload. `core.compression=9` changes it; explicit
 `core.looseCompression=0` overrides it. Raw summary includes sizes and hashes.
-No compression-byte equivalence is inferred from equal oids: R-vc00-2 asks
-which representation parity the new encoder must meet.
+No compression-byte equivalence is inferred from equal oids. Adopted R-vc00-2
+requires raw bytes and oid equality plus interoperable compression and a
+per-corpus size ratio <=1.25 against Git level 1. `loose-object-raw` is the
+named harness comparison mode; checksum or oid corruption still fails.
 
 ## Index v2 (v3/v4 reading later)
 
