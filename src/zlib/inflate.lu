@@ -1,0 +1,294 @@
+// Original codec derived from RFC 1950 §§2.1–2.3 and RFC 1951 §§3.1–3.2.7.
+// No implementation source or RFC sample C copied. See docs/SOURCES.md.
+
+/// Malformed/truncated data, unsupported dictionary, checksum or output cap.
+pub error InflateErrors = {truncated, bad_header, dictionary, checksum, invalid, limit}
+
+/// Owned decoded bytes and whole source bytes through this stream's last byte.
+pub struct Inflated {
+    data: List[byte],
+    consumed: int,
+}
+
+struct Bits {
+    pos: int,
+    bit: int,
+}
+
+// Never reads ahead into a following stream or the zlib checksum.
+fn bits(src: List[byte], mut r: Bits, width: int) -> int ! {truncated} {
+    var value: int = 0
+    var shift: int = 0
+    while shift < width {
+        if r.pos >= src.len { return truncated }
+        value = value | (src[r.pos] as int >> r.bit & 1) << shift
+        r.bit += 1
+        if r.bit == 8 { r.pos += 1; r.bit = 0 }
+        shift += 1
+    }
+    value
+}
+
+fn align(mut r: Bits) {
+    if r.bit != 0 { r.pos += 1; r.bit = 0 }
+}
+
+struct Tree {
+    counts: List[int],
+    symbols: List[int],
+}
+
+fn zeros(n: int) -> List[int] {
+    var result = List[int]()
+    for _ in 0..n { (mut result).push(0) }
+    result
+}
+
+// Code-space accounting detects oversubscription before any table index.
+// Incomplete trees are only legal for a single one-bit data symbol, or an
+// empty distance alphabet. The code-length alphabet must be complete.
+fn tree(lengths: List[int], alphabet: int) -> Tree ! {invalid} {
+    var counts = zeros(16)
+    var used = 0
+    for n in lengths {
+        if n < 0 || n > 15 { return invalid }
+        if n != 0 { counts[n] += 1; used += 1 }
+    }
+    var remaining = 1
+    for n in 1..16 {
+        remaining = remaining * 2 - counts[n]
+        if remaining < 0 { return invalid }
+    }
+    if remaining != 0 {
+        if !(alphabet == 2 && used == 0) && !(alphabet != 0 && used == 1 && counts[1] == 1) {
+            return invalid
+        }
+    }
+    var symbols = List[int]()
+    for n in 1..16 {
+        for i in 0..lengths.len {
+            if lengths[i] == n { (mut symbols).push(i) }
+        }
+    }
+    Tree { counts: counts, symbols: symbols }
+}
+
+fn symbol(src: List[byte], mut r: Bits, t: Tree) -> int ! {truncated, invalid} {
+    if t.symbols.len == 0 { return invalid }
+    var code = 0
+    var first = 0
+    var offset = 0
+    for n in 1..16 {
+        code = code * 2 + bits(src, mut r, 1)?
+        let delta = code - first
+        if delta >= 0 && delta < t.counts[n] {
+            return t.symbols[offset + delta]
+        }
+        offset += t.counts[n]
+        first = (first + t.counts[n]) * 2
+    }
+    invalid
+}
+
+fn fixed_lengths() -> List[int] {
+    var result = List[int]()
+    for i in 0..288 {
+        (mut result).push(if i < 144 then 8 else if i < 256 then 9 else if i < 280 then 7 else 8)
+    }
+    result
+}
+
+fn fixed_distances() -> List[int] {
+    var result = List[int]()
+    for _ in 0..32 { (mut result).push(5) }
+    result
+}
+
+fn code_order() -> List[int] {
+    [16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15]
+}
+
+fn dynamic(src: List[byte], mut r: Bits) -> (Tree, Tree) ! {truncated, invalid} {
+    let nl = bits(src, mut r, 5)? + 257
+    let nd = bits(src, mut r, 5)? + 1
+    let nc = bits(src, mut r, 4)? + 4
+    if nl > 286 { return invalid }
+    let order = code_order()
+    var code_lengths = zeros(19)
+    for i in 0..nc { code_lengths[order[i]] = bits(src, mut r, 3)? }
+    let code_tree = tree(code_lengths, 0)?
+    var lengths = List[int]()
+    while lengths.len < nl + nd {
+        let s = symbol(src, mut r, code_tree)?
+        var value = s
+        var count = 1
+        if s == 16 {
+            if lengths.len == 0 { return invalid }
+            value = lengths[lengths.len - 1]
+            count = bits(src, mut r, 2)? + 3
+        } else if s == 17 {
+            value = 0
+            count = bits(src, mut r, 3)? + 3
+        } else if s == 18 {
+            value = 0
+            count = bits(src, mut r, 7)? + 11
+        }
+        if count > nl + nd - lengths.len { return invalid }
+        for _ in 0..count { (mut lengths).push(value) }
+    }
+    if lengths[256] == 0 { return invalid }
+    (tree(lengths[0..nl], 1)?, tree(lengths[nl..nl + nd], 2)?)
+}
+
+fn length_base() -> List[int] {
+    [
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        13,
+        15,
+        17,
+        19,
+        23,
+        27,
+        31,
+        35,
+        43,
+        51,
+        59,
+        67,
+        83,
+        99,
+        115,
+        131,
+        163,
+        195,
+        227,
+        258,
+    ]
+}
+
+fn length_extra(code: int) -> int {
+    if code < 8 || code == 28 { return 0 }
+    (code - 4) / 4
+}
+
+fn distance_extra(code: int) -> int {
+    if code < 4 then 0 else code / 2 - 1
+}
+
+fn distance_base(code: int) -> int {
+    if code < 4 { return code + 1 }
+    (2 + code % 2) * (1 << distance_extra(code)) + 1
+}
+
+fn compressed(
+    src: List[byte],
+    mut r: Bits,
+    mut out: List[byte],
+    lt: Tree,
+    dt: Tree,
+    cap: int,
+    window: int,
+) -> () ! {invalid, truncated, limit} {
+    let bases = length_base()
+    loop {
+        let s = symbol(src, mut r, lt)?
+        if s < 256 {
+            if out.len == cap { return limit }
+            (mut out).push(s as byte)
+        } else if s == 256 {
+            return
+        } else {
+            if s > 285 { return invalid }
+            let li = s - 257
+            let length = bases[li] + bits(src, mut r, length_extra(li))?
+            let dc = symbol(src, mut r, dt)?
+            if dc > 29 { return invalid }
+            let distance = distance_base(dc) + bits(src, mut r, distance_extra(dc))?
+            if distance > out.len || distance > window { return invalid }
+            if length > cap - out.len { return limit }
+            for _ in 0..length {
+                let b = out[out.len - distance]
+                (mut out).push(b)
+            }
+        }
+    }
+}
+
+fn decode(src: List[byte], start: int, cap: int, window: int) -> Inflated ! InflateErrors {
+    if cap < 0 { return invalid }
+    var r = Bits { pos: start, bit: 0 }
+    var out = List[byte]()
+    var final_block = 0
+    while final_block == 0 {
+        final_block = bits(src, mut r, 1)?
+        let kind = bits(src, mut r, 2)?
+        if kind == 0 {
+            align(mut r)
+            let length = bits(src, mut r, 16)?
+            let inverse = bits(src, mut r, 16)?
+            if length + inverse != 65535 { return invalid }
+            if length > src.len - r.pos { return truncated }
+            if length > cap - out.len { return limit }
+            for i in 0..length { (mut out).push(src[r.pos + i]) }
+            r.pos += length
+        } else if kind == 3 {
+            return invalid
+        } else {
+            region block_tables {
+                if kind == 1 {
+                    let lt = tree(fixed_lengths(), 1)?
+                    let dt = tree(fixed_distances(), 2)?
+                    compressed(src, mut r, mut out, lt, dt, cap, window)?
+                } else {
+                    let (lt, dt) = dynamic(src, mut r)?
+                    compressed(src, mut r, mut out, lt, dt, cap, window)?
+                }
+            }
+        }
+    }
+    align(mut r)
+    Inflated { data: out, consumed: r.pos }
+}
+
+/// Decode one RFC 1951 stream, leaving following whole bytes untouched.
+/// max_output is inclusive; negative is invalid. All output owns storage.
+pub fn inflate_raw(src: List[byte], max_output: int) -> Inflated ! InflateErrors {
+    decode(src, 0, max_output, 32768)?
+}
+
+/// Decode one RFC 1950 stream; refuse dictionaries and validate Adler-32.
+/// consumed includes header, last deflate byte and four checksum bytes.
+pub fn inflate(src: List[byte], max_output: int) -> Inflated ! InflateErrors {
+    if max_output < 0 { return invalid }
+    if src.len < 2 { return truncated }
+    let cmf = src[0] as int
+    let flg = src[1] as int
+    if cmf & 15 != 8 || cmf >> 4 > 7 || (cmf * 256 + flg) % 31 != 0 { return bad_header }
+    if flg & 32 != 0 { return dictionary }
+    var result = decode(src, 2, max_output, 1 << (cmf >> 4) + 8)?
+    if src.len - result.consumed < 4 { return truncated }
+    var expected: int = 0
+    for i in 0..4 { expected = expected * 256 + src[result.consumed + i] as int }
+    if expected != adler32(result.data) { return checksum }
+    result.consumed += 4
+    result
+}
+
+/// Unsigned Adler-32 represented in int; derived from RFC 1950 §2.2 sums.
+pub fn adler32(src: List[byte]) -> int {
+    var a: int = 1
+    var b: int = 0
+    for value in src {
+        a = (a + value as int) % 65521
+        b = (b + a) % 65521
+    }
+    b * 65536 + a
+}

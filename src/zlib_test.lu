@@ -1,0 +1,21 @@
+//! member: false
+
+use zlib
+
+fn main() -> int ! zlib.InflateErrors {
+    let empty: List[byte] = [
+        120 as byte,
+        1 as byte,
+        3 as byte,
+        0 as byte,
+        0 as byte,
+        0 as byte,
+        0 as byte,
+        1 as byte,
+    ]
+    assert(zlib.adler32("Wikipedia".bytes()) == 0x11e60398)
+    let result = zlib.inflate(empty, 0)?
+    assert(result.data.len == 0 && result.consumed == 8)
+    print("zlib empty and Adler known answers pass")
+    0
+}
