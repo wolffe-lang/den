@@ -1,0 +1,25 @@
+#!/bin/sh
+set -eu
+root=$(cd "$(dirname "$0")/.." && pwd)
+cd "$root"
+ulimit -c 0
+export TMPDIR="$root/target/tmp"
+mkdir -p "$TMPDIR"
+python3 ci/tiers-test.py
+tools/fetch-toolchain
+tools/fetch-oracle
+DEN_GIT=$(python3 -I - "$root" <<'PY'
+import pathlib,sys
+p=list(pathlib.Path(sys.argv[1]).glob('target/oracle/*/root/opt/git/bin/git'))
+assert len(p)==1,p
+print(p[0])
+PY
+)
+export DEN_GIT
+tools/check-fmt
+tools/build --all
+tools/check-test
+tools/corpus target/corpus --prove-twice
+tools/oracle --selftest
+tools/oracle
+tools/mkden target/dist

@@ -51,7 +51,7 @@ concurrency:
 jobs:
   plan:
     name: plan
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
       tier: ${{ steps.plan.outputs.tier }}
@@ -74,7 +74,7 @@ jobs:
     name: the planner's own test
     needs: plan
     if: contains(fromJSON(needs.plan.outputs.jobs || '[]'), 'plan-test')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
@@ -84,46 +84,54 @@ jobs:
     name: linux x86-64 (every gate)
     needs: plan
     if: contains(fromJSON(needs.plan.outputs.jobs || '[]'), 'linux')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
 
-      - name: the pinned toolchain, by digest
-        run: tools/fetch-toolchain
-
-      - name: the toolchain answers to its pin
+      - uses: actions/cache@v4
+        with:
+          path: |
+            .wolf-bin
+            target/oracle
+          key: den-linux-${{ hashFiles('wolf-toolchain.toml', 'den-oracle.toml', 'ci/oracle.Containerfile', 'tools/fetch-oracle.py') }}
+      - name: every gate inside the pinned Ubuntu container
+        env:
+          DEN_ENGINE: docker
+          DEN_CPUS: 0-3
+        run: tools/in-container tools/gate
+      - name: evidence, including failures
         if: ${{ !cancelled() }}
-        run: |
-          .wolf-bin/wolf --version
-          .wolf-bin/lupin --version
-          cat .wolf-bin/std/STD-REV
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-evidence
+          path: |
+            target/*checked.json
+            target/corpus/oids.json
+            target/runs
+            target/dist/sums.txt
 
   macos:
-    name: macOS arm64
+    name: macOS Homebrew git field leg (nonblocking)
     needs: plan
     if: contains(fromJSON(needs.plan.outputs.jobs || '[]'), 'macos')
     runs-on: macos-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-
-      - name: the pinned toolchain, by digest
-        run: tools/fetch-toolchain
-
-      - name: the toolchain answers to its pin
+      - run: brew install git
+      - name: field observation, not oracle parity
+        id: field
+        continue-on-error: true
+        run: tools/field
+      - name: record field result
         if: ${{ !cancelled() }}
-        run: |
-          .wolf-bin/wolf --version
-          .wolf-bin/lupin --version
-          cat .wolf-bin/std/STD-REV
-
-      - name: the oracle, from Homebrew (tree 2.3.2)
+        run: echo 'Homebrew field result ${{ steps.field.outcome }}' >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
-        run: |
-          brew install tree
-          tree --version
-          tree --version | grep -q '^tree v2\.3\.2 '
+        with:
+          name: macos-field-evidence
+          path: target/runs
 
   tier:
     name: tier ${{ needs.plan.outputs.tier || 'unplanned' }}
@@ -133,7 +141,7 @@ jobs:
       - plan-test
       - linux
       - macos
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
@@ -149,7 +157,7 @@ jobs:
     name: nightly red, an issue
     needs: tier
     if: ${{ failure() && github.event_name == 'schedule' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       contents: read

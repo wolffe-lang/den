@@ -12,7 +12,7 @@ fn main() -> int {
     net.write_bytes(mut server, inbound) else |_| { return 1 }
     let back = net.read_bytes(mut client, 3) else |_| { return 1 }
     print("TCP bidirectional={back}")
-    assert(back == [0 as byte, 255 as byte, 10 as byte])
+    assert(back.len == 3 && back[0] == 0 as byte && back[1] == 255 as byte && back[2] == 10 as byte)
     net.close(take client) else |_| {}
     net.close(take server) else |_| {}
     net.close_listener(take listener) else |_| {}

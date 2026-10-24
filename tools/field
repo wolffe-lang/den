@@ -1,0 +1,11 @@
+#!/bin/sh
+# Nonblocking macOS Homebrew git field observation, NOT the oracle.
+set -eu
+root=$(cd "$(dirname "$0")/.." && pwd)
+cd "$root"
+tools/fetch-toolchain
+tools/build --native
+export DEN_GIT="$(brew --prefix git)/bin/git"
+"$DEN_GIT" version --build-options
+tools/corpus target/corpus --prove-twice
+tools/oracle

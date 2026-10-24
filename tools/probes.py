@@ -17,13 +17,16 @@ for p in sorted((R/'probes').glob('*/main.lu')):
    result=subprocess.run(['/usr/bin/time','-v',str(out/name)],cwd=R,capture_output=True,timeout=180,env={**os.environ,'TZ':'UTC'})
    data+=result.stdout+result.stderr
   log.write_bytes(data)
-  status='absent' if name in expected_absent and result.returncode!=0 else ('present' if result.returncode==0 else 'FAILED')
-  # Checked conform-run may communicate verdict via JSON while returning 0.
-  if tier=='checked' and result.returncode==0:
+  verdict=None
+  if tier=='checked':
    for line in result.stdout.splitlines():
-    if line.startswith(b'{'):
-     v=json.loads(line)
-     if 'unsupported' in str(v).lower():status='unsupported'
+    if line.startswith(b'{'):verdict=json.loads(line).get('verdict')
+   if verdict=='exit(0)':status='present'
+   elif verdict=='unsupported':status='unsupported'
+   elif name in expected_absent and verdict and verdict.startswith('fail('):status='absent'
+   else:status='FAILED'
+  else:
+   status='absent' if name in expected_absent and result.returncode==2 else ('present' if result.returncode==0 else 'FAILED')
   row={'probe':name,'tier':tier,'status':status,'exit':result.returncode,'log':str(log.relative_to(R))}
   rows.append(row);print(json.dumps(row),flush=True)
 (out/'rows.json').write_text(json.dumps(rows,indent=2)+'\n')

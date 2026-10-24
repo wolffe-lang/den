@@ -1,0 +1,4 @@
+# Job id -> gate. ci/tiers.py is authoritative; tested by ci/tiers-test.py.
+plan-test  python3 ci/tiers-test.py
+linux      tools/in-container tools/gate
+macos      tools/field
