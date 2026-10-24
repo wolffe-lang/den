@@ -9,10 +9,11 @@ def run(*args, **kw):
     return subprocess.run(args, check=True, **kw)
 def sha(p):
     return hashlib.sha256(p.read_bytes()).hexdigest()
-key = hashlib.sha256(json.dumps(pin, sort_keys=True).encode()).hexdigest()
+key = hashlib.sha256(json.dumps({k:v for k,v in pin.items() if k != 'binary_sha256'}, sort_keys=True).encode()).hexdigest()
 cache = R / 'target/oracle' / key
 binary = cache / 'root/opt/git/bin/git'
 if binary.exists() and '--rebuild' not in sys.argv:
+    if sha(binary) != pin['binary_sha256']: sys.exit('REFUSED: cached oracle binary digest')
     run(str(binary), 'version', '--build-options')
     print(binary)
     sys.exit(0)
@@ -46,5 +47,7 @@ build = source/'git-2.56.0'
 run('make','-C',str(build),'-j4','prefix=/opt/git')
 run('make','-C',str(build),'prefix=/opt/git','DESTDIR='+str(cache/'root'),'install')
 run(str(binary),'version','--build-options')
-print('oracle binary sha256',sha(binary))
+have=sha(binary)
+print('oracle binary sha256',have)
+if have != pin['binary_sha256']: sys.exit('REFUSED: built oracle binary digest')
 print(binary)

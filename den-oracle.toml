@@ -13,3 +13,4 @@ signing_fingerprint = "E1F036B1FEE7221FC778ECEFB0B5E88696AFE6CB"
 image = "docker.io/library/ubuntu:24.04@sha256:534baea6a22c03a63003dbc8dbe78fe34bc0d7e595d9a9dc9834884ff530eb55"
 # No NO_GETTEXT or other feature suppression: only install prefix is set.
 make_args = "prefix=/opt/git"
+binary_sha256 = "c4848492938c4ebfffbefe1fbbaa68b9af90c86d1f6a20e76816c5ff37fcfa60"
