@@ -1,0 +1,164 @@
+use oid
+
+/// A raw basename is binary, never decoded to text. The oid owns its octets.
+pub struct TreeEntry {
+    mode: int,
+    name: List[byte],
+    id: oid.Oid,
+}
+
+/// Malformed tree entry, duplicate name, or wrong identifier format.
+pub error TreeErrors = {invalid_tree, duplicate_name, invalid_oid, unsupported_format}
+
+/// Canonical mode spelling and object kind; all documented tree modes retained.
+pub fn mode_text(mode: int) -> str ! {invalid_tree} {
+    match mode {
+        0o100644 => "100644",
+        0o100755 => "100755",
+        0o120000 => "120000",
+        0o40000 => "40000",
+        0o160000 => "160000",
+        _ => { return invalid_tree },
+    }
+}
+
+/// Directory, gitlink, and file/symlink object types.
+pub fn mode_kind(mode: int) -> str ! {invalid_tree} {
+    let _ = mode_text(mode)?
+    if mode == 0o40000 then "tree" else if mode == 0o160000 then "commit" else "blob"
+}
+
+fn valid_name(name: List[byte]) -> bool {
+    if name.len == 0 { return false }
+    if name.len == 1 && name[0] == 46 as byte { return false }
+    if name.len == 2 && name[0] == 46 as byte && name[1] == 46 as byte { return false }
+    for b in name { if b == 0 as byte || b == 47 as byte { return false } }
+    true
+}
+
+fn same_name(a: List[byte], b: List[byte]) -> bool {
+    if a.len != b.len { return false }
+    for i in 0..a.len { if a[i] != b[i] { return false } }
+    true
+}
+
+fn before(a: TreeEntry, b: TreeEntry) -> bool {
+    var i = 0
+    while i < a.name.len && i < b.name.len {
+        if a.name[i] != b.name[i] { return a.name[i] as int < b.name[i] as int }
+        i += 1
+    }
+    let x = if i < a.name.len then a.name[i] as int else if a.mode == 0o40000 then 47 else 0
+    let y = if i < b.name.len then b.name[i] as int else if b.mode == 0o40000 then 47 else 0
+    x < y
+}
+
+/// Parse canonical entries, validating mode, width, names, order and duplicates.
+/// No basename undergoes a UTF-8 conversion. Input is not retained.
+pub fn parse_tree(data: List[byte], algorithm: str) -> List[TreeEntry] ! TreeErrors {
+    let width = oid.width(algorithm)?
+    var entries = List[TreeEntry]()
+    var pos = 0
+    while pos < data.len {
+        var mode = 0
+        let start = pos
+        while pos < data.len && data[pos] != 32 as byte {
+            let digit = data[pos] as int - 48
+            if digit < 0 || digit > 7 || pos - start > 5 { return invalid_tree }
+            mode = mode * 8 + digit
+            pos += 1
+        }
+        if pos == start || pos == data.len { return invalid_tree }
+        let spelling = mode_text(mode)?
+        if spelling.len != pos - start { return invalid_tree }
+        pos += 1
+        let name_start = pos
+        while pos < data.len && data[pos] != 0 as byte { pos += 1 }
+        if pos == data.len { return invalid_tree }
+        let name = data[name_start..pos]
+        if !valid_name(name) { return invalid_tree }
+        pos += 1
+        if data.len - pos < width { return invalid_tree }
+        let entry = TreeEntry {
+            mode: mode,
+            name: name,
+            id: oid.from_bytes(algorithm, data[pos..pos + width])?,
+        }
+        for previous in entries {
+            if same_name(previous.name, entry.name) { return duplicate_name }
+        }
+        if entries.len > 0 && !before(entries[entries.len - 1], entry) { return invalid_tree }
+        (mut entries).push(entry)
+        pos += width
+    }
+    entries
+}
+
+/// Sort by Git's directory-aware byte order and serialize canonical tree bytes.
+pub fn build_tree(entries: List[TreeEntry], algorithm: str) -> List[byte] ! TreeErrors {
+    let _ = oid.width(algorithm)?
+    var order = List[int]()
+    for i in 0..entries.len {
+        let entry = copy entries[i]
+        let _ = mode_text(entry.mode)?
+        if !valid_name(entry.name) { return invalid_tree }
+        oid.validate(entry.id)?
+        if entry.id.algorithm != algorithm { return unsupported_format }
+        for j in 0..i { if same_name(entries[j].name, entry.name) { return duplicate_name } }
+        (mut order).push(i)
+        var j = order.len - 1
+        while j > 0 && before(entry, entries[order[j - 1]]) {
+            order[j] = order[j - 1]
+            j -= 1
+        }
+        order[j] = i
+    }
+    var out = List[byte]()
+    for index in order {
+        let entry = copy entries[index]
+        for b in "{mode_text(entry.mode)?} ".bytes() { (mut out).push(b) }
+        for b in entry.name { (mut out).push(b) }
+        (mut out).push(0 as byte)
+        for b in entry.id.bytes { (mut out).push(b) }
+    }
+    out
+}
+
+/// Pretty-print with Git's default C quoting, including non-UTF-8 octal bytes.
+pub fn pretty_tree(entries: List[TreeEntry]) -> List[byte] ! TreeErrors {
+    var out = List[byte]()
+    for entry in entries {
+        let mode = if entry.mode == 0o40000 then "040000" else mode_text(entry.mode)?
+        for b in "{mode} {mode_kind(entry.mode)?} {oid.hex(entry.id)?}\t".bytes() {
+            (mut out).push(b)
+        }
+        var quoted = false
+        for b in entry.name {
+            if b as int < 32 || b as int >= 127 || b == 34 as byte || b == 92 as byte {
+                quoted = true
+            }
+        }
+        if quoted { (mut out).push(34 as byte) }
+        for b in entry.name {
+            let n = b as int
+            if n == 34 || n == 92 {
+                (mut out).push(92 as byte)
+                (mut out).push(b)
+            } else if n >= 7 && n <= 13 {
+                let escapes = "abtnvfr"
+                (mut out).push(92 as byte)
+                (mut out).push(escapes.bytes()[n - 7])
+            } else if n < 32 || n >= 127 {
+                (mut out).push(92 as byte)
+                (mut out).push((48 + n / 64) as byte)
+                (mut out).push((48 + n / 8 % 8) as byte)
+                (mut out).push((48 + n % 8) as byte)
+            } else {
+                (mut out).push(b)
+            }
+        }
+        if quoted { (mut out).push(34 as byte) }
+        (mut out).push(10 as byte)
+    }
+    out
+}

@@ -1,0 +1,71 @@
+//! member: false
+
+use object
+use oid
+
+fn equal(a: List[byte], b: List[byte]) -> bool {
+    if a.len != b.len { return false }
+    for i in 0..a.len { if a[i] != b[i] { return false } }
+    true
+}
+
+fn main() -> int ! {
+    invalid_tree,
+    duplicate_name,
+    invalid_header,
+    invalid_oid,
+    unsupported_format,
+    bad_header,
+} {
+    let blob = object.identify("blob", [])?
+    let tree = object.identify("tree", [])?
+    let entries = [
+        object.TreeEntry { mode: 0o100644, name: "a0".bytes(), id: copy blob },
+        object.TreeEntry { mode: 0o40000, name: "a".bytes(), id: copy tree },
+        object.TreeEntry { mode: 0o100755, name: "a.c".bytes(), id: copy blob },
+        object.TreeEntry { mode: 0o120000, name: [255 as byte], id: copy blob },
+    ]
+    let raw = object.build_tree(entries, "sha1")?
+    let parsed = object.parse_tree(raw, "sha1")?
+    assert(equal(parsed[0].name, "a.c".bytes()))
+    assert(equal(parsed[1].name, "a".bytes()))
+    assert(equal(parsed[2].name, "a0".bytes()))
+    assert(parsed[3].name[0] == 255 as byte)
+    assert(equal(raw, object.build_tree(parsed, "sha1")?))
+    let pretty = str_from_utf8(object.pretty_tree(parsed)?) else ""
+    assert(pretty.contains("\"\\377\""))
+    let commit = object.build_commit(
+        tree,
+        [],
+        "A <a> 0 +0000",
+        "A <a> 0 +0000",
+        "ISO-8859-1",
+        [255 as byte, 0 as byte],
+    )?
+    let headers = object.parse_commit(commit, "sha1")?
+    assert(headers.fields.len == 4 && headers.message.len == 2)
+    assert(equal(object.build_headers(headers)?, commit))
+    let unknown = "tree {oid.hex(tree)?}\nauthor A <a> 0 +0000\ncommitter A <a> 0 +0000\ngpgsig one\n two\n \nx-unknown v\n\nmessage"
+    assert(
+        equal(
+            object.build_headers(object.parse_commit(unknown.bytes(), "sha1")?)?,
+            unknown.bytes(),
+        ),
+    )
+    let tag = object.build_tag(blob, "blob", "t", "A <a> 0 +0000", [0 as byte, 255 as byte])?
+    assert(equal(object.build_headers(object.parse_tag(tag, "sha1")?)?, tag))
+    var refused = false
+    let _ = object.build_tree([copy entries[0], copy entries[0]], "sha1") else |e| {
+        refused = "{e}" == "duplicate_name"
+        []
+    }
+    assert(refused)
+    refused = false
+    let _ = object.parse_tree(raw[0..raw.len - 1], "sha1") else |e| {
+        refused = "{e}" == "invalid_tree"
+        []
+    }
+    assert(refused)
+    print("PASS tree ordering, binary names, modes, unknown headers, encoding and binary messages")
+    0
+}

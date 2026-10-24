@@ -1,0 +1,153 @@
+use oid
+
+/// Header values own raw bytes, including LF+SP continuation sequences.
+pub struct Header {
+    key: str,
+    value: List[byte],
+}
+
+/// Lossless ordered headers and uninterpreted message bytes.
+pub struct Headers {
+    fields: List[Header],
+    message: List[byte],
+}
+
+/// Invalid framing/required fields or invalid oid in a structured object.
+pub error HeaderErrors = {invalid_header, invalid_oid, unsupported_format}
+
+/// Parse commit/tag framing without discarding unknown or multiline headers.
+pub fn parse_headers(data: List[byte]) -> Headers ! {invalid_header} {
+    var fields = List[Header]()
+    var pos = 0
+    while pos < data.len {
+        let start = pos
+        while pos < data.len && data[pos] != 10 as byte { pos += 1 }
+        if pos == data.len { return invalid_header }
+        if pos == start { return Headers { fields: fields, message: data[pos + 1..] } }
+        if data[start] == 32 as byte { return invalid_header }
+        var sep = start
+        while sep < pos && data[sep] != 32 as byte {
+            if data[sep] as int <= 32 || data[sep] as int >= 127 { return invalid_header }
+            sep += 1
+        }
+        if sep == start || sep == pos { return invalid_header }
+        let key = str_from_utf8(data[start..sep]) else |_| { return invalid_header }
+        var end = pos
+        pos += 1
+        while pos < data.len && data[pos] == 32 as byte {
+            while pos < data.len && data[pos] != 10 as byte { pos += 1 }
+            if pos == data.len { return invalid_header }
+            end = pos
+            pos += 1
+        }
+        (mut fields).push(Header { key: key, value: data[sep + 1..end] })
+    }
+    invalid_header
+}
+
+/// Serialize preserved fields exactly; reject injection of unprefixed new headers.
+pub fn build_headers(headers: Headers) -> List[byte] ! {invalid_header} {
+    var out = List[byte]()
+    for field in headers.fields {
+        if field.key.len == 0 { return invalid_header }
+        for b in field.key.bytes() {
+            if b as int <= 32 || b as int >= 127 { return invalid_header }
+            (mut out).push(b)
+        }
+        (mut out).push(32 as byte)
+        for i in 0..field.value.len {
+            let b = field.value[i]
+            if b == 10 as byte && (i + 1 == field.value.len || field.value[i + 1] != 32 as byte) {
+                return invalid_header
+            }
+            (mut out).push(b)
+        }
+        (mut out).push(10 as byte)
+    }
+    (mut out).push(10 as byte)
+    for b in headers.message { (mut out).push(b) }
+    out
+}
+
+fn field_oid(field: Header, algorithm: str) -> oid.Oid ! HeaderErrors {
+    let text = str_from_utf8(field.value) else |_| { return invalid_header }
+    oid.parse(algorithm, text)?
+}
+
+/// Validate ordered required commit headers while preserving all extra fields.
+pub fn parse_commit(data: List[byte], algorithm: str) -> Headers ! HeaderErrors {
+    let parsed = parse_headers(data)?
+    if parsed.fields.len < 3 || parsed.fields[0].key != "tree" { return invalid_header }
+    let _ = field_oid(parsed.fields[0], algorithm)?
+    var i = 1
+    while i < parsed.fields.len && parsed.fields[i].key == "parent" {
+        let _ = field_oid(parsed.fields[i], algorithm)?
+        i += 1
+    }
+    if i + 1 >= parsed.fields.len ||
+        parsed.fields[i].key != "author" ||
+        parsed.fields[i + 1].key != "committer" {
+        return invalid_header
+    }
+    parsed
+}
+
+/// Build deterministic unsigned canonical headers; message bytes stay unchanged.
+pub fn build_commit(
+    tree: oid.Oid,
+    parents: List[oid.Oid],
+    author: str,
+    committer: str,
+    encoding: str,
+    message: List[byte],
+) -> List[byte] ! HeaderErrors {
+    var fields = List[Header]()
+    (mut fields).push(Header { key: "tree", value: oid.hex(tree)?.bytes() })
+    for parent in parents {
+        if parent.algorithm != tree.algorithm { return unsupported_format }
+        (mut fields).push(Header { key: "parent", value: oid.hex(parent)?.bytes() })
+    }
+    for value in [author, committer, encoding] {
+        if value.contains("\n") || value.contains("\0") { return invalid_header }
+    }
+    (mut fields).push(Header { key: "author", value: author.bytes() })
+    (mut fields).push(Header { key: "committer", value: committer.bytes() })
+    if encoding != "" && encoding.lower() != "utf-8" { (mut fields).push(Header { key: "encoding", value: encoding.bytes() }) }
+    build_headers(Headers { fields: fields, message: copy message })?
+}
+
+/// Generic tag parsing retains unknown fields; strict mktag adds validation.
+pub fn parse_tag(data: List[byte], algorithm: str) -> Headers ! HeaderErrors {
+    let parsed = parse_headers(data)?
+    if parsed.fields.len < 3 ||
+        parsed.fields[0].key != "object" ||
+        parsed.fields[1].key != "type" ||
+        parsed.fields[2].key != "tag" {
+        return invalid_header
+    }
+    let _ = field_oid(parsed.fields[0], algorithm)?
+    let kind = str_from_utf8(parsed.fields[1].value) else |_| { return invalid_header }
+    if !valid_kind(kind) { return invalid_header }
+    parsed
+}
+
+/// Construct an unsigned annotated tag, with a byte-exact message.
+pub fn build_tag(
+    id: oid.Oid,
+    kind: str,
+    name: str,
+    tagger: str,
+    message: List[byte],
+) -> List[byte] ! HeaderErrors {
+    if !valid_kind(kind) || name == "" { return invalid_header }
+    for value in [name, tagger] {
+        if value.contains("\n") || value.contains("\0") { return invalid_header }
+    }
+    let fields = [
+        Header { key: "object", value: oid.hex(id)?.bytes() },
+        Header { key: "type", value: kind.bytes() },
+        Header { key: "tag", value: name.bytes() },
+        Header { key: "tagger", value: tagger.bytes() },
+    ]
+    build_headers(Headers { fields: fields, message: copy message })?
+}
