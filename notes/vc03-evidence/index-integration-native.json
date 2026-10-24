@@ -1,0 +1,1652 @@
+{
+  "proof_rows": 24,
+  "rows": [
+    {
+      "command": [
+        "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+        "init",
+        "-q"
+      ],
+      "status": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+        "-c",
+        "index.version=2",
+        "add",
+        "."
+      ],
+      "status": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+        "add",
+        "-N",
+        "--",
+        "space name"
+      ],
+      "status": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+        "write-tree"
+      ],
+      "status": 0,
+      "stdout": "353863386334393864373134373766653838366337356461366433613131613232313639386136300a",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "roundtrip",
+        "/work/den/target/index-integration-native/format-2/.git/index",
+        "/work/den/target/index-integration-native/roundtrip-2"
+      ],
+      "status": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+        "write-tree"
+      ],
+      "status": 0,
+      "stdout": "353863386334393864373134373766653838366337356461366433613131613232313639386136300a",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "trees",
+        "/work/den/target/index-integration-native/format-2/.git/index",
+        "/work/den/target/index-integration-native/trees-2"
+      ],
+      "status": 0,
+      "stdout": "353863386334393864373134373766653838366337356461366433613131613232313639386136300a",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "write-tree",
+        "/work/den/target/index-integration-native/format-2/.git"
+      ],
+      "status": 0,
+      "stdout": "353863386334393864373134373766653838366337356461366433613131613232313639386136300a",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+        "fsck",
+        "--full"
+      ],
+      "status": 0,
+      "stdout": "64616e676c696e6720626c6f6220653639646532396262326431643634333462386232396165373735616438633265343863353339310a",
+      "stderr": "6e6f746963653a204e6f2064656661756c74207265666572656e6365730a"
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "stat",
+        "/work/den/target/index-integration-native/format-2/a",
+        "100755"
+      ],
+      "status": 0,
+      "stdout": "313739323838323832300a3531363438393034300a313739323838323832300a3531363337363937310a323035300a3130303136373835380a33333236310a300a300a320a",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "lstat",
+        "/work/den/target/index-integration-native/format-2/link"
+      ],
+      "status": 0,
+      "stdout": "313739323838323832300a3531363438393034300a313739323838323832300a3531363438393034300a323035300a3130303136373836350a34303936300a300a300a310a",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "inspect",
+        "/work/den/target/index-integration-native/truncated-2-0"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "696e76616c69645f696e6465780a"
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "inspect",
+        "/work/den/target/index-integration-native/truncated-2-3"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "696e76616c69645f696e6465780a"
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "inspect",
+        "/work/den/target/index-integration-native/truncated-2-11"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "696e76616c69645f696e6465780a"
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "inspect",
+        "/work/den/target/index-integration-native/truncated-2-12"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "696e76616c69645f696e6465780a"
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "inspect",
+        "/work/den/target/index-integration-native/truncated-2-31"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "696e76616c69645f696e6465780a"
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "inspect",
+        "/work/den/target/index-integration-native/truncated-2-32"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "636865636b73756d0a"
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "inspect",
+        "/work/den/target/index-integration-native/truncated-2-61"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "636865636b73756d0a"
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "inspect",
+        "/work/den/target/index-integration-native/truncated-2-62"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "636865636b73756d0a"
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "inspect",
+        "/work/den/target/index-integration-native/truncated-2-63"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "636865636b73756d0a"
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "inspect",
+        "/work/den/target/index-integration-native/truncated-2-758"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "636865636b73756d0a"
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "inspect",
+        "/work/den/target/index-integration-native/extension-2"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "556e737570706f7274656428696e64657820657874656e73696f6e205a5a5a5a290a"
+    },
+    {
+      "command": [
+        "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+        "init",
+        "-q"
+      ],
+      "status": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+        "-c",
+        "index.version=3",
+        "add",
+        "."
+      ],
+      "status": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+        "add",
+        "-N",
+        "--",
+        "space name"
+      ],
+      "status": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+        "write-tree"
+      ],
+      "status": 0,
+      "stdout": "353863386334393864373134373766653838366337356461366433613131613232313639386136300a",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "roundtrip",
+        "/work/den/target/index-integration-native/format-3/.git/index",
+        "/work/den/target/index-integration-native/roundtrip-3"
+      ],
+      "status": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+        "write-tree"
+      ],
+      "status": 0,
+      "stdout": "353863386334393864373134373766653838366337356461366433613131613232313639386136300a",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "trees",
+        "/work/den/target/index-integration-native/format-3/.git/index",
+        "/work/den/target/index-integration-native/trees-3"
+      ],
+      "status": 0,
+      "stdout": "353863386334393864373134373766653838366337356461366433613131613232313639386136300a",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "write-tree",
+        "/work/den/target/index-integration-native/format-3/.git"
+      ],
+      "status": 0,
+      "stdout": "353863386334393864373134373766653838366337356461366433613131613232313639386136300a",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+        "fsck",
+        "--full"
+      ],
+      "status": 0,
+      "stdout": "64616e676c696e6720626c6f6220653639646532396262326431643634333462386232396165373735616438633265343863353339310a",
+      "stderr": "6e6f746963653a204e6f2064656661756c74207265666572656e6365730a"
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "stat",
+        "/work/den/target/index-integration-native/format-3/a",
+        "100755"
+      ],
+      "status": 0,
+      "stdout": "313739323838323832300a3535383230383933320a313739323838323832300a3535373931333730320a323035300a3130303136373932300a33333236310a300a300a320a",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "lstat",
+        "/work/den/target/index-integration-native/format-3/link"
+      ],
+      "status": 0,
+      "stdout": "313739323838323832300a3535383230383933320a313739323838323832300a3535383230383933320a323035300a3130303136373932370a34303936300a300a300a310a",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "inspect",
+        "/work/den/target/index-integration-native/truncated-3-0"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "696e76616c69645f696e6465780a"
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "inspect",
+        "/work/den/target/index-integration-native/truncated-3-3"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "696e76616c69645f696e6465780a"
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "inspect",
+        "/work/den/target/index-integration-native/truncated-3-11"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "696e76616c69645f696e6465780a"
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "inspect",
+        "/work/den/target/index-integration-native/truncated-3-12"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "696e76616c69645f696e6465780a"
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "inspect",
+        "/work/den/target/index-integration-native/truncated-3-31"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "696e76616c69645f696e6465780a"
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "inspect",
+        "/work/den/target/index-integration-native/truncated-3-32"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "636865636b73756d0a"
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "inspect",
+        "/work/den/target/index-integration-native/truncated-3-61"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "636865636b73756d0a"
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "inspect",
+        "/work/den/target/index-integration-native/truncated-3-62"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "636865636b73756d0a"
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "inspect",
+        "/work/den/target/index-integration-native/truncated-3-63"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "636865636b73756d0a"
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "inspect",
+        "/work/den/target/index-integration-native/truncated-3-758"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "636865636b73756d0a"
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "inspect",
+        "/work/den/target/index-integration-native/extension-3"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "556e737570706f7274656428696e64657820657874656e73696f6e205a5a5a5a290a"
+    },
+    {
+      "command": [
+        "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+        "init",
+        "-q"
+      ],
+      "status": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+        "-c",
+        "index.version=4",
+        "add",
+        "."
+      ],
+      "status": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+        "add",
+        "-N",
+        "--",
+        "space name"
+      ],
+      "status": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+        "write-tree"
+      ],
+      "status": 0,
+      "stdout": "353863386334393864373134373766653838366337356461366433613131613232313639386136300a",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "roundtrip",
+        "/work/den/target/index-integration-native/format-4/.git/index",
+        "/work/den/target/index-integration-native/roundtrip-4"
+      ],
+      "status": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+        "write-tree"
+      ],
+      "status": 0,
+      "stdout": "353863386334393864373134373766653838366337356461366433613131613232313639386136300a",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "trees",
+        "/work/den/target/index-integration-native/format-4/.git/index",
+        "/work/den/target/index-integration-native/trees-4"
+      ],
+      "status": 0,
+      "stdout": "353863386334393864373134373766653838366337356461366433613131613232313639386136300a",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "write-tree",
+        "/work/den/target/index-integration-native/format-4/.git"
+      ],
+      "status": 0,
+      "stdout": "353863386334393864373134373766653838366337356461366433613131613232313639386136300a",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+        "fsck",
+        "--full"
+      ],
+      "status": 0,
+      "stdout": "64616e676c696e6720626c6f6220653639646532396262326431643634333462386232396165373735616438633265343863353339310a",
+      "stderr": "6e6f746963653a204e6f2064656661756c74207265666572656e6365730a"
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "stat",
+        "/work/den/target/index-integration-native/format-4/a",
+        "100755"
+      ],
+      "status": 0,
+      "stdout": "313739323838323832300a3637353231323836370a313739323838323832300a3637343637373132370a323035300a3130303136373938320a33333236310a300a300a320a",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "lstat",
+        "/work/den/target/index-integration-native/format-4/link"
+      ],
+      "status": 0,
+      "stdout": "313739323838323832300a3637353231323836370a313739323838323832300a3637353231323836370a323035300a3130303136373938390a34303936300a300a300a310a",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "inspect",
+        "/work/den/target/index-integration-native/truncated-4-0"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "696e76616c69645f696e6465780a"
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "inspect",
+        "/work/den/target/index-integration-native/truncated-4-3"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "696e76616c69645f696e6465780a"
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "inspect",
+        "/work/den/target/index-integration-native/truncated-4-11"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "696e76616c69645f696e6465780a"
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "inspect",
+        "/work/den/target/index-integration-native/truncated-4-12"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "696e76616c69645f696e6465780a"
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "inspect",
+        "/work/den/target/index-integration-native/truncated-4-31"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "696e76616c69645f696e6465780a"
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "inspect",
+        "/work/den/target/index-integration-native/truncated-4-32"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "636865636b73756d0a"
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "inspect",
+        "/work/den/target/index-integration-native/truncated-4-61"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "636865636b73756d0a"
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "inspect",
+        "/work/den/target/index-integration-native/truncated-4-62"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "636865636b73756d0a"
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "inspect",
+        "/work/den/target/index-integration-native/truncated-4-63"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "636865636b73756d0a"
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "inspect",
+        "/work/den/target/index-integration-native/truncated-4-739"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "636865636b73756d0a"
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "inspect",
+        "/work/den/target/index-integration-native/extension-4"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "556e737570706f7274656428696e64657820657874656e73696f6e205a5a5a5a290a"
+    },
+    {
+      "command": [
+        "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+        "init",
+        "-q"
+      ],
+      "status": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+        "init",
+        "-q"
+      ],
+      "status": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+        "-c",
+        "index.version=2",
+        "add",
+        "--chmod=-x",
+        "file"
+      ],
+      "status": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "add",
+        "/work/den/target/index-integration-native/den-add-2-100644/.git",
+        "2",
+        "/work/den/target/index-integration-native/den-add-2-100644/file",
+        "file",
+        "100644"
+      ],
+      "status": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+        "write-tree"
+      ],
+      "status": 0,
+      "stdout": "366661346564383764643261306635623330396437613664666261393665613262343864316362660a",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "write-tree",
+        "/work/den/target/index-integration-native/den-add-2-100644/.git"
+      ],
+      "status": 0,
+      "stdout": "366661346564383764643261306635623330396437613664666261393665613262343864316362660a",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "rewrite",
+        "/work/den/target/index-integration-native/den-add-2-100644/.git",
+        "2",
+        "write"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "696f0a"
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "rewrite",
+        "/work/den/target/index-integration-native/den-add-2-100644/.git",
+        "2",
+        "sync"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "696f0a"
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "rewrite",
+        "/work/den/target/index-integration-native/den-add-2-100644/.git",
+        "2",
+        "rename"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "696f0a"
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "rewrite",
+        "/work/den/target/index-integration-native/den-add-2-100644/.git",
+        "2",
+        "directory-sync"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "696f0a"
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "rewrite",
+        "/work/den/target/index-integration-native/den-add-2-100644/.git",
+        "2"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "6578697374730a"
+    },
+    {
+      "command": [
+        "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+        "init",
+        "-q"
+      ],
+      "status": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+        "init",
+        "-q"
+      ],
+      "status": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+        "-c",
+        "index.version=2",
+        "add",
+        "--chmod=+x",
+        "file"
+      ],
+      "status": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "add",
+        "/work/den/target/index-integration-native/den-add-2-100755/.git",
+        "2",
+        "/work/den/target/index-integration-native/den-add-2-100755/file",
+        "file",
+        "100755"
+      ],
+      "status": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+        "write-tree"
+      ],
+      "status": 0,
+      "stdout": "363830373735366531303762316133303037666230663636646231393532386133333537366632660a",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "write-tree",
+        "/work/den/target/index-integration-native/den-add-2-100755/.git"
+      ],
+      "status": 0,
+      "stdout": "363830373735366531303762316133303037666230663636646231393532386133333537366632660a",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "rewrite",
+        "/work/den/target/index-integration-native/den-add-2-100755/.git",
+        "2",
+        "write"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "696f0a"
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "rewrite",
+        "/work/den/target/index-integration-native/den-add-2-100755/.git",
+        "2",
+        "sync"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "696f0a"
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "rewrite",
+        "/work/den/target/index-integration-native/den-add-2-100755/.git",
+        "2",
+        "rename"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "696f0a"
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "rewrite",
+        "/work/den/target/index-integration-native/den-add-2-100755/.git",
+        "2",
+        "directory-sync"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "696f0a"
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "rewrite",
+        "/work/den/target/index-integration-native/den-add-2-100755/.git",
+        "2"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "6578697374730a"
+    },
+    {
+      "command": [
+        "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+        "init",
+        "-q"
+      ],
+      "status": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+        "init",
+        "-q"
+      ],
+      "status": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+        "-c",
+        "index.version=3",
+        "add",
+        "--chmod=-x",
+        "file"
+      ],
+      "status": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "add",
+        "/work/den/target/index-integration-native/den-add-3-100644/.git",
+        "3",
+        "/work/den/target/index-integration-native/den-add-3-100644/file",
+        "file",
+        "100644"
+      ],
+      "status": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+        "write-tree"
+      ],
+      "status": 0,
+      "stdout": "366661346564383764643261306635623330396437613664666261393665613262343864316362660a",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "write-tree",
+        "/work/den/target/index-integration-native/den-add-3-100644/.git"
+      ],
+      "status": 0,
+      "stdout": "366661346564383764643261306635623330396437613664666261393665613262343864316362660a",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "rewrite",
+        "/work/den/target/index-integration-native/den-add-3-100644/.git",
+        "3",
+        "write"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "696f0a"
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "rewrite",
+        "/work/den/target/index-integration-native/den-add-3-100644/.git",
+        "3",
+        "sync"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "696f0a"
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "rewrite",
+        "/work/den/target/index-integration-native/den-add-3-100644/.git",
+        "3",
+        "rename"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "696f0a"
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "rewrite",
+        "/work/den/target/index-integration-native/den-add-3-100644/.git",
+        "3",
+        "directory-sync"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "696f0a"
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "rewrite",
+        "/work/den/target/index-integration-native/den-add-3-100644/.git",
+        "3"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "6578697374730a"
+    },
+    {
+      "command": [
+        "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+        "init",
+        "-q"
+      ],
+      "status": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+        "init",
+        "-q"
+      ],
+      "status": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+        "-c",
+        "index.version=3",
+        "add",
+        "--chmod=+x",
+        "file"
+      ],
+      "status": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "add",
+        "/work/den/target/index-integration-native/den-add-3-100755/.git",
+        "3",
+        "/work/den/target/index-integration-native/den-add-3-100755/file",
+        "file",
+        "100755"
+      ],
+      "status": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+        "write-tree"
+      ],
+      "status": 0,
+      "stdout": "363830373735366531303762316133303037666230663636646231393532386133333537366632660a",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "write-tree",
+        "/work/den/target/index-integration-native/den-add-3-100755/.git"
+      ],
+      "status": 0,
+      "stdout": "363830373735366531303762316133303037666230663636646231393532386133333537366632660a",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "rewrite",
+        "/work/den/target/index-integration-native/den-add-3-100755/.git",
+        "3",
+        "write"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "696f0a"
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "rewrite",
+        "/work/den/target/index-integration-native/den-add-3-100755/.git",
+        "3",
+        "sync"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "696f0a"
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "rewrite",
+        "/work/den/target/index-integration-native/den-add-3-100755/.git",
+        "3",
+        "rename"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "696f0a"
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "rewrite",
+        "/work/den/target/index-integration-native/den-add-3-100755/.git",
+        "3",
+        "directory-sync"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "696f0a"
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "rewrite",
+        "/work/den/target/index-integration-native/den-add-3-100755/.git",
+        "3"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "6578697374730a"
+    },
+    {
+      "command": [
+        "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+        "init",
+        "-q"
+      ],
+      "status": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+        "init",
+        "-q"
+      ],
+      "status": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+        "-c",
+        "index.version=4",
+        "add",
+        "--chmod=-x",
+        "file"
+      ],
+      "status": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "add",
+        "/work/den/target/index-integration-native/den-add-4-100644/.git",
+        "4",
+        "/work/den/target/index-integration-native/den-add-4-100644/file",
+        "file",
+        "100644"
+      ],
+      "status": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+        "write-tree"
+      ],
+      "status": 0,
+      "stdout": "366661346564383764643261306635623330396437613664666261393665613262343864316362660a",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "write-tree",
+        "/work/den/target/index-integration-native/den-add-4-100644/.git"
+      ],
+      "status": 0,
+      "stdout": "366661346564383764643261306635623330396437613664666261393665613262343864316362660a",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "rewrite",
+        "/work/den/target/index-integration-native/den-add-4-100644/.git",
+        "4",
+        "write"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "696f0a"
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "rewrite",
+        "/work/den/target/index-integration-native/den-add-4-100644/.git",
+        "4",
+        "sync"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "696f0a"
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "rewrite",
+        "/work/den/target/index-integration-native/den-add-4-100644/.git",
+        "4",
+        "rename"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "696f0a"
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "rewrite",
+        "/work/den/target/index-integration-native/den-add-4-100644/.git",
+        "4",
+        "directory-sync"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "696f0a"
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "rewrite",
+        "/work/den/target/index-integration-native/den-add-4-100644/.git",
+        "4"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "6578697374730a"
+    },
+    {
+      "command": [
+        "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+        "init",
+        "-q"
+      ],
+      "status": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+        "init",
+        "-q"
+      ],
+      "status": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+        "-c",
+        "index.version=4",
+        "add",
+        "--chmod=+x",
+        "file"
+      ],
+      "status": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "add",
+        "/work/den/target/index-integration-native/den-add-4-100755/.git",
+        "4",
+        "/work/den/target/index-integration-native/den-add-4-100755/file",
+        "file",
+        "100755"
+      ],
+      "status": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+        "write-tree"
+      ],
+      "status": 0,
+      "stdout": "363830373735366531303762316133303037666230663636646231393532386133333537366632660a",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "write-tree",
+        "/work/den/target/index-integration-native/den-add-4-100755/.git"
+      ],
+      "status": 0,
+      "stdout": "363830373735366531303762316133303037666230663636646231393532386133333537366632660a",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "rewrite",
+        "/work/den/target/index-integration-native/den-add-4-100755/.git",
+        "4",
+        "write"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "696f0a"
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "rewrite",
+        "/work/den/target/index-integration-native/den-add-4-100755/.git",
+        "4",
+        "sync"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "696f0a"
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "rewrite",
+        "/work/den/target/index-integration-native/den-add-4-100755/.git",
+        "4",
+        "rename"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "696f0a"
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "rewrite",
+        "/work/den/target/index-integration-native/den-add-4-100755/.git",
+        "4",
+        "directory-sync"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "696f0a"
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "rewrite",
+        "/work/den/target/index-integration-native/den-add-4-100755/.git",
+        "4"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "6578697374730a"
+    },
+    {
+      "command": [
+        "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+        "init",
+        "-q"
+      ],
+      "status": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+        "init",
+        "-q"
+      ],
+      "status": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+        "-c",
+        "index.version=2",
+        "add",
+        "-N",
+        "d/pending"
+      ],
+      "status": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "add",
+        "/work/den/target/index-integration-native/den-ita-2/.git",
+        "2",
+        "/work/den/target/index-integration-native/den-ita-2/d/pending",
+        "d/pending",
+        "100644",
+        "8192"
+      ],
+      "status": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+        "write-tree"
+      ],
+      "status": 0,
+      "stdout": "346238323564633634326362366562396130363065353462663864363932383866626565343930340a",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "write-tree",
+        "/work/den/target/index-integration-native/den-ita-2/.git"
+      ],
+      "status": 0,
+      "stdout": "346238323564633634326362366562396130363065353462663864363932383866626565343930340a",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+        "init",
+        "-q"
+      ],
+      "status": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+        "init",
+        "-q"
+      ],
+      "status": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+        "-c",
+        "index.version=3",
+        "add",
+        "-N",
+        "d/pending"
+      ],
+      "status": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "add",
+        "/work/den/target/index-integration-native/den-ita-3/.git",
+        "3",
+        "/work/den/target/index-integration-native/den-ita-3/d/pending",
+        "d/pending",
+        "100644",
+        "8192"
+      ],
+      "status": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+        "write-tree"
+      ],
+      "status": 0,
+      "stdout": "346238323564633634326362366562396130363065353462663864363932383866626565343930340a",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "write-tree",
+        "/work/den/target/index-integration-native/den-ita-3/.git"
+      ],
+      "status": 0,
+      "stdout": "346238323564633634326362366562396130363065353462663864363932383866626565343930340a",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+        "init",
+        "-q"
+      ],
+      "status": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+        "init",
+        "-q"
+      ],
+      "status": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+        "-c",
+        "index.version=4",
+        "add",
+        "-N",
+        "d/pending"
+      ],
+      "status": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "add",
+        "/work/den/target/index-integration-native/den-ita-4/.git",
+        "4",
+        "/work/den/target/index-integration-native/den-ita-4/d/pending",
+        "d/pending",
+        "100644",
+        "8192"
+      ],
+      "status": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+        "write-tree"
+      ],
+      "status": 0,
+      "stdout": "346238323564633634326362366562396130363065353462663864363932383866626565343930340a",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "write-tree",
+        "/work/den/target/index-integration-native/den-ita-4/.git"
+      ],
+      "status": 0,
+      "stdout": "346238323564633634326362366562396130363065353462663864363932383866626565343930340a",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+        "init",
+        "-q"
+      ],
+      "status": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/work/den/target/native/index-client",
+        "rewrite",
+        "/work/den/target/index-integration-native/held-lock/.git",
+        "2"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "6578697374730a"
+    }
+  ]
+}

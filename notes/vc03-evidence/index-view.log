@@ -1,0 +1,12 @@
+direct
+wolf build: cannot compile this yet — a lent `bytes()` view in a value position (bind it with `let` to materialize, s89) (pipeline is honest through `mem`; the conservatism ledger, not a bug in your program)
+ --> probes/index-view-direct/main.lu:2:58
+  |
+2 | fn inner(path: List[byte]) -> Entry { Entry { path: copy path } }
+  |                                                          ^^^^
+  |
+build=4
+{"commit":"cf0c13d","diagnostics":[],"file":"probes/index-view-direct/main.lu","impl":"wolfgang","impl_version":"0.2.35","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":null,"stdout_sha256":null,"verdict":"exit(0)","warnings":[]}
+bound
+build=0
+{"commit":"cf0c13d","diagnostics":[],"file":"probes/index-view-bound/main.lu","impl":"wolfgang","impl_version":"0.2.35","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":null,"stdout_sha256":null,"verdict":"exit(0)","warnings":[]}

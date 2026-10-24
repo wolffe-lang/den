@@ -1,0 +1,211 @@
+use std.fs
+use object
+use oid
+use repository
+
+/// An exclusive index.lock transaction. Call abort in a defer immediately after
+/// begin; commit consumes its active state, not the value. Never copy a live one.
+pub struct Transaction {
+    gitdir: str,
+    fd: int,
+    active: bool,
+    value: Index,
+}
+
+/// Exact lock collision text; the command edge supplies its fatal prefix/status.
+pub fn lock_message(repo: repository.Repo) -> str {
+    "Unable to create '{repo.gitdir}/index.lock': File exists."
+}
+
+/// Strict existing-index read. Use begin for a read/modify/write transaction.
+pub fn read(repo: repository.Repo, cap: int) -> Index ! IndexErrors {
+    parse(repository.read_bytes("{repo.gitdir}/index", cap)?)?
+}
+
+fn read_or_empty(repo: repository.Repo, cap: int, version: int) -> Index ! IndexErrors {
+    let data = repository.read_bytes("{repo.gitdir}/index", cap) else |e| match e {
+        not_found => { return empty(version)? },
+        denied => { return denied },
+        io => { return io },
+        invalid => { return invalid },
+        exists => { return exists },
+        unsupported => { return unsupported },
+        limit => { return limit },
+        Unsupported(name) => { return Unsupported(name) },
+    }
+    parse(data)?
+}
+
+/// Acquire before reading, never an advisory lock. version=0 preserves an
+/// existing version (or starts at 2); 2/3/4 explicitly select the output version.
+/// The caller obtains index.version from configuration and passes it here.
+pub fn begin(repo: repository.Repo, cap: int, version: int) -> Transaction ! IndexErrors {
+    if cap < 0 { return invalid }
+    let selected = if version == 0 then 2 else version
+    check_version(selected)?
+    let file = fs.create_new_with_mode("{repo.gitdir}/index.lock", 0o666)?
+    var success = false
+    defer {
+        if !success {
+            fs_close(file.fd) else |_| {}
+            fs.remove("{repo.gitdir}/index.lock") else |_| {}
+        }
+    }
+    var value = read_or_empty(repo, cap, selected)?
+    if version != 0 { value.version = selected }
+    success = true
+    Transaction { gitdir: repo.gitdir, fd: file.fd, active: true, value: value }
+}
+
+/// Idempotent cleanup for a transaction owned by this caller; never remove a
+/// preexisting lock after begin returns exists. Abrupt death can leave index.lock.
+pub fn abort(mut tx: Transaction) {
+    if tx.active {
+        if tx.fd >= 0 { fs_close(tx.fd) else |_| {} }
+        fs.remove("{tx.gitdir}/index.lock") else |_| {}
+        tx.fd = -1
+        tx.active = false
+    }
+}
+
+/// Apply serialize_for_write policy, sync, close, atomic rename, directory sync.
+/// A directory-sync error means a complete new index is already installed.
+pub fn commit(mut tx: Transaction) -> () ! IndexErrors {
+    commit_injected(mut tx, "")?
+}
+
+/// Explicit test seam, never selected by an environment variable. Failure before
+/// rename leaves the old index intact; all ordinary outcomes clean our lock.
+pub fn commit_injected(mut tx: Transaction, fail: str) -> () ! IndexErrors {
+    if !tx.active || tx.fd < 0 { return invalid }
+    defer { if tx.active { abort(mut tx) } }
+    let data = serialize_for_write(tx.value)?
+    if fail == "write" { return io }
+    fs_write_chunk(tx.fd, data)?
+    if fail == "sync" { return io }
+    fs_sync(tx.fd)?
+    fs_close(tx.fd)?
+    tx.fd = -1
+    if fail == "rename" { return io }
+    // Do not use move_file's cross-device copy fallback for an atomic index.
+    fs_rename("{tx.gitdir}/index.lock", "{tx.gitdir}/index")?
+    tx.active = false
+    if fail == "directory-sync" { return io }
+    fs.sync_dir(tx.gitdir)?
+}
+
+/// Replace a complete snapshot under index.lock. For edits to an existing index,
+/// use begin/value/commit instead: a previously read snapshot can be stale.
+pub fn write(repo: repository.Repo, value: Index) -> () ! IndexErrors {
+    var tx = begin(repo, 1000000000, 0)?
+    defer abort(mut tx)
+    tx.value = copy value
+    commit(mut tx)?
+}
+
+/// Nested write-tree: reject unmerged entries and bad/missing objects before
+/// publishing trees; regenerate TREE and atomically install it under index.lock.
+pub fn write_tree(repo: repository.Repo, cap: int) -> oid.Oid ! IndexErrors {
+    var tx = begin(repo, cap, 0)?
+    defer abort(mut tx)
+    let assembled = build_trees(tx.value)?
+    let entries = copy tx.value.entries
+    for entry in entries {
+        if entry.extended & 0x2000 != 0 { continue }
+        if entry.stat[6] != 0o160000 {
+            let stored = object.read_object(repo, entry.id, 1000000000)?
+            if stored.kind != object.mode_kind(entry.stat[6])? { return invalid_index }
+        }
+    }
+    for tree in assembled.objects {
+        let stored = object.write_object(repo, "tree", tree.data)?
+        if !oid.equal(stored, tree.id) { return bad_oid }
+    }
+    tx.value = with_cache(tx.value, assembled.cache)
+    commit(mut tx)?
+    copy assembled.root
+}
+
+fn stat_entry(
+    record: List[int],
+    path: List[byte],
+    id: oid.Oid,
+    mode: int,
+    flags: int,
+    extended: int,
+) -> Entry ! IndexErrors {
+    if record.len != 20 { return invalid_index }
+    // Presence mask: size/mode/uid/gid/dev/ino/mtime/ctime, not fabricated zeros.
+    let required: int = 247507
+    if record[3] & required != required { return Unsupported("incomplete index stat record") }
+    var words = List[int]()
+    (mut words).push(record[16] & 4294967295)
+    (mut words).push(record[17] & 4294967295)
+    (mut words).push(record[14] & 4294967295)
+    (mut words).push(record[15] & 4294967295)
+    (mut words).push(record[9] & 4294967295)
+    (mut words).push(record[10] & 4294967295)
+    (mut words).push(mode)
+    (mut words).push(record[6] & 4294967295)
+    (mut words).push(record[7] & 4294967295)
+    (mut words).push(record[1] & 4294967295)
+    var actual_flags = flags & 0xf000 | name_flags(path)
+    if extended != 0 { actual_flags = actual_flags | 0x4000 }
+    if flags < 0 || flags > 65535 { return invalid_index }
+    let entry = Entry {
+        stat: words,
+        id: copy id,
+        flags: actual_flags,
+        extended: extended,
+        path: owned_path(path),
+    }
+    validate_entry(entry)?
+    entry
+}
+
+/// Map a regular file's full fs_fstat_record. The mode is explicitly supplied
+/// (100644/100755): core.fileMode and any existing index mode belong to the caller.
+/// All other stat words are the low u32 of that file's own metadata.
+pub fn entry_from_stat(
+    record: List[int],
+    path: List[byte],
+    id: oid.Oid,
+    mode: int,
+    flags: int,
+    extended: int,
+) -> Entry ! IndexErrors {
+    if record.len != 20 { return invalid_index }
+    if record[0] != 0 { return Unsupported("regular index entry requires regular-file stat") }
+    if mode != 0o100644 && mode != 0o100755 { return invalid_index }
+    stat_entry(record, path, id, mode, flags, extended)?
+}
+
+/// Open the worktree path with NOFOLLOW before calling this for a fresh regular
+/// file. A handle obtained by following a symlink cannot establish link metadata.
+pub fn fresh_entry(
+    fd: int,
+    path: List[byte],
+    id: oid.Oid,
+    mode: int,
+    flags: int,
+    extended: int,
+) -> Entry ! IndexErrors {
+    entry_from_stat(fs_fstat_record(fd)?, path, id, mode, flags, extended)?
+}
+
+/// A separate lstat-only boundary for actual symlinks. A following stat/fstat
+/// record is rejected by kind; core.symlinks=false regular-file emulation uses
+/// entry_from_stat instead, and the caller must apply its existing index policy.
+/// Path-based lstat/read_link is not an atomic handle snapshot: callers must
+/// detect a concurrent target change. Non-UTF-8 OS paths remain wolf-lang#687/912.
+pub fn entry_from_lstat(
+    record: List[int],
+    path: List[byte],
+    id: oid.Oid,
+    flags: int,
+    extended: int,
+) -> Entry ! IndexErrors {
+    if record.len != 20 { return invalid_index }
+    if record[0] != 3 { return Unsupported("symlink index entry requires lstat") }
+    stat_entry(record, path, id, 0o120000, flags, extended)?
+}

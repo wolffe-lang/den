@@ -1,0 +1,32 @@
+//! member: false
+
+use index
+use oid
+
+fn entry(path: str) -> index.Entry ! index.IndexErrors {
+    let bytes = path.bytes()
+    index.Entry {
+        stat: [1, 2, 3, 4, 5, 6, 0o100644, 7, 8, 0],
+        id: oid.parse("sha1", "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391")?,
+        flags: 0,
+        extended: 0,
+        path: bytes,
+    }
+}
+
+fn main() -> int ! index.IndexErrors {
+    for version in 2..=4 {
+        var value = index.empty(version)?
+        (mut value.entries).push(entry("a")?)
+        (mut value.entries).push(entry("a0/file")?)
+        let raw = index.serialize(value)?
+        let parsed = index.parse(raw)?
+        assert(parsed.version == version && parsed.entries.len == 2)
+        assert(parsed.entries[1].path.len == 7)
+        let second = index.serialize(parsed)?
+        assert(raw.len == second.len)
+        for i in 0..raw.len { assert(raw[i] == second[i]) }
+    }
+    print("PASS bounded index v2/v3/v4 byte roundtrip")
+    0
+}

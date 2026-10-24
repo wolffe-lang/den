@@ -1,0 +1,1 @@
+{"commit":"cf0c13d","diagnostics":[],"file":"src/index_checked_malformed.lu","impl":"wolfgang","impl_version":"0.2.35","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"PASS bounded checksum and truncation rejection\n","stdout_sha256":"4ace3efe2b8013368534cf6f7edfbcc69c5bbd81438d749e4720c27093b380a5","verdict":"exit(0)","warnings":[]}

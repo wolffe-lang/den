@@ -1,0 +1,23 @@
+vc03 foundation gate waiting for block A
+vc03 foundation gate holds block A
+1.3G	.
+PASS index versions, raw paths, flags, malformed data, extensions, nested trees, stat mapping
+index integration native: 152 commands, 24 proven stat rows; roundtrip/interop/ITA/failure/lock pass
+PASS index versions, raw paths, flags, malformed data, extensions, nested trees, stat mapping
+index integration release: 152 commands, 24 proven stat rows; roundtrip/interop/ITA/failure/lock pass
+{"commit":"cf0c13d","diagnostics":[],"file":"src/index_checked_format.lu","impl":"wolfgang","impl_version":"0.2.35","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"PASS bounded index v2/v3/v4 byte roundtrip\n","stdout_sha256":"e7229638dff058a6e6274c2d563765bf83c01d17192536cb38266cd0ad81c743","verdict":"exit(0)","warnings":[]}
+{"commit":"cf0c13d","diagnostics":[],"file":"src/index_checked_flags.lu","impl":"wolfgang","impl_version":"0.2.35","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"PASS bounded index flags and version policy\n","stdout_sha256":"6cddbd426764e4f5f94a70343a7e2d931d7d7ff220aa3a0ab5b62aebca2c0fa9","verdict":"exit(0)","warnings":[]}
+{"commit":"cf0c13d","diagnostics":[],"file":"src/index_checked_trees.lu","impl":"wolfgang","impl_version":"0.2.35","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"PASS bounded nested trees and intent cache\n","stdout_sha256":"3717b34af104bc8000b4dd811362c0c2227954018ccbafb007296c7603281b89","verdict":"exit(0)","warnings":[]}
+{"commit":"cf0c13d","diagnostics":[],"file":"src/index_checked_malformed.lu","impl":"wolfgang","impl_version":"0.2.35","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"PASS bounded checksum and truncation rejection\n","stdout_sha256":"4ace3efe2b8013368534cf6f7edfbcc69c5bbd81438d749e4720c27093b380a5","verdict":"exit(0)","warnings":[]}
+index proof: two proven rows; stat/checksum/proof-binding corruptions rejected; modes remain exact
+index: native/release units and independent Git interop; four bounded actual checked exits; full native test retained
+PASS ignore byte syntax, anchors, globstars, classes, parent exclusions, precedence, tracked bypass, binary records, polynomial miss
+PASS ignore filesystem precedence, source provenance, nested anchors, missing paths, excluded-parent stop, tracked bypass, symlink sources
+ignore oracle native: 840/840 parity, 0 mismatches
+PASS ignore byte syntax, anchors, globstars, classes, parent exclusions, precedence, tracked bypass, binary records, polynomial miss
+PASS ignore filesystem precedence, source provenance, nested anchors, missing paths, excluded-parent stop, tracked bypass, symlink sources
+ignore oracle release: 840/840 parity, 0 mismatches
+{"commit":"cf0c13d","diagnostics":[],"file":"src/ignore_test.lu","impl":"wolfgang","impl_version":"0.2.35","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"PASS ignore byte syntax, anchors, globstars, classes, parent exclusions, precedence, tracked bypass, binary records, polynomial miss\n","stdout_sha256":"9fa284674134c37eaaf541c5aea93879479ad529c8f4c99a75154605d260d2a2","verdict":"exit(0)","warnings":[]}
+ignore: native/release units, filesystem probe, Git matrix; actual checked exit(0)
+wolf-trap: assert
+  at src/commit_format_test.lu:86:9

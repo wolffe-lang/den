@@ -1,0 +1,30 @@
+//! member: false
+
+use index
+use oid
+
+fn entry(path: str) -> index.Entry ! index.IndexErrors {
+    let bytes = path.bytes()
+    index.Entry {
+        stat: [1, 2, 3, 4, 5, 6, 0o100644, 7, 8, 0],
+        id: oid.parse("sha1", "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391")?,
+        flags: 0,
+        extended: 0,
+        path: bytes,
+    }
+}
+
+fn main() -> int ! index.IndexErrors {
+    var value = index.empty(2)?
+    (mut value.entries).push(entry("a/file")?)
+    (mut value.entries).push(entry("z")?)
+    let built = index.build_trees(value)?
+    assert(built.objects.len == 2 && built.cache.len > 40)
+    value.entries[0].extended = 0x2000
+    value.entries[1].extended = 0x2000
+    let intent = index.build_trees(value)?
+    assert(oid.hex(intent.root)? == "4b825dc642cb6eb9a060e54bf8d69288fbee4904")
+    assert((str_from_utf8(intent.cache) else "") == "\0-1 1\na\0-1 0\n")
+    print("PASS bounded nested trees and intent cache")
+    0
+}

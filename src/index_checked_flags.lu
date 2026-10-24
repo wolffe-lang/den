@@ -1,0 +1,34 @@
+//! member: false
+
+use index
+use oid
+
+fn entry(path: str) -> index.Entry ! index.IndexErrors {
+    let bytes = path.bytes()
+    index.Entry {
+        stat: [1, 2, 3, 4, 5, 6, 0o100644, 7, 8, 0],
+        id: oid.parse("sha1", "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391")?,
+        flags: 0,
+        extended: 0,
+        path: bytes,
+    }
+}
+
+fn main() -> int ! index.IndexErrors {
+    for version in 2..=4 {
+        var value = index.empty(version)?
+        var one = entry("file")?
+        one.flags = 0x8000
+        one.extended = 0x2000
+        (mut value.entries).push(one)
+        let parsed = index.parse(index.serialize_for_write(value)?)?
+        assert(parsed.version == (if version == 4 then 4 else 3))
+        assert(parsed.entries[0].extended == 0x2000)
+        assert(parsed.entries[0].flags & 0x8000 != 0)
+        value.entries[0].extended = 0
+        let cleared = index.parse(index.serialize_for_write(value)?)?
+        assert(cleared.version == (if version == 4 then 4 else 2))
+    }
+    print("PASS bounded index flags and version policy")
+    0
+}

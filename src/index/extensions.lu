@@ -1,0 +1,268 @@
+use object
+use oid
+
+// TREE is parsed only to validate/invalidate. Unchanged records retain raw bytes.
+struct CacheNode {
+    path: List[byte],
+    component: List[byte],
+    count: int,
+    children: int,
+    id: List[byte],
+    raw: List[byte],
+}
+
+struct CacheFrame {
+    path: List[byte],
+    remaining: int,
+}
+
+fn decimal(data: List[byte], mut pos: int, terminator: byte, negative: bool) -> int ! IndexErrors {
+    var sign = 1
+    if pos < data.len && data[pos] == 45 as byte {
+        if !negative { return invalid_index }
+        sign = -1
+        pos += 1
+    }
+    let start = pos
+    var n: int = 0
+    while pos < data.len && data[pos] != terminator {
+        let digit = data[pos] as int - 48
+        if digit < 0 || digit > 9 || n > (4294967295 - digit) / 10 { return invalid_index }
+        n = n * 10 + digit
+        pos += 1
+    }
+    if pos == start || pos == data.len { return invalid_index }
+    pos += 1
+    n * sign
+}
+
+fn parse_cache(data: List[byte]) -> List[CacheNode] ! IndexErrors {
+    var nodes = List[CacheNode]()
+    var frames = List[CacheFrame]()
+    var pos = 0
+    loop {
+        let start = pos
+        while pos < data.len && data[pos] != 0 as byte { pos += 1 }
+        if pos == data.len { return invalid_index }
+        let component = data[start..pos]
+        pos += 1
+        if nodes.len == 0 {
+            if component.len != 0 { return invalid_index }
+        } else {
+            if !valid_path(component) { return invalid_index }
+            for b in component { if b == 47 as byte { return invalid_index } }
+            if frames.len == 0 { return invalid_index }
+        }
+        let count = decimal(data, mut pos, 32 as byte, true)?
+        let children = decimal(data, mut pos, 10 as byte, false)?
+        // Every child needs at least a name NUL and two decimal words.
+        if children > (data.len - pos) / 6 { return invalid_index }
+        var id = List[byte]()
+        if count >= 0 {
+            if data.len - pos < 20 { return invalid_index }
+            id = data[pos..pos + 20]
+            pos += 20
+        }
+        var path = List[byte]()
+        if frames.len > 0 {
+            let last = frames.len - 1
+            append(mut path, frames[last].path)
+            if path.len > 0 { (mut path).push(47 as byte) }
+            append(mut path, component)
+            frames[last].remaining -= 1
+        }
+        for previous in nodes {
+            if byte_compare(previous.path, path) == 0 { return invalid_index }
+        }
+        (mut nodes).push(CacheNode {
+            path: owned_path(path),
+            component: component,
+            count: count,
+            children: children,
+            id: id,
+            raw: data[start..pos],
+        })
+        if children > 0 { (mut frames).push(CacheFrame { path: path, remaining: children }) }
+        while frames.len > 0 && frames[frames.len - 1].remaining == 0 {
+            let _ = (mut frames).pop() else |_| { return invalid_index }
+        }
+        if frames.len == 0 { break }
+    }
+    if pos != data.len { return invalid_index }
+    nodes
+}
+
+fn validate_reuc(data: List[byte]) -> () ! IndexErrors {
+    var pos = 0
+    while pos < data.len {
+        let start = pos
+        while pos < data.len && data[pos] != 0 as byte { pos += 1 }
+        if pos == data.len || !valid_path(data[start..pos]) { return invalid_index }
+        pos += 1
+        var ids = 0
+        for _ in 0..3 {
+            let begin = pos
+            var mode: int = 0
+            while pos < data.len && data[pos] != 0 as byte {
+                let digit = data[pos] as int - 48
+                if digit < 0 || digit > 7 || pos - begin >= 6 { return invalid_index }
+                mode = mode * 8 + digit
+                pos += 1
+            }
+            if pos == begin || pos == data.len { return invalid_index }
+            pos += 1
+            if mode != 0 {
+                if mode == 0o40000 { return invalid_index }
+                let _ = object.mode_text(mode)?
+                ids += 1
+            }
+        }
+        if data.len - pos < ids * 20 { return invalid_index }
+        pos += ids * 20
+    }
+}
+
+fn validate_extensions(extensions: List[Extension]) -> () ! IndexErrors {
+    for i in 0..extensions.len {
+        let extension = copy extensions[i]
+        for j in 0..i {
+            if extensions[j].signature == extension.signature { return invalid_index }
+        }
+        if extension.signature == "TREE" {
+            let _ = parse_cache(extension.data)?
+        } else if extension.signature == "REUC" {
+            validate_reuc(extension.data)?
+        } else {
+            // Offset/bitmap caches cannot survive arbitrary entry edits. Refuse,
+            // including optional/unknown ones, rather than silently discard them.
+            return Unsupported("index extension {extension.signature}")
+        }
+    }
+}
+
+// Nonnegative TREE counts describe the actual entry span, not merely syntax.
+// Invalidated nodes may retain stale child structure and carry no trusted count.
+fn validate_cache_spans(value: Index) -> () ! IndexErrors {
+    for extension in value.extensions {
+        if extension.signature != "TREE" { continue }
+        for node in parse_cache(extension.data)? {
+            if node.count < 0 { continue }
+            var actual = 0
+            for entry in value.entries {
+                if parent_of(node.path, entry.path) {
+                    if stage(entry) != 0 || entry.extended & 0x2000 != 0 { return invalid_index }
+                    actual += 1
+                }
+            }
+            if actual != node.count { return invalid_index }
+        }
+    }
+}
+
+fn cache_record(component: List[byte], count: int, children: int, id: List[byte]) -> List[byte] {
+    var out = owned_path(component)
+    (mut out).push(0 as byte)
+    append(mut out, "{count} {children}\n".bytes())
+    if count >= 0 { append(mut out, id) }
+    out
+}
+
+fn parent_of(directory: List[byte], path: List[byte]) -> bool {
+    if directory.len == 0 { return true }
+    if path.len <= directory.len || path[directory.len] != 47 as byte { return false }
+    for i in 0..directory.len { if directory[i] != path[i] { return false } }
+    true
+}
+
+/// Invalidate only ancestors of changed_path. Keep every child record and its
+/// order, and do not create TREE if no cache existed. Other extensions are opaque.
+pub fn invalidate_tree(value: Index, changed_path: List[byte]) -> Index ! IndexErrors {
+    check_version(value.version)?
+    validate_entries(value.entries)?
+    validate_extensions(value.extensions)?
+    if !valid_path(changed_path) { return invalid_index }
+    var result = copy value
+    for i in 0..result.extensions.len {
+        if result.extensions[i].signature == "TREE" {
+            let nodes = parse_cache(result.extensions[i].data)?
+            var data = List[byte]()
+            for node in nodes {
+                if parent_of(node.path, changed_path) {
+                    append(mut data, cache_record(node.component, -1, node.children, List[byte]()))
+                } else {
+                    append(mut data, node.raw)
+                }
+            }
+            result.extensions[i].data = data
+        }
+    }
+    result
+}
+
+fn with_cache(value: Index, data: List[byte]) -> Index {
+    var result = copy value
+    for i in 0..result.extensions.len {
+        if result.extensions[i].signature == "TREE" {
+            result.extensions[i].data = copy data
+            return result
+        }
+    }
+    (mut result.extensions).push(Extension { signature: "TREE", data: copy data })
+    result
+}
+
+/// Sorted insert/replace of one stage. Resolving higher stages needs REUC
+/// recording, so a stage-zero replacement of an unmerged path refuses explicitly.
+pub fn replace_entry(value: Index, entry: Entry) -> Index ! IndexErrors {
+    validate_entry(entry)?
+    check_version(value.version)?
+    validate_entries(value.entries)?
+    validate_extensions(value.extensions)?
+    var tree_changed = true
+    for previous in value.entries {
+        if byte_compare(previous.path, entry.path) == 0 && stage(previous) == stage(entry) {
+            tree_changed = previous.stat[6] != entry.stat[6] ||
+                !oid.equal(previous.id, entry.id) ||
+                previous.extended & 0x2000 != entry.extended & 0x2000
+        }
+    }
+    var result = if tree_changed then invalidate_tree(value, entry.path)? else copy value
+    var entries = List[Entry]()
+    var inserted = false
+    for previous in value.entries {
+        let cmp = byte_compare(previous.path, entry.path)
+        if cmp == 0 && stage(entry) == 0 && stage(previous) != 0 { return unmerged }
+        if cmp == 0 && stage(entry) != 0 && stage(previous) == 0 { return unmerged }
+        if !inserted && (cmp > 0 || cmp == 0 && stage(previous) >= stage(entry)) {
+            (mut entries).push(copy entry)
+            inserted = true
+        }
+        if cmp != 0 || stage(previous) != stage(entry) { (mut entries).push(copy previous) }
+    }
+    if !inserted { (mut entries).push(copy entry) }
+    result.entries = entries
+    result
+}
+
+/// Remove a stage-zero path, retaining REUC and the invalidated TREE shape.
+/// Higher-stage removal refuses until its resolve-undo record can be generated.
+pub fn remove_path(value: Index, path: List[byte]) -> Index ! IndexErrors {
+    check_version(value.version)?
+    validate_entries(value.entries)?
+    validate_extensions(value.extensions)?
+    if !valid_path(path) { return invalid_index }
+    var found = false
+    for entry in value.entries {
+        if byte_compare(entry.path, path) == 0 {
+            if stage(entry) != 0 { return unmerged }
+            found = true
+        }
+    }
+    var result = if found then invalidate_tree(value, path)? else copy value
+    var entries = List[Entry]()
+    for entry in value.entries {
+        if byte_compare(entry.path, path) != 0 { (mut entries).push(copy entry) }
+    }
+    result.entries = entries
+    result
+}

@@ -1,10 +1,9 @@
-// Read-only v2 boundary; writing/refreshing the index belongs to vc03.
+// Owned SHA-1 index format boundary. Paths are unsigned bytes, never text.
 use hash
 use object
 use oid
-use repository
 
-/// Index failures plus object/IO errors; extensions are refused by name.
+/// Format, tree, object and IO failures. Unsupported extensions are named.
 pub error IndexErrors = {
     invalid_index,
     unmerged,
@@ -32,90 +31,323 @@ pub error IndexErrors = {
     cross_device,
 }
 
+/// Ten u32 stat words in on-disk order, owned oid/path, and both flag words.
+/// flags includes assume-valid, extended, stage and the on-disk name length.
+pub struct Entry {
+    stat: List[int],
+    id: oid.Oid,
+    flags: int,
+    extended: int,
+    path: List[byte],
+}
+
+/// Only TREE and REUC are accepted; their original bytes/order are preserved.
+pub struct Extension {
+    signature: str,
+    data: List[byte],
+}
+
+/// Public values are validated again by serialize/build_trees.
+pub struct Index {
+    version: int,
+    entries: List[Entry],
+    extensions: List[Extension],
+}
+
+/// Create an empty owned index in supported version 2, 3 or 4.
+pub fn empty(version: int) -> Index ! IndexErrors {
+    check_version(version)?
+    Index { version: version, entries: List[Entry](), extensions: List[Extension]() }
+}
+
+fn check_version(version: int) -> () ! IndexErrors {
+    if version < 2 || version > 4 { return Unsupported("index version {version}") }
+}
+
 fn be(data: List[byte], start: int, n: int) -> int {
     var result: int = 0
     for i in start..start + n { result = result * 256 + data[i] as int }
     result
 }
 
-/// Read minimal flat v2 entries, stage 0, with known TREE cache ignored safely.
-/// Verify checksum, entry bounds/padding/order before any object publication.
-pub fn parse_v2(data: List[byte]) -> List[object.TreeEntry] ! IndexErrors {
-    if data.len < 32 { return invalid_index }
-    if data[0] != 68 as byte ||
-        data[1] != 73 as byte ||
-        data[2] != 82 as byte ||
-        data[3] != 67 as byte {
+fn append(mut out: List[byte], data: List[byte]) {
+    for b in data { (mut out).push(b) }
+}
+
+fn put_be(mut out: List[byte], value: int, width: int) {
+    var divisor: int = 1
+    for _ in 1..width { divisor *= 256 }
+    for _ in 0..width {
+        (mut out).push((value / divisor % 256) as byte)
+        divisor /= 256
+    }
+}
+
+fn byte_compare(a: List[byte], b: List[byte]) -> int {
+    var i = 0
+    while i < a.len && i < b.len {
+        if a[i] != b[i] { return a[i] as int - b[i] as int }
+        i += 1
+    }
+    if a.len < b.len { return -1 }
+    if a.len > b.len { return 1 }
+    0
+}
+
+fn valid_path(path: List[byte]) -> bool {
+    if path.len == 0 { return false }
+    var start = 0
+    for i in 0..=path.len {
+        if i < path.len && path[i] == 0 as byte { return false }
+        if i == path.len || path[i] == 47 as byte {
+            let n = i - start
+            if n == 0 { return false }
+            if n == 1 && path[start] == 46 as byte { return false }
+            if n == 2 && path[start] == 46 as byte && path[start + 1] == 46 as byte { return false }
+            if n == 4 &&
+                path[start] == 46 as byte &&
+                path[start + 1] == 103 as byte &&
+                path[start + 2] == 105 as byte &&
+                path[start + 3] == 116 as byte {
+                return false
+            }
+            start = i + 1
+        }
+    }
+    true
+}
+
+/// Extract the two-bit merge stage; storage boundaries validate the flags.
+pub fn stage(entry: Entry) -> int { entry.flags / 4096 % 4 }
+
+fn name_flags(path: List[byte]) -> int {
+    if path.len < 4095 then path.len else 4095
+}
+
+fn validate_entry(entry: Entry) -> () ! IndexErrors {
+    if entry.stat.len != 10 { return invalid_index }
+    for word in entry.stat { if word < 0 || word > 4294967295 { return invalid_index } }
+    if entry.stat[6] == 0o40000 { return Unsupported("index sparse directory") }
+    let _ = object.mode_text(entry.stat[6])?
+    if !valid_path(entry.path) { return invalid_index }
+    oid.validate(entry.id)?
+    if entry.id.algorithm != "sha1" { return unsupported_format }
+    if entry.flags < 0 ||
+        entry.flags > 65535 ||
+        entry.extended < 0 ||
+        entry.extended > 65535 ||
+        entry.extended & 0x9fff != 0 {
         return invalid_index
     }
-    if be(data, 4, 4) != 2 { return Unsupported("index version") }
+}
+
+fn validate_entries(entries: List[Entry]) -> () ! IndexErrors {
+    if entries.len > 4294967295 { return limit }
+    for i in 0..entries.len {
+        validate_entry(entries[i])?
+        if i > 0 {
+            let cmp = byte_compare(entries[i - 1].path, entries[i].path)
+            if cmp > 0 ||
+                cmp == 0 &&
+                    (stage(entries[i - 1]) >= stage(entries[i]) || stage(entries[i - 1]) == 0) {
+                return invalid_index
+            }
+        }
+    }
+}
+
+/// Strict v2/v3/v4 parser. No malformed input is allowed to reach a slice/trap.
+/// Stages 1..3 are retained; tree construction, not this reader, rejects them.
+pub fn parse(data: List[byte]) -> Index ! IndexErrors {
+    if data.len < 32 { return invalid_index }
+    if be(data, 0, 4) != 0x44495243 { return invalid_index }
+    let version = be(data, 4, 4)
+    check_version(version)?
     let end = data.len - 20
     let digest = hash.sum1(data[0..end])
     for i in 0..20 { if digest[i] != data[end + i] { return checksum } }
     let count = be(data, 8, 4)
     if count > (end - 12) / 64 { return invalid_index }
-    var entries = List[object.TreeEntry]()
+    var result = empty(version)?
     var pos = 12
+    var previous = List[byte]()
     for _ in 0..count {
         let start = pos
-        if end - pos < 64 { return invalid_index }
-        let mode = be(data, pos + 24, 4)
-        let _ = object.mode_text(mode)?
-        if mode == 0o40000 { return Unsupported("index sparse directory") }
+        if end - pos < 62 { return invalid_index }
+        var words = List[int]()
+        for i in 0..10 { (mut words).push(be(data, pos + i * 4, 4)) }
         let id = oid.from_bytes("sha1", data[pos + 40..pos + 60])?
         let flags = be(data, pos + 60, 2)
-        if flags & 0x4000 != 0 { return invalid_index }
-        if flags & 0x3000 != 0 { return unmerged }
         pos += 62
-        let name_start = pos
+        var extended = 0
+        if flags & 0x4000 != 0 {
+            if version == 2 || end - pos < 2 { return invalid_index }
+            extended = be(data, pos, 2)
+            pos += 2
+        }
+        var path = List[byte]()
+        if version == 4 {
+            // OFS_DELTA integer: continuation increments before shifting.
+            if pos == end { return invalid_index }
+            var b = data[pos] as int
+            var strip: int = b & 127
+            pos += 1
+            while b & 128 != 0 {
+                if pos == end || strip > 33554430 { return invalid_index }
+                b = data[pos] as int
+                pos += 1
+                strip = (strip + 1) * 128 + (b & 127)
+            }
+            if strip > previous.len { return invalid_index }
+            append(mut path, previous[0..previous.len - strip])
+        }
         while pos < end && data[pos] != 0 as byte {
-            if data[pos] == 47 as byte { return Unsupported("nested index entries (vc03)") }
+            (mut path).push(data[pos])
             pos += 1
         }
         if pos == end { return invalid_index }
-        let name = data[name_start..pos]
-        if flags & 0xfff != (if name.len < 4095 then name.len else 4095) { return invalid_index }
+        if flags & 0xfff != name_flags(path) { return invalid_index }
         pos += 1
-        while (pos - start) % 8 != 0 {
-            if pos == end || data[pos] != 0 as byte { return invalid_index }
-            pos += 1
-        }
-        if entries.len > 0 {
-            let previous = copy entries[entries.len - 1].name
-            var cmp = 0
-            var i = 0
-            while i < previous.len && i < name.len && cmp == 0 {
-                cmp = previous[i] as int - name[i] as int
-                i += 1
+        if version != 4 {
+            while (pos - start) % 8 != 0 {
+                if pos == end || data[pos] != 0 as byte { return invalid_index }
+                pos += 1
             }
-            if cmp == 0 { cmp = previous.len - name.len }
-            if cmp >= 0 { return invalid_index }
         }
-        (mut entries).push(object.TreeEntry { mode: mode, name: name, id: id })
+        (mut result.entries).push(Entry {
+            stat: words,
+            id: id,
+            flags: flags,
+            extended: extended,
+            path: owned_path(path),
+        })
+        previous = path
     }
     while pos < end {
         if end - pos < 8 { return invalid_index }
-        let name = str_from_utf8(data[pos..pos + 4]) else "non-ASCII"
+        let signature = str_from_utf8(data[pos..pos + 4]) else |_| {
+            return Unsupported("index extension non-ASCII")
+        }
         let size = be(data, pos + 4, 4)
         pos += 8
         if size > end - pos { return invalid_index }
-        if name != "TREE" { return Unsupported("index extension {name}") }
+        (mut result.extensions).push(Extension {
+            signature: signature,
+            data: data[pos..pos + size],
+        })
         pos += size
+    }
+    validate_extensions(result.extensions)?
+    validate_entries(result.entries)?
+    validate_cache_spans(result)?
+    result
+}
+
+fn put_strip(mut out: List[byte], strip: int) {
+    var n = strip
+    var reversed = List[byte]()
+    (mut reversed).push((n & 127) as byte)
+    while n >= 128 {
+        n = n / 128 - 1
+        (mut reversed).push((n & 127 | 128) as byte)
+    }
+    var i = reversed.len
+    while i > 0 { i -= 1; (mut out).push(reversed[i]) }
+}
+
+/// Preserve the selected version; v2 extended entries upgrade to v3 as Git does.
+/// Low name-length and extended-presence flag bits are derived from the value.
+/// Entries must already be in full-path/stage order (never tree-name order).
+pub fn serialize(value: Index) -> List[byte] ! IndexErrors {
+    check_version(value.version)?
+    validate_entries(value.entries)?
+    validate_extensions(value.extensions)?
+    validate_cache_spans(value)?
+    var version = value.version
+    for entry in value.entries {
+        if version == 2 && (entry.extended != 0 || entry.flags & 0x4000 != 0) { version = 3 }
+    }
+    var out = List[byte]()
+    append(mut out, "DIRC".bytes())
+    put_be(mut out, version, 4)
+    put_be(mut out, value.entries.len, 4)
+    var previous = List[byte]()
+    for entry in value.entries {
+        let start = out.len
+        for word in entry.stat { put_be(mut out, word, 4) }
+        append(mut out, entry.id.bytes)
+        var flags = entry.flags & 0xf000 | name_flags(entry.path)
+        if entry.extended != 0 { flags = flags | 0x4000 }
+        put_be(mut out, flags, 2)
+        if flags & 0x4000 != 0 { put_be(mut out, entry.extended, 2) }
+        var prefix = 0
+        if version == 4 {
+            while prefix < previous.len &&
+                prefix < entry.path.len &&
+                previous[prefix] == entry.path[prefix] {
+                prefix += 1
+            }
+            put_strip(mut out, previous.len - prefix)
+        }
+        append(mut out, entry.path[prefix..entry.path.len])
+        (mut out).push(0 as byte)
+        if version != 4 {
+            while (out.len - start) % 8 != 0 { (mut out).push(0 as byte) }
+        }
+        previous = copy entry.path
+    }
+    for extension in value.extensions {
+        if extension.data.len > 4294967295 { return limit }
+        append(mut out, extension.signature.bytes())
+        put_be(mut out, extension.data.len, 4)
+        append(mut out, extension.data)
+    }
+    let digest = hash.sum1(out)
+    append(mut out, digest)
+    out
+}
+
+/// Git's write policy differs from version-preserving serialize: v2/v3 writes
+/// v2 without extended bits, v3 with them; v4 remains v4. Empty extended fields
+/// are removed. The selected version is value.version (set by begin's caller).
+pub fn serialize_for_write(value: Index) -> List[byte] ! IndexErrors {
+    check_version(value.version)?
+    validate_entries(value.entries)?
+    var selected = copy value
+    if selected.version != 4 { selected.version = 2 }
+    for i in 0..selected.entries.len {
+        selected.entries[i].flags = selected.entries[i].flags & 0xbfff
+    }
+    serialize(selected)?
+}
+
+/// Compatibility boundary: flat v2, stage zero only. TREE is parsed but not used.
+pub fn parse_v2(data: List[byte]) -> List[object.TreeEntry] ! IndexErrors {
+    let value = parse(data)?
+    if value.version != 2 { return Unsupported("index version") }
+    var entries = List[object.TreeEntry]()
+    for extension in value.extensions {
+        if extension.signature != "TREE" {
+            return Unsupported("index extension {extension.signature}")
+        }
+    }
+    for entry in value.entries {
+        if stage(entry) != 0 { return unmerged }
+        for b in entry.path {
+            if b == 47 as byte { return Unsupported("nested index entries (vc03)") }
+        }
+        (mut entries).push(object.
+            TreeEntry { mode: entry.stat[6], name: copy entry.path, id: copy entry.id })
     }
     let _ = object.build_tree(entries, "sha1")?
     entries
 }
 
-/// Build the flat v2 tree without changing even one index byte.
-pub fn write_tree(repo: repository.Repo, cap: int) -> oid.Oid ! IndexErrors {
-    let data = repository.read_bytes("{repo.gitdir}/index", cap)?
-    let entries = parse_v2(data)?
-    for entry in entries {
-        if entry.mode != 0o160000 {
-            let stored = object.read_object(repo, entry.id, 1000000000)?
-            if stored.kind != object.mode_kind(entry.mode)? { return invalid_index }
-        }
-    }
-    let body = object.build_tree(entries, "sha1")?
-    object.write_object(repo, "tree", body)?
+// cf0c13d cannot lower copy of a lent str.bytes() view in a returned value.
+// probes/index-view-{direct,bound} retain native/checked witnesses. Iteration
+// explicitly materializes the API's owned return without changing its contract.
+fn owned_path(bytes: List[byte]) -> List[byte] {
+    var out = List[byte]()
+    for b in bytes { (mut out).push(b) }
+    out
 }

@@ -1,0 +1,1 @@
+{"commit":"cf0c13d","diagnostics":[],"file":"src/index_checked_trees.lu","impl":"wolfgang","impl_version":"0.2.35","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"PASS bounded nested trees and intent cache\n","stdout_sha256":"3717b34af104bc8000b4dd811362c0c2227954018ccbafb007296c7603281b89","verdict":"exit(0)","warnings":[]}

@@ -1,0 +1,13 @@
+pkg {
+    name: "index-client",
+    edition: "1",
+    capabilities: [env, fs],
+    deps: {
+        index: {path: "../../src/index"},
+        object: {path: "../../src/object"},
+        oid: {path: "../../src/oid"},
+        repository: {path: "../../src/repository"},
+        hash: {path: "../../src/hash"},
+        zlib: {path: "../../src/zlib"},
+    },
+}

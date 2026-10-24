@@ -1,0 +1,355 @@
+//! member: false
+
+use hash
+use index
+use object
+use oid
+
+fn same(a: List[byte], b: List[byte]) -> bool {
+    if a.len != b.len { return false }
+    for i in 0..a.len { if a[i] != b[i] { return false } }
+    true
+}
+
+fn add_bytes(mut out: List[byte], bytes: List[byte]) {
+    for b in bytes { (mut out).push(b) }
+}
+
+fn fixture(path: List[byte], stage: int) -> index.Entry ! index.IndexErrors {
+    var owned = List[byte]()
+    for b in path { (mut owned).push(b) }
+    index.Entry {
+        stat: [4294967295, 999999999, 2147483648, 123456789, 123, 456, 0o100644, 789, 1234, 42],
+        id: object.identify("blob", "body".bytes())?,
+        flags: stage * 4096,
+        extended: 0,
+        path: owned,
+    }
+}
+
+fn seal(body: List[byte]) -> List[byte] {
+    var bytes = copy body
+    add_bytes(mut bytes, hash.sum1(body))
+    bytes
+}
+
+fn malformed(data: List[byte], expected: str) -> bool {
+    let _ = index.parse(data) else |e| { return "{e}".contains(expected) }
+    false
+}
+
+fn refused_value(value: index.Index) -> bool {
+    let _ = index.serialize(value) else |_| { return true }
+    false
+}
+
+fn extension_bytes(signature: str, payload: List[byte]) -> List[byte] {
+    var out = copy signature.bytes()
+    (mut out).push((payload.len / 16777216) as byte)
+    (mut out).push((payload.len / 65536) as byte)
+    (mut out).push((payload.len / 256) as byte)
+    (mut out).push(payload.len as byte)
+    add_bytes(mut out, payload)
+    out
+}
+
+fn extension_file(signature: str, payload: List[byte]) -> List[byte] ! index.IndexErrors {
+    let bytes = index.serialize(index.empty(2)?)?
+    var body = bytes[0..12]
+    add_bytes(mut body, extension_bytes(signature, payload))
+    seal(body)
+}
+
+fn record(component: str, count: int, children: int, id: oid.Oid) -> List[byte] {
+    var bytes = copy component.bytes()
+    (mut bytes).push(0 as byte)
+    add_bytes(mut bytes, "{count} {children}\n".bytes())
+    if count >= 0 { add_bytes(mut bytes, id.bytes) }
+    bytes
+}
+
+fn main() -> int ! index.IndexErrors {
+    for version in 2..=4 {
+        var value = index.empty(version)?
+        (mut value.entries).push(fixture("a.c".bytes(), 0)?)
+        (mut value.entries).push(fixture("a/x".bytes(), 0)?)
+        (mut value.entries).push(fixture("a0".bytes(), 0)?)
+        (mut value.entries).push(fixture([255 as byte], 0)?)
+        let encoded = index.serialize(value)?
+        let decoded = index.parse(encoded)?
+        assert(decoded.version == version && decoded.entries.len == 4)
+        assert(decoded.entries[0].stat[0] == 4294967295)
+        assert(decoded.entries[0].stat[2] == 2147483648)
+        assert(decoded.entries[3].path[0] == 255 as byte)
+        assert(same(encoded, index.serialize(decoded)?))
+        for length in 0..encoded.len {
+            let _ = index.parse(encoded[0..length]) else |_| { continue }
+            assert(false)
+        }
+        var checksum_bad = copy encoded
+        checksum_bad[20] = (checksum_bad[20] as int + 1) as byte
+        assert(malformed(checksum_bad, "checksum"))
+    }
+    var extended = index.empty(2)?
+    var skip = fixture("skip".bytes(), 0)?
+    skip.flags = 0x8000
+    skip.extended = 0x4000
+    (mut extended.entries).push(skip)
+    let upgraded = index.parse(index.serialize(extended)?)?
+    assert(upgraded.version == 3 && upgraded.entries[0].flags & 0xc000 == 0xc000)
+    assert(upgraded.entries[0].extended == 0x4000)
+    for requested in 2..=4 {
+        var selection = index.empty(requested)?
+        (mut selection.entries).push(fixture("chosen".bytes(), 0)?)
+        assert(index.parse(index.serialize(selection)?)?.version == requested)
+        assert(
+            index.parse(index.serialize_for_write(selection)?)?.version ==
+                (if requested == 4 then 4 else 2),
+        )
+        selection.entries[0].extended = 0x2000
+        assert(
+            index.parse(index.serialize_for_write(selection)?)?.version ==
+                (if requested == 4 then 4 else 3),
+        )
+        selection.entries[0].extended = 0
+        selection.entries[0].flags = 0x4000
+        let cleared = index.parse(index.serialize_for_write(selection)?)?
+        assert(cleared.version == (if requested == 4 then 4 else 2))
+        assert(cleared.entries[0].flags & 0x4000 == 0)
+    }
+    var bad = index.serialize(upgraded)?
+    bad[75] = 1 as byte
+    assert(malformed(seal(bad[0..bad.len - 20]), "invalid_index"))
+    bad = index.serialize(upgraded)?
+    bad[7] = 2 as byte
+    assert(malformed(seal(bad[0..bad.len - 20]), "invalid_index"))
+
+    var long_path = List[byte]()
+    for _ in 0..5000 { (mut long_path).push(97 as byte) }
+    var long_index = index.empty(4)?
+    (mut long_index.entries).push(fixture(long_path, 0)?)
+    (mut long_index.entries).push(fixture("b".bytes(), 0)?)
+    let long_encoded = index.serialize(long_index)?
+    let long_decoded = index.parse(long_encoded)?
+    assert(long_decoded.entries[0].flags & 0xfff == 4095)
+    assert(same(long_encoded, index.serialize(long_decoded)?))
+    var bad_strip = copy long_encoded
+    bad_strip[74] = 1 as byte
+    assert(malformed(seal(bad_strip[0..bad_strip.len - 20]), "invalid_index"))
+    bad_strip = copy long_encoded
+    for i in 74..85 { bad_strip[i] = 255 as byte }
+    assert(malformed(seal(bad_strip[0..bad_strip.len - 20]), "invalid_index"))
+    long_index.version = 2
+    assert(
+        same(
+            index.serialize(long_index)?,
+            index.serialize(index.parse(index.serialize(long_index)?)?)?,
+        ),
+    )
+
+    var flat = index.empty(2)?
+    (mut flat.entries).push(fixture("ab".bytes(), 0)?)
+    let raw = index.serialize(flat)?
+    assert(index.parse_v2(raw)?.len == 1)
+    for offset in [7, 11, 36, 73, 77] {
+        var body = raw[0..raw.len - 20]
+        body[offset] = 255 as byte
+        assert(malformed(seal(body), if offset == 7 then "index version" else "invalid"))
+    }
+    for name in ["", "/a", "a/", "a//b", ".", "..", ".git", "a/.git/b", "a/../b"] {
+        var invalid = copy flat
+        invalid.entries[0].path = copy name.bytes()
+        assert(refused_value(invalid))
+    }
+    var invalid = copy flat
+    invalid.entries[0].stat = [0]
+    assert(refused_value(invalid))
+    invalid = copy flat
+    invalid.entries[0].stat[9] = -1
+    assert(refused_value(invalid))
+    invalid = copy flat
+    invalid.entries[0].path = [97 as byte, 0 as byte, 98 as byte]
+    assert(refused_value(invalid))
+    var stages = index.empty(3)?
+    for n in 1..=3 { (mut stages.entries).push(fixture("conflict".bytes(), n)?) }
+    let merged_read = index.parse(index.serialize(stages)?)?
+    assert(index.stage(merged_read.entries[2]) == 3)
+    var unmerged = false
+    let _ = index.build_trees(merged_read) else |e| {
+        unmerged = "{e}" == "unmerged"
+        empty_assembly()?
+    }
+    assert(unmerged)
+    var remove_unmerged = false
+    let _ = index.remove_path(merged_read, "conflict".bytes()) else |e| {
+        remove_unmerged = "{e}" == "unmerged"
+        index.empty(2)?
+    }
+    assert(remove_unmerged)
+    (mut stages.entries).push(fixture("conflict".bytes(), 3)?)
+    assert(refused_value(stages))
+    var order = index.empty(2)?
+    (mut order.entries).push(fixture("b".bytes(), 0)?)
+    (mut order.entries).push(fixture("a".bytes(), 0)?)
+    assert(refused_value(order))
+
+    let id = object.identify("tree", [])?
+    for signature in ["UNTR", "FSMN", "EOIE", "IEOT", "sdir", "link", "ZZZZ"] {
+        assert(malformed(extension_file(signature, [])?, signature))
+    }
+    for payload in [
+        List[byte](),
+        [0 as byte],
+        "x\0-1 0\n".bytes(),
+        "\0-1 1\n".bytes(),
+        "\0-1 0\nx".bytes(),
+        "\0-1 99999999999999999999\n".bytes(),
+        "\0".bytes(),
+    ] {
+        assert(malformed(extension_file("TREE", payload)?, "invalid_index"))
+    }
+    assert(malformed(extension_file("TREE", "\0".bytes())?, "invalid_index"))
+    var cache = record("", 2, 2, id)
+    add_bytes(mut cache, record("a", 1, 0, id))
+    let untouched = record("z", 1, 0, id)
+    add_bytes(mut cache, untouched)
+    assert(malformed(extension_file("TREE", record("", 1, 0, id))?, "invalid_index"))
+    var cached = index.empty(2)?
+    (mut cached.entries).push(fixture("a/f".bytes(), 0)?)
+    (mut cached.entries).push(fixture("z/f".bytes(), 0)?)
+    (mut cached.extensions).push(index.Extension { signature: "TREE", data: copy cache })
+    assert(same(index.parse(index.serialize(cached)?)?.extensions[0].data, cache))
+    let invalidated = index.invalidate_tree(cached, "a/new".bytes())?
+    var expected = record("", -1, 2, id)
+    add_bytes(mut expected, record("a", -1, 0, id))
+    add_bytes(mut expected, untouched)
+    assert(same(invalidated.extensions[0].data, expected))
+    assert(same(cached.extensions[0].data, cache))
+    var stat_only = copy cached.entries[0]
+    stat_only.stat[9] = 99
+    stat_only.flags = stat_only.flags | 0x8000
+    let refreshed = index.replace_entry(cached, stat_only)?
+    assert(same(refreshed.extensions[0].data, cache))
+    assert(same(index.remove_path(cached, "missing".bytes())?.extensions[0].data, cache))
+    assert(index.invalidate_tree(flat, "new".bytes())?.extensions.len == 0)
+    var reuc = copy "a\0".bytes()
+    add_bytes(mut reuc, "100644\0".bytes())
+    add_bytes(mut reuc, "0\0".bytes())
+    add_bytes(mut reuc, "100755\0".bytes())
+    add_bytes(mut reuc, id.bytes)
+    add_bytes(mut reuc, id.bytes)
+    let reuc_bytes = extension_file("REUC", reuc)?
+    assert(same(index.serialize(index.parse(reuc_bytes)?)?, reuc_bytes))
+    assert(malformed(extension_file("REUC", reuc[0..reuc.len - 1])?, "invalid_index"))
+
+    var nested = index.empty(2)?
+    nested = index.replace_entry(nested, fixture("a0".bytes(), 0)?)?
+    nested = index.replace_entry(nested, fixture("a/x".bytes(), 0)?)?
+    nested = index.replace_entry(nested, fixture("a.c".bytes(), 0)?)?
+    let assembled = index.build_trees(nested)?
+    assert(assembled.objects.len == 2)
+    let sub = object.build_tree(
+        [object.TreeEntry { mode: 0o100644, name: "x".bytes(), id: copy nested.entries[0].id }],
+        "sha1",
+    )?
+    let sub_id = object.identify("tree", sub)?
+    let root = object.build_tree(
+        [
+            object.TreeEntry { mode: 0o100644, name: "a.c".bytes(), id: copy nested.entries[0].id },
+            object.TreeEntry { mode: 0o40000, name: "a".bytes(), id: sub_id },
+            object.TreeEntry { mode: 0o100644, name: "a0".bytes(), id: copy nested.entries[0].id },
+        ],
+        "sha1",
+    )?
+    assert(oid.equal(assembled.root, object.identify("tree", root)?))
+    assert(same(assembled.objects[assembled.objects.len - 1].data, root))
+    let removed = index.remove_path(nested, "a.c".bytes())?
+    assert(removed.entries.len == 2 && same(removed.entries[0].path, "a/x".bytes()))
+    var conflict = index.empty(2)?
+    conflict = index.replace_entry(conflict, fixture("a".bytes(), 0)?)?
+    conflict = index.replace_entry(conflict, fixture("a/x".bytes(), 0)?)?
+    var duplicate = false
+    let _ = index.build_trees(conflict) else |e| {
+        duplicate = "{e}" == "duplicate_name"
+        empty_assembly()?
+    }
+    assert(duplicate)
+    var intent = index.empty(2)?
+    var intent_entry = fixture("intent".bytes(), 0)?
+    intent_entry.extended = 0x2000
+    (mut intent.entries).push(intent_entry)
+    let intent_tree = index.build_trees(intent)?
+    assert(oid.hex(intent_tree.root)? == "4b825dc642cb6eb9a060e54bf8d69288fbee4904")
+    assert(same(intent_tree.cache, record("", -1, 0, id)))
+    intent.entries[0].path = "d/intent".bytes()
+    let nested_intent = index.build_trees(intent)?
+    var nested_intent_cache = record("", -1, 1, id)
+    add_bytes(mut nested_intent_cache, record("d", -1, 0, id))
+    assert(oid.equal(nested_intent.root, intent_tree.root))
+    assert(same(nested_intent.cache, nested_intent_cache))
+    var siblings = index.empty(2)?
+    for name in ["a./f", "a/f", "a0/f"] {
+        siblings = index.replace_entry(siblings, fixture(name.bytes(), 0)?)?
+    }
+    let siblings_tree = index.build_trees(siblings)?
+    var sibling_cache = record("", 3, 3, siblings_tree.root)
+    let sibling_body = object.build_tree(
+        [object.TreeEntry { mode: 0o100644, name: "f".bytes(), id: copy siblings.entries[0].id }],
+        "sha1",
+    )?
+    let sibling_id = object.identify("tree", sibling_body)?
+    for name in ["a", "a.", "a0"] { add_bytes(mut sibling_cache, record(name, 1, 0, sibling_id)) }
+    assert(same(siblings_tree.cache, sibling_cache))
+
+    let stat = [
+        0,
+        4294967301,
+        0,
+        1048575,
+        0o777,
+        1,
+        4294967302,
+        4294967303,
+        0,
+        4294967304,
+        4294967305,
+        0,
+        0,
+        0,
+        4294967306,
+        123456789,
+        -1,
+        987654321,
+        0,
+        0,
+    ]
+    let fresh = index.entry_from_stat(stat, "fresh".bytes(), id, 0o100755, 0x8000, 0)?
+    let expected_stat = [4294967295, 987654321, 10, 123456789, 8, 9, 0o100755, 6, 7, 5]
+    for i in 0..10 { assert(fresh.stat[i] == expected_stat[i]) }
+    var missing = copy stat
+    missing[3] = 1048575 - 1024
+    var refused = false
+    let _ = index.entry_from_stat(missing, "fresh".bytes(), id, 0o100644, 0, 0) else |_| {
+        refused = true
+        copy fresh
+    }
+    assert(refused)
+    missing = copy stat
+    missing[0] = 3
+    let link = index.entry_from_lstat(missing, "link".bytes(), id, 0, 0)?
+    assert(link.stat[6] == 0o120000)
+    refused = false
+    let _ = index.entry_from_lstat(stat, "link".bytes(), id, 0, 0) else |_| {
+        refused = true
+        copy fresh
+    }
+    assert(refused)
+    print(
+        "PASS index versions, raw paths, flags, malformed data, extensions, nested trees, stat mapping",
+    )
+    0
+}
+
+fn empty_assembly() -> index.TreeAssembly ! index.IndexErrors {
+    index.build_trees(index.empty(2)?)?
+}

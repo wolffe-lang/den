@@ -1,0 +1,127 @@
+use object
+use oid
+
+/// A canonical owned tree body and its full directory path (empty for root).
+pub struct TreeObject {
+    path: List[byte],
+    id: oid.Oid,
+    data: List[byte],
+}
+
+/// Children precede parents in objects; cache is the complete TREE payload.
+pub struct TreeAssembly {
+    root: oid.Oid,
+    objects: List[TreeObject],
+    cache: List[byte],
+}
+
+struct Directory {
+    path: List[byte],
+    component: List[byte],
+    parent: int,
+    count: int,
+    invalidated: bool,
+    children: List[int],
+    entries: List[object.TreeEntry],
+    id: List[byte],
+}
+
+fn directory(path: List[byte], component: List[byte], parent: int) -> Directory {
+    Directory {
+        path: owned_path(path),
+        component: owned_path(component),
+        parent: parent,
+        count: 0,
+        invalidated: false,
+        children: List[int](),
+        entries: List[object.TreeEntry](),
+        id: List[byte](),
+    }
+}
+
+/// Pure nested tree assembly; validates before returning any publication work.
+/// Index sorting and tree sorting are intentionally different. Raw path bytes
+/// never pass through UTF-8, and directory depth consumes no call stack.
+pub fn build_trees(value: Index) -> TreeAssembly ! IndexErrors {
+    check_version(value.version)?
+    validate_entries(value.entries)?
+    validate_extensions(value.extensions)?
+    var dirs = List[Directory]()
+    (mut dirs).push(directory(List[byte](), List[byte](), -1))
+    for entry in value.entries {
+        if stage(entry) != 0 { return unmerged }
+        // Intent-to-add is not a staged object. Its placeholder oid is not read.
+        let intent = entry.extended & 0x2000 != 0
+        var parent = 0
+        if intent { dirs[0].invalidated = true } else { dirs[0].count += 1 }
+        var component_start = 0
+        for i in 0..entry.path.len {
+            if entry.path[i] == 47 as byte {
+                let path = entry.path[0..i]
+                let component = entry.path[component_start..i]
+                var found = -1
+                for j in 1..dirs.len {
+                    if byte_compare(dirs[j].path, path) == 0 { found = j; break }
+                }
+                if found < 0 {
+                    found = dirs.len
+                    (mut dirs).push(directory(path, component, parent))
+                    // Cache children sort by unsigned component, not by the
+                    // index's slash-aware position among full path strings.
+                    var children = copy dirs[parent].children
+                    (mut children).push(found)
+                    var at = children.len - 1
+                    while at > 0 && byte_compare(component, dirs[children[at - 1]].component) < 0 {
+                        children[at] = children[at - 1]
+                        at -= 1
+                    }
+                    children[at] = found
+                    dirs[parent].children = children
+                }
+                parent = found
+                if intent { dirs[parent].invalidated = true } else { dirs[parent].count += 1 }
+                component_start = i + 1
+            }
+        }
+        if intent { continue }
+        (mut dirs[parent].entries).push(object.TreeEntry {
+            mode: entry.stat[6],
+            name: entry.path[component_start..entry.path.len],
+            id: copy entry.id,
+        })
+    }
+    var objects = List[TreeObject]()
+    var at = dirs.len
+    while at > 0 {
+        at -= 1
+        let data = object.build_tree(dirs[at].entries, "sha1")?
+        let id = object.identify("tree", data)?
+        dirs[at].id = copy id.bytes
+        (mut objects).push(TreeObject { path: copy dirs[at].path, id: copy id, data: data })
+        let parent = dirs[at].parent
+        if parent >= 0 && dirs[at].count > 0 {
+            let component = copy dirs[at].component
+            (mut dirs[parent].entries).push(object.
+                TreeEntry { mode: 0o40000, name: component, id: id })
+        }
+    }
+    var cache = List[byte]()
+    var pending = List[int]()
+    (mut pending).push(0)
+    while pending.len > 0 {
+        let index = (mut pending).pop() else |_| { return invalid_index }
+        let node = copy dirs[index]
+        append(
+            mut cache,
+            cache_record(
+                node.component,
+                if node.invalidated then -1 else node.count,
+                node.children.len,
+                node.id,
+            ),
+        )
+        var child = node.children.len
+        while child > 0 { child -= 1; (mut pending).push(node.children[child]) }
+    }
+    TreeAssembly { root: oid.from_bytes("sha1", dirs[0].id)?, objects: objects, cache: cache }
+}

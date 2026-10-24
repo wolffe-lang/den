@@ -1,0 +1,33 @@
+//! member: false
+
+use index
+use oid
+
+fn entry(path: str) -> index.Entry ! index.IndexErrors {
+    let bytes = path.bytes()
+    index.Entry {
+        stat: [1, 2, 3, 4, 5, 6, 0o100644, 7, 8, 0],
+        id: oid.parse("sha1", "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391")?,
+        flags: 0,
+        extended: 0,
+        path: bytes,
+    }
+}
+
+fn main() -> int ! index.IndexErrors {
+    var value = index.empty(2)?
+    (mut value.entries).push(entry("file")?)
+    let raw = index.serialize(value)?
+    for size in [0, 11, 31, 62, raw.len - 1] {
+        var rejected = false
+        let _ = index.parse(raw[0..size]) else |_| { rejected = true; index.empty(2)? }
+        assert(rejected)
+    }
+    var corrupt = copy raw
+    corrupt[20] = 99 as byte
+    var rejected = false
+    let _ = index.parse(corrupt) else |_| { rejected = true; index.empty(2)? }
+    assert(rejected)
+    print("PASS bounded checksum and truncation rejection")
+    0
+}

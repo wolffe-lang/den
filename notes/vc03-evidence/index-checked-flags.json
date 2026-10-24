@@ -1,0 +1,1 @@
+{"commit":"cf0c13d","diagnostics":[],"file":"src/index_checked_flags.lu","impl":"wolfgang","impl_version":"0.2.35","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"PASS bounded index flags and version policy\n","stdout_sha256":"6cddbd426764e4f5f94a70343a7e2d931d7d7ff220aa3a0ab5b62aebca2c0fa9","verdict":"exit(0)","warnings":[]}
