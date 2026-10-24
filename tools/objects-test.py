@@ -58,6 +58,7 @@ for locale,encoding in [('C',None),('C.UTF-8',None),('C','ISO-8859-1')]:
 (gd/'config').write_bytes(initial_config)
 rows.append('encoding: stdin/-F/mktag; C/C.UTF-8/ISO-8859-1 byte-and-warning parity')
 run(G,['fsck','--full'])
+initial_ids=sorted(p.parent.name+p.name for p in (gd/'objects').glob('*/*') if p.is_file())
 # Exclusive install, each injected phase, existing valid/corrupt objects, races.
 payload=root/'payload';payload.write_bytes(b'atomic payload')
 expected=oid('blob',payload.read_bytes())
@@ -190,6 +191,6 @@ for path in (interrupt/'.git/objects').glob('*/*'):
 large.unlink()
 rows.append('permissions: unprivileged child refused; owned interrupted writer leaves no partial final object')
 rows.append('repository: plain/bare init exact files; gitfile; unsupported prewrite refusal')
-summary=dict(tier=a.tier,rows=rows,malformed=len(malformed),status='PASS')
+summary=dict(tier=a.tier,rows=rows,initial_oids=initial_ids,malformed=len(malformed),status='PASS')
 (R/f'target/objects-{a.tier}.json').write_text(json.dumps(summary,indent=2)+'\n')
 print(json.dumps(summary))

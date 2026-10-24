@@ -23,4 +23,10 @@ for tier in native release; do
     "$WOLF" build $flag --deny-warnings probes/object-client/main.lu -o "target/$tier/object-client"
     tools/env python3 -I tools/objects-test.py --tier "$tier"
 done
+python3 -I - <<'PY'
+import json
+a=json.load(open('target/objects-native.json')); b=json.load(open('target/objects-release.json'))
+assert a['initial_oids']==b['initial_oids'] and len(a['initial_oids'])>10
+print('objects: independently authored native/release repositories have identical OIDs')
+PY
 echo 'objects: native/release API and e2e pass; checked programs pass; unsupported=0'
