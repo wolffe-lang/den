@@ -1,6 +1,8 @@
 use std.term
 
 fn main() {
-    print("stdin={(os_isatty(0) else false)} stdout={(os_isatty(1) else false)} stderr={(os_isatty(2) else false)}")
+    print(
+        "stdin={(os_isatty(0) else false)} stdout={(os_isatty(1) else false)} stderr={(os_isatty(2) else false)}",
+    )
     print("term group={term.group() else -1}")
 }

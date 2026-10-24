@@ -20,12 +20,13 @@ with (T/'server.log').open('wb') as log:
    except OSError:time.sleep(.05)
   for name,addr,host,anchor in [('local',f'127.0.0.1:{port}','localhost',str(T/'anchor.der')),('github','github.com:443','github.com',str(T/'roots.der'))]:
    for tier in ('native','checked'):
-    args=[addr,host,anchor]
+    args=[]
+    env={**os.environ,'TZ':'UTC','TLS_PROBE_ADDR':addr,'TLS_PROBE_HOST':host,'TLS_PROBE_ROOTS':anchor}
     if tier=='native':cmd=[str(R/'target/probes/tls'),*args]
-    else:cmd=[os.environ['WOLF'],'conform-run',str(R/'probes/tls/main.lu'),'--checked','--json','--',*args]
+    else:cmd=[os.environ['WOLF'],'conform-run',str(R/'probes/tls/main.lu'),'--checked','--json']
     start=time.monotonic()
     try:
-     p=subprocess.run(cmd,cwd=R,capture_output=True,timeout=120)
+     p=subprocess.run(cmd,cwd=R,capture_output=True,timeout=120,env=env)
      data=p.stdout+p.stderr;status=p.returncode
     except subprocess.TimeoutExpired as e:data=(e.stdout or b'')+(e.stderr or b'')+b'\nTIMEOUT 120s\n';status=124
     (R/f'target/probes/tls-{name}-{tier}.log').write_bytes(data)

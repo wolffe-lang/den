@@ -1,7 +1,10 @@
 fn main() -> int {
     for mode in 0..8 {
         fs_write_text("target/open-file", "abcdef") else |_| { return 1 }
-        let fd = fs_open_mode("target/open-file", mode) else |e| { print("mode={mode} open={e}"); continue }
+        let fd = fs_open_mode("target/open-file", mode) else |e| {
+            print("mode={mode} open={e}")
+            continue
+        }
         fs_write(fd, "X") else |e| { print("mode={mode} write={e}") }
         fs_seek(fd, 0, 0) else |e| { print("mode={mode} seek={e}"); -1 }
         let got = fs_read(fd, 6) else |e| { print("mode={mode} read={e}"); "<no read>" }

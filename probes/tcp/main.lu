@@ -1,7 +1,10 @@
 use std.net
 
 fn main() -> int {
-    var listener = net.listen_with("127.0.0.1:0", net.listen_opts()) else |e| { eprint("listen={e}"); return 1 }
+    var listener = net.listen_with("127.0.0.1:0", net.listen_opts()) else |e| {
+        eprint("listen={e}")
+        return 1
+    }
     let port = net.port(listener) else |_| { return 1 }
     var client = net.connect(net.loopback(port)) else |e| { eprint("connect={e}"); return 1 }
     var server = net.accept(mut listener) else |_| { return 1 }

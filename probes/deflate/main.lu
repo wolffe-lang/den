@@ -1,2 +1,3 @@
 use std.compress
+
 fn main() { print(compress.deflate("abc".bytes())) }

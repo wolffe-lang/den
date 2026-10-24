@@ -1,10 +1,15 @@
 fn main() -> int {
     fs_write_text("target/stat-file", "wolves") else |e| { eprint("{e}"); return 1 }
-    fs_set_times("target/stat-file", 1700000000, 123456789, 1700000001, 987654321, false) else |e| { eprint("{e}"); return 1 }
+    fs_set_times("target/stat-file", 1700000000, 123456789, 1700000001, 987654321, false) else |e| {
+        eprint("{e}")
+        return 1
+    }
     let fd = fs_open("target/stat-file") else |e| { eprint("{e}"); return 1 }
     let w = fs_fstat_record(fd) else |e| { eprint("{e}"); return 1 }
     print("record={w}")
-    print("ctime={w[16]}.{w[17]} mtime={w[14]}.{w[15]} dev={w[9]} ino={w[10]} mode={w[4]} uid={w[6]} gid={w[7]} size={w[1]} have={w[3]}")
+    print(
+        "ctime={w[16]}.{w[17]} mtime={w[14]}.{w[15]} dev={w[9]} ino={w[10]} mode={w[4]} uid={w[6]} gid={w[7]} size={w[1]} have={w[3]}",
+    )
     assert(w.len == 20 && w[15] == 987654321 && w[1] == 6)
     fs_close(fd) else |_| {}
     0

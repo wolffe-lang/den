@@ -1,0 +1,39 @@
+Footprint: cross-cutting
+
+## Forbidden
+Clean-room: documentation and black-box git only. No implementation source
+read; no dependency beyond wolf-std and org-own SHA-1. No Mac builds, labels,
+trunk pushes, releases, merges or issue writes. kasumi container, cores 12–15.
+
+## Inputs verified
+- Base a1ca10e; prediction 0c9518d committed before implementation.
+- wolf 0.2.35 cf0c13d3; lupin tag 28547b4 (binary's embedded pin 294d626);
+  std 2386522e. Both release API digest reads are tracked as raw JSON.
+- git 2.56.0 tarball and signature hashed twice; Junio Hamano's primary and
+  signing subkey verified. Default build includes Rust, gettext and HTTPS.
+- R-vc00-1: 575dc7b has no SHA file. Recommend f87dc76 (formatted b603bb8 SHA
+  implementation); adopted provisionally in the provenance header.
+
+## Prediction
+See notes/vc00-evidence/prediction.txt, committed before code. Predicted
+32 cases, 31 not-yet rows, 1 version-shape pass: observed. Predicted missing
+nanoseconds: wrong, full 20-word fstat_record carries them on both machines.
+
+## Evidence index
+- kasumi target-probes-5.log: planner test, checked/native census, both build
+  tiers, hash vectors, corpus twice, differential selftest, matrix and static
+  build twice green. Static SHA-256
+  03a0ff75f63a7833d8b4833338f3e356f485681ff5c1fddd8b7d56a11ea60651.
+- 32 cases: 1 shape-pass, 31 explicit not-yet, zero parity claims.
+- TLS probe and documentation census still being completed.
+- Tool instructions prohibit Markdown report notes; PR body carries the
+  five sections, raw evidence is notes/vc00-evidence/ (not a hidden report).
+
+## Done-when
+- [x] Prediction before code; toolchain and oracle pins by digest
+- [x] Signed default oracle built twice; checked/native surface probes
+- [x] Differential corpus oids reproduced twice; byte-mismatch selftest
+- [x] Static binary built twice with identical digest
+- [ ] Formats and surface documentation, evidence and packaging drafts
+- [ ] vc01 and vc02 contract drafts
+- [ ] CI byte plant observed red; audit quoted; final run status read once
