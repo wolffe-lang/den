@@ -1,0 +1,257 @@
+tiers-test: PASS T1 push is full
+tiers-test: PASS T1 schedule is full
+tiers-test: PASS T1 workflow_dispatch is full
+tiers-test: PASS T1 the full-matrix label is full
+tiers-test: PASS T1 another label is a noop
+tiers-test: PASS T1 a dispatch naming linux is partial
+tiers-test: PASS T1 a dispatch naming no job of the workflow is refused
+tiers-test: PASS T2 code is pr
+tiers-test: PASS T2 prose alone is a noop
+tiers-test: PASS T2 prose beside code is pr
+tiers-test: PASS T3 a path no rule names is full
+tiers-test: PASS T3 unreadable paths are full
+tiers-test: PASS T4 the jobs, in order: ['plan', 'plan-test', 'linux', 'macos', 'tier', 'nightly-red']
+tiers-test: PASS T4 plan-test needs the plan and runs only when it is named
+tiers-test: PASS T4 linux needs the plan and runs only when it is named
+tiers-test: PASS T4 macos needs the plan and runs only when it is named
+tiers-test: PASS T4 tier needs every job, runs unless cancelled, checks the verdict
+tiers-test: PASS T4 cancel-in-progress for pull requests only
+tiers-test: PASS T4 the trunk push, the nightly, the label and the dispatch input
+tiers-test: PASS T6 a green full
+tiers-test: PASS T6 a green pr
+tiers-test: PASS T6 a green noop
+tiers-test: PASS T6 a green partial
+tiers-test: PASS T6 a chosen job failed
+tiers-test: PASS T6 a chosen job skipped
+tiers-test: PASS T6 a job that ran unasked
+tiers-test: PASS T6 a full that chose less
+tiers-test: PASS T6 a failed plan
+tiers-test: PASS T6 a plan with no tier
+tiers-test: PASS T8 no open issue: one is opened, labelled nightly-red, titled 'nightly red: ci on trunk'
+tiers-test: PASS T8 an open issue: a comment on it, no new issue
+tiers-test: PASS T8 a label that already exists is no failure
+tiers-test: PASS T8 the script refuses to run without REPO, WORKFLOW and RUN_URL
+tiers-test: PASS T8 the workflow's name is ci, the title's
+tiers-test: PASS T8 nightly-red runs after the verdict, on a red schedule only, may write issues
+tiers-test: every check passes
+fetch-toolchain: .wolf-bin/ already holds the pin (x86_64-unknown-linux-gnu)
+git version 2.56.0
+cpu: x86_64
+no commit associated with this build
+sizeof-long: 8
+sizeof-size_t: 8
+shell-path: /bin/sh
+rust: enabled
+feature: fsmonitor--daemon
+gettext: enabled
+libcurl: 8.5.0
+OpenSSL: OpenSSL 3.0.13 30 Jan 2024
+zlib: 1.3
+SHA-1: SHA1_DC
+SHA-256: SHA256_BLK
+default-ref-format: files
+default-hash: sha1
+/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git
+build: target/native/den
+build: target/release/den
+FIPS SHA-1 abc=a9993e364706816aba3e25717850c26c9cd0d89d; SHA-256 abc=ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad; 56-byte vectors pass
+{"commit":"cf0c13d","diagnostics":[],"file":"src/hash_test.lu","impl":"wolfgang","impl_version":"0.2.35","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"FIPS SHA-1 abc=a9993e364706816aba3e25717850c26c9cd0d89d; SHA-256 abc=ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad; 56-byte vectors pass\n","stdout_sha256":"59204e6e0720b78f4497b398e519ffe27d8d7050e64ff506f52e63275861a567","verdict":"exit(0)","warnings":[]}
+corpus: 9 repositories, oids identical in two independent builds
+selftest: actual classifier rejects planted one-byte version; stdout/repository plants rejected; exact review binding passes
+shape-pass: version
+not-yet: init
+not-yet: hash-object
+not-yet: cat-type
+not-yet: cat-size
+not-yet: cat-pretty
+not-yet: write-tree
+not-yet: add
+not-yet: status-short
+not-yet: status-long
+not-yet: commit
+not-yet: rm
+not-yet: mv
+not-yet: restore
+not-yet: diff
+not-yet: diff-renames
+not-yet: log-default
+not-yet: log-oneline
+not-yet: show
+not-yet: branch
+not-yet: tag
+not-yet: switch
+not-yet: reset
+not-yet: merge
+not-yet: rebase
+not-yet: blame
+not-yet: stash
+not-yet: notes
+not-yet: rev-parse
+not-yet: fsck
+not-yet: count-objects
+not-yet: diff-symlink
+{"not-yet": 31, "shape-pass": 1}
+not-yet: hash-object
+{"not-yet": 1}
+gate: strict not-yet rejected as intended
+oracle: filter selected no cases
+gate: empty selection rejected as intended
+build: target/static/den
+build: target/static/den
+den 0.0.0 (built with wolf 0.2.35)
+den 03a0ff75f63a7833d8b4833338f3e356f485681ff5c1fddd8b7d56a11ea60651 14700920
+den (built twice, the same digest); stripped: 1237528 bytes, sha256 095edba57ef5fe7bed731c0e7875d76288b2edb7034b4007e6d54469f47a6693
+linked against: /usr/lib/gcc/x86_64-linux-gnu/13/../../../x86_64-linux-gnu/libc.a
+{"probe": "argv0", "tier": "native", "status": "absent", "exit": 2, "log": "target/probes/argv0-native.log"}
+{"probe": "argv0", "tier": "checked", "status": "absent", "exit": 0, "log": "target/probes/argv0-checked.log"}
+{"probe": "bigint", "tier": "native", "status": "absent", "exit": 2, "log": "target/probes/bigint-native.log"}
+{"probe": "bigint", "tier": "checked", "status": "absent", "exit": 0, "log": "target/probes/bigint-checked.log"}
+{"probe": "deflate", "tier": "native", "status": "absent", "exit": 2, "log": "target/probes/deflate-native.log"}
+{"probe": "deflate", "tier": "checked", "status": "absent", "exit": 0, "log": "target/probes/deflate-checked.log"}
+{"probe": "files", "tier": "native", "status": "present", "exit": 0, "log": "target/probes/files-native.log"}
+{"probe": "files", "tier": "checked", "status": "present", "exit": 0, "log": "target/probes/files-checked.log"}
+{"probe": "glob", "tier": "native", "status": "absent", "exit": 2, "log": "target/probes/glob-native.log"}
+{"probe": "glob", "tier": "checked", "status": "absent", "exit": 0, "log": "target/probes/glob-checked.log"}
+{"probe": "hash", "tier": "native", "status": "present", "exit": 0, "log": "target/probes/hash-native.log"}
+{"probe": "hash", "tier": "checked", "status": "present", "exit": 0, "log": "target/probes/hash-checked.log"}
+{"probe": "mmap", "tier": "native", "status": "absent", "exit": 2, "log": "target/probes/mmap-native.log"}
+{"probe": "mmap", "tier": "checked", "status": "absent", "exit": 0, "log": "target/probes/mmap-checked.log"}
+{"probe": "muzzle", "tier": "native", "status": "present", "exit": 0, "log": "target/probes/muzzle-native.log"}
+{"probe": "muzzle", "tier": "checked", "status": "present", "exit": 0, "log": "target/probes/muzzle-checked.log"}
+{"probe": "open", "tier": "native", "status": "present", "exit": 0, "log": "target/probes/open-native.log"}
+{"probe": "open", "tier": "checked", "status": "present", "exit": 0, "log": "target/probes/open-checked.log"}
+{"probe": "paths", "tier": "native", "status": "present", "exit": 0, "log": "target/probes/paths-native.log"}
+{"probe": "paths", "tier": "checked", "status": "present", "exit": 0, "log": "target/probes/paths-checked.log"}
+{"probe": "process", "tier": "native", "status": "present", "exit": 0, "log": "target/probes/process-native.log"}
+{"probe": "process", "tier": "checked", "status": "present", "exit": 0, "log": "target/probes/process-checked.log"}
+{"probe": "read-at", "tier": "native", "status": "present", "exit": 0, "log": "target/probes/read-at-native.log"}
+{"probe": "read-at", "tier": "checked", "status": "present", "exit": 0, "log": "target/probes/read-at-checked.log"}
+{"probe": "regex", "tier": "native", "status": "absent", "exit": 2, "log": "target/probes/regex-native.log"}
+{"probe": "regex", "tier": "checked", "status": "absent", "exit": 0, "log": "target/probes/regex-checked.log"}
+{"probe": "stat", "tier": "native", "status": "present", "exit": 0, "log": "target/probes/stat-native.log"}
+{"probe": "stat", "tier": "checked", "status": "present", "exit": 0, "log": "target/probes/stat-checked.log"}
+{"probe": "tcp", "tier": "native", "status": "present", "exit": 0, "log": "target/probes/tcp-native.log"}
+{"probe": "tcp", "tier": "checked", "status": "present", "exit": 0, "log": "target/probes/tcp-checked.log"}
+{"probe": "term", "tier": "native", "status": "present", "exit": 0, "log": "target/probes/term-native.log"}
+{"probe": "term", "tier": "checked", "status": "present", "exit": 0, "log": "target/probes/term-checked.log"}
+{"probe": "time", "tier": "native", "status": "present", "exit": 0, "log": "target/probes/time-native.log"}
+{"probe": "time", "tier": "checked", "status": "present", "exit": 0, "log": "target/probes/time-checked.log"}
+not-yet: status-short
+not-yet: status-long
+{"not-yet": 2}
+{
+  "compression": {
+    "core.compression=9": {
+      "matching_zlib_levels": [
+        7,
+        8,
+        9
+      ],
+      "sha256": "af3ca86e356a106ad9ce54412647bb1d63fa672cc7c5e14cb8c945adefd74ff0",
+      "size": 627
+    },
+    "core.looseCompression=0": {
+      "matching_zlib_levels": [
+        0
+      ],
+      "sha256": "bdfe94acd2dbec3fd26c7797a2130dbcf3f4c2ca5a7072c3c35392564ad0f65b",
+      "size": 95259
+    },
+    "default": {
+      "matching_zlib_levels": [
+        1
+      ],
+      "sha256": "438321dd23c0bd9ef26c16e92a7882cada652ad642eca76d0a0731d4a136a6c8",
+      "size": 953
+    }
+  },
+  "oids": {
+    "blob": "4a58007052a65fbc2fc3f910f2855f45a4058e74",
+    "commit": "a6e91b14eec8022f510b48963f5931d148496bbe",
+    "empty-blob": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+    "empty-tree": "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+    "minimal-commit": "b1f43464d4bdeb3d50063f1e43bfc0ef11b49fc3",
+    "tree": "68ba7e4f796cbce5ed86bad3e9df986fb138d99f"
+  },
+  "pack_objects": 2,
+  "sizes": {
+    "blob.loose": 21,
+    "commit.loose": 126,
+    "empty-blob.loose": 15,
+    "empty-tree.loose": 15,
+    "minimal-commit.loose": 120,
+    "tree.loose": 76
+  }
+}
+bytes=100000000 nanoseconds=8710177
+	Command being timed: "target/probes/read-at"
+	User time (seconds): 0.00
+	System time (seconds): 0.00
+	Percent of CPU this job got: 100%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:00.00
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 2428
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 138
+	Voluntary context switches: 1
+	Involuntary context switches: 1
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 0
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+bytes=100000000 nanoseconds=8339710
+	Command being timed: "target/probes/read-at"
+	User time (seconds): 0.00
+	System time (seconds): 0.00
+	Percent of CPU this job got: 100%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:00.00
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 2588
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 140
+	Voluntary context switches: 1
+	Involuntary context switches: 1
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 0
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+bytes=100000000 nanoseconds=8495314
+	Command being timed: "target/probes/read-at"
+	User time (seconds): 0.00
+	System time (seconds): 0.00
+	Percent of CPU this job got: 87%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:00.00
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 2652
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 140
+	Voluntary context switches: 1
+	Involuntary context switches: 0
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 0
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0

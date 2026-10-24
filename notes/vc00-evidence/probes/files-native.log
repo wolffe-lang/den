@@ -2,7 +2,7 @@ entry=[122]
 entry=[97]
 entry=[109]
 link=[114, 101, 110, 97, 109, 101, 100]
-lstat=Info { kind: 3, size: 7, modified_ms: 1792873898342, have: 1048575, mode: 511, nlink: 1, uid: 0, gid: 0, blocks: 8, dev: 53, ino: 271527174, rdev: 0, atime_s: 1792873898, atime_ns: 342242806, mtime_s: 1792873898, mtime_ns: 342242806, ctime_s: 1792873898, ctime_ns: 342242806, btime_s: 1792873898, btime_ns: 342242806 }
+lstat=Info { kind: 3, size: 7, modified_ms: 1792874847542, have: 1048575, mode: 511, nlink: 1, uid: 0, gid: 0, blocks: 8, dev: 53, ino: 272217926, rdev: 0, atime_s: 1792874847, atime_ns: 542566993, mtime_s: 1792874847, mtime_ns: 542566993, ctime_s: 1792874847, ctime_ns: 542566993, btime_s: 1792874847, btime_ns: 542566993 }
 realpath=/work/den/target/renamed
 	Command being timed: "/work/den/target/probes/files"
 	User time (seconds): 0.00
@@ -13,15 +13,15 @@ realpath=/work/den/target/renamed
 	Average unshared data size (kbytes): 0
 	Average stack size (kbytes): 0
 	Average total size (kbytes): 0
-	Maximum resident set size (kbytes): 2380
+	Maximum resident set size (kbytes): 2352
 	Average resident set size (kbytes): 0
 	Major (requiring I/O) page faults: 0
 	Minor (reclaiming a frame) page faults: 97
-	Voluntary context switches: 8
-	Involuntary context switches: 4
+	Voluntary context switches: 9
+	Involuntary context switches: 5
 	Swaps: 0
 	File system inputs: 0
-	File system outputs: 224
+	File system outputs: 320
 	Socket messages sent: 0
 	Socket messages received: 0
 	Signals delivered: 0

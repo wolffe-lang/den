@@ -2,16 +2,16 @@ den needs wolf-std, not muzzle; a future C libden needs C ABI allocation ownersh
 	Command being timed: "/work/den/target/probes/muzzle"
 	User time (seconds): 0.00
 	System time (seconds): 0.00
-	Percent of CPU this job got: 88%
+	Percent of CPU this job got: 87%
 	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:00.00
 	Average shared text size (kbytes): 0
 	Average unshared data size (kbytes): 0
 	Average stack size (kbytes): 0
 	Average total size (kbytes): 0
-	Maximum resident set size (kbytes): 2068
+	Maximum resident set size (kbytes): 2056
 	Average resident set size (kbytes): 0
 	Major (requiring I/O) page faults: 0
-	Minor (reclaiming a frame) page faults: 87
+	Minor (reclaiming a frame) page faults: 84
 	Voluntary context switches: 1
 	Involuntary context switches: 0
 	Swaps: 0
