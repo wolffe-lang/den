@@ -22,6 +22,8 @@ cache.mkdir(parents=True, exist_ok=True)
 download = cache / 'download'; download.mkdir(exist_ok=True)
 for name, urlkey, digestkey in [('git.tar.xz','url','sha256'),('git.tar.sign','sig_url','sig_sha256'),('key.asc','key_url','key_sha256')]:
     p = download / name
+    if name == 'key.asc':
+        shutil.copyfile(R/'tools/oracle-maintainer.asc', p)
     if not p.exists():
         run('curl','-fsSL','--retry','3',pin[urlkey],'-o',str(p))
     for read in (1,2):
