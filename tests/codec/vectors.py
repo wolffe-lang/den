@@ -110,6 +110,18 @@ def vectors():
     lens=[0]*19;lens[0]=lens[2]=1;b=dynamic_header(lens)
     for i in range(258):b.code(1 if i==256 else 0,1)
     bad('incomplete-literal-tree',b.data(),'invalid',raw=True)
+    lens=[0]*19;lens[0]=lens[1]=1;b=dynamic_header(lens,nd=3)
+    for i in range(260):b.code(1 if i>=256 else 0,1)
+    bad('oversubscribed-distance-tree',b.data(),'invalid',raw=True)
+    lens=[0]*19;lens[0]=1;lens[1]=lens[2]=2;b=dynamic_header(lens)
+    for _ in range(256):b.code(0,1)
+    b.code(2,2);b.code(3,2)
+    bad('incomplete-distance-tree',b.data(),'invalid',raw=True)
+    # A literal/length tree containing EOB and length 257, no distance codes.
+    lens=[0]*19;lens[0]=lens[1]=1;b=dynamic_header(lens,nl=258)
+    for _ in range(256):b.code(0,1)
+    b.code(1,1);b.code(1,1);b.code(0,1);b.code(1,1)
+    bad('empty-distance-used',b.data(),'invalid',raw=True)
     return rows
 
 
@@ -121,3 +133,25 @@ def payloads():
         yield 'alphabet-'+str(n),(bytes(range(256))*((n+255)//256))[:n]
     yield 'long-distance', rng.randbytes(32768)*2
     yield 'text',b'The quick brown wolf keeps its history in the den.\n'*2000
+
+
+def bounds():
+    # Independent RFC fixed codes exercise every length and each distance range.
+    bases=[3,4,5,6,7,8,9,10,11,13,15,17,19,23,27,31,35,43,51,59,67,83,99,115,131,163,195,227,258]
+    def match(length,distance):
+        b=Bits();b.put(3,3)
+        lc=max(i for i,x in enumerate(bases) if x<=length)
+        fixed(b,257+lc);extra=0 if lc<8 or lc==28 else (lc-4)//4
+        b.put(length-bases[lc],extra)
+        dc=max(i for i in range(30) if (i+1 if i<4 else (2+i%2)*(1<<(i//2-1))+1)<=distance)
+        base=dc+1 if dc<4 else (2+dc%2)*(1<<(dc//2-1))+1
+        b.code(dc,5);b.put(distance-base,0 if dc<4 else dc//2-1);fixed(b,256)
+        prefix=bytes(i%256 for i in range(distance))
+        stored=b'\x00'+len(prefix).to_bytes(2,'little')+(65535-len(prefix)).to_bytes(2,'little')+prefix
+        out=prefix+bytes(prefix[i%distance] for i in range(length))
+        return stored+b.data(),out
+    for n in range(3,259):yield 'length-'+str(n),*match(n,1)
+    for dc in range(30):
+        base=dc+1 if dc<4 else (2+dc%2)*(1<<(dc//2-1))+1
+        extra=0 if dc<4 else dc//2-1
+        for distance in sorted({base,base+(1<<extra)-1}):yield 'distance-'+str(distance),*match(258,distance)

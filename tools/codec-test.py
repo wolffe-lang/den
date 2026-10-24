@@ -56,6 +56,11 @@ def main():
             assert data==row['decoded'] and meta==[row['consumed'],len(data)],row['name']
         print('PASS',row['name'],flush=True)
     if not a.vectors_only:
+        for name,encoded,expected in v.bounds():
+            assert zlib.decompress(encoded,-15)==expected,name
+            actual,meta=call('inflate_raw',encoded,len(expected))
+            assert actual==expected and meta==[len(encoded),len(expected)],name
+        print('PASS every length and distance range; cross-block 32768 history',flush=True)
         for name,raw in v.payloads():
             for level,strategy in [(0,zlib.Z_DEFAULT_STRATEGY),(1,zlib.Z_FIXED),(6,zlib.Z_DEFAULT_STRATEGY)]:
                 encoded=v.stream(raw,level,strategy)
@@ -74,5 +79,7 @@ def main():
             call('deflate',raw,-1,error='invalid')
             print('PASS payload',name,flush=True)
     summary=dict(zlib_compile=zlib.ZLIB_VERSION,zlib_runtime=zlib.ZLIB_RUNTIME_VERSION,calls=count,vectors=len(rows),sizes=results)
-    (work/'summary.json').write_text(json.dumps(summary,indent=2)+'\n');print(json.dumps(summary),flush=True)
+    (work/'summary.json').write_text(json.dumps(summary,indent=2)+'\n')
+    assert all(r['ratio']<=1.25 for r in results),results
+    print(json.dumps(summary),flush=True)
 if __name__=='__main__':main()

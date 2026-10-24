@@ -1,0 +1,35 @@
+//! member: false
+
+use zlib
+
+fn rejected(src: List[byte], level: int, cap: int) -> str {
+    let result = zlib.deflate(src, level, cap) else |e| { return "{e}" }
+    "success {result.len}"
+}
+
+fn main() -> int ! {
+    invalid,
+    unsupported_level,
+    limit,
+    truncated,
+    bad_header,
+    dictionary,
+    checksum,
+} {
+    let input: List[byte] = [0 as byte, 255 as byte, 0 as byte, 255 as byte, 0 as byte, 255 as byte]
+    for level in [0, 1, -1] {
+        region sample {
+            let encoded = zlib.deflate(input, level, 100)?
+            let decoded = zlib.inflate(encoded, input.len)?
+            assert(decoded.data.len == input.len && decoded.consumed == encoded.len)
+            for i in 0..input.len { assert(decoded.data[i] == input[i]) }
+            let exact = zlib.deflate(input, level, encoded.len)?
+            assert(exact.len == encoded.len)
+            assert(rejected(input, level, encoded.len - 1) == "limit")
+        }
+    }
+    assert(rejected(input, 2, 100) == "unsupported_level")
+    assert(rejected(input, 1, -1) == "invalid")
+    print("PASS encoder levels, binary data, exact and short caps")
+    0
+}

@@ -1,0 +1,19 @@
+//! member: false
+
+// White-box invariants for the original bounded table builder.
+fn main() -> int ! {invalid} {
+    var freq = zeros(286)
+    freq[0] = 1
+    freq[1] = 1
+    for i in 2..23 { freq[i] = freq[i - 1] + freq[i - 2] }
+    let limited = lengths(freq, 15, false)
+    let built = tree(limited, 1)?
+    assert(built.symbols.len == 23)
+    for width in limited { assert(width >= 0 && width <= 15) }
+    let one = lengths(zeros(30), 15, false)
+    assert(one[0] == 1)
+    let complete = tree(lengths(zeros(19), 7, true), 0)?
+    assert(complete.symbols.len == 2)
+    print("PASS length-limited tree; complete header; empty distance encoder")
+    0
+}
