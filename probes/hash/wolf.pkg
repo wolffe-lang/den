@@ -1,0 +1,7 @@
+pkg {
+    name: "hash-probe",
+    edition: "1",
+    deps: [
+        { name: "hash", path: "../../src/hash" },
+    ],
+}

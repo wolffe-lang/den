@@ -1,0 +1,20 @@
+use std.net
+
+fn main() -> int {
+    var listener = net.listen_with("127.0.0.1:0", net.listen_opts()) else |e| { eprint("listen={e}"); return 1 }
+    let port = net.port(listener) else |_| { return 1 }
+    var client = net.connect(net.loopback(port)) else |e| { eprint("connect={e}"); return 1 }
+    var server = net.accept(mut listener) else |_| { return 1 }
+    net.set_deadline(mut client, 5000) else |_| { return 1 }
+    net.set_deadline(mut server, 5000) else |_| { return 1 }
+    net.write_bytes(mut client, [0 as byte, 255 as byte, 10 as byte]) else |_| { return 1 }
+    let inbound = net.read_bytes(mut server, 3) else |_| { return 1 }
+    net.write_bytes(mut server, inbound) else |_| { return 1 }
+    let back = net.read_bytes(mut client, 3) else |_| { return 1 }
+    print("TCP bidirectional={back}")
+    assert(back == [0 as byte, 255 as byte, 10 as byte])
+    net.close(take client) else |_| {}
+    net.close(take server) else |_| {}
+    net.close_listener(take listener) else |_| {}
+    0
+}

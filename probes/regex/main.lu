@@ -1,0 +1,2 @@
+use std.regex
+fn main() { print(regex.matches("a", "a")) }

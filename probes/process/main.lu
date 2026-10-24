@@ -1,0 +1,15 @@
+fn main() -> int {
+    let (ir, iw) = os_pipe() else |_| { return 1 }
+    let (orr, ow) = os_pipe() else |_| { return 1 }
+    let child = os_spawn_fds("/bin/sh", ["-c", "IFS= read -r x; printf '%s' \"$x\"; exit 7"], [0, ir, 1, ow]) else |e| { eprint("spawn={e}"); return 1 }
+    fs_close(ir) else |_| {}
+    fs_close(ow) else |_| {}
+    fs_write(iw, "both ways\n") else |_| { return 1 }
+    fs_close(iw) else |_| {}
+    let output = fs_read_chunk(orr, 64) else |e| { eprint("read={e}"); return 1 }
+    fs_close(orr) else |_| {}
+    let status = os_wait(child) else |e| { eprint("wait={e}"); return 1 }
+    print("stdout={output} wait={status}")
+    assert(output.len == 9 && status == 7)
+    0
+}

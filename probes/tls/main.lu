@@ -1,0 +1,23 @@
+use std.net
+use std.time
+use std.x.tls.client
+
+fn main() -> int {
+    let args = env_args()
+    let addr = if args.len > 0 then args[0] else "127.0.0.1:19443"
+    let host = if args.len > 1 then args[1] else "localhost"
+    let anchor = if args.len > 2 then args[2] else "target/tls/anchor.der"
+    let roots = fs_read_bytes(anchor) else |e| { eprint("roots={e}"); return 1 }
+    var sock = net.connect(addr) else |e| { eprint("connect={e}"); return 1 }
+    net.set_deadline(mut sock, 15000) else |_| { return 1 }
+    let random = fs_read_bytes("target/tls/random") else |_| { return 1 }
+    let scalar = fs_read_bytes("target/tls/scalar") else |_| { return 1 }
+    let pending = client.begin(take sock, host, roots, time.unix_ms() / 1000, random, scalar) else |e| { eprint("begin={e}"); return 1 }
+    var tls = client.complete(take pending) else |e| { eprint("complete={e}"); return 1 }
+    print("TLS handshake complete: {host}")
+    client.write(mut tls, "GET / HTTP/1.0\r\nHost: {host}\r\n\r\n".bytes()) else |e| { eprint("write={e}"); return 1 }
+    let reply = client.read(mut tls) else |e| { eprint("read={e}"); return 1 }
+    print("application bytes={reply.len}")
+    client.close(take tls) else |_| {}
+    0
+}

@@ -1,0 +1,6 @@
+fn main() -> int {
+    let name = str_from_utf8([255 as byte]) else |e| { print("raw path conversion={e}"); return 0 }
+    let fd = fs_open(name) else |e| { print("open={e}"); return 1 }
+    fs_close(fd) else |_| {}
+    1
+}

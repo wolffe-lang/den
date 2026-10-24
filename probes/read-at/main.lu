@@ -1,0 +1,17 @@
+use std.time
+
+fn main() -> int {
+    let fd = fs_open("target/100mb") else |e| { eprint("{e}"); return 1 }
+    let start = time.monotonic_ns()
+    var total: int = 0
+    while total < 100000000 {
+        region window {
+            let b = fs_read_at(fd, total, 65536) else |e| { eprint("{e}"); return 1 }
+            total += b.len
+        }
+    }
+    let ns = time.monotonic_ns() - start
+    print("bytes={total} nanoseconds={ns}")
+    fs_close(fd) else |_| {}
+    0
+}

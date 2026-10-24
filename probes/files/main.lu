@@ -1,0 +1,25 @@
+use std.fs
+
+fn main() -> int {
+    fs.create_dir_all("target/entries") else |_| { return 1 }
+    for name in ["z", "a", "m"] {
+        fs.write_text("target/entries/{name}", name) else |_| { return 1 }
+    }
+    let rows = fs.entries("target/entries") else |e| { eprint("{e}"); return 1 }
+    for row in rows { print("entry={row.name}") }
+    fs.remove("target/exclusive") else |_| {}
+    var f = fs.create_new_with_mode("target/exclusive", 384) else |e| { eprint("{e}"); return 1 }
+    fs.write(mut f, "data") else |_| { return 1 }
+    fs.sync(mut f) else |_| { return 1 }
+    fs_lock(f.fd, 2) else |e| { eprint("lock={e}"); return 1 }
+    fs_unlock(f.fd) else |_| { return 1 }
+    fs.close(take f) else |_| { return 1 }
+    fs.move_file("target/exclusive", "target/renamed") else |_| { return 1 }
+    fs.sync_dir("target") else |_| { return 1 }
+    fs.remove("target/link") else |_| {}
+    fs.symlink("renamed", "target/link") else |_| { return 1 }
+    print("link={fs.read_link("target/link") else List[byte]()}")
+    print("lstat={fs.lstat("target/link") else |_| { return 1 }}")
+    print("realpath={fs.realpath("target/link") else "<error>"}")
+    0
+}

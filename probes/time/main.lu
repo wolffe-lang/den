@@ -1,0 +1,9 @@
+use std.time.local
+
+fn main() -> int {
+    let t = local.local(1700000000) else |e| { eprint("local={e}"); return 1 }
+    let text = local.format(t, "%a %b %e %H:%M:%S %Y %z") else |e| { eprint("format={e}"); return 1 }
+    print(text)
+    assert(text == "Tue Nov 14 22:13:20 2023 +0000")
+    0
+}

@@ -1,0 +1,9 @@
+#!/bin/sh
+# Native and actual checked machine. Every refusal printed and counted.
+set -eu
+root=$(cd "$(dirname "$0")/.." && pwd)
+cd "$root"
+. tools/lib-toolchain.sh
+mkdir -p target/probes target/tls
+truncate -s 100000000 target/100mb
+python3 -I tools/probes.py "$@"

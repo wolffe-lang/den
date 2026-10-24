@@ -1,0 +1,120 @@
+// SHA-1 rounds vendored from wolffe-lang/boreutils f87dc76,
+// src/checksum/sha.lu:9-49 (org-own, GPL-3.0-or-later + Training Data Permission).
+// 575dc7b has no such file: proposed provenance correction R-vc00-1.
+// State/streaming adapter follows that revision digest.lu, SHA-1 only.
+// FIPS 180-4 sections 4.1.1, 5, 6.1; no other implementation read.
+fn sha1_block(mut d: Digest) {
+    load_words(mut d, 4, false)
+    var i = 16
+    while i < 80 {
+        d.w[i] = rotr32(d.w[i - 3] ^ d.w[i - 8] ^ d.w[i - 14] ^ d.w[i - 16], 31)
+        i += 1
+    }
+    var a = d.h[0]
+    var b = d.h[1]
+    var c = d.h[2]
+    var e = d.h[3]
+    var f = d.h[4]
+    i = 0
+    while i < 80 {
+        var choose: wrapping[u64] = b ^ c ^ e
+        var k: wrapping[u64] = 0xca62c1d6
+        if i < 20 {
+            choose = b & c ^ (b ^ 0xffffffff) & e
+            k = 0x5a827999
+        } else if i < 40 {
+            k = 0x6ed9eba1
+        } else if i < 60 {
+            choose = b & c ^ b & e ^ c & e
+            k = 0x8f1bbcdc
+        }
+        let next = rotr32(a, 27) + choose + f + k + d.w[i] & 0xffffffff
+        f = e
+        e = c
+        c = rotr32(b, 2)
+        b = a
+        a = next
+        i += 1
+    }
+    d.h[0] = d.h[0] + a & 0xffffffff
+    d.h[1] = d.h[1] + b & 0xffffffff
+    d.h[2] = d.h[2] + c & 0xffffffff
+    d.h[3] = d.h[3] + e & 0xffffffff
+    d.h[4] = d.h[4] + f & 0xffffffff
+}
+
+pub struct Digest {
+    h: List[wrapping[u64]],
+    w: List[wrapping[u64]],
+    buf: List[byte],
+    used: int,
+    count: wrapping[u64],
+}
+
+pub fn new1() -> Digest {
+    var d = Digest {
+        h: [0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476, 0xc3d2e1f0],
+        w: List[wrapping[u64]](),
+        buf: List[byte](),
+        used: 0,
+        count: 0,
+    }
+    for _ in 0..80 { (mut d.w).push(0) }
+    for _ in 0..64 { (mut d.buf).push(0 as byte) }
+    d
+}
+
+fn rotr32(x: wrapping[u64], n: int) -> wrapping[u64] {
+    (x >> n as wrapping[u64] | x << (32 - n) as wrapping[u64]) & 0xffffffff
+}
+
+fn load_words(mut d: Digest, width: int, little: bool) {
+    var i = 0
+    while i < 16 {
+        var x: wrapping[u64] = 0
+        var j = 0
+        while j < width {
+            let shift = (if little then j else width - 1 - j) * 8
+            x = x | d.buf[i * width + j] as int as wrapping[u64] << shift as wrapping[u64]
+            j += 1
+        }
+        d.w[i] = x
+        i += 1
+    }
+}
+
+pub fn update1(mut d: Digest, data: List[byte]) {
+    for b in data {
+        d.buf[d.used] = b
+        d.used += 1
+        d.count += 1
+        if d.used == 64 { sha1_block(mut d); d.used = 0 }
+    }
+}
+
+pub fn final1(take state: Digest) -> List[byte] {
+    var d = take state
+    d.buf[d.used] = 128 as byte
+    d.used += 1
+    if d.used > 56 {
+        while d.used < 64 { d.buf[d.used] = 0 as byte; d.used += 1 }
+        sha1_block(mut d)
+        d.used = 0
+    }
+    while d.used < 64 { d.buf[d.used] = 0 as byte; d.used += 1 }
+    let bits = d.count << 3
+    for j in 0..8 { d.buf[63 - j] = (bits >> (j * 8) as wrapping[u64] & 255) as int as byte }
+    sha1_block(mut d)
+    var result = List[byte]()
+    for j in 0..20 {
+        let shift = (3 - j % 4) * 8
+        (mut result).push((d.h[j / 4] >> shift as wrapping[u64] & 255) as int as byte)
+    }
+    result
+}
+
+pub fn sum1(data: List[byte]) -> List[byte] {
+    var d = new1()
+    update1(mut d, data)
+    final1(take d)
+}
