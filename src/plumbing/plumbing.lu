@@ -55,6 +55,14 @@ fn output(bytes: List[byte]) -> () ! {invalid, io} {
 }
 
 fn init(args: List[str]) -> int ! Errors {
+    for name in ["GIT_DIR", "GIT_OBJECT_DIRECTORY", "GIT_COMMON_DIR"] {
+        if (env_get(name) else "") != "" { return Unsupported("init {name}") }
+    }
+    let global = repository.global_config()?
+    let template = env_get("GIT_TEMPLATE_DIR") else (global["init.templatedir"] else "")
+    if template != "" && (!fs.is_dir(template) || fs.entries(template)?.len != 0) {
+        return Unsupported("init nonempty template")
+    }
     var bare = false
     var quiet = false
     var branch = ""
@@ -200,6 +208,35 @@ fn hash_object(args: List[str]) -> int ! Errors {
     0
 }
 
+fn ambiguity(repo: repository.Repo, name: str) -> () ! Errors {
+    let prefix = oid.prefix("sha1", name)?
+    let names = fs.read_dir("{repo.gitdir}/objects/{prefix[0..2]}") else |_| { return io }
+    var candidates = List[str]()
+    for suffix in names {
+        let text = "{prefix[0..2]}{suffix}"
+        let _ = oid.parse("sha1", text) else |_| { continue }
+        if text.starts_with(prefix) { (mut candidates).push(text) }
+    }
+    for candidate in candidates {
+        let stored = object.read_object(repo, oid.parse("sha1", candidate)?, 1000000000)?
+        if stored.kind == "commit" || stored.kind == "tag" {
+            return Unsupported("cat-file ambiguous history hints")
+        }
+    }
+    eprint("error: short object ID {name} is ambiguous")
+    eprint("hint: The candidates are:")
+    for candidate in candidates {
+        var width = 7
+        for other in candidates {
+            if other != candidate {
+                while width < 40 && candidate[0..width] == other[0..width] { width += 1 }
+            }
+        }
+        let stored = object.read_object(repo, oid.parse("sha1", candidate)?, 1000000000)?
+        eprint("hint:   {candidate[0..width]} {stored.kind}")
+    }
+}
+
 fn cat_file(args: List[str]) -> int ! Errors {
     if args.len != 3 { return Unsupported("cat-file options") }
     let option = args[1]
@@ -208,9 +245,13 @@ fn cat_file(args: List[str]) -> int ! Errors {
     }
     let repo = repository.discover(".")?
     let name = args[2]
-    let id = object.resolve(repo, name) else |_| {
-        eprint("fatal: Not a valid object name {name}")
-        return 128
+    let id = object.resolve(repo, name) else |e| match e {
+        ambiguous => {
+            ambiguity(repo, name)?
+            eprint("fatal: Not a valid object name {name}")
+            return 128
+        },
+        _ => { eprint("fatal: Not a valid object name {name}"); return 128 },
     }
     let stored = object.read_object(repo, id, 1000000000) else |e| match e {
         not_found => {
@@ -318,6 +359,7 @@ fn valid_tagger(text: str) -> bool {
     if !date[1].starts_with("+") && !date[1].starts_with("-") { return false }
     for b in date[0].bytes() { if b as int < 48 || b as int > 57 { return false } }
     for b in date[1].bytes()[1..] { if b as int < 48 || b as int > 57 { return false } }
+    if date[0].len > 1 && date[0].starts_with("0") { return false }
     let timestamp = date[0].to_int() else { return false }
     timestamp >= 0
 }

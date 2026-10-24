@@ -47,6 +47,16 @@ for msg in [b'',b'tag',b'tag\n',b'\xff\x00']:
  id=run(D,['mktag'],tag).stdout.strip().decode();assert run(G,['mktag'],tag).stdout.strip().decode()==id
  assert run(D,['cat-file','-p',id]).stdout==tag
 rows.append('trees/commits/tags: modes/nesting/order/parents/continuations/binary messages')
+# Same invalid byte through stdin/-F/mktag, two locales and explicit encoding.
+initial_config=(gd/'config').read_bytes();(repo/'message-ff').write_bytes(b'\xff')
+for locale,encoding in [('C',None),('C.UTF-8',None),('C','ISO-8859-1')]:
+ e=dict(os.environ,LC_ALL=locale)
+ (gd/'config').write_bytes(initial_config+(b'\n[i18n]\ncommitEncoding=ISO-8859-1\n' if encoding else b''))
+ for args,data in [(['commit-tree',tree],b'\xff'),(['commit-tree',tree,'-F','message-ff'],b''),(['mktag'],f'object {commit}\ntype commit\ntag t\ntagger A <a> 1700000000 +0000\n\n'.encode()+b'\xff')]:
+  actual=run(D,args,data,env=e);expected=run(G,args,data,env=e)
+  assert (actual.stdout,actual.stderr)==(expected.stdout,expected.stderr),(locale,encoding,args,actual.stderr,expected.stderr)
+(gd/'config').write_bytes(initial_config)
+rows.append('encoding: stdin/-F/mktag; C/C.UTF-8/ISO-8859-1 byte-and-warning parity')
 run(G,['fsck','--full'])
 # Exclusive install, each injected phase, existing valid/corrupt objects, races.
 payload=root/'payload';payload.write_bytes(b'atomic payload')
@@ -102,6 +112,10 @@ for id,body in collision:
  if path.exists():path.chmod(0o644)
  path.write_bytes(zlib.compress(b'blob '+str(len(body)).encode()+b'\0'+body))
 assert run(C,['lookup',gd,collision[0][0][:4]],expect=1).stderr==b'ambiguous\n'
+for option in ('-p','-t','-s'):
+ actual=run(D,['cat-file',option,collision[0][0][:4]],expect=128)
+ expected=run(G,['cat-file',option,collision[0][0][:4]],expect=128)
+ assert (actual.stdout,actual.stderr)==(expected.stdout,expected.stderr)
 run(C,['lookup',gd,'ffffffffff'],expect=1)
 rows.append('caps: inclusive/negative/bomb; real SHA-1 ambiguous prefix')
 # Reject all unsupported repository/compression formats before writes.
