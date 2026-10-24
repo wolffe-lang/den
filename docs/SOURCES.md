@@ -129,3 +129,35 @@ only (raw.githubusercontent.com/git/git/v2.56.0/Documentation):
 - FIPS 180-4 §§4.1.1, 5.1.1, 5.2.1, 5.3.1, 6.1.1–6.1.2, printed pages
   10, 13–14, 18–20; https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.180-4.pdf.
   SHA-1 implementation remains den's merged, provenance-marked hash module.
+
+## Index and worktree derivation (vc03)
+
+Primary references are Git v2.56.0 Documentation, read as documentation only:
+
+- git-config(1), get, Files, Scopes and Environment; config.adoc, Syntax,
+  Includes and Values. Sections/subsections, implicit booleans, quoting,
+  escapes, continuations and precedence are checked against the binary.
+- gitformat-index(5), File header, Index entry, Cache tree, Resolve undo,
+  Split index, Untracked cache, File System Monitor cache, End of Index Entry,
+  Index Entry Offset Table and Sparse Directory Entries.
+- gitignore(5), Description, Pattern Format, Configuration, Notes, Examples;
+  git-check-ignore(1), Options, Output and Exit Status. The two documented
+  contradictions and their exact binary witnesses are retained in FORMATS.
+- git-add(1), Description and Options; git-rm(1), Description, Options and
+  Examples; git-mv(1), Description and Options; git-status(1), Description,
+  Options, Output (short/porcelain v1), Configuration and Background Refresh.
+- git-commit(1), Description, Options, Commit Information, Files and Hooks;
+  date-formats.adoc in full; config/core.adoc, core.commentChar/commentString.
+- git-restore(1), Description, Options and Examples.
+- The inherited oid/repository/object/hash/zlib modules and their API clients
+  are the only implementation references; no external VCS implementation,
+  sample hook or template source was read. The full-stat and nofollow contracts
+  were checked in wolf-lang cf0c13d spec/11-os.md and bundled wolf-std 2386522e.
+  Current std wrappers are not assumed present in that pinned bundle.
+- githooks(5), Description only: executable hooks, default hooks directory,
+  core.hooksPath and working directory; no sample hooks/templates consulted.
+- gitrevisions(7), included revisions.adoc, HEAD definition and @ shorthand only.
+- Pro Git 2nd edition, section 2.2, Recording Changes to the Repository:
+  Checking the Status of Your Files, Short Status, Staging Modified Files,
+  Ignoring Files, Committing Your Changes, Skipping the Staging Area,
+  Removing Files and Moving Files; https://git-scm.com/book/en/v2/Git-Basics-Recording-Changes-to-the-Repository.

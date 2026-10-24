@@ -106,7 +106,7 @@ scalars. Overlong and surrogate-shaped sequences are repaired bytewise.
 native and release integration gates compare all nine command/environment paths.
 No reviewed difference is needed because the tested CLI behavior matches Git.
 
-## Index v2 (v3/v4 reading later)
+## Index v2, v3 and v4
 
 **gitformat-index(5), Header, Index entry, Extensions.** Network byte order;
 DIRC, u32 version, u32 entry count. Each v2 entry has ten u32 stat words:
@@ -125,6 +125,35 @@ EOIE (end of entries), IEOT (entry offset table). Lowercase mandatory `link`
 (split index) and `sdir` (sparse directories) require explicit refusal until
 implemented; unknown mandatory extensions also refuse. Skipping a cache is
 not permission to discard semantic state or rewrite a format not understood.
+
+### Index write-policy measurements (Git 2.56.0)
+
+A fresh two-file `add` writes no extension. `write-tree` and `commit` add
+TREE with a valid root count and OID. Adding a new root file retains TREE
+as `00 2d 31 20 30 0a` (empty root component, count -1, zero children,
+no OID). Cache children sort by raw component bytes: `a`, `a.`, `a0`.
+Intent-to-add paths are omitted from trees, but their ancestor cache nodes
+remain invalid. With only `d/intent`, the tree is empty and TREE is
+`00 2d 31 20 31 0a 64 00 2d 31 20 30 0a`: invalid root and invalid d child.
+
+`index.version=2` and `=3` both write v2 without extended bits, v3 with
+intent-to-add, then v2 when those bits disappear. Version 4 stays v4.
+The lossless codec preserves a selected v3; the transactional write policy
+performs this measured downgrade separately.
+
+`add --chmod=+x file` leaves a 100644 worktree file unchanged while writing
+index mode **33261 (100755)**; own lstat reports **33188 (100644)**. Mode is
+logical index state, not a universally identical copy of physical permissions.
+Under adopted R-vc03-3, the stat proof normalizes only ctime seconds/nanoseconds,
+mtime seconds/nanoseconds, dev and ino, after proving each against that tool's
+own worktree lstat. Mode, uid, gid and size remain exact between the tools.
+All ten words are retained in each proof row. No index wildcard is used.
+
+`tools/vc03-index-measure.py` and `notes/vc03-evidence/index-oracle.json` retain
+the raw index bytes, TREE payloads, chmod witness and nine version transitions.
+`tools/vc03-behavior.py` also records that explicit add leaves an assume-valid
+entry unchanged, while an explicit skip-worktree path is refused without
+modifying the index.
 
 ## Pack v2, idx v2, deltas
 
@@ -220,6 +249,43 @@ not independent ranges. Stage:path addresses index conflict stages.
 not executed in the MVP. core.hooksPath points to an empty harness directory;
 GIT_EDITOR=false. Sample hook scripts were neither read nor copied into the
 corpus. Commit signing and credential helpers are also deferred.
+
+### Ignore documentation contradictions (Git 2.56.0)
+
+The pinned binary is the compatibility oracle (adopted R-vc03-4 A).
+`gitignore(5)`, Pattern Format, says "Other consecutive asterisks are
+considered regular asterisks and will match according to the previous rules."
+Nevertheless `a/***/file` matches both `a/file` and `a/d/e/file`:
+`check-ignore -v --no-index a/file` exits 0, emits
+`.gitignore:1:a/***/file\ta/file\n`, and has empty stderr. A run of at least
+two stars at a recognized whole-component globstar boundary has the recursive
+behavior; den reproduces that measurement.
+
+`git-check-ignore(1)`, Exit Status, describes 0 as "One or more of the provided
+paths is ignored" and 1 as "None of the provided paths are ignored."
+With the sole pattern `!file`, the ordinary `--no-index file` query exits 1
+and emits nothing. Adding `-v` exits 0 and emits
+`.gitignore:1:!file\tfile\n`, although the path is not excluded. Verbose
+success means a rule matched, including a negation. Stderr is empty in both.
+
+Additional measured behavior: the verbose pattern field preserves raw
+backslashes rather than C-quoting them; NUL ends the effective pattern on its
+physical line, not the whole ignore file. Later lines retain their numbering.
+An initial UTF-8 BOM is ignored. Raw witnesses are in
+`notes/vc03-evidence/behavior-oracle.json`; the generated independent matrix
+is `tools/ignore-oracle.py`. `git-doc-errata.txt` in that evidence directory
+is a draft for review, not an upstream submission.
+
+### Amend and relative dates
+
+`commit --amend` leaves ORIG_HEAD untouched: absence remains absence, and a
+preexisting file retains its bytes (adopted R-vc03-2 A). The original contract
+line asking for an ORIG_HEAD write was a guess, corrected by the oracle.
+The root OID 9c898195cdbc9aea467ac6ef0871143f5d6a2a8a amended to
+76d797c00058b03dc350051f32a1927c2d77f1b2 without creating ORIG_HEAD.
+`--date=now` advances the author time despite a fixed GIT_COMMITTER_DATE;
+it is refused by name in the deterministic interface. Exact commands and
+bytes are retained by `tools/vc03-measure.py` and `oracle-initial.json`.
 
 ## Measured porcelain bytes
 

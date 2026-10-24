@@ -231,3 +231,90 @@ Do not normalize inode/ctime fields or ignore the index in parity snapshots.
 Keep generic stored headers/messages lossless; commit-tree's observed repair
 belongs only at the command edge. General config/date/revision parsing is not
 provided by this milestone. Add no production Git or shell dependency.
+
+## Index and ignore consumer API
+
+The index module now owns full v2/v3/v4 records. `Index` contains version,
+entries and extensions; `Entry` contains the ten ordered u32 stat words,
+algorithm-tagged OID, flags, extended flags and an owned raw byte path.
+`parse` checks framing, bounds, checksum, names/stages/order, padding and
+extensions. `serialize` preserves selected v3, while `serialize_for_write`
+implements Git's v2/v3 downgrade/upgrade policy. Version 4 remains version 4.
+The legacy `parse_v2` API keeps its flat stage-zero contract.
+
+`begin(repo, cap, version)` acquires index.lock before reading. Version 0
+retains the existing selection/default2; 2/3/4 select explicitly. Immediately
+`defer abort(mut tx)`, update `tx.value`, then `commit(mut tx)`. Never copy a
+live transaction. Commit writes complete bytes, syncs, closes, renames and
+syncs the directory; ordinary failures clean only its own lock. TREE and REUC
+are validated and preserved; UNTR, FSMN, EOIE, IEOT, sdir, link and unknown
+extensions refuse by name. Resolving/removing higher-stage entries is refused
+until their REUC generation is implemented, rather than losing undo data.
+
+`replace_entry`, `remove_path` and `invalidate_tree` maintain sorted entries
+and invalidate affected TREE ancestors. `build_trees` returns owned child-first
+tree bodies, root OID and TREE bytes. `write_tree` validates referenced objects,
+publishes the trees and refreshes TREE under the transaction; it is no longer
+a read-only index operation. Intent-to-add entries are omitted from trees,
+with invalid ancestor cache records retained. `entry_from_stat`/`fresh_entry`
+map a full regular-file record and explicit canonical mode; `entry_from_lstat`
+requires actual symlink metadata. Callers own core.fileMode/core.symlinks policy.
+
+The stat comparison canonicalizes **exactly six words**: ctime seconds and
+nanoseconds, mtime seconds and nanoseconds, dev and ino. Each word must first
+match the corresponding tool's own worktree lstat. Mode, uid, gid and size are
+always compared byte for byte between the tools. All ten words remain recorded.
+This adopted R-vc03-3 policy handles --chmod without a wildcard or invented
+physical-mode proof. `tools/index-proof.py` binds proof rows to entry path,
+stage and original stat words; a recomputed checksum cannot excuse corruption.
+
+`ignore.parse` owns rules from binary content. `matches` checks one node;
+`evaluate` checks parent exclusions and precedence. `query` takes Repo,
+worktree root, canonical relative path and lstat directory status; it is
+explicitly untracked, with `query_tracked` providing the caller's index bypass.
+The result carries source, line, effective pattern, physical original line,
+negation and ignored status. `format` renders verbose/plain/NUL records.
+The query does not follow symlink .gitignore files or ancestors. The matcher
+uses iterative O(pattern-atoms × path-bytes) DP, not recursive backtracking.
+Sources are bounded at 16 MiB each, and ~user expansion is refused by name.
+
+Independent clients live in probes/index-client and probes/ignore-client.
+vc04 should consume full Entry paths/modes/OIDs, never legacy flat parse_v2;
+worktree-vs-index compares content and configured modes, not stat words alone.
+vc05 should keep using lossless object headers and HEAD resolution; index and
+ignore results do not implement revision walking. Neither consumer may assume
+all extensions or merge-stage edits are supported.
+
+### Configuration boundary
+
+`ConfigEntry {key, value, implicit}` preserves raw assignments. `parse_config`
+handles section/subsection case, quoting, escapes, continuations and implicit
+booleans. `configuration` loads system/global/repository/runtime scopes in that
+order; GIT_CONFIG_NOSYSTEM suppresses system reading. Explicit GLOBAL replaces
+XDG/HOME defaults; COUNT/KEY_n/VALUE_n override files. Includes/includeIf refuse
+by distinct names. Repo.config remains a last-value scalar map (implicit=true);
+`config --get` preserves raw implicit output as an empty line. The detailed
+configuration_diagnostics/check_config boundary carries contextual CLI errors
+without changing object APIs' RepoErrors. Each file is capped at 1 MiB and
+runtime pairs at 65,536.
+
+Existing consumers read core.repositoryFormatVersion, extensions.objectFormat,
+core.compression, core.looseCompression, core.autocrlf, init.defaultBranch,
+init.templateDir, user.name, user.email, i18n.commitEncoding and
+core.excludesFile. The generic harness --get can retrieve any well-formed key;
+that is not a claim that every Git configuration option affects den.
+
+### Checked-machine and compiler limits
+
+The complete index unit program exceeds the pinned checked mem-phase budget;
+its unsupported verdict is retained, not reported as a pass. Four bounded
+actual-checked programs separately cover roundtrip, flags/version policy,
+nested trees/intent cache and malformed data, all exit(0). Full native/release
+units and independent filesystem/oracle tests remain enabled. The full ignore
+unit program runs on the actual checked machine successfully.
+
+A native compiler gap affects `copy` of a lent str.bytes() read parameter in a
+returned value: the direct index-view probe refuses with exit4, while the
+bound control builds and both actual-checked programs exit(0). Explicit byte
+materialization at owned-return boundaries is the narrow workaround. The
+reproducer and native/checked log are tracked; an upstream issue is pending.
