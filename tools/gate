@@ -22,9 +22,10 @@ tools/check-test
 TLS_PROBE_LOCAL_ONLY=1 tools/probe-tls
 tools/corpus target/corpus --prove-twice
 tools/check-codec
+tools/check-objects
 tools/oracle --selftest
 tools/oracle
-if tools/oracle --filter hash-object --strict; then
+if tools/oracle --filter status-short --strict; then
     echo "gate: strict not-yet unexpectedly passed" >&2
     exit 1
 else

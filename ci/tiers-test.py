@@ -91,6 +91,13 @@ p = plan(["README.md", "notes/ap00-the-first-light.md", "CHANGELOG.md", "docs/MA
 say(p["tier"] == "noop", "T2 prose alone is a noop")
 p = plan(["README.md", "src/den.lu"], event="pull_request", action="opened")
 say(p["tier"] == "pr", "T2 prose beside code is pr")
+# Object plumbing must run in the PR Linux gate, not only nightly.
+for path in ("src/object/store.lu", "src/oid/oid.lu", "src/index/index.lu", "src/repository/repository.lu", "tools/check-objects", "tools/objects-test.py", "probes/object-client/main.lu"):
+    p = plan([path], event="pull_request", action="synchronize")
+    say(p["tier"] == "pr" and p["jobs"] == PR, "T2 object gate path " + path)
+gate = open(os.path.join(ROOT, "tools", "gate")).read()
+say("tools/check-objects" in gate, "T2 object integration gate is mandatory")
+say("--filter status-short --strict" in gate, "T2 strict witness remains unimplemented")
 # T3
 p = plan(["somewhere/new"], event="pull_request", action="opened")
 say(p["tier"] == "full", "T3 a path no rule names is full")
