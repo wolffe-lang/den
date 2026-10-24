@@ -131,7 +131,8 @@ pub fn write_injected(
             unsupported => { return unsupported },
             io => { return io },
         }
-        defer fs.remove(temp) else |_| {}
+        var temp_owned = true
+        defer { if temp_owned { fs.remove(temp) else |_| {} } }
         var closed = false
         defer { if !closed { fs_close(file.fd) else |_| {} } }
         if fail == "write" { return io }
@@ -149,6 +150,9 @@ pub fn write_injected(
             io => { return io },
         }
         fs.remove(temp)?
+        // Once unlinked, another exclusive writer may reuse this pathname.
+        // Our deferred cleanup must never remove that writer's new file.
+        temp_owned = false
         if fail == "directory-sync" { return io }
         fs.sync_dir(dir)?
         fs.sync_dir("{checked.gitdir}/objects")?

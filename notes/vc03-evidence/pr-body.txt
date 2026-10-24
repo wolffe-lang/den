@@ -32,6 +32,16 @@ Recorded before implementation; predictions, not measurements:
 
 ## Evidence index
 
+closes den#9: inherited object temporary-name reuse race. The first writer
+unlinked tmp_den_N explicitly, then its deferred cleanup could unlink another
+writer's reused name. tools/object-temp-race.py reproduced not_found at round2
+(96 writer attempts) on four CPUs. The owned-name flag fix passed100 rounds
+(3,200 writers), then the inherited native/release object gate and512 writers
+per tier. Initial plant runs40142256100 and40142259073 stopped at this inherited
+race and do NOT count as intended plant reds. Their raw logs are retained;
+clean fix propagation and intended plant reruns are pending.
+
+
 Initial black-box measurements: tools/vc03-measure.py;
 notes/vc03-evidence/oracle-initial.{json,log}. All first four index observations
 match the extension prediction: no extension after add; TREE after write-tree
