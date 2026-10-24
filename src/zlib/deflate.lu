@@ -203,7 +203,11 @@ fn encode(src: List[byte], level: int, max_output: int, wrapped: bool) -> List[b
                 region block {
                     let ts = tokens(src, start, end, mut heads, mut links)
                     let stored_cost = 3 + (8 - (w.used + 3) % 8) % 8 + 32 + n * 8
-                    if fixed_cost(ts, bases) <= stored_cost {
+                    let fixed = fixed_cost(ts, bases)
+                    let plan = dynamic_plan(ts, bases)
+                    if plan.cost < fixed && plan.cost < stored_cost {
+                        emit_dynamic(mut w, ts, bases, plan, final_block)?
+                    } else if fixed <= stored_cost {
                         emit_fixed(mut w, ts, bases, final_block)?
                     } else {
                         stored(mut w, src, start, end, final_block)?
