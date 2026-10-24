@@ -346,7 +346,7 @@ fn rule_matches(rule: Rule, path: List[byte], is_dir: bool) -> bool {
         for i in 0..rule.base.len { if path[i] != rule.base[i] { return false } }
         begin = rule.base.len + 1
     }
-    if !rule.anchored {
+    if !rule.directory_only {
         var pos = path.len
         while pos > begin && path[pos - 1] != 47 as byte { pos -= 1 }
         begin = pos
