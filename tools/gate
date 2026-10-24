@@ -21,6 +21,7 @@ tools/build --all
 tools/check-test
 TLS_PROBE_LOCAL_ONLY=1 tools/probe-tls
 tools/corpus target/corpus --prove-twice
+tools/check-codec
 tools/oracle --selftest
 tools/oracle
 if tools/oracle --filter hash-object --strict; then

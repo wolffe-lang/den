@@ -107,6 +107,10 @@ jobs:
           name: linux-evidence
           path: |
             target/*checked.json
+            target/codec*.log
+            target/codec/*.json
+            target/codec-corpus/summary.json
+            target/codec-fuzz/summary.json
             target/corpus/oids.json
             target/runs
             target/dist/sums.txt

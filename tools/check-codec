@@ -1,0 +1,37 @@
+#!/bin/sh
+# Independent native/release/checked vectors, cross-codec tests, corpus and fuzz.
+set -eu
+DEN_ROOT=$(cd "$(dirname "$0")/.." && pwd)
+export DEN_ROOT
+cd "$DEN_ROOT"
+. tools/lib-toolchain.sh
+mkdir -p target/codec
+for entry in zlib_test zlib_vectors_test zlib_encode_test zlib/huffman_test; do
+    name=$(basename "$entry")
+    "$WOLF" build --deny-warnings "src/$entry.lu" -o "target/$name"
+    "target/$name"
+    "$WOLF" conform-run "src/$entry.lu" --checked --json >"target/$name-checked.json"
+    cat "target/$name-checked.json"
+    python3 -I - "target/$name-checked.json" <<'PY'
+import json,sys
+rows=[json.loads(s) for s in open(sys.argv[1]) if s.startswith('{')]
+assert len(rows)==1 and rows[0]['verdict']=='exit(0)',rows
+PY
+done
+for tier in native release; do
+    mkdir -p "target/$tier"
+    if [ "$tier" = release ]; then
+        "$WOLF" build --release --deny-warnings src/zpipe.lu -o "target/$tier/zpipe"
+    else
+        "$WOLF" build --deny-warnings src/zpipe.lu -o "target/$tier/zpipe"
+    fi
+    python3 -I tools/codec-test.py --binary "target/$tier/zpipe" >"target/codec-$tier.log"
+    tail -n 1 "target/codec-$tier.log"
+    cp target/codec/summary.json "target/codec/$tier.json"
+    tools/env python3 -I tools/codec-corpus.py --binary "target/$tier/zpipe" >"target/codec-corpus-$tier.log"
+    tail -n 1 "target/codec-corpus-$tier.log"
+    python3 -I tools/codec-fuzz.py --binary "target/$tier/zpipe"
+done
+# The checked program tests all block forms and malformed classes without fs.
+# Large file/100-MB tests are separate native measurements, not checked claims.
+echo 'codec: checked 4 programs pass; native and release independent gates pass; unsupported=0'
