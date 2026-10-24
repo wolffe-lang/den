@@ -1,0 +1,42 @@
+{
+  "tier": "native",
+  "rows": [
+    "blob-0: bidirectional bytes/oid",
+    "blob-1: bidirectional bytes/oid",
+    "blob-2: bidirectional bytes/oid",
+    "blob-3: bidirectional bytes/oid",
+    "blob-4: bidirectional bytes/oid",
+    "blob-5: bidirectional bytes/oid",
+    "trees/commits/tags: modes/nesting/order/parents/continuations/binary messages",
+    "encoding: stdin/-F/mktag; C/C.UTF-8/ISO-8859-1 byte-and-warning parity",
+    "atomic: write/sync/install/parent-sync, existing valid/corrupt, 16 racing writers",
+    "malformed: 22 header/length/truncation/trailing/checksum/oid rows",
+    "caps: inclusive/negative/bomb; real SHA-1 ambiguous prefix",
+    "index: Git v2 byte-preserving read; unknown extension/checksum/stage/extended refusal",
+    "permissions: unprivileged child refused; owned interrupted writer leaves no partial final object",
+    "repository: plain/bare init exact files; gitfile; unsupported prewrite refusal"
+  ],
+  "initial_oids": [
+    "19fe415fca52bad1daab688d5de858cd74d335be",
+    "1c031e800a38b22f69191734a9ff175ee8d7138a",
+    "20b5be91886d0b6f26dc98a225c0dac05fe2c86e",
+    "22adbedb3d3e80134262aa5ce9ed8f0cf5ed20c0",
+    "4a44ee4667f82e55c6ce1585103510b0a87059ba",
+    "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+    "5399d476590ad609b9418749470cfaacf19c58af",
+    "5ed560cd805960fd9a2a6383292510393fbe5d87",
+    "740e8fa78954e038d9b3dedd1d49d484368774fe",
+    "816193a1f2e24fc18b7657f28b6c94c8d30f2fc7",
+    "8bdd33aef9494b09f84018831758babd18dedc93",
+    "a8d724da5f66caf8286de1f32c42b531c934517b",
+    "a95345cc4b2c9b502b9c5e82e6702249b56277d3",
+    "c4b8a955c83bc5cca3ac349f2d346855e98c5192",
+    "c86626638e0bc8cf47ca49bb1525b40e9737ee64",
+    "def894a30ccf761fcab49eed3d8d5f56da29f9b6",
+    "e2f6f5c0a921db0aa404f5267e4a56cd7a676850",
+    "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+    "f2ba8f84ab5c1bce84a7b441cb1959cfc7093b7f"
+  ],
+  "malformed": 22,
+  "status": "PASS"
+}

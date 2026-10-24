@@ -1,0 +1,1 @@
+{"commit":"cf0c13d","diagnostics":[],"file":"src/objects_test.lu","impl":"wolfgang","impl_version":"0.2.35","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"PASS tree ordering, binary names, modes, unknown headers, encoding and binary messages\n","stdout_sha256":"fc8967ff65bd8f6f23fdb18dc6145a29f79aecd3f1f13a03a57e9317fb1013ea","verdict":"exit(0)","warnings":[]}

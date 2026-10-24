@@ -1,0 +1,141 @@
+Footprint: cross-cutting
+
+## Forbidden
+
+Documentation/specifications and black-box Git only; no Git/VCS implementation
+or sample hooks read, no external production dependency or subprocess. No Mac
+build, host package install, label, trunk push, merge, tag, release, issue write,
+or memory/config/planning edit. Runtime work used hasu block A under flock,
+taskset inside the pinned rootless container, memory limited to 12 GiB.
+
+## Inputs verified
+
+- `935c814`: predictions before implementation.
+- `3a691d1`: primary Git/Pro Git/FIPS sources and twice-read release identities.
+- `12c13e5`: owned algorithm-tagged OIDs and bounded loose framing.
+- `118b4ff`: binary trees and lossless structured object bodies.
+- `e587ca8`: repository discovery and exclusive atomic object installation.
+- `2f58cd0`: measured plumbing and read-only index-v2 tree writing.
+- `1eaa6b2`: independent corruption/race/interop/scaling tests and matrix.
+- `dda1c34`: mandatory PR-tier object gates and planner tests.
+- `9fa368b`: encoding path witnesses, template refusal and ambiguous diagnostics.
+- `793f746`, `6cb352b`: README and API/format documentation.
+
+Base trunk 2d1ed89. wolf 0.2.35 cf0c13d3, lupin 0.1.56 tag 28547b4
+(binary embeds 294d626), std 2386522e. All release archive digests verified
+against both API reads. Signed Git 2.56.0 rebuilt on hasu with binary SHA-256
+c4848492938c4ebfffbefe1fbbaa68b9af90c86d1f6a20e76816c5ff37fcfa60.
+The inherited SHA-1 is unchanged; its settled provenance is boreutils b603bb8.
+
+## Prediction
+
+Hits: init HEAD/config bytes and empty-template absence of description/exclude;
+empty/abc blob and empty-tree OIDs; all valid cross-tool fsck/read witnesses;
+linear memory below the predicted 1.2-GiB ceiling at 100 MB; no reviewed rows.
+Misses: minimal measured root commit/tag bodies are 92/86 bytes, not 99/89;
+54 new matrix cases, not the predicted 80 new cases (86 total); 22 malformed
+loose rows, exceeding the predicted 20. Both actual checked unit programs pass,
+so the predicted possible object checked-budget refusal did not arise.
+Prediction text is retained unchanged, including its uncertainty.
+
+## Evidence index
+
+Authoritative full gate: notes/vc02-evidence/final-gate.log. Its input manifest
+matches the Mac worktree byte-for-byte; only docs/evidence changed afterward.
+README read and refreshed. Raw evidence is under notes/vc02-evidence/.
+
+- 86 differential rows: **57 exact parity, 28 named not-yet, 1 version shape,
+  0 reviewed, 0 failures**. Of the not-yet rows, 25 are later commands and 3
+  are unsupported compression levels. Every .git file remains compared;
+  only the settled named loose-object-raw comparison changes representation.
+  stdout/stderr/status and all other bytes/modes remain exact. The two initial
+  commit newline/NUL mismatches were read and fixed, not re-goldened.
+- Two unit programs on native, release and the actual checked machine
+  (`conform-run --checked --json`), both checked exit(0), no object skips.
+  Existing TLS checked-budget refusal stays loud and counted separately.
+- Independently compiled external-package client exercises the public API on
+  both native tiers. Git writes -> den reads and den writes -> Git cat-file
+  and fsck; binary/NUL/all-byte blobs, tree modes/non-UTF-8 names/nesting/order,
+  root/multi-parent commits, unknown/continuation headers and annotated tags.
+  Independently authored native/release repositories have identical OID sets.
+- 22 malformed loose rows: header, declared size, truncation, trailing bytes,
+  checksum and oid; exact inclusive limits, negative caps and a compressed
+  expansion beyond cap; real SHA-1 prefix collision with explicit ambiguous
+  outcome and measured blob/tree CLI diagnostics. No trap/crash.
+- Atomic writes: exclusive 0444 temp, file sync/close, no-replace hard-link
+  install, unlink and directory sync. Injected write/sync/install/directory-sync
+  failure; existing valid/corrupt object; 16 racing writers; unprivileged
+  permission failure; terminate only an owned writer after observing nonempty
+  temp data. No partial final object; ordinary errors clean up, abrupt death
+  may leave an orphan temp (documented). Not a Windows durability claim.
+- Git-written flat index v2: checksum, mode, flags, padding, ordering and
+  extension boundary checked; unchanged index bytes; unknown extension,
+  checksum, stage and extended-flag failures. Index writing/nested paths remain
+  vc03's, never faked as an empty tree.
+- Encoding paths: C and C.UTF-8 both repair isolated ff to c3 bf in commit-tree
+  stdin and -F, with exact warning. ISO-8859-1 preserves ff and adds encoding;
+  mktag preserves ff in all three environments. All nine paths compared in
+  native/release integration. Exact oracle bytes in encoding-paths.json;
+  additional valid/invalid UTF-8 mixtures in encoding-measure.json.
+- Whole-object 50/100-MB release measurements, three runs, warmup excluded:
+  100-MB peak RSS random write/read 787,892/655,276 KiB; zero
+  461,368/426,968 KiB. Median seconds 4.345/.960 and 1.190/.895 respectively.
+  Doubling size remains under 2.7x RSS. Random encoded size 100,015,281 versus
+  Git 100,030,426; zero 138,499 versus Git 436,392. The 1.25 ratio ceiling passes.
+- **CI plant PR #5**, head bc73dc2, **run 40137248290**: one byte of the hashed
+  loose header changed from NUL to LF. Linux every-gate job reaches
+  `wolf-trap: assert at src/object_test.lu:8:5`, exit 134, after codec passes.
+  Clean implementation committed first; plant closed unmerged. Raw failed log
+  retained. No CI wait or label was used.
+- Full gate also covers planner tests, formatting, SHA, local TLS, reproducible
+  nine-repo corpus, inherited codec interop/fuzz, classifier selftests,
+  strict/empty-filter failures and two identical static builds.
+  Static binary: 15,103,872 bytes,
+  6c52032df4ccf1b0e1c77d0510cfa2b52fc09d904ae9839a299d3c83c1580a2c.
+  Stripped: 1,564,696 bytes,
+  c076122e5b342bbc361afee3ff12c8f9897b16d2133cf3428d4af89d48509ea4.
+  Evidence only; no release.
+
+### Decisions, limits and next lane
+
+R-vc02-2 A adopted by the coordinator: reproduce measured commit-tree encoding
+behavior, retain byte-preserving generic APIs. Requested locale, explicit
+encoding, -F and mktag follow-up probes are complete. Hooks and minimal index-v2
+scope were already settled in the launch contract. No unresolved ruling.
+
+README/MAP state the bounded surface: no general config/date/revision parser,
+filters, packs, index writing/nested index paths, nonempty templates, signing,
+quoted mktree input (use -z), or full malformed-object/history-ambiguity hint
+vocabulary. Unsupported features refuse by name, not success. These are scoped
+follow-ons, not accepted parity exceptions. No new upstream issue found/filed.
+Existing byte-path and platform durability limitations remain as documented.
+
+vc03 consumes Oid, Repo, Object, read_object/write_object, lookup/resolve,
+parse/build tree, ordered lossless headers and commit/tag builders. Exact
+signatures and error aliases are documented in docs/MAP.md and module comments;
+probes/object-client proves package imports, ownership and real IO. Keep this
+boundary; add index writing/refresh/nested assembly without global stat/index
+normalization. Generic object messages stay lossless; CLI repair stays outside.
+
+## Done-when
+
+- [x] Prediction before code; primary sources cited by page/section
+- [x] Twice-verified pins and rebuilt pinned oracle
+- [x] Init/plumbing bytes and raw object identity measured
+- [x] Binary object bodies, unknown headers and byte-path preservation
+- [x] Git interop/fsck; corruption/cap/race/failure/interruption witnesses
+- [x] Actual checked/native/release unit tests and external API client
+- [x] PR-tier integration/planner tests; isolated plant seen red, closed unmerged
+- [x] 100-MB memory/size evidence; reproduced repository OID sets
+- [x] README current; MAP/FORMATS/SOURCES/CHANGELOG refreshed
+- [ ] Final head pushed; status read once; audit literal last line attached
+- [ ] PR/full tier green: orchestrator owns label and watch
+
+The lane wrapper prohibits Markdown report files. This PR body and
+notes/vc02-evidence/pr-body.txt are the contract's fallback; no
+notes/vc02-the-objects.md was written.
+
+Prune only after adoption: Mac plant worktree
+/Users/mfwolffe/lanes/vc02/target/plant-header, then /Users/mfwolffe/lanes/vc02;
+hasu /home/mfwolffe/lanes/vc02 (about 1.4 GiB), lane image localhost/den-vc02.
+No owned job remains running. Preserve hasu-env and every other lane's data.

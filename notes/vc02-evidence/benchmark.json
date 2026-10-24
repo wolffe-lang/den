@@ -1,0 +1,218 @@
+[
+  {
+    "pattern": "random",
+    "size": 50000000,
+    "rep": 0,
+    "action": "write",
+    "seconds": 2.14,
+    "rss_kib": 395712,
+    "encoded_bytes": 50007650,
+    "git_bytes": 50015225
+  },
+  {
+    "pattern": "random",
+    "size": 50000000,
+    "rep": 0,
+    "action": "read",
+    "seconds": 0.48,
+    "rss_kib": 328480
+  },
+  {
+    "pattern": "random",
+    "size": 50000000,
+    "rep": 1,
+    "action": "write",
+    "seconds": 2.17,
+    "rss_kib": 395892,
+    "encoded_bytes": 50007650,
+    "git_bytes": 50015225
+  },
+  {
+    "pattern": "random",
+    "size": 50000000,
+    "rep": 1,
+    "action": "read",
+    "seconds": 0.48,
+    "rss_kib": 328964
+  },
+  {
+    "pattern": "random",
+    "size": 50000000,
+    "rep": 2,
+    "action": "write",
+    "seconds": 2.75,
+    "rss_kib": 396020,
+    "encoded_bytes": 50007650,
+    "git_bytes": 50015225
+  },
+  {
+    "pattern": "random",
+    "size": 50000000,
+    "rep": 2,
+    "action": "read",
+    "seconds": 0.49,
+    "rss_kib": 328796
+  },
+  {
+    "pattern": "random",
+    "size": 100000000,
+    "rep": 0,
+    "action": "write",
+    "seconds": 4.36,
+    "rss_kib": 787804,
+    "encoded_bytes": 100015281,
+    "git_bytes": 100030426
+  },
+  {
+    "pattern": "random",
+    "size": 100000000,
+    "rep": 0,
+    "action": "read",
+    "seconds": 0.96,
+    "rss_kib": 655220
+  },
+  {
+    "pattern": "random",
+    "size": 100000000,
+    "rep": 1,
+    "action": "write",
+    "seconds": 4.34,
+    "rss_kib": 787804,
+    "encoded_bytes": 100015281,
+    "git_bytes": 100030426
+  },
+  {
+    "pattern": "random",
+    "size": 100000000,
+    "rep": 1,
+    "action": "read",
+    "seconds": 0.96,
+    "rss_kib": 655276
+  },
+  {
+    "pattern": "random",
+    "size": 100000000,
+    "rep": 2,
+    "action": "write",
+    "seconds": 4.35,
+    "rss_kib": 787892,
+    "encoded_bytes": 100015281,
+    "git_bytes": 100030426
+  },
+  {
+    "pattern": "random",
+    "size": 100000000,
+    "rep": 2,
+    "action": "read",
+    "seconds": 0.96,
+    "rss_kib": 655212
+  },
+  {
+    "pattern": "zero",
+    "size": 50000000,
+    "rep": 0,
+    "action": "write",
+    "seconds": 0.58,
+    "rss_kib": 232544,
+    "encoded_bytes": 69261,
+    "git_bytes": 218209
+  },
+  {
+    "pattern": "zero",
+    "size": 50000000,
+    "rep": 0,
+    "action": "read",
+    "seconds": 0.44,
+    "rss_kib": 214532
+  },
+  {
+    "pattern": "zero",
+    "size": 50000000,
+    "rep": 1,
+    "action": "write",
+    "seconds": 0.58,
+    "rss_kib": 232296,
+    "encoded_bytes": 69261,
+    "git_bytes": 218209
+  },
+  {
+    "pattern": "zero",
+    "size": 50000000,
+    "rep": 1,
+    "action": "read",
+    "seconds": 0.44,
+    "rss_kib": 214864
+  },
+  {
+    "pattern": "zero",
+    "size": 50000000,
+    "rep": 2,
+    "action": "write",
+    "seconds": 0.59,
+    "rss_kib": 232416,
+    "encoded_bytes": 69261,
+    "git_bytes": 218209
+  },
+  {
+    "pattern": "zero",
+    "size": 50000000,
+    "rep": 2,
+    "action": "read",
+    "seconds": 0.45,
+    "rss_kib": 214656
+  },
+  {
+    "pattern": "zero",
+    "size": 100000000,
+    "rep": 0,
+    "action": "write",
+    "seconds": 1.16,
+    "rss_kib": 461308,
+    "encoded_bytes": 138499,
+    "git_bytes": 436392
+  },
+  {
+    "pattern": "zero",
+    "size": 100000000,
+    "rep": 0,
+    "action": "read",
+    "seconds": 0.9,
+    "rss_kib": 426756
+  },
+  {
+    "pattern": "zero",
+    "size": 100000000,
+    "rep": 1,
+    "action": "write",
+    "seconds": 1.22,
+    "rss_kib": 461348,
+    "encoded_bytes": 138499,
+    "git_bytes": 436392
+  },
+  {
+    "pattern": "zero",
+    "size": 100000000,
+    "rep": 1,
+    "action": "read",
+    "seconds": 0.9,
+    "rss_kib": 426888
+  },
+  {
+    "pattern": "zero",
+    "size": 100000000,
+    "rep": 2,
+    "action": "write",
+    "seconds": 1.16,
+    "rss_kib": 461368,
+    "encoded_bytes": 138499,
+    "git_bytes": 436392
+  },
+  {
+    "pattern": "zero",
+    "size": 100000000,
+    "rep": 2,
+    "action": "read",
+    "seconds": 0.89,
+    "rss_kib": 426968
+  }
+]

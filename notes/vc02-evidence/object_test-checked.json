@@ -1,0 +1,1 @@
+{"commit":"cf0c13d","diagnostics":[],"file":"src/object_test.lu","impl":"wolfgang","impl_version":"0.2.35","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"PASS oid widths, SHA answers, binary framing, exact cap, size validation\n","stdout_sha256":"20a97a65bd2e135d1d072edfa72bf90e36ba9d83dd74be1ea8844342b3232154","verdict":"exit(0)","warnings":[]}
