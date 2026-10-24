@@ -1,0 +1,7 @@
+// SHA-256 is wolf-std 2386522e std/x/crypto/sha2/sha2.lu, not copied.
+use std.x.crypto.sha2
+
+/// SHA-256 of an arbitrary byte slice; returns 32 bytes, no failure rows.
+pub fn sum256(data: List[byte]) -> List[byte] {
+    sha2.sum256(data)
+}

@@ -1,0 +1,9 @@
+#!/bin/sh
+set -eu
+DEN_ROOT=$(cd "$(dirname "$0")/.." && pwd)
+export DEN_ROOT
+cd "$DEN_ROOT"
+. tools/lib-toolchain.sh
+mkdir -p target/tls target/probes
+"$WOLF" build --release --deny-warnings probes/tls/main.lu -o target/probes/tls
+python3 -I tools/probe-tls.py

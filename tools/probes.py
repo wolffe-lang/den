@@ -4,6 +4,7 @@ out=R/'target/probes';rows=[]
 expected_absent={'argv0','regex','glob','bigint','deflate','mmap'}
 for p in sorted((R/'probes').glob('*/main.lu')):
  name=p.parent.name
+ if name=='hash':p=R/'src/hash_test.lu'
  if name=='tls':continue # driven by probe-tls with the local and external servers
  if len(sys.argv)>1 and name not in sys.argv[1:]:continue
  for tier in ('native','checked'):

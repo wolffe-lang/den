@@ -1,0 +1,2 @@
+// No C ABI, no muzzle import. den is a hosted wolf executable.
+fn main() { print("den needs wolf-std, not muzzle; a future C libden needs C ABI allocation ownership") }

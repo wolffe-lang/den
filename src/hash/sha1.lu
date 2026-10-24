@@ -43,6 +43,7 @@ fn sha1_block(mut d: Digest) {
     d.h[4] = d.h[4] + f & 0xffffffff
 }
 
+/// Streaming SHA-1 state; construct with new1, feed bytes, finalize once.
 pub struct Digest {
     h: List[wrapping[u64]],
     w: List[wrapping[u64]],
@@ -51,6 +52,7 @@ pub struct Digest {
     count: wrapping[u64],
 }
 
+/// FIPS 180-4 section 5.3.1 initial state; no failure rows.
 pub fn new1() -> Digest {
     var d = Digest {
         h: [0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476, 0xc3d2e1f0],
@@ -83,6 +85,7 @@ fn load_words(mut d: Digest, width: int, little: bool) {
     }
 }
 
+/// Feed a byte slice without retaining it; SHA-1 length wraps modulo 2^64 bits.
 pub fn update1(mut d: Digest, data: List[byte]) {
     for b in data {
         d.buf[d.used] = b
@@ -92,6 +95,7 @@ pub fn update1(mut d: Digest, data: List[byte]) {
     }
 }
 
+/// Consume the state and return the 20-byte SHA-1 digest, big endian.
 pub fn final1(take state: Digest) -> List[byte] {
     var d = state
     d.buf[d.used] = 128 as byte
@@ -113,6 +117,7 @@ pub fn final1(take state: Digest) -> List[byte] {
     result
 }
 
+/// SHA-1 of an arbitrary byte slice; no failure rows.
 pub fn sum1(data: List[byte]) -> List[byte] {
     var d = new1()
     update1(mut d, data)
