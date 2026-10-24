@@ -23,6 +23,8 @@ def main():
  words=[rng.randbytes(rng.randrange(3,40)) for _ in range(300)]
  synthetic=b''.join(words[rng.randrange(len(words))] for _ in range(300000))
  datasets={'text':(b'The quick brown wolf keeps its history in the den.\n'*200000),'phrases':synthetic}
+ witness=[rng.randbytes(6) for _ in range(500)]
+ datasets['lazy-witness']=b''.join(s[:3]+b'X'+s[1:]+b'Y' for s in witness)+b''.join(witness)
  rows=[]
  for name,data in datasets.items():
   inp=work/'input';inp.write_bytes(data)

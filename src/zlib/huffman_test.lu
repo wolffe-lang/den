@@ -14,6 +14,14 @@ fn main() -> int ! {invalid} {
     assert(one[0] == 1)
     let complete = tree(lengths(zeros(19), 7, true), 0)?
     assert(complete.symbols.len == 2)
-    print("PASS length-limited tree; complete header; empty distance encoder")
+    var heads = List[int]()
+    var links = List[int]()
+    for _ in 0..32768 { (mut heads).push(-1); (mut links).push(-1) }
+    let input = "abcXbcdefYabcdef"
+    let chosen = tokens(input.bytes(), 0, input.len, mut heads, mut links)
+    assert(chosen.len == 12)
+    assert(chosen[10].value == 97 && chosen[10].distance == 0)
+    assert(chosen[11].value == 5 && chosen[11].distance == 7)
+    print("PASS length-limited tree; complete header; empty distance encoder; lazy lookahead")
     0
 }
