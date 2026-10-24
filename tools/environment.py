@@ -6,7 +6,7 @@ for name in ('home','xdg','empty-hooks','empty-template'):
     (base/name).mkdir(parents=True,exist_ok=True)
 config=(f'[user]\n\tname = Den Tester\n\temail = den@example.invalid\n'
         f'[color]\n\tui = never\n[core]\n\tpager = cat\n\thooksPath = {base}/empty-hooks\n'
-        '[init]\n\tdefaultBranch = main\n[commit]\n\tgpgsign = false\n')
+        f'[init]\n\tdefaultBranch = main\n\ttemplateDir = {base}/empty-template\n[commit]\n\tgpgsign = false\n')
 (base/'gitconfig').write_bytes(config.encode())
 e={k:v for k,v in os.environ.items() if not k.startswith('GIT_')}
 e.update(LC_ALL='C',TZ='UTC',GIT_CONFIG_NOSYSTEM='1',GIT_CONFIG_GLOBAL=str(base/'gitconfig'),

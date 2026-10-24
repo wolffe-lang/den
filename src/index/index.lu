@@ -1,0 +1,121 @@
+// Read-only v2 boundary; writing/refreshing the index belongs to vc03.
+use hash
+use object
+use oid
+use repository
+
+/// Index failures plus object/IO errors; extensions are refused by name.
+pub error IndexErrors = {
+    invalid_index,
+    unmerged,
+    invalid_tree,
+    duplicate_name,
+    invalid,
+    invalid_oid,
+    unsupported_format,
+    bad_header,
+    bad_size,
+    bad_oid,
+    truncated,
+    dictionary,
+    checksum,
+    limit,
+    trailing,
+    unsupported_level,
+    not_found,
+    denied,
+    io,
+    exists,
+    unsupported,
+    Unsupported(str),
+    ambiguous,
+    cross_device,
+}
+
+fn be(data: List[byte], start: int, n: int) -> int {
+    var result: int = 0
+    for i in start..start + n { result = result * 256 + data[i] as int }
+    result
+}
+
+/// Read minimal flat v2 entries, stage 0, with known TREE cache ignored safely.
+/// Verify checksum, entry bounds/padding/order before any object publication.
+pub fn parse_v2(data: List[byte]) -> List[object.TreeEntry] ! IndexErrors {
+    if data.len < 32 { return invalid_index }
+    if data[0] != 68 as byte ||
+        data[1] != 73 as byte ||
+        data[2] != 82 as byte ||
+        data[3] != 67 as byte {
+        return invalid_index
+    }
+    if be(data, 4, 4) != 2 { return Unsupported("index version") }
+    let end = data.len - 20
+    let digest = hash.sum1(data[0..end])
+    for i in 0..20 { if digest[i] != data[end + i] { return checksum } }
+    let count = be(data, 8, 4)
+    if count > (end - 12) / 64 { return invalid_index }
+    var entries = List[object.TreeEntry]()
+    var pos = 12
+    for _ in 0..count {
+        let start = pos
+        if end - pos < 64 { return invalid_index }
+        let mode = be(data, pos + 24, 4)
+        let _ = object.mode_text(mode)?
+        if mode == 0o40000 { return Unsupported("index sparse directory") }
+        let id = oid.from_bytes("sha1", data[pos + 40..pos + 60])?
+        let flags = be(data, pos + 60, 2)
+        if flags & 0x4000 != 0 { return invalid_index }
+        if flags & 0x3000 != 0 { return unmerged }
+        pos += 62
+        let name_start = pos
+        while pos < end && data[pos] != 0 as byte {
+            if data[pos] == 47 as byte { return Unsupported("nested index entries (vc03)") }
+            pos += 1
+        }
+        if pos == end { return invalid_index }
+        let name = data[name_start..pos]
+        if flags & 0xfff != (if name.len < 4095 then name.len else 4095) { return invalid_index }
+        pos += 1
+        while (pos - start) % 8 != 0 {
+            if pos == end || data[pos] != 0 as byte { return invalid_index }
+            pos += 1
+        }
+        if entries.len > 0 {
+            let previous = copy entries[entries.len - 1].name
+            var cmp = 0
+            var i = 0
+            while i < previous.len && i < name.len && cmp == 0 {
+                cmp = previous[i] as int - name[i] as int
+                i += 1
+            }
+            if cmp == 0 { cmp = previous.len - name.len }
+            if cmp >= 0 { return invalid_index }
+        }
+        (mut entries).push(object.TreeEntry { mode: mode, name: name, id: id })
+    }
+    while pos < end {
+        if end - pos < 8 { return invalid_index }
+        let name = str_from_utf8(data[pos..pos + 4]) else "non-ASCII"
+        let size = be(data, pos + 4, 4)
+        pos += 8
+        if size > end - pos { return invalid_index }
+        if name != "TREE" { return Unsupported("index extension {name}") }
+        pos += size
+    }
+    let _ = object.build_tree(entries, "sha1")?
+    entries
+}
+
+/// Build the flat v2 tree without changing even one index byte.
+pub fn write_tree(repo: repository.Repo, cap: int) -> oid.Oid ! IndexErrors {
+    let data = repository.read_bytes("{repo.gitdir}/index", cap)?
+    let entries = parse_v2(data)?
+    for entry in entries {
+        if entry.mode != 0o160000 {
+            let stored = object.read_object(repo, entry.id, 1000000000)?
+            if stored.kind != object.mode_kind(entry.mode)? { return invalid_index }
+        }
+    }
+    let body = object.build_tree(entries, "sha1")?
+    object.write_object(repo, "tree", body)?
+}

@@ -1,0 +1,511 @@
+use std.fs
+use index
+use object
+use oid
+use repository
+
+error Errors = {
+    invalid_tree,
+    duplicate_name,
+    invalid_header,
+    invalid_index,
+    unmerged,
+    invalid,
+    invalid_oid,
+    unsupported_format,
+    bad_header,
+    bad_size,
+    bad_oid,
+    truncated,
+    dictionary,
+    checksum,
+    limit,
+    trailing,
+    unsupported_level,
+    not_found,
+    denied,
+    io,
+    exists,
+    unsupported,
+    Unsupported(str),
+    ambiguous,
+    cross_device,
+}
+
+fn input(path: str) -> List[byte] ! Errors {
+    if path != "-" { return repository.read_bytes(path, 1000000000)? }
+    var f = fs.stdin()
+    var out = List[byte]()
+    loop {
+        region chunk {
+            let b = fs.read_chunk(mut f, 65536) else |e| match e {
+                eof => { break },
+                io => { return io },
+            }
+            if b.len > 1000000000 - out.len { return limit }
+            for v in b { (mut out).push(v) }
+        }
+    }
+    out
+}
+
+fn output(bytes: List[byte]) -> () ! {invalid, io} {
+    var out = fs.stdout()
+    fs.write_chunk(mut out, bytes)?
+}
+
+fn init(args: List[str]) -> int ! Errors {
+    var bare = false
+    var quiet = false
+    var branch = ""
+    var path = "."
+    var have_path = false
+    var i = 1
+    while i < args.len {
+        let arg = args[i]
+        if arg == "-q" || arg == "--quiet" {
+            quiet = true
+        } else if arg == "--bare" {
+            bare = true
+        } else if arg == "-b" || arg == "--initial-branch" {
+            i += 1
+            if i == args.len { return Unsupported("init missing branch") }
+            branch = args[i]
+        } else if arg.starts_with("--initial-branch=") {
+            branch = arg[17..]
+        } else if arg.starts_with("--template=") {
+            let template = arg[11..]
+            if !fs.is_dir(template) || fs.entries(template)?.len != 0 {
+                return Unsupported("init nonempty template")
+            }
+        } else if arg == "--object-format=sha1" || arg == "--ref-format=files" {} else if arg.
+            starts_with("-") {
+            return Unsupported("init {arg}")
+        } else {
+            if have_path { return Unsupported("init extra operand") }
+            path = arg
+            have_path = true
+        }
+        i += 1
+    }
+    let explicit = branch != ""
+    if !explicit {
+        let values = repository.global_config()?
+        branch = values["init.defaultbranch"] else "main"
+    }
+    let (repo, reinit) = repository.init(path, bare, branch)?
+    if reinit && explicit { eprint("warning: re-init: ignored --initial-branch={branch}") }
+    if !quiet {
+        let message = if reinit {
+            "Reinitialized existing Git repository"
+        } else {
+            "Initialized empty Git repository"
+        }
+        print("{message} in {repo.gitdir}/")
+    }
+    0
+}
+
+fn validate_body(kind: str, data: List[byte]) -> () ! Errors {
+    if kind == "tree" {
+        let _ = object.parse_tree(data, "sha1")?
+    } else if kind == "commit" {
+        let _ = object.parse_commit(data, "sha1")?
+    } else if kind == "tag" {
+        let _ = object.parse_tag(data, "sha1")?
+    }
+}
+
+fn hash_object(args: List[str]) -> int ! Errors {
+    var write = false
+    var kind = "blob"
+    var paths = List[str]()
+    var stdin = false
+    var no_filters = false
+    var literal = false
+    var options = true
+    var i = 1
+    while i < args.len {
+        let arg = args[i]
+        if options && arg == "--" {
+            options = false
+        } else if options && arg == "-w" {
+            write = true
+        } else if options && arg == "--stdin" {
+            stdin = true
+        } else if options && arg == "--no-filters" {
+            no_filters = true
+        } else if options && arg == "--literally" {
+            literal = true
+        } else if options && arg == "-t" {
+            i += 1
+            if i == args.len { return Unsupported("hash-object missing type") }
+            kind = args[i]
+        } else if options && arg.starts_with("-") {
+            return Unsupported("hash-object {arg}")
+        } else {
+            (mut paths).push(arg)
+        }
+        i += 1
+    }
+    if !object.valid_kind(kind) { eprint("fatal: invalid object type \"{kind}\""); return 128 }
+    if stdin { (mut paths).push("-") }
+    var repo = repository.Repo { gitdir: "", config: Map[str, str]() }
+    if write { repo = repository.discover(".")? }
+    if !no_filters && !stdin {
+        if fs.exists(".gitattributes") { return Unsupported("hash-object attributes") }
+        let candidate = repository.discover(".") else repository.Repo {
+            gitdir: "",
+            config: Map[str, str](),
+        }
+        if (candidate.config["core.autocrlf"] else "false") != "false" ||
+            fs.exists("{candidate.gitdir}/info/attributes") {
+            return Unsupported("hash-object filters")
+        }
+    }
+    for path in paths {
+        region item {
+            let data = input(path) else |e| match e {
+                not_found => {
+                    eprint("fatal: could not open '{path}' for reading: No such file or directory")
+                    return 128
+                },
+                denied => {
+                    eprint("fatal: could not open '{path}' for reading: Permission denied")
+                    return 128
+                },
+                _ => { eprint("fatal: could not read '{path}'"); return 128 },
+            }
+            if !literal {
+                validate_body(kind, data) else |_| {
+                    if data.len == 0 {
+                        eprint("error: object fails fsck: unterminatedHeader: unterminated header")
+                        eprint("fatal: refusing to create malformed object")
+                        return 128
+                    }
+                    eprint(
+                        "den: not yet implemented: hash-object malformed {kind} diagnostics (M1, vc02)",
+                    )
+                    return 2
+                }
+            }
+            let id = if write {
+                object.write_object(repo, kind, data)?
+            } else {
+                object.identify(kind, data)?
+            }
+            print(oid.hex(id)?)
+        }
+    }
+    0
+}
+
+fn cat_file(args: List[str]) -> int ! Errors {
+    if args.len != 3 { return Unsupported("cat-file options") }
+    let option = args[1]
+    if option != "-p" && option != "-t" && option != "-s" {
+        return Unsupported("cat-file {option}")
+    }
+    let repo = repository.discover(".")?
+    let name = args[2]
+    let id = object.resolve(repo, name) else |_| {
+        eprint("fatal: Not a valid object name {name}")
+        return 128
+    }
+    let stored = object.read_object(repo, id, 1000000000) else |e| match e {
+        not_found => {
+            if option == "-p" {
+                eprint("fatal: Not a valid object name {name}")
+            } else {
+                eprint("fatal: git cat-file: could not get object info")
+            }
+            return 128
+        },
+        _ => { eprint("fatal: corrupt loose object {name}: {e}"); return 128 },
+    }
+    if option == "-t" {
+        print(stored.kind)
+    } else if option == "-s" {
+        print("{stored.data.len}")
+    } else if stored.kind == "tree" {
+        output(object.pretty_tree(object.parse_tree(stored.data, "sha1")?)?)?
+    } else {
+        output(stored.data)?
+    }
+    0
+}
+
+fn identity(repo: repository.Repo, role: str) -> str ! Errors {
+    let name = env_get("GIT_{role}_NAME") else (repo.config["user.name"] else "")
+    let email = env_get("GIT_{role}_EMAIL") else (repo.config["user.email"] else "")
+    var date = env_get("GIT_{role}_DATE") else ""
+    if name == "" || email == "" || date == "" { return Unsupported("commit-tree identity/date") }
+    if date.starts_with("@") { date = date[1..] }
+    let parts = date.split(" ")
+    if parts.len != 2 ||
+        parts[1].len != 5 ||
+        !(parts[1].starts_with("+") || parts[1].starts_with("-")) {
+        return Unsupported("commit-tree date format")
+    }
+    for b in parts[0].bytes() {
+        if b as int < 48 || b as int > 57 { return Unsupported("commit-tree date format") }
+    }
+    for b in parts[1].bytes()[1..] {
+        if b as int < 48 || b as int > 57 { return Unsupported("commit-tree date format") }
+    }
+    for value in [name, email] {
+        if value.contains("\n") ||
+            value.contains("<") ||
+            value.contains(">") ||
+            value.contains("\0") {
+            return Unsupported("commit-tree identity characters")
+        }
+    }
+    "{name} <{email}> {date}"
+}
+
+fn append_paragraph(mut message: List[byte], paragraph: List[byte]) {
+    if paragraph.len == 0 { return }
+    if message.len != 0 { (mut message).push(10 as byte) }
+    for b in paragraph { (mut message).push(b) }
+    if paragraph[paragraph.len - 1] != 10 as byte { (mut message).push(10 as byte) }
+}
+
+// Black-box R-vc02-2: retain valid UTF-8 sequences, encode isolated invalid
+// octets as their Latin-1 scalar. Generic object APIs never perform this repair.
+fn repair_message(data: List[byte]) -> List[byte] {
+    var out = List[byte]()
+    var i = 0
+    while i < data.len {
+        let b = data[i] as int
+        var n = if b < 128 {
+            1
+        } else if b >= 194 && b <= 223 {
+            2
+        } else if b >= 224 && b <= 239 {
+            3
+        } else if b >= 240 && b <= 244 {
+            4
+        } else {
+            0
+        }
+        if n > data.len - i { n = 0 }
+        if n > 0 {
+            region check {
+                let valid = str_from_utf8(data[i..i + n]) else ""
+                if valid.len == 0 { n = 0 }
+            }
+        }
+        if n == 0 {
+            (mut out).push((192 + b / 64) as byte)
+            (mut out).push((128 + b % 64) as byte)
+            i += 1
+        } else {
+            for j in i..i + n { (mut out).push(data[j]) }
+            i += n
+        }
+    }
+    out
+}
+
+fn valid_tagger(text: str) -> bool {
+    if text.contains("\n") || text.contains("\0") { return false }
+    let left = text.find(" <") else { return false }
+    let right = text.find("> ") else { return false }
+    if left == 0 || right <= left + 2 { return false }
+    let date = text[right + 2..].split(" ")
+    if date.len != 2 || date[0].len == 0 || date[1].len != 5 { return false }
+    if !date[1].starts_with("+") && !date[1].starts_with("-") { return false }
+    for b in date[0].bytes() { if b as int < 48 || b as int > 57 { return false } }
+    for b in date[1].bytes()[1..] { if b as int < 48 || b as int > 57 { return false } }
+    let timestamp = date[0].to_int() else { return false }
+    timestamp >= 0
+}
+
+fn commit_tree(args: List[str]) -> int ! Errors {
+    let repo = repository.discover(".")?
+    var tree = ""
+    var parents = List[oid.Oid]()
+    var message = List[byte]()
+    var specified = false
+    var i = 1
+    while i < args.len {
+        let arg = args[i]
+        if arg == "-p" || arg == "-m" || arg == "-F" {
+            i += 1
+            if i == args.len { return Unsupported("commit-tree missing value") }
+            let value = args[i]
+            if arg == "-p" {
+                let id = object.resolve(repo, value)?
+                if object.read_object(repo, id, 1000000000)?.kind != "commit" {
+                    return invalid_header
+                }
+                var duplicate = false
+                for p in parents { if oid.equal(p, id) { duplicate = true } }
+                if duplicate {
+                    eprint("error: duplicate parent {oid.hex(id)?} ignored")
+                } else {
+                    (mut parents).push(id)
+                }
+            } else {
+                specified = true
+                if arg == "-m" {
+                    append_paragraph(mut message, value.bytes())
+                } else {
+                    if message.len != 0 { (mut message).push(10 as byte) }
+                    for b in input(value)? { (mut message).push(b) }
+                }
+            }
+        } else if arg.starts_with("-") {
+            return Unsupported("commit-tree {arg}")
+        } else {
+            if tree != "" { return Unsupported("commit-tree extra operand") }
+            tree = arg
+        }
+        i += 1
+    }
+    if tree == "" { return Unsupported("commit-tree missing tree") }
+    let id = object.resolve(repo, tree)?
+    if object.read_object(repo, id, 1000000000)?.kind != "tree" { return invalid_tree }
+    if !specified { message = input("-")? }
+    for b in message {
+        if b == 0 as byte {
+            eprint("error: a NUL byte in commit log message not allowed.")
+            return 1
+        }
+    }
+    let encoding = repo.config["i18n.commitencoding"] else ""
+    if encoding == "" || encoding.lower() == "utf-8" {
+        let _ = str_from_utf8(message) else |_| {
+            eprint(
+                "Warning: commit message did not conform to UTF-8.\nYou may want to amend it after fixing the message, or set the config\nvariable i18n.commitEncoding to the encoding your project uses.",
+            )
+            message = repair_message(message)
+            ""
+        }
+    }
+    let bytes = object.build_commit(
+        id,
+        parents,
+        identity(repo, "AUTHOR")?,
+        identity(repo, "COMMITTER")?,
+        encoding,
+        message,
+    )?
+    print(oid.hex(object.write_object(repo, "commit", bytes)?)?)
+    0
+}
+
+fn mktag(args: List[str]) -> int ! Errors {
+    if args.len != 1 { return Unsupported("mktag options") }
+    let repo = repository.discover(".")?
+    let data = input("-")?
+    let parsed = object.parse_tag(data, "sha1") else |_| {
+        if data.len == 0 {
+            eprint("error: tag input does not pass fsck: unterminatedHeader: unterminated header")
+        } else {
+            eprint(
+                "error: tag input does not pass fsck: missingObject: invalid format - expected 'object' line",
+            )
+        }
+        eprint("fatal: tag on stdin did not pass our strict fsck check")
+        return 128
+    }
+    if parsed.fields.len != 4 || parsed.fields[3].key != "tagger" {
+        return Unsupported("mktag strict header diagnostics")
+    }
+    let id = oid.parse("sha1", str_from_utf8(parsed.fields[0].value) else "")?
+    let kind = str_from_utf8(parsed.fields[1].value) else ""
+    let name = str_from_utf8(parsed.fields[2].value) else ""
+    let tagger = str_from_utf8(parsed.fields[3].value) else ""
+    if name == "" ||
+        name.contains(" ") ||
+        name.contains("\n") ||
+        name.contains("\0") ||
+        !valid_tagger(tagger) {
+        return Unsupported("mktag strict identity diagnostics")
+    }
+    if object.read_object(repo, id, 1000000000)?.kind != kind { return invalid_header }
+    print(oid.hex(object.write_object(repo, "tag", data)?)?)
+    0
+}
+
+fn mktree(args: List[str]) -> int ! Errors {
+    var zero = false
+    var missing = false
+    for arg in args[1..] {
+        if arg == "-z" {
+            zero = true
+        } else if arg == "--missing" {
+            missing = true
+        } else {
+            return Unsupported("mktree {arg}")
+        }
+    }
+    let repo = repository.discover(".")?
+    let data = input("-")?
+    var entries = List[object.TreeEntry]()
+    var start = 0
+    var pos = 0
+    let delimiter = if zero then 0 as byte else 10 as byte
+    while pos < data.len {
+        while pos < data.len && data[pos] != delimiter { pos += 1 }
+        var tab = start
+        while tab < pos && data[tab] != 9 as byte { tab += 1 }
+        if tab == pos { return invalid_tree }
+        let prefix = str_from_utf8(data[start..tab]) else |_| { return invalid_tree }
+        let parts = prefix.split(" ")
+        if parts.len != 3 { return invalid_tree }
+        var mode = 0
+        for b in parts[0].bytes() {
+            if b as int < 48 || b as int > 55 || mode > 0o170000 { return invalid_tree }
+            mode = mode * 8 + b as int - 48
+        }
+        if object.mode_kind(mode)? != parts[1] { return invalid_tree }
+        let id = oid.parse("sha1", parts[2])?
+        if !missing &&
+            mode != 0o160000 &&
+            object.read_object(repo, id, 1000000000)?.kind != parts[1] {
+            return invalid_tree
+        }
+        let name = data[tab + 1..pos]
+        if !zero && name.len > 0 && name[0] == 34 as byte {
+            return Unsupported("mktree quoted text; use -z")
+        }
+        (mut entries).push(object.TreeEntry { mode: mode, name: name, id: id })
+        pos += 1
+        start = pos
+    }
+    print(oid.hex(object.write_object(repo, "tree", object.build_tree(entries, "sha1")?)?)?)
+    0
+}
+
+fn dispatch(args: List[str]) -> int ! Errors {
+    match args[0] {
+        "init" => init(args)?,
+        "hash-object" => hash_object(args)?,
+        "cat-file" => cat_file(args)?,
+        "commit-tree" => commit_tree(args)?,
+        "mktag" => mktag(args)?,
+        "mktree" => mktree(args)?,
+        "write-tree" => {
+            if args.len != 1 { return Unsupported("write-tree options") }
+            let repo = repository.discover(".")?
+            print(oid.hex(index.write_tree(repo, 16777216)?)?)
+            0
+        },
+        _ => { return Unsupported(args[0]) },
+    }
+}
+
+/// Thin process edge; no recoverable row escapes main and no subprocess exists.
+pub fn run(args: List[str]) -> int {
+    dispatch(args) else |e| match e {
+        Unsupported(feature) => { eprint("den: not yet implemented: {feature} (M1, vc02)"); 2 },
+        not_found => {
+            eprint("fatal: not a git repository (or any of the parent directories): .git")
+            128
+        },
+        _ => { eprint("fatal: den: {e}"); 128 },
+    }
+}
