@@ -103,3 +103,29 @@ examples are black-box measurements, not prose-derived goldens.
 - Python zlib and the pinned Git are independent black-box test oracles only.
   No zlib, miniz, libdeflate, zlib-ng, Git or other codec/VCS implementation
   source was consulted; no external codec is linked or invoked by den.
+
+## Object store derivation (vc02)
+
+Primary documentation read before implementation, Git v2.56.0 documentation
+only (raw.githubusercontent.com/git/git/v2.56.0/Documentation):
+
+- gitrepository-layout(5), Description and named entries, including gitfiles;
+  technical/repository-version.adoc, Versions 0 and 1.
+- gitformat-loose(5), Loose objects and Loose object mapping (mapping deferred).
+- git-init(1), Description, Options, Template Directory; empty-template policy.
+- git-hash-object(1), Description and Options; git-cat-file(1), Description,
+  Options, Output and Batch Output (batch deferred).
+- git-mktree(1), Description and Options; git-write-tree(1), Description and
+  Options; gitformat-index(5), File header, Index entry and Cache tree extension.
+- git-commit-tree(1), Description, Options, Commit Information; date-formats.adoc
+  and i18n.adoc in full. git-mktag(1), Description, Options and Tag Format.
+- gitformat-signature(5), Description, Tag signatures, Commit signatures and
+  Mergetag signatures: SP-prefixed continuation lines, not signature checking.
+- Git user manual, The Object Database (commit/tree/blob/tag) and Object storage
+  format only; no source-code overview consulted.
+- Pro Git 2nd edition §10.2, Git Objects, Tree Objects, Commit Objects, Object
+  Storage, https://git-scm.com/book/en/v2/Git-Internals-Git-Objects; read the
+  documentation, did not copy its illustrative Ruby.
+- FIPS 180-4 §§4.1.1, 5.1.1, 5.2.1, 5.3.1, 6.1.1–6.1.2, printed pages
+  10, 13–14, 18–20; https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.180-4.pdf.
+  SHA-1 implementation remains den's merged, provenance-marked hash module.
