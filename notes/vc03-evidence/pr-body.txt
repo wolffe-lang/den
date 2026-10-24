@@ -1,0 +1,44 @@
+Footprint: cross-cutting
+
+## Forbidden
+
+Documentation and black-box pinned Git only. No Git or other VCS implementation
+source, sample hooks or templates. No production dependency beyond wolf-std
+and den's merged code. No Mac builds, host package installation, label, trunk
+push, merge, tag, release, issue writes, memory/config/planning edits.
+
+## Inputs verified
+
+- Base: b017d29655e174ad0b75fb8b6a286352da02346b, den#6 MERGED.
+- Contract, track index, RULES sections 1-10, wolf guide read before code.
+- hasu lane environment read; block A, flock, inside-container CPUs 0-5,
+  12 GiB memory cap. Oracle and toolchain binary verification pending.
+
+## Prediction
+
+Recorded before implementation; predictions, not measurements:
+- Git 2.56.0 writes no index extension immediately after the first add of two
+  files; write-tree and commit each write TREE and no other extension.
+- Adding a new root file retains TREE with root entry count -1, child count 0,
+  and no root OID (the cache is invalidated, not globally discarded).
+- The generated status matrix will measure 48 distinct complete stdout texts.
+- --date=now is not deterministic under GIT_COMMITTER_DATE alone: author time
+  still follows the wall clock. Recommend a named refusal unless measured otherwise.
+- The final main differential case list will contain 300 cases (86 inherited
+  plus 214 new); separate generated matrices will be counted independently.
+- The stat-proof harness will validate 512 per-entry tool-side stat rows.
+
+## Evidence index
+
+Pending implementation and measurements. The wrapper prohibits Markdown report
+files; this .txt file and the eventual PR body are the contract's fallback.
+
+## Done-when
+
+- [x] Prediction recorded before code.
+- [ ] Config parser and precedence measured.
+- [ ] Index v2 write, v3/v4 read, extensions, exclusive lock, per-entry stat proof.
+- [ ] Ignore rules; add/rm/mv; status; commit/ref/reflog; path restore.
+- [ ] M1 unchanged, M2 matrix, three plants red by CI run id.
+- [ ] Public consumer API/client, docs, README, issues and contract adjustments.
+- [ ] Final head pushed; status read once; audit last line; orchestrator watches CI.
