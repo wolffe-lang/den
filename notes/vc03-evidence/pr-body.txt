@@ -43,6 +43,16 @@ measurement. Root 9c898195cdbc9aea467ac6ef0871143f5d6a2a8a amended to
 76d797c00058b03dc350051f32a1927c2d77f1b2: ORIG_HEAD stayed absent. A further
 amend with preexisting ORIG_HEAD retained its exact bytes. Reproducer and both
 commands/outputs are retained in the named JSON. No reviewed divergence.
+
+R-vc03-3 A adopted by the coordinator: canonicalize exactly ctime_s/ns,
+mtime_s/ns, dev and ino, each proven against the tool's own lstat; retain mode,
+uid, gid and size byte-for-byte between tools. All ten words remain in each
+proof row. Git add --chmod=+x writes mode 33261 (100755) while own lstat remains
+33188 (100644); the worktree is untouched. This is not a wildcard or permission
+to normalize logical index mode. tools/vc03-index-measure.py and index-oracle.json
+retain that witness plus nested ITA, TREE child order and nine version transitions.
+Git config index.version 2 or 3 writes v2 without extended bits and v3 with them;
+v4 stays v4 through all three transitions.
 --date=now author seconds changed 1792881244 -> 1792881246 with fixed committer
 1700000000; the contract's named refusal is required, not deterministic parsing.
 

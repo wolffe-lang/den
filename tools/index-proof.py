@@ -1,4 +1,4 @@
-"""R-vc03-1: independently prove each differing index entry's own stat words.
+"""R-vc03-1 / R-vc03-3: prove each canonicalized stat word against own lstat.
 Git gitformat-index(5), Index entry. No implementation source consulted.
 Only identity/time words differ between fixture copies; all other bytes stay exact.
 """
@@ -95,14 +95,15 @@ def proof(repo, raw):
             observed = [x & 0xffffffff for x in observed]
         rows.append(dict(path_hex=entry['name'].hex(), stage=entry['key'][1],
                          index_stat=entry['words'], own_worktree_stat=observed,
-                         proven=entry['words'] == observed))
+                         own_stat_equal=entry['words'] == observed,
+                         proven=observed is not None and entry['words'][:6] == observed[:6]))
     return rows
 
 
 def canonical_pair(left, right, left_rows, right_rows):
-    """No normalization unless BOTH sides prove the differing entry in full.
+    """No normalization unless BOTH sides prove all six differing timing/identity words.
     Unchanged cached entries retain original bytes and require no fresh stat.
-    Mode/uid/gid/size are deliberately never normalized (stronger than R-vc03-1).
+    Mode/uid/gid/size are never normalized, per adopted R-vc03-3 A.
     """
     aa, bb = entries(left), entries(right)
     if len(aa) != len(bb) or len(aa) != len(left_rows) or len(bb) != len(right_rows):
@@ -119,7 +120,7 @@ def canonical_pair(left, right, left_rows, right_rows):
         if x['words'] == y['words']:
             continue
         for entry, row in ((x, px), (y, py)):
-            if row['proven'] is not True or row['own_worktree_stat'] != entry['words']:
+            if row['proven'] is not True or row['own_worktree_stat'] is None or row['own_worktree_stat'][:6] != entry['words'][:6]:
                 raise ValueError('unproven index stat '+entry['name'].hex())
         # Only the six timing/device/inode u32 words vary in cloned fixtures.
         a[x['offset']:x['offset']+24] = b'\0'*24
