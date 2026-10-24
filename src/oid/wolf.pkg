@@ -1,0 +1,5 @@
+pkg {
+    name: "oid",
+    edition: "1",
+    deps: {hash: {path: "../hash"}},
+}

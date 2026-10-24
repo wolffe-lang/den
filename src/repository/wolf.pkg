@@ -1,0 +1,5 @@
+pkg {
+    name: "repository",
+    edition: "1",
+    capabilities: [fs, env],
+}

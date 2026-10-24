@@ -1,0 +1,12 @@
+pkg {
+    name: "object-client",
+    edition: "1",
+    capabilities: [env, fs],
+    deps: {
+        object: {path: "../../src/object"},
+        oid: {path: "../../src/oid"},
+        repository: {path: "../../src/repository"},
+        hash: {path: "../../src/hash"},
+        zlib: {path: "../../src/zlib"},
+    },
+}

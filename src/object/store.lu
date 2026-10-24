@@ -1,0 +1,158 @@
+use std.fs
+use oid
+use repository
+
+/// Loose storage errors include repository configuration and filesystem outcomes.
+pub error StoreErrors = {
+    invalid,
+    invalid_oid,
+    unsupported_format,
+    bad_header,
+    bad_size,
+    bad_oid,
+    truncated,
+    dictionary,
+    checksum,
+    limit,
+    trailing,
+    unsupported_level,
+    not_found,
+    denied,
+    io,
+    exists,
+    unsupported,
+    Unsupported(str),
+    ambiguous,
+    cross_device,
+}
+
+/// Canonical loose path; validate public Oid values before path construction.
+pub fn path(repo: repository.Repo, id: oid.Oid) -> str ! StoreErrors {
+    let text = oid.hex(id)?
+    if id.algorithm != "sha1" { return unsupported_format }
+    "{repo.gitdir}/objects/{text[0..2]}/{text[2..]}"
+}
+
+/// Read only one bounded loose file, never load a repository or fallback pack.
+pub fn read_object(repo: repository.Repo, id: oid.Oid, max_output: int) -> Object ! StoreErrors {
+    if max_output < 0 || max_output > 1000000000 { return limit }
+    let input = repository.read_bytes(path(repo, id)?, max_output + max_output / 100 + 65536)?
+    decode(input, id, max_output)?
+}
+
+/// Resolve a loose oid/prefix; missing and ambiguous are distinct rows.
+/// Full-width ids are returned even when missing (read_object tests presence).
+pub fn lookup(repo: repository.Repo, name: str) -> oid.Oid ! StoreErrors {
+    let prefix = oid.prefix("sha1", name)?
+    if prefix.len == 40 { return oid.parse("sha1", prefix)? }
+    let dir = "{repo.gitdir}/objects/{prefix[0..2]}"
+    let entries = fs.entries(dir)?
+    var found = ""
+    for entry in entries {
+        let suffix = str_from_utf8(entry.name) else ""
+        if suffix.len == 38 {
+            let candidate = "{prefix[0..2]}{suffix}"
+            let _ = oid.parse("sha1", candidate) else |_| { continue }
+            if candidate.starts_with(prefix) && entry.kind == 0 {
+                if found != "" { return ambiguous }
+                found = candidate
+            }
+        }
+    }
+    if found == "" { return not_found }
+    oid.parse("sha1", found)?
+}
+
+/// Resolve HEAD/loose refs only, with bounded traversal. Revision grammar is later.
+pub fn resolve(repo: repository.Repo, name: str) -> oid.Oid ! StoreErrors {
+    let normalized = oid.prefix("sha1", name) else ""
+    if normalized != "" { return lookup(repo, normalized)? }
+    if name.contains("..") || name.starts_with("/") || name.contains("\\") { return invalid_oid }
+    var refname = name
+    if name != "HEAD" && !name.starts_with("refs/") {
+        if fs.is_file("{repo.gitdir}/refs/heads/{name}") {
+            refname = "refs/heads/{name}"
+        } else if fs.is_file("{repo.gitdir}/refs/tags/{name}") {
+            refname = "refs/tags/{name}"
+        } else {
+            return not_found
+        }
+    }
+    for _ in 0..8 {
+        let raw = repository.read_bytes("{repo.gitdir}/{refname}", 4096)?
+        let text = str_from_utf8(raw) else |_| { return invalid_oid }
+        let line = text.trim()
+        if !line.starts_with("ref: ") { return oid.parse("sha1", line)? }
+        refname = line[5..]
+        if !refname.starts_with("refs/") || refname.contains("..") || refname.contains("\\") {
+            return invalid_oid
+        }
+    }
+    invalid_oid
+}
+
+/// Install complete immutable bytes using exclusive temp + fsync + hard link.
+/// link is atomic no-replace; unlike rename it cannot clobber another writer.
+/// A preexisting object must validate to the same oid. No environment failpoints.
+pub fn write_object(repo: repository.Repo, kind: str, data: List[byte]) -> oid.Oid ! StoreErrors {
+    write_injected(repo, kind, data, "")?
+}
+
+/// Explicit dependency-injection seam for owned-fixture failure tests only.
+/// write/sync/install fail before publication; directory-sync fails after a
+/// complete object is published. All temp names are removed on ordinary errors.
+pub fn write_injected(
+    repo: repository.Repo,
+    kind: str,
+    data: List[byte],
+    fail: str,
+) -> oid.Oid ! StoreErrors {
+    let checked = repository.open(repo.gitdir)?
+    let _ = repository.compression(checked)?
+    let id = identify(kind, data)?
+    let destination = path(checked, id)?
+    if fs.exists(destination) {
+        let existing = read_object(checked, id, data.len)?
+        if existing.kind != kind || existing.data.len != data.len { return bad_oid }
+        for i in 0..data.len { if existing.data[i] != data[i] { return bad_oid } }
+        return id
+    }
+    let dir = fs.parent(destination) else |_| { return invalid }
+    fs.create_dir_all(dir)?
+    let encoded = encode(kind, data, data.len + data.len / 100 + 65536)?
+    // Exclusive numbered candidates work across processes without shared state.
+    for serial in 0..1024 {
+        let temp = "{dir}/tmp_den_{serial}"
+        var file = fs.create_new_with_mode(temp, 0o444) else |e| match e {
+            exists => { continue },
+            not_found => { return not_found },
+            denied => { return denied },
+            invalid => { return invalid },
+            unsupported => { return unsupported },
+            io => { return io },
+        }
+        defer fs.remove(temp) else |_| {}
+        var closed = false
+        defer { if !closed { fs_close(file.fd) else |_| {} } }
+        if fail == "write" { return io }
+        fs.write_chunk(mut file, encoded)?
+        if fail == "sync" { return io }
+        fs.sync(mut file)?
+        fs_close(file.fd)?
+        closed = true
+        if fail == "install" { return io }
+        fs.link(temp, destination) else |e| match e {
+            exists => { let _ = read_object(checked, id, data.len)? },
+            not_found => { return not_found },
+            denied => { return denied },
+            cross_device => { return cross_device },
+            io => { return io },
+        }
+        fs.remove(temp)?
+        if fail == "directory-sync" { return io }
+        fs.sync_dir(dir)?
+        fs.sync_dir("{checked.gitdir}/objects")?
+        return id
+    }
+    exists
+}

@@ -1,0 +1,27 @@
+use object
+use oid
+use repository
+
+fn work(args: List[str]) -> int ! object.StoreErrors {
+    if args.len < 3 { return invalid }
+    let repo = repository.open(args[1])?
+    if args[0] == "read" {
+        if args.len != 4 { return invalid }
+        let cap = args[3].to_int() else |_| { return invalid }
+        let value = object.read_object(repo, oid.parse("sha1", args[2])?, cap)?
+        print("{value.kind} {value.data.len}")
+    } else if args[0] == "lookup" {
+        print(oid.hex(object.lookup(repo, args[2])?)?)
+    } else if args[0] == "write" {
+        if args.len != 5 { return invalid }
+        let data = repository.read_bytes(args[3], 1000000000)?
+        print(oid.hex(object.write_injected(repo, args[2], data, args[4])?)?)
+    } else {
+        return invalid
+    }
+    0
+}
+
+fn main() -> int {
+    work(env_args()) else |e| { eprint("{e}"); 1 }
+}

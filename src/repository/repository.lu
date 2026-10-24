@@ -1,0 +1,212 @@
+use std.fs
+
+/// Validated administrative directory; worktrees/alternates are not yet supported.
+pub struct Repo {
+    gitdir: str,
+    config: Map[str, str],
+}
+
+/// IO errors remain actionable; unsupported repository features carry their name.
+pub error RepoErrors = {
+    not_found,
+    denied,
+    io,
+    invalid,
+    exists,
+    unsupported,
+    limit,
+    Unsupported(str),
+}
+
+/// Bounded binary read, including a growth check after stat; never reads a pack.
+pub fn read_bytes(path: str, cap: int) -> List[byte] ! RepoErrors {
+    if cap < 0 { return invalid }
+    var f = fs.open(path)?
+    defer fs.close(take f) else |_| {}
+    let info = fs_fstat_record(f.fd) else |_| { return io }
+    if info[1] > cap { return limit }
+    var out = List[byte]()
+    loop {
+        region chunk {
+            let bytes = fs.read_chunk(mut f, 65536) else |e| match e {
+                eof => { break },
+                io => { return io },
+            }
+            if bytes.len > cap - out.len { return limit }
+            for b in bytes { (mut out).push(b) }
+        }
+    }
+    out
+}
+
+/// Minimal scalar config grammar. Includes/escapes/subsections are named refusals,
+/// never silently ignored when repository safety or an identity might depend on them.
+pub fn read_config(path: str, mut values: Map[str, str]) -> () ! RepoErrors {
+    let bytes = read_bytes(path, 1048576) else |e| match e {
+        not_found => { return },
+        denied => { return denied },
+        io => { return io },
+        invalid => { return invalid },
+        exists => { return exists },
+        unsupported => { return unsupported },
+        limit => { return limit },
+        Unsupported(x) => { return Unsupported(x) },
+    }
+    let text = str_from_utf8(bytes) else |_| { return invalid }
+    var section = ""
+    for raw in text.split("\n") {
+        let line = raw.trim()
+        if line.len == 0 || line.starts_with("#") || line.starts_with(";") { continue }
+        if line.contains("\\") { return Unsupported("config escapes") }
+        if line.starts_with("[") {
+            if !line.ends_with("]") { return invalid }
+            section = line[1..line.len - 1].trim().lower()
+            if section.contains("\"") || section.contains(" ") {
+                return Unsupported("config subsection")
+            }
+            if section == "include" || section == "includeif" {
+                return Unsupported("config includes")
+            }
+        } else {
+            if section == "" { return invalid }
+            let at = line.find("=") else |_| { return Unsupported("implicit config boolean") }
+            let key = line[0..at].trim().lower()
+            var value = line[at + 1..].trim()
+            if value.starts_with("\"") {
+                if !value.ends_with("\"") || value.len < 2 { return invalid }
+                value = value[1..value.len - 1]
+            } else {
+                let hash = value.find("#") else value.len
+                let semi = value.find(";") else value.len
+                let end = if hash < semi then hash else semi
+                value = value[0..end].trim()
+            }
+            if key.len == 0 { return invalid }
+            values["{section}.{key}"] = value
+        }
+    }
+}
+
+/// Load explicit global config, otherwise HOME/.gitconfig. System config is
+/// refused unless the caller opted out, rather than accidentally overridden.
+pub fn global_config() -> Map[str, str] ! RepoErrors {
+    var values = Map[str, str]()
+    if (env_get("GIT_CONFIG_NOSYSTEM") else "") != "1" && fs.exists("/etc/gitconfig") {
+        return Unsupported("system config")
+    }
+    let path = env_get("GIT_CONFIG_GLOBAL") else "{env_get("HOME") else "."}/.gitconfig"
+    read_config(path, mut values)?
+    values
+}
+
+/// Refuse unsupported formats before any object write, including at version 0.
+pub fn open(gitdir: str) -> Repo ! RepoErrors {
+    let absolute = fs.realpath(gitdir)?
+    if !fs.is_file("{absolute}/HEAD") || !fs.is_dir("{absolute}/objects") { return not_found }
+    if fs.exists("{absolute}/commondir") { return Unsupported("linked worktree commondir") }
+    if fs.exists("{absolute}/objects/info/alternates") { return Unsupported("object alternates") }
+    var values = global_config()?
+    read_config("{absolute}/config", mut values)?
+    let version = values["core.repositoryformatversion"] else "0"
+    if version != "0" && version != "1" {
+        return Unsupported("core.repositoryformatversion={version}")
+    }
+    for (key, value) in values.pairs() {
+        if key.starts_with("extensions.") {
+            if key != "extensions.objectformat" || value != "sha1" {
+                return Unsupported("{key}={value}")
+            }
+        }
+    }
+    Repo { gitdir: absolute, config: values }
+}
+
+/// Follow a .git gitfile without treating it as an absent repository.
+fn gitfile(path: str) -> str ! RepoErrors {
+    let bytes = read_bytes(path, 4096)?
+    let text = str_from_utf8(bytes) else |_| { return invalid }
+    if !text.starts_with("gitdir: ") { return invalid }
+    let value = text[8..].trim()
+    if value.starts_with("/") { return value }
+    "{fs.parent(path) else "."}/{value}"
+}
+
+/// Discover upward from start, or honor explicit GIT_DIR; no shell subprocess.
+pub fn discover(start: str) -> Repo ! RepoErrors {
+    for name in ["GIT_COMMON_DIR", "GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES"] {
+        if (env_get(name) else "") != "" { return Unsupported(name) }
+    }
+    let explicit = env_get("GIT_DIR") else ""
+    if explicit != "" { return open(explicit)? }
+    var dir = fs.realpath(start)?
+    loop {
+        if fs.is_dir("{dir}/.git") { return open("{dir}/.git")? }
+        if fs.is_file("{dir}/.git") { return open(gitfile("{dir}/.git")?)? }
+        if fs.is_file("{dir}/HEAD") && fs.is_dir("{dir}/objects") { return open(dir)? }
+        let parent = fs.parent(dir) else |_| { return not_found }
+        if parent == dir { return not_found }
+        dir = parent
+    }
+}
+
+/// Return the level this store implements, refusing other settings by name.
+pub fn compression(repo: Repo) -> int ! {Unsupported(str)} {
+    for key in ["core.compression", "core.loosecompression"] {
+        let value = repo.config[key] else "1"
+        if value != "1" && value != "-1" { return Unsupported("{key}={value}") }
+    }
+    1
+}
+
+/// Initialize only the measured empty-template surface; preserve existing data.
+/// Returns repository and whether this was reinitialization.
+pub fn init(path: str, bare: bool, branch: str) -> (Repo, bool) ! RepoErrors {
+    if branch == "" ||
+        branch.contains("..") ||
+        branch.contains("@{{") ||
+        branch.starts_with("/") ||
+        branch.ends_with("/") ||
+        branch.ends_with(".") {
+        return invalid
+    }
+    for b in branch.bytes() {
+        if b as int <= 32 ||
+            b as int == 127 ||
+            b == 126 as byte ||
+            b == 94 as byte ||
+            b == 58 as byte ||
+            b == 63 as byte ||
+            b == 42 as byte ||
+            b == 91 as byte ||
+            b == 92 as byte {
+            return invalid
+        }
+    }
+    for part in branch.split("/") {
+        if part == "" || part.starts_with(".") || part.ends_with(".lock") { return invalid }
+    }
+    let globals = global_config()?
+    let _ = globals
+    fs.create_dir_all(path)?
+    var dir = if bare then path else "{path}/.git"
+    if fs.is_file(dir) { dir = gitfile(dir)? }
+    let reinit = fs.is_file("{dir}/HEAD")
+    if reinit { let _ = open(dir)? }
+    fs.create_dir_all(dir)?
+    for name in ["objects/info", "objects/pack", "refs/heads", "refs/tags", "hooks"] {
+        fs.create_dir_all("{dir}/{name}")?
+    }
+    if !reinit {
+        var head = fs.create_new_with_mode("{dir}/HEAD", 0o644)?
+        fs.write(mut head, "ref: refs/heads/{branch}\n")?
+        fs.sync(mut head)?
+        fs.close(take head)?
+        var config = fs.create_new_with_mode("{dir}/config", 0o644)?
+        let tail = if bare then "\tbare = true\n" else "\tbare = false\n\tlogallrefupdates = true\n"
+        fs.write(mut config, "[core]\n\trepositoryformatversion = 0\n\tfilemode = true\n{tail}")?
+        fs.sync(mut config)?
+        fs.close(take config)?
+        fs.sync_dir(dir)?
+    }
+    (open(dir)?, reinit)
+}

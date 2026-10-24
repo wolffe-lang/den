@@ -1,0 +1,11 @@
+pkg {
+    name: "object",
+    edition: "1",
+    capabilities: [fs, env],
+    deps: {
+        oid: {path: "../oid"},
+        hash: {path: "../hash"},
+        zlib: {path: "../zlib"},
+        repository: {path: "../repository"},
+    },
+}
