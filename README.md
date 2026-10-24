@@ -38,7 +38,8 @@ flock ~/lanes/kasumi-cores-12-15.lock \
 
 The gate fetches the complete toolchain archives, builds/verifies the signed
 oracle, checks formatting, builds native/release, runs SHA tests on native and
-the actual checked machine, constructs the corpus twice, runs harness selftests
+the actual checked machine, gates a local TLS handshake (checked budget refusal
+counted), constructs the corpus twice, runs harness selftests
 and the matrix, then builds the static Linux binary twice. `tools/mkden OUTDIR`
 checks ET_EXEC/no PT_INTERP and prints both full and stripped binary digests.
 Baseline Ubuntu libraries are used, never the host's architecture-tuned glibc.

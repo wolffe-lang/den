@@ -33,7 +33,7 @@ container on kasumi CPUs 12–15. “Checked” below means the observation's
 
 | Need | Exact surface; measured verdict | Witness / disposition |
 |---|---|---|
-| SHA-1 / SHA-256 | `hash.new1/update1/final1/sum1`, SHA-1 rounds from boreutils; `std.x.crypto.sha2.sum256`, exposed as `hash.sum256` | `hash`, `src/hash_test.lu`: abc and 56-byte standard answers on native + checked; provenance correction R-vc00-1 |
+| SHA-1 / SHA-256 | `hash.new1/update1/final1/sum1`, SHA-1 rounds from boreutils; `std.x.crypto.sha2.sum256`, exposed as `hash.sum256` | `hash`, `src/hash_test.lu`: empty, abc and 56-byte standard answers plus five streaming splits on native + checked; provenance correction R-vc00-1 |
 | zlib inflate/deflate | Absent; no `std.compress` module | `deflate`: E0301 native + checked; own-source grep finds cryptographic/DNS compression and configuration names, no zlib codec. vc01 is the component, not an FFI dependency |
 | Files / metadata | `fs_fstat_record` returns all 20 words, with `have=1048575` here. ctime_s/ns [16/17], mtime_s/ns [14/15], dev [9], ino [10], mode [4], uid [6], gid [7], size [1] | `stat`: native + checked. mtime exactly 1700000001.987654321; size 6. Mode is permission bits only: construct Git's type bits from kind. Index words truncate to 32 bits, without a trapping signed cast |
 | File operations | `std.fs.create_new_with_mode`, `move_file`, `sync`, `sync_dir`, `symlink`, `read_link`, `lstat`, `realpath`, `entries`; builtin `fs_lock/unlock` | `files`: native + checked, exclusive creation, sync/rename, lock/unlock and symlink round trip. Unix advisory locks are not Git's `.lock`-file protocol; use exclusive create for that |
@@ -47,7 +47,7 @@ container on kasumi CPUs 12–15. “Checked” below means the observation's
 | Regex | No `std.regex` | `regex`: E0301 native + checked; existing wolf-std#99. Vendor scent only when log --grep/-G needs it |
 | Globs | No `std.glob` | `glob`: E0301 native + checked; implement Git ignore/pathspec grammar in den, not a new generic dependency |
 | Big integers | No `std.bigint`; not needed by den | `bigint`: E0301 native + checked, existing wolf-std#100 |
-| Large packs / memory | `fs_read_at`, `fs_seek`, per-window region reclamation; no `fs_mmap` builtin | `read-at`: native + checked scan 100,000,000-byte sparse file in 64-KiB windows. Native 11,063,324 ns; max RSS 2,572 KiB (one measurement, warm page cache; not a disk benchmark). `mmap`: E0301 on both. Use a bounded window cache, not whole-pack reads |
+| Large packs / memory | `fs_read_at`, `fs_seek`, per-window region reclamation; no `fs_mmap` builtin | `read-at`: native + checked scan 100,000,000-byte sparse file in 64-KiB windows. Native repeated reads after warm-up: 8,339,710 and 8,495,314 ns, median 8,417,512 ns; RSS 2,588–2,652 KiB (`gauntlet-8.log`). Sparse, warm-page-cache read, not a disk benchmark. `mmap`: E0301 on both. Use a bounded window cache, not whole-pack reads |
 | argv[0] | No `env_arg0` in 0.2.35 | `argv0`: E0301 native + checked. wolf-lang#904 is merged but unreleased; revisit the git alias when the pin moves |
 | C ABI / muzzle | No dependency: den is a hosted/static wolf executable over wolf-std | `muzzle` probe; README and LEDGER read. A future C-facing libden needs the C ABI membrane and an explicit allocator/ownership convention (malloc/free for caller-owned results), not muzzle as a VCS dependency |
 
@@ -116,7 +116,7 @@ That proof concerns oids, not inode-dependent index stat bytes.
 `tests/cases.json` names 32 cases. `tools/oracle --filter TEXT` selects a
 subset; an empty selection fails. `--strict` fails on not-yet rows. Normal M0
 mode counts those separately: 1 version-shape pass, 31 not-yet, 0 parity or
-reviewed rows. Every unexpected mismatch fails. Review JSON binds the case
+reviewed rows. Every unexpected mismatch fails. The gate also proves --strict refuses not-yet and an empty filter is an error; local native TLS is gated, with one actual checked budget refusal printed and counted. Review JSON binds the case
 hash and the complete Git/den stdout, stderr, status and .git file maps, with
 reason and issue/ruling; there is no wildcard, normalization or excluded file.
 A review stops matching when either side changes. The seed template is empty
