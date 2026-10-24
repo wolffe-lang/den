@@ -1,8 +1,9 @@
-"""Compare stdout, stderr, status, and EVERY .git file by exact bytes.
+"""Compare stdout, stderr, status and EVERY .git file.
+Only named loose-object-raw mode compares verified inflated bytes/oid (R4a).
 Reviewed rows bind both whole results AND the case identity. A refusal is a
 separate not-yet class, never counted as parity. No outputs are normalized.
 """
-import argparse, hashlib, json, os, pathlib, shutil, stat, subprocess, sys
+import argparse, hashlib, json, os, pathlib, re, shutil, stat, subprocess, sys, zlib
 R=pathlib.Path(__file__).resolve().parent.parent
 
 def snapshot(repo):
@@ -16,6 +17,34 @@ def snapshot(repo):
 def capture(command,repo):
     p=subprocess.run(command,cwd=repo,capture_output=True,timeout=60)
     return {'stdout':p.stdout.hex(),'stderr':p.stderr.hex(),'status':p.returncode,'repository':snapshot(repo)}
+
+def comparable(result, mode):
+    """Named R4a loose-object comparison; every other byte/mode stays exact.
+    Preserve original compressed bytes in evidence/review records. A corrupt
+    checksum, trailing garbage, wrong oid or malformed raw header never equals.
+    """
+    if mode == 'exact': return result
+    if mode != 'loose-object-raw': raise ValueError('unknown comparison mode '+mode)
+    normalized = {**result, 'repository': dict(result['repository'])}
+    for path, entry in result['repository'].items():
+        if not re.fullmatch(r'\.git/objects/[0-9a-f]{2}/[0-9a-f]{38}', path): continue
+        encoded = bytes.fromhex(entry['hex'])
+        decoder = zlib.decompressobj()
+        raw = decoder.decompress(encoded, 256_000_001)
+        if len(raw) > 256_000_000 or not decoder.eof or decoder.unused_data:
+            raise ValueError('invalid or oversized loose stream '+path)
+        header, body = raw.split(b'\0', 1)
+        kind, size = header.split(b' ')
+        if kind not in (b'blob', b'tree', b'commit', b'tag') or size != str(len(body)).encode():
+            raise ValueError('invalid loose header '+path)
+        oid = path.split('/')[-2]+path.split('/')[-1]
+        if hashlib.sha1(raw).hexdigest() != oid: raise ValueError('loose oid mismatch '+path)
+        normalized['repository'][path] = {**entry, 'hex': raw.hex(), 'comparison': mode}
+    return normalized
+
+def equivalent(expected, actual, mode='loose-object-raw'):
+    try: return comparable(expected, mode) == comparable(actual, mode)
+    except (ValueError, KeyError, zlib.error): return False
 
 def case_hash(case):return hashlib.sha256(json.dumps(case,sort_keys=True).encode()).hexdigest()
 
@@ -42,7 +71,7 @@ def one(case,base,den,git):
             and actual['stderr']=='' and actual['status']==0 and actual['repository']==before
             and bytes.fromhex(expected['stdout']).startswith(b'git version ') and expected['status']==0)
         return 'shape-pass' if ok else 'FAIL'
-    if expected==actual:return 'parity'
+    if equivalent(expected,actual,case.get('comparison','loose-object-raw')):return 'parity'
     refusal=f"den: not yet implemented: {args[0]} ({case['lane']})\n".encode().hex()
     if (actual['status']==2 and actual['stdout']=='' and actual['stderr']==refusal
             and actual['repository']==before):return 'not-yet'
@@ -72,6 +101,17 @@ def selftest():
     fake.chmod(0o755)
     version={'name':'selftest-version','repo':'two','args':['--version'],'kind':'version'}
     assert one(version,fixture,str(fake),os.environ['DEN_GIT'])=='FAIL'
+    raw=b'blob 3\0abc';oid=hashlib.sha1(raw).hexdigest();key='.git/objects/'+oid[:2]+'/'+oid[2:]
+    def object_result(encoded):
+        return {**a,'repository':{key:{'mode':0o444,'hex':encoded.hex()}}}
+    x=object_result(zlib.compress(raw,0));y=object_result(zlib.compress(raw,1))
+    assert x!=y and equivalent(x,y) and not equivalent(x,y,'exact')
+    bad=bytearray(zlib.compress(raw));bad[-1]^=1
+    assert not equivalent(x,object_result(bad))
+    assert not equivalent(x,object_result(zlib.compress(b'blob 3\0abd')))
+    assert not equivalent(x,object_result(zlib.compress(raw)+b'junk'))
+    assert not equivalent(x,{**y,'repository':{**y['repository'],'.git/HEAD':{'hex':'61','mode':0o644}}})
+    print('selftest: loose-object-raw accepts representation changes; checksum/oid/trailing and non-object bytes remain gated')
     print('selftest: actual classifier rejects planted one-byte version; stdout/repository plants rejected; exact review binding passes')
 
 def main():
