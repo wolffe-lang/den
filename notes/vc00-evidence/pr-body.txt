@@ -1,39 +1,173 @@
 Footprint: cross-cutting
 
 ## Forbidden
-Clean-room: documentation and black-box git only. No implementation source
-read; no dependency beyond wolf-std and org-own SHA-1. No Mac builds, labels,
-trunk pushes, releases, merges or issue writes. kasumi container, cores 12–15.
+
+Clean-room: Git documentation and black-box runs only; no Git implementation,
+libgit2 or other VCS implementation source read. No extra production dependency
+beyond wolf-std and provenance-marked org-own SHA-1. No Mac builds, PR labels,
+trunk pushes, merges, releases, tags, issue writes or memory/config edits.
+All local builds/probes/oracle jobs ran in the lane's pinned rootless Ubuntu
+container on kasumi CPUs 12–15 under the named flock; no group kills.
 
 ## Inputs verified
-- Base a1ca10e; prediction 0c9518d committed before implementation.
-- wolf 0.2.35 cf0c13d3; lupin tag 28547b4 (binary's embedded pin 294d626);
-  std 2386522e. Both release API digest reads are tracked as raw JSON.
-- git 2.56.0 tarball and signature hashed twice; Junio Hamano's primary and
-  signing subkey verified. Default build includes Rust, gettext and HTTPS.
-- R-vc00-1: 575dc7b has no SHA file. Recommend f87dc76 (formatted b603bb8 SHA
-  implementation); adopted provisionally in the provenance header.
+
+- `a1ca10e`: den base; `0c9518d`: prediction before implementation.
+- `4396426`: pinned scaffold; `0485d9d`: differential harness and corpus.
+- `d15b30e`: surface/format documentation and full follow-on contracts.
+- `ffa160a`: unpublished packaging drafts; `1dc0c73`: README refresh.
+- `1af286d`: cached oracle identity check and default-build tooling.
+- `ad0ffa4`: hash boundaries, exact classifier selftest and local TLS gate.
+- `51671aa`: tested-source manifest corrected to exclude generated caches.
+
+wolf 0.2.35 `cf0c13d3`, lupin v0.1.56 tag `28547b4` (its actual archive embeds
+`294d626`), bundled std `2386522e`. Every release archive digest was read twice
+from GitHub's API; all four raw API responses are tracked. The complete archives
+include the runtime pair; the std pin is verified, never mixed across trees.
+
+Git 2.56.0 tarball SHA-256
+`26c56c296b38c0695b26fa95f475f1d01704d2d38e73465ca30b0b2f5dc789d3`;
+signature SHA-256
+`bee7d2f96844063557b07b43811d81e1fc54563e0da2c36a975dfd432b196a5c`.
+Both hashed twice. Signature verified against Junio Hamano primary
+`96E07AF25771955980DAD10020D04E5A713660A7`, signing subkey
+`E1F036B1FEE7221FC778ECEFB0B5E88696AFE6CB`. Exact public key bytes are vendored
+because the keyserver returned reordered signature packets on another fetch.
+Default `make prefix=/opt/git`, no feature-disabling flags: Rust, gettext and
+HTTPS enabled. The oracle was built twice with identical binary SHA-256
+`c4848492938c4ebfffbefe1fbbaa68b9af90c86d1f6a20e76816c5ff37fcfa60`;
+cache hits and rebuilds now check that identity as well.
 
 ## Prediction
-See notes/vc00-evidence/prediction.txt, committed before code. Predicted
-32 cases, 31 not-yet rows, 1 version-shape pass: observed. Predicted missing
-nanoseconds: wrong, full 20-word fstat_record carries them on both machines.
+
+`notes/vc00-evidence/prediction.txt` was committed before code. Hits: 32 cases,
+31 named not-yet rows, 1 version-shape pass; missing write-only non-truncating
+open/raw paths/regex/globs/bigints/mmap/argv[0]; 15-byte empty loose blob/tree;
+the audit recognizes den. Misses: full fstat_record DOES carry nanoseconds;
+TLS is not absent, the native local handshake works with supported certificates;
+corpus oids reproduced on the first try; minimal empty-message commit measured
+120 compressed bytes rather than the predicted roughly 130. The 19 consulted
+Git pages/manuals exceeded the predicted 18. Checked TLS is a pre-handshake
+mem-budget refusal, not a successful or failed checked handshake.
 
 ## Evidence index
-- kasumi target-probes-5.log: planner test, checked/native census, both build
-  tiers, hash vectors, corpus twice, differential selftest, matrix and static
-  build twice green. Static SHA-256
-  03a0ff75f63a7833d8b4833338f3e356f485681ff5c1fddd8b7d56a11ea60651.
-- 32 cases: 1 shape-pass, 31 explicit not-yet, zero parity claims.
-- TLS probe and documentation census still being completed.
-- Tool instructions prohibit Markdown report notes; PR body carries the
-  five sections, raw evidence is notes/vc00-evidence/ (not a hidden report).
+
+Authoritative final local gate: `notes/vc00-evidence/final-gate.log`.
+`tested-inputs.sha256` binds every implementation/CI/probe input byte to that
+run; compared against the Mac worktree byte-for-byte after the run. Subsequent
+changes are report/documentation only. No build ran on the Mac.
+
+- Planner's own tests; native/release scaffold builds; formatting of src and
+  probes; native and actual checked SHA tests (empty/abc/56-byte answers and
+  five streaming splits); deterministic local native TLS with one checked
+  unsupported budget row printed and counted.
+- Nine repositories pass Git fsck; independent builds have identical oids
+  (`corpus-oids.json`). Corpus: two files, ten-commit line, branch/merge,
+  rename, binary, symlink, empty tree, 1,000 files, packed after gc.
+- `tests/cases.json`: **1 shape-pass, 31 not-yet, 0 parity, 0 reviewed,
+  0 unexpected failures**. The refusal class verifies exact stderr/status and
+  no repository writes. Strict mode and empty selection fail as intended.
+  No .git paths are excluded or normalized. Exact reviews bind case identity
+  and both complete results; none are accepted today.
+- Selftest drives the actual classifier with a one-byte version difference;
+  repository-only corruption and stale/exact review binding are tested too.
+  **CI seen red** for the one-byte source plant: PR #2, branch
+  `vc00-plant-version`, head `cd48397`, run **40130445507**, Linux differential
+  job prints `FAIL: version`, then `{"FAIL": 1, "not-yet": 31}`. PR #2 is
+  closed unmerged. `plant-version-red.log` retains the evidence. The fixed
+  version line was on vc00 before the plant.
+- First completed PR-tier run **40130339283**, at `4973868`, is green, including
+  planner test (`initial-pr-run.json`). The opened-event run was superseded
+  by a push, not a failed gate. The final-head status is read once at handoff;
+  the orchestrator owns the watch and full-matrix label.
+- Static binary built twice, ET_EXEC/no PT_INTERP: **14,700,920 bytes**,
+  SHA-256 `03a0ff75f63a7833d8b4833338f3e356f485681ff5c1fddd8b7d56a11ea60651`.
+  Stripped: **1,237,528 bytes**,
+  `095edba57ef5fe7bed731c0e7875d76288b2edb7034b4007e6d54469f47a6693`.
+- `probes/` and raw `notes/vc00-evidence/probes/*`: every census row measured.
+  fstat_record answers all 20 words, including mtime 1700000001.987654321.
+  TCP 00 ff 0a round-trip and subprocess pipes/wait=7 work native + checked.
+  strftime shape matches Git. entries preserve creation order z,a,m here.
+- Native 100,000,000-byte sparse/windowed reads after warm-up: 8,339,710 and
+  8,495,314 ns (median 8,417,512), RSS 2,588–2,652 KiB; not a disk benchmark.
+  Checked read_at also completes; no mmap exists. `gauntlet-8.log`.
+- TLS local Ed25519 native handshake/application bytes succeed. Both a
+  deterministic local RSA-signed certificate and GitHub:443 return
+  `complete=unsupported_alg`. Actual checked TLS verdict is unsupported:
+  mem-phase step budget exhausted before network execution.
+- `docs/FORMATS.md` and raw `formats/*.hex`: generated loose blob/tree/commit,
+  object/tag/tree-order, two-file index, two-object pack/idx, config/ref/reflog,
+  v2 advertisement, graph/bundle identifying headers, default/oneline log,
+  short/long status, unified/mode/rename/binary diffs and default blame.
+  Default loose compression matches zlib level 1: 953 bytes on the test
+  payload; core.compression=9 gives 627 (indistinguishable 7–9 here); explicit
+  loose level 0 gives 95,259. `tools/formats` produces them, not typed examples.
+- `compression-census.txt`: exact own-code scans at named revisions, including
+  pinned std; no deflate codec. Muzzle README/LEDGER read, no dependency.
+- Homebrew and AUR drafts reference nonexistent v0.1.0 with unfilled source
+  digest, never published or installed. PKGBUILD syntax checked; an installation
+  test is intentionally unavailable before that tag. README read and refreshed.
+
+### Proposed decisions, not rulings
+
+- **R-vc00-1**: requested boreutils `575dc7b` has no src/checksum/sha.lu.
+  Options: stop vendoring, or use implementation b603bb8 as formatted at
+  f87dc76. Recommend/use the latter provisionally; provenance states it.
+- **R-vc00-2**: R4a's compressed loose-byte identity conflicts with R9's new
+  fixed-Huffman encoder. Options: reproduce zlib's exact encoding, or require
+  identical raw object bytes/oid plus interoperable zlib and measured size.
+  Recommend the latter. No harness weakening implemented; vc01 draft is
+  explicitly conditional on the adopted decision.
+- **R-vc00-3**: v2 specifies fetch/ls-refs, not receive-pack push. Options:
+  defer push with all v0/v1, or allow traditional receive-pack framing for
+  push while retaining v2-only fetch. Recommend the latter; no wire code yet.
+
+### Issues for the orchestrator (none filed here)
+
+1. **wolf-std** — TLS public-PKI/RSA certificate profile gap. Witness
+   `TLS_PROBE_RSA=1 tools/probe-tls`, native `complete=unsupported_alg`, whereas
+   the Ed25519 local server succeeds. GitHub with explicit system DER roots
+   reproduces it. Probe: `probes/tls/main.lu`; driver and raw local-RSA/GitHub logs.
+2. **wolf-lang** — actual checked TLS program exhausts mem-phase budget before
+   running. Witness `.wolf-bin/wolf conform-run probes/tls/main.lu --checked
+   --json` through tools/probe-tls; both targets report unsupported/step budget.
+   Ask for a usable library-sized checked budget/configuration, not substitution
+   of `wolf run --checked` (native).
+
+Existing gaps verified by API, no duplicates proposed: wolf-lang#908 is the
+non-creating writable-open gap; #684 is st_blksize (not index-v2 data), #706
+rename-no-replace, #687/#912 byte paths, merged #904 argv[0] unreleased at this
+pin; wolf-std#99 regex and #100 bigint. Track table references #684/#706 should
+not be mistaken for a write-only-open issue. zlib/globs are den work.
+
+Full follow-on drafts for adoption:
+`notes/vc01-zlib-contract.md` (RFC codec, API, independent zlib cross-tests,
+object/pack integration, limits/plants), and `notes/vc02-object-store-contract.md`
+(objects/plumbing, headers, init/template ruling, write-tree/index boundary,
+Git interop/fsck, races/corruption, handoff to vc03). They are not launch
+permission; host block and the proposed decisions need adoption first.
 
 ## Done-when
-- [x] Prediction before code; toolchain and oracle pins by digest
-- [x] Signed default oracle built twice; checked/native surface probes
-- [x] Differential corpus oids reproduced twice; byte-mismatch selftest
-- [x] Static binary built twice with identical digest
-- [ ] Formats and surface documentation, evidence and packaging drafts
-- [ ] vc01 and vc02 contract drafts
-- [ ] CI byte plant observed red; audit quoted; final run status read once
+
+- [x] Prediction committed before implementation
+- [x] Toolchain API digests read twice; whole archives and bundled std pinned
+- [x] Signed default oracle built twice; cached binary identity checked
+- [x] Every census row has checked/native witness or explicit named refusal
+- [x] Source/format map, generated byte examples, exact pinned environment bytes
+- [x] Reproducible nine-repo corpus, matrix/filter/review and strict rejection tests
+- [x] One-byte CI plant seen red in run 40130445507; PR closed unmerged
+- [x] First completed PR tier green, planner's own test green
+- [x] Static build twice identical; unpublished packaging drafts
+- [x] Full vc01/vc02 contract drafts, proposed issues/rulings, README refreshed
+- [ ] Final-head PR tier/full tier green — orchestrator watches, no lane wait/label
+- [ ] Audit output and its literal last line attached to the live PR at handoff
+
+The lane's tool instructions prohibit Markdown report notes, so the five-section
+report is in this PR plus `notes/vc00-evidence/pr-body.txt`; raw evidence is in
+`notes/vc00-evidence/`. No `notes/vc00-the-map.md` was written.
+
+Prune after adoption/merge, not before the evidence is checked: Mac worktrees
+`/Users/mfwolffe/lanes/vc00/target/plant-version` first, then
+`/Users/mfwolffe/lanes/vc00`; kasumi `/home/mfwolffe/lanes/vc00` (target ~1.1 GiB,
+.wolf-bin ~363 MiB); lane images localhost/den-vc00 and
+localhost/den-vc00-e10a7448e199, localhost/den-vc00-10796b735e37. No lane job or
+owned child is still running. Do not prune another lane's containers or caches.
