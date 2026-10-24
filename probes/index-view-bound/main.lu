@@ -1,6 +1,9 @@
 struct Entry { path: List[byte] }
+
 fn inner(path: List[byte]) -> Entry { Entry { path: copy path } }
+
 fn outer(path: List[byte]) -> Entry { inner(path) }
+
 fn main() {
     let bytes = "a".bytes()
     let result = outer(bytes)

@@ -4,6 +4,7 @@ R=pathlib.Path(__file__).resolve().parent.parent
 args=argparse.ArgumentParser();args.add_argument('--tier',default='native');args=args.parse_args()
 G=os.environ['DEN_GIT'];C=str(R/f'target/{args.tier}/index-client')
 P=runpy.run_path(str(R/'tools/index-proof.py'))
+O=runpy.run_path(str(R/'tools/oracle.py'))
 base=R/f'target/index-integration-{args.tier}'
 if base.exists():shutil.rmtree(base)
 base.mkdir()
@@ -24,6 +25,11 @@ def compare_indexes(a,b):
  x,y=(a/'.git/index').read_bytes(),(b/'.git/index').read_bytes()
  xx,yy,n=P['canonical_pair'](x,y,P['proof'](a,x),P['proof'](b,y))
  assert xx==yy,('index byte mismatch',a,b,x.hex(),y.hex())
+ aa=O['comparable']({'repository':O['snapshot'](a)},'loose-object-raw')
+ bb=O['comparable']({'repository':O['snapshot'](b)},'loose-object-raw')
+ aa['repository']['.git/index']['hex']=xx.hex()
+ bb['repository']['.git/index']['hex']=yy.hex()
+ assert aa==bb,('repository byte mismatch',a,b,aa,bb)
  return n
 
 proof_rows=0
@@ -96,6 +102,25 @@ for version in (2,3,4):
  assert (a/'.git/index').read_bytes()==(b/'.git/index').read_bytes()
  assert git(a,'write-tree')==client('write-tree',b/'.git')
  assert (a/'.git/index').read_bytes()==(b/'.git/index').read_bytes()
+ proof_rows+=compare_indexes(a,b)
+ # A nonempty root plus an ITA-only child must not publish extra loose objects.
+ for repo in (a,b):(repo/'kept').write_bytes(b'kept\n')
+ git(a,'add','kept')
+ client('add',b/'.git',version,b/'kept','kept','100644')
+ assert git(a,'write-tree')==client('write-tree',b/'.git')
+ proof_rows+=compare_indexes(a,b)
+
+# Fresh mixed index must not inherit an empty tree from an earlier write-tree.
+for version in (2,3,4):
+ a=fresh(f'git-fresh-mixed-{version}');b=fresh(f'den-fresh-mixed-{version}')
+ for repo in (a,b):
+  (repo/'d').mkdir();(repo/'d/pending').write_bytes(b'pending\n');(repo/'kept').write_bytes(b'kept\n')
+ git(a,'-c',f'index.version={version}','add','-N','d/pending')
+ git(a,'add','kept')
+ client('add',b/'.git',version,b/'d/pending','d/pending','100644',8192)
+ client('add',b/'.git',version,b/'kept','kept','100644')
+ assert git(a,'write-tree')==client('write-tree',b/'.git')
+ proof_rows+=compare_indexes(a,b)
 
 # True held lock waits on our pipe; release affects only this owned process.
 repo=fresh('held-lock')
