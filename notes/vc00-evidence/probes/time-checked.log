@@ -1,0 +1,1 @@
+{"commit":"cf0c13d","diagnostics":[],"file":"/work/den/probes/time/main.lu","impl":"wolfgang","impl_version":"0.2.35","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"Tue Nov 14 22:13:20 2023 +0000\n","stdout_sha256":"68f708dd434935439a8517e3e2997db95cae02ee3b7c613bebdd1d7a9f2e1bb2","verdict":"exit(0)","warnings":[]}

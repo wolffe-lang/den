@@ -1,0 +1,12 @@
+[user]
+	name = Den Tester
+	email = den@example.invalid
+[color]
+	ui = never
+[core]
+	pager = cat
+	hooksPath = /work/den/target/environment/empty-hooks
+[init]
+	defaultBranch = main
+[commit]
+	gpgsign = false

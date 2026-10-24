@@ -1,0 +1,12 @@
+error[E0301]: nothing named `env_arg0` is in scope
+ --> /work/den/probes/argv0/main.lu:1:19
+  |
+1 | fn main() { print(env_arg0() else "<missing>") }
+  |                   ^^^^^^^^ not found
+  |
+help: did you mean `env_args`?
+  |
+1 | fn main() { print(env_args() else "<missing>") }
+  |
+
+wolf build: the package does not compile; fix the errors above (`wolf --explain E0301` explains this code, or any other, by name)

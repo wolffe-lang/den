@@ -1,0 +1,1 @@
+{"commit":"cf0c13d","diagnostics":[],"file":"/work/den/probes/process/main.lu","impl":"wolfgang","impl_version":"0.2.35","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"stdout=[98, 111, 116, 104, 32, 119, 97, 121, 115] wait=7\n","stdout_sha256":"a67f6765e7944bf67107f09ddfced9b3031729f4e51ba8b515849005d9716fd3","verdict":"exit(0)","warnings":[]}

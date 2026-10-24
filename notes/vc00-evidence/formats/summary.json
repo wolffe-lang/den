@@ -1,0 +1,44 @@
+{
+  "compression": {
+    "core.compression=9": {
+      "matching_zlib_levels": [
+        7,
+        8,
+        9
+      ],
+      "sha256": "af3ca86e356a106ad9ce54412647bb1d63fa672cc7c5e14cb8c945adefd74ff0",
+      "size": 627
+    },
+    "core.looseCompression=0": {
+      "matching_zlib_levels": [
+        0
+      ],
+      "sha256": "bdfe94acd2dbec3fd26c7797a2130dbcf3f4c2ca5a7072c3c35392564ad0f65b",
+      "size": 95259
+    },
+    "default": {
+      "matching_zlib_levels": [
+        1
+      ],
+      "sha256": "438321dd23c0bd9ef26c16e92a7882cada652ad642eca76d0a0731d4a136a6c8",
+      "size": 953
+    }
+  },
+  "oids": {
+    "blob": "4a58007052a65fbc2fc3f910f2855f45a4058e74",
+    "commit": "a6e91b14eec8022f510b48963f5931d148496bbe",
+    "empty-blob": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+    "empty-tree": "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+    "minimal-commit": "b1f43464d4bdeb3d50063f1e43bfc0ef11b49fc3",
+    "tree": "68ba7e4f796cbce5ed86bad3e9df986fb138d99f"
+  },
+  "pack_objects": 2,
+  "sizes": {
+    "blob.loose": 21,
+    "commit.loose": 126,
+    "empty-blob.loose": 15,
+    "empty-tree.loose": 15,
+    "minimal-commit.loose": 120,
+    "tree.loose": 76
+  }
+}

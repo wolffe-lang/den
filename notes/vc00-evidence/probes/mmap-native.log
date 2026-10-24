@@ -1,0 +1,8 @@
+error[E0301]: nothing named `fs_mmap` is in scope
+ --> /work/den/probes/mmap/main.lu:1:19
+  |
+1 | fn main() { print(fs_mmap("target/100mb")) }
+  |                   ^^^^^^^ not found
+  |
+
+wolf build: the package does not compile; fix the errors above (`wolf --explain E0301` explains this code, or any other, by name)

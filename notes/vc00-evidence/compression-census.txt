@@ -1,3 +1,4 @@
+Search: git grep -n -i -E "deflate|inflate|zlib|compress" REV -- "*.lu" ":!refs/**"
 === wolf-std ===
 78b9d3cbc41d51db44d18c40b6694403644d1c83
 HEAD:std/x/crypto/curve25519/curve25519.lu:64://! decompression's sign bit per s5.1.3 — the choices Wycheproof's
@@ -87,3 +88,53 @@ HEAD:src/sort.lu:66://! `--files0-from`, `--compress-program` and `--debug` are 
 HEAD:src/sort.lu:364:        if k == "compress-program" {
 HEAD:src/sort.lu:365:            o.unsupported = "--compress-program"
 HEAD:src/sort.lu:456:    (mut s).push(bore.takes("", "compress-program"))
+
+=== wolf-std pinned 2386522e ===
+2386522e:std/x/crypto/curve25519/curve25519.lu:64://! decompression's sign bit per s5.1.3 — the choices Wycheproof's
+2386522e:std/x/crypto/curve25519/curve25519.lu:976:// Edwards points, decompression, and sign/verify below.
+2386522e:std/x/crypto/curve25519/curve25519.lu:1228:/// Compress a point to 32 bytes (RFC 8032 §5.1.2): the y-coordinate
+2386522e:std/x/crypto/curve25519/curve25519.lu:1231:fn ge_compress(p: Ge) -> List[byte] {
+2386522e:std/x/crypto/curve25519/curve25519.lu:1243:/// z^((p-5)/8) mod p — the exponent decompression's square root needs
+2386522e:std/x/crypto/curve25519/curve25519.lu:1310:/// The result of decompression: `ok` false means the 32 bytes are not
+2386522e:std/x/crypto/curve25519/curve25519.lu:1318:/// Decompress 32 bytes to a point (RFC 8032 §5.1.3): read y and the
+2386522e:std/x/crypto/curve25519/curve25519.lu:1323:fn ge_decompress(b: List[byte]) -> GeOpt {
+2386522e:std/x/crypto/curve25519/curve25519.lu:1441:/// A = [a]B compressed, where a is the clamped scalar. Traps `assert`
+2386522e:std/x/crypto/curve25519/curve25519.lu:1455:    ge_compress(ge_scalarmult(a, ge_base()))
+2386522e:std/x/crypto/curve25519/curve25519.lu:1482:    let big_a = ge_compress(ge_scalarmult(a, ge_base()))
+2386522e:std/x/crypto/curve25519/curve25519.lu:1484:    let big_r = ge_compress(ge_scalarmult(r, ge_base()))
+2386522e:std/x/crypto/curve25519/curve25519.lu:1493:/// cases patrol), and both A and R must decompress canonically. Returns
+2386522e:std/x/crypto/curve25519/curve25519.lu:1522:    let a_opt = ge_decompress(pubkey)
+2386522e:std/x/crypto/curve25519/curve25519.lu:1526:    let r_opt = ge_decompress(big_r)
+2386522e:std/x/crypto/p256/p256.lu:2066:/// Decode a 65-byte uncompressed SEC1 point (0x04 || X || Y), REJECTING
+2386522e:std/x/crypto/p256/p256.lu:2072:/// no uncompressed encoding here, so it is rejected by length. ct:
+2386522e:std/x/crypto/p256/p256.lu:2209:/// [1, n): the uncompressed SEC1 encoding of [d]G (0x04 || X || Y).
+2386522e:std/x/crypto/p256/p256.lu:2227:/// Encode a non-identity projective point as 65 uncompressed SEC1
+2386522e:std/x/crypto/p256/p256.lu:2359:/// 65-byte uncompressed SEC1 public key and the 64-byte r || s
+2386522e:std/x/crypto/sha2/sha2.lu:434:fn compress256(mut st: Sha256) {
+2386522e:std/x/crypto/sha2/sha2.lu:492:/// buffered until a 512-bit block is full, then compressed; calling
+2386522e:std/x/crypto/sha2/sha2.lu:504:            compress256(mut st)
+2386522e:std/x/crypto/sha2/sha2.lu:531:        compress256(mut s)
+2386522e:std/x/crypto/sha2/sha2.lu:537:    compress256(mut s)
+2386522e:std/x/crypto/sha2/sha2.lu:629:fn compress512(mut st: Sha512) {
+2386522e:std/x/crypto/sha2/sha2.lu:699:            compress512(mut st)
+2386522e:std/x/crypto/sha2/sha2.lu:725:        compress512(mut s)
+2386522e:std/x/crypto/sha2/sha2.lu:732:    compress512(mut s)
+2386522e:std/x/tls/cert/cert.lu:1277:/// 65-byte uncompressed point), and p256's on-curve check refuses any
+2386522e:std/x/tls/cert/cert.lu:1387:        // A P-256 uncompressed point is 65 bytes; any other length is a
+2386522e:std/x/tls/client/client.lu:83://! Negotiation: `illegal_parameter` (wrong version/compression/group
+2386522e:std/x/tls/client/client.lu:359:    compression: int,
+2386522e:std/x/tls/client/client.lu:500:        compression: comp,
+2386522e:std/x/tls/client/client.lu:515:/// legacy_version that is not 0x0303, a nonzero compression method, a
+2386522e:std/x/tls/client/client.lu:541:    if v.compression != 0 {
+2386522e:std/x/tls/handshake/handshake.lu:354:/// legacy_compression_method, and the extensions vector<8..2^16-1>.
+2386522e:std/x/tls/handshake/handshake.lu:376:/// `cipher_suite` (uint16), the null legacy_compression_method, and the
+2386522e:std/x/tls/handshake/handshake.lu:514:/// A single-element byte list (the null compression method, small
+2386522e:tests/x/crypto/p256/rfc6979_p256.lu:26:    // A.2.5's public key U = (Ux, Uy), uncompressed.
+2386522e:tests/x/tls/client/negative_battery.lu:1://! check: run(exit=0, stdout="downgrade-v12: downgrade\ndowngrade-sentinel: downgrade\nhelloretry: unexpected_message\nbad-suite: handshake_failure\nbad-group: illegal_parameter\nbad-version: illegal_parameter\nbad-compression: illegal_parameter\ntruncated-sh: decode_error\ntampered-record: bad_record_mac\nbad-finished: decrypt_error\nwrong-name: name_mismatch\nexpired: expired\nbad-sig-cv: bad_signature\nbattery: all rows named")
+2386522e:tests/x/tls/client/negative_battery.lu:18://!   wrong group / version / compression -> `illegal_parameter`
+2386522e:tests/x/tls/client/negative_battery.lu:37:/// group, version, compression — every negotiation lever in one place.
+2386522e:tests/x/tls/client/negative_battery.lu:43:    compression: int,
+2386522e:tests/x/tls/client/negative_battery.lu:90:    (mut body).push(compression as byte)
+2386522e:tests/x/tls/client/negative_battery.lu:166:    // ---- nonzero compression ----
+2386522e:tests/x/tls/client/negative_battery.lu:168:    print("bad-compression: {negotiate_name(sh_comp)}")
+2386522e:tests/x/tls/client/rfc8448_parse_vectors.lu:40:    assert(view.compression == 0, "SH compression")

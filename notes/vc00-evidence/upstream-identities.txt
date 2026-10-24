@@ -1,0 +1,8 @@
+https://github.com/wolffe-lang/wolf-lang/issues/684 open fs: the stat record has no I/O block size (st_blksize) — stat's default format and %o cannot be printed
+https://github.com/wolffe-lang/wolf-lang/issues/687 open fs: a name that is not UTF-8 is listable and nothing else — no path call can take the bytes fs_read_dir_entries hands over
+https://github.com/wolffe-lang/wolf-lang/issues/706 open fs: a rename always replaces — mv -n is a check and then a rename, and mv --exchange cannot be written
+https://github.com/wolffe-lang/wolf-lang/issues/912 open a byte-path open: fs_open takes a UTF-8 str, so non-UTF-8 file names cannot be opened (bu32, R-bu32-2)
+https://github.com/wolffe-lang/wolf-lang/pull/904 closed Expose argv[0] and preserve non-UTF-8 arguments
+https://github.com/wolffe-lang/wolf-lang/issues/908 open fs: no writable open that never creates (O_WRONLY/O_RDWR without O_CREAT) — truncate -c races, write-only sync refused (boreutils bu30)
+https://github.com/wolffe-lang/wolf-std/issues/99 open std.regex: a POSIX BRE/ERE matcher (boreutils vendors scent's engine meanwhile)
+https://github.com/wolffe-lang/wolf-std/issues/100 open std.bigint (or u128): expr and factor refuse past 64 bits without it

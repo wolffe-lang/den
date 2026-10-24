@@ -1,0 +1,9 @@
+error[E0301]: there is no module named `std.regex` to import
+ --> /work/den/probes/regex/main.lu:1:5
+  |
+1 | use std.regex
+  |     ^^^^^^^^^ cannot be resolved
+  |
+  = note: did you mean `std.hex`?
+
+wolf build: the package does not compile; fix the errors above (`wolf --explain E0301` explains this code, or any other, by name)

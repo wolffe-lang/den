@@ -1,0 +1,11 @@
+{"commit":"cf0c13d","diagnostics":[],"file":"/work/den/probes/tls/main.lu","impl":"wolfgang","impl_version":"0.2.35","phase_reached":"mem","protocol":1,"seeded":false,"stdout_inline":null,"stdout_sha256":null,"verdict":"unsupported","warnings":[],"x-unsupported-col":1,"x-unsupported-construct":"step budget exhausted","x-unsupported-file":"/work/den/probes/tls/main.lu","x-unsupported-line":1,"x-unsupported-span":[0,1458]}
+wolf conform-run --checked: unsupported — step budget exhausted
+  --> /work/den/probes/tls/main.lu:1:1
+   |
+ 1 | use std.net
+   | ^^^^^^^^^^^
+ 2 | use std.time
+...
+38 | }
+   | ^
+   |

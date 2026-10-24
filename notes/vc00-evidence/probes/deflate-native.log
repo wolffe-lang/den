@@ -1,0 +1,10 @@
+error[E0301]: there is no module named `std.compress` to import
+ --> /work/den/probes/deflate/main.lu:1:5
+  |
+1 | use std.compress
+  |     ^^^^^^^^^^^^ cannot be resolved
+  |
+  = note: a module is a directory of `.lu` files: a sibling directory of the package root forms
+    one (D32), and `std.…` or a package alias also resolves here.
+
+wolf build: the package does not compile; fix the errors above (`wolf --explain E0301` explains this code, or any other, by name)

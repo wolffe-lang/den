@@ -1,0 +1,240 @@
+[
+  {
+    "probe": "argv0",
+    "tier": "native",
+    "status": "absent",
+    "exit": 2,
+    "log": "target/probes/argv0-native.log"
+  },
+  {
+    "probe": "argv0",
+    "tier": "checked",
+    "status": "absent",
+    "exit": 0,
+    "log": "target/probes/argv0-checked.log"
+  },
+  {
+    "probe": "bigint",
+    "tier": "native",
+    "status": "absent",
+    "exit": 2,
+    "log": "target/probes/bigint-native.log"
+  },
+  {
+    "probe": "bigint",
+    "tier": "checked",
+    "status": "absent",
+    "exit": 0,
+    "log": "target/probes/bigint-checked.log"
+  },
+  {
+    "probe": "deflate",
+    "tier": "native",
+    "status": "absent",
+    "exit": 2,
+    "log": "target/probes/deflate-native.log"
+  },
+  {
+    "probe": "deflate",
+    "tier": "checked",
+    "status": "absent",
+    "exit": 0,
+    "log": "target/probes/deflate-checked.log"
+  },
+  {
+    "probe": "files",
+    "tier": "native",
+    "status": "present",
+    "exit": 0,
+    "log": "target/probes/files-native.log"
+  },
+  {
+    "probe": "files",
+    "tier": "checked",
+    "status": "present",
+    "exit": 0,
+    "log": "target/probes/files-checked.log"
+  },
+  {
+    "probe": "glob",
+    "tier": "native",
+    "status": "absent",
+    "exit": 2,
+    "log": "target/probes/glob-native.log"
+  },
+  {
+    "probe": "glob",
+    "tier": "checked",
+    "status": "absent",
+    "exit": 0,
+    "log": "target/probes/glob-checked.log"
+  },
+  {
+    "probe": "hash",
+    "tier": "native",
+    "status": "present",
+    "exit": 0,
+    "log": "target/probes/hash-native.log"
+  },
+  {
+    "probe": "hash",
+    "tier": "checked",
+    "status": "present",
+    "exit": 0,
+    "log": "target/probes/hash-checked.log"
+  },
+  {
+    "probe": "mmap",
+    "tier": "native",
+    "status": "absent",
+    "exit": 2,
+    "log": "target/probes/mmap-native.log"
+  },
+  {
+    "probe": "mmap",
+    "tier": "checked",
+    "status": "absent",
+    "exit": 0,
+    "log": "target/probes/mmap-checked.log"
+  },
+  {
+    "probe": "muzzle",
+    "tier": "native",
+    "status": "present",
+    "exit": 0,
+    "log": "target/probes/muzzle-native.log"
+  },
+  {
+    "probe": "muzzle",
+    "tier": "checked",
+    "status": "present",
+    "exit": 0,
+    "log": "target/probes/muzzle-checked.log"
+  },
+  {
+    "probe": "open",
+    "tier": "native",
+    "status": "present",
+    "exit": 0,
+    "log": "target/probes/open-native.log"
+  },
+  {
+    "probe": "open",
+    "tier": "checked",
+    "status": "present",
+    "exit": 0,
+    "log": "target/probes/open-checked.log"
+  },
+  {
+    "probe": "paths",
+    "tier": "native",
+    "status": "present",
+    "exit": 0,
+    "log": "target/probes/paths-native.log"
+  },
+  {
+    "probe": "paths",
+    "tier": "checked",
+    "status": "present",
+    "exit": 0,
+    "log": "target/probes/paths-checked.log"
+  },
+  {
+    "probe": "process",
+    "tier": "native",
+    "status": "present",
+    "exit": 0,
+    "log": "target/probes/process-native.log"
+  },
+  {
+    "probe": "process",
+    "tier": "checked",
+    "status": "present",
+    "exit": 0,
+    "log": "target/probes/process-checked.log"
+  },
+  {
+    "probe": "read-at",
+    "tier": "native",
+    "status": "present",
+    "exit": 0,
+    "log": "target/probes/read-at-native.log"
+  },
+  {
+    "probe": "read-at",
+    "tier": "checked",
+    "status": "present",
+    "exit": 0,
+    "log": "target/probes/read-at-checked.log"
+  },
+  {
+    "probe": "regex",
+    "tier": "native",
+    "status": "absent",
+    "exit": 2,
+    "log": "target/probes/regex-native.log"
+  },
+  {
+    "probe": "regex",
+    "tier": "checked",
+    "status": "absent",
+    "exit": 0,
+    "log": "target/probes/regex-checked.log"
+  },
+  {
+    "probe": "stat",
+    "tier": "native",
+    "status": "present",
+    "exit": 0,
+    "log": "target/probes/stat-native.log"
+  },
+  {
+    "probe": "stat",
+    "tier": "checked",
+    "status": "present",
+    "exit": 0,
+    "log": "target/probes/stat-checked.log"
+  },
+  {
+    "probe": "tcp",
+    "tier": "native",
+    "status": "present",
+    "exit": 0,
+    "log": "target/probes/tcp-native.log"
+  },
+  {
+    "probe": "tcp",
+    "tier": "checked",
+    "status": "present",
+    "exit": 0,
+    "log": "target/probes/tcp-checked.log"
+  },
+  {
+    "probe": "term",
+    "tier": "native",
+    "status": "present",
+    "exit": 0,
+    "log": "target/probes/term-native.log"
+  },
+  {
+    "probe": "term",
+    "tier": "checked",
+    "status": "present",
+    "exit": 0,
+    "log": "target/probes/term-checked.log"
+  },
+  {
+    "probe": "time",
+    "tier": "native",
+    "status": "present",
+    "exit": 0,
+    "log": "target/probes/time-native.log"
+  },
+  {
+    "probe": "time",
+    "tier": "checked",
+    "status": "present",
+    "exit": 0,
+    "log": "target/probes/time-checked.log"
+  }
+]

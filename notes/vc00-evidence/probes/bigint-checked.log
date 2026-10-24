@@ -1,0 +1,10 @@
+{"commit":"cf0c13d","diagnostics":[{"code":"E0301","severity":"error","span":[4,14]}],"file":"/work/den/probes/bigint/main.lu","impl":"wolfgang","impl_version":"0.2.35","phase_reached":"resolve","protocol":1,"seeded":false,"stdout_inline":null,"stdout_sha256":null,"verdict":"fail(E0301)","warnings":[]}
+error[E0301]: there is no module named `std.bigint` to import
+ --> /work/den/probes/bigint/main.lu:1:5
+  |
+1 | use std.bigint
+  |     ^^^^^^^^^^ cannot be resolved
+  |
+  = note: a module is a directory of `.lu` files: a sibling directory of the package root forms
+    one (D32), and `std.…` or a package alias also resolves here.
+
