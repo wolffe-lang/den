@@ -1,0 +1,74 @@
+use std.fs
+use ignore
+use repository
+
+// A real-filesystem integration witness owned entirely by this client. root
+// MUST NOT exist; exclusive directory creation prevents touching another tree.
+fn filesystem_test(root: str) -> int ! ProbeErrors {
+    fs.create_dir(root)?
+    defer fs.remove_dir_all(root) else |_| {}
+    let absolute = fs.realpath(root)?
+    fs.create_dir_all("{absolute}/.git/info")?
+    for name in ["a", "a/deep", "deny", "links", "real"] {
+        fs.create_dir_all("{absolute}/{name}")?
+    }
+    var config = Map[str, str]()
+    config["core.excludesfile"] = "{absolute}/global-ignore"
+    let repo = repository.Repo { gitdir: "{absolute}/.git", config: config }
+    fs.write_text("{absolute}/global-ignore", "*.tmp\n*.o\n*.log\n/global-only\n")?
+    fs.write_text("{absolute}/.git/info/exclude", "!keep.tmp\n/info-only\n")?
+    fs.write_text("{absolute}/.gitignore", "!keep.o\ndeny/\n/only-root\nlink/\n")?
+    fs.write_text("{absolute}/a/.gitignore", "!keep.log\n/here\n")?
+    // If traversal wrongly opens a source beneath an excluded parent, this
+    // oversized sparse source returns limit. NUL is no longer a poison source:
+    // the measured parser stops the pattern at NUL, not the whole file.
+    {
+        var poison = fs.create("{absolute}/deny/.gitignore")?
+        defer fs.close(take poison) else |_| {}
+        let _ = fs_seek(poison.fd, 16777216, 0) else |_| { return io }
+        fs.write_chunk(mut poison, [0 as byte])?
+        let poison_stat = fs_fstat_record(poison.fd)?
+        assert(poison_stat[1] == 16777217)
+    }
+    let global = ignore.query(repo, absolute, "a/x.tmp", false)?
+    assert(global.ignored && global.source == "{absolute}/global-ignore" && global.line == 1)
+    let info = ignore.query(repo, absolute, "a/keep.tmp", false)?
+    assert(info.negated && info.source == ".git/info/exclude" && info.line == 1)
+    let top = ignore.query(repo, absolute, "a/keep.o", false)?
+    assert(top.negated && top.source == ".gitignore" && top.line == 1)
+    let nested = ignore.query(repo, absolute, "a/deep/keep.log", false)?
+    assert(nested.negated && nested.source == "a/.gitignore" && nested.line == 1)
+    assert(result_status(nested, true) == 0 && result_status(nested, false) == 1)
+    assert(result_status(global, true) == 0 && result_status(global, false) == 0)
+    assert(result_status(ignore.unmatched(), true) == 1)
+    let parent = ignore.query(repo, absolute, "deny/file", false)?
+    assert(parent.ignored && parent.source == ".gitignore" && parent.line == 2)
+    assert(ignore.query(repo, absolute, "a/here", false)?.ignored)
+    assert(!ignore.query(repo, absolute, "a/deep/here", false)?.ignored)
+    assert(ignore.query(repo, absolute, "only-root", false)?.ignored)
+    assert(!ignore.query(repo, absolute, "a/only-root", false)?.ignored)
+    assert(ignore.query(repo, absolute, "global-only", false)?.ignored)
+    assert(!ignore.query(repo, absolute, "a/global-only", false)?.ignored)
+    assert(ignore.query(repo, absolute, "info-only", false)?.ignored)
+    assert(!ignore.query(repo, absolute, "a/info-only", false)?.ignored)
+    assert(!ignore.query(repo, absolute, "missing/deep/file", false)?.matched)
+    // Tracked bypass does not even try to resolve this nonexistent worktree.
+    assert(!ignore.query_tracked(repo, "{absolute}/absent", "deny/file", false, true)?.matched)
+    fs.write_text("{absolute}/link-patterns", "*\n")?
+    fs.symlink("../link-patterns", "{absolute}/links/.gitignore")?
+    assert(!ignore.query(repo, absolute, "links/not-ignored", false)?.matched)
+    fs.symlink("real", "{absolute}/link")?
+    assert(!ignore.query(repo, absolute, "link", false)?.matched)
+    assert(ignore.query(repo, absolute, "link", true)?.ignored)
+    fs.symlink("real", "{absolute}/directory-link")?
+    var refused = false
+    let _ = ignore.query(repo, absolute, "directory-link/file", false) else |e| {
+        refused = "{e}".contains("beyond symlink")
+        ignore.unmatched()
+    }
+    assert(refused)
+    print(
+        "PASS ignore filesystem precedence, source provenance, nested anchors, missing paths, excluded-parent stop, tracked bypass, symlink sources",
+    )
+    0
+}

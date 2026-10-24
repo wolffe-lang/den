@@ -1,0 +1,342 @@
+//! member: false
+
+use ignore
+
+fn check(
+    patterns: str,
+    path: str,
+    directory: bool,
+    ignored: bool,
+    line: int,
+    negated: bool,
+) -> () ! {invalid} {
+    let rules = ignore.parse(".gitignore", [], patterns.bytes())?
+    let result = ignore.evaluate(rules, path.bytes(), directory, false)?
+    assert(result.ignored == ignored)
+    assert(result.line == line)
+    assert(result.matched == (line > 0))
+    assert(result.negated == negated)
+}
+
+fn yes(pattern: str, path: str) -> () ! {invalid} {
+    check(pattern, path, false, true, 1, false)?
+}
+
+fn no(pattern: str, path: str) -> () ! {invalid} {
+    check(pattern, path, false, false, 0, false)?
+}
+
+fn syntax() -> () ! {invalid} {
+    check("\n# comment\n\\#hash\n\\!bang\n", "#hash", false, true, 3, false)?
+    check("\n# comment\n\\#hash\n\\!bang\n", "!bang", false, true, 4, false)?
+    no("#hash", "#hash")?
+    no("!", "!")?
+    no("/", "anything")?
+    yes(" leading", " leading")?
+    no(" leading", "leading")?
+    yes("hello   ", "hello")?
+    no("hello   ", "hello ")?
+    yes("hello\\ ", "hello ")?
+    yes("hello\\    ", "hello ")?
+    yes("hello\\ \\ ", "hello  ")?
+    yes("hello\\\\   ", "hello\\")?
+    no("tail\\", "tail\\")?
+    yes("\\a\\*\\?\\[\\]", "a*?[]")?
+    yes("a\tb", "a\tb")?
+    yes("a#b", "a#b")?
+    check("# comment\r\n\r\n*.tmp\r\n!keep.tmp\r\n", "keep.tmp", false, false, 4, true)?
+    check("# comment\r\n\r\n*.tmp\r\n!keep.tmp\r\n", "x.tmp", false, true, 3, false)?
+    let rules = ignore.parse("source", [], " x\\    \n".bytes())?
+    assert(rules.len == 1 && rules[0].line == 1)
+    assert((str_from_utf8(rules[0].pattern) else "") == " x\\ ")
+    assert((str_from_utf8(rules[0].original) else "") == " x\\    ")
+    let result = ignore.evaluate(rules, " x ".bytes(), false, false)?
+    assert(result.source == "source")
+    let bom = ignore.parse("bom", [], [239 as byte, 187 as byte, 191 as byte, 120 as byte])?
+    assert(ignore.evaluate(bom, "x".bytes(), false, false)?.ignored)
+    assert(bom[0].pattern.len == 1 && bom[0].original.len == 4 && bom[0].line == 1)
+    // Measured correction: ignore-oracle-initial.json, file\0junk; the
+    // focused tools/vc03-behavior.py witness also checks later source lines.
+    check("file\0junk", "file", false, true, 1, false)?
+    check("file\0junk", "junk", false, false, 0, false)?
+    check("file\0junk\n!file\n", "file", false, false, 2, true)?
+    check("\0file\nfile\n", "file", false, true, 2, false)?
+    check("file\0junk\nlater\n", "later", false, true, 2, false)?
+    let nul = ignore.parse("nul", [], "file\0junk\nlater\n".bytes())?
+    assert(nul.len == 2 && nul[0].line == 1 && nul[1].line == 2)
+    assert((str_from_utf8(nul[0].pattern) else "") == "file")
+    assert((str_from_utf8(nul[0].original) else "") == "file\0junk")
+}
+
+fn anchors() -> () ! {invalid} {
+    yes("foo", "a/foo")?
+    yes("/foo", "foo")?
+    no("/foo", "a/foo")?
+    yes("a/foo", "a/foo")?
+    no("a/foo", "x/a/foo")?
+    check("foo/", "foo", false, false, 0, false)?
+    check("foo/", "a/foo", true, true, 1, false)?
+    check("foo/", "a/foo/file", false, true, 1, false)?
+    check("doc/frotz/", "doc/frotz", true, true, 1, false)?
+    check("doc/frotz/", "a/doc/frotz", true, false, 0, false)?
+    yes("foo/*", "foo/test.json")?
+    let rules = ignore.parse(".gitignore", [], "foo/*".bytes())?
+    assert(!ignore.matches(rules[0], "foo/bar/hello.c".bytes(), false)?)
+    // The exact-node wildcard does not cross '/', but an excluded parent
+    // directory makes descendants ignored in an actual traversal.
+    assert(ignore.evaluate(rules, "foo/bar/hello.c".bytes(), false, false)?.ignored)
+    check("build/\n!build/file\n", "build/file", false, true, 1, false)?
+    check("build/\n!build/\n!build/file\n", "build/file", false, false, 3, true)?
+    check("*.o\n!keep.o\n", "x/keep.o", false, false, 2, true)?
+    check("/*\n!/foo\n/foo/*\n!/foo/bar\n", "foo/bar/keep", false, false, 0, false)?
+    check("/*\n!/foo\n/foo/*\n!/foo/bar\n", "other/keep", false, true, 1, false)?
+    let nested = ignore.parse("a/.gitignore", "a".bytes(), "/hello\nname\nsub/end\n".bytes())?
+    assert(ignore.evaluate(nested, "a/hello".bytes(), false, false)?.ignored)
+    assert(!ignore.evaluate(nested, "hello".bytes(), false, false)?.ignored)
+    assert(!ignore.evaluate(nested, "a/x/hello".bytes(), false, false)?.ignored)
+    assert(ignore.evaluate(nested, "a/x/name".bytes(), false, false)?.ignored)
+    assert(ignore.evaluate(nested, "a/sub/end".bytes(), false, false)?.ignored)
+    assert(!ignore.evaluate(nested, "a/x/sub/end".bytes(), false, false)?.ignored)
+}
+
+fn wildcards() -> () ! {invalid} {
+    yes("a*b", "ab")?
+    yes("a*b", "axyzb")?
+    no("a*b", "a/x/b")?
+    yes("a?b", "acb")?
+    no("a?b", "ab")?
+    no("a?b", "a/b")?
+    yes("*", ".hidden")?
+    yes("??", "é")?
+    no("?", "é")?
+    yes("**/foo", "foo")?
+    yes("**/foo", "a/b/foo")?
+    yes("**/foo/bar", "foo/bar")?
+    yes("**/foo/bar", "a/b/foo/bar")?
+    yes("a/**/b", "a/b")?
+    yes("a/**/b", "a/x/b")?
+    yes("a/**/b", "a/x/y/b")?
+    no("a/**/b", "a/xb")?
+    yes("a/**/b/**/c", "a/b/c")?
+    yes("a/**/b/**/c", "a/x/b/y/z/c")?
+    yes("abc/**", "abc/a/b/c")?
+    check("abc/**", "abc", true, false, 0, false)?
+    yes("a**b", "axxb")?
+    no("a**b", "a/x/b")?
+    // R-vc03-4 A follows measured Git rather than gitignore's "other
+    // consecutive asterisks" prose. Witness: ignore-oracle-initial.json
+    // a/***/file against a/file; tools/vc03-behavior.py adds a/d/e/file.
+    yes("a/***/b", "a/b")?
+    yes("a/***/b", "a/x/b")?
+    yes("a/***/b", "a/x/y/b")?
+    yes("a/***/file", "a/file")?
+    yes("a/***/file", "a/d/e/file")?
+    yes("***/file", "file")?
+    yes("***/file", "a/d/file")?
+    yes("a/****/file", "a/file")?
+    yes("a/****/file", "a/d/e/file")?
+    yes("a/***", "a/d/e/file")?
+    no("a***b", "a/x/b")?
+    yes("[a-zA-Z][0-9]", "Q7")?
+    yes("[!a-c]", "d")?
+    no("[!a-c]", "b")?
+    no("a/[!a-c]b", "a/x/b")?
+    yes("[^a-c]", "d")?
+    yes("[]]", "]")?
+    yes("[-a]", "-")?
+    yes("[a-]", "-")?
+    yes("[\\]]", "]")?
+    yes("[[:alnum:]]", "7")?
+    yes("[[:alpha:]]", "A")?
+    yes("[[:blank:]]", "\t")?
+    yes("[[:cntrl:]]", "\u{1}")?
+    yes("[[:digit:]]", "8")?
+    yes("[[:graph:]]", "~")?
+    yes("[[:lower:]]", "q")?
+    yes("[[:print:]]", " ")?
+    yes("[[:punct:]]", "!")?
+    yes("[[:space:]]", "\t")?
+    yes("[[:upper:]]", "Z")?
+    yes("[[:xdigit:]]", "f")?
+    no("[[:digit:]]", "x")?
+    no("[![:digit:]]", "2")?
+    yes("[![:digit:]]", "x")?
+    no("[[:unknown:]]", "u")?
+    no("[z-a]", "z")?
+    let binary = ignore.parse("binary", [], [255 as byte, 63 as byte])?
+    assert(ignore.evaluate(binary, [255 as byte, 128 as byte], false, false)?.ignored)
+}
+
+fn precedence() -> () ! {invalid} {
+    var rules = ignore.parse("/global", [], "*.tmp\n*.o\n/root\n".bytes())?
+    for rule in ignore.parse(".git/info/exclude", [], "!keep.tmp\n*.log\n".bytes())? {
+        (mut rules).push(copy rule)
+    }
+    for rule in ignore.parse(".gitignore", [], "!keep.o\na/blocked/\n".bytes())? {
+        (mut rules).push(copy rule)
+    }
+    for rule in ignore.parse(
+        "a/.gitignore",
+        "a".bytes(),
+        "!keep.log\n!blocked/file\n!root\n".bytes(),
+    )? {
+        (mut rules).push(copy rule)
+    }
+    let keep_tmp = ignore.evaluate(rules, "a/keep.tmp".bytes(), false, false)?
+    assert(keep_tmp.negated && keep_tmp.source == ".git/info/exclude")
+    assert(ignore.evaluate(rules, "a/keep.o".bytes(), false, false)?.negated)
+    let keep_log = ignore.evaluate(rules, "a/keep.log".bytes(), false, false)?
+    assert(keep_log.negated && keep_log.source == "a/.gitignore" && keep_log.line == 1)
+    let blocked = ignore.evaluate(rules, "a/blocked/file".bytes(), false, false)?
+    assert(blocked.ignored && blocked.source == ".gitignore" && blocked.line == 2)
+    assert(!ignore.evaluate(rules, "a/root".bytes(), false, false)?.ignored)
+    assert(ignore.evaluate(rules, "root".bytes(), false, false)?.ignored)
+    assert(!ignore.evaluate(rules, "root".bytes(), false, true)?.matched)
+    assert(!ignore.evaluate(rules, "a/blocked/file".bytes(), false, true)?.matched)
+}
+
+fn rendering() -> () ! {invalid} {
+    let rules = ignore.parse(".gitignore", [], "# header\n*.tmp\n!keep.tmp\n".bytes())?
+    let excluded = ignore.evaluate(rules, "a.tmp".bytes(), false, false)?
+    assert(
+        (
+            str_from_utf8(
+                ignore.format(excluded, "a.tmp".bytes(), true, false, false, true)?,
+            ) else ""
+        ) ==
+            ".gitignore:2:*.tmp\ta.tmp\n",
+    )
+    assert(
+        (
+            str_from_utf8(
+                ignore.format(excluded, "a.tmp".bytes(), true, true, false, true)?,
+            ) else ""
+        ) ==
+            ".gitignore\0" + "2\0*.tmp\0a.tmp\0",
+    )
+    let included = ignore.evaluate(rules, "keep.tmp".bytes(), false, false)?
+    assert(
+        (
+            str_from_utf8(
+                ignore.format(included, "keep.tmp".bytes(), true, false, false, true)?,
+            ) else ""
+        ) ==
+            ".gitignore:3:!keep.tmp\tkeep.tmp\n",
+    )
+    assert(ignore.format(included, "keep.tmp".bytes(), false, false, false, true)?.len == 0)
+    assert(
+        (
+            str_from_utf8(
+                ignore.format(ignore.unmatched(), "none".bytes(), true, false, true, true)?,
+            ) else ""
+        ) ==
+            "::\tnone\n",
+    )
+    assert(ignore.format(ignore.unmatched(), "none".bytes(), true, false, false, true)?.len == 0)
+    assert(
+        (
+            str_from_utf8(
+                ignore.format(excluded, "é\t.tmp".bytes(), false, false, false, true)?,
+            ) else ""
+        ) ==
+            "\"\\303\\251\\t.tmp\"\n",
+    )
+    assert(
+        (
+            str_from_utf8(
+                ignore.format(excluded, "é.tmp".bytes(), false, false, false, false)?,
+            ) else ""
+        ) ==
+            "é.tmp\n",
+    )
+    // Measured raw pattern output: ignore-oracle-initial.json contains
+    // \!literal, \#hash, trailing\ , and \f\i\l\e witnesses.
+    let escaped = ignore.parse(
+        ".gitignore",
+        [],
+        "\\!literal\n\\#hash\ntrailing\\ \n\\f\\i\\l\\e\n".bytes(),
+    )?
+    let literal = ignore.evaluate(escaped, "!literal".bytes(), false, false)?
+    assert(
+        (
+            str_from_utf8(
+                ignore.format(literal, "!literal".bytes(), true, false, false, true)?,
+            ) else ""
+        ) ==
+            ".gitignore:1:\\!literal\t!literal\n",
+    )
+    let hash = ignore.evaluate(escaped, "#hash".bytes(), false, false)?
+    assert(
+        (str_from_utf8(ignore.format(hash, "#hash".bytes(), true, false, false, true)?) else "") ==
+            ".gitignore:2:\\#hash\t#hash\n",
+    )
+    let space = ignore.evaluate(escaped, "trailing ".bytes(), false, false)?
+    assert(
+        (
+            str_from_utf8(
+                ignore.format(space, "trailing ".bytes(), true, false, false, true)?,
+            ) else ""
+        ) ==
+            ".gitignore:3:trailing\\ \ttrailing \n",
+    )
+    let file = ignore.evaluate(escaped, "file".bytes(), false, false)?
+    assert(
+        (str_from_utf8(ignore.format(file, "file".bytes(), true, false, false, true)?) else "") ==
+            ".gitignore:4:\\f\\i\\l\\e\tfile\n",
+    )
+    let tabbed = ignore.evaluate(
+        ignore.parse(".gitignore", [], "a\tb".bytes())?,
+        "a\tb".bytes(),
+        false,
+        false,
+    )?
+    assert(
+        (str_from_utf8(ignore.format(tabbed, "a\tb".bytes(), true, false, false, true)?) else "") ==
+            ".gitignore:1:a\tb\t\"a\\tb\"\n",
+    )
+}
+
+fn invalid_paths() -> () ! {invalid} {
+    for path in ["", "/absolute", "a/", "a//b", ".", "..", "a/./b", "a/../b", "a\0b"] {
+        assert(!ignore.valid_path(path.bytes()))
+    }
+    assert(ignore.valid_path("a/é".bytes()))
+    var refused = false
+    let _ = ignore.parse("bad", "../bad".bytes(), "x".bytes()) else |_| { refused = true; [] }
+    assert(refused)
+    refused = false
+    let _ = ignore.evaluate([], "../bad".bytes(), false, false) else |_| {
+        refused = true
+        ignore.unmatched()
+    }
+    assert(refused)
+}
+
+fn polynomial() -> () ! {invalid} {
+    // A naive recursive glob takes exponentially many retries on this miss.
+    var pattern = List[byte]()
+    var path = List[byte]()
+    for _ in 0..80 {
+        (mut pattern).push(42 as byte)
+        (mut pattern).push(97 as byte)
+        (mut path).push(97 as byte)
+    }
+    (mut pattern).push(98 as byte)
+    (mut path).push(99 as byte)
+    let rules = ignore.parse("adversarial", [], pattern)?
+    assert(!ignore.evaluate(rules, path, false, false)?.ignored)
+}
+
+fn main() -> int ! {invalid} {
+    syntax()?
+    anchors()?
+    wildcards()?
+    precedence()?
+    rendering()?
+    invalid_paths()?
+    polynomial()?
+    print(
+        "PASS ignore byte syntax, anchors, globstars, classes, parent exclusions, precedence, tracked bypass, binary records, polynomial miss",
+    )
+    0
+}

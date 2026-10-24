@@ -1,0 +1,61 @@
+use ignore
+use repository
+
+// Independent API client, not a den subcommand and not linked to the index.
+// selftest NEW-DIRECTORY (real filesystem integration; directory must not exist)
+// pure FILE BASE PATH file|dir [tracked] (BASE '-' means root)
+// query GITDIR WORKTREE PATH file|dir [tracked]
+// query-z/query-n/query-plain use the corresponding output mode.
+// Query paths must already be canonical and relative to WORKTREE. 'tracked'
+// explicitly tests the caller's index bypass; omission is --no-index behavior.
+error ProbeErrors = {invalid, denied, io, limit, Unsupported(str), not_found, exists, unsupported}
+
+// R-vc03-4 A: the measured verbose command reports a matched negation as
+// status 0, despite EXIT STATUS prose saying "ignored". Plain mode reports 1.
+// Witnesses: ignore-oracle-initial.json (!file), tools/vc03-behavior.py.
+fn result_status(result: ignore.Match, verbose: bool) -> int {
+    let selected = if verbose then result.matched else result.ignored
+    if selected then 0 else 1
+}
+
+fn work(args: List[str]) -> int ! ProbeErrors {
+    if args.len == 2 && args[0] == "selftest" { return filesystem_test(args[1])? }
+    // Open stdout first; no production dependency on a shell, Python or Git.
+    let out = fs_open_mode("/dev/stdout", 2)?
+    defer fs_close(out) else |_| {}
+    if args.len < 5 || args.len > 6 { return invalid }
+    if args[4] != "file" && args[4] != "dir" { return invalid }
+    if args.len == 6 && args[5] != "tracked" { return invalid }
+    let tracked = args.len == 6
+    let directory = args[4] == "dir"
+    let result = if args[0] == "pure" {
+        let data = repository.read_bytes(args[1], 16777216)?
+        let base = if args[2] == "-" then "" else args[2]
+        let rules = ignore.parse(args[1], base.bytes(), data)?
+        ignore.evaluate(rules, args[3].bytes(), directory, tracked)?
+    } else {
+        if args[0] != "query" &&
+            args[0] != "query-z" &&
+            args[0] != "query-n" &&
+            args[0] != "query-plain" {
+            return invalid
+        }
+        let repo = repository.open(args[1])?
+        ignore.query_tracked(repo, args[2], args[3], directory, tracked)?
+    }
+    let verbose = args[0] != "query-plain"
+    let record = ignore.format(
+        result,
+        args[3].bytes(),
+        verbose,
+        args[0] == "query-z",
+        args[0] == "query-n",
+        true,
+    )?
+    fs_write_chunk(out, record)?
+    result_status(result, verbose)
+}
+
+fn main() -> int {
+    work(env_args()) else |e| { eprint("ignore-client: {e}"); 128 }
+}

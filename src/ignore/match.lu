@@ -1,0 +1,405 @@
+// Original clean-room implementation from Git v2.56.0 Documentation/
+// gitignore.adoc, "DESCRIPTION", "PATTERN FORMAT", "NOTES", "EXAMPLES".
+// Bracket expressions use the page's fnmatch(3), FNM_PATHNAME reference.
+// No Git implementation, matcher source, hooks or templates consulted.
+
+/// Compiled byte atom. Treat as opaque; obtain rules through parse().
+/// Kinds: literal, ?, *, **, **/, bracket. No recursive matching occurs.
+pub struct Atom {
+    kind: int,
+    value: byte,
+    members: List[byte],
+}
+
+/// A rule owns all octets. base is a canonical worktree-relative directory,
+/// empty at the root. pattern retains !, escapes and a final directory slash,
+/// after insignificant trailing spaces are removed; original is the input line
+/// before that removal (excluding CR/LF, including the BOM and any NUL tail). Pattern
+/// stops at the first NUL in its physical line. Neither is UTF-8 decoded.
+pub struct Rule {
+    source: str,
+    line: int,
+    base: List[byte],
+    pattern: List[byte],
+    original: List[byte],
+    negated: bool,
+    directory_only: bool,
+    anchored: bool,
+    valid: bool,
+    atoms: List[Atom],
+}
+
+/// No match is explicit, rather than encoded as a fictitious source/line.
+/// A negation is a match but is not ignored. An excluded ancestor returns
+/// that ancestor's winning rule; rules inside it cannot re-include a child.
+pub struct Match {
+    matched: bool,
+    source: str,
+    line: int,
+    pattern: List[byte],
+    original: List[byte],
+    negated: bool,
+    ignored: bool,
+}
+
+/// Public empty result, also useful when the caller knows a path is tracked.
+pub fn unmatched() -> Match {
+    Match {
+        matched: false,
+        source: "",
+        line: 0,
+        pattern: [],
+        original: [],
+        negated: false,
+        ignored: false,
+    }
+}
+
+fn same_bytes(a: List[byte], b: List[byte]) -> bool {
+    if a.len != b.len { return false }
+    for i in 0..a.len { if a[i] != b[i] { return false } }
+    true
+}
+
+/// Canonical relative paths only: no empty, dot, dot-dot or NUL components.
+/// The filesystem edge has the same contract; paths remain str-limited there.
+pub fn valid_path(path: List[byte]) -> bool {
+    if path.len == 0 { return false }
+    var start = 0
+    for pos in 0..=path.len {
+        if pos < path.len && path[pos] == 0 as byte { return false }
+        if pos == path.len || path[pos] == 47 as byte {
+            if pos == start { return false }
+            if pos - start == 1 && path[start] == 46 as byte { return false }
+            if pos - start == 2 && path[start] == 46 as byte && path[start + 1] == 46 as byte {
+                return false
+            }
+            start = pos + 1
+        }
+    }
+    true
+}
+
+fn byte_class(name: List[byte], n: int) -> bool {
+    let alpha = n >= 65 && n <= 90 || n >= 97 && n <= 122
+    let digit = n >= 48 && n <= 57
+    if same_bytes(name, "alnum".bytes()) { return alpha || digit }
+    if same_bytes(name, "alpha".bytes()) { return alpha }
+    if same_bytes(name, "blank".bytes()) { return n == 9 || n == 32 }
+    if same_bytes(name, "cntrl".bytes()) { return n < 32 || n == 127 }
+    if same_bytes(name, "digit".bytes()) { return digit }
+    if same_bytes(name, "graph".bytes()) { return n >= 33 && n <= 126 }
+    if same_bytes(name, "lower".bytes()) { return n >= 97 && n <= 122 }
+    if same_bytes(name, "print".bytes()) { return n >= 32 && n <= 126 }
+    if same_bytes(name, "punct".bytes()) { return n >= 33 && n <= 126 && !alpha && !digit }
+    if same_bytes(name, "space".bytes()) { return n == 32 || n >= 9 && n <= 13 }
+    if same_bytes(name, "upper".bytes()) { return n >= 65 && n <= 90 }
+    if same_bytes(name, "xdigit".bytes()) {
+        return digit || n >= 65 && n <= 70 || n >= 97 && n <= 102
+    }
+    false
+}
+
+fn known_class(name: List[byte]) -> bool {
+    for spelling in [
+        "alnum",
+        "alpha",
+        "blank",
+        "cntrl",
+        "digit",
+        "graph",
+        "lower",
+        "print",
+        "punct",
+        "space",
+        "upper",
+        "xdigit",
+    ] {
+        if same_bytes(name, spelling.bytes()) { return true }
+    }
+    false
+}
+
+// Expand one bracket into a 256-byte membership table once, not per query.
+// The first ] and first/last - are literal. Backslash quotes a member.
+fn bracket(pattern: List[byte], start: int) -> (Atom, int, bool) {
+    var members = List[byte]()
+    for _ in 0..256 { (mut members).push(0 as byte) }
+    var pos = start + 1
+    var inverse = false
+    if pos < pattern.len && (pattern[pos] == 33 as byte || pattern[pos] == 94 as byte) {
+        inverse = true
+        pos += 1
+    }
+    var first = true
+    var closed = false
+    while pos < pattern.len {
+        if pattern[pos] == 93 as byte && !first {
+            closed = true
+            pos += 1
+            break
+        }
+        first = false
+        if pattern[pos] == 91 as byte && pos + 1 < pattern.len && pattern[pos + 1] == 58 as byte {
+            let begin = pos + 2
+            var end = begin
+            while end + 1 < pattern.len &&
+                !(pattern[end] == 58 as byte && pattern[end + 1] == 93 as byte) {
+                end += 1
+            }
+            if end + 1 >= pattern.len || !known_class(pattern[begin..end]) {
+                return (Atom { kind: 5, value: 0 as byte, members: members }, pattern.len, false)
+            }
+            let name = pattern[begin..end]
+            for n in 0..256 {
+                if byte_class(name, n) { members[n] = 1 as byte }
+            }
+            pos = end + 2
+            continue
+        }
+        var low = pattern[pos]
+        pos += 1
+        if low == 92 as byte {
+            if pos == pattern.len { break }
+            low = pattern[pos]
+            pos += 1
+        }
+        if pos + 1 < pattern.len && pattern[pos] == 45 as byte && pattern[pos + 1] != 93 as byte {
+            pos += 1
+            var high = pattern[pos]
+            pos += 1
+            if high == 92 as byte {
+                if pos == pattern.len { break }
+                high = pattern[pos]
+                pos += 1
+            }
+            for n in 0..256 {
+                if n >= low as int && n <= high as int { members[n] = 1 as byte }
+            }
+        } else {
+            members[low as int] = 1 as byte
+        }
+    }
+    if inverse {
+        for n in 0..256 { members[n] = if members[n] == 0 as byte then 1 as byte else 0 as byte }
+    }
+    // FNM_PATHNAME applies even to slash explicitly present inside a bracket.
+    members[47] = 0 as byte
+    (Atom { kind: 5, value: 0 as byte, members: members }, pos, closed)
+}
+
+fn compile(pattern: List[byte]) -> (List[Atom], bool) {
+    var atoms = List[Atom]()
+    var pos = 0
+    while pos < pattern.len {
+        let b = pattern[pos]
+        if b == 92 as byte {
+            pos += 1
+            if pos == pattern.len { return (atoms, false) }
+            (mut atoms).push(Atom { kind: 0, value: pattern[pos], members: [] })
+            pos += 1
+        } else if b == 42 as byte {
+            let begin = pos
+            while pos < pattern.len && pattern[pos] == 42 as byte { pos += 1 }
+            let boundary = begin == 0 || pattern[begin - 1] == 47 as byte
+            var kind = 2
+            // Git 2.56.0 oracle: a/***/file matches a/file as well as
+            // a/d/e/file. R-vc03-4 A follows the measured boundary-run rule;
+            // witness notes/vc03-evidence/ignore-oracle-initial.json,
+            // pattern_hex=612f2a2a2a2f66696c65 (gitignore prose differs).
+            if pos - begin >= 2 && boundary {
+                if pos < pattern.len && pattern[pos] == 47 as byte {
+                    kind = 4
+                    pos += 1
+                } else if pos == pattern.len {
+                    kind = 3
+                }
+            }
+            (mut atoms).push(Atom { kind: kind, value: 0 as byte, members: [] })
+        } else if b == 63 as byte {
+            (mut atoms).push(Atom { kind: 1, value: 0 as byte, members: [] })
+            pos += 1
+        } else if b == 91 as byte {
+            let (atom, next, valid) = bracket(pattern, pos)
+            if !valid { return (atoms, false) }
+            (mut atoms).push(atom)
+            pos = next
+        } else {
+            (mut atoms).push(Atom { kind: 0, value: b, members: [] })
+            pos += 1
+        }
+    }
+    (atoms, true)
+}
+
+// An odd run of backslashes immediately before this byte quotes it.
+fn escaped(data: List[byte], pos: int) -> bool {
+    var begin = pos
+    while begin > 0 && data[begin - 1] == 92 as byte { begin -= 1 }
+    (pos - begin) % 2 == 1
+}
+
+/// Parse a complete binary ignore file. Blank/comment lines still count toward
+/// source line numbers. CRLF and an initial UTF-8 BOM are accepted. Invalid glob
+/// syntax never matches; an invalid base returns invalid. NUL terminates only
+/// the pattern on that physical line, not the file or its source line count.
+/// Measured by the Git 2.56.0 oracle (ignore-oracle-initial.json, file\0junk).
+pub fn parse(source: str, base: List[byte], data: List[byte]) -> List[Rule] ! {invalid} {
+    if base.len > 0 && !valid_path(base) { return invalid }
+    var rules = List[Rule]()
+    var start = 0
+    var line = 1
+    if data.len >= 3 && data[0] == 239 as byte && data[1] == 187 as byte && data[2] == 191 as byte {
+        start = 3
+    }
+    var pos = start
+    while start < data.len {
+        while pos < data.len && data[pos] != 10 as byte { pos += 1 }
+        var physical_end = pos
+        if physical_end > start && data[physical_end - 1] == 13 as byte { physical_end -= 1 }
+        let physical_start = if line == 1 then 0 else start
+        let original = data[physical_start..physical_end]
+        var end = start
+        while end < physical_end && data[end] != 0 as byte { end += 1 }
+        while end > start && data[end - 1] == 32 as byte && !escaped(data, end - 1) { end -= 1 }
+        if end > start && data[start] != 35 as byte {
+            let pattern = data[start..end]
+            var begin = start
+            let negated = data[begin] == 33 as byte
+            if negated { begin += 1 }
+            var directory_only = false
+            if end > begin && data[end - 1] == 47 as byte {
+                directory_only = true
+                end -= 1
+            }
+            var anchored = begin < end && data[begin] == 47 as byte
+            if anchored { begin += 1 }
+            for i in begin..end { if data[i] == 47 as byte { anchored = true } }
+            let (atoms, valid) = compile(data[begin..end])
+            (mut rules).push(Rule {
+                source: source,
+                line: line,
+                base: own_bytes(base),
+                pattern: pattern,
+                original: original,
+                negated: negated,
+                directory_only: directory_only,
+                anchored: anchored,
+                valid: valid && begin < end,
+                atoms: atoms,
+            })
+        }
+        if pos == data.len { break }
+        pos += 1
+        start = pos
+        line += 1
+    }
+    rules
+}
+
+// Two rows, reused in place. O(atoms * pathname bytes) time, O(pathname bytes)
+// scratch. **/ is a prefix closure whose nonempty endpoints must be slashes;
+// no wildcard retries or recursive backtracking can grow exponentially.
+fn glob(atoms: List[Atom], text: List[byte]) -> bool {
+    var rows = List[bool]()
+    let width = text.len + 1
+    for _ in 0..width { (mut rows).push(false); (mut rows).push(false) }
+    rows[0] = true
+    var previous = 0
+    var current = width
+    for atom in atoms {
+        for j in 0..width { rows[current + j] = false }
+        var seen = rows[previous]
+        if atom.kind == 2 || atom.kind == 3 || atom.kind == 4 {
+            rows[current] = rows[previous]
+        }
+        for j in 1..width {
+            let b = text[j - 1]
+            if atom.kind == 0 {
+                rows[current + j] = rows[previous + j - 1] && b == atom.value
+            } else if atom.kind == 1 {
+                rows[current + j] = rows[previous + j - 1] && b != 47 as byte
+            } else if atom.kind == 2 || atom.kind == 3 {
+                rows[current + j] = rows[previous + j] ||
+                    rows[current + j - 1] && (atom.kind == 3 || b != 47 as byte)
+            } else if atom.kind == 4 {
+                rows[current + j] = rows[previous + j] || seen && b == 47 as byte
+                seen = seen || rows[previous + j]
+            } else if atom.kind == 5 {
+                rows[current + j] = rows[previous + j - 1] && atom.members[b as int] == 1 as byte
+            }
+        }
+        let old = previous
+        previous = current
+        current = old
+    }
+    rows[previous + text.len]
+}
+
+// Exact node only. An ancestor's exclusion is handled separately, before
+// evaluating any deeper node, so a lower-level negation cannot escape it.
+fn rule_matches(rule: Rule, path: List[byte], is_dir: bool) -> bool {
+    if !rule.valid || rule.directory_only && !is_dir { return false }
+    var begin = 0
+    if rule.base.len > 0 {
+        if path.len <= rule.base.len || path[rule.base.len] != 47 as byte { return false }
+        for i in 0..rule.base.len { if path[i] != rule.base[i] { return false } }
+        begin = rule.base.len + 1
+    }
+    if !rule.anchored {
+        var pos = path.len
+        while pos > begin && path[pos - 1] != 47 as byte { pos -= 1 }
+        begin = pos
+    }
+    region attempt { glob(rule.atoms, path[begin..]) }
+}
+
+/// Test one rule against one node (not its ancestors), for diagnostic clients.
+pub fn matches(rule: Rule, path: List[byte], is_dir: bool) -> bool ! {invalid} {
+    if !valid_path(path) { return invalid }
+    rule_matches(rule, path, is_dir)
+}
+
+fn decision(rules: List[Rule], path: List[byte], is_dir: bool) -> Match {
+    var result = unmatched()
+    for rule in rules {
+        if rule_matches(rule, path, is_dir) {
+            result = Match {
+                matched: true,
+                source: rule.source,
+                line: rule.line,
+                pattern: copy rule.pattern,
+                original: copy rule.original,
+                negated: rule.negated,
+                ignored: !rule.negated,
+            }
+        }
+    }
+    result
+}
+
+/// Pure untracked query. Supply rules in increasing precedence: global,
+/// info/exclude, then .gitignore from root down. Within each file last wins.
+/// Set tracked=true to bypass exclusion entirely, like check-ignore without
+/// --no-index. Passing false is the explicit --no-index/untracked contract.
+pub fn evaluate(rules: List[Rule], path: List[byte], is_dir: bool, tracked: bool) -> Match ! {
+    invalid,
+} {
+    if !valid_path(path) { return invalid }
+    if tracked { return unmatched() }
+    for pos in 0..path.len {
+        if path[pos] == 47 as byte {
+            let parent = decision(rules, path[0..pos], true)
+            if parent.ignored { return parent }
+        }
+    }
+    decision(rules, path, is_dir)
+}
+
+// Explicit materialization avoids cf0c13d's returned lent-byte-view copy refusal;
+// the minimal witness is probes/index-view-direct versus index-view-bound.
+fn own_bytes(bytes: List[byte]) -> List[byte] {
+    var out = List[byte]()
+    for b in bytes { (mut out).push(b) }
+    out
+}

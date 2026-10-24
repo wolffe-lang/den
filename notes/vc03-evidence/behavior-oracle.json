@@ -1,0 +1,541 @@
+[
+  {
+    "repo": "assume-unchanged",
+    "args": [
+      "init",
+      "-q"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "repo": "assume-unchanged",
+    "args": [
+      "add",
+      "file"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "repo": "assume-unchanged",
+    "args": [
+      "commit",
+      "-qm",
+      "root"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "repo": "assume-unchanged",
+    "args": [
+      "update-index",
+      "--assume-unchanged",
+      "file"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "repo": "assume-unchanged",
+    "args": [
+      "add",
+      "file"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "repo": "assume-unchanged",
+    "args": [
+      "status",
+      "--porcelain"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "repo": "assume-unchanged",
+    "before": {
+      "raw_hex": "4449524300000002000000016add38e12b1f13ae6add38e12b1f13ae0000080205f877d5000081a40000000000000000000000043367afdbbf91e638efe983616377c60477cc6612800466696c650000000000005452454500000006002d3120300a30471b5da568e76f26f86568bb92f383f5439e94",
+      "flags": 32772,
+      "extended": 0,
+      "oid": "3367afdbbf91e638efe983616377c60477cc6612"
+    },
+    "after": {
+      "raw_hex": "4449524300000002000000016add38e12b1f13ae6add38e12b1f13ae0000080205f877d5000081a40000000000000000000000043367afdbbf91e638efe983616377c60477cc6612800466696c650000000000005452454500000006002d3120300a30471b5da568e76f26f86568bb92f383f5439e94",
+      "flags": 32772,
+      "extended": 0,
+      "oid": "3367afdbbf91e638efe983616377c60477cc6612"
+    }
+  },
+  {
+    "repo": "skip-worktree",
+    "args": [
+      "init",
+      "-q"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "repo": "skip-worktree",
+    "args": [
+      "add",
+      "file"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "repo": "skip-worktree",
+    "args": [
+      "commit",
+      "-qm",
+      "root"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "repo": "skip-worktree",
+    "args": [
+      "update-index",
+      "--skip-worktree",
+      "file"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "repo": "skip-worktree",
+    "args": [
+      "add",
+      "file"
+    ],
+    "status": 1,
+    "stdout": "",
+    "stderr": "54686520666f6c6c6f77696e6720706174687320616e642f6f7220706174687370656373206d61746368656420706174687320746861742065786973740a6f757473696465206f6620796f7572207370617273652d636865636b6f757420646566696e6974696f6e2c20736f2077696c6c206e6f742062650a7570646174656420696e2074686520696e6465783a0a66696c650a68696e743a20496620796f7520696e74656e6420746f20757064617465207375636820656e74726965732c20747279206f6e65206f662074686520666f6c6c6f77696e673a0a68696e743a202a2055736520746865202d2d737061727365206f7074696f6e2e0a68696e743a202a2044697361626c65206f72206d6f64696679207468652073706172736974792072756c65732e0a68696e743a2044697361626c652074686973206d6573736167652077697468202267697420636f6e66696720736574206164766963652e757064617465537061727365506174682066616c7365220a"
+  },
+  {
+    "repo": "skip-worktree",
+    "args": [
+      "status",
+      "--porcelain"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "repo": "skip-worktree",
+    "before": {
+      "raw_hex": "4449524300000003000000016add38e12b71c90f6add38e12b71c90f0000080205f877ee000081a40000000000000000000000043367afdbbf91e638efe983616377c60477cc66124004400066696c65000000005452454500000006002d3120300a5e4bffa241ab0924d54faa07b2e2739b2c2c764f",
+      "flags": 16388,
+      "extended": 16384,
+      "oid": "3367afdbbf91e638efe983616377c60477cc6612"
+    },
+    "after": {
+      "raw_hex": "4449524300000003000000016add38e12b71c90f6add38e12b71c90f0000080205f877ee000081a40000000000000000000000043367afdbbf91e638efe983616377c60477cc66124004400066696c65000000005452454500000006002d3120300a5e4bffa241ab0924d54faa07b2e2739b2c2c764f",
+      "flags": 16388,
+      "extended": 16384,
+      "oid": "3367afdbbf91e638efe983616377c60477cc6612"
+    }
+  },
+  {
+    "repo": "ignore",
+    "args": [
+      "init",
+      "-q"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "repo": "ignore",
+    "args": [
+      "check-ignore",
+      "--no-index",
+      "file"
+    ],
+    "status": 1,
+    "stdout": "",
+    "stderr": "",
+    "pattern_hex": "2166696c650a"
+  },
+  {
+    "repo": "ignore",
+    "args": [
+      "check-ignore",
+      "--no-index",
+      "a/file"
+    ],
+    "status": 1,
+    "stdout": "",
+    "stderr": "",
+    "pattern_hex": "2166696c650a"
+  },
+  {
+    "repo": "ignore",
+    "args": [
+      "check-ignore",
+      "--no-index",
+      "a/d/e/file"
+    ],
+    "status": 1,
+    "stdout": "",
+    "stderr": "",
+    "pattern_hex": "2166696c650a"
+  },
+  {
+    "repo": "ignore",
+    "args": [
+      "check-ignore",
+      "--no-index",
+      "-v",
+      "file"
+    ],
+    "status": 0,
+    "stdout": "2e67697469676e6f72653a313a2166696c650966696c650a",
+    "stderr": "",
+    "pattern_hex": "2166696c650a"
+  },
+  {
+    "repo": "ignore",
+    "args": [
+      "check-ignore",
+      "--no-index",
+      "-v",
+      "a/file"
+    ],
+    "status": 0,
+    "stdout": "2e67697469676e6f72653a313a2166696c6509612f66696c650a",
+    "stderr": "",
+    "pattern_hex": "2166696c650a"
+  },
+  {
+    "repo": "ignore",
+    "args": [
+      "check-ignore",
+      "--no-index",
+      "-v",
+      "a/d/e/file"
+    ],
+    "status": 0,
+    "stdout": "2e67697469676e6f72653a313a2166696c6509612f642f652f66696c650a",
+    "stderr": "",
+    "pattern_hex": "2166696c650a"
+  },
+  {
+    "repo": "ignore",
+    "args": [
+      "check-ignore",
+      "--no-index",
+      "file"
+    ],
+    "status": 1,
+    "stdout": "",
+    "stderr": "",
+    "pattern_hex": "612f2a2a2a2f66696c650a"
+  },
+  {
+    "repo": "ignore",
+    "args": [
+      "check-ignore",
+      "--no-index",
+      "a/file"
+    ],
+    "status": 0,
+    "stdout": "612f66696c650a",
+    "stderr": "",
+    "pattern_hex": "612f2a2a2a2f66696c650a"
+  },
+  {
+    "repo": "ignore",
+    "args": [
+      "check-ignore",
+      "--no-index",
+      "a/d/e/file"
+    ],
+    "status": 0,
+    "stdout": "612f642f652f66696c650a",
+    "stderr": "",
+    "pattern_hex": "612f2a2a2a2f66696c650a"
+  },
+  {
+    "repo": "ignore",
+    "args": [
+      "check-ignore",
+      "--no-index",
+      "-v",
+      "file"
+    ],
+    "status": 1,
+    "stdout": "",
+    "stderr": "",
+    "pattern_hex": "612f2a2a2a2f66696c650a"
+  },
+  {
+    "repo": "ignore",
+    "args": [
+      "check-ignore",
+      "--no-index",
+      "-v",
+      "a/file"
+    ],
+    "status": 0,
+    "stdout": "2e67697469676e6f72653a313a612f2a2a2a2f66696c6509612f66696c650a",
+    "stderr": "",
+    "pattern_hex": "612f2a2a2a2f66696c650a"
+  },
+  {
+    "repo": "ignore",
+    "args": [
+      "check-ignore",
+      "--no-index",
+      "-v",
+      "a/d/e/file"
+    ],
+    "status": 0,
+    "stdout": "2e67697469676e6f72653a313a612f2a2a2a2f66696c6509612f642f652f66696c650a",
+    "stderr": "",
+    "pattern_hex": "612f2a2a2a2f66696c650a"
+  },
+  {
+    "repo": "ignore",
+    "args": [
+      "check-ignore",
+      "--no-index",
+      "file"
+    ],
+    "status": 1,
+    "stdout": "",
+    "stderr": "",
+    "pattern_hex": "66696c65006a756e6b0a2166696c650a"
+  },
+  {
+    "repo": "ignore",
+    "args": [
+      "check-ignore",
+      "--no-index",
+      "a/file"
+    ],
+    "status": 1,
+    "stdout": "",
+    "stderr": "",
+    "pattern_hex": "66696c65006a756e6b0a2166696c650a"
+  },
+  {
+    "repo": "ignore",
+    "args": [
+      "check-ignore",
+      "--no-index",
+      "a/d/e/file"
+    ],
+    "status": 1,
+    "stdout": "",
+    "stderr": "",
+    "pattern_hex": "66696c65006a756e6b0a2166696c650a"
+  },
+  {
+    "repo": "ignore",
+    "args": [
+      "check-ignore",
+      "--no-index",
+      "-v",
+      "file"
+    ],
+    "status": 0,
+    "stdout": "2e67697469676e6f72653a323a2166696c650966696c650a",
+    "stderr": "",
+    "pattern_hex": "66696c65006a756e6b0a2166696c650a"
+  },
+  {
+    "repo": "ignore",
+    "args": [
+      "check-ignore",
+      "--no-index",
+      "-v",
+      "a/file"
+    ],
+    "status": 0,
+    "stdout": "2e67697469676e6f72653a323a2166696c6509612f66696c650a",
+    "stderr": "",
+    "pattern_hex": "66696c65006a756e6b0a2166696c650a"
+  },
+  {
+    "repo": "ignore",
+    "args": [
+      "check-ignore",
+      "--no-index",
+      "-v",
+      "a/d/e/file"
+    ],
+    "status": 0,
+    "stdout": "2e67697469676e6f72653a323a2166696c6509612f642f652f66696c650a",
+    "stderr": "",
+    "pattern_hex": "66696c65006a756e6b0a2166696c650a"
+  },
+  {
+    "repo": "ignore",
+    "args": [
+      "check-ignore",
+      "--no-index",
+      "file"
+    ],
+    "status": 0,
+    "stdout": "66696c650a",
+    "stderr": "",
+    "pattern_hex": "0066696c650a66696c650a"
+  },
+  {
+    "repo": "ignore",
+    "args": [
+      "check-ignore",
+      "--no-index",
+      "a/file"
+    ],
+    "status": 0,
+    "stdout": "612f66696c650a",
+    "stderr": "",
+    "pattern_hex": "0066696c650a66696c650a"
+  },
+  {
+    "repo": "ignore",
+    "args": [
+      "check-ignore",
+      "--no-index",
+      "a/d/e/file"
+    ],
+    "status": 0,
+    "stdout": "612f642f652f66696c650a",
+    "stderr": "",
+    "pattern_hex": "0066696c650a66696c650a"
+  },
+  {
+    "repo": "ignore",
+    "args": [
+      "check-ignore",
+      "--no-index",
+      "-v",
+      "file"
+    ],
+    "status": 0,
+    "stdout": "2e67697469676e6f72653a323a66696c650966696c650a",
+    "stderr": "",
+    "pattern_hex": "0066696c650a66696c650a"
+  },
+  {
+    "repo": "ignore",
+    "args": [
+      "check-ignore",
+      "--no-index",
+      "-v",
+      "a/file"
+    ],
+    "status": 0,
+    "stdout": "2e67697469676e6f72653a323a66696c6509612f66696c650a",
+    "stderr": "",
+    "pattern_hex": "0066696c650a66696c650a"
+  },
+  {
+    "repo": "ignore",
+    "args": [
+      "check-ignore",
+      "--no-index",
+      "-v",
+      "a/d/e/file"
+    ],
+    "status": 0,
+    "stdout": "2e67697469676e6f72653a323a66696c6509612f642f652f66696c650a",
+    "stderr": "",
+    "pattern_hex": "0066696c650a66696c650a"
+  },
+  {
+    "repo": "ignore",
+    "args": [
+      "check-ignore",
+      "--no-index",
+      "file"
+    ],
+    "status": 0,
+    "stdout": "66696c650a",
+    "stderr": "",
+    "pattern_hex": "efbbbf66696c650a"
+  },
+  {
+    "repo": "ignore",
+    "args": [
+      "check-ignore",
+      "--no-index",
+      "a/file"
+    ],
+    "status": 0,
+    "stdout": "612f66696c650a",
+    "stderr": "",
+    "pattern_hex": "efbbbf66696c650a"
+  },
+  {
+    "repo": "ignore",
+    "args": [
+      "check-ignore",
+      "--no-index",
+      "a/d/e/file"
+    ],
+    "status": 0,
+    "stdout": "612f642f652f66696c650a",
+    "stderr": "",
+    "pattern_hex": "efbbbf66696c650a"
+  },
+  {
+    "repo": "ignore",
+    "args": [
+      "check-ignore",
+      "--no-index",
+      "-v",
+      "file"
+    ],
+    "status": 0,
+    "stdout": "2e67697469676e6f72653a313a66696c650966696c650a",
+    "stderr": "",
+    "pattern_hex": "efbbbf66696c650a"
+  },
+  {
+    "repo": "ignore",
+    "args": [
+      "check-ignore",
+      "--no-index",
+      "-v",
+      "a/file"
+    ],
+    "status": 0,
+    "stdout": "2e67697469676e6f72653a313a66696c6509612f66696c650a",
+    "stderr": "",
+    "pattern_hex": "efbbbf66696c650a"
+  },
+  {
+    "repo": "ignore",
+    "args": [
+      "check-ignore",
+      "--no-index",
+      "-v",
+      "a/d/e/file"
+    ],
+    "status": 0,
+    "stdout": "2e67697469676e6f72653a313a66696c6509612f642f652f66696c650a",
+    "stderr": "",
+    "pattern_hex": "efbbbf66696c650a"
+  }
+]

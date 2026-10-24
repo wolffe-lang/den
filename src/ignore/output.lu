@@ -1,0 +1,82 @@
+// Git v2.56.0 Documentation/git-check-ignore.adoc, "OUTPUT".
+// C-quoting convention follows den's merged src/object/tree.lu pretty_tree;
+// this is original formatting code, not Git code.
+
+fn emit_bytes(mut out: List[byte], bytes: List[byte]) {
+    for b in bytes { (mut out).push(b) }
+}
+
+fn emit_quoted(mut out: List[byte], bytes: List[byte], quote_non_ascii: bool) {
+    var quoted = false
+    for b in bytes {
+        if b as int < 32 ||
+            b == 127 as byte ||
+            b == 34 as byte ||
+            b == 92 as byte ||
+            quote_non_ascii && b as int >= 128 {
+            quoted = true
+        }
+    }
+    if quoted { (mut out).push(34 as byte) }
+    for b in bytes {
+        let n = b as int
+        if n == 34 || n == 92 {
+            (mut out).push(92 as byte)
+            (mut out).push(b)
+        } else if n >= 7 && n <= 13 {
+            (mut out).push(92 as byte)
+            (mut out).push("abtnvfr".bytes()[n - 7])
+        } else if n < 32 || n == 127 || quote_non_ascii && n >= 128 {
+            (mut out).push(92 as byte)
+            (mut out).push((48 + n / 64) as byte)
+            (mut out).push((48 + n / 8 % 8) as byte)
+            (mut out).push((48 + n % 8) as byte)
+        } else {
+            (mut out).push(b)
+        }
+    }
+    if quoted { (mut out).push(34 as byte) }
+}
+
+/// Format a single check-ignore record, without writing it. verbose prints
+/// negated matches too; ordinary mode prints ignored paths only. non_matching
+/// is valid only with verbose; nul uses four raw NUL-delimited verbose fields.
+/// quote_non_ascii corresponds to core.quotePath (normally true). The caller
+/// retains the operand spelling in path, separately from its query path.
+/// Pattern bytes are emitted raw, even in non-NUL mode. Measured Git 2.56.0
+/// witnesses: ignore-oracle-initial.json patterns \!literal and trailing\ .
+pub fn format(
+    result: Match,
+    path: List[byte],
+    verbose: bool,
+    nul: bool,
+    non_matching: bool,
+    quote_non_ascii: bool,
+) -> List[byte] ! {invalid} {
+    if non_matching && !verbose { return invalid }
+    var out = List[byte]()
+    if verbose {
+        if !result.matched && !non_matching { return out }
+        if result.matched {
+            if nul {
+                emit_bytes(mut out, result.source.bytes())
+            } else {
+                emit_quoted(mut out, result.source.bytes(), quote_non_ascii)
+            }
+        }
+        (mut out).push(if nul then 0 as byte else 58 as byte)
+        if result.matched { emit_bytes(mut out, "{result.line}".bytes()) }
+        (mut out).push(if nul then 0 as byte else 58 as byte)
+        if result.matched { emit_bytes(mut out, result.pattern) }
+        (mut out).push(if nul then 0 as byte else 9 as byte)
+    } else if !result.ignored {
+        return out
+    }
+    if nul {
+        emit_bytes(mut out, path)
+    } else {
+        emit_quoted(mut out, path, quote_non_ascii)
+    }
+    (mut out).push(if nul then 0 as byte else 10 as byte)
+    out
+}

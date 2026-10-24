@@ -1,0 +1,43 @@
+Git 2.56.0 documentation errata — draft, not sent
+
+Environment
+Git 2.56.0 built with the pinned default configuration in Ubuntu 24.04.
+Binary SHA-256 c4848492938c4ebfffbefe1fbbaa68b9af90c86d1f6a20e76816c5ff37fcfa60.
+LC_ALL=C, TZ=UTC, empty templates/hooks, GIT_CONFIG_NOSYSTEM=1.
+Reproducer: tools/vc03-behavior.py. Captures: behavior-oracle.json/.log.
+
+1. Longer whole-component star runs behave as globstars
+
+Git v2.56.0 Documentation/gitignore.adoc, PATTERN FORMAT, states:
+"Other consecutive asterisks are considered regular asterisks and
+will match according to the previous rules."
+
+With .gitignore containing a/***/file and files a/file and a/d/e/file,
+`git check-ignore -v --no-index a/file` exits 0 and writes exactly:
+.gitignore:1:a/***/file<TAB>a/file<LF>
+
+The corresponding query for a/d/e/file also exits 0 and prints the same
+pattern and that pathname. Both stderr streams are empty. The three-star
+component therefore matches zero or multiple directory components, unlike
+an ordinary star confined to one component.
+
+Suggested documentation correction: describe runs of two or more stars at
+these whole-component globstar boundaries, if the observed behavior is intended.
+
+2. Verbose negative matches have success status without exclusion
+
+Git v2.56.0 Documentation/git-check-ignore.adoc, EXIT STATUS, states:
+0: "One or more of the provided paths is ignored."
+1: "None of the provided paths are ignored."
+
+With .gitignore containing !file and a file named file,
+`git check-ignore --no-index file` exits 1 with empty stdout/stderr.
+`git check-ignore -v --no-index file` exits 0 and writes exactly:
+.gitignore:1:!file<TAB>file<LF>
+Stderr remains empty. The negated rule matches, but the file is not ignored.
+
+Suggested documentation correction: distinguish a verbose matched rule
+(including negation) from a nonverbose positive exclusion in EXIT STATUS.
+
+Den follows these measured binary behaviors under adopted R-vc03-4 A. These
+are documentation reports for review, not upstream submissions or issue filings.

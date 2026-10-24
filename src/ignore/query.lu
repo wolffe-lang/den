@@ -1,0 +1,168 @@
+use std.fs
+use repository
+
+// Specification: Git v2.56.0 Documentation/gitignore.adoc, "DESCRIPTION",
+// "CONFIGURATION", "NOTES". Configuration itself is repository's API.
+
+/// Invalid paths and resource caps are explicit. Missing optional ignore files
+/// are ordinary absence; permission and other IO failures are not hidden.
+pub error IgnoreErrors = {invalid, denied, io, limit, Unsupported(str)}
+
+fn append_file(
+    path: str,
+    source: str,
+    base: str,
+    nofollow: bool,
+    mut rules: List[Rule],
+) -> () ! IgnoreErrors {
+    // lstat prevents ordinary symlink reads; NOFOLLOW also prevents a final
+    // component swapped to a symlink between this check and the open.
+    if nofollow {
+        let info = fs.lstat(path) else |e| match e {
+            not_found => { return },
+            denied => { return denied },
+            io => { return io },
+        }
+        if info.kind == 3 { return }
+        if info.kind != 0 { return }
+    }
+    let mode = if nofollow then 16 else 0
+    let fd = fs_open_mode(path, mode) else |e| match e {
+        not_found => { return },
+        denied => { return denied },
+        io => { return io },
+        exists => { return io },
+        invalid => {
+            // A raced-in symlink is still not an ignore file. Do not fall
+            // back to a following open on a platform that lacks NOFOLLOW.
+            if nofollow {
+                let info = fs.lstat(path) else |_| { return io }
+                if info.kind == 3 { return }
+                return Unsupported("ignore-file nofollow open")
+            }
+            return invalid
+        },
+    }
+    var f = fs.File { fd: fd }
+    defer fs.close(take f) else |_| {}
+    let info = fs_fstat_record(f.fd) else |_| { return io }
+    if info[0] != 0 { return }
+    // Inclusive cap, checked again as a file can grow after the stat.
+    if info[1] > 16777216 { return limit }
+    var data = List[byte]()
+    loop {
+        region chunk {
+            let bytes = fs.read_chunk(mut f, 65536) else |e| match e {
+                eof => { break },
+                io => { return io },
+            }
+            if bytes.len > 16777216 - data.len { return limit }
+            for b in bytes { (mut data).push(b) }
+        }
+    }
+    for rule in parse(source, base.bytes(), data)? { (mut rules).push(copy rule) }
+}
+
+/// Effective global ignore pathname. An explicitly empty core.excludesFile
+/// disables the default. ~ is expanded using HOME; ~user is refused by name.
+/// Relative configured paths are relative to the process cwd, as file opens
+/// are; worktree is not silently substituted. The result is absolute so the
+/// verbose source field has the documented core.excludesFile form.
+pub fn excludes_file(repo: repository.Repo) -> str ! IgnoreErrors {
+    var path = repo.config["core.excludesfile"] else |_| {
+        var xdg = env_get("XDG_CONFIG_HOME") else ""
+        if xdg == "" {
+            let home = env_get("HOME") else ""
+            if home == "" { return "" }
+            xdg = "{home}/.config"
+        }
+        "{xdg}/git/ignore"
+    }
+    if path == "" { return "" }
+    if path == "~" || path.starts_with("~/") {
+        let home = env_get("HOME") else ""
+        if home == "" { return invalid }
+        path = if path == "~" then home else "{home}/{path[2..]}"
+    } else if path.starts_with("~") {
+        return Unsupported("core.excludesFile ~user expansion")
+    }
+    if !path.starts_with("/") {
+        let cwd = fs.realpath(".") else |_| { return io }
+        path = "{cwd}/{path}"
+    }
+    path
+}
+
+fn display_info(gitdir: str, worktree: str) -> str {
+    let prefix = if worktree == "/" then "/" else "{worktree}/"
+    if gitdir.starts_with(prefix) { return "{gitdir[prefix.len..]}/info/exclude" }
+    "{gitdir}/info/exclude"
+}
+
+/// Filesystem ignore query for an UNTRACKED canonical worktree-relative path.
+/// worktree must name the repository root (not the current subdirectory).
+/// is_dir is caller-supplied lstat kind, never a followed symlink's target kind;
+/// nonexistent paths are supported. Input paths are str-limited (#687/#912),
+/// but file contents and matching are binary. This function DOES NOT read the
+/// index: status/add must bypass it for tracked paths (or use query_tracked).
+/// A symlink .gitignore is never followed. Excluded parents terminate the
+/// traversal before child .gitignore files are opened. Other ancestor symlinks
+/// are refused, not traversed. No caches or filesystem writes are performed.
+/// Optional files are capped individually at 16 MiB, with an explicit limit.
+pub fn query(
+    repo: repository.Repo,
+    worktree: str,
+    path: str,
+    is_dir: bool,
+) -> Match ! IgnoreErrors {
+    if !valid_path(path.bytes()) { return invalid }
+    let root = fs.realpath(worktree) else |e| match e {
+        not_found => { return invalid },
+        io => { return io },
+    }
+    var rules = List[Rule]()
+    let global = excludes_file(repo)?
+    if global != "" { append_file(global, global, "", false, mut rules)? }
+    append_file(
+        "{repo.gitdir}/info/exclude",
+        display_info(repo.gitdir, root),
+        "",
+        false,
+        mut rules,
+    )?
+    append_file("{root}/.gitignore", ".gitignore", "", true, mut rules)?
+    for pos in 0..path.len {
+        if path.bytes()[pos] != 47 as byte { continue }
+        // pos is a slash byte and hence also a valid UTF-8 boundary.
+        let parent = path[0..pos]
+        let result = decision(rules, parent.bytes(), true)
+        if result.ignored { return result }
+        let kind = fs.lstat("{root}/{parent}") else |e| match e {
+            not_found => {
+                // Every deeper physical ancestor is absent too, but patterns
+                // already loaded can still describe this hypothetical path.
+                return evaluate(rules, path.bytes(), is_dir, false)?
+            },
+            denied => { return denied },
+            io => { return io },
+        }
+        if kind.kind == 3 { return Unsupported("ignore query beyond symlink") }
+        if kind.kind != 1 { return invalid }
+        append_file("{root}/{parent}/.gitignore", "{parent}/.gitignore", parent, true, mut rules)?
+    }
+    decision(rules, path.bytes(), is_dir)
+}
+
+/// Explicit tracked-file boundary. tracked=true performs no filesystem IO and
+/// returns unmatched; false is equivalent to query (including --no-index).
+pub fn query_tracked(
+    repo: repository.Repo,
+    worktree: str,
+    path: str,
+    is_dir: bool,
+    tracked: bool,
+) -> Match ! IgnoreErrors {
+    if !valid_path(path.bytes()) { return invalid }
+    if tracked { return unmatched() }
+    query(repo, worktree, path, is_dir)?
+}

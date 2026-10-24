@@ -1,0 +1,26 @@
+#!/bin/sh
+set -eu
+DEN_ROOT=$(cd "$(dirname "$0")/.." && pwd)
+export DEN_ROOT
+cd "$DEN_ROOT"
+. tools/lib-toolchain.sh
+for tier in native release; do
+    flag=
+    if [ "$tier" = release ]; then flag=--release; fi
+    mkdir -p "target/$tier"
+    "$WOLF" build $flag --deny-warnings src/ignore_test.lu -o "target/$tier/ignore-test"
+    "target/$tier/ignore-test"
+    "$WOLF" build $flag --deny-warnings probes/ignore-client/main.lu -o "target/$tier/ignore-client"
+    fixture=$(mktemp -d "$DEN_ROOT/target/ignore-$tier.XXXXXX")
+    rmdir "$fixture"
+    "target/$tier/ignore-client" selftest "$fixture"
+    tools/env python3 -I tools/ignore-oracle.py --tier "$tier"
+done
+"$WOLF" conform-run src/ignore_test.lu --checked --json > target/ignore-checked.json
+cat target/ignore-checked.json
+python3 -I - target/ignore-checked.json <<'PY'
+import json,sys
+rows=[json.loads(line) for line in open(sys.argv[1]) if line.startswith('{')]
+assert len(rows)==1 and rows[0]['verdict']=='exit(0)',rows
+PY
+echo 'ignore: native/release units, filesystem probe, Git matrix; actual checked exit(0)'

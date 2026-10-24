@@ -1,0 +1,9 @@
+pkg {
+    name: "ignore-client",
+    edition: "1",
+    capabilities: [env, fs],
+    deps: {
+        ignore: {path: "../../src/ignore"},
+        repository: {path: "../../src/repository"},
+    },
+}

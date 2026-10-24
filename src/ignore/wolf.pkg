@@ -1,0 +1,8 @@
+pkg {
+    name: "ignore",
+    edition: "1",
+    capabilities: [fs, env],
+    deps: {
+        repository: {path: "../repository"},
+    },
+}
