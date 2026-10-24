@@ -83,3 +83,23 @@ examples are black-box measurements, not prose-derived goldens.
   valid signature is not a claim of a Web-of-Trust certification.
 - Git 2.56.0 CLI; Python stdlib zlib (container zlib 1.3) as a compression
   black box; OpenSSL CLI as a TLS server; system trust roots as data only.
+
+## Codec derivation (vc01)
+
+- RFC 1950 §§2.1–2.3 read fully: byte order, CMF/FLG/FCHECK,
+  FDICT refusal, Adler-32 recurrence and compliance. Adler is derived from
+  the two modular sums in §2.2, not the appendix's sample C (not read).
+- RFC 1951 §§3.1–3.2.7 read fully, including §3.2.2 canonical-code
+  ordering and §3.2.7's single-symbol/empty distance cases. Tables and
+  algorithms are original implementations of the stated format, not copies
+  of the RFC's sample routines or of any codec implementation.
+- FIPS 180-4 §§4.1.1, 5.1.1, 5.2.1, 5.3.1 and 6.1.1–6.1.2 read from
+  https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.180-4.pdf for the inherited
+  SHA-1 object's framing and known-answer tests; no hash algorithm change.
+- Git gitformat-pack(5), pack header, entries, object/size encoding and
+  deltified representation; Pro Git 2nd edition §10.2, Object Storage:
+  https://git-scm.com/docs/gitformat-pack and
+  https://git-scm.com/book/en/v2/Git-Internals-Git-Objects.
+- Python zlib and the pinned Git are independent black-box test oracles only.
+  No zlib, miniz, libdeflate, zlib-ng, Git or other codec/VCS implementation
+  source was consulted; no external codec is linked or invoked by den.
