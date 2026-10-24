@@ -1,0 +1,33 @@
+Prediction — vc02, before implementation, 2026-10-24
+
+Pinned empty template, default branch main: I predict plain init writes only
+.git/HEAD = "ref: refs/heads/main\n" and .git/config =
+"[core]\n\trepositoryformatversion = 0\n\tfilemode = true\n\tbare = false\n\tlogallrefupdates = true\n".
+Bare config omits logallrefupdates and has bare = true. Directories include
+objects/info, objects/pack, refs/heads, refs/tags. Empty-template Git likely
+omits description, info/exclude, hooks and info entirely; den's explicitly
+required empty hooks directory should not affect the file snapshot. This is
+a prediction to measure, not permission to create default-template files.
+
+Empty blob e69de29bb2d1d6434b8b29ae775ad8c2e48c5391;
+abc blob f2ba8f84ab5c1bce84a7b441cb1959cfc7093b7f;
+empty tree 4b825dc642cb6eb9a060e54bf8d69288fbee4904.
+With minimal identity a <a>, timestamp 0 +0000 and empty message, predict
+root commit body 99 bytes and tag body 89 bytes (tag t targeting empty blob).
+Actual pinned identities/dates will be measured separately.
+
+Predict 80 new plumbing parity cases, 20 malformed-object rows, zero
+reviewed exceptions beyond the settled loose-object-raw comparison, and all
+cross-tool reads/raw oids/fsck clean for valid objects. Deliberately corrupt
+header, size, oid and checksum fixtures must fail, not crash. Unknown index
+extensions and compression levels other than -1/1 remain named refusals.
+
+100,000,000-byte whole-object operations should grow linearly; predict peak
+RSS below 1.2 GiB for both random and repeated content, with no quadratic
+concatenation or per-byte list copying. Native and release small unit tests
+should pass; actual checked machine may refuse a large integration client on
+its mem-phase budget, which must be explicit and counted rather than skipped.
+
+Prediction misses, including inventory/count/size estimates, will be retained.
+This .txt evidence plus the PR's five sections is the contract's fallback:
+the lane wrapper prohibits writing Markdown report files.
