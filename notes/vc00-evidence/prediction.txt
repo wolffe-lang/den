@@ -1,0 +1,19 @@
+Prediction (before implementation)
+
+Absent beyond deflate: write-only non-truncating open; index stat nanoseconds
+(partial stat record); raw-byte paths; regex; globs; big integers; mmap; argv[0]
+on the pinned release. TLS likely completes a local handshake only with an
+explicit trust configuration; GitHub HTTPS likely lacks a usable trust-store
+path. Pipes, TCP and strftime should work natively; checked may expose budgets.
+
+Formats: predict 18 documentation pages plus RFC 1950/1951 and FIPS 180-4.
+An empty loose blob should occupy 15 compressed bytes, an empty tree 15, and
+an empty-tree commit with the pinned identity/date/message about 130 bytes.
+Corpus reproducibility likely misses index stat fields on the first try even
+when oids agree; normalize those inputs explicitly, not the comparison.
+Harness: predict 32 command cases, one version-shape pass, 31 named not-yet
+rows. lane-audit should recognize den after planning commit 9b09681.
+
+This .txt evidence file is used because the lane's tool instructions prohibit
+writing report/summary/findings Markdown files. The PR body will carry all
+five report sections; evidence lives under notes/vc00-evidence/.
