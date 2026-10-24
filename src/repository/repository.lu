@@ -39,74 +39,13 @@ pub fn read_bytes(path: str, cap: int) -> List[byte] ! RepoErrors {
     out
 }
 
-/// Minimal scalar config grammar. Includes/escapes/subsections are named refusals,
-/// never silently ignored when repository safety or an identity might depend on them.
-pub fn read_config(path: str, mut values: Map[str, str]) -> () ! RepoErrors {
-    let bytes = read_bytes(path, 1048576) else |e| match e {
-        not_found => { return },
-        denied => { return denied },
-        io => { return io },
-        invalid => { return invalid },
-        exists => { return exists },
-        unsupported => { return unsupported },
-        limit => { return limit },
-        Unsupported(x) => { return Unsupported(x) },
-    }
-    let text = str_from_utf8(bytes) else |_| { return invalid }
-    var section = ""
-    for raw in text.split("\n") {
-        let line = raw.trim()
-        if line.len == 0 || line.starts_with("#") || line.starts_with(";") { continue }
-        if line.contains("\\") { return Unsupported("config escapes") }
-        if line.starts_with("[") {
-            if !line.ends_with("]") { return invalid }
-            section = line[1..line.len - 1].trim().lower()
-            if section.contains("\"") || section.contains(" ") {
-                return Unsupported("config subsection")
-            }
-            if section == "include" || section == "includeif" {
-                return Unsupported("config includes")
-            }
-        } else {
-            if section == "" { return invalid }
-            let at = line.find("=") else |_| { return Unsupported("implicit config boolean") }
-            let key = line[0..at].trim().lower()
-            var value = line[at + 1..].trim()
-            if value.starts_with("\"") {
-                if !value.ends_with("\"") || value.len < 2 { return invalid }
-                value = value[1..value.len - 1]
-            } else {
-                let hash = value.find("#") else value.len
-                let semi = value.find(";") else value.len
-                let end = if hash < semi then hash else semi
-                value = value[0..end].trim()
-            }
-            if key.len == 0 { return invalid }
-            values["{section}.{key}"] = value
-        }
-    }
-}
-
-/// Load explicit global config, otherwise HOME/.gitconfig. System config is
-/// refused unless the caller opted out, rather than accidentally overridden.
-pub fn global_config() -> Map[str, str] ! RepoErrors {
-    var values = Map[str, str]()
-    if (env_get("GIT_CONFIG_NOSYSTEM") else "") != "1" && fs.exists("/etc/gitconfig") {
-        return Unsupported("system config")
-    }
-    let path = env_get("GIT_CONFIG_GLOBAL") else "{env_get("HOME") else "."}/.gitconfig"
-    read_config(path, mut values)?
-    values
-}
-
 /// Refuse unsupported formats before any object write, including at version 0.
 pub fn open(gitdir: str) -> Repo ! RepoErrors {
     let absolute = fs.realpath(gitdir)?
     if !fs.is_file("{absolute}/HEAD") || !fs.is_dir("{absolute}/objects") { return not_found }
     if fs.exists("{absolute}/commondir") { return Unsupported("linked worktree commondir") }
     if fs.exists("{absolute}/objects/info/alternates") { return Unsupported("object alternates") }
-    var values = global_config()?
-    read_config("{absolute}/config", mut values)?
+    let values = config_values(configuration(absolute)?)
     let version = values["core.repositoryformatversion"] else "0"
     if version != "0" && version != "1" {
         return Unsupported("core.repositoryformatversion={version}")

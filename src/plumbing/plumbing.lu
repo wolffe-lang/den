@@ -522,9 +522,43 @@ fn mktree(args: List[str]) -> int ! Errors {
     0
 }
 
+// Read-only harness surface. No set/unset/edit spelling ever reaches a writer.
+fn config(args: List[str]) -> int ! Errors {
+    if args.len != 3 || args[1] != "--get" {
+        return Unsupported("config (only --get <key> is supported)")
+    }
+    let key = repository.config_key(args[2]) else |_| {
+        eprint(repository.config_key_error(args[2]))
+        return 1
+    }
+    let repo = repository.discover(".") else |e| match e {
+        not_found => repository.Repo { gitdir: "", config: Map[str, str]() },
+        denied => { return denied },
+        io => { return io },
+        invalid => { return invalid },
+        exists => { return exists },
+        unsupported => { return unsupported },
+        limit => { return limit },
+        Unsupported(feature) => { return Unsupported(feature) },
+    }
+    let entries = repository.configuration(repo.gitdir)?
+    var found = false
+    var value = ""
+    for entry in entries {
+        if entry.key == key {
+            found = true
+            value = if entry.implicit then "" else entry.value
+        }
+    }
+    if !found { return 1 }
+    print(value)
+    0
+}
+
 fn dispatch(args: List[str]) -> int ! Errors {
     match args[0] {
         "init" => init(args)?,
+        "config" => config(args)?,
         "hash-object" => hash_object(args)?,
         "cat-file" => cat_file(args)?,
         "commit-tree" => commit_tree(args)?,
@@ -542,8 +576,18 @@ fn dispatch(args: List[str]) -> int ! Errors {
 
 /// Thin process edge; no recoverable row escapes main and no subprocess exists.
 pub fn run(args: List[str]) -> int {
+    let start = if args.len > 0 && args[0] == "init" then "" else "."
+    repository.check_config(start) else |e| match e {
+        ConfigDiagnostic(message) => { eprint(message); return 128 },
+        // Existing dispatch retains its established IO/unsupported handling.
+        _ => {},
+    }
     dispatch(args) else |e| match e {
-        Unsupported(feature) => { eprint("den: not yet implemented: {feature} (M1, vc02)"); 2 },
+        Unsupported(feature) => {
+            let milestone = if feature.starts_with("config") then "M2, vc03" else "M1, vc02"
+            eprint("den: not yet implemented: {feature} ({milestone})")
+            2
+        },
         not_found => {
             eprint("fatal: not a git repository (or any of the parent directories): .git")
             128

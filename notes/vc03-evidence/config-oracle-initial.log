@@ -1,0 +1,36 @@
+parity: simple
+parity: case
+parity: implicit
+parity: empty
+parity: quoted
+parity: mixed-quotes
+parity: escapes
+parity: continuation
+parity: comment-continuation
+parity: quoted-subsection
+parity: old-subsection
+parity: inline-section
+FAIL: bom
+ git 128 b'' b'fatal: bad config line 3 in file .git/config\n'
+ den 128 b'' b'fatal: den: invalid\n'
+parity: leading-trailing-space
+parity: priority
+parity: runtime
+parity: missing
+parity: count-empty
+parity: empty-global
+FAIL: bad-escape
+ git 128 b'' b'fatal: bad config line 4 in file .git/config\n'
+ den 128 b'' b'fatal: den: invalid\n'
+FAIL: bad-section
+ git 128 b'' b'fatal: bad config line 3 in file .git/config\n'
+ den 128 b'' b'fatal: den: invalid\n'
+FAIL: bad-quote
+ git 128 b'' b'fatal: bad config line 4 in file .git/config\n'
+ den 128 b'' b'fatal: den: invalid\n'
+FAIL: missing-env-key
+ git 128 b'' b'error: missing config key GIT_CONFIG_KEY_0\nfatal: unable to parse command-line config\n'
+ den 128 b'' b'fatal: den: invalid\n'
+FAIL: invalid-key
+ git 1 b'' b'error: key does not contain a section: bad\n'
+ den 1 b'' b'error: invalid config key: bad\n'

@@ -1,0 +1,137 @@
+//! member: false
+
+use repository
+
+fn malformed(text: str) -> bool {
+    var rejected = false
+    let _ = repository.parse_config(text) else |e| {
+        rejected = "{e}" == "invalid"
+        []
+    }
+    rejected
+}
+
+fn bad_key(text: str) -> bool {
+    var rejected = false
+    let _ = repository.config_key(text) else |e| {
+        rejected = "{e}" == "invalid"
+        ""
+    }
+    rejected
+}
+
+fn main() -> int ! {invalid, limit, Unsupported(str)} {
+    let parsed = repository.parse_config(
+        "# comment\n[UsEr] NaMe = first\nname=last # ignored\nEmail = x;y\n[Core]\nfileMode\nsymlinks =\n[remote \"Origin.X\"]\nURL = \"https://host/#;x\"\n[Remote.OLD.X]\nurl = old\n[remote \"\"]url=empty subsection\n",
+    )?
+    let values = repository.config_values(parsed)
+    assert((values["user.name"] else "missing") == "last")
+    assert((values["user.email"] else "missing") == "x")
+    assert((values["core.filemode"] else "missing") == "true")
+    assert((values["core.symlinks"] else "missing") == "")
+    assert((values["remote.Origin.X.url"] else "missing") == "https://host/#;x")
+    assert((values["remote.old.x.url"] else "missing") == "old")
+    assert((values["remote..url"] else "missing") == "empty subsection")
+    assert(parsed[3].implicit && !parsed[4].implicit)
+    assert(parsed[0].key == "user.name" && parsed[1].key == "user.name")
+    assert(repository.config_key("USER.Name")? == "user.name")
+    assert(repository.config_key("REMOTE.Origin.X.URL")? == "remote.Origin.X.url")
+    assert(repository.config_key("REMOTE..URL")? == "remote..url")
+    assert(repository.config_key("REMOTE.é.名.URL")? == "remote.é.名.url")
+
+    let syntax = repository.config_values(
+        repository.parse_config(
+            "[test]\nwhite =   unquoted \t inside   \t#comment\nquoted =  \"  a #; b  \"   #comment\nmixed=one\" two \"three\nescapes=\"a\\nb\\tc\\b\\\"\\\\z\"\ncontinued=first\\\n  second\nqcontinued=\"first\\\n\tsecond\"\ncomment=value # ignored \\\nnext=separate\nempty=\"\"\n[remote \"a\\\"b\\\\c\\tdé\"]\nurl=unicode\n",
+        )?,
+    )
+    assert((syntax["test.white"] else "missing") == "unquoted \t inside")
+    assert((syntax["test.quoted"] else "missing") == "  a #; b  ")
+    assert((syntax["test.mixed"] else "missing") == "one two three")
+    assert((syntax["test.escapes"] else "missing") == "a\nb\tc\u{8}\"\\z")
+    assert((syntax["test.continued"] else "missing") == "first  second")
+    assert((syntax["test.qcontinued"] else "missing") == "first\tsecond")
+    assert((syntax["test.comment"] else "missing") == "value")
+    assert((syntax["test.next"] else "missing") == "separate")
+    assert((syntax["test.empty"] else "missing") == "")
+    assert((syntax["remote.a\"b\\ctdé.url"] else "missing") == "unicode")
+    let crlf = repository.config_values(
+        repository.parse_config("\u{feff}[USER]\r\nname=José\r\nemail=first\\\r\nsecond")?,
+    )
+    assert((crlf["user.name"] else "missing") == "José")
+    assert((crlf["user.email"] else "missing") == "firstsecond")
+
+    for text in [
+        "name=value",
+        "=value",
+        "[",
+        "[]",
+        "[a",
+        "[a b]",
+        "[a\"b\"]",
+        "[a \"b\n c\"]",
+        "[a \"b\\\nc\"]",
+        "[a \"b]",
+        "[a \"b\"x]",
+        "[a] 1name=x",
+        "[a] name_bad=x",
+        "[a] name value",
+        "[a] name.value=x",
+        "[a] k=\"unterminated",
+        "[a] k=\"line\nline\"",
+        "[a] k=\\q",
+        "[a] k=\\0",
+        "[a] k=\\x41",
+        "[a] k=\\",
+        "[a]\nk=v\0suffix",
+        "[a]\né=x",
+        "[é]\nk=x",
+        "[a] [b]",
+        "[a]k=v\n[b]k=\"",
+    ] {
+        assert(malformed(text))
+    }
+    for key in [
+        "",
+        "user",
+        ".name",
+        "user.",
+        "user.1x",
+        "user.a_b",
+        "a b.key",
+        "a.é",
+        "a.x\n.key",
+        "a.x\0.key",
+    ] {
+        assert(bad_key(key))
+    }
+    for text in [
+        "[include]\npath=x",
+        "[InClUdE]",
+        "[includeIf \"gitdir:never/\"]\npath=x",
+        "[includeIf.condition]\npath=x",
+    ] {
+        var refused = false
+        let _ = repository.parse_config(text) else |e| {
+            refused = "{e}" == "Unsupported(config include)" ||
+                "{e}" == "Unsupported(config includeIf)"
+            []
+        }
+        assert(refused)
+    }
+    // Every ASCII prefix and every inserted NUL is recoverable, not a trap.
+    let seed = "[remote \"A\\\"B\"]\nurl=\"a\\nb\" # trailing\n[core]\nfilemode\n"
+    for end in 0..=seed.len {
+        let _ = repository.parse_config(seed[0..end]) else []
+        assert(malformed("{seed[0..end]}\0{seed[end..]}"))
+    }
+    var limited = false
+    let _ = repository.parse_config("#".repeat(1048577)) else |e| {
+        limited = "{e}" == "limit"
+        []
+    }
+    assert(limited)
+    print(
+        "PASS config syntax, case, implicit values, escapes, continuation, includes and malformed rows",
+    )
+    0
+}

@@ -1,0 +1,131 @@
+PASS config syntax, case, implicit values, escapes, continuation, includes and malformed rows
+PASS config syntax, case, implicit values, escapes, continuation, includes and malformed rows
+{"commit":"cf0c13d","diagnostics":[],"file":"src/config_test.lu","impl":"wolfgang","impl_version":"0.2.35","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"PASS config syntax, case, implicit values, escapes, continuation, includes and malformed rows\n","stdout_sha256":"c8d890dd7a198aacb1928605835709b5853f0f670330288bf64f439ef03e6161","verdict":"exit(0)","warnings":[]}
+build: target/native/den
+build: target/release/den
+PASS config native: 67 read-only CLI rows and init scalar-API integration
+PASS config release: 67 read-only CLI rows and init scalar-API integration
+config: native/release parser and CLI, checked parser; no oracle measurements
+parity: simple
+parity: case
+parity: implicit
+parity: empty
+parity: quoted
+parity: mixed-quotes
+parity: escapes
+parity: continuation
+parity: comment-continuation
+parity: quoted-subsection
+parity: old-subsection
+parity: inline-section
+parity: bom
+parity: leading-trailing-space
+parity: priority
+parity: runtime
+parity: missing
+parity: count-empty
+parity: empty-global
+parity: bad-escape
+parity: bad-section
+parity: bad-quote
+parity: missing-env-key
+parity: invalid-key
+shape-pass: version
+parity: init
+parity: hash-object
+parity: cat-type
+parity: cat-size
+parity: cat-pretty
+parity: write-tree
+not-yet: add
+not-yet: status-short
+not-yet: status-long
+not-yet: commit
+not-yet: rm
+not-yet: mv
+not-yet: restore
+not-yet: diff
+not-yet: diff-renames
+not-yet: log-default
+not-yet: log-oneline
+not-yet: show
+not-yet: branch
+not-yet: tag
+not-yet: switch
+not-yet: reset
+not-yet: merge
+not-yet: rebase
+not-yet: blame
+not-yet: stash
+not-yet: notes
+not-yet: rev-parse
+not-yet: fsck
+not-yet: count-objects
+not-yet: diff-symlink
+parity: hash-empty
+parity: hash-write-empty
+parity: hash-abc
+parity: hash-write-abc
+parity: hash-nul
+parity: hash-write-nul
+parity: hash-all-bytes
+parity: hash-write-all-bytes
+parity: hash-utf8
+parity: hash-write-utf8
+parity: hash-tree-empty
+parity: hash-unknown-type
+parity: hash-missing-file
+parity: cat-p-blob
+parity: cat-p-tree
+parity: cat-p-commit
+parity: cat-p-missing
+parity: cat-p-zero
+parity: cat-s-blob
+parity: cat-s-tree
+parity: cat-s-commit
+parity: cat-s-missing
+parity: cat-s-zero
+parity: cat-t-blob
+parity: cat-t-tree
+parity: cat-t-commit
+parity: cat-t-missing
+parity: cat-t-zero
+parity: init-quiet
+parity: init-branch
+parity: commit-tree-empty
+parity: commit-tree-stdin
+parity: commit-tree-binary
+parity: commit-tree-message
+parity: commit-tree-paragraphs
+parity: commit-tree-empty-message
+parity: commit-tree-parent
+parity: commit-tree-file
+parity: commit-tree-file-stdin
+parity: mktree-empty
+parity: mktag-empty
+parity: mktag-invalid
+parity: commit-tree-invalid-utf8-0
+parity: commit-tree-invalid-utf8-1
+parity: commit-tree-invalid-utf8-2
+parity: commit-tree-invalid-utf8-3
+parity: commit-tree-invalid-utf8-4
+parity: commit-tree-invalid-utf8-5
+not-yet: compression-not-yet-0
+not-yet: compression-not-yet-6
+not-yet: compression-not-yet-9
+parity: commit-tree-latin1
+parity: hash-empty-tag
+parity: hash-empty-commit
+{"not-yet": 28, "parity": 57, "shape-pass": 1}
+error[E0301]: module `fs` has no item named `open_mode`
+  --> src/ignore/query.lu:30:16
+   |
+30 |     var f = fs.open_mode(path, mode) else |e| match e {
+   |                ^^^^^^^^^ not found in the module
+   |
+help: did you mean `set_mode`?
+   |
+30 |     var f = fs.set_mode(path, mode) else |e| match e {
+   |
+
+wolf build: the package does not compile; fix the errors above (`wolf --explain E0301` explains this code, or any other, by name)

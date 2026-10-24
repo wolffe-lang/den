@@ -1,0 +1,422 @@
+[
+  {
+    "name": "simple",
+    "config_hex": "5b636173655d0a6b6579203d2073696d706c650a",
+    "key": "case.key",
+    "overrides": {},
+    "git": {
+      "status": 0,
+      "stdout": "73696d706c650a",
+      "stderr": ""
+    },
+    "den": {
+      "status": 0,
+      "stdout": "73696d706c650a",
+      "stderr": ""
+    },
+    "equal": true
+  },
+  {
+    "name": "case",
+    "config_hex": "5b434153455d0a4b4559203d2076616c75650a",
+    "key": "Case.Key",
+    "overrides": {},
+    "git": {
+      "status": 0,
+      "stdout": "76616c75650a",
+      "stderr": ""
+    },
+    "den": {
+      "status": 0,
+      "stdout": "76616c75650a",
+      "stderr": ""
+    },
+    "equal": true
+  },
+  {
+    "name": "implicit",
+    "config_hex": "5b636173655d0a6b65790a",
+    "key": "case.key",
+    "overrides": {},
+    "git": {
+      "status": 0,
+      "stdout": "0a",
+      "stderr": ""
+    },
+    "den": {
+      "status": 0,
+      "stdout": "0a",
+      "stderr": ""
+    },
+    "equal": true
+  },
+  {
+    "name": "empty",
+    "config_hex": "5b636173655d0a6b6579203d0a",
+    "key": "case.key",
+    "overrides": {},
+    "git": {
+      "status": 0,
+      "stdout": "0a",
+      "stderr": ""
+    },
+    "den": {
+      "status": 0,
+      "stdout": "0a",
+      "stderr": ""
+    },
+    "equal": true
+  },
+  {
+    "name": "quoted",
+    "config_hex": "5b636173655d0a6b6579203d202220612023203b20220a",
+    "key": "case.key",
+    "overrides": {},
+    "git": {
+      "status": 0,
+      "stdout": "20612023203b200a",
+      "stderr": ""
+    },
+    "den": {
+      "status": 0,
+      "stdout": "20612023203b200a",
+      "stderr": ""
+    },
+    "equal": true
+  },
+  {
+    "name": "mixed-quotes",
+    "config_hex": "5b636173655d0a6b6579203d2061202220622022206320202320636f6d6d656e740a",
+    "key": "case.key",
+    "overrides": {},
+    "git": {
+      "status": 0,
+      "stdout": "612020622020630a",
+      "stderr": ""
+    },
+    "den": {
+      "status": 0,
+      "stdout": "612020622020630a",
+      "stderr": ""
+    },
+    "equal": true
+  },
+  {
+    "name": "escapes",
+    "config_hex": "5b636173655d0a6b6579203d2022615c6e625c74635c625c225c5c220a",
+    "key": "case.key",
+    "overrides": {},
+    "git": {
+      "status": 0,
+      "stdout": "610a62096308225c0a",
+      "stderr": ""
+    },
+    "den": {
+      "status": 0,
+      "stdout": "610a62096308225c0a",
+      "stderr": ""
+    },
+    "equal": true
+  },
+  {
+    "name": "continuation",
+    "config_hex": "5b636173655d0a6b6579203d20615c0a2020620a",
+    "key": "case.key",
+    "overrides": {},
+    "git": {
+      "status": 0,
+      "stdout": "612020620a",
+      "stderr": ""
+    },
+    "den": {
+      "status": 0,
+      "stdout": "612020620a",
+      "stderr": ""
+    },
+    "equal": true
+  },
+  {
+    "name": "comment-continuation",
+    "config_hex": "5b636173655d0a6b6579203d2061202320635c0a6e6578743d620a",
+    "key": "case.key",
+    "overrides": {},
+    "git": {
+      "status": 0,
+      "stdout": "610a",
+      "stderr": ""
+    },
+    "den": {
+      "status": 0,
+      "stdout": "610a",
+      "stderr": ""
+    },
+    "equal": true
+  },
+  {
+    "name": "quoted-subsection",
+    "config_hex": "5b4341534520225375622e43617365225d0a4b45593d780a",
+    "key": "case.Sub.Case.key",
+    "overrides": {},
+    "git": {
+      "status": 0,
+      "stdout": "780a",
+      "stderr": ""
+    },
+    "den": {
+      "status": 0,
+      "stdout": "780a",
+      "stderr": ""
+    },
+    "equal": true
+  },
+  {
+    "name": "old-subsection",
+    "config_hex": "5b434153452e5375622e436173655d0a4b45593d780a",
+    "key": "case.sub.case.key",
+    "overrides": {},
+    "git": {
+      "status": 0,
+      "stdout": "780a",
+      "stderr": ""
+    },
+    "den": {
+      "status": 0,
+      "stdout": "780a",
+      "stderr": ""
+    },
+    "equal": true
+  },
+  {
+    "name": "inline-section",
+    "config_hex": "5b636173655d206b65793d780a",
+    "key": "case.key",
+    "overrides": {},
+    "git": {
+      "status": 0,
+      "stdout": "780a",
+      "stderr": ""
+    },
+    "den": {
+      "status": 0,
+      "stdout": "780a",
+      "stderr": ""
+    },
+    "equal": true
+  },
+  {
+    "name": "bom",
+    "config_hex": "efbbbf5b636173655d0a6b65793d780d0a",
+    "key": "case.key",
+    "overrides": {},
+    "git": {
+      "status": 128,
+      "stdout": "",
+      "stderr": "666174616c3a2062616420636f6e666967206c696e65203320696e2066696c65202e6769742f636f6e6669670a"
+    },
+    "den": {
+      "status": 128,
+      "stdout": "",
+      "stderr": "666174616c3a2062616420636f6e666967206c696e65203320696e2066696c65202e6769742f636f6e6669670a"
+    },
+    "equal": true
+  },
+  {
+    "name": "leading-trailing-space",
+    "config_hex": "5b636173655d0a6b6579203d2020612020622020200a",
+    "key": "case.key",
+    "overrides": {},
+    "git": {
+      "status": 0,
+      "stdout": "612020620a",
+      "stderr": ""
+    },
+    "den": {
+      "status": 0,
+      "stdout": "612020620a",
+      "stderr": ""
+    },
+    "equal": true
+  },
+  {
+    "name": "priority",
+    "config_hex": "5b636173655d0a6b65793d7265706f0a",
+    "key": "case.key",
+    "overrides": {},
+    "git": {
+      "status": 0,
+      "stdout": "7265706f0a",
+      "stderr": ""
+    },
+    "den": {
+      "status": 0,
+      "stdout": "7265706f0a",
+      "stderr": ""
+    },
+    "equal": true
+  },
+  {
+    "name": "runtime",
+    "config_hex": "5b636173655d0a6b65793d7265706f0a",
+    "key": "case.key",
+    "overrides": {
+      "GIT_CONFIG_COUNT": "2",
+      "GIT_CONFIG_KEY_0": "case.key",
+      "GIT_CONFIG_VALUE_0": "first",
+      "GIT_CONFIG_KEY_1": "case.key",
+      "GIT_CONFIG_VALUE_1": "last"
+    },
+    "git": {
+      "status": 0,
+      "stdout": "6c6173740a",
+      "stderr": ""
+    },
+    "den": {
+      "status": 0,
+      "stdout": "6c6173740a",
+      "stderr": ""
+    },
+    "equal": true
+  },
+  {
+    "name": "missing",
+    "config_hex": "5b636173655d0a6b65793d780a",
+    "key": "case.missing",
+    "overrides": {},
+    "git": {
+      "status": 1,
+      "stdout": "",
+      "stderr": ""
+    },
+    "den": {
+      "status": 1,
+      "stdout": "",
+      "stderr": ""
+    },
+    "equal": true
+  },
+  {
+    "name": "count-empty",
+    "config_hex": "5b636173655d0a6b65793d780a",
+    "key": "case.key",
+    "overrides": {
+      "GIT_CONFIG_COUNT": ""
+    },
+    "git": {
+      "status": 0,
+      "stdout": "780a",
+      "stderr": ""
+    },
+    "den": {
+      "status": 0,
+      "stdout": "780a",
+      "stderr": ""
+    },
+    "equal": true
+  },
+  {
+    "name": "empty-global",
+    "config_hex": "5b636173655d0a6f746865723d780a",
+    "key": "case.key",
+    "overrides": {
+      "GIT_CONFIG_GLOBAL": ""
+    },
+    "git": {
+      "status": 1,
+      "stdout": "",
+      "stderr": ""
+    },
+    "den": {
+      "status": 1,
+      "stdout": "",
+      "stderr": ""
+    },
+    "equal": true
+  },
+  {
+    "name": "bad-escape",
+    "config_hex": "5b636173655d0a6b65793d5c710a",
+    "key": "case.key",
+    "overrides": {},
+    "git": {
+      "status": 128,
+      "stdout": "",
+      "stderr": "666174616c3a2062616420636f6e666967206c696e65203420696e2066696c65202e6769742f636f6e6669670a"
+    },
+    "den": {
+      "status": 128,
+      "stdout": "",
+      "stderr": "666174616c3a2062616420636f6e666967206c696e65203420696e2066696c65202e6769742f636f6e6669670a"
+    },
+    "equal": true
+  },
+  {
+    "name": "bad-section",
+    "config_hex": "5b636173650a6b65793d780a",
+    "key": "case.key",
+    "overrides": {},
+    "git": {
+      "status": 128,
+      "stdout": "",
+      "stderr": "666174616c3a2062616420636f6e666967206c696e65203320696e2066696c65202e6769742f636f6e6669670a"
+    },
+    "den": {
+      "status": 128,
+      "stdout": "",
+      "stderr": "666174616c3a2062616420636f6e666967206c696e65203320696e2066696c65202e6769742f636f6e6669670a"
+    },
+    "equal": true
+  },
+  {
+    "name": "bad-quote",
+    "config_hex": "5b636173655d0a6b65793d22780a",
+    "key": "case.key",
+    "overrides": {},
+    "git": {
+      "status": 128,
+      "stdout": "",
+      "stderr": "666174616c3a2062616420636f6e666967206c696e65203420696e2066696c65202e6769742f636f6e6669670a"
+    },
+    "den": {
+      "status": 128,
+      "stdout": "",
+      "stderr": "666174616c3a2062616420636f6e666967206c696e65203420696e2066696c65202e6769742f636f6e6669670a"
+    },
+    "equal": true
+  },
+  {
+    "name": "missing-env-key",
+    "config_hex": "5b636173655d0a6b65793d780a",
+    "key": "case.key",
+    "overrides": {
+      "GIT_CONFIG_COUNT": "1"
+    },
+    "git": {
+      "status": 128,
+      "stdout": "",
+      "stderr": "6572726f723a206d697373696e6720636f6e666967206b6579204749545f434f4e4649475f4b45595f300a666174616c3a20756e61626c6520746f20706172736520636f6d6d616e642d6c696e6520636f6e6669670a"
+    },
+    "den": {
+      "status": 128,
+      "stdout": "",
+      "stderr": "6572726f723a206d697373696e6720636f6e666967206b6579204749545f434f4e4649475f4b45595f300a666174616c3a20756e61626c6520746f20706172736520636f6d6d616e642d6c696e6520636f6e6669670a"
+    },
+    "equal": true
+  },
+  {
+    "name": "invalid-key",
+    "config_hex": "5b636173655d0a6b65793d780a",
+    "key": "bad",
+    "overrides": {},
+    "git": {
+      "status": 1,
+      "stdout": "",
+      "stderr": "6572726f723a206b657920646f6573206e6f7420636f6e7461696e20612073656374696f6e3a206261640a"
+    },
+    "den": {
+      "status": 1,
+      "stdout": "",
+      "stderr": "6572726f723a206b657920646f6573206e6f7420636f6e7461696e20612073656374696f6e3a206261640a"
+    },
+    "equal": true
+  }
+]

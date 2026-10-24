@@ -1,0 +1,423 @@
+// Clean-room specification: Git v2.56.0 Documentation/config.adoc,
+// "Syntax", "Includes", "Values"; Documentation/git-config.adoc,
+// "get", "FILES", "SCOPES", "ENVIRONMENT". No implementation consulted.
+
+use std.fs
+
+/// Malformed syntax, bounded-input overflow, or a named include refusal.
+pub error ConfigErrors = {invalid, limit, Unsupported(str)}
+
+// Internal syntax context stays out of the compatible scalar parser's row.
+error ConfigSyntaxErrors = {ConfigLine(int), limit, Unsupported(str)}
+
+/// Read failures with process-edge diagnostic text; legacy APIs map that
+/// payload to invalid, so object/index consumers keep their existing rows.
+pub error ConfigReadErrors = {
+    not_found,
+    denied,
+    io,
+    invalid,
+    exists,
+    unsupported,
+    limit,
+    Unsupported(str),
+    ConfigDiagnostic(str),
+}
+
+fn config_line(text: str, pos: int) -> int {
+    var line = 1
+    for i in 0..pos {
+        if text.bytes()[i] == 10 as byte { line += 1 }
+    }
+    line
+}
+
+/// A raw scalar assignment. Implicit booleans read as true through Repo.config,
+/// but untyped config --get prints an empty value for them. Keep that distinction.
+pub struct ConfigEntry {
+    key: str,
+    value: str,
+    implicit: bool,
+}
+
+fn config_space(b: byte) -> bool {
+    b == 32 as byte || b == 9 as byte
+}
+
+fn config_alpha(b: byte) -> bool {
+    b as int >= 65 && b as int <= 90 || b as int >= 97 && b as int <= 122
+}
+
+fn config_alnum(b: byte) -> bool {
+    config_alpha(b) || b as int >= 48 && b as int <= 57
+}
+
+fn config_section(name: str) -> bool {
+    if name.len == 0 { return false }
+    for b in name.bytes() {
+        if !config_alnum(b) && b != 45 as byte && b != 46 as byte { return false }
+    }
+    true
+}
+
+fn config_variable(name: str) -> bool {
+    if name.len == 0 || !config_alpha(name.bytes()[0]) { return false }
+    for b in name.bytes() {
+        if !config_alnum(b) && b != 45 as byte { return false }
+    }
+    true
+}
+
+/// Canonicalize section and variable only; the intervening subsection is literal.
+pub fn config_key(name: str) -> str ! {invalid} {
+    if name.contains("\0") || name.contains("\n") { return invalid }
+    let first = name.find(".") else |_| { return invalid }
+    let last = name.rfind(".") else |_| { return invalid }
+    if !config_section(name[0..first]) || !config_variable(name[last + 1..]) {
+        return invalid
+    }
+    if first == last { return name.lower() }
+    "{name[0..first].lower()}{name[first..last + 1]}{name[last + 1..].lower()}"
+}
+
+fn config_include(key: str) -> () ! {Unsupported(str)} {
+    let section = key.split(".")[0]
+    if section == "include" { return Unsupported("config include") }
+    if section == "includeif" { return Unsupported("config includeIf") }
+}
+
+// Header names are ASCII; quoted subsection bytes are decoded only after their
+// complete UTF-8 sequence is assembled. No slicing at an unchecked byte offset.
+fn config_header(text: str, start: int) -> (str, int) ! ConfigSyntaxErrors {
+    var pos = start + 1
+    let begin = pos
+    while pos < text.len {
+        let b = text.bytes()[pos]
+        if !config_alnum(b) && b != 45 as byte && b != 46 as byte { break }
+        pos += 1
+    }
+    let name = text[begin..pos].lower()
+    if !config_section(name) { return ConfigLine(config_line(text, pos)) }
+    let spaced = pos < text.len && config_space(text.bytes()[pos])
+    while pos < text.len && config_space(text.bytes()[pos]) { pos += 1 }
+    var section = name
+    if pos < text.len && text.bytes()[pos] == 34 as byte {
+        if !spaced { return ConfigLine(config_line(text, pos)) }
+        pos += 1
+        var subsection = List[byte]()
+        var closed = false
+        while pos < text.len {
+            var b = text.bytes()[pos]
+            pos += 1
+            if b == 10 as byte { return ConfigLine(config_line(text, pos)) }
+            if b == 34 as byte { closed = true; break }
+            if b == 92 as byte {
+                if pos == text.len { return ConfigLine(config_line(text, pos)) }
+                b = text.bytes()[pos]
+                pos += 1
+                if b == 10 as byte { return ConfigLine(config_line(text, pos)) }
+            }
+            (mut subsection).push(b)
+        }
+        if !closed { return ConfigLine(config_line(text, pos)) }
+        let sub = str_from_utf8(subsection) else |_| { return ConfigLine(config_line(text, pos)) }
+        section = "{name}.{sub}"
+        while pos < text.len && config_space(text.bytes()[pos]) { pos += 1 }
+    }
+    if pos == text.len || text.bytes()[pos] != 93 as byte {
+        return ConfigLine(config_line(text, pos))
+    }
+    config_include(section)?
+    (section, pos + 1)
+}
+
+fn config_value(text: str, start: int) -> (str, int) ! ConfigSyntaxErrors {
+    var pos = start
+    var quoted = false
+    var bytes = List[byte]()
+    var end = 0
+    while pos < text.len {
+        let b = text.bytes()[pos]
+        if b == 10 as byte { break }
+        if !quoted && (b == 35 as byte || b == 59 as byte) { break }
+        pos += 1
+        if b == 34 as byte {
+            quoted = !quoted
+            end = bytes.len
+        } else if b == 92 as byte {
+            if pos == text.len { return ConfigLine(config_line(text, pos)) }
+            let next = text.bytes()[pos]
+            pos += 1
+            if next == 10 as byte { continue }
+            let escaped = match next as int {
+                110 => 10 as byte,
+                116 => 9 as byte,
+                98 => 8 as byte,
+                34 => 34 as byte,
+                92 => 92 as byte,
+                _ => { return ConfigLine(config_line(text, pos)) },
+            }
+            (mut bytes).push(escaped)
+            end = bytes.len
+        } else if !quoted && config_space(b) {
+            if bytes.len > 0 { (mut bytes).push(b) }
+        } else {
+            (mut bytes).push(b)
+            end = bytes.len
+        }
+    }
+    if quoted { return ConfigLine(config_line(text, pos)) }
+    let value = str_from_utf8(bytes[0..end]) else |_| { return ConfigLine(config_line(text, pos)) }
+    (value, pos)
+}
+
+fn parse_config_at(input: str) -> List[ConfigEntry] ! ConfigSyntaxErrors {
+    if input.len > 1048576 { return limit }
+    let nul = input.find("\0") else input.len
+    if nul < input.len { return ConfigLine(config_line(input, nul)) }
+    let text = input.replace("\r\n", "\n")
+    var entries = List[ConfigEntry]()
+    var section = ""
+    var pos = 0
+    // A UTF-8 BOM, if present, belongs to the file rather than the first key.
+    if text.starts_with("\u{feff}") { pos = 3 }
+    while pos < text.len {
+        while pos < text.len && config_space(text.bytes()[pos]) { pos += 1 }
+        if pos == text.len { break }
+        if text.bytes()[pos] == 10 as byte { pos += 1; continue }
+        if text.bytes()[pos] == 35 as byte || text.bytes()[pos] == 59 as byte {
+            while pos < text.len && text.bytes()[pos] != 10 as byte { pos += 1 }
+            continue
+        }
+        if text.bytes()[pos] == 91 as byte {
+            let (name, next) = config_header(text, pos)?
+            section = name
+            pos = next
+            while pos < text.len && config_space(text.bytes()[pos]) { pos += 1 }
+            if pos == text.len { break }
+            if text.bytes()[pos] == 10 as byte { pos += 1; continue }
+            if text.bytes()[pos] == 35 as byte || text.bytes()[pos] == 59 as byte {
+                while pos < text.len && text.bytes()[pos] != 10 as byte { pos += 1 }
+                continue
+            }
+        }
+        if section == "" { return ConfigLine(config_line(text, pos)) }
+        let begin = pos
+        while pos < text.len {
+            let b = text.bytes()[pos]
+            if !config_alnum(b) && b != 45 as byte { break }
+            pos += 1
+        }
+        let variable = text[begin..pos]
+        if !config_variable(variable) { return ConfigLine(config_line(text, pos)) }
+        let key = "{section}.{variable.lower()}"
+        while pos < text.len && config_space(text.bytes()[pos]) { pos += 1 }
+        var value = "true"
+        var implicit = true
+        if pos < text.len && text.bytes()[pos] == 61 as byte {
+            let (parsed, next) = config_value(text, pos + 1)?
+            value = parsed
+            implicit = false
+            pos = next
+        } else if pos < text.len &&
+            text.bytes()[pos] != 10 as byte &&
+            text.bytes()[pos] != 35 as byte &&
+            text.bytes()[pos] != 59 as byte {
+            return ConfigLine(config_line(text, pos))
+        }
+        (mut entries).push(ConfigEntry { key: key, value: value, implicit: implicit })
+        // A comment is never a continued value, even if it ends in backslash.
+        while pos < text.len && text.bytes()[pos] != 10 as byte { pos += 1 }
+    }
+    entries
+}
+
+/// Parse at most 1 MiB, preserving assignment order and raw scalar values.
+/// Malformed input is invalid, never a deliberate trap; include sections are
+/// refused by their distinct names, including an inactive includeIf condition.
+pub fn parse_config(input: str) -> List[ConfigEntry] ! ConfigErrors {
+    parse_config_at(input) else |e| match e {
+        ConfigLine(_) => { return invalid },
+        limit => { return limit },
+        Unsupported(feature) => { return Unsupported(feature) },
+    }
+}
+
+fn config_file(path: str, optional: bool, mut entries: List[ConfigEntry]) -> () ! ConfigReadErrors {
+    let bytes = read_bytes(path, 1048576) else |e| match e {
+        not_found => { return },
+        denied => {
+            if optional { return }
+            return denied
+        },
+        io => { return io },
+        invalid => { return invalid },
+        exists => { return exists },
+        unsupported => { return unsupported },
+        limit => { return limit },
+        Unsupported(feature) => { return Unsupported(feature) },
+    }
+    let text = str_from_utf8(bytes) else |_| { return invalid }
+    let parsed = parse_config_at(text) else |e| match e {
+        ConfigLine(line) => {
+            return ConfigDiagnostic("fatal: bad config line {line} in file {path}")
+        },
+        limit => { return limit },
+        Unsupported(feature) => { return Unsupported(feature) },
+    }
+    for entry in parsed { (mut entries).push(copy entry) }
+}
+
+/// Existing scalar API: later assignments replace earlier ones, implicit=true.
+pub fn read_config(path: str, mut values: Map[str, str]) -> () ! RepoErrors {
+    var entries = List[ConfigEntry]()
+    config_file(path, false, mut entries) else |e| match e {
+        ConfigDiagnostic(_) => { return invalid },
+        not_found => { return not_found },
+        denied => { return denied },
+        io => { return io },
+        invalid => { return invalid },
+        exists => { return exists },
+        unsupported => { return unsupported },
+        limit => { return limit },
+        Unsupported(feature) => { return Unsupported(feature) },
+    }
+    for entry in entries { values[entry.key] = entry.value }
+}
+
+fn config_nosystem() -> bool ! {invalid} {
+    let value = (env_get("GIT_CONFIG_NOSYSTEM") else "false").lower()
+    match value {
+        "true" | "yes" | "on" | "1" => true,
+        "false" | "no" | "off" | "0" | "" => false,
+        _ => { return invalid },
+    }
+}
+
+fn config_runtime(mut entries: List[ConfigEntry]) -> () ! ConfigReadErrors {
+    let text = env_get("GIT_CONFIG_COUNT") else ""
+    var count: int = 0
+    for b in text.bytes() {
+        if b as int < 48 || b as int > 57 { return invalid }
+        // Bound work and arithmetic before multiplication, not after overflow.
+        if count > 6553 { return limit }
+        count = count * 10 + b as int - 48
+        if count > 65536 { return limit }
+    }
+    for i in 0..count {
+        let raw = env_get("GIT_CONFIG_KEY_{i}") else |_| {
+            return ConfigDiagnostic(
+                "error: missing config key GIT_CONFIG_KEY_{i}\nfatal: unable to parse command-line config",
+            )
+        }
+        let value = env_get("GIT_CONFIG_VALUE_{i}") else |_| {
+            return ConfigDiagnostic(
+                "error: missing config value GIT_CONFIG_VALUE_{i}\nfatal: unable to parse command-line config",
+            )
+        }
+        let key = config_key(raw)?
+        config_include(key)?
+        (mut entries).push(ConfigEntry { key: key, value: value, implicit: false })
+    }
+}
+
+fn config_globals(mut entries: List[ConfigEntry]) -> () ! ConfigReadErrors {
+    let explicit = env_get("GIT_CONFIG_GLOBAL") else |_| {
+        let home = env_get("HOME") else "."
+        var xdg = env_get("XDG_CONFIG_HOME") else ""
+        if xdg == "" { xdg = "{home}/.config" }
+        config_file("{xdg}/git/config", true, mut entries)?
+        config_file("{home}/.gitconfig", true, mut entries)?
+        return
+    }
+    // An explicitly empty override suppresses both default global files.
+    if explicit != "" { config_file(explicit, true, mut entries)? }
+}
+
+/// Read system, global, optional repository, then command-scope environment.
+/// Empty gitdir means no repository. Files are bounded; includes never opened.
+pub fn configuration_diagnostics(gitdir: str) -> List[ConfigEntry] ! ConfigReadErrors {
+    var entries = List[ConfigEntry]()
+    if !config_nosystem()? {
+        config_file(env_get("GIT_CONFIG_SYSTEM") else "/etc/gitconfig", true, mut entries)?
+    }
+    config_globals(mut entries)?
+    if gitdir != "" { config_file("{gitdir}/config", false, mut entries)? }
+    config_runtime(mut entries)?
+    entries
+}
+
+/// Compatible scalar loader; detailed process diagnostics are available through
+/// configuration_diagnostics without extending RepoErrors in other modules.
+pub fn configuration(gitdir: str) -> List[ConfigEntry] ! RepoErrors {
+    configuration_diagnostics(gitdir) else |e| match e {
+        ConfigDiagnostic(_) => { return invalid },
+        not_found => { return not_found },
+        denied => { return denied },
+        io => { return io },
+        invalid => { return invalid },
+        exists => { return exists },
+        unsupported => { return unsupported },
+        limit => { return limit },
+        Unsupported(feature) => { return Unsupported(feature) },
+    }
+}
+
+// Discovery for a diagnostic read must not call open: open deliberately maps
+// contextual config failures into its compatible RepoErrors vocabulary.
+fn config_directory(start: str) -> str ! RepoErrors {
+    let explicit = env_get("GIT_DIR") else ""
+    if explicit != "" { return explicit }
+    let absolute = fs.realpath(start)?
+    var dir = absolute
+    loop {
+        // Keep the ordinary relative spelling in Git's measured diagnostic.
+        if dir == absolute && fs.is_dir("{dir}/.git") { return "{start}/.git" }
+        if fs.is_dir("{dir}/.git") { return "{dir}/.git" }
+        if fs.is_file("{dir}/.git") { return gitfile("{dir}/.git")? }
+        if fs.is_file("{dir}/HEAD") && fs.is_dir("{dir}/objects") { return dir }
+        let parent = fs.parent(dir) else |_| { return not_found }
+        if parent == dir { return not_found }
+        dir = parent
+    }
+}
+
+/// Process-edge preflight, with no output or writes. Empty start reads only
+/// global/command scope (init); other starts discover local configuration too.
+/// Callers print ConfigDiagnostic exactly once and return status 128.
+pub fn check_config(start: str) -> () ! ConfigReadErrors {
+    var gitdir = ""
+    if start != "" {
+        gitdir = config_directory(start) else |e| match e {
+            not_found => "",
+            denied => { return denied },
+            io => { return io },
+            invalid => { return invalid },
+            exists => { return exists },
+            unsupported => { return unsupported },
+            limit => { return limit },
+            Unsupported(feature) => { return Unsupported(feature) },
+        }
+        if gitdir == "./.git" { gitdir = ".git" }
+    }
+    let _ = configuration_diagnostics(gitdir)?
+}
+
+/// Format a rejected query key. The missing-section wording is pinned by the
+/// independent config oracle; other invalid-key diagnostics remain named.
+pub fn config_key_error(name: str) -> str {
+    if !name.contains(".") { return "error: key does not contain a section: {name}" }
+    "error: invalid config key: {name}"
+}
+
+/// The Repo representation remains the compatible last-value scalar map.
+pub fn config_values(entries: List[ConfigEntry]) -> Map[str, str] {
+    var values = Map[str, str]()
+    for entry in entries { values[entry.key] = entry.value }
+    values
+}
+
+/// Global values for init, including command-scope environment overrides.
+pub fn global_config() -> Map[str, str] ! RepoErrors {
+    config_values(configuration("")?)
+}

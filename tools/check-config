@@ -1,0 +1,25 @@
+#!/bin/sh
+# Focused config gate, no Git invocation. Run only in the assigned Linux container.
+set -eu
+DEN_ROOT=$(cd "$(dirname "$0")/.." && pwd)
+export DEN_ROOT
+cd "$DEN_ROOT"
+. tools/lib-toolchain.sh
+mkdir -p target/config
+for tier in native release; do
+    if [ "$tier" = release ]; then flag=--release; else flag=; fi
+    "$WOLF" build $flag --deny-warnings src/config_test.lu -o "target/config/test-$tier"
+    "target/config/test-$tier"
+done
+"$WOLF" conform-run src/config_test.lu --checked --json >target/config/checked.json
+cat target/config/checked.json
+python3 -I - target/config/checked.json <<'PY'
+import json, sys
+rows = [json.loads(line) for line in open(sys.argv[1]) if line.startswith('{')]
+assert len(rows) == 1 and rows[0]['verdict'] == 'exit(0)', rows
+PY
+tools/build --all
+for tier in native release; do
+    python3 -I tools/config-test.py --tier "$tier"
+done
+echo 'config: native/release parser and CLI, checked parser; no oracle measurements'
