@@ -12,7 +12,9 @@ push, merge, tag, release, issue writes, memory/config/planning edits.
 - Base: b017d29655e174ad0b75fb8b6a286352da02346b, den#6 MERGED.
 - Contract, track index, RULES sections 1-10, wolf guide read before code.
 - hasu lane environment read; block A, flock, inside-container CPUs 0-5,
-  12 GiB memory cap. Oracle and toolchain binary verification pending.
+  12 GiB memory cap. Oracle rebuilt with matching SHA-256
+  c4848492938c4ebfffbefe1fbbaa68b9af90c86d1f6a20e76816c5ff37fcfa60.
+  Both release archive digests verified by fetch-toolchain.
 
 ## Prediction
 
@@ -30,8 +32,30 @@ Recorded before implementation; predictions, not measurements:
 
 ## Evidence index
 
-Pending implementation and measurements. The wrapper prohibits Markdown report
-files; this .txt file and the eventual PR body are the contract's fallback.
+Initial black-box measurements: tools/vc03-measure.py;
+notes/vc03-evidence/oracle-initial.{json,log}. All first four index observations
+match the extension prediction: no extension after add; TREE after write-tree
+and commit; root invalidation payload 002d3120300a after adding a new root file.
+
+R-vc03-2 A adopted by the coordinator: match Git, leaving ORIG_HEAD untouched
+on commit --amend. The contract's ORIG_HEAD-write line was a guess corrected by
+measurement. Root 9c898195cdbc9aea467ac6ef0871143f5d6a2a8a amended to
+76d797c00058b03dc350051f32a1927c2d77f1b2: ORIG_HEAD stayed absent. A further
+amend with preexisting ORIG_HEAD retained its exact bytes. Reproducer and both
+commands/outputs are retained in the named JSON. No reviewed divergence.
+--date=now author seconds changed 1792881244 -> 1792881246 with fixed committer
+1700000000; the contract's named refusal is required, not deterministic parsing.
+
+Execution deviation reported to the coordinator: the initial container image's
+package-install layer ran without an inside-layer taskset; it completed. No host
+packages were installed. Oracle/toolchain execution and measurements ran inside
+the 12-GiB container with taskset 0-5 under hasu-A flock. The bootstrap's final
+sha256sum used an incorrect path and exited 1 after the oracle builder had
+already verified the correct digest; the independent measurement repeated the
+hash at the correct path. No false bootstrap-green claim.
+
+The wrapper prohibits Markdown report files; this .txt file and the eventual
+PR body are the contract's fallback.
 
 ## Done-when
 

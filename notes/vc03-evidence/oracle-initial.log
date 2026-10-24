@@ -1,0 +1,19 @@
+c4848492938c4ebfffbefe1fbbaa68b9af90c86d1f6a20e76816c5ff37fcfa60  /work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git
+{
+  "amend_without_orig_head": {
+    "old_head": "9c898195cdbc9aea467ac6ef0871143f5d6a2a8a",
+    "new_head": "76d797c00058b03dc350051f32a1927c2d77f1b2",
+    "orig_head_exists": false
+  },
+  "amend_existing_orig_head": {
+    "before": "9c898195cdbc9aea467ac6ef0871143f5d6a2a8a\n",
+    "after": "9c898195cdbc9aea467ac6ef0871143f5d6a2a8a\n"
+  },
+  "date_now_0": "1792881244 1700000000\n",
+  "date_now_1": "1792881246 1700000000\n"
+}
+after_add []
+after_write_tree [{'name': 'TREE', 'payload_hex': '003220300a5e52ef244d4b9e118a65cee1beda21ac1fc36d4c'}]
+after_commit [{'name': 'TREE', 'payload_hex': '003220300a5e52ef244d4b9e118a65cee1beda21ac1fc36d4c'}]
+after_add_new_file [{'name': 'TREE', 'payload_hex': '002d3120300a'}]
+/work/den/target/vc03-measure.json
