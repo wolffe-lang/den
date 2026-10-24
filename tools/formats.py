@@ -1,7 +1,9 @@
 """Generate actual format bytes using the pinned oracle, never type examples."""
 import hashlib,json,os,pathlib,shutil,subprocess,zlib
 R=pathlib.Path(__file__).resolve().parent.parent;G=os.environ['DEN_GIT'];O=R/'target/formats';O.mkdir(parents=True,exist_ok=True)
-repo=R/'target/corpus/two'
+repo=O/'repo'
+if repo.exists():shutil.rmtree(repo)
+shutil.copytree(R/'target/corpus/two',repo,symlinks=True)
 def git(*args,data=None,cwd=repo):
  p=subprocess.run([G,*args],cwd=cwd,input=data,capture_output=True,check=True);return p.stdout
 def save(name,data):
@@ -34,6 +36,27 @@ for name in ('log-default','log-oneline','status-short','status-long','diff','di
  p=R/'target/runs'/name/'git.json';row=json.loads(p.read_text())
  for field in ('stdout','stderr'):save(name+'.'+field,bytes.fromhex(row[field]))
  (O/(name+'.status')).write_text(str(row['status'])+'\n')
+# Additional format bodies and documentary skip examples, all from the oracle.
+commit=ids['commit']
+tag=f'object {commit}\ntype commit\ntag sample\ntagger Den Tester <den@example.invalid> 1700000000 +0000\n\nsample tag\n'.encode()
+tagid=git('mktag',data=tag).decode().strip()
+save('tag.raw',git('cat-file','tag',tagid))
+save('HEAD',(repo/'.git/HEAD').read_bytes())
+save('config',(repo/'.git/config').read_bytes())
+save('reflog',(repo/'.git/logs/HEAD').read_bytes())
+save('ref-main',(repo/'.git/refs/heads/main').read_bytes())
+e={**os.environ,'GIT_PROTOCOL':'version=2'}
+pkt=subprocess.run([G,'upload-pack','--advertise-refs',str(repo)],env=e,capture_output=True,check=True).stdout
+save('v2-advertisement',pkt)
+git('commit-graph','write','--reachable')
+save('commit-graph',(repo/'.git/objects/info/commit-graph').read_bytes())
+git('bundle','create',str(O/'sample.bundle'),'--all')
+save('bundle',(O/'sample.bundle').read_bytes())
+(repo/'a.txt').chmod(0o755)
+save('diff-mode.stdout',git('diff'))
+(repo/'a.txt').chmod(0o644)
+(repo/'b.txt').write_bytes(b'beta\x00changed\n')
+save('diff-binary.stdout',git('diff'))
 # Default loose compression vs levels. Every probe uses an independent repository.
 data=(b'line of repeated text\n'*4096)+bytes(range(256))*20
 header=f'blob {len(data)}\0'.encode();levels={}
