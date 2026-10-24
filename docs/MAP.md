@@ -1,9 +1,9 @@
 # Map
 
-The CLI remains a scaffold; M1 now includes the zlib codec. `den --version` works; all other commands refuse with
-exit 2 and the destination milestone/lane. No repository-writing feature is
-implemented. A successful M0 gate means the harness classified refusals
-honestly, not that den matches Git.
+M1 includes the codec, owned OIDs, bounded loose store, binary object parsers,
+repository discovery/init and the measured plumbing subset described in README.
+Packs, index writing, porcelain and transports remain unimplemented; unsupported
+options/features refuse by name. A green gate is not full Git compatibility.
 
 ## Modules and lanes
 
@@ -142,9 +142,9 @@ rename; binary; symlink; empty tree; 1,000 files; packed after gc. Every one
 passes oracle fsck. Two independent builds produce the same object manifests.
 That proof concerns oids, not inode-dependent index stat bytes.
 
-`tests/cases.json` names 32 cases. `tools/oracle --filter TEXT` selects a
+`tests/cases.json` names 86 cases. `tools/oracle --filter TEXT` selects a
 subset; an empty selection fails. `--strict` fails on not-yet rows. Normal M0
-mode counts those separately: 1 version-shape pass, 31 not-yet, 0 parity or
+mode counts those separately: 1 version-shape pass, 28 not-yet, 57 parity and 0
 reviewed rows. Every unexpected mismatch fails. The gate also proves --strict refuses not-yet and an empty filter is an error; local native TLS is gated, with one actual checked budget refusal printed and counted. Review JSON binds the case
 hash and the complete Git/den stdout, stderr, status and .git file maps, with
 reason and issue/ruling; there is no wildcard or excluded file. Named `loose-object-raw` comparison
@@ -165,3 +165,69 @@ Only the orchestrator may add that label. The nightly opens/updates a
 nightly-red issue on failure. Build/probe jobs locally run inside the pinned
 Ubuntu container under the core-block flock. The .txt evidence/PR-body route
 is used instead of a Markdown lane report, as the lane tool rules require.
+
+## Object API for index/porcelain consumers
+
+`probes/object-client` is an independent package importing the public modules;
+its native and release runs exercise real reads, writes, limits and errors.
+All byte lists returned by these APIs own their storage. `read` inputs are
+not retained. Public Oid fields must still pass validation at every boundary.
+
+```wolf
+pub struct Oid { algorithm: str, bytes: List[byte] }
+pub fn oid.parse(algorithm: str, text: str) -> Oid ! OidErrors
+pub fn oid.from_bytes(algorithm: str, bytes: List[byte]) -> Oid ! OidErrors
+pub fn oid.hex(id: Oid) -> str ! OidErrors
+pub fn oid.prefix(algorithm: str, text: str) -> str ! OidErrors
+pub fn oid.digest(algorithm: str, data: List[byte]) -> Oid ! {unsupported_format}
+pub struct Repo { gitdir: str, config: Map[str, str] }
+pub fn repository.open(gitdir: str) -> Repo ! RepoErrors
+pub fn repository.discover(start: str) -> Repo ! RepoErrors
+pub fn repository.init(path: str, bare: bool, branch: str) -> (Repo, bool) ! RepoErrors
+pub struct Object { kind: str, data: List[byte] }
+pub fn object.identify(kind: str, data: List[byte]) -> Oid ! {bad_header}
+pub fn object.read_object(repo: Repo, id: Oid, max_output: int) -> Object ! StoreErrors
+pub fn object.write_object(repo: Repo, kind: str, data: List[byte]) -> Oid ! StoreErrors
+pub fn object.lookup(repo: Repo, name: str) -> Oid ! StoreErrors
+pub fn object.resolve(repo: Repo, name: str) -> Oid ! StoreErrors
+pub struct TreeEntry { mode: int, name: List[byte], id: Oid }
+pub fn object.parse_tree(data: List[byte], algorithm: str) -> List[TreeEntry] ! TreeErrors
+pub fn object.build_tree(entries: List[TreeEntry], algorithm: str) -> List[byte] ! TreeErrors
+pub struct Header { key: str, value: List[byte] }
+pub struct Headers { fields: List[Header], message: List[byte] }
+pub fn object.parse_headers(data: List[byte]) -> Headers ! {invalid_header}
+pub fn object.build_headers(headers: Headers) -> List[byte] ! {invalid_header}
+pub fn object.parse_commit(data: List[byte], algorithm: str) -> Headers ! HeaderErrors
+pub fn object.parse_tag(data: List[byte], algorithm: str) -> Headers ! HeaderErrors
+pub fn object.build_commit(tree: Oid, parents: List[Oid], author: str,
+    committer: str, encoding: str, message: List[byte]) -> List[byte] ! HeaderErrors
+pub fn object.build_tag(id: Oid, kind: str, name: str, tagger: str,
+    message: List[byte]) -> List[byte] ! HeaderErrors
+pub fn index.parse_v2(data: List[byte]) -> List[TreeEntry] ! IndexErrors
+pub fn index.write_tree(repo: Repo, cap: int) -> Oid ! IndexErrors
+```
+
+Names above are qualified for the reader; actual declarations use the unqualified
+function names in their modules. OidErrors is invalid_oid/unsupported_format.
+StoreErrors enumerates framing, checksum, oid, cap, missing/ambiguous and IO rows;
+`Unsupported(str)` names unsupported repository/configuration features. Exact
+aliases live beside the declarations. `max_output` is inclusive body bytes;
+read_object currently caps it at 1,000,000,000, plus bounded compressed overhead.
+The pure decoder independently checks consumption, raw header, size and oid.
+
+Installation uses std.fs.link's no-replace guarantee, not replace-capable rename
+or an advisory lock. Concurrent writers validate the winner; ordinary errors
+remove the exclusive temporary. Abrupt termination leaves a possible orphan
+`tmp_den_*`, never a partial object installed under its oid. Directory fsync is
+required; unsupported platforms return a row instead of claiming durability.
+`write_injected` is an explicit test seam (write/sync/install/directory-sync),
+never selected by a production environment variable.
+
+vc03 should retain this API, implement index writing/refresh and nested tree
+assembly, and replace the minimal flat-v2 reader only with strict checksum,
+padding, mode, stage and extension tests. The existing TREE cache is ignored
+for building but preserved byte-for-byte; unknown extensions refuse by name.
+Do not normalize inode/ctime fields or ignore the index in parity snapshots.
+Keep generic stored headers/messages lossless; commit-tree's observed repair
+belongs only at the command edge. General config/date/revision parsing is not
+provided by this milestone. Add no production Git or shell dependency.

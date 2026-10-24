@@ -61,6 +61,51 @@ requires raw bytes and oid equality plus interoperable compression and a
 per-corpus size ratio <=1.25 against Git level 1. `loose-object-raw` is the
 named harness comparison mode; checksum or oid corruption still fails.
 
+### Object plumbing measurements (Git 2.56.0)
+
+With the pinned empty template, plain init writes HEAD (21 bytes for main) and
+config (92 bytes), bare config is 66 bytes. The created Git directories are
+objects/info, objects/pack, refs/heads and refs/tags; the parents are implicit.
+There is no description or info/exclude under that template. Den additionally
+creates an empty hooks directory as specified. No sample hook was consulted.
+Both file inventories and reinit output are retained in vc02-oracle.json.
+
+With identity `a <a>`, timestamp `0 +0000`, empty message and empty tree, a root
+commit body is **92 bytes**. The tag `t` targeting the empty blob, same tagger,
+is **86 bytes**. These are measured examples of minimal inputs, not a claim of
+a global mathematical minimum. Empty blob/abc blob/empty tree IDs agree with
+the predicted well-known values.
+
+Commit-tree reads stdin and -F files byte-exactly with respect to final newline;
+-m adds a missing final LF, and each further nonempty paragraph gets one
+separator LF. A NUL message exits 1 with
+`error: a NUL byte in commit log message not allowed.` and writes no object.
+
+The i18n.adoc Discussion says commit creation deliberately avoids recoding.
+The pinned binary nevertheless repairs invalid UTF-8 when no non-UTF-8 encoding
+is configured. R-vc02-2 adopts the measured command-edge behavior, while generic
+hash-object/store/cat-file APIs preserve bytes. The isolated byte ff gives:
+
+| Environment/config | commit-tree stdin | commit-tree -F file | mktag message |
+|---|---|---|---|
+| LC_ALL=C, no encoding | c3 bf, warning | c3 bf, warning | ff, no warning |
+| LC_ALL=C.UTF-8, no encoding | c3 bf, warning | c3 bf, warning | ff, no warning |
+| LC_ALL=C, i18n.commitEncoding=ISO-8859-1 | ff, encoding header, no warning | ff, encoding header, no warning | ff, no warning |
+
+The exact warning is:
+
+```text
+Warning: commit message did not conform to UTF-8.
+You may want to amend it after fixing the message, or set the config
+variable i18n.commitEncoding to the encoding your project uses.
+```
+
+Valid UTF-8 subsequences survive; isolated invalid octets are encoded as Latin-1
+scalars. Overlong and surrogate-shaped sequences are repaired bytewise.
+`encoding-measure.json` and `encoding-paths.json` retain exact oracle bytes;
+native and release integration gates compare all nine command/environment paths.
+No reviewed difference is needed because the tested CLI behavior matches Git.
+
 ## Index v2 (v3/v4 reading later)
 
 **gitformat-index(5), Header, Index entry, Extensions.** Network byte order;

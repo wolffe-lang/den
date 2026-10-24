@@ -1,6 +1,19 @@
 # Changes
 
-## Unreleased — M1 codec
+## Unreleased — M1 loose objects
+
+- Add algorithm-tagged OIDs, bounded loose-object read/write with independent
+  checksum/framing/oid validation, and atomic no-replace publication.
+- Preserve binary tree names, ordered parents, unknown multiline headers and
+  message bytes through object parsers/builders.
+- Add the measured init/hash-object/cat-file/mktree/commit-tree/mktag subset
+  and write-tree over Git-written flat index v2; index writing remains deferred.
+- Gate 57 exact parity rows, 28 named not-yet rows, two checked programs,
+  external-client interop, corruption, races, failures and memory scaling.
+- Reproduce measured invalid-UTF-8 commit repair at the CLI only; generic
+  object APIs stay byte-preserving. Document unsupported features explicitly.
+
+## M1 codec
 
 - Add original RFC 1950/1951 inflate, Adler-32 and bounded lazy LZ77 encoding
   with stored/fixed/dynamic block selection. Support levels 0, 1 and default -1;
