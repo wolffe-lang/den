@@ -3,8 +3,9 @@ Only named loose-object-raw mode compares verified inflated bytes/oid (R4a).
 Reviewed rows bind both whole results AND the case identity. A refusal is a
 separate not-yet class, never counted as parity. No outputs are normalized.
 """
-import argparse, hashlib, json, os, pathlib, re, shutil, stat, subprocess, sys, zlib
+import argparse, hashlib, json, os, pathlib, re, shutil, stat, subprocess, sys, zlib, runpy
 R=pathlib.Path(__file__).resolve().parent.parent
+INDEX_PROOF=runpy.run_path(str(R/'tools/index-proof.py'))
 
 def snapshot(repo):
     result={}
@@ -14,9 +15,23 @@ def snapshot(repo):
         elif p.is_file():result[key]={'mode':stat.S_IMODE(p.stat().st_mode),'hex':p.read_bytes().hex()}
     return result
 
-def capture(command,repo,stdin=b''):
+def worktree_snapshot(repo):
+    result = {}
+    for p in sorted(repo.rglob('*')):
+        relative = p.relative_to(repo)
+        if relative.parts[0] == '.git': continue
+        key = relative.as_posix()
+        if p.is_symlink(): result[key] = {'link': os.readlink(p)}
+        elif p.is_file(): result[key] = {'mode': stat.S_IMODE(p.stat().st_mode), 'hex': p.read_bytes().hex()}
+    return result
+
+def capture(command,repo,stdin=b'',index_proof=False):
     p=subprocess.run(command,cwd=repo,input=stdin,capture_output=True,timeout=60)
-    return {'stdout':p.stdout.hex(),'stderr':p.stderr.hex(),'status':p.returncode,'repository':snapshot(repo)}
+    result = {'stdout':p.stdout.hex(),'stderr':p.stderr.hex(),'status':p.returncode,
+              'repository':snapshot(repo),'worktree':worktree_snapshot(repo)}
+    if index_proof and (repo/'.git/index').exists():
+        result['index_stat_proof'] = INDEX_PROOF['proof'](repo, (repo/'.git/index').read_bytes())
+    return result
 
 def comparable(result, mode):
     """Named R4a loose-object comparison; every other byte/mode stays exact.
@@ -43,7 +58,23 @@ def comparable(result, mode):
     return normalized
 
 def equivalent(expected, actual, mode='loose-object-raw'):
-    try: return comparable(expected, mode) == comparable(actual, mode)
+    try:
+        if mode == 'index-stat-proven':
+            expected, actual = dict(expected), dict(actual)
+            left_rows = expected.pop('index_stat_proof', [])
+            right_rows = actual.pop('index_stat_proof', [])
+            expected['repository'] = dict(expected['repository'])
+            actual['repository'] = dict(actual['repository'])
+            left = expected['repository'].get('.git/index')
+            right = actual['repository'].get('.git/index')
+            if left is not None and right is not None:
+                a,b,proved = INDEX_PROOF['canonical_pair'](bytes.fromhex(left['hex']),
+                    bytes.fromhex(right['hex']),left_rows,right_rows)
+                expected['repository']['.git/index'] = {**left, 'hex': a.hex()}
+                actual['repository']['.git/index'] = {**right, 'hex': b.hex()}
+                print(f'index-stat-proof: {proved} tool-side entry rows canonicalized', flush=True)
+            mode = 'loose-object-raw'
+        return comparable(expected, mode) == comparable(actual, mode)
     except (ValueError, KeyError, zlib.error): return False
 
 def case_hash(case):return hashlib.sha256(json.dumps(case,sort_keys=True).encode()).hexdigest()
@@ -70,8 +101,10 @@ def one(case,base,den,git):
             replacements[key]=subprocess.check_output([git,'rev-parse',rev],cwd=base/case['repo']).decode().strip()
     for key,value in replacements.items():args=[arg.replace('{'+key+'}',value) for arg in args]
     stdin=bytes.fromhex(case.get('stdin_hex',''))
-    restore(); expected=capture([git,*args],repo,stdin)
-    restore(); before=snapshot(repo); actual=capture([den,*args],repo,stdin)
+    needs_proof = case.get('comparison') == 'index-stat-proven'
+    restore(); expected=capture([git,*args],repo,stdin,needs_proof)
+    restore(); before=snapshot(repo); before_worktree=worktree_snapshot(repo)
+    actual=capture([den,*args],repo,stdin,needs_proof)
     (root/'git.json').write_text(json.dumps(expected,sort_keys=True)+'\n')
     (root/'den.json').write_text(json.dumps(actual,sort_keys=True)+'\n')
     if case.get('kind')=='version':
@@ -82,7 +115,7 @@ def one(case,base,den,git):
     if equivalent(expected,actual,case.get('comparison','loose-object-raw')):return 'parity'
     refusal=f"den: not yet implemented: {case.get('refusal_feature',args[0])} ({case['lane']})\n".encode().hex()
     if (actual['status']==2 and actual['stdout']=='' and actual['stderr']==refusal
-            and actual['repository']==before):return 'not-yet'
+            and actual['repository']==before and actual['worktree']==before_worktree):return 'not-yet'
     p=R/'tests/review'/f"{case['name']}.json"
     if p.exists() and reviewed(json.loads(p.read_text()),case,expected,actual):return 'reviewed'
     return 'FAIL'
