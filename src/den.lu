@@ -1,4 +1,5 @@
 //! member: false
+
 // M0 is a refusal scaffold, not a VCS implementation.
 fn destination(command: str) -> str {
     match command {

@@ -93,7 +93,7 @@ pub fn update1(mut d: Digest, data: List[byte]) {
 }
 
 pub fn final1(take state: Digest) -> List[byte] {
-    var d = take state
+    var d = state
     d.buf[d.used] = 128 as byte
     d.used += 1
     if d.used > 56 {

@@ -2,6 +2,8 @@
 # Native and actual checked machine. Every refusal printed and counted.
 set -eu
 root=$(cd "$(dirname "$0")/.." && pwd)
+DEN_ROOT=$root
+export DEN_ROOT
 cd "$root"
 . tools/lib-toolchain.sh
 mkdir -p target/probes target/tls
