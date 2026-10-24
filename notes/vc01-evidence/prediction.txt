@@ -1,0 +1,34 @@
+Prediction — vc01, before implementation
+
+Inputs: den fd0e398; adopted vc01 contract and track rulings R1–R10;
+wolf 0.2.35 / lupin 0.1.56 / std 2386522e; Git 2.56.0.
+
+I predict full stored/fixed/dynamic inflate coverage, mixed blocks and 32-KiB
+cross-block history with exact consumed byte counts. At least 25 explicit
+malformed/header/checksum/limit cases will return rows, never traps. Small
+vectors should pass conform-run --checked; the integrated module may exhaust
+the checked mem-phase budget, and 100-MB rows will remain native-only with
+loud counted skips rather than misreported checked successes.
+
+I predict a bounded hash-chain matcher with one-byte lazy lookahead and
+fixed Huffman codes will meet <=1.25 aggregate encoded-size ratio to Git's
+level-1 streams on most of the nine corpora, but text-heavy/commit corpora
+may exceed the cap and need dynamic Huffman encoding. Any corpus >1.25 is
+a stop to tune, never a waiver. Incompressible streams should choose stored
+blocks, <=1.001x input size; repeated zeroes should compress below 1%.
+
+On hasu CPUs 0–5, release 100,000,000-byte inputs: predict inflate 20–150 MB/s,
+level-1 deflate 5–40 MB/s, peak RSS <600 MB with whole-object input/output and
+bounded 32-KiB match state. Repetitive output may be slower due to overlap
+copies. No streaming-pack claim. Measure three runs, warm-up excluded.
+
+API prediction: the adopted signatures suffice with inclusive max_output
+(no byte beyond it; output exactly equal to it succeeds), negative limits
+invalid, levels -1/1 equivalent, level 0 stored, all other levels refused.
+R-vc01-1 if needed: contract's phrase 'reaching the output cap is limit'
+could mean exclusive bound; recommend conventional inclusive maximum and
+explicit tests at cap-1/cap/cap+1. No public API signature change predicted.
+
+The lane tool instructions prohibit Markdown report notes. This committed
+prediction and evidence are .txt; the PR body will carry Forbidden, Inputs
+verified, Prediction, Evidence index, Done-when instead of a .md lane report.
