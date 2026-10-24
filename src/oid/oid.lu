@@ -1,0 +1,83 @@
+// Object identifiers: algorithm-tagged owned bytes, not a public fixed array.
+use hash
+
+/// Invalid spelling/width or unknown algorithm.
+pub error OidErrors = {unsupported_format, invalid_oid}
+
+/// An identifier owns its octets. Constructors enforce algorithm and width.
+pub struct Oid {
+    algorithm: str,
+    bytes: List[byte],
+}
+
+/// Supported digest width; repository support is separately restricted to SHA-1.
+pub fn width(algorithm: str) -> int ! {unsupported_format} {
+    if algorithm == "sha1" { return 20 }
+    if algorithm == "sha256" { return 32 }
+    unsupported_format
+}
+
+/// Validate even explicitly constructed public values at every storage boundary.
+pub fn validate(id: Oid) -> () ! OidErrors {
+    if id.bytes.len != width(id.algorithm)? { return invalid_oid }
+}
+
+fn digit(b: byte) -> int ! {invalid_oid} {
+    let n = b as int
+    if n >= 48 && n <= 57 { return n - 48 }
+    if n >= 97 && n <= 102 { return n - 87 }
+    if n >= 65 && n <= 70 { return n - 55 }
+    invalid_oid
+}
+
+/// Parse a full hexadecimal identifier; case does not change the identifier.
+pub fn parse(algorithm: str, text: str) -> Oid ! OidErrors {
+    let n = width(algorithm)?
+    if text.len != 2 * n { return invalid_oid }
+    var bytes = List[byte]()
+    for i in 0..n {
+        (mut bytes).push(
+            (digit(text.bytes()[2 * i])? * 16 + digit(text.bytes()[2 * i + 1])?) as byte,
+        )
+    }
+    Oid { algorithm: algorithm, bytes: bytes }
+}
+
+/// Own a validated digest slice, copying it explicitly.
+pub fn from_bytes(algorithm: str, bytes: List[byte]) -> Oid ! OidErrors {
+    if bytes.len != width(algorithm)? { return invalid_oid }
+    Oid { algorithm: algorithm, bytes: copy bytes }
+}
+
+/// Lowercase canonical spelling; invalid public values are refused.
+pub fn hex(id: Oid) -> str ! OidErrors {
+    validate(id)?
+    var out = List[byte]()
+    let alphabet = "0123456789abcdef"
+    for b in id.bytes {
+        (mut out).push(alphabet.bytes()[b as int / 16])
+        (mut out).push(alphabet.bytes()[b as int % 16])
+    }
+    str_from_utf8(out) else ""
+}
+
+/// Hash uninterpreted bytes with the inherited SHA implementations.
+pub fn digest(algorithm: str, data: List[byte]) -> Oid ! {unsupported_format} {
+    if algorithm == "sha1" { return Oid { algorithm: algorithm, bytes: hash.sum1(data) } }
+    if algorithm == "sha256" { return Oid { algorithm: algorithm, bytes: hash.sum256(data) } }
+    unsupported_format
+}
+
+/// Compare both algorithm and every octet, without a text conversion.
+pub fn equal(a: Oid, b: Oid) -> bool {
+    if a.algorithm != b.algorithm || a.bytes.len != b.bytes.len { return false }
+    for i in 0..a.bytes.len { if a.bytes[i] != b.bytes[i] { return false } }
+    true
+}
+
+/// Validate a lookup prefix (minimum four hex digits), normalize case.
+pub fn prefix(algorithm: str, text: str) -> str ! OidErrors {
+    if text.len < 4 || text.len > 2 * width(algorithm)? { return invalid_oid }
+    for b in text.bytes() { let _ = digit(b)? }
+    text.lower()
+}

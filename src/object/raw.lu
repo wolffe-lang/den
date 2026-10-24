@@ -1,0 +1,98 @@
+// Git gitformat-loose(5), Loose objects. See docs/SOURCES.md.
+use hash
+use oid
+use zlib
+
+/// Invalid framing, declared length, or caller cap.
+pub error ParseErrors = {invalid, bad_header, bad_size, limit}
+
+/// Objects always own binary body storage; no UTF-8 conversion is implicit.
+pub struct Object {
+    kind: str,
+    data: List[byte],
+}
+
+/// Complete validation failures at the pure object/codec boundary.
+pub error ObjectErrors = {
+    invalid,
+    invalid_oid,
+    unsupported_format,
+    bad_header,
+    bad_size,
+    bad_oid,
+    truncated,
+    dictionary,
+    checksum,
+    limit,
+    trailing,
+    unsupported_level,
+}
+
+/// Only the four documented loose types are accepted by generic storage.
+pub fn valid_kind(kind: str) -> bool {
+    kind == "blob" || kind == "tree" || kind == "commit" || kind == "tag"
+}
+
+/// Canonical ASCII framing, byte length (not character count).
+pub fn frame(kind: str, data: List[byte]) -> List[byte] ! {bad_header} {
+    if !valid_kind(kind) { return bad_header }
+    var out = List[byte]()
+    for b in "{kind} {data.len}\0".bytes() { (mut out).push(b) }
+    for b in data { (mut out).push(b) }
+    out
+}
+
+/// SHA-1 object identity without concatenating a second copy of the body.
+pub fn identify(kind: str, data: List[byte]) -> oid.Oid ! {bad_header} {
+    if !valid_kind(kind) { return bad_header }
+    var state = hash.new1()
+    hash.update1(mut state, "{kind} {data.len}\0".bytes())
+    hash.update1(mut state, data)
+    oid.Oid { algorithm: "sha1", bytes: hash.final1(take state) }
+}
+
+/// Validate raw framing and copy out body; cap is inclusive body bytes.
+/// Size parsing is bounded before multiplication, never trusts input allocation.
+pub fn parse(raw: List[byte], max_output: int) -> Object ! ParseErrors {
+    if max_output < 0 { return invalid }
+    var space = 0
+    while space < raw.len && space < 7 && raw[space] != 32 as byte { space += 1 }
+    if space == raw.len || space == 7 { return bad_header }
+    let kind = str_from_utf8(raw[0..space]) else |_| { return bad_header }
+    if !valid_kind(kind) { return bad_header }
+    var pos = space + 1
+    let start = pos
+    var size: int = 0
+    while pos < raw.len && raw[pos] != 0 as byte {
+        let n = raw[pos] as int - 48
+        if n < 0 || n > 9 || pos - start >= 19 { return bad_size }
+        if pos > start && raw[start] == 48 as byte { return bad_size }
+        if size > max_output / 10 || size == max_output / 10 && n > max_output % 10 { return limit }
+        size = size * 10 + n
+        pos += 1
+    }
+    if pos == start || pos == raw.len { return bad_header }
+    pos += 1
+    if size != raw.len - pos { return bad_size }
+    Object { kind: kind, data: raw[pos..] }
+}
+
+/// Decode exactly one complete loose file and validate its independent oid.
+/// max_output bounds body bytes; at most 32 framing bytes are additionally allowed.
+pub fn decode(src: List[byte], expected: oid.Oid, max_output: int) -> Object ! ObjectErrors {
+    oid.validate(expected)?
+    if expected.algorithm != "sha1" { return unsupported_format }
+    if max_output < 0 || max_output > 9223372036854775775 { return invalid }
+    let decoded = zlib.inflate(src, max_output + 32)?
+    if decoded.consumed != src.len { return trailing }
+    let result = parse(decoded.data, max_output)?
+    let actual = identify(result.kind, result.data)?
+    if !oid.equal(actual, expected) { return bad_oid }
+    result
+}
+
+/// Level 1 loose representation; all input and output are binary owned lists.
+pub fn encode(kind: str, data: List[byte], max_encoded: int) -> List[byte] ! ObjectErrors {
+    let raw = frame(kind, data)?
+    zlib.deflate(raw, 1, max_encoded)?
+}

@@ -1,0 +1,41 @@
+//! member: false
+
+use object
+use oid
+
+fn main() -> int ! object.ObjectErrors {
+    let empty = object.identify("blob", [])?
+    assert(oid.hex(empty)? == "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391")
+    assert(
+        oid.hex(object.identify("blob", "abc".bytes())?)? ==
+            "f2ba8f84ab5c1bce84a7b441cb1959cfc7093b7f",
+    )
+    assert(oid.hex(object.identify("tree", [])?)? == "4b825dc642cb6eb9a060e54bf8d69288fbee4904")
+    let upper = oid.parse("sha1", "E69DE29BB2D1D6434B8B29AE775AD8C2E48C5391")?
+    assert(oid.equal(empty, upper))
+    assert(
+        oid.hex(oid.digest("sha256", [])?)? ==
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    )
+    assert(
+        (
+            oid.parse("sha1", "z") else |e| { assert("{e}" == "invalid_oid"); copy empty }
+        ).bytes.len ==
+            20,
+    )
+    let raw = object.frame("blob", [0 as byte, 255 as byte, 10 as byte])?
+    let parsed = object.parse(raw, 3)?
+    assert(parsed.data.len == 3 && parsed.data[1] == 255 as byte)
+    assert(
+        object.parse(
+            "blob 00\0".bytes(),
+            10,
+        ) else |e| { assert("{e}" == "bad_size"); parsed }.kind ==
+            "blob",
+    )
+    let encoded = object.encode("blob", [], 100)?
+    let result = object.decode(encoded, empty, 0)?
+    assert(result.kind == "blob" && result.data.len == 0)
+    print("PASS oid widths, SHA answers, binary framing, exact cap, size validation")
+    0
+}
