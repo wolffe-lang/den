@@ -46,7 +46,7 @@ pub fn frame(kind: str, data: List[byte]) -> List[byte] ! {bad_header} {
 pub fn identify(kind: str, data: List[byte]) -> oid.Oid ! {bad_header} {
     if !valid_kind(kind) { return bad_header }
     var state = hash.new1()
-    hash.update1(mut state, "{kind} {data.len}\0".bytes())
+    hash.update1(mut state, "{kind} {data.len}\n".bytes())
     hash.update1(mut state, data)
     oid.Oid { algorithm: "sha1", bytes: hash.final1(take state) }
 }
