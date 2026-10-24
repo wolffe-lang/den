@@ -284,7 +284,7 @@ pub fn inflate(src: List[byte], max_output: int) -> Inflated ! InflateErrors {
 
 /// Unsigned Adler-32 represented in int; derived from RFC 1950 §2.2 sums.
 pub fn adler32(src: List[byte]) -> int {
-    var a: int = 1
+    var a: int = 2
     var b: int = 0
     for value in src {
         a = (a + value as int) % 65521
