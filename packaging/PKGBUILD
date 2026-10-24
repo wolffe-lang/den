@@ -1,0 +1,35 @@
+# PREPARED, NOT PUBLISHED. Shape: lope bc388673 packaging/PKGBUILD.
+# v0.1.0 does not exist yet. Release lane supplies its archive digest.
+pkgname=den
+pkgver=0.1.0
+pkgrel=1
+pkgdesc='Git-compatible VCS in wolf (M0 refusal scaffold)'
+arch=('x86_64')
+url='https://github.com/wolffe-lang/den'
+license=('GPL-3.0-only')
+depends=('glibc' 'sh')
+makedepends=('clang')
+_wolf=0.2.35
+_std=2386522eb059cca5a84108562c2c0a0e72345d34
+source=("$pkgname-$pkgver.tar.gz::https://github.com/wolffe-lang/den/archive/refs/tags/v$pkgver.tar.gz"
+        "wolf-$_wolf-x86_64-unknown-linux-gnu.tar.gz::https://github.com/wolffe-lang/wolf-lang/releases/download/v$_wolf/wolf-$_wolf-x86_64-unknown-linux-gnu.tar.gz")
+sha256sums=('RELEASE-LANE-FILLS-THIS'
+            '4cc4045bbbb605c07835bc4f32685953c784eeef4cd3139a48b457dfc90dad1a')
+build() {
+    cd "$pkgname-$pkgver"
+    local tc="$srcdir/wolf-$_wolf-x86_64-unknown-linux-gnu"
+    test "$(cat "$tc/std/STD-REV")" = "$_std"
+    WOLF_STD="$tc/std" "$tc/wolf" build --release --deny-warnings src/den.lu -o den
+}
+check() {
+    cd "$pkgname-$pkgver"
+    test "$(./den --version)" = 'den 0.0.0 (built with wolf 0.2.35)'
+}
+package() {
+    cd "$pkgname-$pkgver"
+    install -Dm755 den "$pkgdir/usr/bin/den"
+    install -Dm644 README.md "$pkgdir/usr/share/doc/den/README.md"
+    for f in LICENSE LICENSE-TRAINING-DATA; do
+        install -Dm644 "$f" "$pkgdir/usr/share/licenses/den/$f"
+    done
+}
