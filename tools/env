@@ -1,0 +1,5 @@
+#!/bin/sh
+# All differential commands enter here, never inherit a user's git settings.
+set -eu
+root=$(cd "$(dirname "$0")/.." && pwd)
+exec python3 -I "$root/tools/environment.py" "$@"

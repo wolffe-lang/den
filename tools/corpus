@@ -1,0 +1,4 @@
+#!/bin/sh
+set -eu
+root=$(cd "$(dirname "$0")/.." && pwd)
+exec "$root/tools/env" python3 -I "$root/tools/corpus.py" "$@"
