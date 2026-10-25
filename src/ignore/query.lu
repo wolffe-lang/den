@@ -8,12 +8,21 @@ use repository
 /// are ordinary absence; permission and other IO failures are not hidden.
 pub error IgnoreErrors = {invalid, denied, io, limit, Unsupported(str)}
 
+// Keep one caller-owned list for a whole operation. The full diagnostic is
+// stable for a source and therefore also serves as its deduplication key.
+fn warn_symlink(source: str, mut warnings: List[str]) {
+    let message = "warning: unable to access '{source}': Too many levels of symbolic links"
+    for previous in warnings { if previous == message { return } }
+    (mut warnings).push(message)
+}
+
 fn append_file(
     path: str,
     source: str,
     base: str,
     nofollow: bool,
     mut rules: List[Rule],
+    mut warnings: List[str],
 ) -> () ! IgnoreErrors {
     // lstat prevents ordinary symlink reads; NOFOLLOW also prevents a final
     // component swapped to a symlink between this check and the open.
@@ -23,7 +32,7 @@ fn append_file(
             denied => { return denied },
             io => { return io },
         }
-        if info.kind == 3 { return }
+        if info.kind == 3 { warn_symlink(source, mut warnings); return }
         if info.kind != 0 { return }
     }
     let mode = if nofollow then 16 else 0
@@ -37,7 +46,7 @@ fn append_file(
             // back to a following open on a platform that lacks NOFOLLOW.
             if nofollow {
                 let info = fs.lstat(path) else |_| { return io }
-                if info.kind == 3 { return }
+                if info.kind == 3 { warn_symlink(source, mut warnings); return }
                 return Unsupported("ignore-file nofollow open")
             }
             return invalid
@@ -65,11 +74,16 @@ fn append_file(
 
 /// Effective global ignore pathname. An explicitly empty core.excludesFile
 /// disables the default. ~ is expanded using HOME; ~user is refused by name.
-/// Relative configured paths are relative to the process cwd, as file opens
-/// are; worktree is not silently substituted. The result is absolute so the
-/// verbose source field has the documented core.excludesFile form.
+/// Configured relative spelling is preserved for verbose provenance; query
+/// resolves its lookup against the explicit worktree root, not the process cwd.
+/// Absolute, tilde-expanded and default paths retain their previous spelling.
+/// Measured Git 2.56.0: target/ignore-filesystem-full-v3.json, global-relative
+/// (the documented blanket absolute-source wording differs; R-vc03-6 A asked).
 pub fn excludes_file(repo: repository.Repo) -> str ! IgnoreErrors {
+    var configured = true
+    var expanded = false
     var path = repo.config["core.excludesfile"] else |_| {
+        configured = false
         var xdg = env_get("XDG_CONFIG_HOME") else ""
         if xdg == "" {
             let home = env_get("HOME") else ""
@@ -80,13 +94,14 @@ pub fn excludes_file(repo: repository.Repo) -> str ! IgnoreErrors {
     }
     if path == "" { return "" }
     if path == "~" || path.starts_with("~/") {
+        expanded = true
         let home = env_get("HOME") else ""
         if home == "" { return invalid }
         path = if path == "~" then home else "{home}/{path[2..]}"
     } else if path.starts_with("~") {
         return Unsupported("core.excludesFile ~user expansion")
     }
-    if !path.starts_with("/") {
+    if (!configured || expanded) && !path.starts_with("/") {
         let cwd = fs.realpath(".") else |_| { return io }
         path = "{cwd}/{path}"
     }
@@ -109,11 +124,28 @@ fn display_info(gitdir: str, worktree: str) -> str {
 /// traversal before child .gitignore files are opened. Other ancestor symlinks
 /// are refused, not traversed. No caches or filesystem writes are performed.
 /// Optional files are capped individually at 16 MiB, with an explicit limit.
+/// Compatibility wrapper: nonfatal source warnings are discarded; use
+/// query_with_warnings when the caller needs Git-compatible diagnostics.
 pub fn query(
     repo: repository.Repo,
     worktree: str,
     path: str,
     is_dir: bool,
+) -> Match ! IgnoreErrors {
+    var warnings = List[str]()
+    query_with_warnings(repo, worktree, path, is_dir, mut warnings)?
+}
+
+/// Same query contract, with nonfatal diagnostics appended once per source to
+/// the caller's operation-wide list. Never writes stderr. Entries are complete
+/// diagnostic lines without LF; the command edge chooses when to emit them.
+/// Existing warnings survive errors and tracked/ancestor early exits.
+pub fn query_with_warnings(
+    repo: repository.Repo,
+    worktree: str,
+    path: str,
+    is_dir: bool,
+    mut warnings: List[str],
 ) -> Match ! IgnoreErrors {
     if !valid_path(path.bytes()) { return invalid }
     let root = fs.realpath(worktree) else |e| match e {
@@ -122,15 +154,19 @@ pub fn query(
     }
     var rules = List[Rule]()
     let global = excludes_file(repo)?
-    if global != "" { append_file(global, global, "", false, mut rules)? }
+    if global != "" {
+        let lookup = if global.starts_with("/") then global else "{root}/{global}"
+        append_file(lookup, global, "", false, mut rules, mut warnings)?
+    }
     append_file(
         "{repo.gitdir}/info/exclude",
         display_info(repo.gitdir, root),
         "",
         false,
         mut rules,
+        mut warnings,
     )?
-    append_file("{root}/.gitignore", ".gitignore", "", true, mut rules)?
+    append_file("{root}/.gitignore", ".gitignore", "", true, mut rules, mut warnings)?
     for pos in 0..path.len {
         if path.bytes()[pos] != 47 as byte { continue }
         // pos is a slash byte and hence also a valid UTF-8 boundary.
@@ -148,7 +184,14 @@ pub fn query(
         }
         if kind.kind == 3 { return Unsupported("ignore query beyond symlink") }
         if kind.kind != 1 { return invalid }
-        append_file("{root}/{parent}/.gitignore", "{parent}/.gitignore", parent, true, mut rules)?
+        append_file(
+            "{root}/{parent}/.gitignore",
+            "{parent}/.gitignore",
+            parent,
+            true,
+            mut rules,
+            mut warnings,
+        )?
     }
     decision(rules, path.bytes(), is_dir)
 }
@@ -162,7 +205,21 @@ pub fn query_tracked(
     is_dir: bool,
     tracked: bool,
 ) -> Match ! IgnoreErrors {
+    var warnings = List[str]()
+    query_tracked_with_warnings(repo, worktree, path, is_dir, tracked, mut warnings)?
+}
+
+/// Explicit tracked boundary plus operation-wide nonfatal diagnostics. A
+/// tracked path performs no IO and appends no warnings. No implicit stderr.
+pub fn query_tracked_with_warnings(
+    repo: repository.Repo,
+    worktree: str,
+    path: str,
+    is_dir: bool,
+    tracked: bool,
+    mut warnings: List[str],
+) -> Match ! IgnoreErrors {
     if !valid_path(path.bytes()) { return invalid }
     if tracked { return unmatched() }
-    query(repo, worktree, path, is_dir)?
+    query_with_warnings(repo, worktree, path, is_dir, mut warnings)?
 }

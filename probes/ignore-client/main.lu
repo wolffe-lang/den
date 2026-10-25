@@ -20,6 +20,8 @@ fn result_status(result: ignore.Match, verbose: bool) -> int {
 
 fn work(args: List[str]) -> int ! ProbeErrors {
     if args.len == 2 && args[0] == "selftest" { return filesystem_test(args[1])? }
+    var warnings = List[str]()
+    defer { for message in warnings { eprint(message) } }
     // Open stdout first; no production dependency on a shell, Python or Git.
     let out = fs_open_mode("/dev/stdout", 2)?
     defer fs_close(out) else |_| {}
@@ -41,7 +43,14 @@ fn work(args: List[str]) -> int ! ProbeErrors {
             return invalid
         }
         let repo = repository.open(args[1])?
-        ignore.query_tracked(repo, args[2], args[3], directory, tracked)?
+        ignore.query_tracked_with_warnings(
+            repo,
+            args[2],
+            args[3],
+            directory,
+            tracked,
+            mut warnings,
+        )?
     }
     let verbose = args[0] != "query-plain"
     let record = ignore.format(

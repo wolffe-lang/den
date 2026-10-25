@@ -32,6 +32,22 @@ fn filesystem_test(root: str) -> int ! ProbeErrors {
     }
     let global = ignore.query(repo, absolute, "a/x.tmp", false)?
     assert(global.ignored && global.source == "{absolute}/global-ignore" && global.line == 1)
+    // Relative source spelling and root-relative lookup are separate. This
+    // fixture root is explicit; the process cwd need not be that directory.
+    // Witness target/ignore-filesystem-full-v3.json, global-relative rows.
+    var relative_repo = copy repo
+    relative_repo.config["core.excludesfile"] = "global-ignore"
+    assert(ignore.excludes_file(relative_repo)? == "global-ignore")
+    let relative = ignore.query(relative_repo, absolute, "a/x.tmp", false)?
+    assert(relative.ignored && relative.source == "global-ignore")
+    assert(
+        (
+            str_from_utf8(
+                ignore.format(relative, "a/x.tmp".bytes(), true, false, false, true)?,
+            ) else ""
+        ) ==
+            "global-ignore:1:*.tmp\ta/x.tmp\n",
+    )
     let info = ignore.query(repo, absolute, "a/keep.tmp", false)?
     assert(info.negated && info.source == ".git/info/exclude" && info.line == 1)
     let top = ignore.query(repo, absolute, "a/keep.o", false)?
@@ -43,6 +59,15 @@ fn filesystem_test(root: str) -> int ! ProbeErrors {
     assert(result_status(ignore.unmatched(), true) == 1)
     let parent = ignore.query(repo, absolute, "deny/file", false)?
     assert(parent.ignored && parent.source == ".gitignore" && parent.line == 2)
+    var parent_warnings = List[str]()
+    let parent_diagnostic = ignore.query_with_warnings(
+        repo,
+        absolute,
+        "deny/file",
+        false,
+        mut parent_warnings,
+    )?
+    assert(parent_diagnostic.ignored && parent_warnings.len == 0)
     assert(ignore.query(repo, absolute, "a/here", false)?.ignored)
     assert(!ignore.query(repo, absolute, "a/deep/here", false)?.ignored)
     assert(ignore.query(repo, absolute, "only-root", false)?.ignored)
@@ -57,6 +82,41 @@ fn filesystem_test(root: str) -> int ! ProbeErrors {
     fs.write_text("{absolute}/link-patterns", "*\n")?
     fs.symlink("../link-patterns", "{absolute}/links/.gitignore")?
     assert(!ignore.query(repo, absolute, "links/not-ignored", false)?.matched)
+    // A whole operation shares one nonfatal-warning list. Query APIs never
+    // emit stderr themselves; the executable chooses when to flush this list.
+    var warnings = List[str]()
+    let linked = ignore.query_with_warnings(
+        repo,
+        absolute,
+        "links/not-ignored",
+        false,
+        mut warnings,
+    )?
+    assert(!linked.matched && warnings.len == 1)
+    assert(
+        warnings[0] ==
+            "warning: unable to access 'links/.gitignore': Too many levels of symbolic links",
+    )
+    let _ = ignore.query_with_warnings(repo, absolute, "links/another", false, mut warnings)?
+    assert(warnings.len == 1)
+    // A symlink source below an excluded parent must not even generate a
+    // warning. Keep the earlier oversized-source barrier witness as well.
+    fs.remove("{absolute}/deny/.gitignore")?
+    fs.symlink("../link-patterns", "{absolute}/deny/.gitignore")?
+    let blocked_link = ignore.query_with_warnings(repo, absolute, "deny/file", false, mut warnings)?
+    assert(blocked_link.ignored && warnings.len == 1)
+    var tracked_warnings = List[str]()
+    assert(
+        !ignore.query_tracked_with_warnings(
+            repo,
+            "{absolute}/absent",
+            "links/file",
+            false,
+            true,
+            mut tracked_warnings,
+        )?.matched,
+    )
+    assert(tracked_warnings.len == 0)
     fs.symlink("real", "{absolute}/link")?
     assert(!ignore.query(repo, absolute, "link", false)?.matched)
     assert(ignore.query(repo, absolute, "link", true)?.ignored)
@@ -67,8 +127,34 @@ fn filesystem_test(root: str) -> int ! ProbeErrors {
         ignore.unmatched()
     }
     assert(refused)
+    // Different sources have different diagnostics, but repeated operands
+    // still emit each source once. A dangling symlink is never followed either.
+    fs.remove("{absolute}/.gitignore")?
+    fs.symlink("absent-patterns", "{absolute}/.gitignore")?
+    let root_link = ignore.query_with_warnings(repo, absolute, "none", false, mut warnings)?
+    assert(!root_link.matched && warnings.len == 2)
+    assert(
+        warnings[1] == "warning: unable to access '.gitignore': Too many levels of symbolic links",
+    )
+    let _ = ignore.query_with_warnings(repo, absolute, "links/third", false, mut warnings)?
+    assert(warnings.len == 2)
+    // A warning discovered before a later fatal ancestor remains available to
+    // the command's defer, which must flush before its outer fatal handler.
+    var fatal_warnings = List[str]()
+    refused = false
+    let _ = ignore.query_with_warnings(
+        repo,
+        absolute,
+        "directory-link/file",
+        false,
+        mut fatal_warnings,
+    ) else |_| {
+        refused = true
+        ignore.unmatched()
+    }
+    assert(refused && fatal_warnings.len == 1 && fatal_warnings[0] == warnings[1])
     print(
-        "PASS ignore filesystem precedence, source provenance, nested anchors, missing paths, excluded-parent stop, tracked bypass, symlink sources",
+        "PASS ignore filesystem precedence, source provenance, nested anchors, missing paths, excluded-parent stop, tracked bypass, symlink sources, relative provenance, deduplicated diagnostics",
     )
     0
 }

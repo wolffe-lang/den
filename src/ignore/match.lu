@@ -396,7 +396,7 @@ pub fn evaluate(rules: List[Rule], path: List[byte], is_dir: bool, tracked: bool
     decision(rules, path, is_dir)
 }
 
-// Explicit materialization avoids cf0c13d's returned lent-byte-view copy refusal;
+// Explicit materialization avoids wolf-lang#927's returned lent-byte-view copy refusal;
 // the minimal witness is probes/index-view-direct versus index-view-bound.
 fn own_bytes(bytes: List[byte]) -> List[byte] {
     var out = List[byte]()
