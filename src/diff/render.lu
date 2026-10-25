@@ -1,6 +1,6 @@
 use delta
-use difftext
 use diffbinary
+use difftext
 use object
 use oid
 use worktree
