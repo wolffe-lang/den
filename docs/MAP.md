@@ -1,13 +1,11 @@
 # Map
 
-The codec, owned OIDs, bounded loose store and binary object parsers underpin
-a writable index and the implemented worktree/commit subset. The dispatcher
-now routes add/rm/mv/status/commit/restore, path-only checkout, check-ignore and
-read-only config --get as well as the object plumbing. M2 is not complete:
-edited rename similarity, diff/history commands, general refs, packs and
-transports remain separate work. The local full gate passed against 177 frozen
-source/input hashes, checked again after completion; final-head CI remains the
-merge gate. This is a measured subset, not full Git compatibility.
+The codec, owned OIDs, bounded loose store and binary parsers underpin the
+index/worktree/commit interface and diff. The dispatcher routes the implemented
+porcelain, plumbing and diff commands. History commands, general refs, packs
+and transports remain separate work; M2 is not complete. Diff's known hunk
+alignment differences and binary representation exceptions are explicit below,
+not a blanket byte-parity claim.
 
 ## Modules and lanes
 
@@ -15,7 +13,7 @@ merge gate. This is a measured subset, not full Git compatibility.
 |---|---|
 | M0 | CLI refusal scaffold, `hash`, probes, oracle/corpus/review harness (vc00) |
 | M1 | `zlib`: inflate then deflate, Adler-32 (vc01); `oid`, `object`, `repository`, init/hash-object/cat-file/tree/commit/tag plumbing (vc02) |
-| M2 (partial) | `index`, `worktree`, `ignore`, `commit_format`, `commit`: implemented subset (vc03); edited rename similarity and `diff` (vc04); `walk`, `pretty`, log/show (vc05) |
+| M2 (partial) | `index`, `worktree`, `ignore`, `commit_format`, `commit`: implemented subset (vc03); `delta`, `rename`, `difftext`, `diffbinary`, `diff` (vc04); `walk`, `pretty`, log/show (vc05) |
 | M3 | `refs`, `reflog`, branch/tag/checkout/reset (vc06); three-way merge/revert (vc07); rebase/cherry-pick/sequencer (vc08); blame (vc09); stash/notes/revision grammar (vc10) |
 | M4 | `pack`, `pack_index`, delta decoding (vc11); pack writing, gc/repack/fsck/count-objects (vc12) |
 | M5 | `pktline`, protocol v2 fetch (vc13); receive-pack push/remotes (vc14); clone/pull porcelain (vc15) |
@@ -31,7 +29,7 @@ OID design keeps an algorithm and a byte list from the start, never a fixed
 
 The original surface census was measured on wolf 0.2.35 (`cf0c13d3`), bundled
 std `2386522e`, Ubuntu 24.04 on kasumi CPUs 12–15. M1/M2 implementation
-measurements use hasu CPUs 0–5 with the same pinned toolchain/container. “Checked” below means the observation's
+measurements use hasu CPUs 0–5; diff uses CPUs 6–11 with the same pinned toolchain/container. “Checked” below means the observation's
 `verdict` from `wolf conform-run --checked --json`, never its process status
 (which is 0 even for a static rejection). Full logs are tracked under
 `notes/vc00-evidence/probes/`.
@@ -146,13 +144,13 @@ is needed beyond referring to the equivalent `DeflateErrors` alias.
 fixtures plus ignore, staged rename, modes/symlink, unborn, amend, index-v4 and
 edited-rename states. The original nine builders remain unchanged. The two
 independent corpus builds compare OID manifests, not inode-dependent stat data.
-`tests/cases.json` defines 163 main cases, with generated component matrices
-counted separately. The full gate reports 136 parity / 26 named not-yet /
-1 version-shape / 0 reviewed / 0 failures. It validates 636 canonicalized
-tool-side entry rows: 60 in the main matrix, 84 per worktree tier, 168 per
-commit tier and 36 per index-client tier. There are 54 distinct captured status
-stdout texts across the main/worktree matrices. `final-counts.json` records
-these counts directly from the observations.
+`tests/cases.json` defines 188 main cases; its latest measured main comparison
+is 167 parity / 20 named not-yet / 1 version-shape / 0 reviewed / 0 failures.
+Implemented diff and edited-rename cases require parity and cannot regress to
+a named refusal unnoticed. Generated component matrices remain separately
+counted. Historical vc03 counts and 636 stat-proof rows are retained in
+`notes/vc03-evidence/final-counts.json`; current gate evidence is under
+`notes/vc04-evidence/` and the CI artifact's `target/runs/vc04-evidence/`.
 
 `tools/oracle --filter TEXT` rejects an empty selection; `--strict` rejects
 named not-yet results. The normal gate distinguishes those from parity and
@@ -430,32 +428,26 @@ same-OID amend logging and the normal-versus-`-a` index lifecycle.
 
 ### Rename scope and follow-on consumers
 
-R-vc03-5 keeps staged rename/copy matching exact-OID only, including regular
-100644/100755 mode changes when the file type agrees. Rename-enabled status
-refuses unresolved same-type staged A+D candidates by name rather than guessing
-an edited-content score. Non-quiet commit checks its corresponding human
-summary policy before writes; quiet commit skips that unavailable summary and
-can use the otherwise exact staged tree/ref/reflog path. This is not M2
-completion or an accepted approximate rename metric. Disabling status rename
-detection returns independent rows without invoking that metric.
+`rename.pair` now supplies staged status, commit summaries and diff. Exact OID
+matching precedes approximate regular-file scoring. Nonregular files pair only
+by exact OID/type; executable-bit changes remain regular-file compatible.
+Candidate pools contain deletions and additions, plus modified retained
+sources when copies are requested. Unique-basename preselection, four best
+candidates per destination, stable slot ties and rename-before-copy assignment
+are independently measured. No source/destination index is an absence sentinel.
 
-vc04 should consume full Index.Entry paths/modes/OIDs and the owned snapshots,
-not legacy flat `parse_v2`; compare content and configured modes, never stat
-words alone. Replace the explicit edited-similarity refusal only after a
-clean-room general rule passes the discriminating black-box cases. The six
-archived `notes/vc03-evidence/rename-measure-{initial,random,hash,structural,equivalence,wrap}.json`
-reports contain 1,510 pairs from `tools/rename-measure.py`, with matching logs.
-They are research captures, not scorer parity or a fixture-specific exception
-table. Exact byte span matching and first-byte-offset normalization both
-misclassify witnesses.
+Commit's metadata-only preview does not require unpublished `-a` blobs. Quiet
+commit skips display work. Nonquiet summaries count actual OID differences,
+even when a hash collision yields a 100-percent content score. The pairer is
+bounded at 2,000 candidates per side and body scoring at 16 MiB per file.
 
 vc05 should reuse lossless object headers, `head`, `flatten_tree`, owned rows and
-quoting/subject helpers as appropriate, but must implement revision walking and
-pretty-history policy separately. Amend retains its complete parent list;
-merge-amend human summaries cannot be guessed as first-parent shortstat.
-Neither consumer may assume all extensions, arbitrary revision grammar or
-higher-stage mutation are supported. There is still no production Git/shell
-dependency.
+the new pure diff consumer API below. `diff.collect`/`render` never refresh the
+index; the CLI's separately measured optional refresh must not be imported into
+log/show. Revision walking and pretty-history policy remain independent.
+Amend retains all parents; merge-amend summaries are not a guessed first-parent
+shortstat. General revision grammar and higher-stage mutation remain outside
+these APIs. There is no production Git/shell dependency.
 
 ### Configuration boundary and key census
 
@@ -480,6 +472,7 @@ subsections); entries marked refusal controls do not imply feature support:
 | Loose storage | `core.compression`, `core.looseCompression` |
 | Worktree / ignore / index | `core.fileMode`, `core.symlinks`, `core.excludesFile`, `core.quotePath`, `index.version` |
 | Status | `status.short`, `status.branch`, `status.showUntrackedFiles`, `status.relativePaths`, `status.renames`, `advice.statusHints`; `branch.<current>.merge` triggers the unsupported upstream-tracking path |
+| Diff | `diff.context`, `diff.indentHeuristic`, `diff.renames`, `diff.autoRefreshIndex`, `diff.statNameWidth`, `diff.statGraphWidth`, `core.abbrev`, `core.quotePath`, `core.fileMode`, `core.symlinks` |
 | Add diagnostics | `advice.addEmptyPathspec`, `advice.addIgnoredFile`, `advice.updateSparsePath` |
 | Commit identity / message / logging | `user.name`, `user.email`, `author.name`, `author.email`, `committer.name`, `committer.email`, `i18n.commitEncoding`, `commit.cleanup`, `core.commentChar`, `core.commentString`, `core.logAllRefUpdates` |
 | Refusal / editor controls | `core.autocrlf`, `core.attributesFile`, `core.hooksPath`, `commit.gpgSign`, `core.editor`; attributes, nonempty hooks, signing and actual editor execution remain unsupported |
@@ -510,11 +503,9 @@ not evidence that every native copy is broken or a substitute for checked
 verification.
 
 
-## Similarity primitive and unfinished diff experiment (vc04)
+## Diff consumer boundaries (vc04)
 
-`src/delta/similarity.lu` adds a pure, bounded content-similarity API. It is not
-wired into `status`, commit summaries or a `diff` command yet; their existing
-refusals and M2's incomplete state are unchanged.
+The pure similarity API remains independent of filesystem and presentation:
 
 ```wolf
 pub error DeltaErrors = {invalid, limit}
@@ -524,28 +515,107 @@ pub fn delta.span_counts(data: List[byte]) -> Map[int, int] ! DeltaErrors
 pub fn delta.similarity(before: List[byte], after: List[byte]) -> Similarity ! DeltaErrors
 ```
 
-Each input is limited to 16 MiB. The map owns its storage. LF/64-byte spans
-contribute byte weights to fingerprint buckets; text CRLF handling and the
-8,000-byte binary sample are measured independently on each side. Similarity
-uses the original maximum body size as denominator, preserves copied-byte
-weight, and exposes a 60,000-unit score and floored percent. Identical byte
-bodies, including two empty bodies, score 100. File-type eligibility, exact-OID
-priority, candidate assignment and rename thresholds belong to a future pairer,
-not this function. Fingerprint collisions deliberately affect similarity;
-100 percent is not an identity test.
+It owns returned storage, limits inputs to 16 MiB, uses original size as the
+denominator and returns a 60,000-unit score plus floored percentage. Exact byte
+identity, including two empty inputs, scores 100; unequal chunks may collide.
+The native and release external clients each match all 1,510 inherited records
+(123/300/522/90/301/174) and 24 newly isolated projection collisions. The checked
+unit verdict is independently `exit(0)`.
 
-`tools/check-delta` is a standalone gate, not yet part of `tools/gate` or CI.
-The native and release public clients each agree on all 1,510 inherited score
-and 50-percent-threshold observations, plus 24 independently isolated collision
-pairs. `src/delta_test.lu` also returns actual-checked `exit(0)`. The six report
-counts are 123/300/522/90/301/174; raw results and derivation are retained under
-`notes/vc04-evidence/`. This is not CLI rename/copy-pairing parity.
+```wolf
+pub struct Candidate { path: List[byte], mode: int, id: oid.Oid,
+    data: List[byte], retained: bool }
+pub struct Options { enabled: bool, copies: bool, threshold: int }
+pub struct Pair { source: int, destination: int, units: int,
+    percent: int, is_copy: bool }
+pub fn rename.defaults() -> Options
+pub fn rename.exact(before: List[Candidate], after: List[Candidate],
+    options: Options) -> List[Pair] ! RenameErrors
+pub fn rename.pair(before: List[Candidate], after: List[Candidate],
+    options: Options) -> List[Pair] ! RenameErrors
+```
 
-The unfinished Myers/unified-hunk experiment is isolated in
-`probes/hunk-prototype/`, outside production modules. Its strict differential
-witness `tools/diff-hunks-test.py` is intentionally RED, not a passing gate:
-620/684 comparisons match Git's default, 676/684 match with its indent heuristic
-disabled, and the oracle's two modes differ in 56/684. The remaining no-indent
-counterexamples are seeded-21 and seeded-116 at all four context widths.
-`hunks-checkpoint.json` retains complete inputs and both oracle outputs.
-Do not import this renderer into log/show or expose it as a compatible diff.
+`RenameErrors` is invalid/limit/invalid_oid/unsupported_format. Inputs may be in
+arbitrary order; returned indices address the supplied lists. `exact` ignores
+body data, supporting lazy reads. `pair` repeats the exact stage internally:
+do not concatenate its results with `exact`. Retained sources are modified
+paths, not arbitrary unchanged files. Threshold 100 requests exact OIDs,
+not a colliding inexact score of 100. Default matching is enabled at 50 percent.
+The mandatory pairer gate covers 267 candidate matrices and 1,044 full-state
+status/commit comparisons per native tier; native/release/checked tests are
+separate evidence rows.
+
+```wolf
+pub struct Line { start: int, end: int, hash: int }
+pub struct Edit { old_start: int, old_count: int,
+    new_start: int, new_count: int }
+pub fn difftext.lines(data: List[byte]) -> List[Line] ! DeltaErrors
+pub fn difftext.edits(before: List[byte], after: List[byte]) -> List[Edit] ! DeltaErrors
+pub fn difftext.hunks(before: List[byte], after: List[byte],
+    context: int, indent: bool) -> List[byte] ! DeltaErrors
+pub fn diffbinary.patch(before: List[byte], after: List[byte]) -> List[byte] ! BinaryPatchErrors
+```
+
+`difftext` uses byte lines, including LF, and verifies line equality after a
+hash prefilter. It keeps a bounded Myers trace; direct empty-side edits avoid
+that search. General searches cap at 2,000 changed lines, inputs at 200,000
+lines/16 MiB, context at 200,000. Invalid arguments and limits are explicit rows.
+Its default boundary ranking matches 676/684 measured hunk outputs; the oracle
+changes output in 56/684 when its indent heuristic is disabled. The remaining
+seeded-21/seeded-116 cases at four context widths are fixed full-input/output
+records in `tests/review/diff-hunks.json` (proposed R-vc04-3). Every generated
+patch, including those eight records, is independently applied forward and
+reverse to reconstruct exact bytes. These eight are not parity passes.
+
+`diffbinary.patch` returns the complete `GIT binary patch` body, not ordinary
+headers, with errors invalid/limit and 16-MiB input bounds. R-vc04-4 was refined
+by the coordinator by analogy to R4c: literal/delta selection and delta payload
+lengths belong to the representation; literal target lengths, blob sizes/OIDs,
+framing and forward/reverse application are checked independently. The original
+corpus is 55/150 byte-identical; the expanded corpus is 154/250, with 96 fixed
+capture-bound representation differences, not parity. The strict byte gate
+remains report-only red. A new/changed capture fails the accepted gate.
+
+```wolf
+pub struct File { path: List[byte], mode: int, id: oid.Oid, data: List[byte] }
+pub struct Change { before: List[File], after: List[File], status: str, percent: int }
+pub fn diff.defaults() -> Options
+pub fn diff.configured(ctx: worktree.Context) -> Options ! worktree.WorkErrors
+pub fn diff.changes(before: List[File], after: List[File], options: Options)
+    -> List[Change] ! worktree.WorkErrors
+pub fn diff.collect(ctx: worktree.Context, options: Options)
+    -> List[Change] ! worktree.WorkErrors
+pub fn diff.render(ctx: worktree.Context, changes: List[Change], options: Options)
+    -> List[byte] ! worktree.WorkErrors
+pub fn diff.run(args: List[str]) -> int
+```
+
+These qualified signatures distinguish modules; `diff.Options` is the display
+record in `src/diff/model.lu`, not `rename.Options`. `configured` reads config,
+COLUMNS and terminal size without publishing state; plain `defaults` is pure.
+Endpoints must be sorted by
+unsigned path for `changes`; each Change side is an owned zero/one file list.
+`collect` handles worktree/index, cached HEAD or a named endpoint, two loose
+commits/trees and two blobs. Aggregate body input is limited to 128 MiB per
+endpoint. Simple bounded `^n`/`~n` ancestry is not a general revision parser.
+
+Only `run` performs documented `diff.autoRefreshIndex` work: a selected stale
+but content-equal entry triggers refresh of all unchanged entries. Foreign
+index locks suppress it silently; cached/two-object forms do not refresh.
+Disabling auto-refresh also preserves Git's stat-only name-list behavior.
+The matrix uses R-vc03-3's six-word per-file proof, never a wildcard index
+normalization. Pure collect/render is exercised from `probes/diff-client`.
+
+All component checks are mandatory in `tools/gate`. New captures are collected
+under the workflow's existing `target/runs` artifact path on success or failure.
+The historical `probes/hunk-prototype` is frozen evidence, not a consumer API.
+The final full local gate passed with 234 functional input hashes unchanged.
+Per native tier: 336 basic display, 575 endpoint/pathspec/width, 66 refresh and
+12 external-API comparisons agree exactly (the refresh comparison uses its
+proved six-word canonicalization). The 684 hunk and 250 binary comparisons
+retain their separately counted differences above. `final-counts.json` derives
+all counts from captures; four new unit programs report actual-checked exit(0).
+Ninety separate pipe/private-PTY cases per tier measure COLUMNS, window sizes
+and explicit width overrides; explicit zero width means 80, not terminal width.
+Per-file patch/count scratch is reclaimed by explicit regions; this is a
+bounded whole-file implementation, not a streaming-memory benchmark claim.

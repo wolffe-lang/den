@@ -192,3 +192,29 @@ Primary references are Git v2.56.0 Documentation, read as documentation only:
   unequal repeated-byte and isolated-collision witnesses report R100. The
   implementation follows the measured content score, not that identity claim.
   This is a proposed documentation correction, not an upstream submission.
+
+
+## Diff integration references (vc04 continuation)
+
+- Git v2.56.0 glossary-content.adoc, pathspec: literal, top, icase, glob,
+  exclude and the attribute boundary; original byte-DP adapter, not another
+  matcher's source. Git config/diff.adoc, diff.autoRefreshIndex and diff stat
+  controls. The refresh side effect was measured on copied/stale indices,
+  including disabled refresh, foreign locks, paths, quiet and cached forms.
+- Git revisions.adoc, first-parent tilde and selected-parent caret notation;
+  the endpoint adapter is bounded and does not implement ranges or a walk.
+- Binary delta instructions use gitformat-pack(5); the envelope and base85
+  alphabet/framing were measured against pinned Git. Existing own zlib code
+  supplies level-1 deflate. Python stdlib zlib/base64 are independent test
+  decoders/oracles, not implementation references or runtime dependencies.
+- Pairing measurements include exact/type/basename precedence, four-candidate
+  destination shortlists, slot-order ties and unused-source-before-copy
+  assignment. Preserved disagreement logs drove general corrections; no
+  fixture-specific pairing exceptions were introduced.
+- No Git, libgit2, other VCS, diff library or external codec source was read.
+  `notes/vc04-evidence/pins/` contains two fresh release-metadata reads; no
+  compiler, std, archive or oracle pin changed.
+- The pinned wolf-std `term/term.lu` size contract and its `os_term_size`
+  wrapper were read for stat-width defaults. The command queries the builtin
+  directly, without importing foreground-process operations or adding an exec
+  capability. Private-PTY and COLUMNS tests use only terminals they create.
