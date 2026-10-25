@@ -161,3 +161,34 @@ Primary references are Git v2.56.0 Documentation, read as documentation only:
   Checking the Status of Your Files, Short Status, Staging Modified Files,
   Ignoring Files, Committing Your Changes, Skipping the Staging Area,
   Removing Files and Moving Files; https://git-scm.com/book/en/v2/Git-Basics-Recording-Changes-to-the-Repository.
+
+
+## Similarity derivation and diff experiment (vc04)
+
+- Git v2.56.0 documentation only: git-diff(1), synopsis and endpoint forms;
+  diff-format.adoc, raw and other formats; diff-generate-patch.adoc, extended
+  headers and unified patches; diff-options.adoc, context, indent heuristic,
+  stat widths, binary/full-index and rename/copy options; gitdiffcore(7), chain
+  of operation and rename/copy candidate stages. These pages do not specify
+  the fingerprint recurrence or projection constants; those were measured.
+- Myers, *An O(ND) Difference Algorithm and Its Variations*, sections 1–3,
+  especially the edit graph, Figure 2 and trace recovery; original paper at
+  https://neil.fraser.name/writing/diff/myers.pdf. No diff library source or
+  Git implementation was consulted. The experiment uses the paper's greedy
+  method and original boundary-compaction hypotheses, not Git heuristics.
+- The six vc03 black-box reports supply 1,510 pairs. An explicit search of
+  348 rolling-fingerprint models fits 1,157 small witnesses, then tests the
+  complete corpus. Only 64-bit left rotation by seven with addition restricted
+  to the low 32-bit word agrees on every inherited pair.
+- Fresh pinned-Git threshold probes isolate 24 unequal 64-byte pairs that
+  collide after projection despite distinct full fingerprints. Each query is
+  retained. Searching both word orders, three arithmetic widths and all
+  coefficients 0–65,535 against 16 pairs leaves one model: low + 97 * high,
+  truncated to 32 bits, modulo 107,927. The other eight pairs validate it.
+  Scripts, source/input hashes, observations and rejected candidates are in
+  tools/rename-{fingerprint,collision,projection}-measure.py and the evidence.
+- A documentation discrepancy remains for review: diff-generate-patch.adoc
+  says 100-percent similarity is reserved for equal files, but the retained
+  unequal repeated-byte and isolated-collision witnesses report R100. The
+  implementation follows the measured content score, not that identity claim.
+  This is a proposed documentation correction, not an upstream submission.

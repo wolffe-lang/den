@@ -508,3 +508,44 @@ exit(0). Explicit byte materialization at owned-return boundaries is the narrow
 workaround. `notes/vc03-evidence/index-view.log` retains the diagnostics; this is
 not evidence that every native copy is broken or a substitute for checked
 verification.
+
+
+## Similarity primitive and unfinished diff experiment (vc04)
+
+`src/delta/similarity.lu` adds a pure, bounded content-similarity API. It is not
+wired into `status`, commit summaries or a `diff` command yet; their existing
+refusals and M2's incomplete state are unchanged.
+
+```wolf
+pub error DeltaErrors = {invalid, limit}
+pub struct Similarity { common: int, maximum: int, units: int, percent: int }
+pub fn delta.binary(data: List[byte]) -> bool
+pub fn delta.span_counts(data: List[byte]) -> Map[int, int] ! DeltaErrors
+pub fn delta.similarity(before: List[byte], after: List[byte]) -> Similarity ! DeltaErrors
+```
+
+Each input is limited to 16 MiB. The map owns its storage. LF/64-byte spans
+contribute byte weights to fingerprint buckets; text CRLF handling and the
+8,000-byte binary sample are measured independently on each side. Similarity
+uses the original maximum body size as denominator, preserves copied-byte
+weight, and exposes a 60,000-unit score and floored percent. Identical byte
+bodies, including two empty bodies, score 100. File-type eligibility, exact-OID
+priority, candidate assignment and rename thresholds belong to a future pairer,
+not this function. Fingerprint collisions deliberately affect similarity;
+100 percent is not an identity test.
+
+`tools/check-delta` is a standalone gate, not yet part of `tools/gate` or CI.
+The native and release public clients each agree on all 1,510 inherited score
+and 50-percent-threshold observations, plus 24 independently isolated collision
+pairs. `src/delta_test.lu` also returns actual-checked `exit(0)`. The six report
+counts are 123/300/522/90/301/174; raw results and derivation are retained under
+`notes/vc04-evidence/`. This is not CLI rename/copy-pairing parity.
+
+The unfinished Myers/unified-hunk experiment is isolated in
+`probes/hunk-prototype/`, outside production modules. Its strict differential
+witness `tools/diff-hunks-test.py` is intentionally RED, not a passing gate:
+620/684 comparisons match Git's default, 676/684 match with its indent heuristic
+disabled, and the oracle's two modes differ in 56/684. The remaining no-indent
+counterexamples are seeded-21 and seeded-116 at all four context widths.
+`hunks-checkpoint.json` retains complete inputs and both oracle outputs.
+Do not import this renderer into log/show or expose it as a compatible diff.
