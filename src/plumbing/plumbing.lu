@@ -588,6 +588,18 @@ pub fn run(args: List[str]) -> int {
             eprint("den: not yet implemented: {feature} ({milestone})")
             2
         },
+        exists => {
+            if args.len > 0 && args[0] == "write-tree" {
+                let repo = repository.discover(".") else |_| {
+                    eprint("fatal: index.lock exists")
+                    return 128
+                }
+                eprint("fatal: {index.lock_message(repo)}{index.lock_advice()}")
+            } else {
+                eprint("fatal: den: exists")
+            }
+            128
+        },
         not_found => {
             eprint("fatal: not a git repository (or any of the parent directories): .git")
             128

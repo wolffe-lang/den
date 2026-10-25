@@ -13,7 +13,7 @@ for tier in native release; do
     "$WOLF" build $flag --deny-warnings probes/index-client/main.lu -o "target/$tier/index-client"
     tools/env python3 -I tools/index-test.py --tier "$tier"
 done
-for part in format flags trees malformed; do
+for part in format flags trees malformed stat; do
     "$WOLF" conform-run "src/index_checked_$part.lu" --checked --json > "target/index-checked-$part.json"
     cat "target/index-checked-$part.json"
     python3 -I - "target/index-checked-$part.json" <<'PYCODE'
@@ -23,4 +23,4 @@ assert len(rows)==1 and rows[0]['verdict']=='exit(0)',rows
 PYCODE
 done
 python3 -I tools/index-proof-test.py
-echo 'index: native/release units and independent Git interop; four bounded actual checked exits; full native test retained'
+echo 'index: native/release units and independent Git interop; five bounded actual checked exits; full native test retained'

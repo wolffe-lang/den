@@ -1,0 +1,7 @@
+resolve-undo ['TREE', 'REUC'] 0 b''
+untracked ['TREE', 'UNTR'] 1 b'Unsupported(index extension UNTR)\n'
+fsmonitor ['TREE', 'FSMN'] 1 b'Unsupported(index extension FSMN)\n'
+offsets ['IEOT', 'TREE', 'EOIE'] 1 b'Unsupported(index extension IEOT)\n'
+split ['link', 'TREE'] 1 b'Unsupported(index extension link)\n'
+sparse ['TREE', 'sdir'] 1 b'Unsupported(index extension sdir)\n'
+index extension census: all produced records preserved or refused by exact extension name

@@ -86,6 +86,13 @@ for version in (2,3,4):
    client('rewrite',b/'.git',version,fail,status=1)
    assert not (b/'.git/index.lock').exists()
    assert (b/'.git/index').read_bytes()==old
+  client('prepare-abort',b/'.git',version)
+  assert (b/'.git/index').read_bytes()==old and not (b/'.git/index.lock').exists()
+  for fail in ('write','sync'):
+   client('prepare-abort',b/'.git',version,fail,status=1)
+   assert (b/'.git/index').read_bytes()==old and not (b/'.git/index.lock').exists()
+  client('install-unprepared',b/'.git',version,status=1)
+  assert (b/'.git/index').read_bytes()==old and not (b/'.git/index.lock').exists()
   # Neither process may remove somebody else's existing lock.
   lock=b/'.git/index.lock';lock.write_bytes(b'owned-by-other-writer')
   client('rewrite',b/'.git',version,status=1)

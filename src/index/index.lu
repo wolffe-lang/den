@@ -343,7 +343,7 @@ pub fn parse_v2(data: List[byte]) -> List[object.TreeEntry] ! IndexErrors {
     entries
 }
 
-// cf0c13d cannot lower copy of a lent str.bytes() view in a returned value.
+// wolf-lang#927: cf0c13d cannot lower copy of a lent str.bytes() view in a returned value.
 // probes/index-view-{direct,bound} retain native/checked witnesses. Iteration
 // explicitly materializes the API's owned return without changing its contract.
 fn owned_path(bytes: List[byte]) -> List[byte] {

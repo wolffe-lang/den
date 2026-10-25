@@ -1,0 +1,31 @@
+//! member: false
+
+use index
+use oid
+
+fn main() -> int ! index.IndexErrors {
+    var record = List[int]()
+    for _ in 0..20 { (mut record).push(0) }
+    record[0] = 0
+    record[1] = 4294967297
+    record[3] = 1048575
+    record[4] = 0o644
+    record[6] = 4294967298
+    record[7] = 4294967299
+    record[9] = 4294967300
+    record[10] = 4294967301
+    record[14] = 4294967302
+    record[15] = 123
+    record[16] = -1
+    record[17] = 456
+    let id = oid.parse("sha1", "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391")?
+    let path = "file".bytes()
+    let entry = index.entry_from_stat(record, path, id, 0o100755, 0, 0)?
+    let expected = [4294967295, 456, 6, 123, 4, 5, 0o100755, 2, 3, 1]
+    for i in 0..10 { assert(entry.stat[i] == expected[i]) }
+    record[0] = 3
+    let link = index.entry_from_lstat(record, path, id, 0, 0)?
+    assert(link.stat[6] == 0o120000)
+    print("PASS bounded low-u32 stat mapping and symlink mode")
+    0
+}

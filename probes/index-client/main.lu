@@ -136,6 +136,20 @@ fn work(args: List[str]) -> int ! index.IndexErrors {
         var tx = index.begin(repo, 1000000000, number(args[2])?)?
         defer index.abort(mut tx)
         index.commit_injected(mut tx, if args.len == 4 then args[3] else "")?
+    } else if args[0] == "prepare-abort" {
+        if args.len < 3 || args.len > 4 { return invalid }
+        let repo = repository.open(args[1])?
+        var tx = index.begin(repo, 1000000000, number(args[2])?)?
+        defer index.abort(mut tx)
+        index.prepare_injected(mut tx, if args.len == 4 then args[3] else "")?
+        let ready = index.parse(repository.read_bytes("{repo.gitdir}/index.lock", 1000000000)?)?
+        print("prepared {ready.entries.len}")
+    } else if args[0] == "install-unprepared" {
+        if args.len != 3 { return invalid }
+        let repo = repository.open(args[1])?
+        var tx = index.begin(repo, 1000000000, number(args[2])?)?
+        defer index.abort(mut tx)
+        index.install(mut tx)?
     } else if args[0] == "lock" {
         if args.len != 2 { return invalid }
         var input = fs.open("/dev/stdin")?
