@@ -1,0 +1,6 @@
+pkg {
+    name: "delta-client",
+    edition: "1",
+    capabilities: [env, fs],
+    deps: {delta: {path: "../../src/delta"}},
+}

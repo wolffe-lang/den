@@ -1,0 +1,79 @@
+// Original black-box derivation, not translated from any VCS implementation.
+// tools/rename-fingerprint-measure.py searches rotation width/step/carry;
+// tools/rename-collision-measure.py isolates independent oracle collisions;
+// tools/rename-projection-measure.py fits a projection and holds eight out.
+// The complete derivation and 1,510-pair observations are in notes/vc04-evidence.
+
+/// invalid denotes an invalid API argument; limit denotes a bounded input refusal.
+pub error DeltaErrors = {invalid, limit}
+
+/// Copied-byte weight and original size denominator, plus Git's score scale.
+pub struct Similarity { common: int, maximum: int, units: int, percent: int }
+
+/// NUL in the first 8,000 bytes selects binary behavior, independently per side.
+pub fn binary(data: List[byte]) -> bool {
+    let end = if data.len < 8000 then data.len else 8000
+    for i in 0..end { if data[i] == 0 as byte { return true } }
+    false
+}
+
+fn same_bytes(a: List[byte], b: List[byte]) -> bool {
+    if a.len != b.len { return false }
+    for i in 0..a.len { if a[i] != b[i] { return false } }
+    true
+}
+
+fn bucket(low: int, high: int) -> int {
+    // The only surviving model in the bounded coefficient/word-order search.
+    (low + 97 * high & 0xffffffff) % 107927
+}
+
+/// LF/64-byte fingerprints, weighted by normalized bytes, not line counts.
+/// CR immediately before LF is skipped for text, but original sizes are kept
+/// by similarity(). Hash collisions intentionally combine their byte weights.
+pub fn span_counts(data: List[byte]) -> Map[int, int] ! DeltaErrors {
+    if data.len > 16777216 { return limit }
+    var counts = Map[int, int]()
+    let text = !binary(data)
+    var low: int = 0, high: int = 0, length = 0
+    for i in 0..data.len {
+        let b = data[i] as int
+        if text && b == 13 && i + 1 < data.len && data[i + 1] == 10 as byte { continue }
+        let previous = low
+        low = (low << 7 | high >> 25) + b & 0xffffffff
+        high = (high << 7 | previous >> 25) & 0xffffffff
+        length += 1
+        if b == 10 || length == 64 {
+            let key = bucket(low, high)
+            counts[key] = (counts[key] else 0) + length
+            low = 0
+            high = 0
+            length = 0
+        }
+    }
+    if length > 0 {
+        let key = bucket(low, high)
+        counts[key] = (counts[key] else 0) + length
+    }
+    counts
+}
+
+/// Content similarity only. Type eligibility, exact OIDs and multi-candidate
+/// assignment belong to the pairer. Returned records retain no input storage.
+pub fn similarity(before: List[byte], after: List[byte]) -> Similarity ! DeltaErrors {
+    if before.len > 16777216 || after.len > 16777216 { return limit }
+    let maximum = if before.len > after.len then before.len else after.len
+    if same_bytes(before, after) {
+        return Similarity { common: maximum, maximum: maximum, units: 60000, percent: 100 }
+    }
+    if maximum == 0 { return invalid }
+    let left = span_counts(before)?
+    let right = span_counts(after)?
+    var common: int = 0
+    for (key, count) in left.pairs() {
+        let other = right[key] else 0
+        common += if count < other then count else other
+    }
+    let units = common * 60000 / maximum
+    Similarity { common: common, maximum: maximum, units: units, percent: units / 600 }
+}

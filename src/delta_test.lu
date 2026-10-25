@@ -1,0 +1,37 @@
+//! member: false
+
+use delta
+
+fn repeated(b: byte, n: int) -> List[byte] {
+    var out = List[byte]()
+    for _ in 0..n { (mut out).push(b) }
+    out
+}
+
+fn main() -> int ! delta.DeltaErrors {
+    assert(delta.similarity("".bytes(), "".bytes())?.percent == 100)
+    assert(delta.similarity("".bytes(), "x".bytes())?.percent == 0)
+    assert(delta.similarity("a\nb\nc\n".bytes(), "a\nb\nX\n".bytes())?.percent == 66)
+    assert(delta.similarity("a\nb\nc\n".bytes(), "c\nb\na\n".bytes())?.percent == 100)
+    assert(delta.similarity("a\r\nb\r\nc\r\n".bytes(), "a\nb\nc\n".bytes())?.percent == 66)
+    assert(delta.similarity(repeated(97 as byte, 63), repeated(98 as byte, 63))?.percent == 0)
+    assert(delta.similarity(repeated(97 as byte, 64), repeated(98 as byte, 64))?.percent == 100)
+    for b in [0, 10, 127, 254] {
+        assert(delta.similarity(repeated(97 as byte, 64), repeated(b as byte, 64))?.percent == 0)
+    }
+    let prefix = repeated(97 as byte, 47)
+    var old = copy prefix, fresh = copy prefix
+    (mut old).push(10 as byte)
+    (mut fresh).push(10 as byte)
+    for _ in 0..51 { (mut old).push(98 as byte); (mut fresh).push(99 as byte) }
+    (mut old).push(10 as byte)
+    (mut fresh).push(10 as byte)
+    assert(delta.similarity(old, fresh)?.percent == 48)
+    var nul = repeated(97 as byte, 8001)
+    nul[8000] = 0 as byte
+    assert(!delta.binary(nul))
+    nul[7999] = 0 as byte
+    assert(delta.binary(nul))
+    print("delta: similarity boundaries, multiset weighting and text detection pass")
+    0
+}

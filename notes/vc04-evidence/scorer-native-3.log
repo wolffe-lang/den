@@ -1,0 +1,9 @@
+delta: similarity boundaries, multiset weighting and text detection pass
+initial 123 / 123
+random 300 / 300
+hash 522 / 522
+structural 90 / 90
+equivalence 301 / 301
+wrap 174 / 174
+collisions 24 / 24
+PASS 1510 inherited pairs plus 24 independent collisions; zero skips
