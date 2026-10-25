@@ -1,0 +1,6 @@
+pkg {
+    name: "diff-client",
+    edition: "1",
+    capabilities: [env, fs],
+    deps: {diff: {path: "../../src/diff"}, worktree: {path: "../../src/worktree"}},
+}

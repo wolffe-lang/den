@@ -1,0 +1,32 @@
+use std.fs
+use diff
+use worktree
+
+fn work(args: List[str]) -> int ! worktree.WorkErrors {
+    var options = diff.defaults()
+    for arg in args {
+        if arg == "--cached" {
+            options.cached = true
+        } else if arg == "--stat" {
+            options.stat = true
+            options.patch = false
+        } else if arg == "--name-status" {
+            options.name_status = true
+            options.patch = false
+        } else if arg == "-U0" {
+            options.context = 0
+        } else if arg.starts_with("path=") {
+            (mut options.paths).push(arg[5..])
+        } else {
+            (mut options.revisions).push(arg)
+        }
+    }
+    let ctx = worktree.discover(".")?
+    let changes = diff.collect(ctx, options)?
+    let bytes = diff.render(ctx, changes, options)?
+    var stdout = fs.stdout()
+    fs.write_chunk(mut stdout, bytes)?
+    0
+}
+
+fn main() -> int { work(env_args()) else |e| { eprint("{e}"); 1 } }
