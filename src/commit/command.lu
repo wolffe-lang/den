@@ -184,7 +184,7 @@ fn dispatch(args: List[str], fail: str) -> int ! CommitErrors {
     let cleanup_setting = if value.cleanup != "" {
         value.cleanup
     } else {
-        (ctx.repo.config["commit.cleanup"] else "default")
+        ctx.repo.config["commit.cleanup"] else "default"
     }
     let edited = if value.edit >= 0 then value.edit == 1 else !value.supplied
     let _ = commit_format.cleanup_mode(cleanup_setting, edited)?
