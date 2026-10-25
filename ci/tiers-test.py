@@ -97,7 +97,9 @@ for path in ("src/object/store.lu", "src/oid/oid.lu", "src/index/index.lu", "src
     say(p["tier"] == "pr" and p["jobs"] == PR, "T2 object gate path " + path)
 gate = open(os.path.join(ROOT, "tools", "gate")).read()
 say("tools/check-objects" in gate, "T2 object integration gate is mandatory")
-say("--filter status-short --strict" in gate, "T2 strict witness remains unimplemented")
+for command in ("tools/check-config", "tools/check-index", "tools/check-ignore", "tools/check-worktree", "tools/check-commit"):
+    say(command in gate, "T2 M2 integration gate is mandatory: " + command)
+say("--filter diff-symlink --strict" in gate, "T2 strict witness remains unimplemented")
 # T3
 p = plan(["somewhere/new"], event="pull_request", action="opened")
 say(p["tier"] == "full", "T3 a path no rule names is full")

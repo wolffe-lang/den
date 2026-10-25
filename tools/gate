@@ -26,9 +26,11 @@ tools/check-objects
 tools/check-config
 tools/check-index
 tools/check-ignore
+tools/check-worktree
+tools/check-commit
 tools/oracle --selftest
 tools/oracle
-if tools/oracle --filter status-short --strict; then
+if tools/oracle --filter diff-symlink --strict; then
     echo "gate: strict not-yet unexpectedly passed" >&2
     exit 1
 else

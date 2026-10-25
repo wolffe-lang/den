@@ -18,7 +18,7 @@ G=os.environ['DEN_GIT']
 def main():
     p=argparse.ArgumentParser();p.add_argument('--binary',default='target/zpipe');a=p.parse_args()
     binary=(ROOT/a.binary).resolve(); work=ROOT/'target/codec-corpus'; work.mkdir(exist_ok=True)
-    counts={'loose':0,'pack_entries':0,'written':0,'corrupt_refused':0};sizes=[]
+    counts={'loose':0,'pack_entries':0,'written':0,'corrupt_refused':0,'empty_corpora':0};sizes=[]
     def git(repo,*args,data=None,ok=True):
         c=subprocess.run([G,*args],cwd=repo,input=data,capture_output=True,timeout=60)
         if ok:assert c.returncode==0,(args,c.returncode,c.stderr)
@@ -116,12 +116,26 @@ def main():
             den_size+=len(encoded);git_size+=len(oracle);largest=max(largest,len(encoded)/len(oracle))
             f=dest/'.git/objects'/oid[:2]/oid[2:];f.parent.mkdir(exist_ok=True);f.write_bytes(encoded)
             assert git(dest,'cat-file',kind,oid)==body;counts['written']+=1;objects.append((f,encoded,raw))
-        head=git(repo,'rev-parse','HEAD').strip();git(dest,'update-ref','refs/heads/main',head.decode());git(dest,'fsck','--full','--strict')
-        f,encoded,raw=objects[0]
+        head=subprocess.run([G,'rev-parse','--verify','HEAD'],cwd=repo,capture_output=True)
+        if head.returncode==0:git(dest,'update-ref','refs/heads/main',head.stdout.strip().decode())
+        else:
+            assert head.returncode in (1,128) and not objects,(repo,head.stderr)
+            counts['empty_corpora']+=1
+        git(dest,'fsck','--full','--strict')
+        if objects:
+            f,encoded,raw=objects[0]
+        else:
+            # A valid unborn store has no object to mutate. Exercise the same
+            # corruption boundary with an independent synthetic empty blob,
+            # then remove it so the rebuilt store is empty again. No skip.
+            raw=b'blob 0\0';encoded=zlib.compress(raw,1);identifier=hashlib.sha1(raw).hexdigest()
+            f=dest/'.git/objects'/identifier[:2]/identifier[2:];f.parent.mkdir(exist_ok=True)
         corrupt=encoded[:-1]+bytes([encoded[-1]^1]);den('inflate',corrupt,len(raw),error='checksum')
         den('inflate',encoded[:-1],len(raw),error='truncated')
-        f.write_bytes(corrupt);git(dest,'fsck','--full',ok=False);f.write_bytes(encoded)
-        sizes.append(dict(corpus=repo.name,den=den_size,git_level1=git_size,ratio=den_size/git_size,max_object_ratio=largest))
+        f.write_bytes(corrupt);git(dest,'fsck','--full',ok=False)
+        if objects:f.write_bytes(encoded)
+        else:f.unlink()
+        sizes.append(dict(corpus=repo.name,den=den_size,git_level1=git_size,ratio=den_size/git_size if git_size else None,max_object_ratio=largest))
         print('PASS corpus',repo.name,sizes[-1],flush=True)
     # The documented two-entry pack is an independent stream boundary fixture.
     text=(ROOT/'notes/vc00-evidence/formats/two-object.pack.hex').read_text()
@@ -130,7 +144,7 @@ def main():
     second,m=inflate(pack[14+n:]);assert second==b'beta\n' and m==13
     summary=dict(counts=counts,sizes=sizes,zlib=zlib.ZLIB_RUNTIME_VERSION)
     (work/'summary.json').write_text(json.dumps(summary,indent=2)+'\n')
-    assert all(s['ratio']<=1.25 for s in sizes),sizes
+    assert all((s['ratio'] is None and s['den']==s['git_level1']==0) or s['ratio']<=1.25 for s in sizes),sizes
     print(json.dumps(summary),flush=True)
 
 if __name__=='__main__':main()

@@ -45,6 +45,38 @@ def build(base):
         # Deterministic object identities; index stat is an observation, not an oid.
         manifest[name]=git(p,'rev-list','--objects','--all').decode().splitlines()
         git(p,'fsck','--full')
+    # M2 states are separate fixtures; the original nine builders stay unchanged.
+    for name in ('m2-ignore','m2-staged-rename','m2-modes','m2-unborn','m2-amend','m2-index-v4','m2-edited-rename'):
+        p=base/name;p.mkdir()
+        git(p,'init','--template='+os.environ['DEN_EMPTY_TEMPLATE'],'-q')
+        if name=='m2-unborn':
+            (p/'new').write_bytes(b'new\n')
+        else:
+            (p/'a.txt').write_bytes(b'alpha\n');(p/'b.txt').write_bytes(b'beta\n')
+            if name=='m2-modes':
+                (p/'link').symlink_to('a.txt')
+                (p/'exec').write_bytes(b'#!/bin/sh\necho den\n');(p/'exec').chmod(0o755)
+            if name=='m2-edited-rename':(p/'a.txt').write_bytes(b'a'*64)
+            if name=='m2-index-v4':git(p,'-c','index.version=4','add','.')
+            else:git(p,'add','.')
+            git(p,'commit','-qm','initial')
+            if name=='m2-edited-rename':
+                git(p,'mv','a.txt','renamed.txt');(p/'renamed.txt').write_bytes(b'b'*64);git(p,'add','renamed.txt')
+            if name=='m2-staged-rename':git(p,'mv','a.txt','renamed.txt')
+            if name=='m2-amend':
+                git(p,'commit','--amend','-qm','amended root',date=1)
+                (p/'a.txt').write_bytes(b'child\n');git(p,'add','a.txt');git(p,'commit','-qm','child',date=2)
+                git(p,'commit','--amend','-qm','amended child',date=3)
+            if name=='m2-ignore':
+                (p/'.gitignore').write_bytes(b'*.tmp\n/root-only\ncache/\n**/deep.log\na/**/secret\n!keep.tmp\nescaped\\ \n\\!literal\n\\#hash\nnumber[0-9]\nquest?on\n')
+                for path in ('hide.tmp','keep.tmp','root-only','cache/hidden','a/deep.log','a/sub/secret','escaped ','!literal','#hash','number7','question','nested/keep.tmp','nested/drop.tmp','local-only','global-only'):
+                    f=p/path;f.parent.mkdir(parents=True,exist_ok=True);f.write_bytes(b'fixture\n')
+                (p/'nested/.gitignore').write_bytes(b'!keep.tmp\n')
+                (p/'.git/info').mkdir(exist_ok=True);(p/'.git/info/exclude').write_bytes(b'local-only\n')
+                (p/'global.ignore').write_bytes(b'global-only\n')
+                with (p/'.git/config').open('ab') as out:out.write(b'\n[core]\nexcludesFile = global.ignore\n')
+        manifest[name]=git(p,'rev-list','--objects','--all').decode().splitlines()
+        git(p,'fsck','--full')
     (base/'oids.json').write_text(json.dumps(manifest,indent=2,sort_keys=True)+'\n')
     return manifest
 if __name__=='__main__':
@@ -53,5 +85,5 @@ if __name__=='__main__':
     if '--prove-twice' in sys.argv:
         second=build(dest.with_name(dest.name+'-second'))
         assert first==second,'corpus oids are NOT reproducible'
-        print('corpus: 9 repositories, oids identical in two independent builds')
-    else:print('corpus: 9 repositories')
+        print(f'corpus: {len(first)} repositories, oids identical in two independent builds')
+    else:print(f'corpus: {len(first)} repositories')

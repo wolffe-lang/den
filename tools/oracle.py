@@ -23,6 +23,7 @@ def worktree_snapshot(repo):
         key = relative.as_posix()
         if p.is_symlink(): result[key] = {'link': os.readlink(p)}
         elif p.is_file(): result[key] = {'mode': stat.S_IMODE(p.stat().st_mode), 'hex': p.read_bytes().hex()}
+        elif p.is_dir(): result[key] = {'directory': True, 'mode': stat.S_IMODE(p.stat().st_mode)}
     return result
 
 def capture(command,repo,stdin=b'',index_proof=False):
@@ -113,7 +114,9 @@ def one(case,base,den,git):
             and bytes.fromhex(expected['stdout']).startswith(b'git version ') and expected['status']==0)
         return 'shape-pass' if ok else 'FAIL'
     if equivalent(expected,actual,case.get('comparison','loose-object-raw')):return 'parity'
-    refusal=f"den: not yet implemented: {case.get('refusal_feature',args[0])} ({case['lane']})\n".encode().hex()
+    feature=case.get('refusal_feature',args[0])
+    suffix='' if case.get('refusal_style')=='feature-only' else f" ({case['lane']})"
+    refusal=f"den: not yet implemented: {feature}{suffix}\n".encode().hex()
     if (actual['status']==2 and actual['stdout']=='' and actual['stderr']==refusal
             and actual['repository']==before and actual['worktree']==before_worktree):return 'not-yet'
     p=R/'tests/review'/f"{case['name']}.json"

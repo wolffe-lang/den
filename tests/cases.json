@@ -70,7 +70,8 @@
       "add",
       "a.txt"
     ],
-    "lane": "M2, vc03"
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven"
   },
   {
     "name": "status-short",
@@ -80,7 +81,8 @@
       "--short"
     ],
     "prepare": "dirty",
-    "lane": "M2, vc03"
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven"
   },
   {
     "name": "status-long",
@@ -89,7 +91,8 @@
       "status"
     ],
     "prepare": "dirty",
-    "lane": "M2, vc03"
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven"
   },
   {
     "name": "commit",
@@ -100,7 +103,8 @@
       "-m",
       "second"
     ],
-    "lane": "M2, vc03"
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven"
   },
   {
     "name": "rm",
@@ -109,7 +113,8 @@
       "rm",
       "b.txt"
     ],
-    "lane": "M2, vc03"
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven"
   },
   {
     "name": "mv",
@@ -119,7 +124,8 @@
       "a.txt",
       "c.txt"
     ],
-    "lane": "M2, vc03"
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven"
   },
   {
     "name": "restore",
@@ -129,7 +135,8 @@
       "a.txt"
     ],
     "prepare": "dirty",
-    "lane": "M2, vc03"
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven"
   },
   {
     "name": "diff",
@@ -895,5 +902,861 @@
     ],
     "lane": "M1, vc02",
     "stdin_hex": ""
+  },
+  {
+    "name": "m2-ignore-status-human",
+    "repo": "m2-ignore",
+    "args": [
+      "status"
+    ],
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "m2-ignore-status-porcelain",
+    "repo": "m2-ignore",
+    "args": [
+      "status",
+      "--porcelain"
+    ],
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "m2-ignore-status-short-branch",
+    "repo": "m2-ignore",
+    "args": [
+      "status",
+      "-s",
+      "-b"
+    ],
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "m2-ignore-status-nul",
+    "repo": "m2-ignore",
+    "args": [
+      "status",
+      "-z"
+    ],
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "m2-ignore-status-all",
+    "repo": "m2-ignore",
+    "args": [
+      "status",
+      "--porcelain",
+      "--untracked-files=all"
+    ],
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "m2-ignore-status-no",
+    "repo": "m2-ignore",
+    "args": [
+      "status",
+      "--porcelain",
+      "--untracked-files=no"
+    ],
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "m2-ignore-status-ignored",
+    "repo": "m2-ignore",
+    "args": [
+      "status",
+      "--porcelain",
+      "--ignored"
+    ],
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "m2-staged-rename-status-human",
+    "repo": "m2-staged-rename",
+    "args": [
+      "status"
+    ],
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "m2-staged-rename-status-porcelain",
+    "repo": "m2-staged-rename",
+    "args": [
+      "status",
+      "--porcelain"
+    ],
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "m2-staged-rename-status-short-branch",
+    "repo": "m2-staged-rename",
+    "args": [
+      "status",
+      "-s",
+      "-b"
+    ],
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "m2-staged-rename-status-nul",
+    "repo": "m2-staged-rename",
+    "args": [
+      "status",
+      "-z"
+    ],
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "m2-staged-rename-status-all",
+    "repo": "m2-staged-rename",
+    "args": [
+      "status",
+      "--porcelain",
+      "--untracked-files=all"
+    ],
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "m2-staged-rename-status-no",
+    "repo": "m2-staged-rename",
+    "args": [
+      "status",
+      "--porcelain",
+      "--untracked-files=no"
+    ],
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "m2-staged-rename-status-ignored",
+    "repo": "m2-staged-rename",
+    "args": [
+      "status",
+      "--porcelain",
+      "--ignored"
+    ],
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "m2-modes-status-human",
+    "repo": "m2-modes",
+    "args": [
+      "status"
+    ],
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "m2-modes-status-porcelain",
+    "repo": "m2-modes",
+    "args": [
+      "status",
+      "--porcelain"
+    ],
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "m2-modes-status-short-branch",
+    "repo": "m2-modes",
+    "args": [
+      "status",
+      "-s",
+      "-b"
+    ],
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "m2-modes-status-nul",
+    "repo": "m2-modes",
+    "args": [
+      "status",
+      "-z"
+    ],
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "m2-modes-status-all",
+    "repo": "m2-modes",
+    "args": [
+      "status",
+      "--porcelain",
+      "--untracked-files=all"
+    ],
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "m2-modes-status-no",
+    "repo": "m2-modes",
+    "args": [
+      "status",
+      "--porcelain",
+      "--untracked-files=no"
+    ],
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "m2-modes-status-ignored",
+    "repo": "m2-modes",
+    "args": [
+      "status",
+      "--porcelain",
+      "--ignored"
+    ],
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "m2-unborn-status-human",
+    "repo": "m2-unborn",
+    "args": [
+      "status"
+    ],
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "m2-unborn-status-porcelain",
+    "repo": "m2-unborn",
+    "args": [
+      "status",
+      "--porcelain"
+    ],
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "m2-unborn-status-short-branch",
+    "repo": "m2-unborn",
+    "args": [
+      "status",
+      "-s",
+      "-b"
+    ],
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "m2-unborn-status-nul",
+    "repo": "m2-unborn",
+    "args": [
+      "status",
+      "-z"
+    ],
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "m2-unborn-status-all",
+    "repo": "m2-unborn",
+    "args": [
+      "status",
+      "--porcelain",
+      "--untracked-files=all"
+    ],
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "m2-unborn-status-no",
+    "repo": "m2-unborn",
+    "args": [
+      "status",
+      "--porcelain",
+      "--untracked-files=no"
+    ],
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "m2-unborn-status-ignored",
+    "repo": "m2-unborn",
+    "args": [
+      "status",
+      "--porcelain",
+      "--ignored"
+    ],
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "m2-amend-status-human",
+    "repo": "m2-amend",
+    "args": [
+      "status"
+    ],
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "m2-amend-status-porcelain",
+    "repo": "m2-amend",
+    "args": [
+      "status",
+      "--porcelain"
+    ],
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "m2-amend-status-short-branch",
+    "repo": "m2-amend",
+    "args": [
+      "status",
+      "-s",
+      "-b"
+    ],
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "m2-amend-status-nul",
+    "repo": "m2-amend",
+    "args": [
+      "status",
+      "-z"
+    ],
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "m2-amend-status-all",
+    "repo": "m2-amend",
+    "args": [
+      "status",
+      "--porcelain",
+      "--untracked-files=all"
+    ],
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "m2-amend-status-no",
+    "repo": "m2-amend",
+    "args": [
+      "status",
+      "--porcelain",
+      "--untracked-files=no"
+    ],
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "m2-amend-status-ignored",
+    "repo": "m2-amend",
+    "args": [
+      "status",
+      "--porcelain",
+      "--ignored"
+    ],
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "m2-ignore-query-121",
+    "repo": "m2-ignore",
+    "args": [
+      "check-ignore",
+      "-v",
+      "hide.tmp"
+    ],
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "m2-ignore-query-122",
+    "repo": "m2-ignore",
+    "args": [
+      "check-ignore",
+      "-v",
+      "keep.tmp"
+    ],
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "m2-ignore-query-123",
+    "repo": "m2-ignore",
+    "args": [
+      "check-ignore",
+      "-v",
+      "root-only"
+    ],
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "m2-ignore-query-124",
+    "repo": "m2-ignore",
+    "args": [
+      "check-ignore",
+      "-v",
+      "cache/hidden"
+    ],
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "m2-ignore-query-125",
+    "repo": "m2-ignore",
+    "args": [
+      "check-ignore",
+      "-v",
+      "a/deep.log"
+    ],
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "m2-ignore-query-126",
+    "repo": "m2-ignore",
+    "args": [
+      "check-ignore",
+      "-v",
+      "a/sub/secret"
+    ],
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "m2-ignore-query-127",
+    "repo": "m2-ignore",
+    "args": [
+      "check-ignore",
+      "-v",
+      "escaped "
+    ],
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "m2-ignore-query-128",
+    "repo": "m2-ignore",
+    "args": [
+      "check-ignore",
+      "-v",
+      "!literal"
+    ],
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "m2-ignore-query-129",
+    "repo": "m2-ignore",
+    "args": [
+      "check-ignore",
+      "-v",
+      "#hash"
+    ],
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "m2-ignore-query-130",
+    "repo": "m2-ignore",
+    "args": [
+      "check-ignore",
+      "-v",
+      "number7"
+    ],
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "m2-ignore-query-131",
+    "repo": "m2-ignore",
+    "args": [
+      "check-ignore",
+      "-v",
+      "question"
+    ],
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "m2-ignore-query-132",
+    "repo": "m2-ignore",
+    "args": [
+      "check-ignore",
+      "-v",
+      "nested/keep.tmp"
+    ],
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "m2-ignore-query-133",
+    "repo": "m2-ignore",
+    "args": [
+      "check-ignore",
+      "-v",
+      "nested/drop.tmp"
+    ],
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "m2-ignore-query-134",
+    "repo": "m2-ignore",
+    "args": [
+      "check-ignore",
+      "-v",
+      "local-only"
+    ],
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "m2-ignore-query-135",
+    "repo": "m2-ignore",
+    "args": [
+      "check-ignore",
+      "-v",
+      "global-only"
+    ],
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "m2-add-new",
+    "repo": "two",
+    "args": [
+      "add",
+      "untracked"
+    ],
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven",
+    "prepare": "dirty"
+  },
+  {
+    "name": "m2-add-all",
+    "repo": "two",
+    "args": [
+      "add",
+      "-A"
+    ],
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven",
+    "prepare": "dirty"
+  },
+  {
+    "name": "m2-add-update",
+    "repo": "two",
+    "args": [
+      "add",
+      "-u"
+    ],
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven",
+    "prepare": "dirty"
+  },
+  {
+    "name": "m2-add-intent",
+    "repo": "two",
+    "args": [
+      "add",
+      "-N",
+      "untracked"
+    ],
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven",
+    "prepare": "dirty"
+  },
+  {
+    "name": "m2-add-chmod",
+    "repo": "two",
+    "args": [
+      "add",
+      "--chmod=+x",
+      "a.txt"
+    ],
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "m2-rm-cached",
+    "repo": "two",
+    "args": [
+      "rm",
+      "--cached",
+      "a.txt"
+    ],
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "m2-rm-modified",
+    "repo": "two",
+    "args": [
+      "rm",
+      "a.txt"
+    ],
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven",
+    "prepare": "dirty"
+  },
+  {
+    "name": "m2-rm-force",
+    "repo": "two",
+    "args": [
+      "rm",
+      "-f",
+      "a.txt"
+    ],
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven",
+    "prepare": "dirty"
+  },
+  {
+    "name": "m2-restore-source",
+    "repo": "two",
+    "args": [
+      "restore",
+      "--source=HEAD",
+      "a.txt"
+    ],
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven",
+    "prepare": "dirty"
+  },
+  {
+    "name": "m2-restore-both",
+    "repo": "two",
+    "args": [
+      "restore",
+      "--staged",
+      "--worktree",
+      "a.txt"
+    ],
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven",
+    "prepare": "dirty"
+  },
+  {
+    "name": "m2-checkout-path",
+    "repo": "two",
+    "args": [
+      "checkout",
+      "--",
+      "a.txt"
+    ],
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven",
+    "prepare": "dirty"
+  },
+  {
+    "name": "m2-commit-all",
+    "repo": "two",
+    "args": [
+      "commit",
+      "-a",
+      "-m",
+      "tracked"
+    ],
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven",
+    "prepare": "dirty"
+  },
+  {
+    "name": "m2-commit-amend",
+    "repo": "two",
+    "args": [
+      "commit",
+      "--amend",
+      "-m",
+      "amended"
+    ],
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "m2-commit-paragraphs",
+    "repo": "two",
+    "args": [
+      "commit",
+      "--allow-empty",
+      "-m",
+      "one",
+      "-m",
+      "two"
+    ],
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "m2-commit-date",
+    "repo": "two",
+    "args": [
+      "commit",
+      "--allow-empty",
+      "--date=2005-04-07T22:13:13+02:00",
+      "-m",
+      "dated"
+    ],
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "m2-force-ignored",
+    "repo": "m2-ignore",
+    "args": [
+      "add",
+      "-f",
+      "hide.tmp"
+    ],
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "m2-unborn-empty",
+    "repo": "m2-unborn",
+    "args": [
+      "commit",
+      "--allow-empty",
+      "-m",
+      "empty"
+    ],
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "m2-amend-chain",
+    "repo": "m2-amend",
+    "args": [
+      "commit",
+      "--amend",
+      "-m",
+      "next amendment"
+    ],
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "m2-refusal-verbose",
+    "repo": "two",
+    "args": [
+      "commit",
+      "-v",
+      "-m",
+      "x"
+    ],
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven",
+    "refusal_feature": "commit -v",
+    "refusal_style": "feature-only"
+  },
+  {
+    "name": "m2-refusal-relative-date",
+    "repo": "two",
+    "args": [
+      "commit",
+      "--allow-empty",
+      "--date=now",
+      "-m",
+      "x"
+    ],
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven",
+    "refusal_feature": "commit relative or unrecognized date",
+    "refusal_style": "feature-only"
+  },
+  {
+    "name": "m2-existing-v2-config-v4",
+    "repo": "two",
+    "args": [
+      "add",
+      "a.txt"
+    ],
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven",
+    "config_append": "\n[index]\nversion=4\n"
+  },
+  {
+    "name": "m2-existing-v4-default",
+    "repo": "m2-index-v4",
+    "args": [
+      "add",
+      "a.txt"
+    ],
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "m2-existing-v4-config-v2",
+    "repo": "m2-index-v4",
+    "args": [
+      "add",
+      "a.txt"
+    ],
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven",
+    "config_append": "\n[index]\nversion=2\n"
+  },
+  {
+    "name": "m2-edited-rename-status",
+    "repo": "m2-edited-rename",
+    "args": [
+      "status",
+      "--porcelain"
+    ],
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven",
+    "refusal_feature": "inexact staged rename detection",
+    "refusal_style": "feature-only"
+  },
+  {
+    "name": "m2-edited-rename-commit",
+    "repo": "m2-edited-rename",
+    "args": [
+      "commit",
+      "-m",
+      "edited rename"
+    ],
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven",
+    "refusal_feature": "commit edited rename similarity (vc04)",
+    "refusal_style": "feature-only"
+  },
+  {
+    "name": "m2-edited-rename-quiet",
+    "repo": "m2-edited-rename",
+    "args": [
+      "commit",
+      "-q",
+      "-m",
+      "edited rename"
+    ],
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "m2-edited-rename-disabled",
+    "repo": "m2-edited-rename",
+    "args": [
+      "commit",
+      "-m",
+      "edited rename"
+    ],
+    "lane": "M2, vc03",
+    "comparison": "index-stat-proven",
+    "config_append": "\n[diff]\nrenames=false\n",
+    "refusal_feature": "commit edited rename similarity (vc04)",
+    "refusal_style": "feature-only"
   }
 ]
