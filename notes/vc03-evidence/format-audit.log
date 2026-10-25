@@ -1,0 +1,14 @@
+wolf fmt --check: src/commit/command.lu is not canonically formatted
+first_check=1
+second_check=0
+--- target/command-before-format.lu.txt	2026-10-25 02:29:45.293943001 +0000
++++ src/commit/command.lu	2026-10-25 02:29:45.461329373 +0000
+@@ -184,7 +184,7 @@
+     let cleanup_setting = if value.cleanup != "" {
+         value.cleanup
+     } else {
+-        (ctx.repo.config["commit.cleanup"] else "default")
++        ctx.repo.config["commit.cleanup"] else "default"
+     }
+     let edited = if value.edit >= 0 then value.edit == 1 else !value.supplied
+     let _ = commit_format.cleanup_mode(cleanup_setting, edited)?
