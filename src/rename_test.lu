@@ -29,6 +29,13 @@ fn main() -> int ! rename.RenameErrors {
     options.enabled = false
     assert(rename.pair(old, fresh, options)?.len == 0)
     options = rename.defaults()
+    print("vc04 gate: reject a rename at 49 percent")
+    let at49 = rename.pair(
+        [candidate("old", "s".repeat(48) + "\n" + "b".repeat(50) + "\n")?],
+        [candidate("new", "s".repeat(48) + "\n" + "c".repeat(50) + "\n")?],
+        options,
+    )?
+    assert(at49.len == 0)
     let collision = rename.pair(
         [candidate("old", "a".repeat(64))?],
         [candidate("new", "b".repeat(64))?],

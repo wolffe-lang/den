@@ -2,6 +2,7 @@
 set -eu
 root=$(cd "$(dirname "$0")/.." && pwd)
 cd "$root"
+trap 'status=$?; python3 -I tools/collect-diff-evidence.py || echo "vc04 evidence collection failed" >&2; exit "$status"' EXIT
 ulimit -c 0
 export TMPDIR="$root/target/tmp"
 mkdir -p "$TMPDIR"
@@ -18,6 +19,7 @@ PY
 export DEN_GIT
 tools/check-fmt
 tools/build --all
+tools/check-diff --units-only
 tools/check-test
 TLS_PROBE_LOCAL_ONLY=1 tools/probe-tls
 tools/corpus target/corpus --prove-twice
@@ -28,9 +30,30 @@ tools/check-index
 tools/check-ignore
 tools/check-worktree
 tools/check-commit
+tools/check-delta
+tools/check-rename
+tools/check-diff --corpus-only
+tools/check-diffbinary --reviewed-body --with-cli
+# Strict binary byte identity remains a visible report-only RED under R-vc04-4.
+for tier in native release; do
+    rm -f "target/diffbinary-$tier/summary-byte-parity.json"
+    if tools/env python3 -I tools/diffbinary-oracle.py --tier "$tier"; then
+        echo "binary strict bytes: $tier exact"
+    else
+        rc=$?
+        [ "$rc" = 1 ] || exit "$rc"
+        python3 -I - "target/diffbinary-$tier/summary-byte-parity.json" <<'PYREPORT'
+import json,sys
+s=json.load(open(sys.argv[1]))
+assert s.get('completed') is True and s['exact'] < s['total'], s
+assert s['forward_reverse_index_apply']==s['total'] and s['corrupt_rejected']==4 and s['zero_skips'],s
+PYREPORT
+        echo "::warning::continue-on-error: binary strict bytes $tier RED; capture-bound representation/application gate above is authoritative"
+    fi
+done
 tools/oracle --selftest
 tools/oracle
-if tools/oracle --filter diff-symlink --strict; then
+if tools/oracle --filter log-default --strict; then
     echo "gate: strict not-yet unexpectedly passed" >&2
     exit 1
 else

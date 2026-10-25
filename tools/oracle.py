@@ -115,6 +115,7 @@ def one(case,base,den,git):
             and bytes.fromhex(expected['stdout']).startswith(b'git version ') and expected['status']==0)
         return 'shape-pass' if ok else 'FAIL'
     if equivalent(expected,actual,case.get('comparison','loose-object-raw')):return 'parity'
+    if case.get('require_parity'): return 'FAIL'
     feature=case.get('refusal_feature',args[0])
     suffix='' if case.get('refusal_style')=='feature-only' else f" ({case['lane']})"
     refusal=f"den: not yet implemented: {feature}{suffix}\n".encode().hex()

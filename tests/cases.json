@@ -145,7 +145,9 @@
       "diff"
     ],
     "prepare": "dirty",
-    "lane": "M2, vc04"
+    "lane": "M2, vc04",
+    "require_parity": true,
+    "comparison": "index-stat-proven"
   },
   {
     "name": "diff-renames",
@@ -155,7 +157,9 @@
       "HEAD~1",
       "HEAD"
     ],
-    "lane": "M2, vc04"
+    "lane": "M2, vc04",
+    "require_parity": true,
+    "comparison": "index-stat-proven"
   },
   {
     "name": "log-default",
@@ -306,7 +310,9 @@
       "diff",
       "--stat"
     ],
-    "lane": "M2, vc04"
+    "lane": "M2, vc04",
+    "require_parity": true,
+    "comparison": "index-stat-proven"
   },
   {
     "name": "hash-empty",
@@ -1717,8 +1723,7 @@
     ],
     "lane": "M2, vc03",
     "comparison": "index-stat-proven",
-    "refusal_feature": "inexact staged rename detection",
-    "refusal_style": "feature-only"
+    "require_parity": true
   },
   {
     "name": "m2-edited-rename-commit",
@@ -1730,8 +1735,7 @@
     ],
     "lane": "M2, vc03",
     "comparison": "index-stat-proven",
-    "refusal_feature": "commit edited rename similarity (vc04)",
-    "refusal_style": "feature-only"
+    "require_parity": true
   },
   {
     "name": "m2-edited-rename-quiet",
@@ -1756,7 +1760,285 @@
     "lane": "M2, vc03",
     "comparison": "index-stat-proven",
     "config_append": "\n[diff]\nrenames=false\n",
-    "refusal_feature": "commit edited rename similarity (vc04)",
-    "refusal_style": "feature-only"
+    "require_parity": true
+  },
+  {
+    "name": "vc04-diff-context-zero",
+    "repo": "two",
+    "args": [
+      "diff",
+      "-U0"
+    ],
+    "prepare": "dirty",
+    "require_parity": true,
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "vc04-diff-context-one",
+    "repo": "two",
+    "args": [
+      "diff",
+      "-U1"
+    ],
+    "prepare": "dirty",
+    "require_parity": true,
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "vc04-diff-stat",
+    "repo": "two",
+    "args": [
+      "diff",
+      "--stat"
+    ],
+    "prepare": "dirty",
+    "require_parity": true,
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "vc04-diff-names",
+    "repo": "two",
+    "args": [
+      "diff",
+      "--name-only"
+    ],
+    "prepare": "dirty",
+    "require_parity": true,
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "vc04-diff-status",
+    "repo": "two",
+    "args": [
+      "diff",
+      "--name-status"
+    ],
+    "prepare": "dirty",
+    "require_parity": true,
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "vc04-diff-nul",
+    "repo": "two",
+    "args": [
+      "diff",
+      "--name-status",
+      "-z"
+    ],
+    "prepare": "dirty",
+    "require_parity": true,
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "vc04-diff-numstat",
+    "repo": "two",
+    "args": [
+      "diff",
+      "--numstat"
+    ],
+    "prepare": "dirty",
+    "require_parity": true,
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "vc04-diff-shortstat",
+    "repo": "two",
+    "args": [
+      "diff",
+      "--shortstat"
+    ],
+    "prepare": "dirty",
+    "require_parity": true,
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "vc04-diff-full-index",
+    "repo": "two",
+    "args": [
+      "diff",
+      "--full-index"
+    ],
+    "prepare": "dirty",
+    "require_parity": true,
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "vc04-diff-tracked-path",
+    "repo": "two",
+    "args": [
+      "diff",
+      "--",
+      "a.txt"
+    ],
+    "prepare": "dirty",
+    "require_parity": true,
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "vc04-diff-untracked-excluded",
+    "repo": "two",
+    "args": [
+      "diff",
+      "--",
+      "untracked"
+    ],
+    "prepare": "dirty",
+    "require_parity": true,
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "vc04-diff-glob",
+    "repo": "two",
+    "args": [
+      "diff",
+      "--",
+      ":(glob)*.txt"
+    ],
+    "prepare": "dirty",
+    "require_parity": true,
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "vc04-exact-rename-patch",
+    "repo": "m2-staged-rename",
+    "args": [
+      "diff",
+      "--cached"
+    ],
+    "require_parity": true,
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "vc04-exact-rename-stat",
+    "repo": "m2-staged-rename",
+    "args": [
+      "diff",
+      "--cached",
+      "--stat"
+    ],
+    "require_parity": true,
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "vc04-exact-rename-names",
+    "repo": "m2-staged-rename",
+    "args": [
+      "diff",
+      "--cached",
+      "--name-status"
+    ],
+    "require_parity": true,
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "vc04-exact-rename-no-renames",
+    "repo": "m2-staged-rename",
+    "args": [
+      "diff",
+      "--cached",
+      "--no-renames"
+    ],
+    "require_parity": true,
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "vc04-exact-rename-numstat-nul",
+    "repo": "m2-staged-rename",
+    "args": [
+      "diff",
+      "--cached",
+      "--numstat",
+      "-z"
+    ],
+    "require_parity": true,
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "vc04-exact-rename-exact-only",
+    "repo": "m2-staged-rename",
+    "args": [
+      "diff",
+      "--cached",
+      "-M100%"
+    ],
+    "require_parity": true,
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "vc04-collision-rename-patch",
+    "repo": "m2-edited-rename",
+    "args": [
+      "diff",
+      "--cached"
+    ],
+    "require_parity": true,
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "vc04-collision-rename-stat",
+    "repo": "m2-edited-rename",
+    "args": [
+      "diff",
+      "--cached",
+      "--stat"
+    ],
+    "require_parity": true,
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "vc04-collision-rename-names",
+    "repo": "m2-edited-rename",
+    "args": [
+      "diff",
+      "--cached",
+      "--name-status"
+    ],
+    "require_parity": true,
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "vc04-collision-rename-no-renames",
+    "repo": "m2-edited-rename",
+    "args": [
+      "diff",
+      "--cached",
+      "--no-renames"
+    ],
+    "require_parity": true,
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "vc04-collision-rename-numstat-nul",
+    "repo": "m2-edited-rename",
+    "args": [
+      "diff",
+      "--cached",
+      "--numstat",
+      "-z"
+    ],
+    "require_parity": true,
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "vc04-collision-rename-exact-only",
+    "repo": "m2-edited-rename",
+    "args": [
+      "diff",
+      "--cached",
+      "-M100%"
+    ],
+    "require_parity": true,
+    "comparison": "index-stat-proven"
+  },
+  {
+    "name": "vc04-two-blobs-equal",
+    "repo": "two",
+    "args": [
+      "diff",
+      "{blob}",
+      "{blob}"
+    ],
+    "require_parity": true,
+    "comparison": "index-stat-proven"
   }
 ]
