@@ -1,0 +1,103 @@
+// git-config(1), diff.autoRefreshIndex: porcelain silently refreshes matching
+// stat-only entries. This is not a content/index staging operation.
+use index
+use oid
+use worktree
+
+fn fresh_stat(file: worktree.FileState, prior: index.Entry) -> index.Entry ! worktree.WorkErrors {
+    var fresh = if file.kind == 3 {
+        index.entry_from_lstat(file.stat, prior.path, prior.id, prior.flags, prior.extended)?
+    } else {
+        index.entry_from_stat(
+            file.stat,
+            prior.path,
+            prior.id,
+            if file.mode == 0o120000 then 0o100644 else file.mode,
+            prior.flags,
+            prior.extended,
+        )?
+    }
+    fresh.stat[6] = prior.stat[6]
+    fresh
+}
+
+fn stat_differs(a: index.Entry, b: index.Entry) -> bool {
+    for i in 0..10 { if a.stat[i] != b.stat[i] { return true } }
+    false
+}
+
+fn refresh(ctx: worktree.Context, options: Options) -> () ! worktree.WorkErrors {
+    if options.cached ||
+        options.revisions.len == 2 ||
+        !worktree.config_bool(ctx, "diff.autorefreshindex", true)? {
+        return
+    }
+    let specs = pathspecs(ctx, options.paths)?
+    // A foreign lock silently suppresses refresh and is never removed.
+    var tx = index.begin(ctx.repo, 1000000000, 0)?
+    defer index.abort(mut tx)
+    var triggered = false
+    for at in 0..tx.value.entries.len {
+        let prior = copy tx.value.entries[at]
+        if index.stage(prior) != 0 || prior.flags & 0x8000 != 0 || prior.extended & 0x6000 != 0 {
+            continue
+        }
+        let file = worktree.read_file(ctx, prior.path, [copy prior]) else |_| { continue }
+        if file.mode != prior.stat[6] || !oid.equal(file.id, prior.id) { continue }
+        let fresh = fresh_stat(file, prior)?
+        if stat_differs(fresh, prior) {
+            // A selected stat-only path triggers update-index --refresh for
+            // all unchanged entries, not only the selected pathspec subset.
+            if selected(prior.path, specs)? { triggered = true }
+            tx.value.entries[at] = fresh
+        }
+    }
+    if triggered { index.commit(mut tx)? }
+}
+
+fn stat_only_names(
+    ctx: worktree.Context,
+    options: Options,
+    mut result: List[Change],
+) -> () ! worktree.WorkErrors {
+    if options.cached ||
+        options.revisions.len == 2 ||
+        !(options.names || options.name_status) ||
+        worktree.config_bool(ctx, "diff.autorefreshindex", true)? {
+        return
+    }
+    let value = worktree.read_index(ctx)?
+    let specs = pathspecs(ctx, options.paths)?
+    for prior in value.entries {
+        if index.stage(prior) != 0 ||
+            prior.flags & 0x8000 != 0 ||
+            prior.extended & 0x6000 != 0 ||
+            !selected(prior.path, specs)? {
+            continue
+        }
+        var present = false
+        for change in result { if compare(path(change), prior.path) == 0 { present = true; break } }
+        if present { continue }
+        let file = worktree.read_file(ctx, prior.path, [copy prior]) else |_| { continue }
+        if stat_differs(fresh_stat(file, prior)?, prior) {
+            let old = blob(ctx, worktree.
+                FlatEntry { path: owned(prior.path), mode: prior.stat[6], id: copy prior.id })?
+            let new = File {
+                path: owned(file.path),
+                mode: file.mode,
+                id: copy file.id,
+                data: owned(file.data),
+            }
+            (mut result).push(Change { before: [old], after: [new], status: "M", percent: 0 })
+        }
+    }
+    for i in 1..result.len {
+        let item = copy result[i]
+        var j = i
+        while j > 0 && compare(path(result[j - 1]), path(item)) > 0 {
+            result[j] = copy result[j - 1]
+            j -= 1
+        }
+        result[j] = item
+    }
+}

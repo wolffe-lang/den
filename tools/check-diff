@@ -20,6 +20,7 @@ for tier in native release; do
         "$WOLF" build $flag --deny-warnings probes/difftext-client/main.lu -o "target/$tier/difftext-client"
         tools/env python3 -I tools/diff-oracle.py --tier "$tier" --output "target/diff-$tier.json"
         tools/env python3 -I tools/diff-endpoints-test.py --tier "$tier" --output "target/diff-endpoints-$tier.json"
+        tools/env python3 -I tools/diff-refresh-test.py --tier "$tier"
         tools/env python3 -I tools/diff-hunks-test.py --tier "$tier" --output "target/diff-hunks-$tier.json"
     fi
 done

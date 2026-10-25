@@ -1,0 +1,54 @@
+0 True [] default refresh True status 0 stderr  ok None
+1 True [] disabled refresh False status 0 stderr  ok None
+2 True [] locked refresh False status 0 stderr  ok None
+3 True ['--exit-code'] default refresh True status 1 stderr  ok None
+4 True ['--exit-code'] disabled refresh False status 1 stderr  ok None
+5 True ['--exit-code'] locked refresh False status 1 stderr  ok None
+6 True ['--quiet'] default refresh True status 1 stderr  ok None
+7 True ['--quiet'] disabled refresh False status 1 stderr  ok None
+8 True ['--quiet'] locked refresh False status 1 stderr  ok None
+9 True ['--name-only'] default refresh True status 0 stderr  ok None
+10 True ['--name-only'] disabled refresh False status 0 stderr  ok None
+11 True ['--name-only'] locked refresh False status 0 stderr  ok None
+12 True ['--stat'] default refresh True status 0 stderr  ok None
+13 True ['--stat'] disabled refresh False status 0 stderr  ok None
+14 True ['--stat'] locked refresh False status 0 stderr  ok None
+15 True ['HEAD'] default refresh True status 0 stderr  ok None
+16 True ['HEAD'] disabled refresh False status 0 stderr  ok None
+17 True ['HEAD'] locked refresh False status 0 stderr  ok None
+18 True ['--cached'] default refresh False status 0 stderr  ok None
+19 True ['--cached'] disabled refresh False status 0 stderr  ok None
+20 True ['--cached'] locked refresh False status 0 stderr  ok None
+21 True ['--', 'a'] default refresh False status 0 stderr  ok None
+22 True ['--', 'a'] disabled refresh False status 0 stderr  ok None
+23 True ['--', 'a'] locked refresh False status 0 stderr  ok None
+24 True ['--', 'b'] default refresh True status 0 stderr  ok None
+25 True ['--', 'b'] disabled refresh False status 0 stderr  ok None
+26 True ['--', 'b'] locked refresh False status 0 stderr  ok None
+27 False [] default refresh True status 0 stderr  ok None
+28 False [] disabled refresh False status 0 stderr  ok None
+29 False [] locked refresh False status 0 stderr  ok None
+30 False ['--exit-code'] default refresh True status 0 stderr  ok None
+31 False ['--exit-code'] disabled refresh False status 0 stderr  ok None
+32 False ['--exit-code'] locked refresh False status 0 stderr  ok None
+33 False ['--quiet'] default refresh True status 0 stderr  ok None
+34 False ['--quiet'] disabled refresh False status 0 stderr  ok None
+35 False ['--quiet'] locked refresh False status 0 stderr  ok None
+36 False ['--name-only'] default refresh True status 0 stderr  ok None
+37 False ['--name-only'] disabled refresh False status 0 stderr  ok None
+38 False ['--name-only'] locked refresh False status 0 stderr  ok None
+39 False ['--stat'] default refresh True status 0 stderr  ok None
+40 False ['--stat'] disabled refresh False status 0 stderr  ok None
+41 False ['--stat'] locked refresh False status 0 stderr  ok None
+42 False ['HEAD'] default refresh True status 0 stderr  ok None
+43 False ['HEAD'] disabled refresh False status 0 stderr  ok None
+44 False ['HEAD'] locked refresh False status 0 stderr  ok None
+45 False ['--cached'] default refresh False status 0 stderr  ok None
+46 False ['--cached'] disabled refresh False status 0 stderr  ok None
+47 False ['--cached'] locked refresh False status 0 stderr  ok None
+48 False ['--', 'a'] default refresh True status 0 stderr  ok None
+49 False ['--', 'a'] disabled refresh False status 0 stderr  ok None
+50 False ['--', 'a'] locked refresh False status 0 stderr  ok None
+51 False ['--', 'b'] default refresh True status 0 stderr  ok None
+52 False ['--', 'b'] disabled refresh False status 0 stderr  ok None
+53 False ['--', 'b'] locked refresh False status 0 stderr  ok None

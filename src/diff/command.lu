@@ -171,10 +171,11 @@ fn dispatch(args: List[str]) -> int ! worktree.WorkErrors {
     let bytes = render(ctx, edits, options)?
     var stdout = fs.stdout()
     fs.write_chunk(mut stdout, bytes)?
+    refresh(ctx, options) else |_| {}
     if options.exit_code && edits.len > 0 then 1 else 0
 }
 
-/// Read-only CLI boundary. Unsupported features are explicit exit-2 refusals.
+/// CLI boundary with documented optional stat-cache refresh. Unsupported features are explicit exit-2 refusals.
 pub fn run(args: List[str]) -> int {
     repository.check_config(".") else |e| match e {
         ConfigDiagnostic(message) => { eprint(message); return 128 },

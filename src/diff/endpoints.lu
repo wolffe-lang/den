@@ -232,9 +232,11 @@ pub fn collect(ctx: worktree.Context, options: Options) -> List[Change] ! worktr
     let specs = pathspecs(ctx, options.paths)?
     for file in before { if selected(file.path, specs)? { (mut selected_old).push(copy file) } }
     for file in after { if selected(file.path, specs)? { (mut selected_new).push(copy file) } }
-    if options.reverse {
+    var result = if options.reverse {
         changes(selected_new, selected_old, options)?
     } else {
         changes(selected_old, selected_new, options)?
     }
+    stat_only_names(ctx, options, mut result)?
+    result
 }

@@ -1,0 +1,404 @@
+build: target/native/den
+index-stat-proof: 2 tool-side entry rows canonicalized
+0 True [] default refresh True status 0 stderr  ok True
+index-stat-proof: 0 tool-side entry rows canonicalized
+1 True [] disabled refresh False status 0 stderr  ok True
+index-stat-proof: 0 tool-side entry rows canonicalized
+2 True [] locked refresh False status 0 stderr  ok True
+index-stat-proof: 2 tool-side entry rows canonicalized
+3 True ['--exit-code'] default refresh True status 1 stderr  ok True
+index-stat-proof: 0 tool-side entry rows canonicalized
+4 True ['--exit-code'] disabled refresh False status 1 stderr  ok True
+index-stat-proof: 0 tool-side entry rows canonicalized
+5 True ['--exit-code'] locked refresh False status 1 stderr  ok True
+index-stat-proof: 2 tool-side entry rows canonicalized
+6 True ['--quiet'] default refresh True status 1 stderr  ok True
+index-stat-proof: 0 tool-side entry rows canonicalized
+7 True ['--quiet'] disabled refresh False status 1 stderr  ok True
+index-stat-proof: 0 tool-side entry rows canonicalized
+8 True ['--quiet'] locked refresh False status 1 stderr  ok True
+index-stat-proof: 2 tool-side entry rows canonicalized
+9 True ['--name-only'] default refresh True status 0 stderr  ok True
+index-stat-proof: 0 tool-side entry rows canonicalized
+10 True ['--name-only'] disabled refresh False status 0 stderr  ok True
+index-stat-proof: 0 tool-side entry rows canonicalized
+11 True ['--name-only'] locked refresh False status 0 stderr  ok True
+index-stat-proof: 2 tool-side entry rows canonicalized
+12 True ['--stat'] default refresh True status 0 stderr  ok True
+index-stat-proof: 0 tool-side entry rows canonicalized
+13 True ['--stat'] disabled refresh False status 0 stderr  ok True
+index-stat-proof: 0 tool-side entry rows canonicalized
+14 True ['--stat'] locked refresh False status 0 stderr  ok True
+index-stat-proof: 2 tool-side entry rows canonicalized
+15 True ['HEAD'] default refresh True status 0 stderr  ok True
+index-stat-proof: 0 tool-side entry rows canonicalized
+16 True ['HEAD'] disabled refresh False status 0 stderr  ok True
+index-stat-proof: 0 tool-side entry rows canonicalized
+17 True ['HEAD'] locked refresh False status 0 stderr  ok True
+index-stat-proof: 0 tool-side entry rows canonicalized
+18 True ['--cached'] default refresh False status 0 stderr  ok True
+index-stat-proof: 0 tool-side entry rows canonicalized
+19 True ['--cached'] disabled refresh False status 0 stderr  ok True
+index-stat-proof: 0 tool-side entry rows canonicalized
+20 True ['--cached'] locked refresh False status 0 stderr  ok True
+index-stat-proof: 0 tool-side entry rows canonicalized
+21 True ['--', 'a'] default refresh False status 0 stderr  ok True
+index-stat-proof: 0 tool-side entry rows canonicalized
+22 True ['--', 'a'] disabled refresh False status 0 stderr  ok True
+index-stat-proof: 0 tool-side entry rows canonicalized
+23 True ['--', 'a'] locked refresh False status 0 stderr  ok True
+index-stat-proof: 2 tool-side entry rows canonicalized
+24 True ['--', 'b'] default refresh True status 0 stderr  ok True
+index-stat-proof: 0 tool-side entry rows canonicalized
+25 True ['--', 'b'] disabled refresh False status 0 stderr  ok True
+index-stat-proof: 0 tool-side entry rows canonicalized
+26 True ['--', 'b'] locked refresh False status 0 stderr  ok True
+index-stat-proof: 4 tool-side entry rows canonicalized
+27 False [] default refresh True status 0 stderr  ok True
+index-stat-proof: 0 tool-side entry rows canonicalized
+28 False [] disabled refresh False status 0 stderr  ok True
+index-stat-proof: 0 tool-side entry rows canonicalized
+29 False [] locked refresh False status 0 stderr  ok True
+index-stat-proof: 4 tool-side entry rows canonicalized
+30 False ['--exit-code'] default refresh True status 0 stderr  ok True
+index-stat-proof: 0 tool-side entry rows canonicalized
+31 False ['--exit-code'] disabled refresh False status 0 stderr  ok True
+index-stat-proof: 0 tool-side entry rows canonicalized
+32 False ['--exit-code'] locked refresh False status 0 stderr  ok True
+index-stat-proof: 4 tool-side entry rows canonicalized
+33 False ['--quiet'] default refresh True status 0 stderr  ok True
+index-stat-proof: 0 tool-side entry rows canonicalized
+34 False ['--quiet'] disabled refresh False status 0 stderr  ok True
+index-stat-proof: 0 tool-side entry rows canonicalized
+35 False ['--quiet'] locked refresh False status 0 stderr  ok True
+index-stat-proof: 4 tool-side entry rows canonicalized
+36 False ['--name-only'] default refresh True status 0 stderr  ok True
+index-stat-proof: 0 tool-side entry rows canonicalized
+37 False ['--name-only'] disabled refresh False status 0 stderr  ok True
+index-stat-proof: 0 tool-side entry rows canonicalized
+38 False ['--name-only'] locked refresh False status 0 stderr  ok True
+index-stat-proof: 4 tool-side entry rows canonicalized
+39 False ['--stat'] default refresh True status 0 stderr  ok True
+index-stat-proof: 0 tool-side entry rows canonicalized
+40 False ['--stat'] disabled refresh False status 0 stderr  ok True
+index-stat-proof: 0 tool-side entry rows canonicalized
+41 False ['--stat'] locked refresh False status 0 stderr  ok True
+index-stat-proof: 4 tool-side entry rows canonicalized
+42 False ['HEAD'] default refresh True status 0 stderr  ok True
+index-stat-proof: 0 tool-side entry rows canonicalized
+43 False ['HEAD'] disabled refresh False status 0 stderr  ok True
+index-stat-proof: 0 tool-side entry rows canonicalized
+44 False ['HEAD'] locked refresh False status 0 stderr  ok True
+index-stat-proof: 0 tool-side entry rows canonicalized
+45 False ['--cached'] default refresh False status 0 stderr  ok True
+index-stat-proof: 0 tool-side entry rows canonicalized
+46 False ['--cached'] disabled refresh False status 0 stderr  ok True
+index-stat-proof: 0 tool-side entry rows canonicalized
+47 False ['--cached'] locked refresh False status 0 stderr  ok True
+index-stat-proof: 4 tool-side entry rows canonicalized
+48 False ['--', 'a'] default refresh True status 0 stderr  ok True
+index-stat-proof: 0 tool-side entry rows canonicalized
+49 False ['--', 'a'] disabled refresh False status 0 stderr  ok True
+index-stat-proof: 0 tool-side entry rows canonicalized
+50 False ['--', 'a'] locked refresh False status 0 stderr  ok True
+index-stat-proof: 4 tool-side entry rows canonicalized
+51 False ['--', 'b'] default refresh True status 0 stderr  ok True
+index-stat-proof: 0 tool-side entry rows canonicalized
+52 False ['--', 'b'] disabled refresh False status 0 stderr  ok True
+index-stat-proof: 0 tool-side entry rows canonicalized
+53 False ['--', 'b'] locked refresh False status 0 stderr  ok True
+selftest: 61 inherited M1/shape case definitions remain unchanged
+selftest: loose-object-raw accepts representation changes; checksum/oid/trailing and non-object bytes remain gated
+selftest: actual classifier rejects planted one-byte version; stdout/repository plants rejected; exact review binding passes
+shape-pass: version
+parity: init
+parity: hash-object
+parity: cat-type
+parity: cat-size
+parity: cat-pretty
+parity: write-tree
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: add
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-short
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-long
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: commit
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: rm
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: mv
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: restore
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: diff
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: diff-renames
+not-yet: log-default
+not-yet: log-oneline
+not-yet: show
+not-yet: branch
+not-yet: tag
+not-yet: switch
+not-yet: reset
+not-yet: merge
+not-yet: rebase
+not-yet: blame
+not-yet: stash
+not-yet: notes
+not-yet: rev-parse
+not-yet: fsck
+not-yet: count-objects
+index-stat-proof: 6 tool-side entry rows canonicalized
+parity: diff-symlink
+parity: hash-empty
+parity: hash-write-empty
+parity: hash-abc
+parity: hash-write-abc
+parity: hash-nul
+parity: hash-write-nul
+parity: hash-all-bytes
+parity: hash-write-all-bytes
+parity: hash-utf8
+parity: hash-write-utf8
+parity: hash-tree-empty
+parity: hash-unknown-type
+parity: hash-missing-file
+parity: cat-p-blob
+parity: cat-p-tree
+parity: cat-p-commit
+parity: cat-p-missing
+parity: cat-p-zero
+parity: cat-s-blob
+parity: cat-s-tree
+parity: cat-s-commit
+parity: cat-s-missing
+parity: cat-s-zero
+parity: cat-t-blob
+parity: cat-t-tree
+parity: cat-t-commit
+parity: cat-t-missing
+parity: cat-t-zero
+parity: init-quiet
+parity: init-branch
+parity: commit-tree-empty
+parity: commit-tree-stdin
+parity: commit-tree-binary
+parity: commit-tree-message
+parity: commit-tree-paragraphs
+parity: commit-tree-empty-message
+parity: commit-tree-parent
+parity: commit-tree-file
+parity: commit-tree-file-stdin
+parity: mktree-empty
+parity: mktag-empty
+parity: mktag-invalid
+parity: commit-tree-invalid-utf8-0
+parity: commit-tree-invalid-utf8-1
+parity: commit-tree-invalid-utf8-2
+parity: commit-tree-invalid-utf8-3
+parity: commit-tree-invalid-utf8-4
+parity: commit-tree-invalid-utf8-5
+not-yet: compression-not-yet-0
+not-yet: compression-not-yet-6
+not-yet: compression-not-yet-9
+parity: commit-tree-latin1
+parity: hash-empty-tag
+parity: hash-empty-commit
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: m2-ignore-status-human
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: m2-ignore-status-porcelain
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: m2-ignore-status-short-branch
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: m2-ignore-status-nul
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: m2-ignore-status-all
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: m2-ignore-status-no
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: m2-ignore-status-ignored
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: m2-staged-rename-status-human
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: m2-staged-rename-status-porcelain
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: m2-staged-rename-status-short-branch
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: m2-staged-rename-status-nul
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: m2-staged-rename-status-all
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: m2-staged-rename-status-no
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: m2-staged-rename-status-ignored
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: m2-modes-status-human
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: m2-modes-status-porcelain
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: m2-modes-status-short-branch
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: m2-modes-status-nul
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: m2-modes-status-all
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: m2-modes-status-no
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: m2-modes-status-ignored
+parity: m2-unborn-status-human
+parity: m2-unborn-status-porcelain
+parity: m2-unborn-status-short-branch
+parity: m2-unborn-status-nul
+parity: m2-unborn-status-all
+parity: m2-unborn-status-no
+parity: m2-unborn-status-ignored
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: m2-amend-status-human
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: m2-amend-status-porcelain
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: m2-amend-status-short-branch
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: m2-amend-status-nul
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: m2-amend-status-all
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: m2-amend-status-no
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: m2-amend-status-ignored
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: m2-ignore-query-121
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: m2-ignore-query-122
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: m2-ignore-query-123
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: m2-ignore-query-124
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: m2-ignore-query-125
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: m2-ignore-query-126
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: m2-ignore-query-127
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: m2-ignore-query-128
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: m2-ignore-query-129
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: m2-ignore-query-130
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: m2-ignore-query-131
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: m2-ignore-query-132
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: m2-ignore-query-133
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: m2-ignore-query-134
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: m2-ignore-query-135
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: m2-add-new
+index-stat-proof: 6 tool-side entry rows canonicalized
+parity: m2-add-all
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: m2-add-update
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: m2-add-intent
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: m2-add-chmod
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: m2-rm-cached
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: m2-rm-modified
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: m2-rm-force
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: m2-restore-source
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: m2-restore-both
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: m2-checkout-path
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: m2-commit-all
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: m2-commit-amend
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: m2-commit-paragraphs
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: m2-commit-date
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: m2-force-ignored
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: m2-unborn-empty
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: m2-amend-chain
+not-yet: m2-refusal-verbose
+not-yet: m2-refusal-relative-date
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: m2-existing-v2-config-v4
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: m2-existing-v4-default
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: m2-existing-v4-config-v2
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: m2-edited-rename-status
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: m2-edited-rename-commit
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: m2-edited-rename-quiet
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: m2-edited-rename-disabled
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: vc04-diff-context-zero
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: vc04-diff-context-one
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: vc04-diff-stat
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: vc04-diff-names
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: vc04-diff-status
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: vc04-diff-nul
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: vc04-diff-numstat
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: vc04-diff-shortstat
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: vc04-diff-full-index
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: vc04-diff-tracked-path
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: vc04-diff-untracked-excluded
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: vc04-diff-glob
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: vc04-exact-rename-patch
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: vc04-exact-rename-stat
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: vc04-exact-rename-names
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: vc04-exact-rename-no-renames
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: vc04-exact-rename-numstat-nul
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: vc04-exact-rename-exact-only
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: vc04-collision-rename-patch
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: vc04-collision-rename-stat
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: vc04-collision-rename-names
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: vc04-collision-rename-no-renames
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: vc04-collision-rename-numstat-nul
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: vc04-collision-rename-exact-only
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: vc04-two-blobs-equal
+{"not-yet": 20, "parity": 167, "shape-pass": 1}

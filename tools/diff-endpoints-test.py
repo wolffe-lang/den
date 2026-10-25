@@ -36,13 +36,14 @@ def main():
     originals={'nested/a.txt':b'alpha\nbeta\ngamma\n','nested/deep/b.txt':b'nested\n','UP.txt':b'upper\n',
                'other.md':b'old markdown\n','literal*.txt':b'literal\n','empty':b'',
                'mode':b'mode\n','type':b'target','binary':b'\0old binary',
-               '.gitignore':b'ignored*\n','source':b''.join(f'line-{i:03}\n'.encode() for i in range(100))}
+               '.gitignore':b'ignored*\n','copy-source':b'copy original\n','source':b''.join(f'line-{i:03}\n'.encode() for i in range(100))}
     for p,v in originals.items():write(repo,p,v)
     (repo/'link').symlink_to('nested/a.txt');g(repo,'add','-A');g(repo,'commit','-qm','before');first=g(repo,'rev-parse','HEAD')
     for p in ('nested/a.txt','nested/deep/b.txt','UP.txt','other.md','literal*.txt'):write(repo,p,originals[p]+b'added\n')
     (repo/'empty').unlink();(repo/'mode').chmod(0o755);(repo/'type').unlink();(repo/'type').symlink_to('target')
     (repo/'link').unlink();(repo/'link').symlink_to('other.md');write(repo,'binary',b'\0new binary')
     (repo/'source').rename(repo/'moved');write(repo,'moved',b''.join(f'line-{i:03}\n'.encode() for i in range(51))+b''.join(f'EDIT-{i:03}\n'.encode() for i in range(49)))
+    write(repo,'copy-source',b'copy changed\n');write(repo,'copy-target',b'copy original\n')
     write(repo,'space file',b'space\n');write(repo,'tab\tfile',b'tab\n');write(repo,'new-empty',b'')
     g(repo,'add','-A');g(repo,'commit','-qm','after');second=g(repo,'rev-parse','HEAD')
     write(repo,'nested/a.txt',b'index\n');g(repo,'add','nested/a.txt');write(repo,'nested/a.txt',b'worktree\n')
@@ -51,7 +52,7 @@ def main():
     displays=[[],['-U0'],['-U1'],['-U10'],['--no-indent-heuristic'],['--name-only'],['--name-status'],
               ['--name-status','-z'],['--numstat'],['--numstat','-z'],['--stat'],['--stat=40,15'],
               ['--stat','--stat-count=3'],['--stat','--stat-graph-width=10'],['--shortstat'],['--stat','-p'],
-              ['--no-renames'],['-M100%'],['-M49%'],['--abbrev=12'],['--full-index'],['-R']]
+              ['--no-renames'],['-M100%'],['-M49%'],['--abbrev=12'],['--full-index'],['-R'],['-C'],['--find-copies=50%'],['--text']]
     selectors=[[],['--','nested'],['--','*.txt'],['--',':(literal)literal*.txt'],['--',':(top)nested/*'],
                ['--',':(glob)nested/*.txt'],['--',':(glob)**/*.txt'],['--',':(icase)up.txt'],
                ['--',':(exclude)*.md'],['--',':'],['--',':/'],['--',':!nested'],['--','source'],
