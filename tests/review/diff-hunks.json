@@ -1,0 +1,118 @@
+{
+  "schema": 1,
+  "status": "recommendation, not a lane ruling",
+  "rows": [
+    {
+      "name": "seeded-21",
+      "context": 0,
+      "issue_or_ruling": "proposed R-vc04-3",
+      "reason": "Different equal-cost Myers alignment; retain exact oracle output and independently validate edit reconstruction.",
+      "capture": {
+        "name": "seeded-21",
+        "context": 0,
+        "old_hex": "2020626f64790a7d0a7d0a",
+        "new_hex": "7d0a6e65770a",
+        "actual_hex": "4040202d31202b302c302040400a2d2020626f64790a4040202d33202b322040400a2d7d0a2b6e65770a",
+        "oracle_hex": "4040202d312c32202b302c302040400a2d2020626f64790a2d7d0a4040202d332c30202b322040400a2b6e65770a"
+      }
+    },
+    {
+      "name": "seeded-21",
+      "context": 1,
+      "issue_or_ruling": "proposed R-vc04-3",
+      "reason": "Different equal-cost Myers alignment; retain exact oracle output and independently validate edit reconstruction.",
+      "capture": {
+        "name": "seeded-21",
+        "context": 1,
+        "old_hex": "2020626f64790a7d0a7d0a",
+        "new_hex": "7d0a6e65770a",
+        "actual_hex": "4040202d312c33202b312c322040400a2d2020626f64790a207d0a2d7d0a2b6e65770a",
+        "oracle_hex": "4040202d312c33202b312c322040400a2d2020626f64790a2d7d0a207d0a2b6e65770a"
+      }
+    },
+    {
+      "name": "seeded-21",
+      "context": 3,
+      "issue_or_ruling": "proposed R-vc04-3",
+      "reason": "Different equal-cost Myers alignment; retain exact oracle output and independently validate edit reconstruction.",
+      "capture": {
+        "name": "seeded-21",
+        "context": 3,
+        "old_hex": "2020626f64790a7d0a7d0a",
+        "new_hex": "7d0a6e65770a",
+        "actual_hex": "4040202d312c33202b312c322040400a2d2020626f64790a207d0a2d7d0a2b6e65770a",
+        "oracle_hex": "4040202d312c33202b312c322040400a2d2020626f64790a2d7d0a207d0a2b6e65770a"
+      }
+    },
+    {
+      "name": "seeded-21",
+      "context": 10,
+      "issue_or_ruling": "proposed R-vc04-3",
+      "reason": "Different equal-cost Myers alignment; retain exact oracle output and independently validate edit reconstruction.",
+      "capture": {
+        "name": "seeded-21",
+        "context": 10,
+        "old_hex": "2020626f64790a7d0a7d0a",
+        "new_hex": "7d0a6e65770a",
+        "actual_hex": "4040202d312c33202b312c322040400a2d2020626f64790a207d0a2d7d0a2b6e65770a",
+        "oracle_hex": "4040202d312c33202b312c322040400a2d2020626f64790a2d7d0a207d0a2b6e65770a"
+      }
+    },
+    {
+      "name": "seeded-116",
+      "context": 0,
+      "issue_or_ruling": "proposed R-vc04-3",
+      "reason": "Different equal-cost Myers alignment; retain exact oracle output and independently validate edit reconstruction.",
+      "capture": {
+        "name": "seeded-116",
+        "context": 0,
+        "old_hex": "7d0a2020626f64790a0a620a7d0a610a620a2020626f64790a620a620a620a",
+        "new_hex": "7d0a2020626f64790a0a620a7d0a610a620a2020626f64790a620a0a620a620a620a6e65770a610a",
+        "actual_hex": "4040202d392c30202b313020404020620a2b0a4040202d31312c30202b31332c3320404020620a2b620a2b6e65770a2b610a",
+        "oracle_hex": "4040202d392c30202b31302c3220404020620a2b0a2b620a4040202d31312c30202b31342c3220404020620a2b6e65770a2b610a"
+      }
+    },
+    {
+      "name": "seeded-116",
+      "context": 1,
+      "issue_or_ruling": "proposed R-vc04-3",
+      "reason": "Different equal-cost Myers alignment; retain exact oracle output and independently validate edit reconstruction.",
+      "capture": {
+        "name": "seeded-116",
+        "context": 1,
+        "old_hex": "7d0a2020626f64790a0a620a7d0a610a620a2020626f64790a620a620a620a",
+        "new_hex": "7d0a2020626f64790a0a620a7d0a610a620a2020626f64790a620a0a620a620a620a6e65770a610a",
+        "actual_hex": "4040202d392c33202b392c3720404020620a20620a2b0a20620a20620a2b620a2b6e65770a2b610a",
+        "oracle_hex": "4040202d392c33202b392c3720404020620a20620a2b0a2b620a20620a20620a2b6e65770a2b610a"
+      }
+    },
+    {
+      "name": "seeded-116",
+      "context": 3,
+      "issue_or_ruling": "proposed R-vc04-3",
+      "reason": "Different equal-cost Myers alignment; retain exact oracle output and independently validate edit reconstruction.",
+      "capture": {
+        "name": "seeded-116",
+        "context": 3,
+        "old_hex": "7d0a2020626f64790a0a620a7d0a610a620a2020626f64790a620a620a620a",
+        "new_hex": "7d0a2020626f64790a0a620a7d0a610a620a2020626f64790a620a0a620a620a620a6e65770a610a",
+        "actual_hex": "4040202d372c35202b372c3920404020610a20620a202020626f64790a20620a2b0a20620a20620a2b620a2b6e65770a2b610a",
+        "oracle_hex": "4040202d372c35202b372c3920404020610a20620a202020626f64790a20620a2b0a2b620a20620a20620a2b6e65770a2b610a"
+      }
+    },
+    {
+      "name": "seeded-116",
+      "context": 10,
+      "issue_or_ruling": "proposed R-vc04-3",
+      "reason": "Different equal-cost Myers alignment; retain exact oracle output and independently validate edit reconstruction.",
+      "capture": {
+        "name": "seeded-116",
+        "context": 10,
+        "old_hex": "7d0a2020626f64790a0a620a7d0a610a620a2020626f64790a620a620a620a",
+        "new_hex": "7d0a2020626f64790a0a620a7d0a610a620a2020626f64790a620a0a620a620a620a6e65770a610a",
+        "actual_hex": "4040202d312c3131202b312c31352040400a207d0a202020626f64790a200a20620a207d0a20610a20620a202020626f64790a20620a2b0a20620a20620a2b620a2b6e65770a2b610a",
+        "oracle_hex": "4040202d312c3131202b312c31352040400a207d0a202020626f64790a200a20620a207d0a20610a20620a202020626f64790a20620a2b0a2b620a20620a20620a2b6e65770a2b610a"
+      }
+    }
+  ]
+}

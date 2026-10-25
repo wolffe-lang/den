@@ -1,0 +1,6 @@
+pkg {
+    name: "difftext-client",
+    edition: "1",
+    capabilities: [env, fs],
+    deps: {difftext: {path: "../../src/difftext"}},
+}

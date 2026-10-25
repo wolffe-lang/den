@@ -1,0 +1,36 @@
+use std.fs
+use difftext
+
+error ProbeErrors = {invalid, limit, not_found, denied, io}
+
+fn input(path: str) -> List[byte] ! ProbeErrors {
+    var file = fs.open(path)?
+    defer fs.close(take file) else |_| {}
+    var out = List[byte]()
+    loop {
+        region part {
+            let bytes = fs.read_chunk(mut file, 65536) else |e| match e {
+                eof => { break },
+                io => { return io },
+            }
+            if bytes.len > 16777216 - out.len { return limit }
+            for b in bytes { (mut out).push(b) }
+        }
+    }
+    out
+}
+
+fn work(args: List[str]) -> int ! ProbeErrors {
+    if args.len != 4 || args[0] != "hunks" { return invalid }
+    let before = input(args[1])?
+    let after = input(args[2])?
+    let context = args[3].to_int() else |_| { return invalid }
+    let output = difftext.hunks(before, after, context, true)?
+    var stdout = fs.stdout()
+    fs.write_chunk(mut stdout, output)?
+    0
+}
+
+fn main() -> int {
+    work(env_args()) else |e| { eprint("{e}"); 1 }
+}

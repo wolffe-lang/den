@@ -1,0 +1,101 @@
+fn append(mut out: List[byte], bytes: List[byte]) {
+    for b in bytes { (mut out).push(b) }
+}
+
+fn range_text(start: int, count: int) -> str {
+    if count == 0 { return "{start},0" }
+    if count == 1 { return "{start + 1}" }
+    "{start + 1},{count}"
+}
+
+fn output_line(mut out: List[byte], prefix: byte, data: List[byte], line: Line) {
+    (mut out).push(prefix)
+    for i in line.start..line.end { (mut out).push(data[i]) }
+    if data[line.end - 1] != 10 as byte {
+        append(mut out, "\n\\ No newline at end of file\n".bytes())
+    }
+}
+
+fn heading(mut out: List[byte], data: List[byte], records: List[Line], before: int) {
+    var pos = before
+    while pos > 0 {
+        pos -= 1
+        let row = copy records[pos]
+        let first = data[row.start] as int
+        if first >= 65 && first <= 90 || first >= 97 && first <= 122 || first == 95 || first == 36 {
+            var end = row.end
+            while end > row.start &&
+                (
+                    data[end - 1] == 10 as byte ||
+                        data[end - 1] == 13 as byte ||
+                        data[end - 1] == 32 as byte ||
+                        data[end - 1] == 9 as byte
+                ) { end -= 1 }
+            if end - row.start > 80 { end = row.start + 80 }
+            (mut out).push(32 as byte)
+            for i in row.start..end { (mut out).push(data[i]) }
+            break
+        }
+    }
+}
+
+/// Unified hunk body from a minimal script. File headers are a caller concern.
+/// Context is 0..200,000. Equal-cost alignment differences are recorded by
+/// named R-vc04-3 witnesses; the default uses measured indent ranking.
+pub fn hunks(
+    before: List[byte],
+    after: List[byte],
+    context: int,
+    indent: bool,
+) -> List[byte] ! DeltaErrors {
+    if context < 0 || context > 200000 { return invalid }
+    let left = lines(before)?
+    let right = lines(after)?
+    let changes = if indent then aligned(before, after)? else compact(before, after)?
+    var out = List[byte]()
+    var at = 0
+    while at < changes.len {
+        let first = copy changes[at]
+        let old_begin = if first.old_start > context then first.old_start - context else 0
+        let new_begin = if first.new_start > context then first.new_start - context else 0
+        var last = at
+        while last + 1 < changes.len &&
+            changes[last + 1].old_start - (changes[last].old_start + changes[last].old_count) <=
+                2 * context {
+            last += 1
+        }
+        let final = copy changes[last]
+        let old_limit = final.old_start + final.old_count + context
+        let new_limit = final.new_start + final.new_count + context
+        let old_end = if old_limit < left.len then old_limit else left.len
+        let new_end = if new_limit < right.len then new_limit else right.len
+        append(
+            mut out,
+            "@@ -{range_text(old_begin, old_end - old_begin)} +{range_text(new_begin, new_end - new_begin)} @@".
+                bytes(),
+        )
+        heading(mut out, before, left, old_begin)
+        (mut out).push(10 as byte)
+        var old_pos = old_begin
+        for change_at in at..=last {
+            let change = copy changes[change_at]
+            while old_pos < change.old_start {
+                output_line(mut out, 32 as byte, before, left[old_pos])
+                old_pos += 1
+            }
+            for i in change.old_start..change.old_start + change.old_count {
+                output_line(mut out, 45 as byte, before, left[i])
+            }
+            for i in change.new_start..change.new_start + change.new_count {
+                output_line(mut out, 43 as byte, after, right[i])
+            }
+            old_pos = change.old_start + change.old_count
+        }
+        while old_pos < old_end {
+            output_line(mut out, 32 as byte, before, left[old_pos])
+            old_pos += 1
+        }
+        at = last + 1
+    }
+    out
+}

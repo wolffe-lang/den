@@ -1,0 +1,47 @@
+//! member: false
+
+use difftext
+
+fn same(actual: List[byte], expected: str) -> bool {
+    if actual.len != expected.len { return false }
+    for i in 0..actual.len { if actual[i] != expected.bytes()[i] { return false } }
+    true
+}
+
+fn main() -> int ! difftext.DeltaErrors {
+    print("vc04 gate: exact unified hunk header")
+    assert(same(difftext.hunks("".bytes(), "new\n".bytes(), 3, true)?, "@@ -0,0 +1 @@\n+new\n"))
+    assert(same(difftext.hunks("old\n".bytes(), "".bytes(), 3, true)?, "@@ -1 +0,0 @@\n-old\n"))
+    assert(
+        same(
+            difftext.hunks("one\ntwo\nthree\n".bytes(), "one\nTWO\nthree\n".bytes(), 3, true)?,
+            "@@ -1,3 +1,3 @@\n one\n-two\n+TWO\n three\n",
+        ),
+    )
+    print("vc04 gate: missing-final-newline marker")
+    assert(
+        same(
+            difftext.hunks("one\ntwo".bytes(), "one\nTWO".bytes(), 0, true)?,
+            "@@ -2 +2 @@ one\n-two\n\\ No newline at end of file\n+TWO\n\\ No newline at end of file\n",
+        ),
+    )
+    assert(
+        same(
+            difftext.hunks("\na\nc\n".bytes(), "\na\na\nc\n".bytes(), 0, true)?,
+            "@@ -1,0 +2 @@\n+a\n",
+        ),
+    )
+    assert(
+        same(
+            difftext.hunks("\na\nc\n".bytes(), "\na\na\nc\n".bytes(), 0, false)?,
+            "@@ -2,0 +3 @@ a\n+a\n",
+        ),
+    )
+    assert(same(difftext.hunks("".bytes(), "".bytes(), 3, true)?, ""))
+    let edits = difftext.edits("a\nb\nc\n".bytes(), "c\na\nb\n".bytes())?
+    var changed = 0
+    for edit in edits { changed += edit.old_count + edit.new_count }
+    assert(changed == 2)
+    print("difftext: hunk headers, context, final-LF markers, default indent and minimal move pass")
+    0
+}

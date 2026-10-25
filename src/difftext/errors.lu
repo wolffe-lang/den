@@ -1,0 +1,2 @@
+/// Invalid API arguments and bounded resource refusals; bounded text-diff API.
+pub error DeltaErrors = {invalid, limit}

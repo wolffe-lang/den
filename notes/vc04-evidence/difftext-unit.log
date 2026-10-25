@@ -1,0 +1,3 @@
+difftext: hunk headers, context, final-LF markers, default indent and minimal move pass
+{"commit":"cf0c13d","diagnostics":[],"file":"src/difftext_test.lu","impl":"wolfgang","impl_version":"0.2.35","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"difftext: hunk headers, context, final-LF markers, default indent and minimal move pass\n","stdout_sha256":"295beebd6435e2dc6d630c51ed67a4b8456d56dc93533d1a4b8fbed8ef4b88b0","verdict":"exit(0)","warnings":[]}
+build: target/native/den
