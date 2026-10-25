@@ -1,0 +1,26 @@
+isolated 1 queries 31
+isolated 2 queries 64
+isolated 3 queries 92
+isolated 4 queries 128
+isolated 5 queries 159
+isolated 6 queries 192
+isolated 7 queries 226
+isolated 8 queries 248
+isolated 9 queries 285
+isolated 10 queries 321
+round 0 collisions 10 queries 333
+isolated 11 queries 354
+isolated 12 queries 387
+isolated 13 queries 416
+isolated 14 queries 451
+isolated 15 queries 486
+isolated 16 queries 521
+isolated 17 queries 553
+isolated 18 queries 582
+isolated 19 queries 613
+isolated 20 queries 642
+isolated 21 queries 673
+isolated 22 queries 710
+isolated 23 queries 748
+isolated 24 queries 778
+round 1 collisions 24 queries 778

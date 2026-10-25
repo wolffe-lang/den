@@ -1,0 +1,18 @@
+{
+  "collision_report_sha256": "4038440ea0e9479dd01902aff8f350e853684da8b0fc831a89a9e99aab933d42",
+  "fit_pairs": 16,
+  "validation_pairs": 8,
+  "coefficient_range": [
+    0,
+    65535
+  ],
+  "models": [
+    {
+      "coefficient": 97,
+      "reverse": false,
+      "bits": 32,
+      "gcd": 107927,
+      "validation_failures": []
+    }
+  ]
+}

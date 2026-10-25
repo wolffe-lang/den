@@ -1,0 +1,6 @@
+searched reverse False bits 0 survivors []
+searched reverse False bits 32 survivors [{'coefficient': 97, 'reverse': False, 'bits': 32, 'gcd': 107927, 'validation_failures': []}]
+searched reverse False bits 64 survivors [{'coefficient': 97, 'reverse': False, 'bits': 32, 'gcd': 107927, 'validation_failures': []}]
+searched reverse True bits 0 survivors [{'coefficient': 97, 'reverse': False, 'bits': 32, 'gcd': 107927, 'validation_failures': []}]
+searched reverse True bits 32 survivors [{'coefficient': 97, 'reverse': False, 'bits': 32, 'gcd': 107927, 'validation_failures': []}]
+searched reverse True bits 64 survivors [{'coefficient': 97, 'reverse': False, 'bits': 32, 'gcd': 107927, 'validation_failures': []}]
