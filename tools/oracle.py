@@ -105,12 +105,13 @@ def one(case,base,den,git):
     needs_proof = case.get('comparison') == 'index-stat-proven'
     restore(); expected=capture([git,*args],repo,stdin,needs_proof)
     restore(); before=snapshot(repo); before_worktree=worktree_snapshot(repo)
+    (root/'before.json').write_text(json.dumps({'repository':before,'worktree':before_worktree},sort_keys=True)+'\n')
     actual=capture([den,*args],repo,stdin,needs_proof)
     (root/'git.json').write_text(json.dumps(expected,sort_keys=True)+'\n')
     (root/'den.json').write_text(json.dumps(actual,sort_keys=True)+'\n')
     if case.get('kind')=='version':
         ok=(bytes.fromhex(actual['stdout'])==b'den 0.0.0 (built with wolf 0.2.35)\n'
-            and actual['stderr']=='' and actual['status']==0 and actual['repository']==before
+            and actual['stderr']=='' and actual['status']==0 and actual['repository']==before and actual['worktree']==before_worktree
             and bytes.fromhex(expected['stdout']).startswith(b'git version ') and expected['status']==0)
         return 'shape-pass' if ok else 'FAIL'
     if equivalent(expected,actual,case.get('comparison','loose-object-raw')):return 'parity'
@@ -124,6 +125,10 @@ def one(case,base,den,git):
     return 'FAIL'
 
 def selftest():
+    cases={c['name']:c for c in json.loads((R/'tests/cases.json').read_text())}
+    baseline=json.loads((R/'tests/m1-case-sha256.json').read_text())
+    assert all(name in cases and case_hash(cases[name])==digest for name,digest in baseline.items())
+    print(f'selftest: {len(baseline)} inherited M1/shape case definitions remain unchanged')
     case={'name':'one-byte'};a={'stdout':'61','stderr':'','status':0,'repository':{}}
     b={**a,'stdout':'62'}
     row={'case_sha256':case_hash(case),'git':a,'den':b,'reason':'plant','issue_or_ruling':'vc00 selftest'}

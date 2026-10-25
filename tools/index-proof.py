@@ -87,7 +87,9 @@ def proof(repo, raw):
             st = os.lstat(path)
         except FileNotFoundError:
             observed = None
+            raw_mode = None
         else:
+            raw_mode = st.st_mode & 0xffffffff
             mode = 0o120000 if stat.S_ISLNK(st.st_mode) else (0o100755 if st.st_mode & 0o100 else 0o100644)
             observed = [st.st_ctime_ns//10**9, st.st_ctime_ns%10**9,
                         st.st_mtime_ns//10**9, st.st_mtime_ns%10**9,
@@ -95,6 +97,7 @@ def proof(repo, raw):
             observed = [x & 0xffffffff for x in observed]
         rows.append(dict(path_hex=entry['name'].hex(), stage=entry['key'][1],
                          index_stat=entry['words'], own_worktree_stat=observed,
+                         own_lstat_mode=raw_mode,
                          own_stat_equal=entry['words'] == observed,
                          proven=observed is not None and entry['words'][:6] == observed[:6]))
     return rows

@@ -17,6 +17,7 @@ for tier in native release; do
     tools/env python3 -I tools/commit-format-oracle.py --tier "$tier"
     tools/env python3 -I tools/commit-oracle.py --tier "$tier"
     tools/env python3 -I tools/commit-ref-test.py --tier "$tier"
+    tools/env python3 -I tools/rename-scope-test.py --tier "$tier"
 done
 for test in commit_format_test commit_test; do
     "$WOLF" conform-run "src/$test.lu" --checked --json > "target/$test-checked.json"
