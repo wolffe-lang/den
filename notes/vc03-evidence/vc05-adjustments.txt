@@ -1,0 +1,40 @@
+vc05 adjustment — history and display consumers
+
+Use the preserved object APIs (ordered raw headers/continuations and raw message
+bytes), algorithm-tagged OIDs, repository/config reader and worktree HEAD model.
+Do not infer a branch from a detached OID: Head retains checkout provenance from
+the reflog, including annotated-tag peeling and manual-detachment distinction.
+General revision grammar, packed refs/object packs and branch mutation are not
+provided by vc03; their existing named scope boundaries remain.
+
+Read-only log/show must not call index.write_tree: it now refreshes TREE and
+publishes an index transaction. Use index.read/parse and pure build_trees when
+index-derived state is needed. All returned byte lists own storage. Use the
+independent clients in probes/ to check external-package imports.
+
+Date/message distinctions measured in vc03
+- Raw input-date grammar and canonical stored identity grammar differ. A raw
+  +9999 offset is emitted as +10039, but Git rejects +10039 as raw date input.
+  Do not feed a stored identity blindly through a command-date parser.
+- commit_format provides deterministic date and explicit identity parsing;
+  relative dates are named refusals here. Log's requested output formats and
+  revision walk ordering remain vc05's, not claims of this module.
+- Generic object bodies stay lossless. Commit creation repairs invalid UTF-8
+  when required; its reflog still keeps the pre-repair first physical line.
+- Human commit subject joins the first nonblank paragraph, preserving line
+  indentation/internal bytes and trimming line ends; reflog subject takes only
+  the first physical line and normalizes its whitespace. They are not one API.
+- --amend retains all parents and author unless reset/overridden; merge amends
+  print no shortstat. ORIG_HEAD is untouched. Same-OID amendment appends HEAD's
+  reflog but not the branch reflog. These are creation semantics, not a walk.
+
+Config/ignore/status APIs are documented in docs/MAP.md. A warning-aware scan
+can collect source warnings once per operation; silent compatibility wrappers
+remain available to non-CLI consumers. Do not silently discard warnings in a
+command that promises Git output. See vc04-adjustments.txt before adding -p or
+--stat: edited rename scoring is still deferred, and commit's bounded LCS is
+not a complete Git diff/pretty-print implementation.
+
+Known upstream limitation: wolf-lang#927 rejects a copied lent bytes() parameter
+in a returned native value; bind/materialize byte storage at owned boundaries.
+The probes and native/actual-checked counterexample remain in this repository.

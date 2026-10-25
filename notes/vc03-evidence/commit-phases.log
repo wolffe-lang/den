@@ -1,0 +1,5 @@
+normal-editor status 1 held no index_changed True
+normal-empty status 1 held None index_changed True
+all-editor status 1 held yes index_changed False
+all-empty status 1 held None index_changed False
+merge differs both 0 b'[main 4c0b615] amended merge\n Date: Tue Nov 14 22:13:20 2023 +0000\n' b''

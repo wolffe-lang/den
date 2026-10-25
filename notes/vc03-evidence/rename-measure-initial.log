@@ -1,0 +1,52 @@
+two-of-three score 66 rename True candidate64 66
+reorder score 100 rename True candidate64 100
+half score 50 rename True candidate64 50
+long-half score 100 rename True candidate64 50
+long-shift score None rename False candidate64 0
+crlf score 66 rename True candidate64 0
+one-line score None rename False candidate64 0
+binary-half score 100 rename True candidate64 50
+duplicate score 66 rename True candidate64 66
+grow score 50 rename True candidate64 50
+uniform-1 score None rename False candidate64 0
+uniform-2 score None rename False candidate64 0
+uniform-7 score None rename False candidate64 0
+uniform-8 score None rename False candidate64 0
+uniform-15 score None rename False candidate64 0
+uniform-16 score None rename False candidate64 0
+uniform-31 score None rename False candidate64 0
+uniform-32 score None rename False candidate64 0
+uniform-33 score None rename False candidate64 0
+uniform-47 score None rename False candidate64 0
+uniform-48 score None rename False candidate64 0
+uniform-62 score None rename False candidate64 0
+uniform-63 score None rename False candidate64 0
+uniform-64 score 100 rename True candidate64 0
+uniform-65 score 98 rename True candidate64 0
+uniform-66 score 96 rename True candidate64 0
+uniform-95 score 67 rename True candidate64 0
+uniform-96 score 66 rename True candidate64 0
+uniform-127 score 50 rename True candidate64 0
+uniform-128 score 100 rename True candidate64 0
+uniform-129 score 99 rename True candidate64 0
+uniform-191 score 67 rename True candidate64 0
+uniform-192 score 100 rename True candidate64 0
+uniform-193 score 99 rename True candidate64 0
+uniform-255 score 75 rename True candidate64 0
+uniform-256 score 100 rename True candidate64 0
+uniform-257 score 99 rename True candidate64 0
+text-edit-63-31 score None rename False candidate64 0
+text-edit-191-190 score 67 rename True candidate64 67
+periodic-64-64 score 50 rename True candidate64 50
+threshold-48 score 48 rename False candidate64 48
+threshold-49 score 49 rename False candidate64 49
+threshold-50 score 50 rename True candidate64 50
+threshold-51 score 51 rename True candidate64 51
+threshold-52 score 52 rename True candidate64 52
+span32-raw mismatches 63 / 123 ['long-half', 'long-shift', 'crlf', 'binary-half', 'uniform-64', 'uniform-65', 'uniform-66', 'uniform-95', 'uniform-96', 'uniform-127', 'uniform-128', 'uniform-129', 'uniform-191', 'uniform-192', 'uniform-193']
+span32-crlf mismatches 57 / 123 ['long-half', 'long-shift', 'binary-half', 'uniform-64', 'uniform-65', 'uniform-66', 'uniform-95', 'uniform-96', 'uniform-127', 'uniform-128', 'uniform-129', 'uniform-191', 'uniform-192', 'uniform-193', 'uniform-255']
+span64-raw mismatches 28 / 123 ['long-half', 'crlf', 'binary-half', 'uniform-64', 'uniform-65', 'uniform-66', 'uniform-95', 'uniform-96', 'uniform-127', 'uniform-128', 'uniform-129', 'uniform-191', 'uniform-192', 'uniform-193', 'uniform-255']
+span64-crlf mismatches 27 / 123 ['long-half', 'binary-half', 'uniform-64', 'uniform-65', 'uniform-66', 'uniform-95', 'uniform-96', 'uniform-127', 'uniform-128', 'uniform-129', 'uniform-191', 'uniform-192', 'uniform-193', 'uniform-255', 'uniform-256']
+span128-raw mismatches 51 / 123 ['long-half', 'crlf', 'binary-half', 'uniform-64', 'uniform-65', 'uniform-66', 'uniform-95', 'uniform-96', 'uniform-127', 'uniform-128', 'uniform-129', 'uniform-191', 'uniform-192', 'uniform-193', 'uniform-255']
+span128-crlf mismatches 46 / 123 ['long-half', 'binary-half', 'uniform-64', 'uniform-65', 'uniform-66', 'uniform-95', 'uniform-96', 'uniform-127', 'uniform-128', 'uniform-129', 'uniform-191', 'uniform-192', 'uniform-193', 'uniform-255', 'uniform-256']
+RESULT /work/den/target/rename-measure-initial.json cases 123 seconds 0.5777681330218911

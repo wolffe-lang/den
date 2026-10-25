@@ -1,0 +1,26 @@
+direct-uniform-0 score None rename False candidate64 0
+direct-uniform-25 score 100 rename True candidate64 0
+direct-uniform-50 score 100 rename True candidate64 0
+direct-uniform-75 score 100 rename True candidate64 0
+direct-uniform-100 score 100 rename True candidate64 0
+direct-uniform-125 score 100 rename True candidate64 0
+direct-uniform-150 score 100 rename True candidate64 0
+direct-uniform-175 score 100 rename True candidate64 0
+direct-uniform-200 score 100 rename True candidate64 0
+direct-uniform-225 score 100 rename True candidate64 0
+direct-uniform-250 score 100 rename True candidate64 0
+direct-offset-19-96 score 100 rename True candidate64 0
+threshold-reordered-48 score 48 rename False candidate64 48
+threshold-reordered-49 score 49 rename False candidate64 49
+threshold-reordered-50 score 50 rename True candidate64 50
+threshold-reordered-51 score 51 rename True candidate64 51
+threshold-reordered-52 score 52 rename True candidate64 52
+span32-raw mismatches 291 / 301 ['direct-uniform-1', 'direct-uniform-2', 'direct-uniform-3', 'direct-uniform-4', 'direct-uniform-5', 'direct-uniform-6', 'direct-uniform-7', 'direct-uniform-8', 'direct-uniform-9', 'direct-uniform-11', 'direct-uniform-12', 'direct-uniform-13', 'direct-uniform-14', 'direct-uniform-15', 'direct-uniform-16']
+span32-crlf mismatches 291 / 301 ['direct-uniform-1', 'direct-uniform-2', 'direct-uniform-3', 'direct-uniform-4', 'direct-uniform-5', 'direct-uniform-6', 'direct-uniform-7', 'direct-uniform-8', 'direct-uniform-9', 'direct-uniform-11', 'direct-uniform-12', 'direct-uniform-13', 'direct-uniform-14', 'direct-uniform-15', 'direct-uniform-16']
+span64-raw mismatches 291 / 301 ['direct-uniform-1', 'direct-uniform-2', 'direct-uniform-3', 'direct-uniform-4', 'direct-uniform-5', 'direct-uniform-6', 'direct-uniform-7', 'direct-uniform-8', 'direct-uniform-9', 'direct-uniform-11', 'direct-uniform-12', 'direct-uniform-13', 'direct-uniform-14', 'direct-uniform-15', 'direct-uniform-16']
+span64-crlf mismatches 291 / 301 ['direct-uniform-1', 'direct-uniform-2', 'direct-uniform-3', 'direct-uniform-4', 'direct-uniform-5', 'direct-uniform-6', 'direct-uniform-7', 'direct-uniform-8', 'direct-uniform-9', 'direct-uniform-11', 'direct-uniform-12', 'direct-uniform-13', 'direct-uniform-14', 'direct-uniform-15', 'direct-uniform-16']
+span128-raw mismatches 291 / 301 ['direct-uniform-1', 'direct-uniform-2', 'direct-uniform-3', 'direct-uniform-4', 'direct-uniform-5', 'direct-uniform-6', 'direct-uniform-7', 'direct-uniform-8', 'direct-uniform-9', 'direct-uniform-11', 'direct-uniform-12', 'direct-uniform-13', 'direct-uniform-14', 'direct-uniform-15', 'direct-uniform-16']
+span128-crlf mismatches 291 / 301 ['direct-uniform-1', 'direct-uniform-2', 'direct-uniform-3', 'direct-uniform-4', 'direct-uniform-5', 'direct-uniform-6', 'direct-uniform-7', 'direct-uniform-8', 'direct-uniform-9', 'direct-uniform-11', 'direct-uniform-12', 'direct-uniform-13', 'direct-uniform-14', 'direct-uniform-15', 'direct-uniform-16']
+span64-offset-normalized mismatches 3 / 301 ['direct-uniform-0', 'direct-uniform-127', 'direct-uniform-254']
+span64-sample8000-crlf mismatches 291 / 301 ['direct-uniform-1', 'direct-uniform-2', 'direct-uniform-3', 'direct-uniform-4', 'direct-uniform-5', 'direct-uniform-6', 'direct-uniform-7', 'direct-uniform-8', 'direct-uniform-9', 'direct-uniform-11', 'direct-uniform-12', 'direct-uniform-13', 'direct-uniform-14', 'direct-uniform-15', 'direct-uniform-16']
+RESULT /work/den/target/rename-measure-equivalence.json cases 301 seconds 1.7303811450256035

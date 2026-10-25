@@ -2,19 +2,40 @@ Footprint: cross-cutting
 
 ## Forbidden
 
-Documentation and black-box pinned Git only. No Git or other VCS implementation
-source, sample hooks or templates. No production dependency beyond wolf-std
-and den's merged code. No Mac builds, host package installation, label, trunk
-push, merge, tag, release, issue writes, memory/config/planning edits.
+Documentation and pinned black-box Git only; no Git/VCS implementation,
+sample hooks/templates, new production dependency, label, trunk push, merge,
+tag, release, issue write or memory/config/planning edit. No Mac builds or
+program execution. Source formatting was also used locally. Runtime witnesses
+use hasu block A, a rootless pinned container, taskset inside and12GiB cap.
+The initial image package-install layer was mistakenly unpinned; it completed,
+was reported immediately, and was not repeated. No host packages were installed.
+
+The wrapper prohibits Markdown lane reports. This PR body and
+notes/vc03-evidence/pr-body.txt are the authorized fallback.
 
 ## Inputs verified
 
-- Base: b017d29655e174ad0b75fb8b6a286352da02346b, den#6 MERGED.
-- Contract, track index, RULES sections 1-10, wolf guide read before code.
-- hasu lane environment read; block A, flock, inside-container CPUs 0-5,
-  12 GiB memory cap. Oracle rebuilt with matching SHA-256
-  c4848492938c4ebfffbefe1fbbaa68b9af90c86d1f6a20e76816c5ff37fcfa60.
-  Both release archive digests verified by fetch-toolchain.
+Base b017d29655e174ad0b75fb8b6a286352da02346b is den#6's verified merge.
+wolf0.2.35 cf0c13d38479f444b69bb8356ad5709d07eff323; lupin0.1.56 tag
+28547b4324524d5477a6e54e4f6888462461a21f (binary embeds wolf snapshot294d626);
+std2386522eb059cca5a84108562c2c0a0e72345d34. Two release API reads agree on all
+six platform archive digests; two tag/object reads resolve both annotated tags
+to the pinned commits. Linux archives were verified while staging. Signed Git
+2.56.0 rebuilt with binary SHA-256
+c4848492938c4ebfffbefe1fbbaa68b9af90c86d1f6a20e76816c5ff37fcfa60, then hashed
+again independently. Original SHA provenance stays boreutils b603bb8.
+
+Implementation commits:
+- `27849a1` — prediction before code.
+- `86fcf44`, `87006b7`, `598f297` — oracle witnesses and bounded stat proof.
+- `0625d2f` — layered read-only config and measured diagnostics.
+- `4f15aa2`, `16e2dfa` — full index records, cache trees, transactions and prepare/install.
+- `11be978`, `d00d789` — ignore matching, provenance and nonfatal warnings.
+- `91ef30f` — fix inherited object temporary ownership race (den#9).
+- `fca4d14`, `3ee8c08` — owned worktree/HEAD snapshots and status/ignore rendering.
+- `ee90f6b`, `57d8f2d`, `5b22e71` — add/rm/mv/restore and independent worktree gates.
+- `3fdd069`, `bf39ab7` — commit formatting, lifecycle, refs and reflogs.
+- `c7fb52e` — CLI dispatch, expanded corpus and mandatory gates.
 
 ## Prediction
 
@@ -30,59 +51,127 @@ Recorded before implementation; predictions, not measurements:
   plus 214 new); separate generated matrices will be counted independently.
 - The stat-proof harness will validate 512 per-entry tool-side stat rows.
 
+
+Measured hits: fresh add has no extension; write-tree/commit add TREE; adding a
+root file retains invalid TREE payload002d3120300a. --date=now is not pinned by
+GIT_COMMITTER_DATE. The main matrix has163 cases, not300;54 distinct status stdout texts, not48;
+636 canonicalized tool-side entry proof rows, not512. These misses are retained,
+not retrofitted. final-counts.json derives the counts from the captures.
+
 ## Evidence index
 
-closes den#9: inherited object temporary-name reuse race. The first writer
-unlinked tmp_den_N explicitly, then its deferred cleanup could unlink another
-writer's reused name. tools/object-temp-race.py reproduced not_found at round2
-(96 writer attempts) on four CPUs. The owned-name flag fix passed100 rounds
-(3,200 writers), then the inherited native/release object gate and512 writers
-per tier. Initial plant runs40142256100 and40142259073 stopped at this inherited
-race and do NOT count as intended plant reds. Their raw logs are retained;
-clean fix propagation and intended plant reruns are pending.
+Authoritative full gate: notes/vc03-evidence/final-gate.log, exit0, ending
+`FINAL INPUT MANIFEST UNCHANGED 177`. final-inputs.json matches the Mac source
+byte for byte; only documentation/evidence changed afterward. The already-tested
+helper files were committed without changing their contents. README read and
+refreshed. final-counts.json and the individual JSONs record:
+main163 =136 parity /26 named not-yet /1 shape /0 reviewed /0 failures;
+207 worktree rows per native/release tier;51 commit rows per tier;150 date/message
+API comparisons per tier (not a claim of CLI error-text equality);212 index API
+commands per tier with36 canonicalized tool-side rows;840 ignore pattern rows
+per tier and479 filesystem comparisons in the separate native run. Native and
+release units, external-package clients and actual-checked verdicts are separate.
+Five bounded index checked programs and full worktree/ignore/commit programs
+exit(0). The earlier combined-index checked mem-budget refusal remains explicit
+in index-combined-checked-budget.json; it is not relabeled a pass.
 
+Sixteen corpus repositories reproduce their OID manifests twice. The original
+nine builders remain intact;61 inherited M1/shape case definitions are sealed
+by tests/m1-case-sha256.json. The expanded codec gate reads1099 loose objects
+and31 pack entries, rewrites1130 objects, checks32 corrupt/truncated streams,
+and handles one genuinely empty/unborn store with an independent corruption
+control. Its undefined empty-store size ratio is null, not a fabricated number.
+Nonempty corpus ratios remain at most1.006731, below the1.25 ceiling.
 
-Initial black-box measurements: tools/vc03-measure.py;
-notes/vc03-evidence/oracle-initial.{json,log}. All first four index observations
-match the extension prediction: no extension after add; TREE after write-tree
-and commit; root invalidation payload 002d3120300a after adding a new root file.
+Index extension census: actual Git-generated TREE/REUC round-trip; UNTR, FSMN,
+IEOT/EOIE, link and sdir are observed and refused by name where unsupported.
+Generic parse preserves stages0–3; mutation of unmerged entries refuses until
+REUC generation exists. Stat comparison canonicalizes only ctime_s/ns,
+mtime_s/ns, dev and ino, each proved against its own file; mode/uid/gid/size
+remain exact. Proof rows retain all ten index words and the observed raw mode.
+Unchanged stale cache entries are never normalized. Recomputed checksums do
+not excuse a wrong stat word. Worktree files, modes, directories and symlinks
+are compared too; stdout/stderr/status are never normalized.
 
-R-vc03-2 A adopted by the coordinator: match Git, leaving ORIG_HEAD untouched
-on commit --amend. The contract's ORIG_HEAD-write line was a guess corrected by
-measurement. Root 9c898195cdbc9aea467ac6ef0871143f5d6a2a8a amended to
-76d797c00058b03dc350051f32a1927c2d77f1b2: ORIG_HEAD stayed absent. A further
-amend with preexisting ORIG_HEAD retained its exact bytes. Reproducer and both
-commands/outputs are retained in the named JSON. No reviewed divergence.
+Commit lifecycle measured, not inferred:
 
-R-vc03-3 A adopted by the coordinator: canonicalize exactly ctime_s/ns,
-mtime_s/ns, dev and ino, each proven against the tool's own lstat; retain mode,
-uid, gid and size byte-for-byte between tools. All ten words remain in each
-proof row. Git add --chmod=+x writes mode 33261 (100755) while own lstat remains
-33188 (100644); the worktree is untouched. This is not a wildcard or permission
-to normalize logical index mode. tools/vc03-index-measure.py and index-oracle.json
-retain that witness plus nested ITA, TREE child order and nine version transitions.
-Git config index.version 2 or 3 writes v2 without extended bits and v3 with them;
-v4 stays v4 through all three transitions.
---date=now author seconds changed 1792881244 -> 1792881246 with fixed committer
-1700000000; the contract's named refusal is required, not deterministic parsing.
+| Mode | At message/editor phase | On message/editor failure |
+|---|---|---|
+| ordinary | refreshed index/TREE/tree objects published; index.lock absent | refreshed cache and COMMIT_EDITMSG retained; ref unchanged |
+| -a | staged index.lock fully prepared and held | original index retained; owned lock removed; ref unchanged |
 
-Execution deviation reported to the coordinator: the initial container image's
-package-install layer ran without an inside-layer taskset; it completed. No host
-packages were installed. Oracle/toolchain execution and measurements ran inside
-the 12-GiB container with taskset 0-5 under hasu-A flock. The bootstrap's final
-sha256sum used an incorrect path and exited 1 after the oracle builder had
-already verified the correct digest; the independent measurement repeated the
-hash at the correct path. No false bootstrap-green claim.
+commit-phases.json uses a tiny lane-owned failing editor solely as black-box
+test input; den executes no editor or hook. Empty-message, NUL, editor-false,
+foreign index/HEAD/branch locks, stale ref CAS, same-OID amendment and explicit
+index-write/index-sync failures have dedicated witnesses. Reflogs retain the
+pre-UTF8-repair first physical line, not the human paragraph subject.
 
-The wrapper prohibits Markdown report files; this .txt file and the eventual
-PR body are the contract's fallback.
+closes den#9: tools/object-temp-race.py reproduced not_found at round2 (96 writer
+attempts) on four CPUs. A deferred unlink could delete a second writer's reused
+temporary name. Retiring ownership after unlink passed100 rounds/3200 writers,
+then512 writers per native/release tier and inherited object interop. First plant
+runs40142256100/40142259073 stopped at this inherited race and are NOT plant reds.
+
+Measured text families: human/short/porcelain/NUL status headings and hints,
+unborn/manual-detached/checkout-detached states, ignored-path and sparse-path
+advice, rm local/staged/both refusals, mv missing/overwrite errors, restore
+pathspec errors, index/HEAD/branch lock advice, commit nothing/empty/NUL/editor
+errors, root/amend/author/date/shortstat summaries, and check-ignore provenance,
+negative records and deduplicated symlink-source warnings. Exact bytes and
+individual case names remain in the matrix captures.
+
+Intended plants, correct implementation committed first:
+- Stat word: closed-unmerged PR#7, head5309592, run40143870758, Linux assert at
+  src/index_test.lu:328:22, exit134. Raw log retained.
+- Ignore anchor: closed-unmerged PR#8, head8097cd4, run40143873215, Linux assert at
+  src/ignore_test.lu:15:5, exit134. Raw log retained.
+- Reflog separator: closed-unmerged PR#10, head51059da, run40154821076, Linux
+  assert at src/commit_test.lu:62:5, exit134. First run40152196930 stopped at
+  formatting and is not counted; clean fix985594e preceded the corrected run.
+
+### Rulings and follow-ons
+
+- R-vc03-1 / R-vc03-3 A: six-word per-entry proof; --chmod witness has index
+  mode33261 versus physical33188, never normalized.
+- R-vc03-2 A: --amend leaves ORIG_HEAD untouched. Root9c898195cdbc9aea467ac6ef0871143f5d6a2a8a
+  amended to76d797c00058b03dc350051f32a1927c2d77f1b2 without creating it; a preexisting
+  file stayed byte-identical. The contract's original write was a corrected guess.
+- R-vc03-4 A: match Git's >=2-star globstar boundary and verbose matched-negation
+  success. Pattern backslashes remain raw; NUL truncates its physical pattern.
+- R-vc03-5 A: edited rename metric/pairing belongs to vc04. Exact-OID handling
+  stays here; unresolved status/nonquiet summary candidates refuse without
+  persistent writes; quiet commits retain full-state parity. No M2-complete claim.
+- R-vc03-6 A: relative excludesFile provenance stays relative; lookup uses root.
+- R-vc03-7 A: preserve all amend parents, use one-parent baseline where relevant,
+  and print no merge-amend shortstat that Git does not print.
+
+All were decided by the coordinator, not the lane. docs/SOURCES.md cites the
+primary pages/sections. Git documentation errata are drafted in
+notes/vc03-evidence/git-doc-errata.txt, not submitted upstream.
+
+wolf-lang#927 carries the copied-lent-byte-view native refusal. Direct/bound
+probes plus native/actual-checked logs are retained; boundary materialization
+is the documented workaround. No toolchain pin changed. Existing byte-path,
+pack/revision and checked-budget limits are not presented as new support.
+
+vc04's first input is the1510-pair six-report rename corpus and its counterexamples
+(63 versus64 repeated bytes, shifted versus wrapped spans); no approximation was
+shipped. vc04-adjustments.txt and vc05-adjustments.txt name the APIs, refusal
+boundaries and contract changes. MAP and probes/ carry exact public signatures.
 
 ## Done-when
 
-- [x] Prediction recorded before code.
-- [ ] Config parser and precedence measured.
-- [ ] Index v2 write, v3/v4 read, extensions, exclusive lock, per-entry stat proof.
-- [ ] Ignore rules; add/rm/mv; status; commit/ref/reflog; path restore.
-- [ ] M1 unchanged, M2 matrix, three plants red by CI run id.
-- [ ] Public consumer API/client, docs, README, issues and contract adjustments.
-- [ ] Final head pushed; status read once; audit last line; orchestrator watches CI.
+- [x] Prediction, primary-source record and twice-verified pins.
+- [x] Config/index/ignore/worktree/commit implementation and independent matrices.
+- [x] M1 case seal; native/release and actual-checked evidence; extension census.
+- [x] Measured lifecycle, stat proof, source warnings and inherited race fix.
+- [x] All three intended plants red and closed unmerged; no labels or CI wait.
+- [x] Final full gate, source manifest, exact counts, README final read.
+- [ ] Final PR/head pushed; status read once; literal audit line attached.
+- [ ] Orchestrator adds full-matrix and watches the final-head merge gate.
+
+Prune after adoption: /Users/mfwolffe/lanes/vc03/target/plant-stat,
+/Users/mfwolffe/lanes/vc03/target/plant-ignore,
+/Users/mfwolffe/lanes/vc03/target/plant-reflog, then /Users/mfwolffe/lanes/vc03;
+hasu /home/mfwolffe/lanes/vc03 and image localhost/den-vc03. Preserve hasu-env,
+other lanes and all model/server data. The recorded local full gate completed with exit0. No helper agent remains running.

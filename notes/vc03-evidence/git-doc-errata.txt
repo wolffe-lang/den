@@ -41,3 +41,15 @@ Suggested documentation correction: distinguish a verbose matched rule
 
 Den follows these measured binary behaviors under adopted R-vc03-4 A. These
 are documentation reports for review, not upstream submissions or issue filings.
+
+3. Relative core.excludesFile source spelling is not made absolute
+
+Git v2.56.0 Documentation/git-check-ignore.adoc, OUTPUT, says <source> is an
+absolute path for core.excludesFile. With core.excludesFile=relative.ignore,
+the actual verbose result is:
+relative.ignore:1:*.tmp<TAB>scratch.tmp<LF>
+The source spelling remains relative, even when check-ignore runs from a
+subdirectory. Lookup remains rooted at the worktree rather than that subdirectory.
+Reproducer: tools/ignore-filesystem-oracle.py, global-relative cases; original
+captures are in ignore-filesystem-initial.json. Adopted R-vc03-6 follows the
+binary and separates lookup path from displayed source spelling.

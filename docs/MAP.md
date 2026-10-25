@@ -1,17 +1,21 @@
 # Map
 
-M1 includes the codec, owned OIDs, bounded loose store, binary object parsers,
-repository discovery/init and the measured plumbing subset described in README.
-Packs, index writing, porcelain and transports remain unimplemented; unsupported
-options/features refuse by name. A green gate is not full Git compatibility.
+The codec, owned OIDs, bounded loose store and binary object parsers underpin
+a writable index and the implemented worktree/commit subset. The dispatcher
+now routes add/rm/mv/status/commit/restore, path-only checkout, check-ignore and
+read-only config --get as well as the object plumbing. M2 is not complete:
+edited rename similarity, diff/history commands, general refs, packs and
+transports remain separate work. The local full gate passed against 177 frozen
+source/input hashes, checked again after completion; final-head CI remains the
+merge gate. This is a measured subset, not full Git compatibility.
 
 ## Modules and lanes
 
-| Milestone | Planned modules and owners |
+| Milestone | Modules and scope |
 |---|---|
 | M0 | CLI refusal scaffold, `hash`, probes, oracle/corpus/review harness (vc00) |
 | M1 | `zlib`: inflate then deflate, Adler-32 (vc01); `oid`, `object`, `repository`, init/hash-object/cat-file/tree/commit/tag plumbing (vc02) |
-| M2 | `index`, `worktree`, `ignore`, add/rm/mv/status/commit/restore (vc03); `diff` Myers, unified output and rename detection (vc04); `walk`, `pretty`, log/show (vc05) |
+| M2 (partial) | `index`, `worktree`, `ignore`, `commit_format`, `commit`: implemented subset (vc03); edited rename similarity and `diff` (vc04); `walk`, `pretty`, log/show (vc05) |
 | M3 | `refs`, `reflog`, branch/tag/checkout/reset (vc06); three-way merge/revert (vc07); rebase/cherry-pick/sequencer (vc08); blame (vc09); stash/notes/revision grammar (vc10) |
 | M4 | `pack`, `pack_index`, delta decoding (vc11); pack writing, gc/repack/fsck/count-objects (vc12) |
 | M5 | `pktline`, protocol v2 fetch (vc13); receive-pack push/remotes (vc14); clone/pull porcelain (vc15) |
@@ -25,8 +29,9 @@ OID design keeps an algorithm and a byte list from the start, never a fixed
 
 ## Surfaces
 
-Measured on wolf 0.2.35 (`cf0c13d3`), bundled std `2386522e`, Ubuntu 24.04
-container on kasumi CPUs 12–15. “Checked” below means the observation's
+The original surface census was measured on wolf 0.2.35 (`cf0c13d3`), bundled
+std `2386522e`, Ubuntu 24.04 on kasumi CPUs 12–15. M1/M2 implementation
+measurements use hasu CPUs 0–5 with the same pinned toolchain/container. “Checked” below means the observation's
 `verdict` from `wolf conform-run --checked --json`, never its process status
 (which is 0 even for a static rejection). Full logs are tracked under
 `notes/vc00-evidence/probes/`.
@@ -135,36 +140,67 @@ is needed beyond referring to the equivalent `DeflateErrors` alias.
   compression, with measured sizes. Other on-disk artifacts stay exact.
 - R-vc00-3: fetch/ls-refs use protocol v2; push uses receive-pack framing.
 
-## Harness and CI
+## Harness, evidence and CI
 
-Nine corpus repositories: two files; ten-commit linear history; branch/merge;
-rename; binary; symlink; empty tree; 1,000 files; packed after gc. Every one
-passes oracle fsck. Two independent builds produce the same object manifests.
-That proof concerns oids, not inode-dependent index stat bytes.
+`tools/corpus` defines 16 repositories: the original nine object/history
+fixtures plus ignore, staged rename, modes/symlink, unborn, amend, index-v4 and
+edited-rename states. The original nine builders remain unchanged. The two
+independent corpus builds compare OID manifests, not inode-dependent stat data.
+`tests/cases.json` defines 163 main cases, with generated component matrices
+counted separately. The full gate reports 136 parity / 26 named not-yet /
+1 version-shape / 0 reviewed / 0 failures. It validates 636 canonicalized
+tool-side entry rows: 60 in the main matrix, 84 per worktree tier, 168 per
+commit tier and 36 per index-client tier. There are 54 distinct captured status
+stdout texts across the main/worktree matrices. `final-counts.json` records
+these counts directly from the observations.
 
-`tests/cases.json` names 86 cases. `tools/oracle --filter TEXT` selects a
-subset; an empty selection fails. `--strict` fails on not-yet rows. Normal M0
-mode counts those separately: 1 version-shape pass, 28 not-yet, 57 parity and 0
-reviewed rows. Every unexpected mismatch fails. The gate also proves --strict refuses not-yet and an empty filter is an error; local native TLS is gated, with one actual checked budget refusal printed and counted. Review JSON binds the case
-hash and the complete Git/den stdout, stderr, status and .git file maps, with
-reason and issue/ruling; there is no wildcard or excluded file. Named `loose-object-raw` comparison
-validates checksum/header/oid and compares raw bytes; compressed evidence
-remains in the captures. All non-object file bytes and modes remain exact.
-A review stops matching when either side changes. The seed template is empty
-so the harness never reads Git's sample hook scripts.
+`tools/oracle --filter TEXT` rejects an empty selection; `--strict` rejects
+named not-yet results. The normal gate distinguishes those from parity and
+shape checks. A reviewed difference binds its case hash, complete stdout,
+stderr, status and repository-byte map to a specific reason/issue; no wildcard
+or excluded repository path is permitted. The loose-object comparison checks
+raw bytes/OIDs and valid bounded compression, retaining compressed captures.
+Other bytes and modes remain exact except the six proven index-stat words
+described below. Optional read-only index refresh is disabled by the pinned
+environment. Empty hook/template fixtures contain no sample scripts.
 
-Repository copies have different inode/ctime metadata; before index-writing
-parity is asserted vc03 must supply shared stat fixtures or a specifically
-reviewed index-stat difference. It must not globally exclude the index.
-Optional index refresh is disabled in the pinned environment for read-only
-commands. Index data itself is never normalized by this harness.
+Recorded earlier witnesses are not the final expanded verification:
 
-CI plan: PR runs ubuntu-24.04 and the planner's own tests; full-matrix at the
-final head (or trunk/nightly) adds a nonblocking macOS Homebrew-git field leg.
-Only the orchestrator may add that label. The nightly opens/updates a
-nightly-red issue on failure. Build/probe jobs locally run inside the pinned
-Ubuntu container under the core-block flock. The .txt evidence/PR-body route
-is used instead of a Markdown lane report, as the lane tool rules require.
+| Component | Earlier recorded coverage | Current gate |
+|---|---|---|
+| Worktree | 186 command cases per native/release tier and an actual checked unit exit | `tools/check-worktree`: units, external client and full repository snapshots |
+| Ignore | 840 pattern rows per native/release tier and actual checked unit exit; 479 filesystem rows on native | `tools/check-ignore` plus `tools/ignore-filesystem-oracle.py`: precedence, tracked/prefix bypass, relative sources, warnings and no-write checks |
+| Commit | 51 native full-repository comparisons after the initial fixes | `tools/check-commit`: CLI state, failure/ref tests and actual checked units |
+| Commit formatting | 150 API comparisons | Date/identity/message outputs; **not** 150 CLI stdout/stderr/status parity cases |
+
+The current gates have expanded since those measurements. The combined index
+checked-budget refusal and the new bounded stat probe are tracked separately
+below. Native/release failures and explicit unsupported rows are never counted
+as checked passes.
+
+CI selects PR/full/noop/partial tiers, tests its own planner, and adds the
+nonblocking macOS Homebrew-Git field leg at the full tier. Local heavy work
+runs under the assigned core-block flock with taskset inside a 12-GiB container.
+The complete gate also retains codec/object interop, race/interruption tests,
+format checking, corpus reproducibility and the static archive checks.
+
+### Toolchain input identity
+
+`wolf-toolchain.toml` and `den-oracle.toml` retain archive, source and container
+pins. The two metadata reads in
+`notes/vc03-evidence/{wolf,lupin}-release-read-{1,2}.json` agree on asset IDs,
+names and digests. These are input identities, not test verdicts.
+
+| Linux x86-64 archive | Release asset ID | SHA-256 |
+|---|---:|---|
+| wolf 0.2.35 | 668511628 | `4cc4045bbbb605c07835bc4f32685953c784eeef4cd3139a48b457dfc90dad1a` |
+| lupin 0.1.56 | 667986244 | `ad703550ac4787e8e4bb26989d591a731410274d7332f2b4e8b9a64c878822cc` |
+
+The oracle executable is Git 2.56.0, SHA-256
+`c4848492938c4ebfffbefe1fbbaa68b9af90c86d1f6a20e76816c5ff37fcfa60`.
+The wolf archive includes its runtime archive and std tree; do not replace it
+with an unstamped plain build. Lupin's tag revision and embedded revision differ
+as recorded in the pin file.
 
 ## Object API for index/porcelain consumers
 
@@ -223,14 +259,13 @@ required; unsupported platforms return a row instead of claiming durability.
 `write_injected` is an explicit test seam (write/sync/install/directory-sync),
 never selected by a production environment variable.
 
-vc03 should retain this API, implement index writing/refresh and nested tree
-assembly, and replace the minimal flat-v2 reader only with strict checksum,
-padding, mode, stage and extension tests. The existing TREE cache is ignored
-for building but preserved byte-for-byte; unknown extensions refuse by name.
-Do not normalize inode/ctime fields or ignore the index in parity snapshots.
-Keep generic stored headers/messages lossless; commit-tree's observed repair
-belongs only at the command edge. General config/date/revision parsing is not
-provided by this milestone. Add no production Git or shell dependency.
+These object APIs remain available to the index and porcelain modules.
+`parse_v2` is a legacy flat-v2 compatibility reader, not the interface for new
+nested consumers. `index.write_tree` now writes nested trees and refreshes TREE
+under index.lock. Generic headers/messages remain byte-lossless; UTF-8 repair
+belongs only at commit creation command edges. Configuration and deterministic
+date/message parsing have their own APIs below; no general revision grammar or
+production Git/shell dependency has been introduced.
 
 ## Index and ignore consumer API
 
@@ -242,11 +277,32 @@ extensions. `serialize` preserves selected v3, while `serialize_for_write`
 implements Git's v2/v3 downgrade/upgrade policy. Version 4 remains version 4.
 The legacy `parse_v2` API keeps its flat stage-zero contract.
 
-`begin(repo, cap, version)` acquires index.lock before reading. Version 0
-retains the existing selection/default2; 2/3/4 select explicitly. Immediately
-`defer abort(mut tx)`, update `tx.value`, then `commit(mut tx)`. Never copy a
-live transaction. Commit writes complete bytes, syncs, closes, renames and
-syncs the directory; ordinary failures clean only its own lock. TREE and REUC
+`begin(repo, cap, version)` acquires index.lock before reading. An existing
+index retains its version regardless of this argument: 0 means default v2 for
+a missing index, and 2/3/4 choose only a missing index's initial version. To
+convert an existing index, set `tx.value.version` explicitly; the transactional
+v2/v3 write policy still applies. This matches `index.version`, not an implicit
+conversion on every command. Immediately `defer abort(mut tx)` and never copy a
+live transaction.
+
+`prepare(mut tx)` serializes, writes, syncs and closes index.lock without
+publishing it. `install(mut tx)` atomically renames that prepared lock to index
+and syncs the directory. `commit(mut tx)` combines both; ordinary failures
+clean only this transaction's lock. An install directory-sync error means the
+complete new index is already visible. Preparation leaves an active owned
+transaction with a closed fd; abort can still discard it. The split boundary
+lets `commit -a` prepare its index before ref CAS and install only afterward.
+No API promises a multi-file atomic commit.
+
+```wolf
+pub fn index.begin(repo: repository.Repo, cap: int, version: int) -> Transaction ! IndexErrors
+pub fn index.abort(mut tx: Transaction)
+pub fn index.prepare(mut tx: Transaction) -> () ! IndexErrors
+pub fn index.install(mut tx: Transaction) -> () ! IndexErrors
+pub fn index.commit(mut tx: Transaction) -> () ! IndexErrors
+```
+
+TREE and REUC
 are validated and preserved; UNTR, FSMN, EOIE, IEOT, sdir, link and unknown
 extensions refuse by name. Resolving/removing higher-stage entries is refused
 until their REUC generation is implemented, rather than losing undo data.
@@ -267,54 +323,188 @@ always compared byte for byte between the tools. All ten words remain recorded.
 This adopted R-vc03-3 policy handles --chmod without a wildcard or invented
 physical-mode proof. `tools/index-proof.py` binds proof rows to entry path,
 stage and original stat words; a recomputed checksum cannot excuse corruption.
+Original checksums are verified first. Only the canonical comparison copy's
+checksum is recomputed after the six proven words are changed.
 
 `ignore.parse` owns rules from binary content. `matches` checks one node;
 `evaluate` checks parent exclusions and precedence. `query` takes Repo,
 worktree root, canonical relative path and lstat directory status; it is
-explicitly untracked, with `query_tracked` providing the caller's index bypass.
-The result carries source, line, effective pattern, physical original line,
-negation and ignored status. `format` renders verbose/plain/NUL records.
-The query does not follow symlink .gitignore files or ancestors. The matcher
-uses iterative O(pattern-atoms × path-bytes) DP, not recursive backtracking.
-Sources are bounded at 16 MiB each, and ~user expansion is refused by name.
+explicitly untracked, with `query_tracked` providing an explicit tracked bypass.
+The result carries matched/source/1-based line/effective pattern/physical
+original line/negated/ignored. `format` renders verbose/plain/NUL records;
+pattern bytes are raw, while source/operand quoting is controlled separately.
+NUL ends the effective pattern on its physical line, not the file. The original
+retains BOM/NUL-tail provenance; the effective first-line pattern omits a BOM.
 
-Independent clients live in probes/index-client and probes/ignore-client.
-vc04 should consume full Entry paths/modes/OIDs, never legacy flat parse_v2;
-worktree-vs-index compares content and configured modes, not stat words alone.
-vc05 should keep using lossless object headers and HEAD resolution; index and
-ignore results do not implement revision walking. Neither consumer may assume
-all extensions or merge-stage edits are supported.
+`query_with_warnings(..., mut warnings: List[str])` and
+`query_tracked_with_warnings(..., tracked, mut warnings)` append complete
+nonfatal diagnostic lines without LF, once per source across a caller's
+operation list. They never print, clear existing diagnostics, or follow a
+symlink .gitignore. A warning remains available if a later query fails. Silent
+compatibility wrappers discard their local warning lists. Tracked bypass and
+excluded-parent early stop load no deeper ignore sources and add no such
+warnings. Other symlink ancestors are refused. Configured relative global
+sources retain their spelling for output but are opened relative to the
+explicit worktree root; tilde/default absolute sources are unchanged.
 
-### Configuration boundary
+The matcher uses iterative O(pattern-atoms × path-bytes) DP, not recursive
+backtracking. Sources are bounded at 16 MiB each; ~user expansion is refused.
+Filesystem path inputs remain str-limited, even though matching is binary.
+
+```wolf
+pub fn ignore.query_with_warnings(repo: repository.Repo, worktree: str, path: str,
+    is_dir: bool, mut warnings: List[str]) -> Match ! IgnoreErrors
+pub fn ignore.query_tracked_with_warnings(repo: repository.Repo, worktree: str,
+    path: str, is_dir: bool, tracked: bool, mut warnings: List[str]) -> Match ! IgnoreErrors
+```
+
+Independent packages exercise these boundaries in probes/index-client,
+probes/ignore-client, probes/worktree-client, probes/commit-format-client and
+probes/commit-client. Follow-on consumer requirements are listed below; these
+APIs do not implement revision walking or every index extension.
+
+## Worktree and commit consumer APIs
+
+`Context {repo, root, cwd, prefix}` distinguishes the worktree root from gitdir
+and command cwd. `discover` handles gitfiles, explicit GIT_DIR/GIT_WORK_TREE and
+core.worktree, but refuses bare-worktree commands and GIT_INDEX_FILE. Paths
+are owned root-relative bytes after normalization; ordinary porcelain pathspec
+magic/globs remain named refusals. `check-ignore` uses literal normalization,
+so metacharacters in an operand do not become wildcard selections.
+
+`FlatEntry {path, mode, id}`, `FileState {path, mode, id, data, stat, kind}`,
+`StatusRow {path, original_path, x, y, ignored, untracked}` and
+`Snapshot {context, head, index, head_entries, files, directories, rows}` own
+their data. File content and symlink target bytes are distinct; no followed
+referent is used as link metadata. `Head` represents unborn/attached/detached
+state and optional checkout-origin data without writing HEAD.
+
+Key operations, with error aliases defined alongside their declarations:
+
+```wolf
+pub fn worktree.read_index(ctx: Context) -> index.Index ! WorkErrors
+pub fn worktree.flatten_tree(repo: repository.Repo, id: oid.Oid) -> List[FlatEntry] ! WorkErrors
+pub fn worktree.scan(ctx: Context) -> Snapshot ! WorkErrors
+pub fn worktree.scan_index(ctx: Context, value: index.Index) -> Snapshot ! WorkErrors
+pub fn worktree.scan_with_warnings(ctx: Context, include_untracked: bool,
+    mut warnings: List[str]) -> Snapshot ! WorkErrors
+pub fn worktree.scan_index_with_warnings(ctx: Context, value: index.Index,
+    include_untracked: bool, mut warnings: List[str]) -> Snapshot ! WorkErrors
+pub fn worktree.stage_paths_with_warnings(ctx: Context, mut value: index.Index,
+    paths: List[List[byte]], options: AddOptions, mut warnings: List[str]) -> List[List[byte]] ! WorkErrors
+pub fn worktree.query_ignore_with_warnings(ctx: Context, operand: str,
+    no_index: bool, mut warnings: List[str]) -> ignore.Match ! WorkErrors
+pub fn worktree.tracked_for_ignore(value: index.Index, path: List[byte]) -> bool
+pub fn worktree.render_status(snapshot: Snapshot, options: StatusOptions) -> List[byte] ! WorkErrors
+```
+
+Scan/read operations do not refresh the index or acquire its write lock.
+`include_untracked=false` skips ignore queries and untracked file-body reads,
+not just their displayed rows. `compare_status_with_warnings` offers the same
+control when comparing caller-supplied snapshots. Silent compatibility wrappers
+remain for scan/index-scan, comparison, staging and ignore queries. Command
+callers share one warnings list and flush once, including before fatal returns.
+Tracked ignore bypass includes indexed descendants under a literal directory
+prefix; `no_index=true` does not read the index at all.
+
+For edits, callers own begin/abort/commit around `stage_paths`, `remove_paths`,
+`plan_moves`/`move_paths` or `restore_paths`. `AddOptions`, `RemoveOptions`,
+`RestoreOptions` and `MovePlan` make the selection explicit. The index lock
+is not a promise of atomic rollback for a series of worktree file operations.
+
+`commit_format` is pure: `Date {seconds, offset}`, `Identity {name, email,
+date}`, `parse_date`, `date_text`, `make_identity`, `parse_author`,
+`parse_identity`, `identity_text`, `cleanup_mode`, `comment_marker`, `cleanup`,
+`paragraphs`, `file_message` and `message_empty`. Callers supply environment,
+configuration and default offset; cleanup preserves binary message bytes.
+Clock-relative dates, unsupported identity search and input/size limits have
+explicit rows. Command-edge UTF-8 repair is not part of these pure APIs.
+
+`commit.reflog_line` builds owned bytes; `publish_ref` publishes an attached
+loose branch with exclusive HEAD/branch locks and an expected-old-OID recheck.
+It never writes ORIG_HEAD. Reflog appends and ref/index publication are not one
+multi-file atomic transaction: later IO failure can leave earlier log bytes.
+`commit.subject` formats the human first paragraph; `reflog_subject` uses only
+the first physical line, before command-edge UTF-8 repair. FORMATS describes
+same-OID amend logging and the normal-versus-`-a` index lifecycle.
+
+### Rename scope and follow-on consumers
+
+R-vc03-5 keeps staged rename/copy matching exact-OID only, including regular
+100644/100755 mode changes when the file type agrees. Rename-enabled status
+refuses unresolved same-type staged A+D candidates by name rather than guessing
+an edited-content score. Non-quiet commit checks its corresponding human
+summary policy before writes; quiet commit skips that unavailable summary and
+can use the otherwise exact staged tree/ref/reflog path. This is not M2
+completion or an accepted approximate rename metric. Disabling status rename
+detection returns independent rows without invoking that metric.
+
+vc04 should consume full Index.Entry paths/modes/OIDs and the owned snapshots,
+not legacy flat `parse_v2`; compare content and configured modes, never stat
+words alone. Replace the explicit edited-similarity refusal only after a
+clean-room general rule passes the discriminating black-box cases. The six
+archived `notes/vc03-evidence/rename-measure-{initial,random,hash,structural,equivalence,wrap}.json`
+reports contain 1,510 pairs from `tools/rename-measure.py`, with matching logs.
+They are research captures, not scorer parity or a fixture-specific exception
+table. Exact byte span matching and first-byte-offset normalization both
+misclassify witnesses.
+
+vc05 should reuse lossless object headers, `head`, `flatten_tree`, owned rows and
+quoting/subject helpers as appropriate, but must implement revision walking and
+pretty-history policy separately. Amend retains its complete parent list;
+merge-amend human summaries cannot be guessed as first-parent shortstat.
+Neither consumer may assume all extensions, arbitrary revision grammar or
+higher-stage mutation are supported. There is still no production Git/shell
+dependency.
+
+### Configuration boundary and key census
 
 `ConfigEntry {key, value, implicit}` preserves raw assignments. `parse_config`
 handles section/subsection case, quoting, escapes, continuations and implicit
 booleans. `configuration` loads system/global/repository/runtime scopes in that
-order; GIT_CONFIG_NOSYSTEM suppresses system reading. Explicit GLOBAL replaces
-XDG/HOME defaults; COUNT/KEY_n/VALUE_n override files. Includes/includeIf refuse
+order; GIT_CONFIG_NOSYSTEM suppresses system reading. GIT_CONFIG_SYSTEM and
+GIT_CONFIG_GLOBAL select their files; explicit GLOBAL replaces XDG/HOME defaults.
+GIT_CONFIG_COUNT/KEY_n/VALUE_n override file values. Includes/includeIf refuse
 by distinct names. Repo.config remains a last-value scalar map (implicit=true);
-`config --get` preserves raw implicit output as an empty line. The detailed
-configuration_diagnostics/check_config boundary carries contextual CLI errors
-without changing object APIs' RepoErrors. Each file is capped at 1 MiB and
-runtime pairs at 65,536.
+`config --get` preserves raw implicit output as an empty line. The
+`configuration_diagnostics`/`check_config` boundary carries contextual CLI
+errors without changing object APIs' RepoErrors. Files are capped at 1 MiB and
+runtime pairs at 65,536. This is a reader, not a general config editor.
 
-Existing consumers read core.repositoryFormatVersion, extensions.objectFormat,
-core.compression, core.looseCompression, core.autocrlf, init.defaultBranch,
-init.templateDir, user.name, user.email, i18n.commitEncoding and
-core.excludesFile. The generic harness --get can retrieve any well-formed key;
-that is not a claim that every Git configuration option affects den.
+Keys currently consulted (canonical matching is case-insensitive except quoted
+subsections); entries marked refusal controls do not imply feature support:
+
+| Consumer | Keys |
+|---|---|
+| Repository / init | `core.repositoryFormatVersion`, `extensions.objectFormat`, `core.bare`, `core.worktree`, `init.defaultBranch`, `init.templateDir`; unknown `extensions.*` refuse |
+| Loose storage | `core.compression`, `core.looseCompression` |
+| Worktree / ignore / index | `core.fileMode`, `core.symlinks`, `core.excludesFile`, `core.quotePath`, `index.version` |
+| Status | `status.short`, `status.branch`, `status.showUntrackedFiles`, `status.relativePaths`, `status.renames`, `advice.statusHints`; `branch.<current>.merge` triggers the unsupported upstream-tracking path |
+| Add diagnostics | `advice.addEmptyPathspec`, `advice.addIgnoredFile`, `advice.updateSparsePath` |
+| Commit identity / message / logging | `user.name`, `user.email`, `author.name`, `author.email`, `committer.name`, `committer.email`, `i18n.commitEncoding`, `commit.cleanup`, `core.commentChar`, `core.commentString`, `core.logAllRefUpdates` |
+| Refusal / editor controls | `core.autocrlf`, `core.attributesFile`, `core.hooksPath`, `commit.gpgSign`, `core.editor`; attributes, nonempty hooks, signing and actual editor execution remain unsupported |
+
+The generic --get command can retrieve any well-formed key; this is not a claim
+that every Git option affects den. Environment identity/date overrides and
+EMAIL/EDITOR/VISUAL/TZ are resolved by the commit command, not the pure format
+module. User hooks/editors are never executed.
 
 ### Checked-machine and compiler limits
 
-The complete index unit program exceeds the pinned checked mem-phase budget;
-its unsupported verdict is retained, not reported as a pass. Four bounded
-actual-checked programs separately cover roundtrip, flags/version policy,
-nested trees/intent cache and malformed data, all exit(0). Full native/release
-units and independent filesystem/oracle tests remain enabled. The full ignore
-unit program runs on the actual checked machine successfully.
+The combined `src/index_test.lu` checked program exhausts the pinned mem-phase
+step budget; `index-combined-checked-budget.json` retains its unsupported
+verdict. Five bounded actual-checked programs are wired into `tools/check-index`:
+format, flags, trees, malformed input and stat mapping. All five recorded
+exit(0) in the full gate. Native and
+release still run the complete unit and independent filesystem/oracle suite.
+The ignore, worktree, commit-format and commit unit programs also recorded
+actual-checked exit(0). `final-gate.log` and `final-inputs.json` bind these
+results to the source files; no runtime source was changed after that gate.
 
-A native compiler gap affects `copy` of a lent str.bytes() read parameter in a
-returned value: the direct index-view probe refuses with exit4, while the
-bound control builds and both actual-checked programs exit(0). Explicit byte
-materialization at owned-return boundaries is the narrow workaround. The
-reproducer and native/checked log are tracked; an upstream issue is pending.
+wolf-lang#927 tracks a native compiler gap when copying a lent str.bytes()
+read parameter into a returned value. `probes/index-view-direct` refuses with
+build exit 4, while `probes/index-view-bound` builds; both actual-checked probes
+exit(0). Explicit byte materialization at owned-return boundaries is the narrow
+workaround. `notes/vc03-evidence/index-view.log` retains the diagnostics; this is
+not evidence that every native copy is broken or a substitute for checked
+verification.

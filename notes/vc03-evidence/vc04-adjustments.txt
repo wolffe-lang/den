@@ -1,0 +1,63 @@
+vc04 adjustment — read the rename measurements before designing the scorer
+
+Scope adopted in R-vc03-5: vc03 implements exact-OID rename/copy matching only.
+Edited-content similarity and general pairing belong to vc04's shared diff
+component. M2 is not complete. Status/nonquiet commit refuse unresolved
+same-type added/deleted candidates by name, with no persistent state changes;
+quiet commit can publish the exact tree/ref/reflogs without that summary.
+Commit summary forces rename detection even when diff.renames=false.
+
+First inputs
+- tools/rename-measure.py
+- notes/vc03-evidence/rename-measure-{initial,random,hash,structural,equivalence,wrap}.json
+- The corresponding .log files, all under the same evidence directory.
+These six completed reports contain 1,510 one-source/one-destination pairs:
+123 + 300 + 522 + 90 + 301 + 174. Every report names the pinned Git digest.
+The combined --suite all was not run. Fresh suite directories are required.
+
+Supported structural hypothesis, NOT a compatible final algorithm
+- Split at LF or 64-byte boundaries, retain a final incomplete span.
+- Compare a multiset; repeated matches contribute the smaller occurrence count.
+- Common-byte weight / max(original byte sizes), floored to a percentage;
+  default classification crosses at 50% in the measured threshold families.
+- Text CRLF normalization changes span bytes/weight, not the size denominator.
+  NUL at offset 7999 disables it; NUL at offset 8000 does not in these witnesses.
+Exact span equality predicted both score and classification in 300 random
+pairs. It is nevertheless WRONG as the general content-equivalence rule.
+
+Counterexamples that change classification
+1. a repeated 63 times -> b repeated 63 times: no rename even at 1%.
+   a repeated 64 times -> b repeated 64 times: R100, also R at default50%.
+   The complete 256-byte census and near-uniform positional cases are retained.
+2. Forty non-wrapping uniformly shifted random64-byte spans all yield R100.
+   First-byte normalization would predict that, but 120 mixed-wrap pairs with
+   the same modulo-256 normalized representation yield NO rename.
+Do not hard-code the repeated-byte exceptions or ship exact-span matching as
+parity. The signature/equivalence remains unresolved; no implementation-derived
+recurrence or constants were consulted. Multiple-candidate pairing/ties remain
+unmeasured in this research and need their own discriminating matrix.
+
+Integration boundary
+- Use index.parse/read and full Entry values, not legacy flat parse_v2.
+  Paths are raw owned bytes; stat[6] is canonical mode; stage() preserves0-3.
+  Index order is full unsigned path then stage, not tree directory-aware order.
+- Use worktree.scan_index or warning-aware variants for owned HEAD/index/file
+  snapshots. Respect assume-valid/skip-worktree/ITA and logical mode policies.
+  include_untracked=false skips ignore queries and incidental untracked reads.
+- Replace the refusal boundary in worktree/status.lu and commit/summary.lu with
+  ONE shared scorer/pairer. Keep quiet commit independent of display scoring.
+- Exact matching uses file-type bits, allowing regular executable-bit changes,
+  not regular-file/symlink equivalence. Preserve C quoting, -z rename order and
+  stable tracked -> untracked -> ignored groups.
+- Do not reuse commit.line_counts as Git's full diff engine: it is an original
+  bounded LCS supplying the measured shortstat subset, not unified patch bytes.
+- No third-party implementation source or new runtime dependency. Continue the
+  documentation/black-box derivation and keep every disagreement as evidence.
+
+Index/cache cautions
+TREE/REUC are validated/preserved. UNTR/FSMN/IEOT/EOIE/link/sdir refuse by name.
+Higher-stage mutations refuse until their REUC generation is implemented.
+write_tree now updates TREE under index.lock; build_trees is the pure boundary.
+begin's version selects only a missing index's initial version; existing versions
+are preserved, with the documented v2/v3 write-policy downgrade/upgrade.
+The six-word stat proof is not a wildcard: mode/uid/gid/size stay exact.

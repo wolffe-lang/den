@@ -1,0 +1,31 @@
+before 5452454500000019003120300abec63e37d08c454ad3a60cde90b70f3f7d077852
+add-same 5452454500000006002d3120300a
+chmod-noop 5452454500000006002d3120300a
+write-tree 5452454500000019003120300abec63e37d08c454ad3a60cde90b70f3f7d077852
+add-ctime-change 5452454500000006002d3120300a
+checkout-head HEAD detached at 09e69a5
+nothing to commit, working tree clean
+
+after-commit HEAD detached from 09e69a5
+nothing to commit, working tree clean
+
+at-tag HEAD detached from 09e69a5
+nothing to commit, working tree clean
+
+manual Not currently on any branch.
+nothing to commit, working tree clean
+
+two-of-three R  file -> moved rename file => moved (66%)
+reorder R  file -> moved rename file => moved (100%)
+half R  file -> moved rename file => moved (50%)
+long-half R  file -> moved rename file => moved (100%)
+long-shift D  file
+A  moved delete mode 100644 file
+ create mode 100644 moved
+crlf R  file -> moved rename file => moved (66%)
+one-line D  file
+A  moved delete mode 100644 file
+ create mode 100644 moved
+binary-half R  file -> moved rename file => moved (100%)
+duplicate R  file -> moved rename file => moved (66%)
+grow R  file -> moved rename file => moved (50%)

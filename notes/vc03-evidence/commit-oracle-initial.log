@@ -1,0 +1,154 @@
+PASS bounded line counts, byte subjects and exact TAB/oid/date reflog framing
+FAIL: clean-message
+ git 1 b'On branch main\nnothing to commit, working tree clean\n' b''
+ den 1 b'On branch main\nnothing to commit, working tree clean\n' b''
+FAIL: clean-quiet
+ git 1 b'On branch main\nnothing to commit, working tree clean\n' b''
+ den 1 b'On branch main\nnothing to commit, working tree clean\n' b''
+FAIL: staged-message
+ git 0 b'[main 83c7c75] subject\n 1 file changed, 1 insertion(+), 1 deletion(-)\n' b''
+ den 0 b'[main 83c7c75] subject\n 1 file changed, 1 insertion(+), 1 deletion(-)\n' b''
+FAIL: staged-quiet
+ git 0 b'' b''
+ den 0 b'' b''
+FAIL: both-message
+ git 0 b'[main 1aaac8d] subject\n 1 file changed, 1 insertion(+), 1 deletion(-)\n' b''
+ den 0 b'[main 1aaac8d] subject\n 1 file changed, 1 insertion(+), 1 deletion(-)\n' b''
+FAIL: both-quiet
+ git 0 b'' b''
+ den 0 b'' b''
+index-stat-proof: 0 tool-side entry rows canonicalized
+FAIL: dirty-message
+ git 1 b'On branch main\nChanges not staged for commit:\n  (use "git add/rm <file>..." to update what will be committed)\n  (use "git restore <file>..." to discard changes in working directory)\n\tmodified:   a.txt\n\tdeleted:    b.txt\n\nUntracked files:\n  (use "git add <file>..." to include in what will be committed)\n\tuntracked\n\nno changes added to commit (use "git add" and/or "git commit -a")\n' b''
+ den 1 b'On branch main\nChanges not staged for commit:\n  (use "git add/rm <file>..." to update what will be committed)\n  (use "git restore <file>..." to discard changes in working directory)\n\tmodified:   a.txt\n\tdeleted:    b.txt\n\nUntracked files:\n  (use "git add <file>..." to include in what will be committed)\n\tuntracked\n\nno changes added to commit (use "git add" and/or "git commit -a")\n' b''
+index-stat-proof: 0 tool-side entry rows canonicalized
+FAIL: dirty-quiet
+ git 1 b'On branch main\nChanges not staged for commit:\n  (use "git add/rm <file>..." to update what will be committed)\n  (use "git restore <file>..." to discard changes in working directory)\n\tmodified:   a.txt\n\tdeleted:    b.txt\n\nUntracked files:\n  (use "git add <file>..." to include in what will be committed)\n\tuntracked\n\nno changes added to commit (use "git add" and/or "git commit -a")\n' b''
+ den 1 b'On branch main\nChanges not staged for commit:\n  (use "git add/rm <file>..." to update what will be committed)\n  (use "git restore <file>..." to discard changes in working directory)\n\tmodified:   a.txt\n\tdeleted:    b.txt\n\nUntracked files:\n  (use "git add <file>..." to include in what will be committed)\n\tuntracked\n\nno changes added to commit (use "git add" and/or "git commit -a")\n' b''
+FAIL: rename-message
+ git 0 b'[main b0df90e] subject\n 1 file changed, 0 insertions(+), 0 deletions(-)\n rename a.txt => renamed.txt (100%)\n' b''
+ den 0 b'[main b0df90e] subject\n 1 file changed, 0 insertions(+), 0 deletions(-)\n rename a.txt => renamed.txt (100%)\n' b''
+FAIL: rename-quiet
+ git 0 b'' b''
+ den 0 b'' b''
+FAIL: root-message
+ git 0 b'[main (root-commit) a01ad6f] subject\n 2 files changed, 2 insertions(+)\n create mode 100644 a\n create mode 100644 b\n' b''
+ den 0 b'[main (root-commit) a01ad6f] subject\n 2 files changed, 2 insertions(+)\n create mode 100644 a\n create mode 100644 b\n' b''
+FAIL: root-quiet
+ git 0 b'' b''
+ den 0 b'' b''
+FAIL: empty-message
+ git 1 b'On branch main\n\nInitial commit\n\nnothing to commit (create/copy files and use "git add" to track)\n' b''
+ den 1 b'On branch main\n\nNo commits yet\n\nnothing to commit (create/copy files and use "git add" to track)\n' b''
+FAIL: empty-quiet
+ git 1 b'On branch main\n\nInitial commit\n\nnothing to commit (create/copy files and use "git add" to track)\n' b''
+ den 1 b'On branch main\n\nNo commits yet\n\nnothing to commit (create/copy files and use "git add" to track)\n' b''
+FAIL: allow-empty
+ git 0 b'[main 4e5605f] empty\n' b''
+ den 0 b'[main 4e5605f] empty\n' b''
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: root-allow-empty
+FAIL: allow-empty-message
+ git 0 b'[main 114a1bb] \n 1 file changed, 1 insertion(+), 1 deletion(-)\n' b''
+ den 0 b'[main 114a1bb] \n 1 file changed, 1 insertion(+), 1 deletion(-)\n' b''
+FAIL: empty-message-refused
+ git 1 b'' b'Aborting commit due to empty commit message.\n'
+ den 1 b'' b'Aborting commit due to empty commit message.\n'
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: all
+FAIL: paragraphs
+ git 0 b'[main 0535855] one\n 1 file changed, 1 insertion(+), 1 deletion(-)\n' b''
+ den 0 b'[main 0535855] one\n 1 file changed, 1 insertion(+), 1 deletion(-)\n' b''
+FAIL: empty-paragraph
+ git 0 b'[main 2f9a6d1] one\n 1 file changed, 1 insertion(+), 1 deletion(-)\n' b''
+ den 0 b'[main 2f9a6d1] one\n 1 file changed, 1 insertion(+), 1 deletion(-)\n' b''
+FAIL: cleanup-strip
+ git 0 b'[main 2820a6a]  subject\n 1 file changed, 1 insertion(+), 1 deletion(-)\n' b''
+ den 0 b'[main 2820a6a] subject\n 1 file changed, 1 insertion(+), 1 deletion(-)\n' b''
+FAIL: cleanup-whitespace
+ git 0 b'[main 9d2dc42]  subject\n 1 file changed, 1 insertion(+), 1 deletion(-)\n' b''
+ den 0 b'[main 9d2dc42] subject\n 1 file changed, 1 insertion(+), 1 deletion(-)\n' b''
+FAIL: cleanup-verbatim
+ git 0 b'[main 95b4866]  subject\n 1 file changed, 1 insertion(+), 1 deletion(-)\n' b''
+ den 0 b'[main 95b4866] subject\n 1 file changed, 1 insertion(+), 1 deletion(-)\n' b''
+FAIL: cleanup-scissors
+ git 0 b'[main 9d2dc42]  subject\n 1 file changed, 1 insertion(+), 1 deletion(-)\n' b''
+ den 0 b'[main 9d2dc42] subject\n 1 file changed, 1 insertion(+), 1 deletion(-)\n' b''
+FAIL: cleanup-default
+ git 0 b'[main 9d2dc42]  subject\n 1 file changed, 1 insertion(+), 1 deletion(-)\n' b''
+ den 0 b'[main 9d2dc42] subject\n 1 file changed, 1 insertion(+), 1 deletion(-)\n' b''
+FAIL: file-empty
+ git 0 b'[main 114a1bb] \n 1 file changed, 1 insertion(+), 1 deletion(-)\n' b''
+ den 0 b'[main 114a1bb] \n 1 file changed, 1 insertion(+), 1 deletion(-)\n' b''
+FAIL: file-nul
+ git 128 b'' b'error: a NUL byte in commit log message not allowed.\nfatal: failed to write commit object\n'
+ den 1 b'' b'error: a NUL byte in commit log message not allowed.\n'
+FAIL: file-utf8
+ git 0 b'[main 70cddd3] \xc3\xbf\n 1 file changed, 1 insertion(+), 1 deletion(-)\n' b'Warning: commit message did not conform to UTF-8.\nYou may want to amend it after fixing the message, or set the config\nvariable i18n.commitEncoding to the encoding your project uses.\n'
+ den 0 b'[main 70cddd3] \xc3\xbf\n 1 file changed, 1 insertion(+), 1 deletion(-)\n' b'Warning: commit message did not conform to UTF-8.\nYou may want to amend it after fixing the message, or set the config\nvariable i18n.commitEncoding to the encoding your project uses.\n'
+FAIL: file-latin1
+ git 0 b'[main e2b978d] \xff\n 1 file changed, 1 insertion(+), 1 deletion(-)\n' b''
+ den 0 b'[main e2b978d] \xff\n 1 file changed, 1 insertion(+), 1 deletion(-)\n' b''
+FAIL: author
+ git 0 b'[main ed1832f] subject\n Author: Other Person <other@example.invalid>\n 1 file changed, 1 insertion(+), 1 deletion(-)\n' b''
+ den 0 b'[main ed1832f] subject\n Author: Other Person <other@example.invalid>\n 1 file changed, 1 insertion(+), 1 deletion(-)\n' b''
+FAIL: env-ident
+ git 0 b'[main 893c9bc] subject\n Author: Author <author@example.invalid>\n 1 file changed, 1 insertion(+), 1 deletion(-)\n' b''
+ den 0 b'[main 893c9bc] subject\n Author: Author <author@example.invalid>\n 1 file changed, 1 insertion(+), 1 deletion(-)\n' b''
+FAIL: date-0
+ git 0 b'[main 5beb018] subject\n Date: Thu Jan 1 00:00:00 1970 +0000\n 1 file changed, 1 insertion(+), 1 deletion(-)\n' b''
+ den 0 b'[main 5beb018] subject\n Date: Thu Jan 1 00:00:00 1970 +0000\n 1 file changed, 1 insertion(+), 1 deletion(-)\n' b''
+FAIL: date-1
+ git 0 b'[main b7b882f] subject\n Date: Thu Apr 7 22:13:13 2005 +0200\n 1 file changed, 1 insertion(+), 1 deletion(-)\n' b''
+ den 0 b'[main b7b882f] subject\n Date: Thu Apr 7 22:13:13 2005 +0200\n 1 file changed, 1 insertion(+), 1 deletion(-)\n' b''
+FAIL: date-2
+ git 0 b'[main b7b882f] subject\n Date: Thu Apr 7 22:13:13 2005 +0200\n 1 file changed, 1 insertion(+), 1 deletion(-)\n' b''
+ den 0 b'[main b7b882f] subject\n Date: Thu Apr 7 22:13:13 2005 +0200\n 1 file changed, 1 insertion(+), 1 deletion(-)\n' b''
+FAIL: date-3
+ git 0 b'[main b7b882f] subject\n Date: Thu Apr 7 22:13:13 2005 +0200\n 1 file changed, 1 insertion(+), 1 deletion(-)\n' b''
+ den 0 b'[main b7b882f] subject\n Date: Thu Apr 7 22:13:13 2005 +0200\n 1 file changed, 1 insertion(+), 1 deletion(-)\n' b''
+FAIL: date-4
+ git 0 b'[main b7b882f] subject\n Date: Thu Apr 7 22:13:13 2005 +0200\n 1 file changed, 1 insertion(+), 1 deletion(-)\n' b''
+ den 0 b'[main b7b882f] subject\n Date: Thu Apr 7 22:13:13 2005 +0200\n 1 file changed, 1 insertion(+), 1 deletion(-)\n' b''
+FAIL: date-5
+ git 0 b'[main b7b882f] subject\n Date: Thu Apr 7 22:13:13 2005 +0200\n 1 file changed, 1 insertion(+), 1 deletion(-)\n' b''
+ den 0 b'[main b7b882f] subject\n Date: Thu Apr 7 22:13:13 2005 +0200\n 1 file changed, 1 insertion(+), 1 deletion(-)\n' b''
+FAIL: date-6
+ git 0 b'[main b7b882f] subject\n Date: Thu Apr 7 22:13:13 2005 +0200\n 1 file changed, 1 insertion(+), 1 deletion(-)\n' b''
+ den 0 b'[main b7b882f] subject\n Date: Thu Apr 7 22:13:13 2005 +0200\n 1 file changed, 1 insertion(+), 1 deletion(-)\n' b''
+FAIL: amend-clean
+ git 0 b'[main 3fc0a92] amended\n Date: Tue Nov 14 22:13:20 2023 +0000\n 2 files changed, 2 insertions(+)\n create mode 100644 a.txt\n create mode 100644 b.txt\n' b''
+ den 0 b'[main (root-commit) 3fc0a92] amended\n Date: Tue Nov 14 22:13:20 2023 +0000\n 2 files changed, 2 insertions(+)\n create mode 100644 a.txt\n create mode 100644 b.txt\n' b''
+FAIL: amend-staged
+ git 0 b'[main 57ba07a] amended\n Date: Tue Nov 14 22:13:20 2023 +0000\n 2 files changed, 2 insertions(+)\n create mode 100644 a.txt\n create mode 100644 b.txt\n' b''
+ den 0 b'[main (root-commit) 57ba07a] amended\n Date: Tue Nov 14 22:13:20 2023 +0000\n 2 files changed, 2 insertions(+)\n create mode 100644 a.txt\n create mode 100644 b.txt\n' b''
+FAIL: amend-both
+ git 0 b'[main 9d6ce46] amended\n Date: Tue Nov 14 22:13:20 2023 +0000\n 2 files changed, 2 insertions(+)\n create mode 100644 a.txt\n create mode 100644 b.txt\n' b''
+ den 0 b'[main (root-commit) 9d6ce46] amended\n Date: Tue Nov 14 22:13:20 2023 +0000\n 2 files changed, 2 insertions(+)\n create mode 100644 a.txt\n create mode 100644 b.txt\n' b''
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: amend-root
+FAIL: amend-merge
+ git 0 b'[main b5dd348] amended\n Date: Tue Nov 14 22:16:20 2023 +0000\n' b''
+ den 0 b'[main b5dd348] amended\n Date: Tue Nov 14 22:16:20 2023 +0000\n 1 file changed, 1 insertion(+)\n create mode 100644 side\n' b''
+FAIL: amend-amend-orig
+ git 0 b'[main 3fc0a92] amended\n Date: Tue Nov 14 22:13:20 2023 +0000\n 2 files changed, 2 insertions(+)\n create mode 100644 a.txt\n create mode 100644 b.txt\n' b''
+ den 0 b'[main (root-commit) 3fc0a92] amended\n Date: Tue Nov 14 22:13:20 2023 +0000\n 2 files changed, 2 insertions(+)\n create mode 100644 a.txt\n create mode 100644 b.txt\n' b''
+FAIL: amend-no-edit
+ git 0 b'[main a6e91b1] initial\n Date: Tue Nov 14 22:13:20 2023 +0000\n 2 files changed, 2 insertions(+)\n create mode 100644 a.txt\n create mode 100644 b.txt\n' b''
+ den 0 b'[main (root-commit) a6e91b1] initial\n Date: Tue Nov 14 22:13:20 2023 +0000\n 2 files changed, 2 insertions(+)\n create mode 100644 a.txt\n create mode 100644 b.txt\n' b''
+FAIL: amend-reset
+ git 0 b'[main 663f4a3] new author\n Author: New Author <new@example.invalid>\n 2 files changed, 2 insertions(+)\n create mode 100644 a.txt\n create mode 100644 b.txt\n' b''
+ den 0 b'[main (root-commit) 663f4a3] new author\n Author: New Author <new@example.invalid>\n 2 files changed, 2 insertions(+)\n create mode 100644 a.txt\n create mode 100644 b.txt\n' b''
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: reset-without-amend
+FAIL: editor-false
+ git 1 b'' b"error: there was a problem with the editor 'false'\nPlease supply the message using either -m or -F option.\n"
+ den 1 b'' b"error: there was a problem with the editor 'false'\nPlease supply the message using either -m or -F option.\n"
+index-stat-proof: 0 tool-side entry rows canonicalized
+FAIL: index-lock
+ git 128 b'' b"fatal: Unable to create '/work/den/target/commit-oracle-native/index-lock/repo/.git/index.lock': File exists.\n\nAnother git process seems to be running in this repository, or the lock file may be stale\n"
+ den 128 b'' b"fatal: Unable to create '/work/den/target/commit-oracle-native/index-lock/repo/.git/index.lock': File exists.\n"
+FAIL: ref-lock
+ git 128 b'' b"fatal: cannot lock ref 'HEAD': Unable to create '/work/den/target/commit-oracle-native/ref-lock/repo/.git/refs/heads/main.lock': File exists.\n\nAnother git process seems to be running in this repository, or the lock file may be stale\n"
+ den 128 b'' b"fatal: cannot lock ref 'refs/heads/main': Unable to create '/work/den/target/commit-oracle-native/ref-lock/repo/.git/refs/heads/main.lock': File exists.\n"
+commit oracle: 4 / 51 parity; 47 mismatches

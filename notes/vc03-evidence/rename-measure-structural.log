@@ -1,0 +1,13 @@
+offset-31-1 score 67 rename True candidate64 67
+offset-127-2 score 67 rename True candidate64 33
+uniform-byte-2 score 100 rename True candidate64 50
+uniform-marker-63-fixed score 50 rename True candidate64 50
+span32-raw mismatches 40 / 90 ['offset-64-1', 'offset-64-2', 'offset-64-7', 'offset-64-32', 'offset-65-1', 'offset-65-2', 'offset-65-7', 'offset-65-32', 'offset-127-1', 'offset-127-2', 'offset-127-7', 'offset-127-32', 'offset-128-1', 'offset-128-2', 'offset-128-7']
+span32-crlf mismatches 43 / 90 ['offset-64-1', 'offset-64-2', 'offset-64-7', 'offset-64-32', 'offset-65-1', 'offset-65-2', 'offset-65-7', 'offset-65-32', 'offset-127-1', 'offset-127-2', 'offset-127-7', 'offset-127-32', 'offset-128-1', 'offset-128-2', 'offset-128-7']
+span64-raw mismatches 39 / 90 ['offset-64-1', 'offset-64-2', 'offset-64-7', 'offset-64-32', 'offset-65-1', 'offset-65-2', 'offset-65-7', 'offset-65-32', 'offset-127-1', 'offset-127-2', 'offset-127-7', 'offset-127-32', 'offset-128-1', 'offset-128-2', 'offset-128-7']
+span64-crlf mismatches 42 / 90 ['offset-64-1', 'offset-64-2', 'offset-64-7', 'offset-64-32', 'offset-65-1', 'offset-65-2', 'offset-65-7', 'offset-65-32', 'offset-127-1', 'offset-127-2', 'offset-127-7', 'offset-127-32', 'offset-128-1', 'offset-128-2', 'offset-128-7']
+span128-raw mismatches 39 / 90 ['offset-64-1', 'offset-64-2', 'offset-64-7', 'offset-64-32', 'offset-65-1', 'offset-65-2', 'offset-65-7', 'offset-65-32', 'offset-127-1', 'offset-127-2', 'offset-127-7', 'offset-127-32', 'offset-128-1', 'offset-128-2', 'offset-128-7']
+span128-crlf mismatches 42 / 90 ['offset-64-1', 'offset-64-2', 'offset-64-7', 'offset-64-32', 'offset-65-1', 'offset-65-2', 'offset-65-7', 'offset-65-32', 'offset-127-1', 'offset-127-2', 'offset-127-7', 'offset-127-32', 'offset-128-1', 'offset-128-2', 'offset-128-7']
+span64-offset-normalized mismatches 8 / 90 ['uniform-byte-0', 'uniform-byte-127', 'uniform-byte-254', 'nul-classification-8000', 'nul-classification-8191', 'nul-classification-8192', 'nul-classification-8193', 'nul-classification-10000']
+span64-conditional-crlf mismatches 39 / 90 ['offset-64-1', 'offset-64-2', 'offset-64-7', 'offset-64-32', 'offset-65-1', 'offset-65-2', 'offset-65-7', 'offset-65-32', 'offset-127-1', 'offset-127-2', 'offset-127-7', 'offset-127-32', 'offset-128-1', 'offset-128-2', 'offset-128-7']
+RESULT /work/den/target/rename-measure-structural.json cases 90 seconds 0.6256054950645193

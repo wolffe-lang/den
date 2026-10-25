@@ -1,0 +1,161 @@
+{
+  "main": {
+    "cases": 163,
+    "classes": {
+      "shape": 1,
+      "parity": 136,
+      "not-yet": 26
+    },
+    "canonicalized_tool_side_rows": 60
+  },
+  "worktree-oracle-native": {
+    "cases": 207,
+    "canonicalized_tool_side_rows": 84
+  },
+  "worktree-oracle-release": {
+    "cases": 207,
+    "canonicalized_tool_side_rows": 84
+  },
+  "commit-oracle-native": {
+    "cases": 51,
+    "canonicalized_tool_side_rows": 168
+  },
+  "commit-oracle-release": {
+    "cases": 51,
+    "canonicalized_tool_side_rows": 168
+  },
+  "index-native": {
+    "commands": 212,
+    "canonicalized_tool_side_rows": 36
+  },
+  "index-release": {
+    "commands": 212,
+    "canonicalized_tool_side_rows": 36
+  },
+  "distinct_status_stdout_texts": 54,
+  "canonicalized_tool_side_rows_total": 636,
+  "codec": {
+    "counts": {
+      "loose": 1099,
+      "pack_entries": 31,
+      "written": 1130,
+      "corrupt_refused": 32,
+      "empty_corpora": 1
+    },
+    "sizes": [
+      {
+        "corpus": "binary",
+        "den": 552,
+        "git_level1": 553,
+        "ratio": 0.9981916817359855,
+        "max_object_ratio": 1.0
+      },
+      {
+        "corpus": "empty",
+        "den": 139,
+        "git_level1": 139,
+        "ratio": 1.0,
+        "max_object_ratio": 1.0
+      },
+      {
+        "corpus": "linear",
+        "den": 2554,
+        "git_level1": 2557,
+        "ratio": 0.9988267500977708,
+        "max_object_ratio": 1.0
+      },
+      {
+        "corpus": "m2-amend",
+        "den": 788,
+        "git_level1": 790,
+        "ratio": 0.9974683544303797,
+        "max_object_ratio": 1.0
+      },
+      {
+        "corpus": "m2-edited-rename",
+        "den": 260,
+        "git_level1": 261,
+        "ratio": 0.9961685823754789,
+        "max_object_ratio": 1.0
+      },
+      {
+        "corpus": "m2-ignore",
+        "den": 242,
+        "git_level1": 243,
+        "ratio": 0.9958847736625515,
+        "max_object_ratio": 1.0
+      },
+      {
+        "corpus": "m2-index-v4",
+        "den": 242,
+        "git_level1": 243,
+        "ratio": 0.9958847736625515,
+        "max_object_ratio": 1.0
+      },
+      {
+        "corpus": "m2-modes",
+        "den": 362,
+        "git_level1": 363,
+        "ratio": 0.9972451790633609,
+        "max_object_ratio": 1.0
+      },
+      {
+        "corpus": "m2-staged-rename",
+        "den": 242,
+        "git_level1": 243,
+        "ratio": 0.9958847736625515,
+        "max_object_ratio": 1.0
+      },
+      {
+        "corpus": "m2-unborn",
+        "den": 0,
+        "git_level1": 0,
+        "ratio": null,
+        "max_object_ratio": 0
+      },
+      {
+        "corpus": "merge",
+        "den": 1117,
+        "git_level1": 1120,
+        "ratio": 0.9973214285714286,
+        "max_object_ratio": 1.0
+      },
+      {
+        "corpus": "packed",
+        "den": 2554,
+        "git_level1": 2557,
+        "ratio": 0.9988267500977708,
+        "max_object_ratio": 1.0
+      },
+      {
+        "corpus": "rename",
+        "den": 479,
+        "git_level1": 480,
+        "ratio": 0.9979166666666667,
+        "max_object_ratio": 1.0
+      },
+      {
+        "corpus": "symlink",
+        "den": 295,
+        "git_level1": 295,
+        "ratio": 1.0,
+        "max_object_ratio": 1.0
+      },
+      {
+        "corpus": "thousand",
+        "den": 43676,
+        "git_level1": 43384,
+        "ratio": 1.0067305919232896,
+        "max_object_ratio": 1.011984403857993
+      },
+      {
+        "corpus": "two",
+        "den": 242,
+        "git_level1": 243,
+        "ratio": 0.9958847736625515,
+        "max_object_ratio": 1.0
+      }
+    ],
+    "zlib": "1.3"
+  }
+}

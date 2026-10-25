@@ -1,0 +1,935 @@
+[
+  {
+    "repo": "cache",
+    "args": [
+      "init",
+      "-q"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "repo": "cache",
+    "args": [
+      "add",
+      "file"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "repo": "cache",
+    "args": [
+      "commit",
+      "-qm",
+      "root"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "repo": "cache",
+    "label": "before",
+    "cache": "5452454500000019003120300abec63e37d08c454ad3a60cde90b70f3f7d077852",
+    "index_hex": "4449524300000002000000016add3e5a0d2ed2ee6add3e5a0d2ed2ee0000080205f86ffa000081a4000000000000000000000005f73f3093ff865c514c6c51f867e35f693487d0d3000466696c650000000000005452454500000019003120300abec63e37d08c454ad3a60cde90b70f3f7d07785266509950017f7bfd30aade51ef6b5561c6fbb0a6"
+  },
+  {
+    "repo": "cache",
+    "args": [
+      "add",
+      "file"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "repo": "cache",
+    "label": "add-same",
+    "cache": "5452454500000006002d3120300a",
+    "index_hex": "4449524300000002000000016add3e5a0d2ed2ee6add3e5a0d2ed2ee0000080205f86ffa000081a4000000000000000000000005f73f3093ff865c514c6c51f867e35f693487d0d3000466696c650000000000005452454500000006002d3120300a1c8015aec44d4a255548cf9e3bfc805701467ec7"
+  },
+  {
+    "repo": "cache",
+    "args": [
+      "add",
+      "--chmod=-x",
+      "file"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "repo": "cache",
+    "label": "chmod-noop",
+    "cache": "5452454500000006002d3120300a",
+    "index_hex": "4449524300000002000000016add3e5a0d2ed2ee6add3e5a0d2ed2ee0000080205f86ffa000081a4000000000000000000000005f73f3093ff865c514c6c51f867e35f693487d0d3000466696c650000000000005452454500000006002d3120300a1c8015aec44d4a255548cf9e3bfc805701467ec7"
+  },
+  {
+    "repo": "cache",
+    "args": [
+      "write-tree"
+    ],
+    "status": 0,
+    "stdout": "626563363365333764303863343534616433613630636465393062373066336637643037373835320a",
+    "stderr": ""
+  },
+  {
+    "repo": "cache",
+    "label": "write-tree",
+    "cache": "5452454500000019003120300abec63e37d08c454ad3a60cde90b70f3f7d077852",
+    "index_hex": "4449524300000002000000016add3e5a0d2ed2ee6add3e5a0d2ed2ee0000080205f86ffa000081a4000000000000000000000005f73f3093ff865c514c6c51f867e35f693487d0d3000466696c650000000000005452454500000019003120300abec63e37d08c454ad3a60cde90b70f3f7d07785266509950017f7bfd30aade51ef6b5561c6fbb0a6"
+  },
+  {
+    "repo": "cache",
+    "args": [
+      "add",
+      "file"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "repo": "cache",
+    "label": "add-ctime-change",
+    "cache": "5452454500000006002d3120300a",
+    "index_hex": "4449524300000002000000016add3e5a0d6ff47f6add3e5a0d2ed2ee0000080205f86ffa000081a4000000000000000000000005f73f3093ff865c514c6c51f867e35f693487d0d3000466696c650000000000005452454500000006002d3120300a559db204d41bc066593e4fd0f542baf7e6134ea4"
+  },
+  {
+    "repo": "detached",
+    "args": [
+      "init",
+      "-q"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "repo": "detached",
+    "args": [
+      "add",
+      "file"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "repo": "detached",
+    "args": [
+      "commit",
+      "-qm",
+      "root"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "repo": "detached",
+    "args": [
+      "checkout",
+      "--detach",
+      "HEAD"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": "48454144206973206e6f77206174203039653639613520726f6f740a"
+  },
+  {
+    "repo": "detached",
+    "args": [
+      "status"
+    ],
+    "status": 0,
+    "stdout": "4845414420646574616368656420617420303965363961350a6e6f7468696e6720746f20636f6d6d69742c20776f726b696e67207472656520636c65616e0a",
+    "stderr": ""
+  },
+  {
+    "repo": "detached",
+    "args": [
+      "commit",
+      "--allow-empty",
+      "-qm",
+      "child"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "repo": "detached",
+    "args": [
+      "status"
+    ],
+    "status": 0,
+    "stdout": "484541442064657461636865642066726f6d20303965363961350a6e6f7468696e6720746f20636f6d6d69742c20776f726b696e67207472656520636c65616e0a",
+    "stderr": ""
+  },
+  {
+    "repo": "detached",
+    "args": [
+      "tag",
+      "anchor"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "repo": "detached",
+    "args": [
+      "checkout",
+      "--detach",
+      "anchor"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": "48454144206973206e6f772061742035343165356534206368696c640a"
+  },
+  {
+    "repo": "detached",
+    "args": [
+      "status"
+    ],
+    "status": 0,
+    "stdout": "484541442064657461636865642066726f6d20303965363961350a6e6f7468696e6720746f20636f6d6d69742c20776f726b696e67207472656520636c65616e0a",
+    "stderr": ""
+  },
+  {
+    "repo": "manual",
+    "args": [
+      "init",
+      "-q"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "repo": "manual",
+    "args": [
+      "add",
+      "file"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "repo": "manual",
+    "args": [
+      "commit",
+      "-qm",
+      "root"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "repo": "manual",
+    "args": [
+      "rev-parse",
+      "HEAD"
+    ],
+    "status": 0,
+    "stdout": "303965363961356232373561623032386336353062373064333832393037326433656661386239390a",
+    "stderr": ""
+  },
+  {
+    "repo": "manual",
+    "args": [
+      "status"
+    ],
+    "status": 0,
+    "stdout": "4e6f742063757272656e746c79206f6e20616e79206272616e63682e0a6e6f7468696e6720746f20636f6d6d69742c20776f726b696e67207472656520636c65616e0a",
+    "stderr": ""
+  },
+  {
+    "repo": "rename-two-of-three",
+    "args": [
+      "init",
+      "-q"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "repo": "rename-two-of-three",
+    "args": [
+      "add",
+      "file"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "repo": "rename-two-of-three",
+    "args": [
+      "commit",
+      "-qm",
+      "root"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "repo": "rename-two-of-three",
+    "args": [
+      "add",
+      "-A"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "repo": "rename-two-of-three",
+    "args": [
+      "status",
+      "--porcelain"
+    ],
+    "status": 0,
+    "stdout": "52202066696c65202d3e206d6f7665640a",
+    "stderr": ""
+  },
+  {
+    "repo": "rename-two-of-three",
+    "args": [
+      "diff",
+      "--cached",
+      "--summary",
+      "--find-renames=1%"
+    ],
+    "status": 0,
+    "stdout": "2072656e616d652066696c65203d3e206d6f7665642028363625290a",
+    "stderr": ""
+  },
+  {
+    "repo": "rename-two-of-three",
+    "old_hex": "610a620a630a",
+    "new_hex": "610a620a580a"
+  },
+  {
+    "repo": "rename-reorder",
+    "args": [
+      "init",
+      "-q"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "repo": "rename-reorder",
+    "args": [
+      "add",
+      "file"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "repo": "rename-reorder",
+    "args": [
+      "commit",
+      "-qm",
+      "root"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "repo": "rename-reorder",
+    "args": [
+      "add",
+      "-A"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "repo": "rename-reorder",
+    "args": [
+      "status",
+      "--porcelain"
+    ],
+    "status": 0,
+    "stdout": "52202066696c65202d3e206d6f7665640a",
+    "stderr": ""
+  },
+  {
+    "repo": "rename-reorder",
+    "args": [
+      "diff",
+      "--cached",
+      "--summary",
+      "--find-renames=1%"
+    ],
+    "status": 0,
+    "stdout": "2072656e616d652066696c65203d3e206d6f766564202831303025290a",
+    "stderr": ""
+  },
+  {
+    "repo": "rename-reorder",
+    "old_hex": "610a620a630a",
+    "new_hex": "630a610a620a"
+  },
+  {
+    "repo": "rename-half",
+    "args": [
+      "init",
+      "-q"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "repo": "rename-half",
+    "args": [
+      "add",
+      "file"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "repo": "rename-half",
+    "args": [
+      "commit",
+      "-qm",
+      "root"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "repo": "rename-half",
+    "args": [
+      "add",
+      "-A"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "repo": "rename-half",
+    "args": [
+      "status",
+      "--porcelain"
+    ],
+    "status": 0,
+    "stdout": "52202066696c65202d3e206d6f7665640a",
+    "stderr": ""
+  },
+  {
+    "repo": "rename-half",
+    "args": [
+      "diff",
+      "--cached",
+      "--summary",
+      "--find-renames=1%"
+    ],
+    "status": 0,
+    "stdout": "2072656e616d652066696c65203d3e206d6f7665642028353025290a",
+    "stderr": ""
+  },
+  {
+    "repo": "rename-half",
+    "old_hex": "6161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161610a6262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262620a",
+    "new_hex": "6161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161610a6363636363636363636363636363636363636363636363636363636363636363636363636363636363636363636363636363636363636363636363636363630a"
+  },
+  {
+    "repo": "rename-long-half",
+    "args": [
+      "init",
+      "-q"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "repo": "rename-long-half",
+    "args": [
+      "add",
+      "file"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "repo": "rename-long-half",
+    "args": [
+      "commit",
+      "-qm",
+      "root"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "repo": "rename-long-half",
+    "args": [
+      "add",
+      "-A"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "repo": "rename-long-half",
+    "args": [
+      "status",
+      "--porcelain"
+    ],
+    "status": 0,
+    "stdout": "52202066696c65202d3e206d6f7665640a",
+    "stderr": ""
+  },
+  {
+    "repo": "rename-long-half",
+    "args": [
+      "diff",
+      "--cached",
+      "--summary",
+      "--find-renames=1%"
+    ],
+    "status": 0,
+    "stdout": "2072656e616d652066696c65203d3e206d6f766564202831303025290a",
+    "stderr": ""
+  },
+  {
+    "repo": "rename-long-half",
+    "old_hex": "6161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616162626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262",
+    "new_hex": "6161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616163636363636363636363636363636363636363636363636363636363636363636363636363636363636363636363636363636363636363636363636363636363"
+  },
+  {
+    "repo": "rename-long-shift",
+    "args": [
+      "init",
+      "-q"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "repo": "rename-long-shift",
+    "args": [
+      "add",
+      "file"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "repo": "rename-long-shift",
+    "args": [
+      "commit",
+      "-qm",
+      "root"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "repo": "rename-long-shift",
+    "args": [
+      "add",
+      "-A"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "repo": "rename-long-shift",
+    "args": [
+      "status",
+      "--porcelain"
+    ],
+    "status": 0,
+    "stdout": "44202066696c650a4120206d6f7665640a",
+    "stderr": ""
+  },
+  {
+    "repo": "rename-long-shift",
+    "args": [
+      "diff",
+      "--cached",
+      "--summary",
+      "--find-renames=1%"
+    ],
+    "status": 0,
+    "stdout": "2064656c657465206d6f6465203130303634342066696c650a20637265617465206d6f646520313030363434206d6f7665640a",
+    "stderr": ""
+  },
+  {
+    "repo": "rename-long-shift",
+    "old_hex": "6161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616162626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262",
+    "new_hex": "7861616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262"
+  },
+  {
+    "repo": "rename-crlf",
+    "args": [
+      "init",
+      "-q"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "repo": "rename-crlf",
+    "args": [
+      "add",
+      "file"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "repo": "rename-crlf",
+    "args": [
+      "commit",
+      "-qm",
+      "root"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "repo": "rename-crlf",
+    "args": [
+      "add",
+      "-A"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "repo": "rename-crlf",
+    "args": [
+      "status",
+      "--porcelain"
+    ],
+    "status": 0,
+    "stdout": "52202066696c65202d3e206d6f7665640a",
+    "stderr": ""
+  },
+  {
+    "repo": "rename-crlf",
+    "args": [
+      "diff",
+      "--cached",
+      "--summary",
+      "--find-renames=1%"
+    ],
+    "status": 0,
+    "stdout": "2072656e616d652066696c65203d3e206d6f7665642028363625290a",
+    "stderr": ""
+  },
+  {
+    "repo": "rename-crlf",
+    "old_hex": "610d0a620d0a630d0a",
+    "new_hex": "610a620a630a"
+  },
+  {
+    "repo": "rename-one-line",
+    "args": [
+      "init",
+      "-q"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "repo": "rename-one-line",
+    "args": [
+      "add",
+      "file"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "repo": "rename-one-line",
+    "args": [
+      "commit",
+      "-qm",
+      "root"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "repo": "rename-one-line",
+    "args": [
+      "add",
+      "-A"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "repo": "rename-one-line",
+    "args": [
+      "status",
+      "--porcelain"
+    ],
+    "status": 0,
+    "stdout": "44202066696c650a4120206d6f7665640a",
+    "stderr": ""
+  },
+  {
+    "repo": "rename-one-line",
+    "args": [
+      "diff",
+      "--cached",
+      "--summary",
+      "--find-renames=1%"
+    ],
+    "status": 0,
+    "stdout": "2064656c657465206d6f6465203130303634342066696c650a20637265617465206d6f646520313030363434206d6f7665640a",
+    "stderr": ""
+  },
+  {
+    "repo": "rename-one-line",
+    "old_hex": "6162636465660a",
+    "new_hex": "6162636465670a"
+  },
+  {
+    "repo": "rename-binary-half",
+    "args": [
+      "init",
+      "-q"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "repo": "rename-binary-half",
+    "args": [
+      "add",
+      "file"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "repo": "rename-binary-half",
+    "args": [
+      "commit",
+      "-qm",
+      "root"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "repo": "rename-binary-half",
+    "args": [
+      "add",
+      "-A"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "repo": "rename-binary-half",
+    "args": [
+      "status",
+      "--porcelain"
+    ],
+    "status": 0,
+    "stdout": "52202066696c65202d3e206d6f7665640a",
+    "stderr": ""
+  },
+  {
+    "repo": "rename-binary-half",
+    "args": [
+      "diff",
+      "--cached",
+      "--summary",
+      "--find-renames=1%"
+    ],
+    "status": 0,
+    "stdout": "2072656e616d652066696c65203d3e206d6f766564202831303025290a",
+    "stderr": ""
+  },
+  {
+    "repo": "rename-binary-half",
+    "old_hex": "0061616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616162626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262",
+    "new_hex": "0061616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616163636363636363636363636363636363636363636363636363636363636363636363636363636363636363636363636363636363636363636363636363636363"
+  },
+  {
+    "repo": "rename-duplicate",
+    "args": [
+      "init",
+      "-q"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "repo": "rename-duplicate",
+    "args": [
+      "add",
+      "file"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "repo": "rename-duplicate",
+    "args": [
+      "commit",
+      "-qm",
+      "root"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "repo": "rename-duplicate",
+    "args": [
+      "add",
+      "-A"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "repo": "rename-duplicate",
+    "args": [
+      "status",
+      "--porcelain"
+    ],
+    "status": 0,
+    "stdout": "52202066696c65202d3e206d6f7665640a",
+    "stderr": ""
+  },
+  {
+    "repo": "rename-duplicate",
+    "args": [
+      "diff",
+      "--cached",
+      "--summary",
+      "--find-renames=1%"
+    ],
+    "status": 0,
+    "stdout": "2072656e616d652066696c65203d3e206d6f7665642028363625290a",
+    "stderr": ""
+  },
+  {
+    "repo": "rename-duplicate",
+    "old_hex": "610a610a620a",
+    "new_hex": "610a620a620a"
+  },
+  {
+    "repo": "rename-grow",
+    "args": [
+      "init",
+      "-q"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "repo": "rename-grow",
+    "args": [
+      "add",
+      "file"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "repo": "rename-grow",
+    "args": [
+      "commit",
+      "-qm",
+      "root"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "repo": "rename-grow",
+    "args": [
+      "add",
+      "-A"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "repo": "rename-grow",
+    "args": [
+      "status",
+      "--porcelain"
+    ],
+    "status": 0,
+    "stdout": "52202066696c65202d3e206d6f7665640a",
+    "stderr": ""
+  },
+  {
+    "repo": "rename-grow",
+    "args": [
+      "diff",
+      "--cached",
+      "--summary",
+      "--find-renames=1%"
+    ],
+    "status": 0,
+    "stdout": "2072656e616d652066696c65203d3e206d6f7665642028353025290a",
+    "stderr": ""
+  },
+  {
+    "repo": "rename-grow",
+    "old_hex": "610a620a",
+    "new_hex": "610a620a630a640a"
+  }
+]

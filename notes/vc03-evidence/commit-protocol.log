@@ -1,0 +1,24 @@
+2005-04-07T24:01:00Z 0 author Den Tester <den@example.invalid> 1112918460 +0000
+2005-04-07T25:00:00Z 0 author Den Tester <den@example.invalid> 1112832000 +0000
+2005-04-07T99:00:00Z 0 author Den Tester <den@example.invalid> 1112832000 +0000
+2005-04-07T100:00:00Z 0 author Den Tester <den@example.invalid> 1112832000 +0000
+2005-04-07T22:61:00Z 0 author Den Tester <den@example.invalid> 1112911200 +0000
+2005-04-07T22:99:00Z 0 author Den Tester <den@example.invalid> 1112911200 +0000
+2005-04-07T22:100:00Z 0 author Den Tester <den@example.invalid> 1112911200 +0000
+2005-04-07T22:13:61Z 0 author Den Tester <den@example.invalid> 1112911200 +0000
+2005-04-07T22:13:99Z 0 author Den Tester <den@example.invalid> 1112911200 +0000
+2005-04-07T22:13:100Z 0 author Den Tester <den@example.invalid> 1112911200 +0000
+@1 +2400 0 author Den Tester <den@example.invalid> 1 +2400
+@1 +2460 0 author Den Tester <den@example.invalid> 1 +2500
+@1 +9999 0 author Den Tester <den@example.invalid> 1 +10039
+@1 +10039 128 None
+@1 +10000 128 None
+@1 +123456 128 None
+@1 +5 128 None
+@1 +005 128 None
+@1 +00:60 128 None
+@1 -0000 0 author Den Tester <den@example.invalid> 1 +0000
+@1 -2460 0 author Den Tester <den@example.invalid> 1 -2500
+HEAD.lock commit 128 b'' b"fatal: cannot lock ref 'HEAD': Unable to create '/work/den/target/vc03-commit-measure/head-lock/.git/HEAD.lock': File exists.\n\nAnother git process seems to be running in this repository, or the lock file may be stale\n" d41a4e74ef824ade955807de023cc144085c73c5 d41a4e74ef824ade955807de023cc144085c73c5
+empty merge amend ['--no-edit'] 0 b'[main def0038] merge\n Date: Tue Nov 14 22:13:20 2023 +0000\n' b''
+empty merge amend ['-m', 'amended merge'] 0 b'[main b3b4235] amended merge\n Date: Tue Nov 14 22:13:20 2023 +0000\n' b''

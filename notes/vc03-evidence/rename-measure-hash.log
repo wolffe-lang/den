@@ -1,0 +1,28 @@
+zero-pair-1-bit0 score 50 rename True candidate64 50
+zero-pair-4-bit1 score 50 rename True candidate64 50
+zero-pair-7-bit2 score 50 rename True candidate64 50
+zero-pair-10-bit3 score 50 rename True candidate64 50
+zero-pair-13-bit4 score 50 rename True candidate64 50
+zero-pair-16-bit5 score 50 rename True candidate64 50
+zero-pair-19-bit6 score 50 rename True candidate64 50
+zero-pair-22-bit7 score 50 rename True candidate64 50
+zero-pair-26-bit0 score 50 rename True candidate64 50
+zero-pair-29-bit1 score 50 rename True candidate64 50
+zero-pair-32-bit2 score 50 rename True candidate64 50
+zero-pair-35-bit3 score 50 rename True candidate64 50
+zero-pair-38-bit4 score 50 rename True candidate64 50
+zero-pair-41-bit5 score 50 rename True candidate64 50
+zero-pair-44-bit6 score 50 rename True candidate64 50
+zero-pair-47-bit7 score 50 rename True candidate64 50
+zero-pair-51-bit0 score 50 rename True candidate64 50
+zero-pair-54-bit1 score 50 rename True candidate64 50
+zero-pair-57-bit2 score 50 rename True candidate64 50
+zero-pair-60-bit3 score 50 rename True candidate64 50
+zero-pair-63-bit4 score 50 rename True candidate64 50
+span32-raw mismatches 260 / 522 ['zero-pair-1-bit0', 'zero-pair-1-bit1', 'zero-pair-1-bit2', 'zero-pair-1-bit3', 'zero-pair-1-bit4', 'zero-pair-1-bit5', 'zero-pair-1-bit6', 'zero-pair-1-bit7', 'zero-pair-2-bit0', 'zero-pair-2-bit1', 'zero-pair-2-bit2', 'zero-pair-2-bit3', 'zero-pair-2-bit4', 'zero-pair-2-bit5', 'zero-pair-2-bit6']
+span32-crlf mismatches 260 / 522 ['zero-pair-1-bit0', 'zero-pair-1-bit1', 'zero-pair-1-bit2', 'zero-pair-1-bit3', 'zero-pair-1-bit4', 'zero-pair-1-bit5', 'zero-pair-1-bit6', 'zero-pair-1-bit7', 'zero-pair-2-bit0', 'zero-pair-2-bit1', 'zero-pair-2-bit2', 'zero-pair-2-bit3', 'zero-pair-2-bit4', 'zero-pair-2-bit5', 'zero-pair-2-bit6']
+span64-raw mismatches 0 / 522 []
+span64-crlf mismatches 0 / 522 []
+span128-raw mismatches 0 / 522 []
+span128-crlf mismatches 0 / 522 []
+RESULT /work/den/target/rename-measure-hash.json cases 522 seconds 2.4153563589788973

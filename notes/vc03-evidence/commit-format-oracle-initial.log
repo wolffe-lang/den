@@ -1,0 +1,21 @@
+parity: date @0 +0000
+FAIL: date @1 -0000
+ git 0 b'1 +0000\n' b'' den 0 b'1 -0000\n' b''
+parity: date 1700000000 +0000
+parity: date @1700000000 -0730
+parity: date Thu, 07 Apr 2005 22:13:13 +0200
+parity: date 07 Apr 2005 22:13:13 +0200
+parity: date 2005-04-07T22:13:13+02:00
+parity: date 2005-04-07 22:13:13 +0200
+parity: date 2005-04-07T20:13:13Z
+parity: date 2005-04-07T22:13:13.019 +0200
+parity: date 2005.04.07 22:13:13 +0200
+parity: date 04/07/2005 22:13:13 +0200
+parity: date 07.04.2005 22:13:13 +0200
+parity: date 2024-02-29T12:00:00Z
+parity: date 2005-04-07
+parity: date 1969-12-31T23:59:59Z
+FAIL: date 2000-02-30T12:00:00Z
+ git 0 b'951912000 +0000\n' b'' den 1 b'' b'invalid_date\n'
+parity: date @9223372036854775807 +0000
+commit-format oracle: 136 / 138 parity; 2 mismatches

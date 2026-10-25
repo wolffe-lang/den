@@ -1,0 +1,19 @@
+random-text-0-reorder score 100 rename True candidate64 100
+random-text-6-one score 75 rename True candidate64 75
+random-text-12-three score 25 rename False candidate64 25
+random-text-18-duplicate score 75 rename True candidate64 75
+random-text-25-reorder score 100 rename True candidate64 100
+random-binary-1-one score 75 rename True candidate64 75
+random-binary-7-three score 25 rename False candidate64 25
+random-binary-13-duplicate score 75 rename True candidate64 75
+random-binary-20-reorder score 100 rename True candidate64 100
+random-binary-26-one score 75 rename True candidate64 75
+random-lines-5-reorder score 100 rename True candidate64 100
+random-lines-17-edit score 75 rename True candidate64 75
+span32-raw mismatches 11 / 300 ['random-lines-1-edit', 'random-lines-3-edit', 'random-lines-5-edit', 'random-lines-7-edit', 'random-lines-12-edit', 'random-lines-17-edit', 'random-lines-18-edit', 'random-lines-21-edit', 'random-lines-22-edit', 'random-lines-26-edit', 'random-lines-28-edit']
+span32-crlf mismatches 11 / 300 ['random-lines-1-edit', 'random-lines-3-edit', 'random-lines-5-edit', 'random-lines-7-edit', 'random-lines-12-edit', 'random-lines-17-edit', 'random-lines-18-edit', 'random-lines-21-edit', 'random-lines-22-edit', 'random-lines-26-edit', 'random-lines-28-edit']
+span64-raw mismatches 0 / 300 []
+span64-crlf mismatches 0 / 300 []
+span128-raw mismatches 246 / 300 ['random-text-0-reorder', 'random-text-0-one', 'random-text-0-three', 'random-text-0-duplicate', 'random-text-1-reorder', 'random-text-1-one', 'random-text-1-three', 'random-text-1-duplicate', 'random-text-2-reorder', 'random-text-2-one', 'random-text-2-three', 'random-text-2-duplicate', 'random-text-3-reorder', 'random-text-3-one', 'random-text-3-three']
+span128-crlf mismatches 246 / 300 ['random-text-0-reorder', 'random-text-0-one', 'random-text-0-three', 'random-text-0-duplicate', 'random-text-1-reorder', 'random-text-1-one', 'random-text-1-three', 'random-text-1-duplicate', 'random-text-2-reorder', 'random-text-2-one', 'random-text-2-three', 'random-text-2-duplicate', 'random-text-3-reorder', 'random-text-3-one', 'random-text-3-three']
+RESULT /work/den/target/rename-measure-random.json cases 300 seconds 1.5516868130071089
