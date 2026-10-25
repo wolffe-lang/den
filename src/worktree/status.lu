@@ -1,4 +1,6 @@
+use object
 use oid
+use rename
 
 /// Render controls are independent of scanning, so vc04/vc05 can reuse rows.
 pub struct StatusOptions {
@@ -115,74 +117,82 @@ fn display(ctx: Context, path: List[byte], options: StatusOptions) -> List[byte]
     }
 }
 
-fn same_file_type(a: int, b: int) -> bool {
-    a & 0o170000 == b & 0o170000
+fn rename_candidate(path: List[byte], mode: int, id: oid.Oid, retained: bool) -> rename.Candidate {
+    rename.Candidate { path: copy path, mode: mode, id: copy id, data: [], retained: retained }
+}
+
+fn rename_body(ctx: Context, id: oid.Oid) -> List[byte] ! WorkErrors {
+    let stored = object.read_object(ctx.repo, id, 16777216)?
+    if stored.kind != "blob" { return invalid_tree }
+    copy stored.data
 }
 
 fn renames(snapshot: Snapshot, options: StatusOptions) -> List[StatusRow] ! WorkErrors {
     var rows = copy snapshot.rows
     if !options.renames { return rows }
-    var dropped = List[int]()
+    var before = List[rename.Candidate](), after = List[rename.Candidate]()
+    var source_rows = List[int](), destination_rows = List[int]()
     for i in 0..rows.len {
-        if rows[i].x != "A" { continue }
-        let added = index_at(snapshot.index.entries, rows[i].path)
-        if added < 0 { continue }
-        for j in 0..rows.len {
-            if rows[j].x != "D" { continue }
-            var taken = false
-            for removed in dropped { if removed == j { taken = true } }
-            if taken { continue }
-            let old = flat_at(snapshot.head_entries, rows[j].path)
+        if rows[i].x == "D" {
+            let old = flat_at(snapshot.head_entries, rows[i].path)
             if old < 0 { continue }
-            if same_file_type(
-                snapshot.head_entries[old].mode,
-                snapshot.index.entries[added].stat[6],
-            ) &&
-                oid.equal(snapshot.head_entries[old].id, snapshot.index.entries[added].id) {
-                rows[i].x = "R"
-                rows[i].original_path = copy rows[j].path
-                (mut dropped).push(j)
-                break
+            let entry = copy snapshot.head_entries[old]
+            (mut before).push(rename_candidate(entry.path, entry.mode, entry.id, false))
+            (mut source_rows).push(i)
+        } else if rows[i].x == "A" {
+            let added = index_at(snapshot.index.entries, rows[i].path)
+            if added < 0 { continue }
+            let entry = copy snapshot.index.entries[added]
+            (mut after).push(rename_candidate(entry.path, entry.stat[6], entry.id, false))
+            (mut destination_rows).push(i)
+        } else if options.copies && (rows[i].x == "M" || rows[i].x == "T") {
+            let old = flat_at(snapshot.head_entries, rows[i].path)
+            if old < 0 { continue }
+            let entry = copy snapshot.head_entries[old]
+            (mut before).push(rename_candidate(entry.path, entry.mode, entry.id, true))
+            (mut source_rows).push(i)
+        }
+    }
+    var settings = rename.defaults()
+    settings.copies = options.copies
+    let exact = rename.exact(before, after, settings)?
+    var source_used = List[bool](), destination_used = List[bool]()
+    for _ in before { (mut source_used).push(false) }
+    for _ in after { (mut destination_used).push(false) }
+    for p in exact { source_used[p.source] = true; destination_used[p.destination] = true }
+    var inexact = false
+    for src in 0..before.len {
+        if before[src].mode & 0o170000 != 0o100000 || source_used[src] && !options.copies {
+            continue
+        }
+        for dst in 0..after.len {
+            if !destination_used[dst] && after[dst].mode & 0o170000 == 0o100000 { inexact = true }
+        }
+    }
+    var pairs = copy exact
+    if inexact {
+        for src in 0..before.len {
+            if before[src].mode & 0o170000 == 0o100000 && (!source_used[src] || options.copies) {
+                before[src].data = rename_body(snapshot.context, before[src].id)?
             }
         }
-        if rows[i].x == "A" && options.copies {
-            for old in snapshot.head_entries {
-                let now = index_at(snapshot.index.entries, old.path)
-                if now >= 0 &&
-                    !oid.equal(old.id, snapshot.index.entries[now].id) &&
-                    same_file_type(old.mode, snapshot.index.entries[added].stat[6]) &&
-                    oid.equal(old.id, snapshot.index.entries[added].id) {
-                    rows[i].x = "C"
-                    rows[i].original_path = copy old.path
-                    break
-                }
+        for dst in 0..after.len {
+            if !destination_used[dst] && after[dst].mode & 0o170000 == 0o100000 {
+                after[dst].data = rename_body(snapshot.context, after[dst].id)?
             }
         }
+        pairs = rename.pair(before, after, settings)?
+    }
+    var dropped = List[bool]()
+    for _ in rows { (mut dropped).push(false) }
+    for p in pairs {
+        let dst = destination_rows[p.destination]
+        rows[dst].x = if p.is_copy then "C" else "R"
+        rows[dst].original_path = copy before[p.source].path
+        if !before[p.source].retained { dropped[source_rows[p.source]] = true }
     }
     var result = List[StatusRow]()
-    for i in 0..rows.len {
-        var drop = false
-        for removed in dropped { if removed == i { drop = true } }
-        if !drop { (mut result).push(copy rows[i]) }
-    }
-    // Similarity scoring belongs to the measured diff engine. Do not silently
-    // claim an exact-only detector agrees on edited-content rename candidates.
-    for row in result {
-        if row.x != "A" { continue }
-        let added = index_at(snapshot.index.entries, row.path)
-        if added < 0 { continue }
-        for other in result {
-            if other.x != "D" { continue }
-            let old = flat_at(snapshot.head_entries, other.path)
-            if old >= 0 &&
-                same_file_type(
-                    snapshot.head_entries[old].mode,
-                    snapshot.index.entries[added].stat[6],
-                ) {
-                return Unsupported("inexact staged rename detection")
-            }
-        }
-    }
+    for i in 0..rows.len { if !dropped[i] { (mut result).push(copy rows[i]) } }
     result
 }
 

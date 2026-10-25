@@ -294,12 +294,14 @@ fn main() -> int ! worktree.WorkErrors {
     snapshot.index.entries[0].id = object.identify("blob", "edited body".bytes())?
     opts = options()
     opts.renames = true
-    var inexact_refused = false
-    let _ = worktree.render_status(snapshot, opts) else |e| {
-        inexact_refused = "{e}".contains("inexact staged rename detection")
-        List[byte]()
-    }
-    assert(inexact_refused)
+    // Disabled detection never tries to read these deliberately absent blobs.
+    opts.renames = false
+    assert(equal(worktree.render_status(snapshot, opts)?, bytes("A  new\nD  old\n")))
+    // Inexact symlinks are ineligible and also need no object reads.
+    opts.renames = true
+    snapshot.head_entries[0].mode = 0o120000
+    snapshot.index.entries[0].stat[6] = 0o120000
+    assert(equal(worktree.render_status(snapshot, opts)?, bytes("A  new\nD  old\n")))
     snapshot = copy exact_snapshot
     opts = options()
     opts.renames = true

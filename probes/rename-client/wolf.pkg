@@ -1,0 +1,6 @@
+pkg {
+    name: "rename-client",
+    edition: "1",
+    capabilities: [env, fs],
+    deps: {rename: {path: "../../src/rename"}, oid: {path: "../../src/oid"}},
+}

@@ -1,0 +1,9 @@
+{'name': 'eight-equal-no-basename', 'oracle': [('old/s0', 'new/d0', 90, 'R'), ('old/s1', 'new/d1', 90, 'R'), ('old/s2', 'new/d2', 90, 'R'), ('old/s3', 'new/d3', 90, 'R')], 'actual': [('old/s0', 'new/d0', 90, 'R'), ('old/s1', 'new/d1', 90, 'R'), ('old/s2', 'new/d2', 90, 'R'), ('old/s3', 'new/d3', 90, 'R'), ('old/s4', 'new/d4', 90, 'R'), ('old/s5', 'new/d5', 90, 'R'), ('old/s6', 'new/d6', 90, 'R'), ('old/s7', 'new/d7', 90, 'R')], 'ok': False, 'raw': '52303930006f6c642f7330006e65772f64300052303930006f6c642f7331006e65772f64310052303930006f6c642f7332006e65772f64320052303930006f6c642f7333006e65772f64330041006e65772f64340041006e65772f64350041006e65772f64360041006e65772f64370044006f6c642f73340044006f6c642f73350044006f6c642f73360044006f6c642f733700'}
+Traceback (most recent call last):
+  File "/work/den/tools/rename-pairing-test.py", line 99, in <module>
+    if __name__=='__main__':main()
+                            ^^^^^^
+  File "/work/den/tools/rename-pairing-test.py", line 97, in main
+    assert not failures,failures
+           ^^^^^^^^^^^^
+AssertionError: [{'name': 'eight-equal-no-basename', 'oracle': [('old/s0', 'new/d0', 90, 'R'), ('old/s1', 'new/d1', 90, 'R'), ('old/s2', 'new/d2', 90, 'R'), ('old/s3', 'new/d3', 90, 'R')], 'actual': [('old/s0', 'new/d0', 90, 'R'), ('old/s1', 'new/d1', 90, 'R'), ('old/s2', 'new/d2', 90, 'R'), ('old/s3', 'new/d3', 90, 'R'), ('old/s4', 'new/d4', 90, 'R'), ('old/s5', 'new/d5', 90, 'R'), ('old/s6', 'new/d6', 90, 'R'), ('old/s7', 'new/d7', 90, 'R')], 'ok': False, 'raw': '52303930006f6c642f7330006e65772f64300052303930006f6c642f7331006e65772f64310052303930006f6c642f7332006e65772f64320052303930006f6c642f7333006e65772f64330041006e65772f64340041006e65772f64350041006e65772f64360041006e65772f64370044006f6c642f73340044006f6c642f73350044006f6c642f73360044006f6c642f733700'}]

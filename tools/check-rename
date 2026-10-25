@@ -1,0 +1,27 @@
+#!/bin/sh
+# Shared pairer gate, kept independently runnable from the diff endpoint.
+set -eu
+DEN_ROOT=$(cd "$(dirname "$0")/.." && pwd)
+export DEN_ROOT
+cd "$DEN_ROOT"
+. tools/lib-toolchain.sh
+for tier in native release; do
+    flag=
+    if [ "$tier" = release ]; then flag=--release; fi
+    mkdir -p "target/$tier"
+    "$WOLF" build $flag --deny-warnings src/rename_test.lu -o "target/$tier/rename-test"
+    "target/$tier/rename-test"
+    "$WOLF" build $flag --deny-warnings probes/rename-client/main.lu -o "target/$tier/rename-client"
+    for client in worktree commit; do
+        "$WOLF" build $flag --deny-warnings "probes/$client-client/main.lu" -o "target/$tier/$client-client"
+    done
+    tools/env python3 -I tools/rename-pairing-test.py --tier "$tier" --consumers
+done
+"$WOLF" conform-run src/rename_test.lu --checked --json > target/rename-checked.json
+cat target/rename-checked.json
+python3 -I - target/rename-checked.json <<'PY'
+import json,sys
+rows=[json.loads(line) for line in open(sys.argv[1]) if line.startswith('{')]
+assert len(rows)==1 and rows[0]['verdict']=='exit(0)',rows
+PY
+echo 'rename: native/release independent multi-candidate oracle; checked exit verified; zero skips'

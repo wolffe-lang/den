@@ -1,7 +1,8 @@
 // Original bounded line-sequence LCS for summary counts, not another tool's
-// diff implementation. Exact renames use the same oid criterion as worktree.
+// diff implementation. Shared rename pairing is independent of summary counting.
 use object
 use oid
+use rename
 use worktree
 
 /// Shortstat counts for one blob pair; binary bodies count neither text side.
@@ -76,7 +77,7 @@ fn compare_path(left: List[byte], right: List[byte]) -> int {
     0
 }
 
-struct Change { old_at: int, new_at: int, rename: bool, dropped: bool }
+struct Change { old_at: int, new_at: int, rename: bool, score: int, dropped: bool }
 
 fn change_order(
     a: Change,
@@ -93,6 +94,7 @@ fn change_order(
 }
 
 fn changes(
+    ctx: worktree.Context,
     before: List[worktree.FlatEntry],
     after: List[worktree.FlatEntry],
     renames: bool,
@@ -115,33 +117,92 @@ fn changes(
                     old_at: old_at,
                     new_at: new_at,
                     rename: false,
+                    score: 0,
                     dropped: false,
                 })
             }
             old_at += 1
             new_at += 1
         } else if cmp < 0 {
-            (mut out).push(Change { old_at: old_at, new_at: -1, rename: false, dropped: false })
+            (mut out).push(Change {
+                old_at: old_at,
+                new_at: -1,
+                rename: false,
+                score: 0,
+                dropped: false,
+            })
             old_at += 1
         } else {
-            (mut out).push(Change { old_at: -1, new_at: new_at, rename: false, dropped: false })
+            (mut out).push(Change {
+                old_at: -1,
+                new_at: new_at,
+                rename: false,
+                score: 0,
+                dropped: false,
+            })
             new_at += 1
         }
     }
     if renames {
         if out.len > 2000 { return Unsupported("commit rename summary budget") }
+        var sources = List[int](), destinations = List[int]()
+        var left = List[rename.Candidate](), right = List[rename.Candidate]()
         for i in 0..out.len {
-            if out[i].old_at >= 0 || out[i].new_at < 0 { continue }
-            for j in 0..out.len {
-                if out[j].dropped || out[j].old_at < 0 || out[j].new_at >= 0 { continue }
-                if before[out[j].old_at].mode & 0o170000 == after[out[i].new_at].mode & 0o170000 &&
-                    oid.equal(before[out[j].old_at].id, after[out[i].new_at].id) {
-                    out[i].old_at = out[j].old_at
-                    out[i].rename = true
-                    out[j].dropped = true
-                    break
+            if out[i].old_at < 0 {
+                let entry = copy after[out[i].new_at]
+                (mut destinations).push(i)
+                (mut right).push(rename.Candidate {
+                    path: copy entry.path,
+                    mode: entry.mode,
+                    id: copy entry.id,
+                    data: [],
+                    retained: false,
+                })
+            } else if out[i].new_at < 0 {
+                let entry = copy before[out[i].old_at]
+                (mut sources).push(i)
+                (mut left).push(rename.Candidate {
+                    path: copy entry.path,
+                    mode: entry.mode,
+                    id: copy entry.id,
+                    data: [],
+                    retained: false,
+                })
+            }
+        }
+        let options = rename.defaults()
+        let exact = rename.exact(left, right, options)?
+        var used_left = List[bool](), used_right = List[bool]()
+        for _ in left { (mut used_left).push(false) }
+        for _ in right { (mut used_right).push(false) }
+        for p in exact { used_left[p.source] = true; used_right[p.destination] = true }
+        var pending_left = false, pending_right = false
+        for i in 0..left.len {
+            if !used_left[i] && left[i].mode & 0o170000 == 0o100000 { pending_left = true }
+        }
+        for i in 0..right.len {
+            if !used_right[i] && right[i].mode & 0o170000 == 0o100000 { pending_right = true }
+        }
+        var pairs = copy exact
+        if pending_left && pending_right {
+            for i in 0..left.len {
+                if !used_left[i] && left[i].mode & 0o170000 == 0o100000 {
+                    left[i].data = blob(ctx, before[out[sources[i]].old_at])?
                 }
             }
+            for i in 0..right.len {
+                if !used_right[i] && right[i].mode & 0o170000 == 0o100000 {
+                    right[i].data = blob(ctx, after[out[destinations[i]].new_at])?
+                }
+            }
+            pairs = rename.pair(left, right, options)?
+        }
+        for p in pairs {
+            let dst = destinations[p.destination], src = sources[p.source]
+            out[dst].old_at = out[src].old_at
+            out[dst].rename = true
+            out[dst].score = p.percent
+            out[src].dropped = true
         }
     }
     for i in 1..out.len {
@@ -192,46 +253,25 @@ fn blob(ctx: worktree.Context, entry: worktree.FlatEntry) -> List[byte] ! Commit
     owned(stored.data)
 }
 
-fn checked_changes(
-    before: List[worktree.FlatEntry],
-    after: List[worktree.FlatEntry],
-) -> List[Change] ! CommitErrors {
-    // Git's commit summary forces rename detection, independently of
-    // diff.renames. The R5 similarity boundary therefore cannot be disabled.
-    let edits = changes(before, after, true)?
-    // R-vc03-5 A: exact oid renames are known. Unresolved additions plus
-    // deletions need vc04's similarity matcher; do not print guessed A/D rows.
-    // Quiet commit never calls this renderer and can publish the exact tree.
-    var added_candidate = false, deleted_candidate = false
-    for change in edits {
-        if change.dropped { continue }
-        if change.old_at < 0 { added_candidate = true }
-        if change.new_at < 0 { deleted_candidate = true }
-    }
-    if added_candidate && deleted_candidate {
-        return Unsupported("commit edited rename similarity (vc04)")
-    }
-    edits
-}
-
-/// Pure exact-oid/similarity scope check. This never reads blob objects or
-/// publishes anything; -a callers can pass an in-memory worktree-id preview.
+/// Metadata-only preview policy: -a may reference blobs not yet published.
+/// Scoring belongs to change_summary after staging. Quiet commit skips both.
 pub fn check_summary_policy(
     _ctx: worktree.Context,
     before: List[worktree.FlatEntry],
     after: List[worktree.FlatEntry],
 ) -> () ! CommitErrors {
-    let _ = checked_changes(before, after)?
+    let edits = changes(_ctx, before, after, false)?
+    if edits.len > 2000 { return Unsupported("commit rename summary budget") }
 }
 
-/// Render shortstat and create/delete/mode/exact-rename summary rows. Unknown
-/// similarity candidates refuse by name (vc04); quiet callers skip rendering.
+/// Render shortstat and create/delete/mode/rename rows. Counts compare actual
+/// blob OIDs and bodies even when the similarity score rounds to 100 percent.
 pub fn change_summary(
     ctx: worktree.Context,
     before: List[worktree.FlatEntry],
     after: List[worktree.FlatEntry],
 ) -> List[byte] ! CommitErrors {
-    let edits = checked_changes(before, after)?
+    let edits = changes(ctx, before, after, true)?
     var files = 0, added = 0, deleted = 0
     var detail = List[byte]()
     let quote = worktree.config_bool(ctx, "core.quotepath", true)?
@@ -239,7 +279,7 @@ pub fn change_summary(
         if change.dropped { continue }
         files += 1
         var old_data = List[byte](), new_data = List[byte]()
-        if !change.rename {
+        {
             let same = change.old_at >= 0 &&
                 change.new_at >= 0 &&
                 oid.equal(before[change.old_at].id, after[change.new_at].id)
@@ -255,7 +295,7 @@ pub fn change_summary(
             add_bytes(mut detail, " rename ".bytes())
             let path = renamed_path(before[change.old_at].path, after[change.new_at].path)
             add_bytes(mut detail, worktree.quote(path, quote, false))
-            add_bytes(mut detail, " (100%)\n".bytes())
+            add_bytes(mut detail, " ({change.score}%)\n".bytes())
             if before[change.old_at].mode != after[change.new_at].mode {
                 // The rename already names the path; Git's following mode row
                 // has no pathname and must retain this order.

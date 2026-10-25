@@ -1,0 +1,76 @@
+//! member: false
+
+use rename
+use oid
+
+fn candidate(path: str, data: str) -> rename.Candidate ! rename.RenameErrors {
+    rename.Candidate {
+        path: path.bytes(),
+        mode: 0o100644,
+        id: oid.digest("sha1", data.bytes())?,
+        data: data.bytes(),
+        retained: false,
+    }
+}
+
+fn main() -> int ! rename.RenameErrors {
+    var options = rename.defaults()
+    let old = [candidate("old/z", "a\nb\nc\n")?, candidate("old/a", "a\nb\nc\n")?]
+    let fresh = [candidate("new/z", "a\nb\nX\n")?, candidate("new/a", "a\nb\nX\n")?]
+    let pairs = rename.pair(old, fresh, options)?
+    assert(pairs.len == 2)
+    for p in pairs {
+        assert(p.source == p.destination && p.units == 40000 && p.percent == 66 && !p.is_copy)
+    }
+    options.threshold = 67
+    assert(rename.pair(old, fresh, options)?.len == 0)
+    options.threshold = 66
+    assert(rename.pair(old, fresh, options)?.len == 2)
+    options.enabled = false
+    assert(rename.pair(old, fresh, options)?.len == 0)
+    options = rename.defaults()
+    let collision = rename.pair(
+        [candidate("old", "a".repeat(64))?],
+        [candidate("new", "b".repeat(64))?],
+        options,
+    )?
+    assert(collision.len == 1 && collision[0].percent == 100)
+    options.threshold = 100
+    assert(
+        rename.pair(
+            [candidate("old", "a".repeat(64))?],
+            [candidate("new", "b".repeat(64))?],
+            options,
+        )?.len ==
+            0,
+    )
+    options = rename.defaults()
+    var link = candidate("old", "a\nb\nc\n")?
+    link.mode = 0o120000
+    assert(rename.pair([copy link], fresh, options)?.len == 0)
+    var destination = copy link
+    destination.path = "new".bytes()
+    assert(rename.pair([copy link], [copy destination], options)?.len == 1)
+    destination.mode = 0o100644
+    assert(rename.pair([copy link], [copy destination], options)?.len == 0)
+    options.copies = true
+    let copies = rename.pair(
+        [candidate("old", "a\nb\nc\n")?],
+        [candidate("b", "a\nb\nc\n")?, candidate("a", "a\nb\nc\n")?],
+        options,
+    )?
+    assert(copies.len == 2)
+    for p in copies { assert(p.is_copy == (p.destination == 1)) }
+    var retained = candidate("old", "a\nb\nc\n")?
+    retained.retained = true
+    let copied = rename.pair([copy retained], [candidate("new", "a\nb\nX\n")?], options)?
+    assert(copied.len == 1 && copied[0].is_copy)
+    options.copies = false
+    assert(rename.pair([copy retained], fresh, options)?.len == 0)
+    options.threshold = 0
+    var invalid = false
+    let _ = rename.pair(old, fresh, options) else |e| { invalid = "{e}" == "invalid"; [] }
+    assert(invalid)
+    print("PASS shared rename exact/type, ties, thresholds, copies and unequal R100")
+    0
+}

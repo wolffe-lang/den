@@ -1,0 +1,252 @@
+// Original black-box pairing, measured by tools/rename-pairing-test.py.
+use delta
+use oid
+
+/// Invalid arguments/OIDs, unsupported OID algorithm, or bounded candidate/body limit.
+pub error RenameErrors = {invalid, limit, invalid_oid, unsupported_format}
+
+/// Deleted sources and added destinations; retained sources are modified paths
+/// offered only for copies. Bodies must correspond to id, except exact() does
+/// not inspect bodies. No input storage is retained by the returned pairs.
+pub struct Candidate {
+    path: List[byte],
+    mode: int,
+    id: oid.Oid,
+    data: List[byte],
+    retained: bool,
+}
+
+/// Integer percent in 1..100. Disabled matching returns no pairs or body reads.
+pub struct Options { enabled: bool, copies: bool, threshold: int }
+
+/// Indices always address the original input lists. units uses 0..60000;
+/// percent is its truncated presentation. 100 percent does NOT imply equal OIDs.
+pub struct Pair { source: int, destination: int, units: int, percent: int, is_copy: bool }
+
+/// Default rename detection at fifty percent, without copy detection.
+pub fn defaults() -> Options { Options { enabled: true, copies: false, threshold: 50 } }
+
+fn compare(a: List[byte], b: List[byte]) -> int {
+    var i = 0
+    while i < a.len && i < b.len {
+        if a[i] != b[i] { return a[i] as int - b[i] as int }
+        i += 1
+    }
+    a.len - b.len
+}
+
+fn basename_start(path: List[byte]) -> int {
+    var start = 0
+    for i in 0..path.len { if path[i] == 47 as byte { start = i + 1 } }
+    start
+}
+
+fn names(a: Candidate, b: Candidate) -> bool {
+    let left = basename_start(a.path), right = basename_start(b.path)
+    if a.path.len - left != b.path.len - right { return false }
+    for i in 0..a.path.len - left { if a.path[left + i] != b.path[right + i] { return false } }
+    true
+}
+
+fn order(values: List[Candidate]) -> List[int] {
+    var out = List[int]()
+    for i in 0..values.len {
+        (mut out).push(i)
+        var j = out.len - 1
+        while j > 0 && compare(values[out[j - 1]].path, values[i].path) > 0 {
+            out[j] = out[j - 1]
+            j -= 1
+        }
+        out[j] = i
+    }
+    out
+}
+
+fn has_source(pairs: List[Pair], source: int) -> bool {
+    for p in pairs { if p.source == source { return true } }
+    false
+}
+
+fn has_destination(pairs: List[Pair], destination: int) -> bool {
+    for p in pairs { if p.destination == destination { return true } }
+    false
+}
+
+fn matched(source: int, destination: int, units: int) -> Pair {
+    Pair {
+        source: source,
+        destination: destination,
+        units: units,
+        percent: units / 600,
+        is_copy: false,
+    }
+}
+
+fn validate(
+    before: List[Candidate],
+    after: List[Candidate],
+    options: Options,
+) -> () ! RenameErrors {
+    if options.threshold < 1 || options.threshold > 100 { return invalid }
+    if before.len > 2000 || after.len > 2000 { return limit }
+    for c in before { oid.validate(c.id)? }
+    for c in after { oid.validate(c.id)? }
+}
+
+fn classify(mut pairs: List[Pair], before: List[Candidate], after: List[Candidate]) {
+    // A removed source may feed several copies; its last destination is R.
+    for i in 0..pairs.len {
+        pairs[i].is_copy = before[pairs[i].source].retained
+        for j in 0..pairs.len {
+            if pairs[i].source == pairs[j].source &&
+                compare(after[pairs[i].destination].path, after[pairs[j].destination].path) < 0 {
+                pairs[i].is_copy = true
+            }
+        }
+    }
+}
+
+/// Exact OID/type matching is separately available to lazy-loading callers.
+/// Bodies may be empty here. Results can identify which candidates still need
+/// bodies before pair(); do not merge exact() results with pair() results.
+pub fn exact(
+    before: List[Candidate],
+    after: List[Candidate],
+    options: Options,
+) -> List[Pair] ! RenameErrors {
+    if !options.enabled { return List[Pair]() }
+    validate(before, after, options)?
+    let sources = order(before)
+    let destinations = order(after)
+    var pairs = List[Pair]()
+    for dst in destinations {
+        var best = List[int](), preference = -1
+        for src in sources {
+            if before[src].retained && !options.copies { continue }
+            let used = before[src].retained || has_source(pairs, src)
+            if used && !options.copies { continue }
+            if before[src].mode & 0o170000 != after[dst].mode & 0o170000 ||
+                !oid.equal(before[src].id, after[dst].id) {
+                continue
+            }
+            let rank = (if used then 0 else 2) + (if names(before[src], after[dst]) then 1 else 0)
+            if rank > preference { best = [src]; preference = rank }
+        }
+        if best.len == 1 { (mut pairs).push(matched(best[0], dst, 60000)) }
+    }
+    classify(mut pairs, before, after)
+    pairs
+}
+
+fn score(a: Candidate, b: Candidate) -> int ! RenameErrors {
+    if a.mode & 0o170000 != 0o100000 || b.mode & 0o170000 != 0o100000 { return 0 }
+    delta.similarity(a.data, b.data)?.units
+}
+
+/// Exact pass, unique-basename prepass, then descending similarity with basename
+/// and stable destination/shortlist-slot ties. Source candidates are visited in
+/// unsigned path order; a better candidate replaces the first weakest of four
+/// slots without reordering the others. Copies run after unused deleted sources.
+/// Threshold 100 is exact-OID only (even unequal-content R100 is excluded).
+/// At most 2000 inputs per side;
+/// scorer body limits apply to inexact regular-file pairs. Symlinks/gitlinks
+/// match only by OID/type. No filesystem, configuration, status or commit imports.
+pub fn pair(
+    before: List[Candidate],
+    after: List[Candidate],
+    options: Options,
+) -> List[Pair] ! RenameErrors {
+    var pairs = exact(before, after, options)?
+    if !options.enabled || options.threshold == 100 { return pairs }
+    let sources = order(before)
+    let destinations = order(after)
+    let minimum = options.threshold * 600
+    if !options.copies {
+        for dst in destinations {
+            if has_destination(pairs, dst) { continue }
+            var same_sources = List[int](), same_destinations = 0
+            for src in sources {
+                if !before[src].retained &&
+                    !has_source(pairs, src) &&
+                    names(before[src], after[dst]) {
+                    (mut same_sources).push(src)
+                }
+            }
+            for other in destinations {
+                if !has_destination(pairs, other) && names(after[other], after[dst]) {
+                    same_destinations += 1
+                }
+            }
+            if same_sources.len == 1 && same_destinations == 1 {
+                let src = same_sources[0]
+                let units = score(before[src], after[dst])?
+                if units >= (60000 + minimum) / 2 { (mut pairs).push(matched(src, dst, units)) }
+            }
+        }
+    }
+    var edges = List[Pair]()
+    for dst in destinations {
+        if has_destination(pairs, dst) { continue }
+        var shortlist = List[Pair]()
+        for src in sources {
+            if !options.copies && (before[src].retained || has_source(pairs, src)) { continue }
+            let units = score(before[src], after[dst])?
+            if units < minimum { continue }
+            let edge = matched(src, dst, units)
+            if shortlist.len < 4 { (mut shortlist).push(edge); continue }
+            var worst = 0
+            for i in 1..shortlist.len {
+                if shortlist[i].units < shortlist[worst].units ||
+                    shortlist[i].units == shortlist[worst].units &&
+                        !names(before[shortlist[i].source], after[dst]) &&
+                        names(before[shortlist[worst].source], after[dst]) {
+                    worst = i
+                }
+            }
+            if units > shortlist[worst].units ||
+                units == shortlist[worst].units &&
+                    names(before[src], after[dst]) &&
+                    !names(before[shortlist[worst].source], after[dst]) {
+                shortlist[worst] = edge
+            }
+        }
+        // Oracle's eight-way equal fixture retains only four source choices
+        // per destination; do not promote a fifth after a source is consumed.
+        for edge in shortlist { (mut edges).push(copy edge) }
+    }
+    // Stable insertion preserves destination order and the measured shortlist-slot ties.
+    for i in 1..edges.len {
+        let edge = copy edges[i]
+        let named = names(before[edge.source], after[edge.destination])
+        var pos = i
+        while pos > 0 {
+            let previous = copy edges[pos - 1]
+            if previous.units > edge.units ||
+                previous.units == edge.units &&
+                    (!named || names(before[previous.source], after[previous.destination])) {
+                break
+            }
+            edges[pos] = copy edges[pos - 1]
+            pos -= 1
+        }
+        edges[pos] = edge
+    }
+    // First consume still-unused removed sources as renames, even if a retained
+    // or previously consumed source has a higher copy score. Copies fill only
+    // the remaining destinations in the second pass.
+    for edge in edges {
+        if has_destination(pairs, edge.destination) ||
+            before[edge.source].retained ||
+            has_source(pairs, edge.source) {
+            continue
+        }
+        (mut pairs).push(copy edge)
+    }
+    if options.copies {
+        for edge in edges {
+            if !has_destination(pairs, edge.destination) { (mut pairs).push(copy edge) }
+        }
+    }
+    classify(mut pairs, before, after)
+    pairs
+}

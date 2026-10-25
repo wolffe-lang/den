@@ -1,0 +1,5 @@
+pkg {
+    name: "rename",
+    edition: "1",
+    deps: {delta: {path: "../delta"}, oid: {path: "../oid"}, hash: {path: "../hash"}},
+}

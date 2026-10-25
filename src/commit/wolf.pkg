@@ -3,6 +3,7 @@ pkg {
     edition: "1",
     capabilities: [env, fs],
     deps: {
+        rename: {path: "../rename"},
         commit_format: {path: "../commit_format"},
         worktree: {path: "../worktree"},
         index: {path: "../index"},

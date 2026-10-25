@@ -1,0 +1,61 @@
+use std.fs
+use oid
+use rename
+
+error ProbeErrors = {invalid, limit, not_found, denied, io, invalid_oid, unsupported_format}
+
+fn input(path: str) -> List[byte] ! ProbeErrors {
+    var file = fs.open(path)?
+    defer fs.close(take file) else |_| {}
+    var out = List[byte]()
+    loop {
+        region part {
+            let bytes = fs.read_chunk(mut file, 65536) else |e| match e {
+                eof => { break },
+                io => { return io },
+            }
+            if bytes.len > 16777216 - out.len { return limit }
+            for b in bytes { (mut out).push(b) }
+        }
+    }
+    out
+}
+
+fn number(text: str) -> int ! ProbeErrors {
+    var n = 0
+    if text.len == 0 { return invalid }
+    for b in text.bytes() {
+        if b < 48 as byte || b > 57 as byte { return invalid }
+        n = n * 10 + b as int - 48
+    }
+    n
+}
+
+fn work(args: List[str]) -> int ! ProbeErrors {
+    if args.len < 2 || (args.len - 2) % 5 != 0 { return invalid }
+    var options = rename.defaults()
+    options.threshold = number(args[0]) else { return invalid }
+    options.copies = args[1] == "true"
+    var before = List[rename.Candidate](), after = List[rename.Candidate]()
+    var i = 2
+    while i < args.len {
+        let data = input(args[i + 4])?
+        let candidate = rename.Candidate {
+            path: args[i + 1].bytes(),
+            mode: number(args[i + 2]) else { return invalid },
+            id: oid.digest("sha1", data)?,
+            data: copy data,
+            retained: args[i + 3] == "true",
+        }
+        if args[i] == "old" { (mut before).push(candidate) } else { (mut after).push(candidate) }
+        i += 5
+    }
+    for p in rename.pair(before, after, options)? {
+        print("{p.source} {p.destination} {p.units} {p.percent} {p.is_copy}")
+    }
+    0
+}
+
+fn main() -> int {
+    work(env_args()) else |e| { eprint("{e}"); 1 }
+}
