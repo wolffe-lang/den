@@ -1,0 +1,5 @@
+pkg {
+    name: "hunk-prototype",
+    edition: "1",
+    capabilities: [env, fs],
+}

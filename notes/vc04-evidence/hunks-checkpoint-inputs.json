@@ -1,0 +1,8 @@
+{
+  "probes/hunk-prototype/wolf.pkg": "384034c77a853d968a0e8b6196c4193a7cbb488cb431317b4173e2314f22b927",
+  "probes/hunk-prototype/main.lu": "8686c2a26d96420263bd948310e6ba18857b38de12d2675249ae286cd779f5bd",
+  "probes/hunk-prototype/engine/errors.lu": "0c1cbf1adbdd9532119d820b24a3309afd8ff699d54ea70017808c385ce897aa",
+  "probes/hunk-prototype/engine/lines.lu": "3201364b50241ec6f80520c3ef2b90011c3f3ec77cbb3643d5d2678fadebd920",
+  "probes/hunk-prototype/engine/hunks.lu": "9a20aa999633508a7e66ea742cca677fc708be04b6f195e0e969b9e7f0883626",
+  "tools/diff-hunks-test.py": "fa84446777c110d1ef6f690d188641e8969b1a6012aa065579d925ef87490015"
+}

@@ -1,0 +1,12 @@
+default_equal 620 / 684
+no_indent_equal 676 / 684
+oracle_heuristics_differ 56 / 684
+failures [('seeded-6', 0), ('seeded-6', 1), ('seeded-6', 3), ('seeded-6', 10), ('seeded-21', 0), ('seeded-21', 1), ('seeded-21', 3), ('seeded-21', 10), ('seeded-22', 0), ('seeded-22', 1), ('seeded-22', 3), ('seeded-22', 10), ('seeded-25', 0), ('seeded-25', 1), ('seeded-25', 3), ('seeded-25', 10), ('seeded-36', 0), ('seeded-36', 1), ('seeded-36', 3), ('seeded-36', 10), ('seeded-41', 0), ('seeded-41', 1), ('seeded-41', 3), ('seeded-41', 10), ('seeded-52', 0), ('seeded-52', 1), ('seeded-52', 3), ('seeded-52', 10), ('seeded-54', 0), ('seeded-54', 1)]
+Traceback (most recent call last):
+  File "/work/den/tools/diff-hunks-test.py", line 83, in <module>
+    if __name__=='__main__':main()
+                            ^^^^^^
+  File "/work/den/tools/diff-hunks-test.py", line 81, in main
+    assert not failures
+           ^^^^^^^^^^^^
+AssertionError
