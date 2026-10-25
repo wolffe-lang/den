@@ -1,0 +1,243 @@
+use std.fs
+use ignore
+use index
+use object
+
+/// Add policy independent of command parsing; chmod is -1 (unchanged), 0 or 1.
+pub struct AddOptions {
+    all: bool,
+    update: bool,
+    ignore_removal: bool,
+    force: bool,
+    intent: bool,
+    chmod: int,
+    verbose: bool,
+    dry_run: bool,
+}
+
+/// Default add stages exactly the selected paths, including their deletions.
+pub fn add_options() -> AddOptions {
+    AddOptions {
+        all: false,
+        update: false,
+        ignore_removal: false,
+        force: false,
+        intent: false,
+        chmod: -1,
+        verbose: false,
+        dry_run: false,
+    }
+}
+
+fn ensure_filters(ctx: Context) -> () ! WorkErrors {
+    let autocrlf = ctx.repo.config["core.autocrlf"] else "false"
+    if autocrlf != "false" && autocrlf != "0" { return Unsupported("core.autocrlf={autocrlf}") }
+    if fs.exists("{ctx.root}/.gitattributes") ||
+        fs.exists("{ctx.repo.gitdir}/info/attributes") ||
+        (ctx.repo.config["core.attributesfile"] else "") != "" {
+        return Unsupported("worktree attributes")
+    }
+}
+
+fn entry_for(
+    file: FileState,
+    prior: List[index.Entry],
+    options: AddOptions,
+) -> index.Entry ! WorkErrors {
+    if prior.len > 1 { return unmerged }
+    var mode = file.mode
+    if options.chmod >= 0 {
+        if mode != 0o100644 && mode != 0o100755 {
+            return Unsupported("--chmod on a non-regular entry")
+        }
+        mode = if options.chmod == 1 then 0o100755 else 0o100644
+    }
+    let flags = if prior.len == 1 then prior[0].flags else 0
+    var extended = if prior.len == 1 then prior[0].extended & 0x4000 else 0
+    if options.intent { extended = extended | 0x2000 }
+    let id = if options.intent then object.identify("blob", [])? else copy file.id
+    var entry = if file.kind == 3 {
+        index.entry_from_lstat(file.stat, file.path, id, flags, extended)?
+    } else {
+        index.entry_from_stat(
+            file.stat,
+            file.path,
+            id,
+            if mode == 0o120000 then 0o100644 else mode,
+            flags,
+            extended,
+        )?
+    }
+    entry.stat[6] = mode
+    if options.intent { entry.stat = [0, 0, 0, 0, 0, 0, mode, 0, 0, 0] }
+    entry
+}
+
+fn path_present(ctx: Context, path: List[byte]) -> bool ! WorkErrors {
+    let _ = fs_lstat(absolute(ctx, path)?) else |e| match e {
+        not_found => { return false },
+        denied => { return denied },
+        io => { return io },
+    }
+    true
+}
+
+/// Apply Git add's measured cache policy without IO. Every actually staged
+/// entry invalidates its TREE ancestors, even with identical stat/mode/oid.
+/// stage_paths bypasses assume-valid/skip entries before reaching this helper;
+/// the generic index.replace_entry intentionally retains stat-only caches.
+pub fn stage_entry(value: index.Index, entry: index.Entry) -> index.Index ! WorkErrors {
+    let result = index.replace_entry(value, entry)?
+    index.invalidate_tree(result, entry.path)?
+}
+
+/// Stage into an owned, already-locked index value. Caller owns begin/commit;
+/// no lock is acquired here. All pathspec/ignore checks precede object writes.
+/// Empty paths selects all only with all/update; otherwise it changes nothing.
+pub fn stage_paths(
+    ctx: Context,
+    mut value: index.Index,
+    paths: List[List[byte]],
+    options: AddOptions,
+) -> List[List[byte]] ! WorkErrors {
+    var warnings = List[str]()
+    stage_paths_with_warnings(ctx, mut value, paths, options, mut warnings)?
+}
+
+/// Stage with nonfatal ignore diagnostics collected in the caller's operation
+/// list. Only actual untracked-file/directory ignore queries can append a
+/// warning; tracked-only selections and update=true never load ignore sources.
+/// Never emits stderr, including on an ignored-path or other error return.
+pub fn stage_paths_with_warnings(
+    ctx: Context,
+    mut value: index.Index,
+    paths: List[List[byte]],
+    options: AddOptions,
+    mut warnings: List[str],
+) -> List[List[byte]] ! WorkErrors {
+    validate_specs(paths)?
+    let _ = index.serialize(value)?
+    if options.chmod < -1 || options.chmod > 1 { return invalid }
+    if paths.len == 0 && !options.all && !options.update { return List[List[byte]]() }
+    ensure_filters(ctx)?
+    let current = copy value
+    var sparse = List[List[byte]]()
+    if paths.len > 0 {
+        for entry in current.entries {
+            if entry.extended & 0x4000 != 0 && selected(entry.path, paths) {
+                (mut sparse).push(copy entry.path)
+            }
+        }
+    }
+    if sparse.len > 0 {
+        var message = "The following paths and/or pathspecs matched paths that exist\noutside of your sparse-checkout definition, so will not be\nupdated in the index:\n"
+        for path in sparse { message += "{text(path)?}\n" }
+        if config_bool(ctx, "advice.updatesparsepath", true)? {
+            message += "hint: If you intend to update such entries, try one of the following:\nhint: * Use the --sparse option.\nhint: * Disable or modify the sparsity rules.\nhint: Disable this message with \"git config set advice.updateSparsePath false\""
+        } else {
+            message = message[0..message.len - 1]
+        }
+        return Failure(message)
+    }
+    let walked = walk(ctx, current, !options.update, paths)?
+    for file in walked.files {
+        let name = text(file.path)?
+        if name == ".gitattributes" || name.ends_with("/.gitattributes") {
+            return Unsupported("worktree attributes")
+        }
+    }
+    var candidates = List[List[byte]]()
+    for entry in current.entries {
+        if !selected(entry.path, paths) { continue }
+        if index.stage(entry) != 0 { return unmerged }
+        if entry.extended & 0x4000 != 0 || entry.flags & 0x8000 != 0 { continue }
+        (mut candidates).push(copy entry.path)
+    }
+    var ignored = List[List[byte]]()
+    if !options.force && !options.update {
+        for path in paths {
+            if path.len == 0 { continue }
+            var tracked = false
+            for entry in current.entries { if under(entry.path, path) { tracked = true; break } }
+            if tracked { continue }
+            let info = fs_lstat(absolute(ctx, path)?) else |e| match e {
+                not_found => { continue },
+                denied => { return denied },
+                io => { return io },
+            }
+            if info[0] == 1 &&
+                ignore.query_with_warnings(
+                    ctx.repo,
+                    ctx.root,
+                    text(path)?,
+                    true,
+                    mut warnings,
+                )?.ignored {
+                (mut ignored).push(owned_bytes(path))
+            }
+        }
+    }
+    if !options.update {
+        for file in walked.files {
+            if !selected(file.path, paths) || index_at(current.entries, file.path) >= 0 { continue }
+            let result = ignore.query_with_warnings(
+                ctx.repo,
+                ctx.root,
+                text(file.path)?,
+                false,
+                mut warnings,
+            )?
+            if result.ignored && !options.force {
+                for path in paths {
+                    if compare(path, file.path) == 0 { (mut ignored).push(copy file.path) }
+                }
+                continue
+            }
+            (mut candidates).push(copy file.path)
+        }
+    }
+    if ignored.len > 0 {
+        var message = "The following paths are ignored by one of your .gitignore files:\n"
+        for path in ignored { message += "{text(path)?}\n" }
+        if config_bool(ctx, "advice.addignoredfile", true)? {
+            message += "hint: Use -f if you really want to add them.\nhint: Disable this message with \"git config set advice.addIgnoredFile false\""
+        } else {
+            message = message[0..message.len - 1]
+        }
+        return Failure(message)
+    }
+    for path in paths {
+        var matched = false
+        for candidate in candidates { if under(candidate, path) { matched = true; break } }
+        for entry in current.entries { if under(entry.path, path) { matched = true; break } }
+        if !matched && (options.update || !path_present(ctx, path)?) {
+            return Pathspec(text(path)?)
+        }
+    }
+    var changed = List[List[byte]]()
+    for path in candidates {
+        let at = index_at(current.entries, path)
+        let disk = file_at(walked.files, path)
+        if disk < 0 {
+            if options.ignore_removal || options.intent { continue }
+            if !options.dry_run { value = index.remove_path(value, path)? }
+            (mut changed).push(copy path)
+            continue
+        }
+        if options.intent && at >= 0 { continue }
+        var prior = List[index.Entry]()
+        if at >= 0 { (mut prior).push(copy current.entries[at]) }
+        let file = copy walked.files[disk]
+        let entry = entry_for(file, prior, options)?
+        if !options.dry_run {
+            let _ = object.write_object(
+                ctx.repo,
+                "blob",
+                if options.intent then List[byte]() else file.data,
+            )?
+            value = stage_entry(value, entry)?
+        }
+        (mut changed).push(copy path)
+    }
+    changed
+}
