@@ -7,7 +7,10 @@ keeps what it has.
 **State: loose objects, a writable index and part of the worktree/commit interface.**
 This is not a replacement for Git, and M2 is not complete. Edited-content rename
 similarity, diff, history commands, general ref operations, packs and transports
-remain unfinished. `den --version` prints `den 0.0.0 (built with wolf 0.2.35)`.
+remain unfinished. A measured content-similarity primitive now exists, but is
+not yet connected to rename pairing or the commands; `tools/check-delta`
+validates it independently. The isolated hunk prototype remains nonconforming
+and must not be used as a compatible diff. `den --version` prints `den 0.0.0 (built with wolf 0.2.35)`.
 See [MAP](docs/MAP.md) for API contracts and [FORMATS](docs/FORMATS.md) for
 measured bytes and documentation discrepancies.
 
