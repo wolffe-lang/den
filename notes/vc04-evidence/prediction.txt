@@ -1,0 +1,25 @@
+vc04 prediction, before implementation
+
+Base: fd42d7ff (origin/trunk). Contract: wolf/sprints/vcs/vc04-the-diff.md.
+Clean room: Git documentation and pinned binary only; no VCS/diff-library source.
+
+Predictions, not measurements:
+1. The 1,510-pair corpus disproves line-count ratios and exact-span equality.
+   A bounded 64-byte/LF chunk fingerprint with additive positional weights
+   explains the non-wrapping offsets but must distinguish partial byte wraps.
+   A simple modulo-256 offset normalization will fail all 120 mixed-wrap rows.
+2. Git's default indent heuristic changes at least one repeated-block fixture
+   versus --no-indent-heuristic. A shortest edit script alone will not suffice.
+3. A byte-counted similarity threshold accepts exactly 50 percent and rejects
+   49 percent. Exact object identity is handled before approximate scoring.
+4. Worktree binary patches use an all-zero destination object id unless
+   --binary/full-index is selected; this needs a direct oracle witness.
+5. The final implementation needs shared edit/scoring primitives for diff,
+   status and commit summaries; quiet commits must remain independent of
+   presentation scoring. All existing named refusals remain until measured.
+
+Order: resolve the existing rename counterexamples; implement/test shared
+primitives; implement endpoint/path/patch/stat rendering; broaden differential
+corpus and integrate; prove three plants; final full local gate and PR.
+No success claim before each required measurement exists. New rulings are
+recommendations only; R-vc04-1 A is provisional pending complete agreement.
