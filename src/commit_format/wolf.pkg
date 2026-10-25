@@ -1,0 +1,4 @@
+pkg {
+    name: "commit_format",
+    edition: "1",
+}

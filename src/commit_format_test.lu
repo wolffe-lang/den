@@ -1,0 +1,316 @@
+//! member: false
+
+use commit_format
+
+fn bytes_equal(left: List[byte], right: List[byte]) -> bool {
+    if left.len != right.len { return false }
+    for i in 0..left.len { if left[i] != right[i] { return false } }
+    true
+}
+
+fn date_rejected(text: str) -> bool {
+    var rejected = false
+    let _ = commit_format.parse_date(text, "+0000") else |_| {
+        rejected = true
+        commit_format.Date { seconds: 0, offset: "+0000" }
+    }
+    rejected
+}
+
+fn main() -> int ! commit_format.FormatErrors {
+    assert(
+        commit_format.identity_text(commit_format.parse_identity("Name <n> 1 +10039")?)? ==
+            "Name <n> 1 +10039",
+    )
+
+    for (input, expected) in [
+        ("@0 +0000", "0 +0000"),
+        ("@0 -0000", "0 +0000"),
+        ("@1 -0000", "1 +0000"),
+        ("@1 +0530", "1 +0530"),
+        ("@1 +2400", "1 +2400"),
+        ("@1 +2460", "1 +2500"),
+        ("@1 -2460", "1 -2500"),
+        ("@1 +9999", "1 +10039"),
+        ("@1 -9999", "1 -10039"),
+        ("@0 +0060", "0 +0100"),
+        ("@1700000000", "1700000000 +0000"),
+        ("1700000000 -0700", "1700000000 -0700"),
+        ("2005-04-07T22:13:13+02:00", "1112904793 +0200"),
+        ("2005-04-07T22:13:13 +0200", "1112904793 +0200"),
+        ("2005-04-07 22:13:13 +0200", "1112904793 +0200"),
+        ("2005-04-07T20:13:13Z", "1112904793 +0000"),
+        ("2005-04-07T20:13:13.019Z", "1112904793 +0000"),
+        ("2005.04.07 22:13:13 +0200", "1112904793 +0200"),
+        ("04/07/2005 22:13:13 +0200", "1112904793 +0200"),
+        ("07.04.2005 22:13:13 +0200", "1112904793 +0200"),
+        ("Thu, 07 Apr 2005 22:13:13 +0200", "1112904793 +0200"),
+        ("07 Apr 2005 22:13:13 +0200", "1112904793 +0200"),
+        ("Thu, 07 Apr 2005 22:13:13 EDT", "1112926393 -0400"),
+        ("2000-02-29T12:00:00Z", "951825600 +0000"),
+        ("2000-02-30T12:00:00Z", "951912000 +0000"),
+        ("2000-02-31T12:00:00Z", "951998400 +0000"),
+        ("2023-02-29T12:00:00Z", "1677672000 +0000"),
+        ("2005-04-31T12:00:00Z", "1114948800 +0000"),
+        ("2005-13-01T12:00:00Z", "1105617600 +0000"),
+        ("2005-04-07T24:00:00Z", "1112918400 +0000"),
+        ("2005-04-07T24:01:00Z", "1112918460 +0000"),
+        ("2005-04-07T25:00:00Z", "1112832000 +0000"),
+        ("2005-04-07T99:00:00Z", "1112832000 +0000"),
+        ("2005-04-07T100:00:00Z", "1112832000 +0000"),
+        ("2005-04-07T22:60:00Z", "1112911200 +0000"),
+        ("2005-04-07T22:61:00Z", "1112911200 +0000"),
+        ("2005-04-07T22:99:00Z", "1112911200 +0000"),
+        ("2005-04-07T22:100:00Z", "1112911200 +0000"),
+        ("2005-04-07T22:13:60Z", "1112912040 +0000"),
+        ("2005-04-07T22:13:61Z", "1112911200 +0000"),
+        ("2005-04-07T22:13:99Z", "1112911200 +0000"),
+        ("2005-04-07T22:13:100Z", "1112911200 +0000"),
+        ("2024-02-29T00:00:00Z", "1709164800 +0000"),
+        ("2000-01-01 00:00", "946684800 +0000"),
+        ("@9223372036854775807 +0000", "9223372036854775807 +0000"),
+    ] {
+        assert(commit_format.date_text(commit_format.parse_date(input, "+0000")?)? == expected)
+    }
+    assert(
+        commit_format.date_text(commit_format.parse_date("2005-04-07 22:13:13", "+0530")?)? ==
+            "1112892193 +0530",
+    )
+    // Calendar rollover is arithmetic over bounded components, not a table of
+    // measured timestamps; cover leap and non-leap centuries independently.
+    for (rolled, canonical) in [
+        ("2005-02-29T12:00:00Z", "2005-03-01T12:00:00Z"),
+        ("2100-02-29T12:00:00Z", "2100-03-01T12:00:00Z"),
+        ("2000-02-31T12:00:00Z", "2000-03-02T12:00:00Z"),
+    ] {
+        assert(
+            commit_format.date_text(commit_format.parse_date(rolled, "+0000")?)? ==
+                commit_format.date_text(commit_format.parse_date(canonical, "+0000")?)?,
+        )
+    }
+    let expanded = commit_format.parse_date("@1 +9999", "+0000")?
+    assert(expanded.offset == "+10039")
+    assert(commit_format.date_text(commit_format.Date { seconds: 1, offset: "+10039" })? == "1 +10039")
+    assert(commit_format.date_text(commit_format.parse_date("@1", "+9999")?)? == "1 +10039")
+    assert(
+        commit_format.identity_text(commit_format.make_identity("A", "a", expanded)?)? ==
+            "A <a> 1 +10039",
+    )
+    let long_fraction = "2005-04-07T20:13:13.{"9".repeat(100)}Z"
+    assert(commit_format.parse_date(long_fraction, "+0000")?.seconds == 1112904793)
+    for input in [
+        "",
+        "@",
+        "@-1 +0000",
+        "@9223372036854775808 +0000",
+        "@1 +10039",
+        "@1 +10000",
+        "@1 +123456",
+        "@0 +00x0",
+        "@0 +0é0",
+        "@0 +0000 extra",
+        "0 +0000",
+        "2005-00-01T12:00:00Z",
+        "2005-04-00T12:00:00Z",
+        "2005-01-32T12:00:00Z",
+        "2000-01-00T00:00:00Z",
+        "@1 +5",
+        "@1 +005",
+        "@1 +00:60",
+        "2000-01-01T00:00:00.xZ",
+        "2000-01-01T00:00:00.Z",
+        "2000-01-01T00:00:00Z +0100",
+        "1970-01-01T00:00:00+0100",
+        "@0\0 +0000",
+        "@0\n+0000",
+        "@0 \r+0000",
+        "@{"9".repeat(1025)} +0000",
+    ] {
+        assert(date_rejected(input))
+    }
+    for input in ["now", "yesterday", "last Friday at noon", "2 days ago", "2005-04-07"] {
+        var named = false
+        let _ = commit_format.parse_date(input, "+0000") else |e| {
+            named = "{e}".starts_with("Unsupported(")
+            commit_format.Date { seconds: 0, offset: "+0000" }
+        }
+        assert(named)
+    }
+    // Every byte-oriented prefix stays a recoverable row or a parsed date.
+    let seed = "2005-04-07T22:13:13.019+02:00"
+    for end in 0..=seed.len {
+        let _ = commit_format.parse_date(seed[0..end], "+0000") else commit_format.Date {
+            seconds: 0,
+            offset: "+0000",
+        }
+    }
+
+    let input = "\n\t \nsubject  \r\n\n\n# comment\nbody\t\n\n".bytes()
+    assert(
+        bytes_equal(
+            commit_format.cleanup(input, "strip", "#", false)?,
+            "subject\n\nbody\n".bytes(),
+        ),
+    )
+    assert(
+        bytes_equal(
+            commit_format.cleanup(input, "whitespace", "#", false)?,
+            "subject\n\n# comment\nbody\n".bytes(),
+        ),
+    )
+    assert(bytes_equal(commit_format.cleanup(input, "verbatim", "#", false)?, input))
+    assert(
+        bytes_equal(
+            commit_format.cleanup(input, "default", "#", true)?,
+            commit_format.cleanup(input, "strip", "#", true)?,
+        ),
+    )
+    assert(
+        bytes_equal(
+            commit_format.cleanup(input, "default", "#", false)?,
+            commit_format.cleanup(input, "whitespace", "#", false)?,
+        ),
+    )
+    let scissors = "subject\n\n# ------------------------ >8 ------------------------\nremoved\n".
+        bytes()
+    assert(
+        bytes_equal(commit_format.cleanup(scissors, "scissors", "#", true)?, "subject\n".bytes()),
+    )
+    assert(bytes_equal(commit_format.cleanup(scissors, "scissors", "#", false)?, scissors))
+    assert(
+        bytes_equal(
+            commit_format.cleanup(
+                "a\n// ------------------------ >8 ------------------------\nb\n".bytes(),
+                "scissors",
+                "//",
+                true,
+            )?,
+            "a\n".bytes(),
+        ),
+    )
+    assert(
+        bytes_equal(
+            commit_format.cleanup(
+                "// removed\n# kept\n // kept\né removed\nbody\n".bytes(),
+                "strip",
+                "//",
+                true,
+            )?,
+            "# kept\n // kept\né removed\nbody\n".bytes(),
+        ),
+    )
+    assert(
+        bytes_equal(
+            commit_format.cleanup("é comment\nbody".bytes(), "strip", "é", true)?,
+            "body\n".bytes(),
+        ),
+    )
+    assert(commit_format.comment_marker("# old\n; old\n".bytes(), "auto")? == "@")
+    assert(commit_format.comment_marker(" # indented\n".bytes(), "auto")? == "#")
+    assert(
+        bytes_equal(
+            commit_format.cleanup("a\n\n#only\n\nb".bytes(), "strip", "#", false)?,
+            "a\n\nb\n".bytes(),
+        ),
+    )
+    assert(
+        bytes_equal(
+            commit_format.cleanup([255 as byte, 0 as byte, 32 as byte], "strip", "#", false)?,
+            [255 as byte, 0 as byte, 10 as byte],
+        ),
+    )
+    assert(bytes_equal(commit_format.cleanup([], "strip", "#", false)?, []))
+    assert(
+        commit_format.message_empty(
+            commit_format.cleanup(" \n#comment\n".bytes(), "strip", "#", false)?,
+            "strip",
+            false,
+        )?,
+    )
+    assert(!commit_format.message_empty("#comment\n".bytes(), "whitespace", false)?)
+    assert(commit_format.message_empty([], "verbatim", false)?)
+    assert(!commit_format.message_empty(" \n".bytes(), "verbatim", false)?)
+    assert(commit_format.message_empty(" \n".bytes(), "default", false)?)
+    assert(
+        bytes_equal(
+            commit_format.paragraphs(["one".bytes(), "two\n".bytes()])?,
+            "one\n\ntwo\n".bytes(),
+        ),
+    )
+    assert(
+        bytes_equal(
+            commit_format.paragraphs([[], "one".bytes(), [], "two".bytes()])?,
+            "one\n\n\ntwo\n".bytes(),
+        ),
+    )
+    assert(bytes_equal(commit_format.paragraphs([[], []])?, []))
+    let source = [255 as byte, 0 as byte, 10 as byte]
+    var body = commit_format.file_message(source)?
+    body[0] = 1 as byte
+    assert(source[0] == 255 as byte)
+    var raw = commit_format.cleanup(source, "verbatim", "#", false)?
+    raw[0] = 2 as byte
+    assert(source[0] == 255 as byte)
+
+    let date = commit_format.parse_date("@1700000000 +0530", "+0000")?
+    let ident = commit_format.make_identity("  A U Thor  ", " author@example.invalid ", date)?
+    assert(
+        commit_format.identity_text(ident)? == "A U Thor <author@example.invalid> 1700000000 +0530",
+    )
+    let author = commit_format.parse_author("José 名 <j@example.invalid>", date)?
+    assert(author.name == "José 名" && author.email == "j@example.invalid")
+    let restored = commit_format.parse_identity("A <a> 0 -0000")?
+    assert(commit_format.identity_text(restored)? == "A <a> 0 +0000")
+    assert(commit_format.make_identity("A\n<B>", "<a>", date)?.name == "AB")
+    assert(
+        commit_format.identity_text(commit_format.parse_author("A <a b>", date)?)? ==
+            "A <a b> 1700000000 +0530",
+    )
+    var bad_identity = false
+    let _ = commit_format.make_identity("A\0B", "a", date) else |e| {
+        bad_identity = "{e}" == "invalid_identity"
+        copy ident
+    }
+    assert(bad_identity)
+    var pattern = false
+    let _ = commit_format.parse_author("author-search", date) else |e| {
+        pattern = "{e}" == "Unsupported(commit --author pattern)"
+        copy ident
+    }
+    assert(pattern)
+    for text in ["A <a", "A <a> suffix", "A <>", "<a>", "A <a> <b>"] {
+        var invalid = false
+        let _ = commit_format.parse_author(text, date) else |_| {
+            invalid = true
+            copy ident
+        }
+        assert(invalid)
+    }
+    var bad_mode = false
+    let _ = commit_format.cleanup([], "unknown", "#", false) else |e| {
+        bad_mode = "{e}" == "invalid_cleanup"
+        []
+    }
+    assert(bad_mode)
+    for marker in ["", "\n", "a\rb", "a\0b"] {
+        var refused = false
+        let _ = commit_format.comment_marker([], marker) else |e| {
+            refused = "{e}" == "invalid_comment"
+            ""
+        }
+        assert(refused)
+    }
+    var exhausted = false
+    let _ = commit_format.comment_marker(
+        "#\n;\n@\n!\n$\n%\n^\n&\n|\n:\n".bytes(),
+        "auto",
+    ) else |e| {
+        exhausted = "{e}" == "Unsupported(core.commentChar=auto exhausted)"
+        ""
+    }
+    assert(exhausted)
+    print(
+        "PASS pure commit dates, message cleanup, paragraph/file ownership and explicit identities",
+    )
+    0
+}

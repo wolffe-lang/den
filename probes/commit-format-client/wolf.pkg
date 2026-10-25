@@ -1,0 +1,6 @@
+pkg {
+    name: "commit-format-client",
+    edition: "1",
+    capabilities: [env, fs],
+    deps: {commit_format: {path: "../../src/commit_format"}},
+}

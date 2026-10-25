@@ -1,0 +1,310 @@
+// Clean-room: Git v2.56.0 Documentation/date-formats.adoc, DATE FORMATS,
+// and Documentation/git-commit.adoc, --date. No implementation consulted.
+
+/// Recoverable commit formatting failures; no malformed input deliberately traps.
+pub error FormatErrors = {
+    invalid_date,
+    invalid_timezone,
+    invalid_identity,
+    invalid_cleanup,
+    invalid_comment,
+    limit,
+    Unsupported(str),
+}
+
+/// Absolute seconds and a canonical numeric offset; zero is always +0000.
+pub struct Date {
+    seconds: int,
+    offset: str,
+}
+
+fn date_number(text: str) -> int ! FormatErrors {
+    if text.len == 0 { return invalid_date }
+    for b in text.bytes() {
+        if b as int < 48 || b as int > 57 { return invalid_date }
+    }
+    text.to_int() else |_| { return invalid_date }
+}
+
+fn date_two(n: int) -> str {
+    if n < 10 then "0{n}" else "{n}"
+}
+
+fn zone_text(magnitude: int, negative: bool) -> str {
+    let sign = if negative && magnitude != 0 then "-" else "+"
+    "{sign}{date_two(magnitude / 60)}{date_two(magnitude % 60)}"
+}
+
+// Raw timestamps accept exactly sign+four digits. Minutes are an arithmetic
+// offset, not a clock field: +2460 normalizes to +2500, +9999 to +10039.
+fn raw_zone(text: str) -> (int, str) ! FormatErrors {
+    if text.len != 5 || !text.starts_with("+") && !text.starts_with("-") {
+        return invalid_timezone
+    }
+    for b in text.bytes()[1..] {
+        if b as int < 48 || b as int > 57 { return invalid_timezone }
+    }
+    let hours = text[1..3].to_int() else |_| { return invalid_timezone }
+    let minutes = text[3..5].to_int() else |_| { return invalid_timezone }
+    // Both parsed components have two digits; every operation is bounded.
+    let magnitude = hours * 60 + minutes
+    let negative = text.starts_with("-")
+    (if negative then -magnitude else magnitude, zone_text(magnitude, negative))
+}
+
+fn date_zone(text: str) -> (int, str) ! FormatErrors {
+    if text.len > 16 { return limit }
+    let upper = text.upper()
+    let named = match upper {
+        "UT" | "UTC" | "GMT" | "Z" => "+0000",
+        "EST" => "-0500",
+        "EDT" => "-0400",
+        "CST" => "-0600",
+        "CDT" => "-0500",
+        "MST" => "-0700",
+        "MDT" => "-0600",
+        "PST" => "-0800",
+        "PDT" => "-0700",
+        _ => text,
+    }
+    if named.len == 6 &&
+        (named.starts_with("+") || named.starts_with("-")) &&
+        named.bytes()[3] == 58 as byte {
+        let hours = named.get(1..3) else |_| { return invalid_timezone }
+        let minutes = named.get(4..6) else |_| { return invalid_timezone }
+        let zone = "{named[0..1]}{hours}{minutes}"
+        let h = date_number(hours) else |_| { return invalid_timezone }
+        let m = date_number(minutes) else |_| { return invalid_timezone }
+        if h > 23 || m > 59 { return invalid_timezone }
+        return raw_zone(zone)?
+    }
+    raw_zone(named)?
+}
+
+// A parsed Date carries a canonical offset, not raw date-input syntax. The
+// image of four-digit raw offsets extends through 100:39, so serializing it
+// must not feed a generated +10039 back through the raw four-digit grammar.
+fn canonical_zone(text: str) -> str ! FormatErrors {
+    if text.len != 5 && text.len != 6 || !text.starts_with("+") && !text.starts_with("-") {
+        return invalid_timezone
+    }
+    for b in text.bytes()[1..] {
+        if b as int < 48 || b as int > 57 { return invalid_timezone }
+    }
+    let cut = text.len - 2
+    let hours = text[1..cut].to_int() else |_| { return invalid_timezone }
+    let minutes = text[cut..].to_int() else |_| { return invalid_timezone }
+    if minutes > 59 || hours * 60 + minutes > 6039 { return invalid_timezone }
+    zone_text(hours * 60 + minutes, text.starts_with("-"))
+}
+
+fn date_month(name: str) -> int ! FormatErrors {
+    match name.lower() {
+        "jan" => 1,
+        "feb" => 2,
+        "mar" => 3,
+        "apr" => 4,
+        "may" => 5,
+        "jun" => 6,
+        "jul" => 7,
+        "aug" => 8,
+        "sep" => 9,
+        "oct" => 10,
+        "nov" => 11,
+        "dec" => 12,
+        _ => { return invalid_date },
+    }
+}
+
+fn date_leap(year: int) -> bool {
+    year % 4 == 0 && (year % 100 != 0 || year % 400 == 0)
+}
+
+fn date_days(year: int, month: int, day: int) -> int ! FormatErrors {
+    if year < 1970 || year > 9999 || month < 1 || month > 12 || day < 1 || day > 31 {
+        return invalid_date
+    }
+    let months = [31, if date_leap(year) then 29 else 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+    // Pinned Git date-corners witness: day 1..31 is validated before
+    // adding its offset, so excess February/April days roll into the next month.
+    // Count complete years since 1970, then complete months in this year.
+    let prior = year - 1
+    var days: int = (year - 1970) * 365 +
+        (prior / 4 - 1969 / 4) -
+        (prior / 100 - 1969 / 100) +
+        (prior / 400 - 1969 / 400)
+    for i in 0..month - 1 { days += months[i] }
+    days + day - 1
+}
+
+fn date_calendar(text: str) -> (int, int, int) ! FormatErrors {
+    var fields = text.split("-")
+    if fields.len == 3 {
+        if fields[0].len != 4 { return invalid_date }
+        return (date_number(fields[0])?, date_number(fields[1])?, date_number(fields[2])?)
+    }
+    fields = text.split(".")
+    if fields.len == 3 {
+        if fields[0].len == 4 {
+            return (date_number(fields[0])?, date_number(fields[1])?, date_number(fields[2])?)
+        }
+        if fields[2].len != 4 { return invalid_date }
+        return (date_number(fields[2])?, date_number(fields[1])?, date_number(fields[0])?)
+    }
+    fields = text.split("/")
+    if fields.len != 3 || fields[2].len != 4 { return invalid_date }
+    (date_number(fields[2])?, date_number(fields[0])?, date_number(fields[1])?)
+}
+
+fn date_clock(text: str) -> (int, int, int) ! FormatErrors {
+    let fields = text.split(":")
+    if fields.len != 2 && fields.len != 3 { return invalid_date }
+    let hour = date_number(fields[0])?
+    let minute = date_number(fields[1])?
+    var second = 0
+    if fields.len == 3 {
+        let fraction = fields[2].split(".")
+        if fraction.len > 2 { return invalid_date }
+        second = date_number(fraction[0])?
+        if fraction.len == 2 {
+            if fraction[1].len == 0 { return invalid_date }
+            for b in fraction[1].bytes() {
+                if b as int < 48 || b as int > 57 { return invalid_date }
+            }
+        }
+    }
+    // Measured field reset, not unrestricted arithmetic rollover: 24 and
+    // second 60 are admitted; an invalid subordinate field loses min/sec.
+    // Compare before multiplication, including arbitrarily long numerals.
+    if hour > 24 { return (0, 0, 0) }
+    if minute >= 60 || second > 60 { return (hour, 0, 0) }
+    (hour, minute, second)
+}
+
+fn date_absolute(year: int, month: int, day: int, clock: str, zone: str) -> Date ! FormatErrors {
+    var actual_month = month, actual_day = day
+    // Numeric date disambiguation: an impossible month can be the day when
+    // the other component is a possible month (not a carry into another year).
+    if actual_month > 12 && actual_month <= 31 && actual_day >= 1 && actual_day <= 12 {
+        let swapped = actual_month
+        actual_month = actual_day
+        actual_day = swapped
+    }
+    let days = date_days(year, actual_month, actual_day)?
+    let (hour, minute, second) = date_clock(clock)?
+    let (offset, numeric) = date_zone(zone)?
+    let seconds: int = days * 86400 + hour * 3600 + minute * 60 + second - offset * 60
+    if seconds < 0 { return invalid_date }
+    Date { seconds: seconds, offset: numeric }
+}
+
+/// Parse deterministic raw, RFC 2822 and ISO/calendar dates. The caller supplies
+/// its fixed default offset (normally +0000 under TZ=UTC); no environment/clock
+/// is read. Calendar forms require a time; relative or clock-dependent forms
+/// are named refusals. Inputs are at most 1024 bytes, years 1970 through 9999.
+pub fn parse_date(input: str, default_offset: str) -> Date ! FormatErrors {
+    if input.len > 1024 { return limit }
+    if input.contains("\0") || input.contains("\n") || input.contains("\r") { return invalid_date }
+    let (_, fallback) = date_zone(default_offset)?
+    let text = input.trim()
+    if text == "" { return invalid_date }
+    let words = text.words()
+    let first = words[0]
+    if first.starts_with("@") {
+        if words.len > 2 { return invalid_date }
+        let seconds = date_number(first[1..])?
+        var numeric = fallback
+        if words.len == 2 { let (_, parsed) = raw_zone(words[1])?; numeric = parsed }
+        return Date { seconds: seconds, offset: numeric }
+    }
+    var all_digits = true
+    for b in first.bytes() {
+        if b as int < 48 || b as int > 57 { all_digits = false }
+    }
+    if all_digits && first.len >= 9 && words.len == 2 {
+        let seconds = date_number(first)?
+        let (_, numeric) = raw_zone(words[1])?
+        return Date { seconds: seconds, offset: numeric }
+    }
+    if all_digits && words.len >= 3 {
+        let unit = words[1].lower()
+        for candidate in [
+            "second",
+            "seconds",
+            "minute",
+            "minutes",
+            "hour",
+            "hours",
+            "day",
+            "days",
+            "week",
+            "weeks",
+            "month",
+            "months",
+            "year",
+            "years",
+        ] {
+            if unit == candidate { return Unsupported("commit relative or unrecognized date") }
+        }
+    }
+    // Optional RFC weekday is descriptive: the absolute date determines time.
+    var begin = 0
+    if first.ends_with(",") { begin = 1 }
+    if words.len >= begin + 4 {
+        let month = date_month(words[begin + 1]) else 0
+        if month != 0 {
+            if words.len != begin + 4 && words.len != begin + 5 { return invalid_date }
+            let day = date_number(words[begin])?
+            let year = date_number(words[begin + 2])?
+            let zone = if words.len == begin + 5 then words[begin + 4] else default_offset
+            return date_absolute(year, month, day, words[begin + 3], zone)?
+        }
+    }
+    if begin != 0 { return invalid_date }
+    var calendar = first
+    var clock = ""
+    var used = 1
+    let upper_t = first.find("T") else first.len
+    let lower_t = first.find("t") else first.len
+    let at = if upper_t < lower_t then upper_t else lower_t
+    if at < first.len {
+        calendar = first[0..at]
+        clock = first[at + 1..]
+    } else if words.len >= 2 {
+        clock = words[1]
+        used = 2
+    }
+    let (year, month, day) = date_calendar(calendar) else |_| {
+        if all_digits || first.starts_with("@") { return invalid_date }
+        return Unsupported("commit relative or unrecognized date")
+    }
+    if clock == "" { return Unsupported("commit date without a fixed time") }
+    var zone = default_offset
+    var attached = false
+    if clock.ends_with("Z") || clock.ends_with("z") {
+        zone = "+0000"
+        clock = clock[0..clock.len - 1]
+        attached = true
+    } else {
+        let plus = clock.find("+") else clock.len
+        let minus = clock.find("-") else clock.len
+        let split = if plus < minus then plus else minus
+        if split < clock.len {
+            zone = clock[split..]
+            clock = clock[0..split]
+            attached = true
+        }
+    }
+    if words.len > used {
+        if attached || words.len != used + 1 { return invalid_date }
+        zone = words[used]
+    }
+    date_absolute(year, month, day, clock, zone)?
+}
+
+/// Serialize a validated date in Git's internal `seconds +HHMM` identity form.
+pub fn date_text(date: Date) -> str ! FormatErrors {
+    if date.seconds < 0 { return invalid_date }
+    let numeric = canonical_zone(date.offset)?
+    "{date.seconds} {numeric}"
+}

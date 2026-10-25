@@ -1,0 +1,62 @@
+// Clean-room: Git v2.56.0 Documentation/git-commit.adoc, --author/--date;
+// date-formats.adoc, DATE FORMATS. Identity values are caller-supplied only.
+
+/// An explicit identity, independent of configuration and environment lookup.
+pub struct Identity {
+    name: str,
+    email: str,
+    date: Date,
+}
+
+fn identity_part(input: str) -> str ! FormatErrors {
+    if input.len > 4096 { return limit }
+    if input.contains("\0") { return invalid_identity }
+    var bytes = List[byte]()
+    // git-commit(1), COMMIT INFORMATION explicitly strips these three bytes.
+    for b in input.bytes() {
+        if b != 60 as byte && b != 62 as byte && b != 10 as byte { (mut bytes).push(b) }
+    }
+    let text = (str_from_utf8(bytes) else |_| { return invalid_identity }).trim()
+    if text == "" { return invalid_identity }
+    text
+}
+
+/// Validate explicit parameters and strip <, > and LF from name/email as the
+/// commit documentation specifies. No fallback identity is inferred.
+pub fn make_identity(name: str, email: str, date: Date) -> Identity ! FormatErrors {
+    let clean_name = identity_part(name)?
+    let clean_email = identity_part(email)?
+    let _ = date_text(date)?
+    Identity { name: clean_name, email: clean_email, date: copy date }
+}
+
+/// Parse the explicit --author `Name <email>` form. Historical-author search is
+/// outside this pure module and is refused by name rather than approximated.
+pub fn parse_author(text: str, date: Date) -> Identity ! FormatErrors {
+    if text.len > 16384 { return limit }
+    let left = text.find("<") else |_| { return Unsupported("commit --author pattern") }
+    let right = text.rfind(">") else |_| { return invalid_identity }
+    if text.count("<") != 1 || text.count(">") != 1 { return invalid_identity }
+    if right <= left || text[right + 1..].trim() != "" { return invalid_identity }
+    make_identity(text[0..left], text[left + 1..right], date)?
+}
+
+/// Serialize an identity for author/committer headers or reflog ident fields.
+pub fn identity_text(identity: Identity) -> str ! FormatErrors {
+    let checked = make_identity(identity.name, identity.email, identity.date)?
+    "{checked.name} <{checked.email}> {date_text(checked.date)?}"
+}
+
+/// Parse a complete existing `Name <email> seconds +HHMM` header identity,
+/// preserving its author date for an amend caller that does not reset it.
+pub fn parse_identity(text: str) -> Identity ! FormatErrors {
+    if text.len > 16384 { return limit }
+    let left = text.find("<") else |_| { return invalid_identity }
+    let right = text.rfind(">") else |_| { return invalid_identity }
+    if text.count("<") != 1 || text.count(">") != 1 { return invalid_identity }
+    if right <= left { return invalid_identity }
+    let tail = text[right + 1..].trim().words()
+    if tail.len != 2 { return invalid_identity }
+    let date = Date { seconds: date_number(tail[0])?, offset: canonical_zone(tail[1])? }
+    make_identity(text[0..left], text[left + 1..right], date)?
+}

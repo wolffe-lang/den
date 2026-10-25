@@ -1,0 +1,136 @@
+// Clean-room: Git v2.56.0 Documentation/git-commit.adoc, -m/-F/--cleanup;
+// Documentation/config/core.adoc, core.commentChar/core.commentString.
+
+fn message_space(b: byte) -> bool {
+    let n = b as int
+    n == 32 || n >= 9 && n <= 13
+}
+
+fn message_prefix(data: List[byte], start: int, end: int, prefix: str) -> bool {
+    if prefix.len > end - start { return false }
+    for i in 0..prefix.len {
+        if data[start + i] != prefix.bytes()[i] { return false }
+    }
+    true
+}
+
+/// Resolve default cleanup using whether an editor actually edits the message.
+pub fn cleanup_mode(mode: str, edited: bool) -> str ! FormatErrors {
+    if mode == "default" { return if edited then "strip" else "whitespace" }
+    if mode == "strip" || mode == "whitespace" || mode == "verbatim" || mode == "scissors" {
+        return mode
+    }
+    invalid_cleanup
+}
+
+/// Choose a configured comment string, or an unused line-start character for
+/// auto. Modern Git permits multi-byte/multi-character strings. Nothing is read
+/// from configuration here; callers supply its effective value, normally #.
+pub fn comment_marker(message: List[byte], configured: str) -> str ! FormatErrors {
+    if message.len > 16777216 || configured.len > 128 { return limit }
+    if configured == "" ||
+        configured.contains("\n") ||
+        configured.contains("\r") ||
+        configured.contains("\0") {
+        return invalid_comment
+    }
+    if configured != "auto" { return configured }
+    for candidate in ["#", ";", "@", "!", "$", "%", "^", "&", "|", ":"] {
+        var used = false
+        var start = true
+        for b in message {
+            if start && b == candidate.bytes()[0] { used = true; break }
+            start = b == 10 as byte
+        }
+        if !used { return candidate }
+    }
+    Unsupported("core.commentChar=auto exhausted")
+}
+
+/// Clean message bytes without decoding or UTF-8 repair. Strip/whitespace remove
+/// trailing ASCII whitespace, edge blank lines and duplicate blank lines, and
+/// terminate nonempty output with LF. Scissors truncates only when edited.
+pub fn cleanup(
+    message: List[byte],
+    mode: str,
+    configured_comment: str,
+    edited: bool,
+) -> List[byte] ! FormatErrors {
+    if message.len > 16777216 { return limit }
+    let actual = cleanup_mode(mode, edited)?
+    if actual == "verbatim" { return owned_message(message) }
+    var marker = ""
+    if actual == "strip" || actual == "scissors" && edited {
+        marker = comment_marker(message, configured_comment)?
+    }
+    let scissors = "{marker} ------------------------ >8 ------------------------"
+    var out = List[byte]()
+    var pos = 0
+    var blank = false
+    while pos < message.len {
+        let start = pos
+        while pos < message.len && message[pos] != 10 as byte { pos += 1 }
+        var end = pos
+        if pos < message.len { pos += 1 }
+        while end > start && message_space(message[end - 1]) { end -= 1 }
+        if actual == "scissors" && edited && message_prefix(message, start, end, scissors) {
+            var only_space = true
+            for i in start + scissors.len..end {
+                if !message_space(message[i]) { only_space = false }
+            }
+            if only_space { break }
+        }
+        if actual == "strip" && message_prefix(message, start, end, marker) { continue }
+        if end == start {
+            if out.len > 0 { blank = true }
+            continue
+        }
+        if blank { (mut out).push(10 as byte); blank = false }
+        for i in start..end { (mut out).push(message[i]) }
+        (mut out).push(10 as byte)
+    }
+    out
+}
+
+/// Assemble ordered -m arguments as paragraphs, adding a final LF to nonempty
+/// arguments that lack one. Empty later arguments still delimit paragraphs.
+pub fn paragraphs(messages: List[List[byte]]) -> List[byte] ! FormatErrors {
+    if messages.len > 65536 { return limit }
+    var out = List[byte]()
+    for message in messages {
+        if message.len > 16777216 { return limit }
+        var additional = message.len
+        if out.len > 0 { additional += 1 }
+        if message.len > 0 && message[message.len - 1] != 10 as byte { additional += 1 }
+        if additional > 16777216 - out.len { return limit }
+        if out.len > 0 { (mut out).push(10 as byte) }
+        for b in message { (mut out).push(b) }
+        if out.len > 0 && out[out.len - 1] != 10 as byte { (mut out).push(10 as byte) }
+    }
+    out
+}
+
+/// Own a -F body unchanged. Loading/stdin, NUL policy and any command-edge UTF-8
+/// repair remain the caller's responsibility; this API is byte-lossless.
+pub fn file_message(message: List[byte]) -> List[byte] ! FormatErrors {
+    if message.len > 16777216 { return limit }
+    owned_message(message)
+}
+
+/// Test a cleaned message for emptiness. Verbatim deliberately distinguishes a
+/// zero-length body from nonempty whitespace; other modes ignore whitespace.
+pub fn message_empty(message: List[byte], mode: str, edited: bool) -> bool ! FormatErrors {
+    if message.len > 16777216 { return limit }
+    let actual = cleanup_mode(mode, edited)?
+    if actual == "verbatim" { return message.len == 0 }
+    for b in message { if !message_space(b) { return false } }
+    true
+}
+
+// Native wolf-lang#927: cf0c13d cannot lower a returned copy of a lent bytes() view; the
+// index-view probes retain the native/checked witness. Materialize explicitly.
+fn owned_message(bytes: List[byte]) -> List[byte] {
+    var out = List[byte]()
+    for b in bytes { (mut out).push(b) }
+    out
+}
