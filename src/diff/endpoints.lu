@@ -1,3 +1,4 @@
+use std.fs
 use index
 use object
 use oid
@@ -46,13 +47,17 @@ fn from_index(
 
 fn from_worktree(ctx: worktree.Context, value: index.Index) -> List[File] ! worktree.WorkErrors {
     let autocrlf = (ctx.repo.config["core.autocrlf"] else "false").lower()
-    if autocrlf != "false" { return Unsupported("core.autocrlf={autocrlf}") }
+    if autocrlf != "false" && autocrlf != "0" { return Unsupported("core.autocrlf={autocrlf}") }
     var out = List[File]()
     var total: int = 0
     for entry in value.entries {
         if index.stage(entry) != 0 { return Unsupported("diff unmerged index") }
         if entry.flags & 0x8000 != 0 || entry.extended & 0x4000 != 0 {
-            (mut out).push(blob(ctx, worktree.FlatEntry { path: owned(entry.path), mode: entry.stat[6], id: copy entry.id })?)
+            let file = blob(ctx, worktree.
+                FlatEntry { path: owned(entry.path), mode: entry.stat[6], id: copy entry.id })?
+            total += file.data.len
+            if total > 134217728 { return limit }
+            (mut out).push(file)
             continue
         }
         let full = "{ctx.root}/{text(entry.path)?}"
@@ -178,6 +183,11 @@ pub fn changes(
 
 /// Resolve supported loose endpoints without refreshing or publishing the index.
 pub fn collect(ctx: worktree.Context, options: Options) -> List[Change] ! worktree.WorkErrors {
+    if ctx.root != "" && fs.exists("{ctx.root}/.gitattributes") ||
+        fs.exists("{ctx.repo.gitdir}/info/attributes") ||
+        (ctx.repo.config["core.attributesfile"] else "") != "" {
+        return Unsupported("diff attributes")
+    }
     var before = List[File](), after = List[File]()
     if options.revisions.len == 2 {
         let a = resolve(ctx, options.revisions[0])?

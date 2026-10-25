@@ -76,7 +76,7 @@ def main():
     for path,body in [('a',b'old\n'),('directory/'+'long-name-'*8,b'old\n'*45),('z',b'old\n'*80)]:write(repo,path,body)
     g(repo,'add','-A');g(repo,'commit','-qm','base')
     write(repo,'a',b'new\n'*10);write(repo,'directory/'+'long-name-'*8,b'new\n'*55);write(repo,'z',b'new\n'*20)
-    for width in (1,20,25,26,39,40,79,80,81,120):
+    for width in (0,1,20,25,26,39,40,79,80,81,120):
         for count in (0,1,2):
             for name_width in (0,3,15):
                 display=['--stat',f'--stat-width={width}',f'--stat-count={count}',f'--stat-name-width={name_width}']

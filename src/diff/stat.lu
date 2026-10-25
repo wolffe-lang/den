@@ -45,13 +45,19 @@ fn statistics(change: Change, options: Options) -> Stat ! worktree.WorkErrors {
     } else {
         path(change)
     }
-    let before = data(change.before), after = data(change.after)
-    let binary = !options.text && (delta.binary(before) || delta.binary(after))
+    let binary = !options.text &&
+        (
+            change.before.len == 1 && delta.binary(change.before[0].data) ||
+                change.after.len == 1 && delta.binary(change.after[0].data)
+        )
     var added = 0, deleted = 0
     if !binary && !unchanged(change) {
-        for edit in difftext.edits(before, after)? {
-            added += edit.new_count
-            deleted += edit.old_count
+        region count_scratch {
+            let before = data(change.before), after = data(change.after)
+            for edit in difftext.edits(before, after)? {
+                added += edit.new_count
+                deleted += edit.old_count
+            }
         }
     }
     Stat {
@@ -112,7 +118,7 @@ fn render_stats(
             number_width = 3
         }
     }
-    let width = if options.width < 25 then 25 else options.width
+    let width = if options.width == 0 then 80 else if options.width < 25 then 25 else options.width
     var name_cap = if options.name_width > 0 then options.name_width else width - width * 3 / 8
     var maximum_plot = maximum
     if options.graph_width > 0 && maximum_plot > options.graph_width {

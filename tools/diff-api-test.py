@@ -20,4 +20,6 @@ for endpoint in ([],['--cached'],[first,second]):
   assert actual==expected,(endpoint,mode,expected['stdout'],actual['stdout'])
   rows.append({'args':[*endpoint,*mode],'result':actual})
 (R/f'target/diff-api-{a.tier}.json').write_text(json.dumps({'rows':rows},indent=2)+'\n')
+bad=subprocess.run([str(driver),'invalid'],cwd=repo,capture_output=True)
+assert bad.returncode==1 and bad.stderr==b'invalid\n' and not bad.stdout,bad
 print('diff external collect/render client: 12 exact command/state comparisons; zero skips')

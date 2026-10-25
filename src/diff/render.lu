@@ -174,12 +174,48 @@ fn name_record(mut out: List[byte], change: Change, options: Options) {
     (mut out).push(if options.nul then 0 as byte else 10 as byte)
 }
 
+fn validate_side(files: List[File]) -> () ! worktree.WorkErrors {
+    for file in files {
+        if file.path.len == 0 { return invalid }
+        for b in file.path { if b == 0 as byte { return invalid } }
+        if file.data.len > 16777216 { return limit }
+        if file.mode != 0o100644 && file.mode != 0o100755 && file.mode != 0o120000 {
+            return invalid
+        }
+        oid.validate(file.id)?
+    }
+}
+
+fn validate_change(change: Change) -> () ! worktree.WorkErrors {
+    if change.before.len > 1 || change.after.len > 1 || change.before.len + change.after.len == 0 {
+        return invalid
+    }
+    match change.status {
+        "A" => { if change.before.len != 0 || change.after.len != 1 { return invalid } },
+        "D" => { if change.before.len != 1 || change.after.len != 0 { return invalid } },
+        "M" | "T" | "R" | "C" => {
+            if change.before.len != 1 || change.after.len != 1 { return invalid }
+        },
+        _ => { return invalid },
+    }
+    if change.percent < 0 || change.percent > 100 { return invalid }
+    validate_side(change.before)?
+    validate_side(change.after)?
+}
+
 /// Render all requested display modes in Git order; never publishes objects.
 pub fn render(
     ctx: worktree.Context,
     changes: List[Change],
     options: Options,
 ) -> List[byte] ! worktree.WorkErrors {
+    if options.context < 0 ||
+        options.context > 200000 ||
+        options.abbreviate < 4 ||
+        options.abbreviate > 40 {
+        return invalid
+    }
+    for change in changes { validate_change(change)? }
     var out = List[byte]()
     if options.quiet { return out }
     if options.names || options.name_status {
@@ -194,21 +230,23 @@ pub fn render(
             (mut out).push(10 as byte)
         }
         for change in changes {
-            if change.status == "T" {
-                patch_one(
-                    mut out,
-                    ctx,
-                    Change { before: copy change.before, after: [], status: "D", percent: 0 },
-                    options,
-                )?
-                patch_one(
-                    mut out,
-                    ctx,
-                    Change { before: [], after: copy change.after, status: "A", percent: 0 },
-                    options,
-                )?
-            } else {
-                patch_one(mut out, ctx, change, options)?
+            region patch_scratch {
+                if change.status == "T" {
+                    patch_one(
+                        mut out,
+                        ctx,
+                        Change { before: copy change.before, after: [], status: "D", percent: 0 },
+                        options,
+                    )?
+                    patch_one(
+                        mut out,
+                        ctx,
+                        Change { before: [], after: copy change.after, status: "A", percent: 0 },
+                        options,
+                    )?
+                } else {
+                    patch_one(mut out, ctx, change, options)?
+                }
             }
         }
     }
