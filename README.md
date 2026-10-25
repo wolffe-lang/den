@@ -4,147 +4,165 @@ A version control system in [wolf](https://github.com/wolffe-lang/wolf-lang),
 working toward Git-compatible repositories and wire protocols. Where a wolf
 keeps what it has.
 
-**State: M1 loose objects and a measured plumbing subset.** `init`,
-`hash-object`, `cat-file -p/-t/-s`, `mktree`, `commit-tree`, `mktag`, and
-`write-tree` over a minimal Git-written flat index v2 now work on the tested
-surface below. This is not a replacement for Git. Packs, index writing,
-porcelain and transports remain named refusals. `den --version` prints
-`den 0.0.0 (built with wolf 0.2.35)`. See [MAP](docs/MAP.md) for the public API
-and limits and [FORMATS](docs/FORMATS.md) for measured bytes.
+**State: loose objects, a writable index and part of the worktree/commit interface.**
+This is not a replacement for Git, and M2 is not complete. Edited-content rename
+similarity, diff, history commands, general ref operations, packs and transports
+remain unfinished. `den --version` prints `den 0.0.0 (built with wolf 0.2.35)`.
+See [MAP](docs/MAP.md) for API contracts and [FORMATS](docs/FORMATS.md) for
+measured bytes and documentation discrepancies.
 
 ## Machines and pins
 
 | Role | Machine / identity |
 |---|---|
-| Behavioral oracle | Git 2.56.0, signed kernel.org tarball; default build (Rust, gettext, HTTPS enabled), Ubuntu 24.04 image by digest |
-| Development witnesses | hasu CPUs 0–5 (codec and objects), kasumi CPUs 12–15 (M0); Linux x86-64, rootless pinned container under flock |
-| CI PR gate | ubuntu-24.04, same container and oracle, planner's own tests |
-| CI full field leg | macOS arm64, Homebrew Git; nonblocking observation, not the oracle |
+| Behavioral oracle | Git 2.56.0, signed kernel.org tarball; default build, Ubuntu 24.04 image pinned by digest |
+| Development witnesses | hasu CPUs 0–5 for objects/index/worktree/commit; kasumi CPUs 12–15 for the initial surface census; Linux x86-64, rootless container under a core-block lock |
+| CI PR gate | ubuntu-24.04, pinned container and oracle, including planner tests |
+| CI full field leg | macOS arm64 with Homebrew Git; nonblocking observation, not the oracle |
 | Toolchain | wolf 0.2.35 cf0c13d3, lupin 0.1.56 tag 28547b4 (binary embeds 294d626), bundled std 2386522e |
 
 Archive and oracle pins are in `wolf-toolchain.toml` and `den-oracle.toml`.
-Downloads are refused on a digest mismatch. Both release API reads, detached
-signature verification and two identical oracle builds are retained in
-`notes/vc00-evidence/`.
+Downloads fail on a digest mismatch. Both release-metadata reads are retained
+in `notes/vc03-evidence/`; the original signature verification and two matching
+oracle builds are in `notes/vc00-evidence/`.
+
+## Commands implemented so far
+
+| Area | Commands and supported surface |
+|---|---|
+| Objects | `init`, `hash-object`, `cat-file -p/-t/-s`, `mktree`, `commit-tree`, `mktag` |
+| Index | `write-tree` over nested index v2/v3/v4 entries; exclusive `index.lock` writes, stat fields, flags and TREE cache updates |
+| Config / ignore | Read-only `config --get`; `check-ignore` with provenance, negation, tracked-file bypass and `--no-index` |
+| Worktree | `add` paths/directories, `-A`, `-u`, `--ignore-removal`, `-f`, `-N`, `--chmod`; `rm`, `mv` and their implemented safety/force/recursive options |
+| Status | Human, short and porcelain v1, branch/unborn/detached headings, NUL output, untracked grouping and ignored paths |
+| Commit | Ordered `-m`, `-F`, `-a`, `--amend`, `--reset-author`, `--author`, fixed `--date`, cleanup modes, quiet and allow-empty options; attached loose branch/ref/reflog updates |
+| Restore | Index-to-worktree `restore`, `--staged`, `--worktree`, `--source`; `checkout -- <paths>` only, not branch checkout |
+
+Exact-OID staged renames/copies are supported, including an executable-bit
+change between regular-file modes. Edited-content similarity belongs to the
+next diff milestone. If rename-enabled status still has an unresolved added
+and deleted candidate of the same file type, it returns a named not-yet refusal
+without changing the repository. `--no-renames` can show the separate rows.
+A non-quiet commit likewise refuses an unresolved added/deleted summary before
+writing. Quiet commit skips that unavailable human summary and can publish the
+staged tree, attached ref and reflogs on the tested loose-repository path; it
+does not implement similarity detection.
 
 ## Build and measure
 
-On Linux with rootless Podman, run in the assigned CPU block. This example is
-vc00's allocation; other lanes need their own host/block assignment.
+Run `tools/gate` inside the pinned Ubuntu container, holding the assigned
+core-block lock and applying `taskset` inside the container. Rootless hosts
+without delegated cpusets must not rely on pinning only the outer process.
+The gate checks formatting, builds native/release binaries, runs actual checked
+programs, constructs the corpus twice, compares against the pinned oracle and
+builds the static Linux archive. `tools/mkden OUTDIR` checks ET_EXEC/no PT_INTERP
+and prints full/stripped binary digests. No host-specific glibc is substituted.
 
-```sh
-flock ~/lanes/kasumi-cores-12-15.lock \
-  taskset -c 12-15 tools/in-container tools/gate
-```
-
-The gate fetches the complete toolchain archives, builds/verifies the signed
-oracle, checks formatting, builds native/release, runs SHA tests on native and
-the actual checked machine, gates a local TLS handshake (checked budget refusal
-counted), constructs the corpus twice, runs codec native/release/checked tests, independent zlib cross-tests, Git
-object interop and deterministic fuzz, then object native/release/actual-checked tests, binary object interop, atomic
-write failure/race/interruption witnesses, harness selftests and the matrix,
-and builds the static Linux binary twice. `tools/mkden OUTDIR`
-checks ET_EXEC/no PT_INTERP and prints both full and stripped binary digests.
-Baseline Ubuntu libraries are used, never the host's architecture-tuned glibc.
-
-Inside that container, after setting `DEN_GIT` to the pinned built Git:
+Inside that container, with `DEN_GIT` set to the pinned built Git:
 
 ```sh
 tools/env COMMAND ARGS...          # fixed identity, dates, locale, hooks and HOME
 tools/corpus target/corpus --prove-twice
-tools/oracle                      # every case, explicit parity/refusal classifications
-tools/oracle --filter status       # only matching names; empty selection is an error
-tools/oracle --strict              # refuses every not-yet result as well
-tools/probe                       # native + conform-run --checked JSON verdicts
-tools/probe-tls                    # local OpenSSL and GitHub TLS observations
-tools/formats                     # regenerate byte examples in target/formats/
+tools/check-config
+tools/check-index
+tools/check-ignore
+tools/check-worktree
+tools/check-commit
+tools/oracle                      # parity, shape and named not-yet rows
+tools/oracle --filter status       # empty selections are errors
+tools/oracle --strict              # fails while named not-yet cases remain
 ```
 
-There is no production dependency on Git, Python, zlib or OpenSSL; they are
-black-box oracle/harness tools. Shipped wolf code depends only on wolf-std and
-the provenance-marked SHA-1 code the organisation wrote in boreutils.
+The gates include external-package clients, real filesystem operations,
+index lock contention, ref CAS/lock collisions and injected failures, read-only command snapshots,
+ignore precedence and diagnostics, fixed dates/messages, object interop and
+full repository-byte comparisons. Formatting/date API comparisons are not a
+claim of CLI stderr/exit-status parity. A checked result means the JSON verdict
+from `wolf conform-run --checked`, not merely a successful process exit.
 
-## Corpus and review rows
+**Verified local gate:** the full gate completed with all 177 source/input
+hashes unchanged. The main matrix reports 136 parity cases, 26 named not-yet
+cases, one version-shape case and no failures. Generated matrices are reported
+separately in `notes/vc03-evidence/final-counts.json`; this is not full Git
+compatibility or a substitute for the final-head CI merge gate.
+There is no production dependency on Git, Python, zlib or OpenSSL. Shipped wolf
+code uses wolf-std and the provenance-marked SHA-1 code from boreutils.
 
-The nine reproducible fixtures cover two files, a ten-commit history, a branch
-and merge, rename, binary bytes, symlink, empty tree, 1,000 files, and a packed
-repository after gc. Two independent builds have identical oid manifests.
-Index inode/ctime fields are not claimed reproducible across fresh copies.
+## Corpus and comparison rules
 
-| Matrix class | Cases | Meaning |
-|---|---:|---|
-| version shape | 1 | own version line and status, not equality with `git --version` |
-| parity | 57 | stdout, stderr, status and all .git file bytes agree |
-| reviewed | 0 | exact accepted differences, listed individually below |
-| not yet | 28 | 25 later commands and 3 unsupported compression settings; no writes |
-| unexpected failures | 0 | any new mismatch makes the gate red |
+The corpus now defines 16 repositories: the original nine object/history
+fixtures plus ignore, staged rename, modes/symlink, unborn, amend, index-v4 and
+edited-rename states. `tests/cases.json` currently defines 163 main cases.
+The main classifications are stated above. The generated config,
+index, ignore, worktree and commit matrices run separately.
 
-**Accepted review rows: none.** [Review mechanism](tests/review/README.md).
-A review names the case, both complete byte results, reason and issue/ruling.
-Neither an expectation change nor a blanket ignored index counts as a review.
-Every .git file is compared; no repository paths are excluded. The named
-`loose-object-raw` mode compares loose streams by validated raw bytes and oid,
-with checksum, header and trailing-byte validation. All other files remain
-byte-identical; `exact` mode also compares compressed representation. The one-byte
-version plant was rejected by the CI differential gate (run 40130445507,
-closed-unmerged PR #2). The selftest also rejects repository-only corruption.
+Every compared repository file is included. The `loose-object-raw` comparison
+checks uncompressed object bytes, OID, framing and checksum with valid,
+size-bounded compression; it does not require identical deflate streams.
+Other bytes remain exact, except six inode/time index words may be compared
+canonically only after each is independently proved against that tool's own
+worktree stat. Mode, uid, gid and size are never normalized. Neither ignoring
+the index nor accepting a recomputed checksum is such a proof.
 
-The case list is `tests/cases.json`; `--strict` intentionally fails while named not-yet rows remain.
-The 86-case normal gate proves only its named surface, not complete Git parity. Unimplemented
-commands and raw-byte path limitations must not be presented as supported.
+An expected not-yet refusal is not a parity pass or a reviewed difference.
+[Review records](tests/review/README.md) bind the complete command result and
+repository state to a specific case; there are no wildcard exclusions.
 
-## Loose objects and plumbing
+## Repository and command limits
 
-Objects carry owned binary bytes and algorithm-tagged IDs. The SHA-1 store
-validates zlib checksums, canonical framing, declared length and the independent
-OID, with inclusive caller limits. Trees retain non-UTF-8 basenames and Git's
-directory-aware order. Commit/tag parsers round-trip unknown headers and
-SP-prefixed continuations. SHA-256 IDs are representable; SHA-256 repositories
-are explicitly refused before writes.
+The store reads/writes loose SHA-1 repositories only. Binary object/tree names
+are preserved, but filesystem path arguments remain UTF-8 `str`; raw non-UTF-8
+OS paths have named upstream limitations. SHA-256 IDs are representable, but
+SHA-256 repositories are refused before writes. Packs, alternates, linked
+worktrees, submodules and general revision expressions remain unsupported.
+HEAD/full or unambiguous loose-object IDs are not a general revision grammar.
 
-Plain/bare `init`, quiet mode, initial branches and reinit use the measured
-empty-template surface: HEAD/config only, plus empty directories (including
-empty hooks). `hash-object` supports binary files/stdin, -w and -t;
-`cat-file` resolves full/abbreviated loose IDs, HEAD and loose refs. `mktree`
-supports raw names with -z and --missing. `commit-tree` supports ordered -p,
--m and -F messages, configured identities and raw Git timestamps. `mktag`
-checks required headers, target type and a restricted identity syntax.
-`write-tree` validates a Git-written flat index v2, including checksum and
-padding; it never modifies the index. TREE is recognized, every unknown
-extension is a named refusal.
+TREE and REUC index extensions are validated and preserved. UNTR, FSMN, IEOT,
+EOIE, split-index `link`, sparse-index `sdir` and unknown extensions are refused
+by name. Higher merge-stage entries can be read, but operations that would
+resolve or remove them refuse until resolve-undo generation is implemented.
 
-This is deliberately bounded: no packs/alternates/linked-worktree commondir,
-revision expressions, index writing or nested index paths; no general date
-parser, signing, filters, nonempty templates, config includes/escaped values,
-quoted mktree input (use -z), or full malformed-object diagnostic vocabulary.
-Ambiguous blob/tree prefixes have measured Git diagnostics; history-object
-ambiguity hints are a named refusal. Unsupported paths are never successful
-no-ops. Generic object APIs retain bytes; commit-tree alone reproduces Git's
-measured invalid-UTF-8 repair and warning. Explicit ISO-8859-1 leaves bytes
-unchanged. These limits are future work, not reviewed parity exceptions.
+Config parsing handles quoting, escapes, continuation and precedence, but
+`include`/`includeIf` are named refusals. There is no config writer; the command is
+read-only `config --get`. Filters/attributes, non-false `core.autocrlf`, general
+pathspec magic/globs, nonempty templates/hooks, signing and user editor execution
+are unsupported. A requested editor is never launched; the measured
+`GIT_EDITOR=false` failure is handled explicitly. Relative dates such as `now`
+are refused; deterministic raw, RFC 2822 and ISO/calendar inputs are supported
+within the formatting API's stated bounds.
 
-Writes use an exclusive 0444 temporary file, complete write, file sync, close,
-atomic no-replace hard-link install, temporary removal and directory sync.
-A racing valid object wins; corrupt existing data is refused, not replaced.
-Ordinary error paths clean up. Abrupt death can leave `tmp_den_*` files;
-never a truncated final object. This is a measured Unix guarantee, not a claim
-about Windows directory-sync support.
+Commit writes target an attached loose branch, not detached HEAD. Amend retains
+the existing parents and normally its author; it does not change ORIG_HEAD.
+Index/ref/reflog publication is not a multi-file atomic transaction. An ordinary
+commit can refresh the index before a message/editor abort, whereas `commit -a`
+keeps its prepared index unpublished until ref publication succeeds. FORMATS
+records these lifecycle differences and the possible earlier object/message
+side effects. Unsupported-command refusals must not be confused with rollback
+of every ordinary commit failure.
 
-`tools/check-objects` runs two native/release/actual-checked unit programs,
-an external-package API client, bidirectional Git interop/fsck, 22 malformed
-loose-object cases, unknown index extension/checksum/stage failures, 16 racing
-writers, injected write/sync/install failures, an unprivileged permission
-failure and interruption after a nonempty temporary write. The header plant
-failed at the known empty-blob OID assertion in CI run **40137248290**, closed
-unmerged PR #5. Object checked refusals: zero; the older TLS checked-budget
-refusal stays separately loud.
+## Loose objects and historical measurements
 
-On hasu, three whole-object release runs per input (first excluded) give these
-peak RSS values at 100,000,000 bytes: random write/read **787,892/655,276 KiB**;
-zero write/read **461,368/426,968 KiB**. Doubling 50 MB to 100 MB stays below
-2.7x RSS for each path. `tools/objects-bench.py` checks this and the compressed
-size ceiling; raw measurements are in `notes/vc02-evidence/`. No streaming or
-large-object checked execution is claimed.
+Objects own their binary data and algorithm-tagged IDs. Reads validate zlib,
+canonical header/size, full consumption and the independent OID. Tree sorting
+uses Git's directory-aware byte order. Generic headers/messages retain unknown
+fields and continuations. Commit creation alone applies the measured UTF-8
+repair/warning when no non-UTF-8 encoding is selected; explicit ISO-8859-1
+preserves the input bytes.
+
+Loose writes use an exclusive temporary, complete write and sync, atomic
+no-replace hard-link installation, owned temporary cleanup and directory sync.
+Concurrent writers validate the installed winner. Abrupt termination may leave
+an orphan temporary, never a partially installed final object. The temporary
+name-reuse cleanup race has a dedicated concurrent-writer regression.
+`tools/check-objects` covers malformed input, API/checked witnesses, Git interop,
+write failures, permissions, races and interruption.
+
+Historical M1 measurements on hasu, three whole-object release runs per input
+with the first excluded, gave peak RSS at 100,000,000 bytes: random write/read
+**787,892/655,276 KiB**; zero write/read **461,368/426,968 KiB**. Doubling 50 MB to
+100 MB stayed below 2.7x for each path. `tools/objects-bench.py` and
+`notes/vc02-evidence/` retain those measurements; they are not a new benchmark
+for the current changes or a streaming/large-object checked claim.
 
 ## Zlib codec
 
@@ -167,7 +185,7 @@ at 1 or -1. Levels 0/6/9 have exact named not-yet matrix rows; pack settings
 remain outside this loose-only implementation.
 The whole-object API is not a streaming pack reader.
 
-`tools/check-codec` gates 52 independent small vectors, all lengths 3–258 and
+The historical M1 codec gate covered 52 independent small vectors, all lengths 3–258 and
 every distance range through 32768, native/release cross-tests, four actual
 checked programs, 1,067 loose objects and 31 packed entries, and 1,098 den-written
 objects read by Git. Nine rebuilt repositories pass Git fsck. Corpus encoded-size
@@ -176,7 +194,7 @@ Each native tier runs 250 deterministic fuzz rounds (1,250 calls); every
 malformed result must be a named row. The Adler CI plant failed as intended
 in run 40133795581 (closed-unmerged PR #3).
 
-On hasu, three 100,000,000-byte file-driver runs with the first excluded:
+Historical M1 measurements on hasu, three 100,000,000-byte file-driver runs with the first excluded:
 
 | Release operation | Random bytes | Repeated zeroes |
 |---|---:|---:|
@@ -189,46 +207,47 @@ On hasu, three 100,000,000-byte file-driver runs with the first excluded:
 
 These are whole-object file read/codec/write measurements, not isolated CPU or
 disk benchmarks. `tools/codec-bench.py` reproduces them; raw runs, hashes and
-predictions are under `notes/vc01-evidence/`. The small checked programs all pass;
-100-MB file measurements are native-only, not claimed as checked runs.
+predictions are under `notes/vc01-evidence/`. Those small checked programs passed;
+100-MB file measurements were native-only. These are retained measurements,
+not a new performance result for the current changes.
 
-## Measured gaps
+## Measured platform gaps
 
-The full stat record includes nanosecond times, identity, permissions, owner
-and size. TCP and subprocess pipes work in both directions on native and the
-actual checked machine. Git-style dates work. TLS completes a native local
-Ed25519/OpenSSL handshake, but RSA-signed certificates and the observed GitHub
-chain return `unsupported_alg`; the checked TLS program exhausts its mem-phase
-budget before a handshake. HTTPS is deferred, not generically claimed absent.
+The full stat record supplies every index word. TCP and subprocess pipes were
+observed on native and the actual checked machine. TLS completed a local
+Ed25519 handshake, but the tested RSA/GitHub chain returned `unsupported_alg`;
+the checked TLS program exhausted its mem-phase budget before a handshake.
+HTTPS remains deferred. Non-UTF-8 OS paths, non-creating writable opens,
+argv[0] at this pin, regex and mmap have the specific limitations listed in MAP.
 
-The zlib codec is implemented in `src/zlib`; its contract is above.
-Non-UTF-8 path arguments, non-creating writable opens, argv[0] at this pin,
-regex and mmap have named upstream limitations in MAP. muzzle is not a
-dependency; a future C-facing libden would need a C ABI/allocator boundary.
+The combined index checked unit also exceeds the pinned mem-phase budget.
+Five smaller checked probes cover format, flags, trees, malformed input and
+stat mapping; all five returned actual-checked `exit(0)` in the full gate. This does
+not turn the combined program's `unsupported` verdict into a pass. A retained
+compiler reproducer tracks the returned lent-byte-view copy issue separately.
 
 ## CI and packaging
 
-`plan` selects PR/full/noop/partial tiers; `ci/tiers-test.py` tests both planning
-and the final verdict. Normal PRs run Linux; trunk/nightly/dispatch and a
-`full-matrix` label add the nonblocking macOS field observation. The label is
-added at the final head by the orchestrator, never by a lane. A failed nightly
-opens or updates a `nightly-red` issue. No local Mac builds were used for these milestones.
+`plan` selects PR/full/noop/partial tiers; `ci/tiers-test.py` checks planning and
+final verdicts. PRs run Linux; trunk/nightly/dispatch and `full-matrix` add the
+nonblocking macOS field observation. A failed nightly opens/updates a
+`nightly-red` issue. Local implementation measurements use Linux containers,
+not Mac builds.
 
-`packaging/den.rb` and `packaging/PKGBUILD` are **drafts, not published**. They
-refer to a future v0.1.0 tag that does not exist and deliberately contain an
-unfilled source-archive digest. They must not be installed or uploaded as a
-release. Neither draft replaces the system Git or installs a git alias.
+`packaging/den.rb` and `packaging/PKGBUILD` remain **drafts, not published**.
+They name a future v0.1.0 tag and have an unfilled source-archive digest. Do not
+install or upload them as a release. Neither replaces the system Git or installs
+a `git` alias.
 
 ## Clean room
 
-Authors read Git's documentation, published specifications and run the oracle.
-They never read Git implementation source, libgit2 or another Git implementation's
-code. No blog code is translated. [SOURCES](docs/SOURCES.md) records the exact
-pages, sections and organisation-owned references. Every difference needs an
-exact reviewed row. A format ambiguity or divergence is a proposed ruling,
-never a silent lane decision.
+Implementation work uses Git's documentation, published specifications and
+black-box oracle runs, never Git source, sample hooks/templates, libgit2 or
+another VCS implementation's code. [SOURCES](docs/SOURCES.md) lists references.
+A documented behavior that disagrees with the binary is recorded with its
+reproducer; an unimplemented feature is not silently approximated.
 
 ## Licence
 
 GPL-3.0-only (`LICENSE`) with the wolf Training Data Permission
-(`LICENSE-TRAINING-DATA`). Vendored organisation-owned files carry provenance.
+(`LICENSE-TRAINING-DATA`). Vendored organisation-owned files retain provenance.
