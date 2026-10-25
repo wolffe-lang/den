@@ -1,0 +1,363 @@
+use std.fs
+use ignore
+use index
+use object
+use oid
+
+fn stable(a: List[int], b: List[int]) -> bool {
+    if a.len != 20 || b.len != 20 { return false }
+    for i in [0, 1, 4, 6, 7, 9, 10, 14, 15, 16, 17] { if a[i] != b[i] { return false } }
+    true
+}
+
+fn read_held(fd: int) -> List[byte] ! WorkErrors {
+    var out = List[byte]()
+    loop {
+        region chunk {
+            let part = fs_read_chunk(fd, 65536) else |e| match e {
+                eof => { break },
+                io => { return io },
+            }
+            if part.len > 1000000000 - out.len { return limit }
+            for b in part { (mut out).push(b) }
+        }
+    }
+    out
+}
+
+/// Read actual bytes with before/after metadata agreement. Final symlinks use
+/// lstat/read_link/lstat; regular files use NOFOLLOW plus one held descriptor.
+/// prior has zero or one stage-zero entry and controls fileMode/symlinks policy.
+pub fn read_file(
+    ctx: Context,
+    path: List[byte],
+    prior: List[index.Entry],
+) -> FileState ! WorkErrors {
+    if prior.len > 1 { return invalid }
+    if prior.len == 1 {
+        var checked = index.empty(2)?
+        (mut checked.entries).push(copy prior[0])
+        let _ = index.serialize(checked)?
+        if index.stage(prior[0]) != 0 || compare(prior[0].path, path) != 0 { return invalid_index }
+    }
+    safe_parents(ctx, path, false)?
+    let full = absolute(ctx, path)?
+    let named = fs_lstat(full)?
+    var record = copy named
+    var data = List[byte]()
+    var mode = 0o100644
+    if named[0] == 3 {
+        data = fs.read_link(full)?
+        if !stable(named, fs_lstat(full)?) {
+            return Failure("'{text(path)?}' changed while reading")
+        }
+        mode = 0o120000
+    } else if named[0] == 0 {
+        var file = fs.File { fd: fs_open_mode(full, 21)? }
+        defer fs.close(take file) else |_| {}
+        let before = fs_fstat_record(file.fd)?
+        if !stable(named, before) { return Failure("'{text(path)?}' changed while opening") }
+        data = read_held(file.fd)?
+        record = fs_fstat_record(file.fd)?
+        if !stable(before, record) || !stable(record, fs_lstat(full)?) {
+            return Failure("'{text(path)?}' changed while reading")
+        }
+        if before[4] & 0o100 != 0 { mode = 0o100755 }
+        if !config_bool(ctx, "core.filemode", true)? {
+            mode = if prior.len == 1 &&
+                (prior[0].stat[6] == 0o100644 || prior[0].stat[6] == 0o100755) {
+                prior[0].stat[6]
+            } else {
+                0o100644
+            }
+        }
+        if !config_bool(ctx, "core.symlinks", true)? &&
+            prior.len == 1 &&
+            prior[0].stat[6] == 0o120000 {
+            mode = 0o120000
+        }
+    } else {
+        return Unsupported("worktree file kind {named[0]} at {text(path)?}")
+    }
+    FileState {
+        path: owned_bytes(path),
+        mode: mode,
+        id: object.identify("blob", data)?,
+        data: data,
+        stat: record,
+        kind: named[0],
+    }
+}
+
+struct Walk { files: List[FileState], directories: List[List[byte]] }
+
+fn walk(
+    ctx: Context,
+    value: index.Index,
+    include_untracked: bool,
+    paths: List[List[byte]],
+) -> Walk ! WorkErrors {
+    for entry in value.entries {
+        if entry.stat.len != 10 { return invalid_index }
+        if entry.stat[6] == 0o160000 { return Unsupported("submodule worktree") }
+    }
+    var total_bytes: int = 0
+    var pending = [List[byte]()]
+    var files = List[FileState]()
+    var directories = List[List[byte]]()
+    while pending.len > 0 {
+        let parent = (mut pending).pop() else |_| { return invalid }
+        let items = fs.entries(absolute(ctx, parent)?)?
+        for item in items {
+            if compare(item.name, ".git".bytes()) == 0 {
+                if parent.len > 0 { return Unsupported("embedded repository {text(parent)?}") }
+                continue
+            }
+            var path = copy parent
+            if path.len > 0 { (mut path).push(47 as byte) }
+            bytes_add(mut path, item.name)
+            // A selected leaf may need its ancestors traversed, but unrelated
+            // paths must not be opened incidentally by add <tracked> or -u.
+            var relevant = selected(path, paths)
+            if !relevant {
+                for selector in paths { if under(selector, path) { relevant = true; break } }
+            }
+            if !relevant { continue }
+            if !include_untracked {
+                var tracked = false
+                for entry in value.entries {
+                    if under(entry.path, path) && selected(entry.path, paths) {
+                        tracked = true
+                        break
+                    }
+                }
+                if !tracked { continue }
+            }
+            let full = absolute(ctx, path)?
+            let info = fs_lstat(full) else |e| match e {
+                not_found => { continue },
+                denied => { return denied },
+                io => { return io },
+            }
+            if info[0] == 1 {
+                if directories.len >= 1000000 { return limit }
+                (mut directories).push(copy path)
+                (mut pending).push(path)
+            } else if info[0] == 0 || info[0] == 3 {
+                if !selected(path, paths) { continue }
+                let at = index_at(value.entries, path)
+                var prior = List[index.Entry]()
+                if at >= 0 {
+                    if value.entries[at].stat[6] == 0o160000 {
+                        return Unsupported("submodule worktree")
+                    }
+                    if index.stage(value.entries[at]) == 0 {
+                        (mut prior).push(copy value.entries[at])
+                    }
+                }
+                let file = read_file(ctx, path, prior)?
+                if file.data.len > 1000000000 - total_bytes || files.len >= 1000000 { return limit }
+                total_bytes += file.data.len
+                (mut files).push(copy file)
+                var i = files.len - 1
+                while i > 0 && compare(files[i - 1].path, file.path) > 0 {
+                    files[i] = copy files[i - 1]
+                    i -= 1
+                }
+                files[i] = file
+            } else if index_at(value.entries, path) >= 0 {
+                return Unsupported("tracked worktree file kind {info[0]} at {text(path)?}")
+            }
+        }
+    }
+    Walk { files: files, directories: directories }
+}
+
+fn status_row(path: List[byte], x: str, y: str) -> StatusRow {
+    StatusRow {
+        path: owned_bytes(path),
+        original_path: [],
+        x: x,
+        y: y,
+        ignored: false,
+        untracked: false,
+    }
+}
+
+fn change(old_mode: int, old: oid.Oid, mode: int, id: oid.Oid) -> str {
+    if old_mode / 4096 != mode / 4096 { return "T" }
+    if old_mode != mode || !oid.equal(old, id) { return "M" }
+    " "
+}
+
+fn unmerged_code(bits: int) -> (str, str) {
+    match bits {
+        2 => ("D", "D"),
+        4 => ("A", "U"),
+        6 => ("U", "D"),
+        8 => ("U", "A"),
+        10 => ("D", "U"),
+        12 => ("A", "A"),
+        _ => ("U", "U"),
+    }
+}
+
+/// Compare three owned snapshots without filesystem writes. Unmerged entries,
+/// ITA, assume-valid and skip-worktree are represented explicitly.
+pub fn compare_status(
+    ctx: Context,
+    value: index.Index,
+    tree: List[FlatEntry],
+    files: List[FileState],
+) -> List[StatusRow] ! WorkErrors {
+    var warnings = List[str]()
+    compare_status_with_warnings(ctx, value, tree, files, true, mut warnings)?
+}
+
+/// Compare snapshots while collecting operation-wide ignore diagnostics. False
+/// include_untracked bypasses all ignore-source queries, not just their output,
+/// and returns tracked rows only. Existing warnings are retained on every exit.
+pub fn compare_status_with_warnings(
+    ctx: Context,
+    value: index.Index,
+    tree: List[FlatEntry],
+    files: List[FileState],
+    include_untracked: bool,
+    mut warnings: List[str],
+) -> List[StatusRow] ! WorkErrors {
+    let _ = index.serialize(value)?
+    var paths = List[List[byte]]()
+    for entry in tree { (mut paths).push(copy entry.path) }
+    for entry in value.entries {
+        var found = false
+        for path in paths { if compare(path, entry.path) == 0 { found = true; break } }
+        if !found { (mut paths).push(copy entry.path) }
+    }
+    var rows = List[StatusRow]()
+    for path in paths {
+        let staged = index_at(value.entries, path)
+        let old = flat_at(tree, path)
+        let disk = file_at(files, path)
+        if staged < 0 { (mut rows).push(status_row(path, "D", " ")); continue }
+        let entry = copy value.entries[staged]
+        if index.stage(entry) != 0 {
+            var bits = 0
+            for item in value.entries {
+                if compare(item.path, path) == 0 { bits = bits | 1 << index.stage(item) }
+            }
+            let (x, y) = unmerged_code(bits)
+            (mut rows).push(status_row(path, x, y))
+            continue
+        }
+        let intent = entry.extended & 0x2000 != 0
+        let x = if intent {
+            " "
+        } else if old < 0 {
+            "A"
+        } else {
+            change(tree[old].mode, tree[old].id, entry.stat[6], entry.id)
+        }
+        var y = " "
+        if entry.flags & 0x8000 == 0 && entry.extended & 0x4000 == 0 {
+            y = if disk < 0 {
+                "D"
+            } else if intent {
+                "A"
+            } else {
+                change(entry.stat[6], entry.id, files[disk].mode, files[disk].id)
+            }
+        }
+        if x != " " || y != " " { (mut rows).push(status_row(path, x, y)) }
+    }
+    for file in files {
+        if !include_untracked { break }
+        if index_at(value.entries, file.path) >= 0 { continue }
+        let decision = ignore.query_with_warnings(
+            ctx.repo,
+            ctx.root,
+            text(file.path)?,
+            false,
+            mut warnings,
+        )?
+        var row = status_row(
+            file.path,
+            if decision.ignored then "!" else "?",
+            if decision.ignored then "!" else "?",
+        )
+        row.ignored = decision.ignored
+        row.untracked = !decision.ignored
+        (mut rows).push(row)
+    }
+    // Stable unsigned path order, independent of directory enumeration order.
+    for i in 1..rows.len {
+        let row = copy rows[i]
+        var j = i
+        while j > 0 && compare(rows[j - 1].path, row.path) > 0 {
+            rows[j] = copy rows[j - 1]
+            j -= 1
+        }
+        rows[j] = row
+    }
+    rows
+}
+
+/// Scan against a caller's already-locked index snapshot. This function itself
+/// remains read-only, allowing commit/add/status consumers to choose ownership.
+pub fn scan_index(ctx: Context, value: index.Index) -> Snapshot ! WorkErrors {
+    var warnings = List[str]()
+    scan_index_with_warnings(ctx, value, true, mut warnings)?
+}
+
+/// Read-only scan with explicit warning collection. include_untracked=false
+/// skips ignore queries, untracked/ignored rows and untracked file-body reads.
+/// files then contains observed tracked files only. Existing scan_index keeps
+/// the full silent snapshot. Never prints or clears caller diagnostics.
+pub fn scan_index_with_warnings(
+    ctx: Context,
+    value: index.Index,
+    include_untracked: bool,
+    mut warnings: List[str],
+) -> Snapshot ! WorkErrors {
+    let _ = index.serialize(value)?
+    let current_head = head(ctx)?
+    var entries = List[FlatEntry]()
+    if current_head.commits.len == 1 { entries = flatten_tree(ctx.repo, current_head.commits[0])? }
+    ensure_filters(ctx)?
+    let walked = walk(ctx, value, include_untracked, [])?
+    for file in walked.files {
+        let path = text(file.path)?
+        if path == ".gitattributes" || path.ends_with("/.gitattributes") {
+            return Unsupported("worktree attributes")
+        }
+    }
+    let rows = compare_status_with_warnings(
+        ctx,
+        value,
+        entries,
+        walked.files,
+        include_untracked,
+        mut warnings,
+    )?
+    Snapshot {
+        context: copy ctx,
+        head: current_head,
+        index: copy value,
+        head_entries: entries,
+        files: walked.files,
+        directories: walked.directories,
+        rows: rows,
+    }
+}
+
+/// A read-only owned status snapshot; does not perform optional index refresh.
+pub fn scan(ctx: Context) -> Snapshot ! WorkErrors { scan_index(ctx, read_index(ctx)?)? }
+
+/// Read the index and collect ignore warnings without emitting them. The caller
+/// shares one list across related scans and emits it at its command boundary.
+pub fn scan_with_warnings(
+    ctx: Context,
+    include_untracked: bool,
+    mut warnings: List[str],
+) -> Snapshot ! WorkErrors {
+    scan_index_with_warnings(ctx, read_index(ctx)?, include_untracked, mut warnings)?
+}

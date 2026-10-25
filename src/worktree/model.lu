@@ -1,0 +1,414 @@
+// Clean-room worktree boundary from Git 2.56.0 porcelain documentation.
+use std.fs
+use index
+use object
+use oid
+use repository
+
+/// Format/object/IO rows plus named pathspec and command-edge refusals.
+pub error WorkErrors = {
+    invalid_index,
+    unmerged,
+    invalid_tree,
+    duplicate_name,
+    invalid,
+    invalid_oid,
+    unsupported_format,
+    bad_header,
+    bad_size,
+    bad_oid,
+    truncated,
+    dictionary,
+    checksum,
+    limit,
+    trailing,
+    unsupported_level,
+    not_found,
+    denied,
+    io,
+    exists,
+    unsupported,
+    Unsupported(str),
+    ambiguous,
+    cross_device,
+    invalid_header,
+    utf8,
+    Pathspec(str),
+    Fatal(str),
+    Failure(str),
+}
+
+/// Canonical absolute repository root/cwd and root-relative cwd prefix.
+pub struct Context { repo: repository.Repo, root: str, cwd: str, prefix: str }
+
+/// A flattened tree leaf owns its raw full pathname and identifier.
+pub struct FlatEntry { path: List[byte], mode: int, id: oid.Oid }
+
+/// Last checkout reflog record plus a display label resolved when HEAD is read.
+/// target is the original checkout operand; id is that record's new commit.
+pub struct CheckoutOrigin { target: str, id: oid.Oid, label: str }
+
+/// commits is empty on an unborn branch and contains exactly one id otherwise.
+/// reference is empty when detached; branch is the short refs/heads name.
+/// checkout is empty without a checkout record, otherwise its most recent one.
+pub struct Head {
+    reference: str,
+    branch: str,
+    detached: bool,
+    commits: List[oid.Oid],
+    checkout: List[CheckoutOrigin],
+}
+
+/// An actual regular file or symbolic link; stat is the full 20-word record.
+/// data is file content or link target bytes, never a followed link's content.
+pub struct FileState {
+    path: List[byte],
+    mode: int,
+    id: oid.Oid,
+    data: List[byte],
+    stat: List[int],
+    kind: int,
+}
+
+/// Reusable status codes; original_path is populated only for a rename/copy.
+pub struct StatusRow {
+    path: List[byte],
+    original_path: List[byte],
+    x: str,
+    y: str,
+    ignored: bool,
+    untracked: bool,
+}
+
+/// Owned snapshot; scan never acquires a write lock or refreshes the index.
+pub struct Snapshot {
+    context: Context,
+    head: Head,
+    index: index.Index,
+    head_entries: List[FlatEntry],
+    files: List[FileState],
+    directories: List[List[byte]],
+    rows: List[StatusRow],
+}
+
+fn owned_bytes(bytes: List[byte]) -> List[byte] {
+    var out = List[byte]()
+    for b in bytes { (mut out).push(b) }
+    out
+}
+
+fn valid_relative(path: List[byte]) -> bool {
+    if path.len == 0 { return false }
+    var start = 0
+    for i in 0..=path.len {
+        if i < path.len && path[i] == 0 as byte { return false }
+        if i == path.len || path[i] == 47 as byte {
+            let component = path[start..i]
+            if component.len == 0 ||
+                compare(component, ".".bytes()) == 0 ||
+                compare(component, "..".bytes()) == 0 ||
+                compare(component, ".git".bytes()) == 0 {
+                return false
+            }
+            start = i + 1
+        }
+    }
+    true
+}
+
+fn validate_specs(paths: List[List[byte]]) -> () ! WorkErrors {
+    for path in paths { if path.len != 0 && !valid_relative(path) { return invalid } }
+}
+
+fn bytes_add(mut out: List[byte], bytes: List[byte]) { for b in bytes { (mut out).push(b) } }
+
+fn compare(a: List[byte], b: List[byte]) -> int {
+    var i = 0
+    while i < a.len && i < b.len {
+        if a[i] != b[i] { return a[i] as int - b[i] as int }
+        i += 1
+    }
+    if a.len < b.len { return -1 }
+    if a.len > b.len { return 1 }
+    0
+}
+
+fn text(path: List[byte]) -> str ! WorkErrors {
+    str_from_utf8(path) else |_| {
+        return Unsupported("non-UTF-8 filesystem path (wolf-lang#687/#912)")
+    }
+}
+
+fn under(path: List[byte], directory: List[byte]) -> bool {
+    if directory.len == 0 { return true }
+    if path.len < directory.len { return false }
+    for i in 0..directory.len { if path[i] != directory[i] { return false } }
+    path.len == directory.len || path[directory.len] == 47 as byte
+}
+
+/// Parse Git boolean spellings; invalid values are explicit, not silently false.
+pub fn config_bool(ctx: Context, key: str, fallback: bool) -> bool ! WorkErrors {
+    let value = ctx.repo.config[key] else |_| { return fallback }
+    let lower = value.lower()
+    if lower == "true" || lower == "yes" || lower == "on" || lower == "1" {
+        return true
+    }
+    if lower == "false" || lower == "no" || lower == "off" || lower == "0" || lower == "" {
+        return false
+    }
+    return Unsupported("boolean configuration {key}={value}")
+}
+
+/// Resolve root without assuming gitdir's parent is the worktree (gitfiles and
+/// explicit GIT_DIR/GIT_WORK_TREE are distinct). Bare repositories are refused.
+pub fn discover(start: str) -> Context ! WorkErrors {
+    if (env_get("GIT_INDEX_FILE") else "") != "" { return Unsupported("GIT_INDEX_FILE") }
+    let cwd = fs.realpath(start)?
+    let repo = repository.discover(cwd)?
+    let explicit = env_get("GIT_WORK_TREE") else ""
+    var root = ""
+    if explicit != "" {
+        root = fs.realpath(explicit)?
+    } else {
+        let configured = repo.config["core.worktree"] else ""
+        if configured != "" {
+            root = fs.realpath(
+                if configured.starts_with("/") then configured else "{repo.gitdir}/{configured}",
+            )?
+        } else if (repo.config["core.bare"] else "false").lower() == "true" {
+            return Fatal("this operation must be run in a work tree")
+        } else {
+            var directory = cwd
+            loop {
+                if fs.is_dir("{directory}/.git") || fs.is_file("{directory}/.git") {
+                    root = directory
+                    break
+                }
+                let parent = fs.parent(directory) else |_| { break }
+                if parent == directory { break }
+                directory = parent
+            }
+            if root == "" && (env_get("GIT_DIR") else "") != "" { root = cwd }
+            if root == "" { return Fatal("this operation must be run in a work tree") }
+        }
+    }
+    if cwd != root && !cwd.starts_with(if root == "/" then "/" else "{root}/") {
+        return Fatal("current directory is outside the work tree")
+    }
+    let prefix = if cwd == root then "" else if root == "/" then cwd[1..] else cwd[root.len + 1..]
+    Context { repo: repo, root: root, cwd: cwd, prefix: prefix }
+}
+
+/// Normalize a literal user pathname relative to cwd, including missing paths.
+/// Empty output names the root. No symlink is followed during normalization.
+pub fn normalize(ctx: Context, path: str) -> List[byte] ! WorkErrors {
+    normalize_inner(ctx, path, true)?
+}
+
+fn normalize_literal(ctx: Context, path: str) -> List[byte] ! WorkErrors {
+    normalize_inner(ctx, path, false)?
+}
+
+fn normalize_inner(ctx: Context, path: str, pathspec: bool) -> List[byte] ! WorkErrors {
+    if path == "" || path.contains("\0") { return invalid }
+    var raw = path
+    if pathspec && path == ":/" { return List[byte]() }
+    if pathspec && path.starts_with(":") { return Unsupported("pathspec magic {path}") }
+    if path.starts_with("/") {
+        if path == ctx.root { return List[byte]() }
+        let prefix = if ctx.root == "/" then "/" else "{ctx.root}/"
+        if !path.starts_with(prefix) {
+            return Fatal("'{path}' is outside repository at '{ctx.root}'")
+        }
+        raw = path[prefix.len..]
+    } else if ctx.prefix != "" {
+        raw = "{ctx.prefix}/{path}"
+    }
+    var parts = List[str]()
+    for part in raw.split("/") {
+        if part == "" || part == "." { continue }
+        if part == ".." {
+            let _ = (mut parts).pop() else |_| {
+                return Fatal("'{path}' is outside repository at '{ctx.root}'")
+            }
+        } else {
+            if part == ".git" { return Fatal("pathspec '{path}' is inside the git directory") }
+            if pathspec && (part.contains("*") || part.contains("?") || part.contains("[")) {
+                return Unsupported("wildcard pathspec {path}")
+            }
+            (mut parts).push(part)
+        }
+    }
+    var out = List[byte]()
+    for i in 0..parts.len {
+        if i > 0 { (mut out).push(47 as byte) }
+        bytes_add(mut out, parts[i].bytes())
+    }
+    out
+}
+
+fn absolute(ctx: Context, path: List[byte]) -> str ! WorkErrors {
+    if path.len == 0 { return ctx.root }
+    "{ctx.root}/{text(path)?}"
+}
+
+// Inspect each ancestor with lstat, never authorize traversal through a link.
+fn safe_parents(ctx: Context, path: List[byte], create: bool) -> () ! WorkErrors {
+    if !valid_relative(path) { return invalid }
+    for i in 0..path.len {
+        if path[i] != 47 as byte { continue }
+        let parent = absolute(ctx, path[0..i])?
+        let info = fs_lstat(parent) else |e| match e {
+            not_found => {
+                if create { fs.create_dir(parent)?; continue }
+                return not_found
+            },
+            denied => { return denied },
+            io => { return io },
+        }
+        if info[0] == 3 { return Fatal("'{text(path)?}' is beyond a symbolic link") }
+        if info[0] != 1 { return not_found }
+    }
+}
+
+/// Get the configured index version for a new write; zero preserves an existing
+/// version. Invalid values are named rather than silently falling back.
+pub fn index_version(ctx: Context) -> int ! WorkErrors {
+    let configured = ctx.repo.config["index.version"] else |_| { return 0 }
+    let version = configured.to_int() else |_| { return Unsupported("index.version={configured}") }
+    if version < 2 || version > 4 { return Unsupported("index.version={configured}") }
+    version
+}
+
+/// Read the existing index, or an owned empty v2 index for an unborn worktree.
+pub fn read_index(ctx: Context) -> index.Index ! WorkErrors {
+    let bytes = repository.read_bytes("{ctx.repo.gitdir}/index", 1000000000) else |e| match e {
+        not_found => { return index.empty(2)? },
+        denied => { return denied },
+        io => { return io },
+        invalid => { return invalid },
+        exists => { return exists },
+        unsupported => { return unsupported },
+        limit => { return limit },
+        Unsupported(name) => { return Unsupported(name) },
+    }
+    index.parse(bytes)?
+}
+
+/// Read symbolic/unborn/detached HEAD. Packed refs are explicitly outside this
+/// milestone's loose-ref resolver, not guessed from a missing loose branch.
+pub fn head(ctx: Context) -> Head ! WorkErrors {
+    let raw = repository.read_bytes("{ctx.repo.gitdir}/HEAD", 4096)?
+    let line = (str_from_utf8(raw) else |_| { return invalid_oid }).trim()
+    var reference = ""
+    var branch = ""
+    var commits = List[oid.Oid]()
+    if line.starts_with("ref: ") {
+        reference = line[5..]
+        if !reference.starts_with("refs/") || reference.contains("..") { return invalid_oid }
+        branch = if reference.starts_with("refs/heads/") then reference[11..] else reference
+        if !fs.exists("{ctx.repo.gitdir}/{reference}") {
+            if fs.exists("{ctx.repo.gitdir}/packed-refs") { return Unsupported("packed refs") }
+            return Head {
+                reference: reference,
+                branch: branch,
+                detached: false,
+                commits: commits,
+                checkout: List[CheckoutOrigin](),
+            }
+        }
+    }
+    (mut commits).push(object.resolve(ctx.repo, "HEAD")?)
+    let checkout = if reference == "" then read_checkout(ctx.repo)? else List[CheckoutOrigin]()
+    Head {
+        reference: reference,
+        branch: branch,
+        detached: reference == "",
+        commits: commits,
+        checkout: checkout,
+    }
+}
+
+fn tree_id(repo: repository.Repo, id: oid.Oid) -> oid.Oid ! WorkErrors {
+    var current = copy id
+    for _ in 0..64 {
+        let stored = object.read_object(repo, current, 1000000000)?
+        if stored.kind == "tree" { return current }
+        if stored.kind != "commit" && stored.kind != "tag" { return invalid_tree }
+        let headers = if stored.kind == "commit" {
+            object.parse_commit(stored.data, "sha1")?
+        } else {
+            object.parse_tag(stored.data, "sha1")?
+        }
+        let key = if stored.kind == "commit" then "tree" else "object"
+        var found = false
+        for field in headers.fields {
+            if field.key == key {
+                current = oid.parse("sha1", text(field.value)?)?
+                found = true
+                break
+            }
+        }
+        if !found { return invalid_header }
+    }
+    limit
+}
+
+struct PendingTree { path: List[byte], id: oid.Oid, ancestors: List[oid.Oid] }
+
+/// Flatten a tree/commit/tag into unsigned full-path order, retaining raw names.
+/// Detect cycles and reject .git entries before any consumer can reach disk.
+pub fn flatten_tree(repo: repository.Repo, id: oid.Oid) -> List[FlatEntry] ! WorkErrors {
+    var pending = [
+        PendingTree { path: List[byte](), id: tree_id(repo, id)?, ancestors: List[oid.Oid]() },
+    ]
+    var entries = List[FlatEntry]()
+    while pending.len > 0 {
+        let next = (mut pending).pop() else |_| { return invalid_tree }
+        for ancestor in next.ancestors { if oid.equal(ancestor, next.id) { return invalid_tree } }
+        var ancestors = copy next.ancestors
+        (mut ancestors).push(copy next.id)
+        if ancestors.len > 1024 { return limit }
+        let stored = object.read_object(repo, next.id, 1000000000)?
+        if stored.kind != "tree" { return invalid_tree }
+        let children = object.parse_tree(stored.data, "sha1")?
+        for child in children {
+            if compare(child.name, ".git".bytes()) == 0 { return invalid_tree }
+            var path = copy next.path
+            if path.len > 0 { (mut path).push(47 as byte) }
+            bytes_add(mut path, child.name)
+            if child.mode == 0o40000 {
+                (mut pending).push(PendingTree {
+                    path: path,
+                    id: copy child.id,
+                    ancestors: copy ancestors,
+                })
+            } else {
+                let entry = FlatEntry { path: path, mode: child.mode, id: copy child.id }
+                (mut entries).push(copy entry)
+                var pos = entries.len - 1
+                while pos > 0 && compare(entries[pos - 1].path, entry.path) > 0 {
+                    entries[pos] = copy entries[pos - 1]
+                    pos -= 1
+                }
+                entries[pos] = entry
+            }
+        }
+    }
+    entries
+}
+
+fn index_at(entries: List[index.Entry], path: List[byte]) -> int {
+    for i in 0..entries.len { if compare(entries[i].path, path) == 0 { return i } }
+    -1
+}
+
+fn flat_at(entries: List[FlatEntry], path: List[byte]) -> int {
+    for i in 0..entries.len { if compare(entries[i].path, path) == 0 { return i } }
+    -1
+}
+
+fn file_at(entries: List[FileState], path: List[byte]) -> int {
+    for i in 0..entries.len { if compare(entries[i].path, path) == 0 { return i } }
+    -1
+}

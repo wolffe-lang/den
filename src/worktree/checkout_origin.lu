@@ -1,0 +1,102 @@
+use object
+use oid
+use repository
+
+/// Read only checkout records from documented reflog framing. Unknown messages
+/// are irrelevant to detached provenance. Recognized malformed records return
+/// rows, never byte/UTF-8 boundary traps. The final checkout record wins, even
+/// when its old and new ids coincide (an initial --detach HEAD does that).
+pub fn parse_checkout_origin(data: List[byte]) -> List[CheckoutOrigin] ! WorkErrors {
+    var result = List[CheckoutOrigin]()
+    let prefix = "checkout: moving from "
+    var start = 0
+    for end in 0..=data.len {
+        if end < data.len && data[end] != 10 as byte { continue }
+        var tab = start
+        while tab < end && data[tab] != 9 as byte { tab += 1 }
+        if tab < end &&
+            end - tab - 1 >= prefix.len &&
+            compare(data[tab + 1..tab + 1 + prefix.len], prefix.bytes()) == 0 {
+            if end == data.len { return invalid_header }
+            if tab - start < 82 ||
+                data[start + 40] != 32 as byte ||
+                data[start + 81] != 32 as byte {
+                return invalid_header
+            }
+            let old_text = str_from_utf8(data[start..start + 40]) else |_| { return invalid_oid }
+            let new_text = str_from_utf8(data[start + 41..start + 81]) else |_| {
+                return invalid_oid
+            }
+            let _ = oid.parse("sha1", old_text)?
+            let id = oid.parse("sha1", new_text)?
+            let message = str_from_utf8(data[tab + 1 + prefix.len..end]) else |_| {
+                return invalid_header
+            }
+            let separator = message.rfind(" to ") else |_| { return invalid_header }
+            let target = message[separator + 4..]
+            if separator == 0 || target == "" { return invalid_header }
+            for b in target.bytes() {
+                if b as int <= 32 || b == 127 as byte { return invalid_header }
+            }
+            let hex = oid.hex(id)?
+            result = [CheckoutOrigin { target: target, id: id, label: hex[0..7] }]
+        }
+        start = end + 1
+    }
+    result
+}
+
+// A named checkout operand may resolve to an annotated tag, or to a chain of
+// tags. Compare the peeled commit, never the outer tag object's own oid. The
+// bound includes the final commit; malformed, missing and over-deep historical
+// targets retain the existing origin-oid display fallback at the caller.
+fn peel_checkout_commit(repo: repository.Repo, id: oid.Oid) -> oid.Oid ! WorkErrors {
+    var current = copy id
+    var seen = List[oid.Oid]()
+    var expected_kind = ""
+    for _ in 0..64 {
+        for previous in seen { if oid.equal(previous, current) { return invalid_header } }
+        (mut seen).push(copy current)
+        let stored = object.read_object(repo, current, 16777216)?
+        if expected_kind != "" && stored.kind != expected_kind { return invalid_header }
+        if stored.kind == "commit" { return current }
+        if stored.kind != "tag" { return invalid_header }
+        let headers = object.parse_tag(stored.data, "sha1")?
+        let target = str_from_utf8(headers.fields[0].value) else |_| { return invalid_header }
+        expected_kind = str_from_utf8(headers.fields[1].value) else |_| { return invalid_header }
+        if expected_kind != "commit" && expected_kind != "tag" { return invalid_header }
+        current = oid.parse("sha1", target)?
+    }
+    limit
+}
+
+fn read_checkout(repo: repository.Repo) -> List[CheckoutOrigin] ! WorkErrors {
+    let data = repository.read_bytes("{repo.gitdir}/logs/HEAD", 16777216) else |e| match e {
+        not_found => { return List[CheckoutOrigin]() },
+        denied => { return denied },
+        io => { return io },
+        invalid => { return invalid },
+        exists => { return exists },
+        unsupported => { return unsupported },
+        limit => { return limit },
+        Unsupported(name) => { return Unsupported(name) },
+    }
+    var records = parse_checkout_origin(data)?
+    if records.len == 0 { return records }
+    let target = records[0].target
+    if target == "HEAD" || target == "@" { return records }
+    // Object spellings and unresolved historical targets keep the origin's
+    // seven-digit id. A still-resolving named ref can supply its readable name.
+    let hexadecimal = oid.prefix("sha1", target) else ""
+    if hexadecimal != "" { return records }
+    let resolved = object.resolve(repo, target) else |_| { return records }
+    let peeled = peel_checkout_commit(repo, resolved) else |_| { return records }
+    if oid.equal(peeled, records[0].id) {
+        var label = target
+        for prefix in ["refs/heads/", "refs/tags/"] {
+            if label.starts_with(prefix) { label = label[prefix.len..]; break }
+        }
+        records[0].label = label
+    }
+    records
+}
