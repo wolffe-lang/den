@@ -1,0 +1,174 @@
+//! member: false
+
+use commit
+use commit_format
+use oid
+use repository
+use worktree
+
+fn equal(a: List[byte], b: List[byte]) -> bool {
+    if a.len != b.len { return false }
+    for i in 0..a.len { if a[i] != b[i] { return false } }
+    true
+}
+
+fn main() -> int ! commit.CommitErrors {
+    for (before, after, added, deleted) in [
+        ("", "", 0, 0),
+        ("", "a\n", 1, 0),
+        ("a\n", "", 0, 1),
+        ("a\nb\n", "a\nc\n", 1, 1),
+        ("a\n", "a", 1, 1),
+        ("a\nb\nc\n", "a\nc\n", 0, 1),
+        ("a\nb\n", "x\na\nb\ny\n", 2, 0),
+        ("a\nb\na\n", "b\na\nb\n", 1, 1),
+    ] {
+        let count = commit.line_counts(before.bytes(), after.bytes())?
+        assert(count.added == added && count.deleted == deleted && !count.binary)
+    }
+    let binary = commit.line_counts([0 as byte, 255 as byte], "line\n".bytes())?
+    assert(binary.binary && binary.added == 0 && binary.deleted == 0)
+    assert(
+        equal(
+            commit.subject("\n title \tcontinued \nmore words\n\nbody\n".bytes())?,
+            " title \tcontinued more words".bytes(),
+        ),
+    )
+    assert(
+        equal(
+            commit.subject([255 as byte, 9 as byte, 97 as byte, 10 as byte])?,
+            [255 as byte, 9 as byte, 97 as byte],
+        ),
+    )
+    for (input, human, expected_log) in [
+        ("one\ntwo\n", "one two", "one"),
+        (" one \n two \n", " one  two", "one"),
+        ("\none\n", "one", ""),
+        ("one\t\t two\n", "one\t\t two", "one two"),
+        ("one\r two\n", "one\r two", "one two"),
+        ("one\n\ntwo\n", "one", "one"),
+    ] {
+        assert(equal(commit.subject(input.bytes())?, human.bytes()))
+        assert(equal(commit.reflog_subject(input.bytes())?, expected_log.bytes()))
+    }
+    let old = oid.parse("sha1", "1111111111111111111111111111111111111111")?
+    let next = oid.parse("sha1", "2222222222222222222222222222222222222222")?
+    let ident = commit_format.make_identity(
+        "A",
+        "a",
+        commit_format.parse_date("@1700000000 +0530", "+0000")?,
+    )?
+    let initial = commit.reflog_line([], next, ident, "commit (initial)", "title\n\nbody".bytes())?
+    assert(
+        equal(
+            initial,
+            "0000000000000000000000000000000000000000 2222222222222222222222222222222222222222 A <a> 1700000000 +0530\tcommit (initial): title\n".
+                bytes(),
+        ),
+    )
+    let amend = commit.reflog_line(
+        [copy old],
+        next,
+        ident,
+        "commit (amend)",
+        "new\n title\n".bytes(),
+    )?
+    assert(
+        equal(
+            amend,
+            "1111111111111111111111111111111111111111 2222222222222222222222222222222222222222 A <a> 1700000000 +0530\tcommit (amend): new\n".
+                bytes(),
+        ),
+    )
+    assert(equal(commit.subject("  indented\n".bytes())?, "  indented".bytes()))
+    assert(equal(commit.reflog_subject("\nnext paragraph\n".bytes())?, []))
+    assert(equal(commit.reflog_subject(" \tfirst \t\nsecond\n".bytes())?, "first".bytes()))
+    let empty_log = commit.reflog_line([], next, ident, "commit", "\nsecond line".bytes())?
+    assert(
+        equal(
+            empty_log,
+            "0000000000000000000000000000000000000000 2222222222222222222222222222222222222222 A <a> 1700000000 +0530\tcommit:\n".
+                bytes(),
+        ),
+    )
+    let raw_subject = commit.reflog_subject([255 as byte, 10 as byte, 97 as byte])?
+    assert(equal(raw_subject, [255 as byte]))
+    var refused = false
+    let _ = commit.reflog_line([], next, ident, "bad\nline", []) else |e| {
+        refused = "{e}" == "invalid"
+        []
+    }
+    assert(refused)
+    let seed = "a\nb\na\n"
+    for end in 0..=seed.len {
+        let count = commit.line_counts(seed.bytes(), seed[0..end].bytes())?
+        assert(count.added >= 0 && count.deleted >= 0)
+    }
+    let ctx = worktree.Context {
+        repo: repository.Repo { gitdir: "", config: Map[str, str]() },
+        root: "",
+        cwd: "",
+        prefix: "",
+    }
+    let removed = [worktree.FlatEntry { path: "old".bytes(), mode: 0o100644, id: copy old }]
+    let added = [worktree.FlatEntry { path: "new".bytes(), mode: 0o100644, id: copy next }]
+    var similarity_refused = false
+    let _ = commit.change_summary(ctx, removed, added) else |e| {
+        similarity_refused = "{e}" == "Unsupported(commit edited rename similarity (vc04))"
+        []
+    }
+    assert(similarity_refused)
+    var policy_refused = false
+    commit.check_summary_policy(ctx, removed, added) else |e| {
+        policy_refused = "{e}" == "Unsupported(commit edited rename similarity (vc04))"
+    }
+    assert(policy_refused)
+    let chmod_rename = [worktree.FlatEntry { path: "new".bytes(), mode: 0o100755, id: copy old }]
+    commit.check_summary_policy(ctx, removed, chmod_rename)?
+    assert(
+        equal(
+            commit.change_summary(ctx, removed, chmod_rename)?,
+            " 1 file changed, 0 insertions(+), 0 deletions(-)\n rename old => new (100%)\n mode change 100644 => 100755\n".
+                bytes(),
+        ),
+    )
+    let exact = [worktree.FlatEntry { path: "new".bytes(), mode: 0o100644, id: copy old }]
+    assert(
+        equal(
+            commit.change_summary(ctx, removed, exact)?,
+            " 1 file changed, 0 insertions(+), 0 deletions(-)\n rename old => new (100%)\n".bytes(),
+        ),
+    )
+    var disabled_config = Map[str, str]()
+    disabled_config["diff.renames"] = "false"
+    var disabled_ctx = worktree.Context {
+        repo: repository.Repo { gitdir: "", config: disabled_config },
+        root: "",
+        cwd: "",
+        prefix: "",
+    }
+    for setting in ["false", "0", "no", "off", "FALSE"] {
+        disabled_ctx.repo.config["diff.renames"] = setting
+        var refused_disabled = false
+        commit.check_summary_policy(disabled_ctx, removed, added) else |e| {
+            refused_disabled = "{e}" == "Unsupported(commit edited rename similarity (vc04))"
+        }
+        assert(refused_disabled)
+        assert(
+            equal(
+                commit.change_summary(disabled_ctx, removed, exact)?,
+                " 1 file changed, 0 insertions(+), 0 deletions(-)\n rename old => new (100%)\n".
+                    bytes(),
+            ),
+        )
+    }
+    var bounded = false
+    let many = "a\n".repeat(2001)
+    let _ = commit.line_counts(many.bytes(), many.bytes()) else |e| {
+        bounded = "{e}" == "Unsupported(commit summary line-diff budget)"
+        commit.LineCounts { added: 0, deleted: 0, binary: false }
+    }
+    assert(bounded)
+    print("PASS bounded line counts, byte subjects and exact TAB/oid/date reflog framing")
+    0
+}

@@ -1,0 +1,16 @@
+pkg {
+    name: "commit",
+    edition: "1",
+    capabilities: [env, fs],
+    deps: {
+        commit_format: {path: "../commit_format"},
+        worktree: {path: "../worktree"},
+        index: {path: "../index"},
+        object: {path: "../object"},
+        oid: {path: "../oid"},
+        repository: {path: "../repository"},
+        ignore: {path: "../ignore"},
+        hash: {path: "../hash"},
+        zlib: {path: "../zlib"},
+    },
+}

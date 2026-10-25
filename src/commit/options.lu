@@ -1,0 +1,199 @@
+// Clean-room: Git v2.56.0 Documentation/git-commit.adoc, OPTIONS and
+// COMMIT INFORMATION; date-formats.adoc. No implementation consulted.
+
+/// Combined consumer rows; all ordinary command failures are handled by run.
+pub error CommitErrors = {
+    invalid_index,
+    unmerged,
+    invalid_tree,
+    duplicate_name,
+    invalid,
+    invalid_oid,
+    unsupported_format,
+    bad_header,
+    bad_size,
+    bad_oid,
+    truncated,
+    dictionary,
+    checksum,
+    limit,
+    trailing,
+    unsupported_level,
+    not_found,
+    denied,
+    io,
+    exists,
+    unsupported,
+    Unsupported(str),
+    ambiguous,
+    cross_device,
+    invalid_header,
+    Pathspec(str),
+    Fatal(str),
+    Failure(str),
+    invalid_date,
+    invalid_timezone,
+    invalid_identity,
+    invalid_cleanup,
+    invalid_comment,
+    utf8,
+}
+
+struct Options {
+    messages: List[List[byte]],
+    supplied: bool,
+    file: str,
+    from_file: bool,
+    all: bool,
+    amend: bool,
+    reset_author: bool,
+    allow_empty: bool,
+    allow_empty_message: bool,
+    author: str,
+    date: str,
+    cleanup: str,
+    quiet: bool,
+    edit: int,
+}
+
+fn owned(bytes: List[byte]) -> List[byte] {
+    var out = List[byte]()
+    for b in bytes { (mut out).push(b) }
+    out
+}
+
+fn add_bytes(mut out: List[byte], bytes: List[byte]) {
+    for b in bytes { (mut out).push(b) }
+}
+
+fn options(args: List[str]) -> Options ! CommitErrors {
+    var value = Options {
+        messages: [],
+        supplied: false,
+        file: "",
+        from_file: false,
+        all: false,
+        amend: false,
+        reset_author: false,
+        allow_empty: false,
+        allow_empty_message: false,
+        author: "",
+        date: "",
+        cleanup: "",
+        quiet: false,
+        edit: -1,
+    }
+    if args.len == 0 || args[0] != "commit" { return invalid }
+    var pos = 1
+    while pos < args.len {
+        let arg = args[pos]
+        pos += 1
+        if arg == "-m" ||
+            arg == "--message" ||
+            arg == "-F" ||
+            arg == "--file" ||
+            arg == "--author" ||
+            arg == "--date" ||
+            arg == "--cleanup" {
+            if pos == args.len { return Fatal("option '{arg}' requires a value") }
+            let word = args[pos]
+            pos += 1
+            if arg == "-m" || arg == "--message" {
+                (mut value.messages).push(owned(word.bytes()))
+                value.supplied = true
+            } else if arg == "-F" || arg == "--file" {
+                value.file = word
+                value.from_file = true
+                value.supplied = true
+            } else if arg == "--author" {
+                if word == "" { return invalid_identity }
+                value.author = word
+            } else if arg == "--date" {
+                if word == "" { return invalid_date }
+                value.date = word
+            } else {
+                if word == "" { return invalid_cleanup }
+                value.cleanup = word
+            }
+        } else if arg.starts_with("--message=") || arg.starts_with("-m") && arg.len > 2 {
+            let message = if arg.starts_with("--message=") then arg[10..] else arg[2..]
+            (mut value.messages).push(owned(message.bytes()))
+            value.supplied = true
+        } else if arg.starts_with("--file=") || arg.starts_with("-F") && arg.len > 2 {
+            value.file = if arg.starts_with("--file=") then arg[7..] else arg[2..]
+            value.from_file = true
+            value.supplied = true
+        } else if arg.starts_with("--author=") {
+            value.author = arg[9..]
+            if value.author == "" { return invalid_identity }
+        } else if arg.starts_with("--date=") {
+            value.date = arg[7..]
+            if value.date == "" { return invalid_date }
+        } else if arg.starts_with("--cleanup=") {
+            value.cleanup = arg[10..]
+            if value.cleanup == "" { return invalid_cleanup }
+        } else if arg == "-a" || arg == "--all" {
+            value.all = true
+        } else if arg == "--amend" {
+            value.amend = true
+        } else if arg == "--reset-author" {
+            value.reset_author = true
+        } else if arg == "--allow-empty" {
+            value.allow_empty = true
+        } else if arg == "--allow-empty-message" {
+            value.allow_empty_message = true
+        } else if arg == "-q" || arg == "--quiet" {
+            value.quiet = true
+        } else if arg == "--no-edit" {
+            value.edit = 0
+        } else if arg == "-e" || arg == "--edit" {
+            value.edit = 1
+        } else if arg == "-v" || arg == "--verbose" {
+            return Unsupported("commit -v")
+        } else if arg.starts_with("-") && !arg.starts_with("--") && arg.len > 2 {
+            var at = 1
+            while at < arg.len {
+                let flag = arg.bytes()[at]
+                at += 1
+                if flag == 97 as byte {
+                    value.all = true
+                } else if flag == 113 as byte {
+                    value.quiet = true
+                } else if flag == 101 as byte {
+                    value.edit = 1
+                } else if flag == 118 as byte {
+                    return Unsupported("commit -v")
+                } else if flag == 109 as byte || flag == 70 as byte {
+                    var word = arg[at..]
+                    if word == "" {
+                        if pos == args.len { return Fatal("option '{arg}' requires a value") }
+                        word = args[pos]
+                        pos += 1
+                    }
+                    if flag == 109 as byte {
+                        (mut value.messages).push(owned(word.bytes()))
+                    } else {
+                        value.file = word
+                        value.from_file = true
+                    }
+                    value.supplied = true
+                    break
+                } else {
+                    return Unsupported("commit {arg}")
+                }
+            }
+        } else {
+            return Unsupported("commit {arg}")
+        }
+    }
+    if value.from_file && value.messages.len > 0 {
+        return Fatal("options '-m' and '-F' cannot be used together")
+    }
+    if value.reset_author && !value.amend {
+        return Fatal("--reset-author can be used only with -C, -c or --amend.")
+    }
+    if value.reset_author && value.author != "" {
+        return Fatal("options '--reset-author' and '--author' cannot be used together")
+    }
+    value
+}

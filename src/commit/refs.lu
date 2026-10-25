@@ -1,0 +1,232 @@
+// Minimal attached-branch writes, from Git's documented loose-ref/reflog
+// representation and git-commit(1). No detached updates and no ORIG_HEAD writes.
+use std.fs
+use commit_format
+use object
+use oid
+use repository
+use worktree
+
+fn valid_reference(reference: str) -> bool {
+    if reference.len > 4096 { return false }
+    if !reference.starts_with("refs/heads/") ||
+        reference.contains("..") ||
+        reference.contains("@{{") {
+        return false
+    }
+    for b in reference.bytes() {
+        if b as int <= 32 ||
+            b as int == 127 ||
+            b == 92 as byte ||
+            b == 126 as byte ||
+            b == 94 as byte ||
+            b == 58 as byte ||
+            b == 63 as byte ||
+            b == 42 as byte ||
+            b == 91 as byte {
+            return false
+        }
+    }
+    for component in reference.split("/") {
+        if component == "" ||
+            component.starts_with(".") ||
+            component.ends_with(".") ||
+            component.ends_with(".lock") {
+            return false
+        }
+    }
+    true
+}
+
+fn administrative(
+    repo: repository.Repo,
+    relative: str,
+    create_parents: bool,
+) -> str ! CommitErrors {
+    let parts = relative.split("/")
+    var path = repo.gitdir
+    for i in 0..parts.len {
+        if parts[i] == "" || parts[i] == "." || parts[i] == ".." || parts[i].contains("\0") {
+            return invalid
+        }
+        let parent = path
+        path = "{path}/{parts[i]}"
+        let info = fs_lstat(path) else |e| match e {
+            not_found => {
+                if i + 1 == parts.len { return path }
+                if !create_parents { return not_found }
+                fs.create_dir(path) else |problem| match problem {
+                    exists => {},
+                    not_found => { return not_found },
+                    denied => { return denied },
+                    io => { return io },
+                }
+                let created = fs_lstat(path)?
+                if created[0] != 1 {
+                    return Unsupported("commit administrative parent is not a directory")
+                }
+                fs.sync_dir(parent)?
+                continue
+            },
+            denied => { return denied },
+            io => { return io },
+        }
+        if info[0] == 3 { return Unsupported("commit administrative symlink {relative}") }
+        if i + 1 < parts.len && info[0] != 1 { return io }
+        if i + 1 == parts.len && info[0] != 0 { return io }
+    }
+    path
+}
+
+fn old_hex(before: List[oid.Oid]) -> str ! CommitErrors {
+    if before.len == 0 { return "0000000000000000000000000000000000000000" }
+    if before.len != 1 || before[0].algorithm != "sha1" { return invalid_oid }
+    oid.hex(before[0])?
+}
+
+/// Build a raw reflog line with one literal TAB before action/subject and one
+/// LF at the end. Empty before means the unborn zero oid. No files are read.
+pub fn reflog_line(
+    before: List[oid.Oid],
+    after: oid.Oid,
+    committer: commit_format.Identity,
+    action: str,
+    message: List[byte],
+) -> List[byte] ! CommitErrors {
+    if after.algorithm != "sha1" { return unsupported_format }
+    if action.len > 1024 { return limit }
+    if action == "" { return invalid }
+    if action.contains("\0") ||
+        action.contains("\n") ||
+        action.contains("\r") ||
+        action.contains("\t") {
+        return invalid
+    }
+    let ident = commit_format.identity_text(committer)?
+    if ident.contains("\t") { return Unsupported("commit reflog identity tab") }
+    var out = List[byte]()
+    add_bytes(mut out, "{old_hex(before)?} {oid.hex(after)?} {ident}\t{action}:".bytes())
+    let title = reflog_subject(message)?
+    if title.len > 0 { (mut out).push(32 as byte); add_bytes(mut out, title) }
+    (mut out).push(10 as byte)
+    out
+}
+
+fn append_log(path: str, line: List[byte]) -> () ! CommitErrors {
+    // Mode 2 is append+create; bit 16 refuses a final symlink at this pin.
+    let fd = fs_open_mode(path, 18)?
+    defer fs_close(fd) else |_| {}
+    fs_write_chunk(fd, line)?
+    fs_sync(fd)?
+    fs.sync_dir(fs.parent(path) else |_| { return invalid })?
+}
+
+fn lock_advice() -> str {
+    "\n\nAnother git process seems to be running in this repository, or the lock file may be stale"
+}
+
+fn ref_lock(path: str, reference: str) -> fs.File ! CommitErrors {
+    fs.create_new_with_mode(path, 0o666) else |e| match e {
+        exists => {
+            let advice = lock_advice()
+            return Fatal(
+                "cannot lock ref '{reference}': Unable to create '{path}': File exists.{advice}",
+            )
+        },
+        not_found => { return not_found },
+        denied => { return denied },
+        invalid => { return invalid },
+        unsupported => { return unsupported },
+        io => { return io },
+    }
+}
+
+/// Publish an attached loose branch while holding exclusive HEAD.lock and
+/// branch.lock, rechecking HEAD and the expected old oid under both locks.
+/// HEAD.lock is released, never renamed over the existing symbolic HEAD.
+/// Complete log/ref writes are synced; ordinary pre-rename failures remove only this caller's lock. Reflogs
+/// are not a multi-file atomic transaction; a later IO error can leave a log
+/// append. This function never reads/writes ORIG_HEAD, including on amend.
+pub fn publish_ref(
+    ctx: worktree.Context,
+    expected: worktree.Head,
+    after: oid.Oid,
+    committer: commit_format.Identity,
+    action: str,
+    message: List[byte],
+) -> () ! CommitErrors {
+    if expected.detached { return Unsupported("commit detached HEAD write") }
+    if !valid_reference(expected.reference) { return Unsupported("commit non-branch HEAD") }
+    if expected.commits.len > 1 || after.algorithm != "sha1" { return invalid_oid }
+    let new_hex = oid.hex(after)?
+    let target = object.read_object(ctx.repo, after, 67108864)?
+    if target.kind != "commit" { return invalid_header }
+    let target_bytes = owned(target.data)
+    let _ = object.parse_commit(target_bytes, "sha1")?
+    let _ = administrative(ctx.repo, "HEAD", false)?
+    let head_lock_path = "{ctx.repo.gitdir}/HEAD.lock"
+    let head_lock = ref_lock(head_lock_path, "HEAD")?
+    defer {
+        fs_close(head_lock.fd) else |_| {}
+        fs.remove(head_lock_path) else |_| {}
+    }
+    let destination = administrative(ctx.repo, expected.reference, true)?
+    let lock = "{destination}.lock"
+    let file = ref_lock(lock, "HEAD")?
+    var fd = file.fd
+    var active = true
+    defer {
+        if fd >= 0 { fs_close(fd) else |_| {} }
+        if active { fs.remove(lock) else |_| {} }
+    }
+    let current_bytes = repository.read_bytes(destination, 4096) else |e| match e {
+        not_found => List[byte](),
+        denied => { return denied },
+        io => { return io },
+        invalid => { return invalid },
+        exists => { return exists },
+        unsupported => { return unsupported },
+        limit => { return limit },
+        Unsupported(reason) => { return Unsupported(reason) },
+    }
+    if (str_from_utf8(current_bytes) else "").starts_with("ref: ") {
+        return Unsupported("commit symbolic branch ref")
+    }
+    let current = worktree.head(ctx)?
+    if current.detached || current.reference != expected.reference {
+        return Fatal("cannot lock ref '{expected.reference}': HEAD changed during commit")
+    }
+    let wanted = old_hex(expected.commits)?
+    let actual = old_hex(current.commits)?
+    if actual != wanted {
+        return Fatal("cannot lock ref '{expected.reference}': is at {actual} but expected {wanted}")
+    }
+    fs_write_chunk(fd, "{new_hex}\n".bytes())?
+    fs_sync(fd)?
+    fs_close(fd)?
+    fd = -1
+    let logging = worktree.config_bool(ctx, "core.logallrefupdates", true)?
+    let head_log = "{ctx.repo.gitdir}/logs/HEAD"
+    let branch_log = "{ctx.repo.gitdir}/logs/{expected.reference}"
+    let log_head = logging || fs.exists(head_log)
+    let log_branch = actual != new_hex && (logging || fs.exists(branch_log))
+    // Validate both destinations before either append, avoiding predictable
+    // partial updates caused by a symlink or invalid parent at the second log.
+    var head_path = "", branch_path = ""
+    if log_head { head_path = administrative(ctx.repo, "logs/HEAD", true)? }
+    if log_branch { branch_path = administrative(ctx.repo, "logs/{expected.reference}", true)? }
+    let line = reflog_line(expected.commits, after, committer, action, message)?
+    if log_head { append_log(head_path, line)? }
+    if log_branch { append_log(branch_path, line)? }
+    fs_rename(lock, destination)?
+    active = false
+    fs.sync_dir(fs.parent(destination) else |_| { return invalid })?
+}
+
+fn save_edit_message(ctx: worktree.Context, bytes: List[byte]) -> () ! CommitErrors {
+    let path = administrative(ctx.repo, "COMMIT_EDITMSG", false)?
+    let fd = fs_open_mode(path, 17)?
+    defer fs_close(fd) else |_| {}
+    fs_write_chunk(fd, bytes)?
+    fs_sync(fd)?
+}

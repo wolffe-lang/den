@@ -1,0 +1,302 @@
+use std.fs
+use std.time
+use commit_format
+use object
+use oid
+use repository
+use worktree
+
+fn output(bytes: List[byte]) -> () ! CommitErrors {
+    var file = fs.stdout()
+    fs.write_chunk(mut file, bytes)?
+}
+
+fn message_input(path: str) -> List[byte] ! CommitErrors {
+    if path != "-" {
+        return repository.read_bytes(path, 16777216) else |e| match e {
+            not_found => {
+                return Fatal("could not read log file '{path}': No such file or directory")
+            },
+            denied => { return Fatal("could not read log file '{path}': Permission denied") },
+            io => { return io },
+            invalid => { return invalid },
+            exists => { return exists },
+            unsupported => { return unsupported },
+            limit => { return limit },
+            Unsupported(reason) => { return Unsupported(reason) },
+        }
+    }
+    var file = fs.stdin()
+    var out = List[byte]()
+    loop {
+        region chunk {
+            let data = fs.read_chunk(mut file, 65536) else |e| match e {
+                eof => { break },
+                io => { return io },
+            }
+            if data.len > 16777216 - out.len { return limit }
+            add_bytes(mut out, data)
+        }
+    }
+    out
+}
+
+fn text(bytes: List[byte]) -> str ! CommitErrors {
+    str_from_utf8(bytes) else |_| { return Unsupported("commit non-UTF-8 header") }
+}
+
+fn header(headers: object.Headers, key: str) -> str ! CommitErrors {
+    for field in headers.fields { if field.key == key { return text(field.value)? } }
+    invalid_header
+}
+
+fn owned_id(id: oid.Oid) -> oid.Oid {
+    oid.Oid { algorithm: id.algorithm, bytes: owned(id.bytes) }
+}
+
+fn owned_flat(entries: List[worktree.FlatEntry]) -> List[worktree.FlatEntry] {
+    var out = List[worktree.FlatEntry]()
+    for entry in entries {
+        (mut out).push(worktree.
+            FlatEntry { path: owned(entry.path), mode: entry.mode, id: owned_id(entry.id) })
+    }
+    out
+}
+
+fn read_commit(repo: repository.Repo, id: oid.Oid) -> object.Headers ! CommitErrors {
+    let stored = object.read_object(repo, id, 16777216)?
+    if stored.kind != "commit" { return invalid_header }
+    // Materialize nested borrowed views before handing them to owned builders.
+    let bytes = owned(stored.data)
+    let parsed = object.parse_commit(bytes, "sha1")?
+    var fields = List[object.Header]()
+    for field in parsed.fields { (mut fields).push(object.Header { key: field.key, value: owned(field.value) }) }
+    object.Headers { fields: fields, message: owned(parsed.message) }
+}
+
+fn parents_of(headers: object.Headers) -> List[oid.Oid] ! CommitErrors {
+    var parents = List[oid.Oid]()
+    for field in headers.fields {
+        if field.key == "parent" { (mut parents).push(oid.parse("sha1", text(field.value)?)?) }
+    }
+    parents
+}
+
+fn selected_date(value: str) -> commit_format.Date ! CommitErrors {
+    commit_format.parse_date(value, "+0000") else |e| match e {
+        Unsupported(reason) => { return Unsupported(reason) },
+        _ => { return Fatal("invalid date format: {value}") },
+    }
+}
+
+fn identity_environment(name: str) -> str ! {missing, Unsupported(str)} {
+    env_get(name) else |e| match e {
+        missing => { return missing },
+        utf8 => { return Unsupported("commit non-UTF-8 {name}") },
+    }
+}
+
+fn environment_or(name: str, fallback: str) -> str ! CommitErrors {
+    identity_environment(name) else |e| match e {
+        missing => fallback,
+        Unsupported(reason) => { return Unsupported(reason) },
+    }
+}
+
+fn validate_identity_environment() -> () ! CommitErrors {
+    for name in [
+        "GIT_AUTHOR_NAME",
+        "GIT_AUTHOR_EMAIL",
+        "GIT_AUTHOR_DATE",
+        "GIT_COMMITTER_NAME",
+        "GIT_COMMITTER_EMAIL",
+        "GIT_COMMITTER_DATE",
+    ] {
+        let _ = identity_environment(name) else |e| match e {
+            missing => "",
+            Unsupported(reason) => { return Unsupported(reason) },
+        }
+    }
+}
+
+fn configured_email(ctx: worktree.Context, role: str) -> str ! {missing} {
+    ctx.repo.config["{role}.email"] else (ctx.repo.config["user.email"] else { return missing })
+}
+
+fn role_date(role: str) -> commit_format.Date ! CommitErrors {
+    var date = environment_or("GIT_{role}_DATE", "")?
+    if date == "" { date = "@{time.unix_ms() / 1000} +0000" }
+    selected_date(date)?
+}
+
+fn environment_identity(
+    ctx: worktree.Context,
+    role: str,
+    override_date: str,
+) -> commit_format.Identity ! CommitErrors {
+    let key = role.lower()
+    let name = environment_or(
+        "GIT_{role}_NAME",
+        ctx.repo.config["{key}.name"] else (ctx.repo.config["user.name"] else ""),
+    )?
+    let email = identity_environment("GIT_{role}_EMAIL") else |e| match e {
+        missing => configured_email(ctx, key) else |_| { environment_or("EMAIL", "")? },
+        Unsupported(reason) => { return Unsupported(reason) },
+    }
+    if name == "" || email == "" { return Unsupported("commit missing {key} identity") }
+    let date = if override_date != "" then selected_date(override_date)? else role_date(role)?
+    commit_format.make_identity(name, email, date)?
+}
+
+fn preserved_identity(value: str) -> commit_format.Identity ! CommitErrors {
+    // Stored identities contain canonical offsets, whose +10039 representation
+    // is deliberately not accepted by the raw command-date input grammar.
+    let left = value.find("<") else |_| { return invalid_identity }
+    let right = value.rfind(">") else |_| { return invalid_identity }
+    if right <= left { return invalid_identity }
+    let parts = value[right + 1..].trim().words()
+    if parts.len != 2 { return invalid_identity }
+    for b in parts[0].bytes() {
+        if b as int < 48 || b as int > 57 { return invalid_date }
+    }
+    let seconds = parts[0].to_int() else |_| { return invalid_date }
+    let date = commit_format.Date { seconds: seconds, offset: parts[1] }
+    commit_format.parse_author(value[0..right + 1], date)?
+}
+
+fn commit_author(
+    ctx: worktree.Context,
+    value: Options,
+    previous: List[object.Headers],
+) -> commit_format.Identity ! CommitErrors {
+    var author = if value.amend && !value.reset_author {
+        if previous.len != 1 { return invalid_header }
+        preserved_identity(header(previous[0], "author")?)?
+    } else if value.author != "" {
+        let date = if value.date != "" then selected_date(value.date)? else role_date("AUTHOR")?
+        commit_format.parse_author(value.author, date)?
+    } else {
+        environment_identity(ctx, "AUTHOR", value.date)?
+    }
+    if value.date != "" { author.date = selected_date(value.date)? }
+    if value.author != "" { author = commit_format.parse_author(value.author, author.date)? }
+    author
+}
+
+// Inherited own-code policy from src/plumbing/plumbing.lu (R-vc02-2): keep
+// valid UTF-8 sequences, encode isolated invalid octets as Latin-1 scalars.
+fn repaired_message(data: List[byte]) -> List[byte] {
+    var out = List[byte]()
+    var pos = 0
+    while pos < data.len {
+        let b = data[pos] as int
+        var width = if b < 128 {
+            1
+        } else if b >= 194 && b <= 223 {
+            2
+        } else if b >= 224 && b <= 239 {
+            3
+        } else if b >= 240 && b <= 244 {
+            4
+        } else {
+            0
+        }
+        if width > data.len - pos { width = 0 }
+        if width > 0 {
+            region validate {
+                let check = str_from_utf8(data[pos..pos + width]) else ""
+                if check.len == 0 { width = 0 }
+            }
+        }
+        if width == 0 {
+            (mut out).push((192 + b / 64) as byte)
+            (mut out).push((128 + b % 64) as byte)
+            pos += 1
+        } else {
+            for i in pos..pos + width { (mut out).push(data[i]) }
+            pos += width
+        }
+    }
+    out
+}
+
+/// Render the first nonempty paragraph for human summaries: trim trailing
+/// ASCII whitespace on each line, preserve its leading/internal bytes, and
+/// join adjacent nonblank lines with one SP. No decoding or repair occurs.
+pub fn subject(message: List[byte]) -> List[byte] ! CommitErrors {
+    if message.len > 16777216 { return limit }
+    var out = List[byte]()
+    var pos = 0
+    while pos < message.len {
+        let begin = pos
+        while pos < message.len && message[pos] != 10 as byte { pos += 1 }
+        var end = pos
+        while end > begin {
+            let b = message[end - 1]
+            if b != 32 as byte && (b as int < 9 || b as int > 13) { break }
+            end -= 1
+        }
+        if end == begin {
+            if out.len > 0 { break }
+        } else {
+            if out.len > 0 { (mut out).push(32 as byte) }
+            for i in begin..end { (mut out).push(message[i]) }
+        }
+        if pos < message.len { pos += 1 }
+    }
+    out
+}
+
+/// Normalize only the first physical line for a reflog, trimming/collapsing
+/// ASCII whitespace. A leading LF produces an empty subject, not line two.
+/// The command supplies its cleaned message before any UTF-8 repair.
+pub fn reflog_subject(message: List[byte]) -> List[byte] ! CommitErrors {
+    if message.len > 16777216 { return limit }
+    var out = List[byte]()
+    var space = false
+    for b in message {
+        if b == 10 as byte { break }
+        if b == 32 as byte || b as int >= 9 && b as int <= 13 {
+            if out.len > 0 { space = true }
+        } else {
+            if space { (mut out).push(32 as byte); space = false }
+            (mut out).push(b)
+        }
+    }
+    out
+}
+
+fn summary_date(date: commit_format.Date) -> str ! CommitErrors {
+    // Bound before std's documented checked seconds+offset arithmetic.
+    if date.seconds < 0 || date.seconds > 253401938459 {
+        return Unsupported("commit summary date range")
+    }
+    let raw = commit_format.date_text(date)?
+    let parts = raw.split(" ")
+    let zone = parts[1]
+    let cut = zone.len - 2
+    let hours = zone[1..cut].to_int() else |_| { return invalid_date }
+    let minutes = zone[cut..].to_int() else |_| { return invalid_date }
+    let magnitude = hours * 3600 + minutes * 60
+    let offset = if zone.starts_with("-") then -magnitude else magnitude
+    let local = time.local_in("UTC", date.seconds + offset) else |_| { return invalid_date }
+    let civil = time.format(local, "%a %b %-d %H:%M:%S %Y") else |_| { return invalid_date }
+    "{civil} {zone}"
+}
+
+fn hooks_empty(ctx: worktree.Context) -> () ! CommitErrors {
+    let path = ctx.repo.config["core.hookspath"] else "{ctx.repo.gitdir}/hooks"
+    let root = if path.starts_with("/") then path else "{ctx.root}/{path}"
+    if fs.is_dir(root) && fs.entries(root)?.len > 0 {
+        return Unsupported("commit nonempty hooks directory")
+    }
+    if worktree.config_bool(ctx, "commit.gpgsign", false)? { return Unsupported("commit signing") }
+    if (env_get("GIT_INDEX_FILE") else "") != "" { return Unsupported("commit GIT_INDEX_FILE") }
+    let zone = env_get("TZ") else "UTC"
+    if zone != "" && zone != "UTC" && zone != "UTC0" && zone != "Etc/UTC" && zone != "GMT" {
+        return Unsupported("commit implicit local timezone {zone}")
+    }
+    for name in ["MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD"] {
+        if fs.exists("{ctx.repo.gitdir}/{name}") { return Unsupported("commit {name}") }
+    }
+}

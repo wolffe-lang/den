@@ -1,0 +1,443 @@
+[
+  {
+    "command": [
+      "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+      "init",
+      "-q"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+      "commit-tree",
+      "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+      "-m",
+      "old"
+    ],
+    "status": 0,
+    "stdout": "623932633836633637626262326138613936343262626566333132623861366639613730356261370a",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+      "commit-tree",
+      "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+      "-p",
+      "b92c86c67bbb2a8a9642bbef312b8a6f9a705ba7",
+      "-m",
+      "new"
+    ],
+    "status": 0,
+    "stdout": "613438623332303966646636303132663437653433643063326237383764336639663834666461300a",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/work/den/target/native/commit-client",
+      "verify-publish",
+      "-",
+      "a48b3209fdf6012f47e43d0c2b787d3f9f84fda0",
+      "Ref Tester",
+      "ref@example.invalid",
+      "1700000000 +0000",
+      "commit",
+      "/work/den/target/commit-ref-native/unborn-message"
+    ],
+    "status": 0,
+    "stdout": "50415353207665726966792d7075626c6973683a207265662f6c6f67206672616d696e672c206f776e6564206c6f636b20636c65616e75702c204f5249475f4845414420756e746f75636865640a",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+      "init",
+      "-q"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+      "commit-tree",
+      "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+      "-m",
+      "old"
+    ],
+    "status": 0,
+    "stdout": "623932633836633637626262326138613936343262626566333132623861366639613730356261370a",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+      "commit-tree",
+      "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+      "-p",
+      "b92c86c67bbb2a8a9642bbef312b8a6f9a705ba7",
+      "-m",
+      "new"
+    ],
+    "status": 0,
+    "stdout": "613438623332303966646636303132663437653433643063326237383764336639663834666461300a",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+      "update-ref",
+      "refs/heads/main",
+      "b92c86c67bbb2a8a9642bbef312b8a6f9a705ba7"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/work/den/target/native/commit-client",
+      "verify-publish",
+      "b92c86c67bbb2a8a9642bbef312b8a6f9a705ba7",
+      "a48b3209fdf6012f47e43d0c2b787d3f9f84fda0",
+      "Ref Tester",
+      "ref@example.invalid",
+      "1700000000 +0000",
+      "commit",
+      "/work/den/target/commit-ref-native/normal-message"
+    ],
+    "status": 0,
+    "stdout": "50415353207665726966792d7075626c6973683a207265662f6c6f67206672616d696e672c206f776e6564206c6f636b20636c65616e75702c204f5249475f4845414420756e746f75636865640a",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+      "init",
+      "-q"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+      "commit-tree",
+      "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+      "-m",
+      "old"
+    ],
+    "status": 0,
+    "stdout": "623932633836633637626262326138613936343262626566333132623861366639613730356261370a",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+      "commit-tree",
+      "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+      "-p",
+      "b92c86c67bbb2a8a9642bbef312b8a6f9a705ba7",
+      "-m",
+      "new"
+    ],
+    "status": 0,
+    "stdout": "613438623332303966646636303132663437653433643063326237383764336639663834666461300a",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+      "update-ref",
+      "refs/heads/main",
+      "b92c86c67bbb2a8a9642bbef312b8a6f9a705ba7"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/work/den/target/native/commit-client",
+      "verify-publish",
+      "b92c86c67bbb2a8a9642bbef312b8a6f9a705ba7",
+      "b92c86c67bbb2a8a9642bbef312b8a6f9a705ba7",
+      "Ref Tester",
+      "ref@example.invalid",
+      "1700000000 +0000",
+      "commit",
+      "/work/den/target/commit-ref-native/same-message"
+    ],
+    "status": 0,
+    "stdout": "50415353207665726966792d7075626c6973683a207265662f6c6f67206672616d696e672c206f776e6564206c6f636b20636c65616e75702c204f5249475f4845414420756e746f75636865640a",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+      "init",
+      "-q"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+      "commit-tree",
+      "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+      "-m",
+      "old"
+    ],
+    "status": 0,
+    "stdout": "623932633836633637626262326138613936343262626566333132623861366639613730356261370a",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+      "commit-tree",
+      "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+      "-p",
+      "b92c86c67bbb2a8a9642bbef312b8a6f9a705ba7",
+      "-m",
+      "new"
+    ],
+    "status": 0,
+    "stdout": "613438623332303966646636303132663437653433643063326237383764336639663834666461300a",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+      "update-ref",
+      "refs/heads/main",
+      "b92c86c67bbb2a8a9642bbef312b8a6f9a705ba7"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/work/den/target/native/commit-client",
+      "verify-stale",
+      "1111111111111111111111111111111111111111",
+      "a48b3209fdf6012f47e43d0c2b787d3f9f84fda0",
+      "Ref Tester",
+      "ref@example.invalid",
+      "1700000000 +0000",
+      "commit",
+      "/work/den/target/commit-ref-native/stale-message"
+    ],
+    "status": 0,
+    "stdout": "50415353207665726966792d7374616c653a207265662f6c6f67206672616d696e672c206f776e6564206c6f636b20636c65616e75702c204f5249475f4845414420756e746f75636865640a",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+      "init",
+      "-q"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+      "commit-tree",
+      "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+      "-m",
+      "old"
+    ],
+    "status": 0,
+    "stdout": "623932633836633637626262326138613936343262626566333132623861366639613730356261370a",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+      "commit-tree",
+      "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+      "-p",
+      "b92c86c67bbb2a8a9642bbef312b8a6f9a705ba7",
+      "-m",
+      "new"
+    ],
+    "status": 0,
+    "stdout": "613438623332303966646636303132663437653433643063326237383764336639663834666461300a",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+      "update-ref",
+      "refs/heads/main",
+      "b92c86c67bbb2a8a9642bbef312b8a6f9a705ba7"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/work/den/target/native/commit-client",
+      "verify-lock",
+      "b92c86c67bbb2a8a9642bbef312b8a6f9a705ba7",
+      "a48b3209fdf6012f47e43d0c2b787d3f9f84fda0",
+      "Ref Tester",
+      "ref@example.invalid",
+      "1700000000 +0000",
+      "commit",
+      "/work/den/target/commit-ref-native/lock-message"
+    ],
+    "status": 0,
+    "stdout": "50415353207665726966792d6c6f636b3a207265662f6c6f67206672616d696e672c206f776e6564206c6f636b20636c65616e75702c204f5249475f4845414420756e746f75636865640a",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+      "init",
+      "-q"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+      "commit-tree",
+      "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+      "-m",
+      "old"
+    ],
+    "status": 0,
+    "stdout": "623932633836633637626262326138613936343262626566333132623861366639613730356261370a",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+      "commit-tree",
+      "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+      "-p",
+      "b92c86c67bbb2a8a9642bbef312b8a6f9a705ba7",
+      "-m",
+      "new"
+    ],
+    "status": 0,
+    "stdout": "613438623332303966646636303132663437653433643063326237383764336639663834666461300a",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+      "update-ref",
+      "refs/heads/main",
+      "b92c86c67bbb2a8a9642bbef312b8a6f9a705ba7"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/work/den/target/native/commit-client",
+      "verify-head-lock",
+      "b92c86c67bbb2a8a9642bbef312b8a6f9a705ba7",
+      "a48b3209fdf6012f47e43d0c2b787d3f9f84fda0",
+      "Ref Tester",
+      "ref@example.invalid",
+      "1700000000 +0000",
+      "commit",
+      "/work/den/target/commit-ref-native/head-lock-message"
+    ],
+    "status": 0,
+    "stdout": "50415353207665726966792d686561642d6c6f636b3a207265662f6c6f67206672616d696e672c206f776e6564206c6f636b20636c65616e75702c204f5249475f4845414420756e746f75636865640a",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+      "add",
+      "a.txt"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/work/den/target/native/commit-client",
+      "injected",
+      "index-write",
+      "commit",
+      "-m",
+      "must not publish"
+    ],
+    "status": 128,
+    "stdout": "",
+    "stderr": "666174616c3a20696f0a"
+  },
+  {
+    "command": [
+      "/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git",
+      "add",
+      "a.txt"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/work/den/target/native/commit-client",
+      "injected",
+      "index-sync",
+      "commit",
+      "-m",
+      "must not publish"
+    ],
+    "status": 128,
+    "stdout": "",
+    "stderr": "666174616c3a20696f0a"
+  },
+  {
+    "command": [
+      "/work/den/target/native/commit-client",
+      "injected",
+      "index-write",
+      "commit",
+      "-a",
+      "-m",
+      "must not publish"
+    ],
+    "status": 128,
+    "stdout": "",
+    "stderr": "666174616c3a20696f0a"
+  },
+  {
+    "command": [
+      "/work/den/target/native/commit-client",
+      "injected",
+      "index-sync",
+      "commit",
+      "-a",
+      "-m",
+      "must not publish"
+    ],
+    "status": 128,
+    "stdout": "",
+    "stderr": "666174616c3a20696f0a"
+  }
+]

@@ -1,0 +1,17 @@
+pkg {
+    name: "commit-client",
+    edition: "1",
+    capabilities: [env, fs],
+    deps: {
+        commit: {path: "../../src/commit"},
+        commit_format: {path: "../../src/commit_format"},
+        worktree: {path: "../../src/worktree"},
+        index: {path: "../../src/index"},
+        object: {path: "../../src/object"},
+        oid: {path: "../../src/oid"},
+        repository: {path: "../../src/repository"},
+        ignore: {path: "../../src/ignore"},
+        hash: {path: "../../src/hash"},
+        zlib: {path: "../../src/zlib"},
+    },
+}

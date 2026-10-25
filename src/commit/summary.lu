@@ -1,0 +1,310 @@
+// Original bounded line-sequence LCS for summary counts, not another tool's
+// diff implementation. Exact renames use the same oid criterion as worktree.
+use object
+use oid
+use worktree
+
+/// Shortstat counts for one blob pair; binary bodies count neither text side.
+pub struct LineCounts { added: int, deleted: int, binary: bool }
+
+struct Line { start: int, end: int }
+
+fn lines(data: List[byte]) -> List[Line] ! CommitErrors {
+    var result = List[Line]()
+    var pos = 0
+    while pos < data.len {
+        let begin = pos
+        while pos < data.len && data[pos] != 10 as byte { pos += 1 }
+        if pos < data.len { pos += 1 }
+        (mut result).push(Line { start: begin, end: pos })
+        if result.len > 200000 { return limit }
+    }
+    result
+}
+
+fn same_line(a: List[byte], left: Line, b: List[byte], right: Line) -> bool {
+    if left.end - left.start != right.end - right.start { return false }
+    for i in 0..left.end - left.start {
+        if a[left.start + i] != b[right.start + i] { return false }
+    }
+    true
+}
+
+fn binary(data: List[byte]) -> bool {
+    let end = if data.len < 8000 then data.len else 8000
+    for i in 0..end { if data[i] == 0 as byte { return true } }
+    false
+}
+
+/// Count a minimal line insertion/deletion script with a one-row LCS. Work is
+/// capped at four million line pairs, each body at 16 MiB. NUL in the first
+/// 8000 bytes selects binary counting. Malformed/large data is a row, not a trap.
+pub fn line_counts(before: List[byte], after: List[byte]) -> LineCounts ! CommitErrors {
+    if before.len > 16777216 || after.len > 16777216 { return limit }
+    if binary(before) || binary(after) { return LineCounts { added: 0, deleted: 0, binary: true } }
+    let left = lines(before)?
+    let right = lines(after)?
+    if left.len > 0 && right.len > 4000000 / left.len {
+        return Unsupported("commit summary line-diff budget")
+    }
+    var row = List[int]()
+    for _ in 0..=right.len { (mut row).push(0) }
+    for a in left {
+        var diagonal = 0
+        for j in 0..right.len {
+            let prior = row[j + 1]
+            if same_line(before, a, after, right[j]) {
+                row[j + 1] = diagonal + 1
+            } else if row[j] > prior {
+                row[j + 1] = row[j]
+            }
+            diagonal = prior
+        }
+    }
+    let common = row[right.len]
+    LineCounts { added: right.len - common, deleted: left.len - common, binary: false }
+}
+
+fn compare_path(left: List[byte], right: List[byte]) -> int {
+    var pos = 0
+    while pos < left.len && pos < right.len {
+        if left[pos] != right[pos] { return left[pos] as int - right[pos] as int }
+        pos += 1
+    }
+    if left.len < right.len { return -1 }
+    if left.len > right.len { return 1 }
+    0
+}
+
+struct Change { old_at: int, new_at: int, rename: bool, dropped: bool }
+
+fn change_order(
+    a: Change,
+    b: Change,
+    before: List[worktree.FlatEntry],
+    after: List[worktree.FlatEntry],
+) -> int {
+    if a.new_at >= 0 {
+        if b.new_at >= 0 { return compare_path(after[a.new_at].path, after[b.new_at].path) }
+        return compare_path(after[a.new_at].path, before[b.old_at].path)
+    }
+    if b.new_at >= 0 { return compare_path(before[a.old_at].path, after[b.new_at].path) }
+    compare_path(before[a.old_at].path, before[b.old_at].path)
+}
+
+fn changes(
+    before: List[worktree.FlatEntry],
+    after: List[worktree.FlatEntry],
+    renames: bool,
+) -> List[Change] ! CommitErrors {
+    if before.len > 100000 || after.len > 100000 { return limit }
+    var out = List[Change]()
+    var old_at = 0, new_at = 0
+    while old_at < before.len || new_at < after.len {
+        let cmp = if old_at == before.len {
+            1
+        } else if new_at == after.len {
+            -1
+        } else {
+            compare_path(before[old_at].path, after[new_at].path)
+        }
+        if cmp == 0 {
+            if before[old_at].mode != after[new_at].mode ||
+                !oid.equal(before[old_at].id, after[new_at].id) {
+                (mut out).push(Change {
+                    old_at: old_at,
+                    new_at: new_at,
+                    rename: false,
+                    dropped: false,
+                })
+            }
+            old_at += 1
+            new_at += 1
+        } else if cmp < 0 {
+            (mut out).push(Change { old_at: old_at, new_at: -1, rename: false, dropped: false })
+            old_at += 1
+        } else {
+            (mut out).push(Change { old_at: -1, new_at: new_at, rename: false, dropped: false })
+            new_at += 1
+        }
+    }
+    if renames {
+        if out.len > 2000 { return Unsupported("commit rename summary budget") }
+        for i in 0..out.len {
+            if out[i].old_at >= 0 || out[i].new_at < 0 { continue }
+            for j in 0..out.len {
+                if out[j].dropped || out[j].old_at < 0 || out[j].new_at >= 0 { continue }
+                if before[out[j].old_at].mode & 0o170000 == after[out[i].new_at].mode & 0o170000 &&
+                    oid.equal(before[out[j].old_at].id, after[out[i].new_at].id) {
+                    out[i].old_at = out[j].old_at
+                    out[i].rename = true
+                    out[j].dropped = true
+                    break
+                }
+            }
+        }
+    }
+    for i in 1..out.len {
+        let change = copy out[i]
+        var pos = i
+        while pos > 0 && change_order(out[pos - 1], change, before, after) > 0 {
+            out[pos] = copy out[pos - 1]
+            pos -= 1
+        }
+        out[pos] = change
+    }
+    out
+}
+
+fn renamed_path(before: List[byte], after: List[byte]) -> List[byte] {
+    var prefix = 0, pos = 0
+    while pos < before.len && pos < after.len && before[pos] == after[pos] {
+        if before[pos] == 47 as byte { prefix = pos + 1 }
+        pos += 1
+    }
+    var suffix = 0
+    pos = 0
+    while pos < before.len - prefix &&
+        pos < after.len - prefix &&
+        before[before.len - 1 - pos] == after[after.len - 1 - pos] {
+        if before[before.len - 1 - pos] == 47 as byte { suffix = pos + 1 }
+        pos += 1
+    }
+    var out = List[byte]()
+    if prefix > 0 || suffix > 0 {
+        add_bytes(mut out, before[0..prefix])
+        (mut out).push(123 as byte)
+    }
+    add_bytes(mut out, before[prefix..before.len - suffix])
+    add_bytes(mut out, " => ".bytes())
+    add_bytes(mut out, after[prefix..after.len - suffix])
+    if prefix > 0 || suffix > 0 {
+        (mut out).push(125 as byte)
+        add_bytes(mut out, before[before.len - suffix..])
+    }
+    out
+}
+
+fn blob(ctx: worktree.Context, entry: worktree.FlatEntry) -> List[byte] ! CommitErrors {
+    if entry.mode == 0o160000 { return Unsupported("commit submodule summary") }
+    let stored = object.read_object(ctx.repo, entry.id, 16777216)?
+    if stored.kind != "blob" { return invalid_tree }
+    owned(stored.data)
+}
+
+fn checked_changes(
+    before: List[worktree.FlatEntry],
+    after: List[worktree.FlatEntry],
+) -> List[Change] ! CommitErrors {
+    // Git's commit summary forces rename detection, independently of
+    // diff.renames. The R5 similarity boundary therefore cannot be disabled.
+    let edits = changes(before, after, true)?
+    // R-vc03-5 A: exact oid renames are known. Unresolved additions plus
+    // deletions need vc04's similarity matcher; do not print guessed A/D rows.
+    // Quiet commit never calls this renderer and can publish the exact tree.
+    var added_candidate = false, deleted_candidate = false
+    for change in edits {
+        if change.dropped { continue }
+        if change.old_at < 0 { added_candidate = true }
+        if change.new_at < 0 { deleted_candidate = true }
+    }
+    if added_candidate && deleted_candidate {
+        return Unsupported("commit edited rename similarity (vc04)")
+    }
+    edits
+}
+
+/// Pure exact-oid/similarity scope check. This never reads blob objects or
+/// publishes anything; -a callers can pass an in-memory worktree-id preview.
+pub fn check_summary_policy(
+    _ctx: worktree.Context,
+    before: List[worktree.FlatEntry],
+    after: List[worktree.FlatEntry],
+) -> () ! CommitErrors {
+    let _ = checked_changes(before, after)?
+}
+
+/// Render shortstat and create/delete/mode/exact-rename summary rows. Unknown
+/// similarity candidates refuse by name (vc04); quiet callers skip rendering.
+pub fn change_summary(
+    ctx: worktree.Context,
+    before: List[worktree.FlatEntry],
+    after: List[worktree.FlatEntry],
+) -> List[byte] ! CommitErrors {
+    let edits = checked_changes(before, after)?
+    var files = 0, added = 0, deleted = 0
+    var detail = List[byte]()
+    let quote = worktree.config_bool(ctx, "core.quotepath", true)?
+    for change in edits {
+        if change.dropped { continue }
+        files += 1
+        var old_data = List[byte](), new_data = List[byte]()
+        if !change.rename {
+            let same = change.old_at >= 0 &&
+                change.new_at >= 0 &&
+                oid.equal(before[change.old_at].id, after[change.new_at].id)
+            if !same {
+                if change.old_at >= 0 { old_data = blob(ctx, before[change.old_at])? }
+                if change.new_at >= 0 { new_data = blob(ctx, after[change.new_at])? }
+                let count = line_counts(old_data, new_data)?
+                added += count.added
+                deleted += count.deleted
+            }
+        }
+        if change.rename {
+            add_bytes(mut detail, " rename ".bytes())
+            let path = renamed_path(before[change.old_at].path, after[change.new_at].path)
+            add_bytes(mut detail, worktree.quote(path, quote, false))
+            add_bytes(mut detail, " (100%)\n".bytes())
+            if before[change.old_at].mode != after[change.new_at].mode {
+                // The rename already names the path; Git's following mode row
+                // has no pathname and must retain this order.
+                add_bytes(
+                    mut detail,
+                    " mode change {object.mode_text(before[change.old_at].mode)?} => {object.mode_text(after[change.new_at].mode)?}\n".
+                        bytes(),
+                )
+            }
+        } else if change.old_at < 0 {
+            add_bytes(
+                mut detail,
+                " create mode {object.mode_text(after[change.new_at].mode)?} ".bytes(),
+            )
+            add_bytes(mut detail, worktree.quote(after[change.new_at].path, quote, false))
+            (mut detail).push(10 as byte)
+        } else if change.new_at < 0 {
+            add_bytes(
+                mut detail,
+                " delete mode {object.mode_text(before[change.old_at].mode)?} ".bytes(),
+            )
+            add_bytes(mut detail, worktree.quote(before[change.old_at].path, quote, false))
+            (mut detail).push(10 as byte)
+        } else if before[change.old_at].mode != after[change.new_at].mode {
+            add_bytes(
+                mut detail,
+                " mode change {object.mode_text(before[change.old_at].mode)?} => {object.mode_text(after[change.new_at].mode)?} ".
+                    bytes(),
+            )
+            add_bytes(mut detail, worktree.quote(after[change.new_at].path, quote, false))
+            (mut detail).push(10 as byte)
+        }
+    }
+    if files == 0 { return List[byte]() }
+    var out = List[byte]()
+    add_bytes(mut out, " {files} {if files == 1 then "file" else "files"} changed".bytes())
+    if added > 0 || deleted == 0 {
+        add_bytes(
+            mut out,
+            ", {added} {if added == 1 then "insertion" else "insertions"}(+)".bytes(),
+        )
+    }
+    if deleted > 0 || added == 0 {
+        add_bytes(
+            mut out,
+            ", {deleted} {if deleted == 1 then "deletion" else "deletions"}(-)".bytes(),
+        )
+    }
+    (mut out).push(10 as byte)
+    add_bytes(mut out, detail)
+    out
+}

@@ -1,0 +1,136 @@
+// Commit-specific lifecycle measured by the pinned vc03 commit phase witnesses.
+use index
+use object
+use oid
+use worktree
+
+fn owned_index(value: index.Index) -> index.Index {
+    var extensions = List[index.Extension]()
+    for extension in value.extensions {
+        (mut extensions).push(index.
+            Extension { signature: extension.signature, data: owned(extension.data) })
+    }
+    index.Index {
+        version: value.version,
+        entries: owned_entries(value.entries),
+        extensions: extensions,
+    }
+}
+
+fn refresh_index(mut value: index.Index, files: List[worktree.FileState]) -> () ! CommitErrors {
+    let entries = owned_entries(value.entries)
+    var disk = 0
+    for pos in 0..entries.len {
+        if index.stage(entries[pos]) != 0 ||
+            entries[pos].extended & 0x6000 != 0 ||
+            entries[pos].flags & 0x8000 != 0 {
+            continue
+        }
+        while disk < files.len && compare_path(files[disk].path, entries[pos].path) < 0 {
+            disk += 1
+        }
+        if disk == files.len || compare_path(files[disk].path, entries[pos].path) != 0 { continue }
+        // A changed unstaged entry must retain its cached stat words. A clean
+        // entry gets this worktree's own held-file/lstat metadata, not a seed's.
+        if files[disk].mode != entries[pos].stat[6] || !oid.equal(files[disk].id, entries[pos].id) {
+            continue
+        }
+        let path = owned(entries[pos].path)
+        let id = owned_id(entries[pos].id)
+        var record = List[int]()
+        for word in files[disk].stat { (mut record).push(word) }
+        let mode = files[disk].mode
+        let flags = entries[pos].flags
+        let extended = entries[pos].extended
+        var refreshed = if files[disk].kind == 3 {
+            index.entry_from_lstat(record, path, id, flags, extended)?
+        } else {
+            index.entry_from_stat(
+                record,
+                path,
+                id,
+                if mode == 0o120000 then 0o100644 else mode,
+                flags,
+                extended,
+            )?
+        }
+        refreshed.stat[6] = mode
+        value.entries[pos] = refreshed
+    }
+}
+
+fn preview_all(
+    value: index.Index,
+    files: List[worktree.FileState],
+) -> List[worktree.FlatEntry] ! CommitErrors {
+    let entries = owned_entries(value.entries)
+    var out = List[worktree.FlatEntry]()
+    var disk = 0
+    for entry in entries {
+        if index.stage(entry) != 0 { return unmerged }
+        if entry.flags & 0x8000 != 0 || entry.extended & 0x4000 != 0 {
+            if entry.extended & 0x2000 == 0 {
+                (mut out).push(worktree.FlatEntry {
+                    path: owned(entry.path),
+                    mode: entry.stat[6],
+                    id: owned_id(entry.id),
+                })
+            }
+            continue
+        }
+        while disk < files.len && compare_path(files[disk].path, entry.path) < 0 { disk += 1 }
+        if disk == files.len || compare_path(files[disk].path, entry.path) != 0 { continue }
+        // -a promotes ITA just like an ordinary observed indexed path; missing
+        // paths disappear. No untracked path or object store is touched here.
+        (mut out).push(worktree.FlatEntry {
+            path: owned(entry.path),
+            mode: files[disk].mode,
+            id: owned_id(files[disk].id),
+        })
+    }
+    out
+}
+
+fn same_flat(left: List[worktree.FlatEntry], right: List[worktree.FlatEntry]) -> bool {
+    if left.len != right.len { return false }
+    for i in 0..left.len {
+        if left[i].mode != right[i].mode ||
+            compare_path(left[i].path, right[i].path) != 0 ||
+            !oid.equal(left[i].id, right[i].id) {
+            return false
+        }
+    }
+    true
+}
+
+fn prepare_commit_index(
+    ctx: worktree.Context,
+    mut tx: index.Transaction,
+    trees: index.TreeAssembly,
+    fail: str,
+    install_now: bool,
+) -> () ! CommitErrors {
+    let entries = owned_entries(tx.value.entries)
+    for entry in entries {
+        if entry.extended & 0x2000 != 0 { continue }
+        if entry.stat[6] == 0o160000 { return Unsupported("commit submodule") }
+        let stored = object.read_object(ctx.repo, entry.id, 1000000000)?
+        if stored.kind != "blob" { return invalid_index }
+    }
+    for tree in trees.objects {
+        let data = owned(tree.data)
+        let written = object.write_object(ctx.repo, "tree", data)?
+        if !oid.equal(written, tree.id) { return bad_oid }
+    }
+    install_cache(mut tx.value, trees.cache)
+    if fail == "index-write" {
+        index.prepare_injected(mut tx, "write")?
+    } else if fail == "index-sync" {
+        index.prepare_injected(mut tx, "sync")?
+    } else {
+        index.prepare(mut tx)?
+    }
+    // Ordinary commit publishes before message/committability checks. -a holds
+    // its prepared lock and preserves the original index on message/ref errors.
+    if install_now { index.install(mut tx)? }
+}

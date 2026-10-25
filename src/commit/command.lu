@@ -1,0 +1,371 @@
+use commit_format
+use index
+use object
+use oid
+use repository
+use worktree
+
+fn owned_entries(entries: List[index.Entry]) -> List[index.Entry] {
+    var out = List[index.Entry]()
+    for entry in entries {
+        var words = List[int]()
+        for word in entry.stat { (mut words).push(word) }
+        (mut out).push(index.Entry {
+            stat: words,
+            id: owned_id(entry.id),
+            flags: entry.flags,
+            extended: entry.extended,
+            path: owned(entry.path),
+        })
+    }
+    out
+}
+
+fn flat_index(value: index.Index) -> List[worktree.FlatEntry] ! CommitErrors {
+    var out = List[worktree.FlatEntry]()
+    for entry in value.entries {
+        if index.stage(entry) != 0 { return unmerged }
+        if entry.extended & 0x2000 != 0 { continue }
+        (mut out).push(worktree.FlatEntry {
+            path: owned(entry.path),
+            mode: entry.stat[6],
+            id: owned_id(entry.id),
+        })
+    }
+    out
+}
+
+fn install_cache(mut value: index.Index, data: List[byte]) {
+    for pos in 0..value.extensions.len {
+        if value.extensions[pos].signature == "TREE" {
+            value.extensions[pos].data = owned(data)
+            return
+        }
+    }
+    (mut value.extensions).push(index.Extension { signature: "TREE", data: owned(data) })
+}
+
+fn commit_status(snapshot: worktree.Snapshot, hints: bool) -> List[byte] ! CommitErrors {
+    var settings = worktree.status_options(snapshot.context)?
+    settings.short = false
+    settings.porcelain = false
+    settings.nul = false
+    settings.branch = false
+    settings.paths = []
+    if !hints { settings.hints = false }
+    let status = worktree.render_status(snapshot, settings)?
+    var out = List[byte]()
+    var pos = 0
+    while pos < status.len {
+        let begin = pos
+        while pos < status.len && status[pos] != 10 as byte { pos += 1 }
+        let line = status[begin..pos]
+        if (str_from_utf8(line) else "") == "No commits yet" {
+            add_bytes(mut out, "Initial commit".bytes())
+        } else {
+            add_bytes(mut out, line)
+        }
+        if pos < status.len { (mut out).push(10 as byte); pos += 1 }
+    }
+    out
+}
+
+fn diagnostic_snapshot(
+    snapshot: worktree.Snapshot,
+    mut warnings: List[str],
+) -> worktree.Snapshot ! CommitErrors {
+    let settings = worktree.status_options(snapshot.context)?
+    let value = owned_index(snapshot.index)
+    worktree.scan_index_with_warnings(
+        snapshot.context,
+        value,
+        settings.untracked != "no",
+        mut warnings,
+    )?
+}
+
+fn emit_warnings(warnings: List[str]) {
+    for warning in warnings { eprint(warning) }
+}
+
+fn nothing(snapshot: worktree.Snapshot, mut warnings: List[str]) -> int ! CommitErrors {
+    let visible = diagnostic_snapshot(snapshot, mut warnings)?
+    emit_warnings(warnings)
+    output(commit_status(visible, true)?)?
+    1
+}
+
+fn editor_message(
+    raw: List[byte],
+    snapshot: worktree.Snapshot,
+    marker: str,
+    mut warnings: List[str],
+) -> List[byte] ! CommitErrors {
+    var out = owned(raw)
+    if out.len > 0 && out[out.len - 1] != 10 as byte { (mut out).push(10 as byte) }
+    (mut out).push(10 as byte)
+    add_bytes(
+        mut out,
+        "{marker} Please enter the commit message for your changes. Lines starting\n{marker} with '{marker}' will be ignored, and an empty message aborts the commit.\n{marker}\n".
+            bytes(),
+    )
+    let visible = diagnostic_snapshot(snapshot, mut warnings)?
+    let status = commit_status(visible, false)?
+    var pos = 0
+    while pos < status.len {
+        let begin = pos
+        while pos < status.len && status[pos] != 10 as byte { pos += 1 }
+        add_bytes(mut out, marker.bytes())
+        if pos > begin {
+            if status[begin] != 9 as byte { (mut out).push(32 as byte) }
+            add_bytes(mut out, status[begin..pos])
+        }
+        (mut out).push(10 as byte)
+        if pos < status.len { pos += 1 }
+    }
+    out
+}
+
+fn commit_summary(
+    ctx: worktree.Context,
+    value: Options,
+    parents: List[oid.Oid],
+    id: oid.Oid,
+    message: List[byte],
+    author: commit_format.Identity,
+    committer: commit_format.Identity,
+    changes: List[byte],
+) -> List[byte] ! CommitErrors {
+    var out = List[byte]()
+    let hex = oid.hex(id)?
+    let initial = if parents.len == 0 && !value.amend then " (root-commit)" else ""
+    add_bytes(mut out, "[{worktree.head(ctx)?.branch}{initial} {hex[0..7]}] ".bytes())
+    add_bytes(mut out, subject(message)?)
+    (mut out).push(10 as byte)
+    if author.name != committer.name || author.email != committer.email {
+        add_bytes(mut out, " Author: {author.name} <{author.email}>\n".bytes())
+    }
+    if value.date != "" || value.amend && !value.reset_author {
+        add_bytes(mut out, " Date: {summary_date(author.date)?}\n".bytes())
+    }
+    add_bytes(mut out, changes)
+    out
+}
+
+fn dispatch(args: List[str], fail: str) -> int ! CommitErrors {
+    if fail != "" && fail != "index-write" && fail != "index-sync" { return invalid }
+    let value = options(args)?
+    let ctx = worktree.discover(".")?
+    let expected = worktree.head(ctx)?
+    if expected.detached { return Unsupported("commit detached HEAD write") }
+    if !valid_reference(expected.reference) { return Unsupported("commit non-branch HEAD") }
+    if value.amend && expected.commits.len == 0 { return Fatal("You have nothing to amend.") }
+    validate_identity_environment()?
+    hooks_empty(ctx)?
+    var previous = List[object.Headers]()
+    if expected.commits.len == 1 {
+        (mut previous).push(read_commit(ctx.repo, expected.commits[0])?)
+    }
+    var parents = List[oid.Oid]()
+    if value.amend {
+        parents = parents_of(previous[0])?
+        for field in previous[0].fields {
+            if field.key != "tree" &&
+                field.key != "parent" &&
+                field.key != "author" &&
+                field.key != "committer" &&
+                field.key != "encoding" {
+                return Unsupported("commit amend header {field.key}")
+            }
+        }
+    } else if expected.commits.len == 1 {
+        (mut parents).push(owned_id(expected.commits[0]))
+    }
+    let cleanup_setting = if value.cleanup != "" {
+        value.cleanup
+    } else {
+        (ctx.repo.config["commit.cleanup"] else "default")
+    }
+    let edited = if value.edit >= 0 then value.edit == 1 else !value.supplied
+    let _ = commit_format.cleanup_mode(cleanup_setting, edited)?
+    if value.date != "" { let _ = selected_date(value.date)? }
+    let comment = ctx.repo.config["core.commentstring"] else (
+        ctx.repo.config["core.commentchar"] else "#"
+    )
+    var tx = index.begin(ctx.repo, 1000000000, worktree.index_version(ctx)?)?
+    defer index.abort(mut tx)
+    var warnings = List[str]()
+    var snapshot = worktree.scan_index_with_warnings(ctx, tx.value, false, mut warnings)?
+    if snapshot.head.reference != expected.reference { return Fatal("HEAD changed during commit") }
+    var baseline = List[worktree.FlatEntry]()
+    if value.amend {
+        if parents.len == 1 { baseline = owned_flat(worktree.flatten_tree(ctx.repo, parents[0])?) }
+    } else {
+        baseline = owned_flat(snapshot.head_entries)
+    }
+    let preview = if value.all {
+        preview_all(tx.value, snapshot.files)?
+    } else {
+        flat_index(tx.value)?
+    }
+    if !value.quiet && parents.len < 2 { check_summary_policy(ctx, baseline, preview)? }
+    if value.all {
+        var staging = worktree.add_options()
+        staging.update = true
+        let _ = worktree.stage_paths(ctx, mut tx.value, [], staging)?
+        if !same_flat(preview, flat_index(tx.value)?) {
+            return Failure("worktree changed while staging for commit")
+        }
+        snapshot = worktree.scan_index_with_warnings(ctx, tx.value, false, mut warnings)?
+        if snapshot.head.reference != expected.reference {
+            return Fatal("HEAD changed during commit")
+        }
+    }
+    refresh_index(mut tx.value, snapshot.files)?
+    let trees = index.build_trees(tx.value)?
+    prepare_commit_index(ctx, mut tx, trees, fail, !value.all)?
+    var raw = List[byte]()
+    if value.from_file {
+        raw = commit_format.file_message(message_input(value.file)?)?
+    } else if value.messages.len > 0 {
+        raw = commit_format.paragraphs(value.messages)?
+    } else if value.amend {
+        raw = owned(previous[0].message)
+    }
+    let file_mode = if cleanup_setting == "verbatim" then "verbatim" else "whitespace"
+    let file_body = commit_format.cleanup(raw, file_mode, comment, false)?
+    if edited {
+        let marker = commit_format.comment_marker(file_body, comment)?
+        save_edit_message(ctx, editor_message(file_body, snapshot, marker, mut warnings)?)?
+    } else {
+        save_edit_message(ctx, file_body)?
+    }
+    let empty_tree = object.identify("tree", [])?
+    var old_tree = owned_id(empty_tree)
+    if previous.len == 1 { old_tree = oid.parse("sha1", header(previous[0], "tree")?)? }
+    if value.amend {
+        var parent_tree = owned_id(empty_tree)
+        if parents.len == 1 {
+            parent_tree = oid.parse("sha1", header(read_commit(ctx.repo, parents[0])?, "tree")?)?
+        }
+        if !value.allow_empty && parents.len < 2 && oid.equal(trees.root, parent_tree) {
+            emit_warnings(warnings)
+            return Failure(
+                "You asked to amend the most recent commit, but doing so would make\nit empty. You can repeat your command with --allow-empty, or you can\nremove the commit entirely with \"git reset HEAD^\".",
+            )
+        }
+    } else if !value.allow_empty && oid.equal(trees.root, old_tree) {
+        return nothing(snapshot, mut warnings)?
+    }
+    let author = commit_author(ctx, value, previous)?
+    let committer = environment_identity(ctx, "COMMITTER", "")?
+    if edited {
+        emit_warnings(warnings)
+        let editor = env_get("GIT_EDITOR") else (
+            ctx.repo.config["core.editor"] else (
+                env_get("VISUAL") else (env_get("EDITOR") else "vi")
+            )
+        )
+        if editor == "false" {
+            return Failure(
+                "error: there was a problem with the editor 'false'\nPlease supply the message using either -m or -F option.",
+            )
+        }
+        return Unsupported("commit editor {editor}")
+    }
+    var message = commit_format.cleanup(raw, cleanup_setting, comment, false)?
+    for b in message {
+        if b == 0 as byte {
+            eprint("error: a NUL byte in commit log message not allowed.")
+            return Fatal("failed to write commit object")
+        }
+    }
+    if !value.allow_empty_message && commit_format.message_empty(message, cleanup_setting, false)? {
+        return Failure("Aborting commit due to empty commit message.")
+    }
+    let log_message = owned(message)
+    var encoding = ctx.repo.config["i18n.commitencoding"] else ""
+    if encoding == "" && value.amend {
+        for field in previous[0].fields {
+            if field.key == "encoding" { encoding = text(field.value)? }
+        }
+    }
+    if encoding == "" || encoding.lower() == "utf-8" {
+        let _ = str_from_utf8(message) else |_| {
+            eprint(
+                "Warning: commit message did not conform to UTF-8.\nYou may want to amend it after fixing the message, or set the config\nvariable i18n.commitEncoding to the encoding your project uses.",
+            )
+            message = repaired_message(message)
+            ""
+        }
+    }
+    let staged = flat_index(tx.value)?
+    var change_text = List[byte]()
+    if !value.quiet && parents.len < 2 { change_text = change_summary(ctx, baseline, staged)? }
+    let bytes = object.build_commit(
+        trees.root,
+        parents,
+        commit_format.identity_text(author)?,
+        commit_format.identity_text(committer)?,
+        encoding,
+        message,
+    )?
+    let id = object.identify("commit", bytes)?
+    var summary = List[byte]()
+    if !value.quiet {
+        summary = commit_summary(ctx, value, parents, id, message, author, committer, change_text)?
+    }
+    if !oid.equal(object.write_object(ctx.repo, "commit", bytes)?, id) { return bad_oid }
+    let action = if value.amend {
+        "commit (amend)"
+    } else if expected.commits.len == 0 {
+        "commit (initial)"
+    } else {
+        "commit"
+    }
+    publish_ref(ctx, expected, id, committer, action, log_message)?
+    if value.all { index.install(mut tx)? }
+    if !value.quiet { output(summary)? }
+    0
+}
+
+/// Run the commit porcelain; args[0] is commit. No editor, hook, signing or Git
+/// subprocess is ever run. Summary/failure strings await parent oracle proof.
+pub fn run(args: List[str]) -> int {
+    command_run(args, "")
+}
+
+/// Explicit index-write/index-sync preparation failure seam for fixture tests.
+/// No environment variable selects it; the production dispatcher calls run.
+pub fn run_injected(args: List[str], fail: str) -> int {
+    command_run(args, fail)
+}
+
+fn command_run(args: List[str], fail: str) -> int {
+    repository.check_config(".") else |e| match e {
+        ConfigDiagnostic(message) => { eprint(message); return 128 },
+        _ => {},
+    }
+    dispatch(args, fail) else |e| match e {
+        Unsupported(feature) => { eprint("den: not yet implemented: {feature}"); 2 },
+        Fatal(message) => { eprint("fatal: {message}"); 128 },
+        Failure(message) => { eprint(message); 1 },
+        exists => {
+            let ctx = worktree.discover(".") else |_| {
+                eprint("fatal: index.lock exists")
+                return 128
+            }
+            eprint("fatal: {index.lock_message(ctx.repo)}{lock_advice()}")
+            128
+        },
+        not_found => {
+            eprint("fatal: not a git repository (or any of the parent directories): .git")
+            128
+        },
+        unmerged => {
+            eprint("error: Committing is not possible because you have unmerged files.")
+            128
+        },
+        _ => { eprint("fatal: {e}"); 128 },
+    }
+}

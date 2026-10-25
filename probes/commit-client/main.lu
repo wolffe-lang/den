@@ -1,0 +1,200 @@
+use std.fs
+use commit
+use commit_format
+use oid
+use repository
+use worktree
+
+fn output(bytes: List[byte]) -> () ! commit.CommitErrors {
+    var file = fs.stdout()
+    fs.write_chunk(mut file, bytes)?
+}
+
+fn before(text: str) -> List[oid.Oid] ! commit.CommitErrors {
+    var ids = List[oid.Oid]()
+    if text != "-" { (mut ids).push(oid.parse("sha1", text)?) }
+    ids
+}
+
+fn identity(args: List[str], at: int) -> commit_format.Identity ! commit.CommitErrors {
+    commit_format.make_identity(
+        args[at],
+        args[at + 1],
+        commit_format.parse_date(args[at + 2], "+0000")?,
+    )?
+}
+
+fn optional_file(path: str) -> List[byte] ! commit.CommitErrors {
+    repository.read_bytes(path, 16777216) else |e| match e {
+        not_found => List[byte](),
+        denied => { return denied },
+        io => { return io },
+        invalid => { return invalid },
+        exists => { return exists },
+        unsupported => { return unsupported },
+        limit => { return limit },
+        Unsupported(reason) => { return Unsupported(reason) },
+    }
+}
+
+fn equal(a: List[byte], b: List[byte]) -> bool {
+    if a.len != b.len { return false }
+    for i in 0..a.len { if a[i] != b[i] { return false } }
+    true
+}
+
+fn appended(prior: List[byte], line: List[byte]) -> List[byte] {
+    var bytes = List[byte]()
+    for b in prior { (mut bytes).push(b) }
+    for b in line { (mut bytes).push(b) }
+    bytes
+}
+
+fn verify(args: List[str]) -> int ! commit.CommitErrors {
+    // verify-publish|verify-lock|verify-head-lock|verify-stale OLD_OR_- NEW NAME EMAIL DATE ACTION FILE
+    // Caller supplies a newly prepared repository with logAllRefUpdates=true
+    // and a real new commit object. No environment-selected failure injection.
+    if args.len != 8 { return invalid }
+    let ctx = worktree.discover(".")?
+    var expected = worktree.head(ctx)?
+    if expected.detached { return Unsupported("commit detached HEAD write") }
+    expected.commits = before(args[1])?
+    let next = oid.parse("sha1", args[2])?
+    let ident = identity(args, 3)?
+    let body = repository.read_bytes(args[7], 16777216)?
+    let path = "{ctx.repo.gitdir}/{expected.reference}"
+    let branch_lock = "{path}.lock"
+    let head_lock = "{ctx.repo.gitdir}/HEAD.lock"
+    let lock = if args[0] == "verify-head-lock" then head_lock else branch_lock
+    let head_path = "{ctx.repo.gitdir}/HEAD"
+    let head_data = optional_file(head_path)?
+    let head_log = "{ctx.repo.gitdir}/logs/HEAD"
+    let branch_log = "{ctx.repo.gitdir}/logs/{expected.reference}"
+    let original = "{ctx.repo.gitdir}/ORIG_HEAD"
+    let was_original = fs.exists(original)
+    let original_data = optional_file(original)?
+    let old_ref = optional_file(path)?
+    let was_ref = fs.exists(path)
+    let old_head_log = optional_file(head_log)?
+    let old_branch_log = optional_file(branch_log)?
+    if args[0] == "verify-lock" || args[0] == "verify-head-lock" {
+        let held = fs.create_new_with_mode(lock, 0o666)?
+        defer {
+            fs_close(held.fd) else |_| {}
+            fs.remove(lock) else |_| {}
+        }
+        let marker = "fixture owns this lock\n".bytes()
+        fs_write_chunk(held.fd, marker)?
+        var refused = false
+        var diagnostic = ""
+        commit.publish_ref(ctx, expected, next, ident, args[6], body) else |e| match e {
+            Fatal(message) => { refused = true; diagnostic = message },
+            _ => {},
+        }
+        assert(refused && equal(optional_file(lock)?, marker))
+        if args[0] == "verify-head-lock" {
+            assert(
+                diagnostic ==
+                    "cannot lock ref 'HEAD': Unable to create '{head_lock}': File exists.\n\nAnother git process seems to be running in this repository, or the lock file may be stale",
+            )
+        } else {
+            assert(diagnostic.contains("Unable to create '{branch_lock}': File exists."))
+        }
+        assert(equal(optional_file(path)?, old_ref) && fs.exists(path) == was_ref)
+        assert(equal(optional_file(head_log)?, old_head_log))
+        assert(equal(optional_file(branch_log)?, old_branch_log))
+    } else if args[0] == "verify-stale" {
+        var refused = false
+        commit.publish_ref(ctx, expected, next, ident, args[6], body) else |e| {
+            refused = "{e}".starts_with("Fatal(cannot lock ref '")
+        }
+        assert(refused && !fs.exists(lock))
+        assert(equal(optional_file(path)?, old_ref) && fs.exists(path) == was_ref)
+        assert(equal(optional_file(head_log)?, old_head_log))
+        assert(equal(optional_file(branch_log)?, old_branch_log))
+    } else {
+        let line = commit.reflog_line(expected.commits, next, ident, args[6], body)?
+        commit.publish_ref(ctx, expected, next, ident, args[6], body)?
+        assert(equal(optional_file(path)?, "{oid.hex(next)?}\n".bytes()))
+        assert(!fs.exists(lock))
+        assert(equal(optional_file(head_log)?, appended(old_head_log, line)))
+        let unchanged = expected.commits.len == 1 && oid.equal(expected.commits[0], next)
+        assert(
+            equal(
+                optional_file(branch_log)?,
+                if unchanged then old_branch_log else appended(old_branch_log, line),
+            ),
+        )
+    }
+    assert(equal(optional_file(head_path)?, head_data))
+    if args[0] != "verify-head-lock" { assert(!fs.exists(head_lock)) }
+    if args[0] != "verify-lock" { assert(!fs.exists(branch_lock)) }
+    assert(fs.exists(original) == was_original && equal(optional_file(original)?, original_data))
+    print("PASS {args[0]}: ref/log framing, owned lock cleanup, ORIG_HEAD untouched")
+    0
+}
+
+fn work(args: List[str]) -> int ! commit.CommitErrors {
+    if args.len == 0 { return invalid }
+    if args[0] == "verify-publish" ||
+        args[0] == "verify-lock" ||
+        args[0] == "verify-head-lock" ||
+        args[0] == "verify-stale" {
+        return verify(args)?
+    } else if args[0] == "counts" {
+        // counts BEFORE_FILE AFTER_FILE
+        if args.len != 3 { return invalid }
+        let a = repository.read_bytes(args[1], 16777216)?
+        let b = repository.read_bytes(args[2], 16777216)?
+        let counts = commit.line_counts(a, b)?
+        print("{counts.added} {counts.deleted} {counts.binary}")
+    } else if args[0] == "subject" || args[0] == "reflog-subject" {
+        if args.len != 2 { return invalid }
+        let data = repository.read_bytes(args[1], 16777216)?
+        output(
+            if args[0] == "subject" then commit.subject(data)? else commit.reflog_subject(data)?,
+        )?
+    } else if args[0] == "reflog" {
+        // reflog OLD_OR_- NEW NAME EMAIL DATE ACTION MESSAGE_FILE
+        if args.len != 8 { return invalid }
+        let body = repository.read_bytes(args[7], 16777216)?
+        output(
+            commit.reflog_line(
+                before(args[1])?,
+                oid.parse("sha1", args[2])?,
+                identity(args, 3)?,
+                args[6],
+                body,
+            )?,
+        )?
+    } else if args[0] == "publish" {
+        // publish EXPECTED_OLD_OR_- NEW NAME EMAIL DATE ACTION MESSAGE_FILE
+        // The explicit old value permits stale-head tests without environment
+        // failpoints. Parent fixtures create real lock collisions/IO refusals.
+        if args.len != 8 { return invalid }
+        let ctx = worktree.discover(".")?
+        var expected = worktree.head(ctx)?
+        expected.commits = before(args[1])?
+        let body = repository.read_bytes(args[7], 16777216)?
+        commit.publish_ref(
+            ctx,
+            expected,
+            oid.parse("sha1", args[2])?,
+            identity(args, 3)?,
+            args[6],
+            body,
+        )?
+    } else {
+        return invalid
+    }
+    0
+}
+
+fn main() -> int {
+    let args = env_args()
+    if args.len > 0 && args[0] == "commit" { return commit.run(args) }
+    // injected index-write|index-sync commit ... explicitly tests that failed
+    // index preparation cannot advance refs/reflogs; never reads a fail envvar.
+    if args.len >= 3 && args[0] == "injected" { return commit.run_injected(args[2..], args[1]) }
+    work(args) else |e| { eprint("{e}"); 1 }
+}

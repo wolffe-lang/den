@@ -1,0 +1,30 @@
+#!/bin/sh
+set -eu
+DEN_ROOT=$(cd "$(dirname "$0")/.." && pwd)
+export DEN_ROOT
+cd "$DEN_ROOT"
+. tools/lib-toolchain.sh
+for tier in native release; do
+    flag=
+    if [ "$tier" = release ]; then flag=--release; fi
+    mkdir -p "target/$tier"
+    for test in commit_format_test commit_test; do
+        "$WOLF" build $flag --deny-warnings "src/$test.lu" -o "target/$tier/$test"
+        "target/$tier/$test"
+    done
+    "$WOLF" build $flag --deny-warnings probes/commit-format-client/main.lu -o "target/$tier/commit-format-client"
+    "$WOLF" build $flag --deny-warnings probes/commit-client/main.lu -o "target/$tier/commit-client"
+    tools/env python3 -I tools/commit-format-oracle.py --tier "$tier"
+    tools/env python3 -I tools/commit-oracle.py --tier "$tier"
+    tools/env python3 -I tools/commit-ref-test.py --tier "$tier"
+done
+for test in commit_format_test commit_test; do
+    "$WOLF" conform-run "src/$test.lu" --checked --json > "target/$test-checked.json"
+    cat "target/$test-checked.json"
+    python3 -I - "target/$test-checked.json" <<'PY'
+import json,sys
+rows=[json.loads(line) for line in open(sys.argv[1]) if line.startswith('{')]
+assert len(rows)==1 and rows[0]['verdict']=='exit(0)',rows
+PY
+done
+echo 'commit: native/release API, object-byte dates/messages, full CLI state and ref failures; checked exits verified'
