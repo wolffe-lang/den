@@ -1,0 +1,8 @@
+build: target/native/den
+build: target/release/den
+diff terminal widths 72 / 90 failed [(None, '40', ['--stat-width=0']), (None, '120', ['--stat-width=0']), (0, '40', ['--stat-width=0']), (0, '120', ['--stat-width=0']), (40, None, ['--stat-width=0']), (40, '0', ['--stat-width=0']), (40, '-1', ['--stat-width=0']), (40, 'garbage', ['--stat-width=0']), (40, '40', ['--stat-width=0']), (40, '120', ['--stat-width=0']), (80, '40', ['--stat-width=0']), (80, '120', ['--stat-width=0']), (120, None, ['--stat-width=0']), (120, '0', ['--stat-width=0']), (120, '-1', ['--stat-width=0']), (120, 'garbage', ['--stat-width=0']), (120, '40', ['--stat-width=0']), (120, '120', ['--stat-width=0'])]
+Traceback (most recent call last):
+  File "/work/den/tools/diff-terminal-test.py", line 37, in <module>
+    assert not bad
+           ^^^^^^^
+AssertionError

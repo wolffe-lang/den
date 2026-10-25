@@ -2,6 +2,14 @@ use std.fs
 use repository
 use worktree
 
+fn terminal_width() -> int {
+    let columns = (env_get("COLUMNS") else "").to_int() else 0
+    if columns > 0 && columns <= 100000 { return columns }
+    let (_, measured) = os_term_size(fs.stdout().fd) else |_| { return 80 }
+    if measured > 0 && measured <= 100000 { return measured }
+    80
+}
+
 fn integer(value: str, maximum: int) -> int ! worktree.WorkErrors {
     let n = value.to_int() else |_| { return invalid }
     if n < 0 || n > maximum { return invalid }
@@ -20,6 +28,7 @@ fn threshold(value: str) -> int ! worktree.WorkErrors {
 
 fn parse(ctx: worktree.Context, args: List[str]) -> Options ! worktree.WorkErrors {
     var options = defaults()
+    options.width = terminal_width()
     options.context = integer(ctx.repo.config["diff.context"] else "3", 200000)?
     options.indent = worktree.config_bool(ctx, "diff.indentheuristic", true)?
     options.quote_path = worktree.config_bool(ctx, "core.quotepath", true)?
@@ -153,6 +162,12 @@ fn parse(ctx: worktree.Context, args: List[str]) -> Options ! worktree.WorkError
     }
     if options.revisions.len > 2 || options.cached && options.revisions.len > 1 { return invalid }
     options
+}
+
+/// Resolve diff configuration and terminal/COLUMNS defaults for display
+/// consumers. Reads only; does not refresh the index or write repository state.
+pub fn configured(ctx: worktree.Context) -> Options ! worktree.WorkErrors {
+    parse(ctx, List[str]())?
 }
 
 fn dispatch(args: List[str]) -> int ! worktree.WorkErrors {

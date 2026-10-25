@@ -12,7 +12,8 @@ fn work(args: List[str]) -> int ! worktree.WorkErrors {
         )?
         return 0
     }
-    var options = diff.defaults()
+    let ctx = worktree.discover(".")?
+    var options = diff.configured(ctx)?
     for arg in args {
         if arg == "--cached" {
             options.cached = true
@@ -30,7 +31,6 @@ fn work(args: List[str]) -> int ! worktree.WorkErrors {
             (mut options.revisions).push(arg)
         }
     }
-    let ctx = worktree.discover(".")?
     let changes = diff.collect(ctx, options)?
     let bytes = diff.render(ctx, changes, options)?
     var stdout = fs.stdout()
