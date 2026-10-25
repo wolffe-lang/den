@@ -4,13 +4,12 @@ A version control system in [wolf](https://github.com/wolffe-lang/wolf-lang),
 working toward Git-compatible repositories and wire protocols. Where a wolf
 keeps what it has.
 
-**State: loose objects, a writable index and part of the worktree/commit interface.**
-This is not a replacement for Git, and M2 is not complete. Edited-content rename
-similarity, diff, history commands, general ref operations, packs and transports
-remain unfinished. A measured content-similarity primitive now exists, but is
-not yet connected to rename pairing or the commands; `tools/check-delta`
-validates it independently. The isolated hunk prototype remains nonconforming
-and must not be used as a compatible diff. `den --version` prints `den 0.0.0 (built with wolf 0.2.35)`.
+**State: loose objects, a writable index, worktree/commit commands and bounded diff.**
+This is not a replacement for Git, and M2 is not complete. History commands,
+general ref operations, packs and transports remain unfinished. Text diff has
+two recorded equal-cost alignment differences; binary patches reconstruct the
+exact blobs but do not always use Git's byte representation. `den --version`
+prints `den 0.0.0 (built with wolf 0.2.35)`.
 See [MAP](docs/MAP.md) for API contracts and [FORMATS](docs/FORMATS.md) for
 measured bytes and documentation discrepancies.
 
@@ -19,14 +18,14 @@ measured bytes and documentation discrepancies.
 | Role | Machine / identity |
 |---|---|
 | Behavioral oracle | Git 2.56.0, signed kernel.org tarball; default build, Ubuntu 24.04 image pinned by digest |
-| Development witnesses | hasu CPUs 0–5 for objects/index/worktree/commit; kasumi CPUs 12–15 for the initial surface census; Linux x86-64, rootless container under a core-block lock |
+| Development witnesses | hasu CPUs 0–5 for objects/index/worktree/commit and 6–11 for diff; kasumi CPUs 12–15 for the initial surface census; Linux x86-64, rootless container under a core-block lock |
 | CI PR gate | ubuntu-24.04, pinned container and oracle, including planner tests |
 | CI full field leg | macOS arm64 with Homebrew Git; nonblocking observation, not the oracle |
 | Toolchain | wolf 0.2.35 cf0c13d3, lupin 0.1.56 tag 28547b4 (binary embeds 294d626), bundled std 2386522e |
 
 Archive and oracle pins are in `wolf-toolchain.toml` and `den-oracle.toml`.
 Downloads fail on a digest mismatch. Both release-metadata reads are retained
-in `notes/vc03-evidence/`; the original signature verification and two matching
+in `notes/vc04-evidence/pins/` (earlier reads in `notes/vc03-evidence/`); the original signature verification and two matching
 oracle builds are in `notes/vc00-evidence/`.
 
 ## Commands implemented so far
@@ -39,17 +38,23 @@ oracle builds are in `notes/vc00-evidence/`.
 | Worktree | `add` paths/directories, `-A`, `-u`, `--ignore-removal`, `-f`, `-N`, `--chmod`; `rm`, `mv` and their implemented safety/force/recursive options |
 | Status | Human, short and porcelain v1, branch/unborn/detached headings, NUL output, untracked grouping and ignored paths |
 | Commit | Ordered `-m`, `-F`, `-a`, `--amend`, `--reset-author`, `--author`, fixed `--date`, cleanup modes, quiet and allow-empty options; attached loose branch/ref/reflog updates |
+| Diff | Worktree/index, `--cached`, two loose commits/trees or blobs; unified context, final-newline markers, modes, binary patches, stat/name forms, rename/copy detection and common pathspec magic |
 | Restore | Index-to-worktree `restore`, `--staged`, `--worktree`, `--source`; `checkout -- <paths>` only, not branch checkout |
 
-Exact-OID staged renames/copies are supported, including an executable-bit
-change between regular-file modes. Edited-content similarity belongs to the
-next diff milestone. If rename-enabled status still has an unresolved added
-and deleted candidate of the same file type, it returns a named not-yet refusal
-without changing the repository. `--no-renames` can show the separate rows.
-A non-quiet commit likewise refuses an unresolved added/deleted summary before
-writing. Quiet commit skips that unavailable human summary and can publish the
-staged tree, attached ref and reflogs on the tested loose-repository path; it
-does not implement similarity detection.
+Status, commit summaries and diff share one rename/copy pairer. Exact OIDs are
+matched first; edited regular files use measured chunk-hash similarity, with
+50 percent as the default threshold. Executable-bit changes do not prevent
+regular-file pairing. A 100-percent score can result from fingerprint
+collisions and is not an identity test; summaries still count actual edits.
+Quiet commit remains independent of display scoring.
+
+Two text alignment witnesses remain byte-different from Git's default, despite
+reconstructing the same files. Each input, context width and both outputs are
+bound in `tests/review/diff-hunks.json`; they are not counted as parity.
+Binary output is independently decoded and applied in both directions with Git.
+The expanded binary corpus has 154 exact bodies and 96 capture-bound encoding
+differences out of 250; the strict byte report remains visibly red. Ordinary
+headers, literal sizes, blob identities and framing remain exact or validated.
 
 ## Build and measure
 
@@ -71,23 +76,29 @@ tools/check-index
 tools/check-ignore
 tools/check-worktree
 tools/check-commit
+tools/check-delta
+tools/check-rename
+tools/check-diff
+tools/check-diffbinary --reviewed-body --with-cli
 tools/oracle                      # parity, shape and named not-yet rows
 tools/oracle --filter status       # empty selections are errors
 tools/oracle --strict              # fails while named not-yet cases remain
 ```
 
 The gates include external-package clients, real filesystem operations,
-index lock contention, ref CAS/lock collisions and injected failures, read-only command snapshots,
+index lock contention, ref CAS/lock collisions and injected failures, command-state snapshots,
 ignore precedence and diagnostics, fixed dates/messages, object interop and
 full repository-byte comparisons. Formatting/date API comparisons are not a
 claim of CLI stderr/exit-status parity. A checked result means the JSON verdict
 from `wolf conform-run --checked`, not merely a successful process exit.
 
-**Verified local gate:** the full gate completed with all 177 source/input
-hashes unchanged. The main matrix reports 136 parity cases, 26 named not-yet
-cases, one version-shape case and no failures. Generated matrices are reported
-separately in `notes/vc03-evidence/final-counts.json`; this is not full Git
-compatibility or a substitute for the final-head CI merge gate.
+The expanded main matrix contains 188 cases: 167 parity, 20 named not-yet and
+one version-shape check. Generated diff, similarity, pairing and application
+matrices are reported separately in `notes/vc04-evidence/`; their explicit
+representation/alignment differences are never added to the parity count.
+The full local gate passed with all 234 functional input hashes unchanged,
+including twice-identical static builds. CI remains the merge gate, not a
+consequence of a successful local run.
 There is no production dependency on Git, Python, zlib or OpenSSL. Shipped wolf
 code uses wolf-std and the provenance-marked SHA-1 code from boreutils.
 
@@ -95,9 +106,9 @@ code uses wolf-std and the provenance-marked SHA-1 code from boreutils.
 
 The corpus now defines 16 repositories: the original nine object/history
 fixtures plus ignore, staged rename, modes/symlink, unborn, amend, index-v4 and
-edited-rename states. `tests/cases.json` currently defines 163 main cases.
+edited-rename states. `tests/cases.json` currently defines 188 main cases.
 The main classifications are stated above. The generated config,
-index, ignore, worktree and commit matrices run separately.
+index, ignore, worktree, commit and diff matrices run separately.
 
 Every compared repository file is included. The `loose-object-raw` comparison
 checks uncompressed object bytes, OID, framing and checksum with valid,
@@ -118,7 +129,8 @@ are preserved, but filesystem path arguments remain UTF-8 `str`; raw non-UTF-8
 OS paths have named upstream limitations. SHA-256 IDs are representable, but
 SHA-256 repositories are refused before writes. Packs, alternates, linked
 worktrees, submodules and general revision expressions remain unsupported.
-HEAD/full or unambiguous loose-object IDs are not a general revision grammar.
+Diff accepts loose names/IDs and bounded `^n`/`~n` ancestry; this is not a general
+revision grammar or a history walk.
 
 TREE and REUC index extensions are validated and preserved. UNTR, FSMN, IEOT,
 EOIE, split-index `link`, sparse-index `sdir` and unknown extensions are refused
@@ -127,12 +139,24 @@ resolve or remove them refuse until resolve-undo generation is implemented.
 
 Config parsing handles quoting, escapes, continuation and precedence, but
 `include`/`includeIf` are named refusals. There is no config writer; the command is
-read-only `config --get`. Filters/attributes, non-false `core.autocrlf`, general
-pathspec magic/globs, nonempty templates/hooks, signing and user editor execution
-are unsupported. A requested editor is never launched; the measured
+read-only `config --get`. Diff implements literal, top, icase, glob and exclude
+pathspecs; other commands retain their earlier literal-path limits. Attribute
+pathspecs, filters/attributes, non-false `core.autocrlf`, nonempty templates/hooks,
+signing and user editor execution remain unsupported. A requested editor is never launched; the measured
 `GIT_EDITOR=false` failure is handled explicitly. Relative dates such as `now`
 are refused; deterministic raw, RFC 2822 and ISO/calendar inputs are supported
 within the formatting API's stated bounds.
+
+Diff's pure `collect`/`render` API does not publish state. The CLI follows
+`diff.autoRefreshIndex`: a selected stat-only match triggers refresh of all
+unchanged index entries, unless disabled or a foreign index lock prevents it.
+Cached/two-object comparisons do not refresh. The gate proves the six permitted
+inode/time fields against each tool's own files; modes and sizes remain exact.
+
+Diff bodies are limited to 16 MiB per file, aggregate endpoints to 128 MiB,
+text sequences to 200,000 lines and general edit searches to 2,000 changed
+lines. Rename pools are limited to 2,000 candidates per side. Exceeding a bound
+returns a named failure, never an approximate result presented as exact.
 
 Commit writes target an attached loose branch, not detached HEAD. Amend retains
 the existing parents and normally its author; it does not change ORIG_HEAD.
