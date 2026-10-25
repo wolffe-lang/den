@@ -1,0 +1,410 @@
+use std.fs
+use index
+use object
+use oid
+
+/// Removal controls; force bypasses content checks but not index format checks.
+pub struct RemoveOptions {
+    cached: bool,
+    recursive: bool,
+    force: bool,
+    quiet: bool,
+    dry_run: bool,
+    ignore_unmatch: bool,
+}
+
+/// Restore sources are explicit; empty source means HEAD for staged, index for
+/// worktree only. checkout alias sets overlay=true to retain absent source paths.
+pub struct RestoreOptions { staged: bool, worktree: bool, source: str, overlay: bool }
+
+fn same_entry(entry: index.Entry, old: FlatEntry) -> bool {
+    entry.stat[6] == old.mode && oid.equal(entry.id, old.id)
+}
+
+fn clean_parents(ctx: Context, path: List[byte]) {
+    var pos = path.len
+    while pos > 0 {
+        pos -= 1
+        if path[pos] != 47 as byte { continue }
+        let name = absolute(ctx, path[0..pos]) else |_| { return }
+        fs.remove_dir(name) else |_| { return }
+    }
+}
+
+fn remove_file(ctx: Context, path: List[byte]) -> () ! WorkErrors {
+    safe_parents(ctx, path, false) else |e| match e {
+        not_found => { return },
+        _ => { return Fatal("cannot remove '{text(path)?}': unsafe parent") },
+    }
+    let full = absolute(ctx, path)?
+    let stat = fs_lstat(full) else |e| match e {
+        not_found => { return },
+        denied => { return denied },
+        io => { return io },
+    }
+    if stat[0] == 1 { return Fatal("cannot remove '{text(path)?}': is a directory") }
+    fs.remove(full)?
+    clean_parents(ctx, path)
+}
+
+fn remove_error(paths: List[List[byte]], kind: str, cached: bool) -> str ! WorkErrors {
+    let plural = if paths.len == 1 then "file has" else "files have"
+    var message = if kind == "both" {
+        "error: the following {plural} staged content different from both the\nfile and the HEAD:\n"
+    } else if kind == "staged" {
+        "error: the following {plural} changes staged in the index:\n"
+    } else {
+        "error: the following {plural} local modifications:\n"
+    }
+    for path in paths { message += "    {text(path)?}\n" }
+    message += if kind == "both" || cached {
+        "(use -f to force removal)"
+    } else {
+        "(use --cached to keep the file, or -f to force removal)"
+    }
+    message
+}
+
+/// Remove selected tracked entries after checking every safety condition. Caller
+/// holds the index transaction; ordinary filesystem failures never commit it.
+pub fn remove_paths(
+    ctx: Context,
+    mut value: index.Index,
+    paths: List[List[byte]],
+    options: RemoveOptions,
+) -> List[List[byte]] ! WorkErrors {
+    validate_specs(paths)?
+    let _ = index.serialize(value)?
+    if paths.len == 0 { return Fatal("No pathspec was given. Which files should I remove?") }
+    let snapshot = scan_index(ctx, value)?
+    var targets = List[List[byte]]()
+    for path in paths {
+        var matched = false
+        for entry in snapshot.index.entries {
+            if !under(entry.path, path) { continue }
+            if compare(entry.path, path) != 0 && !options.recursive {
+                return Fatal("not removing '{text(path)?}' recursively without -r")
+            }
+            if index.stage(entry) != 0 { return unmerged }
+            if entry.stat[6] == 0o160000 { return Unsupported("submodule removal") }
+            matched = true
+            var seen = false
+            for prior in targets { if compare(prior, entry.path) == 0 { seen = true; break } }
+            if !seen { (mut targets).push(copy entry.path) }
+        }
+        if !matched && !options.ignore_unmatch { return Pathspec(text(path)?) }
+    }
+    var local = List[List[byte]](), staged = List[List[byte]](), both = List[List[byte]]()
+    if !options.force {
+        for path in targets {
+            let at = index_at(snapshot.index.entries, path)
+            if at < 0 { return invalid_index }
+            let entry = copy snapshot.index.entries[at]
+            let previous = flat_at(snapshot.head_entries, path)
+            let file = file_at(snapshot.files, path)
+            let same_head = previous >= 0 && same_entry(entry, snapshot.head_entries[previous])
+            let same_disk = file >= 0 &&
+                entry.stat[6] == snapshot.files[file].mode &&
+                oid.equal(entry.id, snapshot.files[file].id)
+            if options.cached {
+                if !same_head && !same_disk && entry.extended & 0x2000 == 0 {
+                    (mut both).push(copy path)
+                }
+            } else if !same_head && file >= 0 && !same_disk {
+                (mut both).push(copy path)
+            } else if !same_head {
+                (mut staged).push(copy path)
+            } else if file >= 0 && !same_disk {
+                (mut local).push(copy path)
+            }
+        }
+    }
+    var problems = ""
+    if both.len > 0 { problems += remove_error(both, "both", options.cached)? }
+    if staged.len > 0 {
+        if problems != "" { problems += "\n" }
+        problems += remove_error(staged, "staged", options.cached)?
+    }
+    if local.len > 0 {
+        if problems != "" { problems += "\n" }
+        problems += remove_error(local, "local", options.cached)?
+    }
+    if problems != "" { return Failure(problems) }
+    for path in targets {
+        if !options.dry_run {
+            if !options.cached { remove_file(ctx, path)? }
+            value = index.remove_path(value, path)?
+        }
+    }
+    targets
+}
+
+// The temporary is exclusively ours; publication replaces the final link itself,
+// not its referent. Ancestor validation is lstat-based, not a portable openat API.
+fn install(ctx: Context, entry: FlatEntry) -> () ! WorkErrors {
+    if entry.mode == 0o160000 { return Unsupported("submodule restore") }
+    let stored = object.read_object(ctx.repo, entry.id, 1000000000)?
+    if stored.kind != "blob" { return bad_oid }
+    safe_parents(ctx, entry.path, true)?
+    let destination = absolute(ctx, entry.path)?
+    let existing = fs_lstat(destination) else |e| match e {
+        not_found => { List[int]() },
+        denied => { return denied },
+        io => { return io },
+    }
+    if existing.len != 0 && existing[0] == 1 {
+        return Fatal("cannot overwrite directory '{text(entry.path)?}'")
+    }
+    let parent = fs.parent(destination) else |_| { return invalid }
+    let symbolic = entry.mode == 0o120000 && config_bool(ctx, "core.symlinks", true)?
+    var permissions = if entry.mode == 0o100755 then 0o755 else 0o644
+    if !config_bool(ctx, "core.filemode", true)? && existing.len != 0 && existing[0] == 0 {
+        permissions = existing[4] & 0o777
+    }
+    for serial in 0..1024 {
+        let temporary = "{parent}/.den-restore-{serial}"
+        if symbolic {
+            let target = str_from_utf8(stored.data) else |_| {
+                return Unsupported("non-UTF-8 symlink target")
+            }
+            fs_symlink(target, temporary) else |e| match e {
+                exists => { continue },
+                not_found => { return not_found },
+                denied => { return denied },
+                invalid => { return invalid },
+                unsupported => { return unsupported },
+                io => { return io },
+            }
+            defer fs.remove(temporary) else |_| {}
+            fs_rename(temporary, destination)?
+        } else {
+            let fd = fs_open_perm(temporary, 4, permissions) else |e| match e {
+                exists => { continue },
+                not_found => { return not_found },
+                denied => { return denied },
+                invalid => { return invalid },
+                unsupported => { return unsupported },
+                io => { return io },
+            }
+            defer fs.remove(temporary) else |_| {}
+            var closed = false
+            defer { if !closed { fs_close(fd) else |_| {} } }
+            fs_write_chunk(fd, stored.data)?
+            fs_sync(fd)?
+            fs_close(fd)?
+            closed = true
+            fs_rename(temporary, destination)?
+        }
+        fs.sync_dir(parent)?
+        return
+    }
+    exists
+}
+
+fn cached_entry(entry: FlatEntry, prior: List[index.Entry]) -> index.Entry {
+    if prior.len == 1 && same_entry(prior[0], entry) { return copy prior[0] }
+    index.Entry {
+        path: owned_bytes(entry.path),
+        stat: [0, 0, 0, 0, 0, 0, entry.mode, 0, 0, 0],
+        id: copy entry.id,
+        flags: 0,
+        extended: 0,
+    }
+}
+
+/// Restore selected paths from a loose tree-ish or the index. Only exact paths
+/// and directory prefixes are accepted; every target is checked before writes.
+pub fn restore_paths(
+    ctx: Context,
+    mut value: index.Index,
+    paths: List[List[byte]],
+    options: RestoreOptions,
+) -> () ! WorkErrors {
+    validate_specs(paths)?
+    let _ = index.serialize(value)?
+    if paths.len == 0 { return Fatal("you must specify path(s) to restore") }
+    if !options.staged && !options.worktree { return invalid }
+    let previous = copy value
+    var source = List[FlatEntry]()
+    if options.source != "" || options.staged {
+        let name = if options.source == "" then "HEAD" else options.source
+        let id = object.resolve(ctx.repo, name) else |_| {
+            return Fatal("could not resolve {name}")
+        }
+        source = flatten_tree(ctx.repo, id)?
+    } else {
+        for entry in previous.entries {
+            if index.stage(entry) != 0 && selected(entry.path, paths) { return unmerged }
+            if index.stage(entry) == 0 { (mut source).push(FlatEntry { path: copy entry.path, mode: entry.stat[6], id: copy entry.id }) }
+        }
+    }
+    var targets = List[List[byte]]()
+    for entry in previous.entries {
+        if selected(entry.path, paths) {
+            if index.stage(entry) != 0 { return unmerged }
+            if entry.extended & 0x4000 != 0 { continue }
+            (mut targets).push(copy entry.path)
+        }
+    }
+    for entry in source {
+        if !selected(entry.path, paths) { continue }
+        var exists = false
+        for path in targets { if compare(path, entry.path) == 0 { exists = true } }
+        if !exists { (mut targets).push(copy entry.path) }
+    }
+    for path in paths {
+        var matched = false
+        for target in targets { if under(target, path) { matched = true; break } }
+        if !matched {
+            return Failure("error: pathspec '{text(path)?}' did not match any file(s) known to git")
+        }
+    }
+    // Verify every blob before deleting or replacing even one worktree file.
+    for path in targets {
+        let src = flat_at(source, path)
+        if src >= 0 {
+            if source[src].mode == 0o160000 { return Unsupported("submodule restore") }
+            let stored = object.read_object(ctx.repo, source[src].id, 1000000000)?
+            if stored.kind != "blob" { return bad_oid }
+        }
+    }
+    for path in targets {
+        let src = flat_at(source, path)
+        if src < 0 && !options.overlay {
+            if options.worktree { remove_file(ctx, path)? }
+            if options.staged { value = index.remove_path(value, path)? }
+        }
+    }
+    for path in targets {
+        let src = flat_at(source, path)
+        if src < 0 { continue }
+        let entry = copy source[src]
+        let old = index_at(previous.entries, path)
+        var prior = List[index.Entry]()
+        if old >= 0 { (mut prior).push(copy previous.entries[old]) }
+        if options.worktree { install(ctx, entry)? }
+        if options.staged {
+            var replacement = cached_entry(entry, prior)
+            if options.worktree {
+                let file = read_file(ctx, path, [copy replacement])?
+                replacement = entry_for(file, [copy replacement], add_options())?
+                replacement.stat[6] = entry.mode
+            }
+            value = index.replace_entry(value, replacement)?
+        } else if options.worktree &&
+            options.source == "" &&
+            old >= 0 &&
+            same_entry(previous.entries[old], entry) {
+            let file = read_file(ctx, path, prior)?
+            value = index.replace_entry(value, entry_for(file, prior, add_options())?)?
+        }
+    }
+}
+
+/// One actual filesystem rename and its root-relative source/destination.
+pub struct MovePlan { source: List[byte], destination: List[byte] }
+
+/// Validate moves before any rename. skip_errors omits invalid pairs (-k).
+/// Source and destination paths are already canonical worktree-relative bytes.
+pub fn plan_moves(
+    ctx: Context,
+    value: index.Index,
+    sources: List[List[byte]],
+    destination: List[byte],
+    force: bool,
+    skip_errors: bool,
+) -> List[MovePlan] ! WorkErrors {
+    let _ = index.serialize(value)?
+    validate_specs(sources)?
+    if destination.len != 0 && !valid_relative(destination) { return invalid }
+    if sources.len == 0 { return invalid }
+    if destination.len > 0 {
+        safe_parents(ctx, destination, false) else |_| {
+            if skip_errors { return List[MovePlan]() }
+            return Fatal("bad destination: {text(destination)?}")
+        }
+    }
+    let dest_info = fs_lstat(absolute(ctx, destination)?) else |e| match e {
+        not_found => { List[int]() },
+        denied => { return denied },
+        io => { return io },
+    }
+    let directory = dest_info.len != 0 && dest_info[0] == 1
+    if sources.len > 1 && !directory {
+        return Fatal("destination '{text(destination)?}' is not a directory")
+    }
+    var plans = List[MovePlan]()
+    for source in sources {
+        if source.len == 0 { return Fatal("can not move the worktree root") }
+        safe_parents(ctx, source, false) else |_| {
+            if skip_errors { continue }
+            return Fatal("bad source: {text(source)?}")
+        }
+        var target = owned_bytes(destination)
+        if directory {
+            var start = 0
+            for i in 0..source.len { if source[i] == 47 as byte { start = i + 1 } }
+            if target.len > 0 { (mut target).push(47 as byte) }
+            bytes_add(mut target, source[start..source.len])
+        }
+        var reason = ""
+        if source.len == 0 || under(target, source) {
+            reason = "can not move directory into itself"
+        }
+        var tracked = false
+        for entry in value.entries {
+            if under(entry.path, source) {
+                if index.stage(entry) != 0 { return unmerged }
+                if entry.stat[6] == 0o160000 { return Unsupported("submodule move") }
+                tracked = true
+            }
+        }
+        for previous in plans {
+            if compare(previous.destination, target) == 0 {
+                reason = "multiple sources for destination"
+            }
+        }
+        if !tracked { reason = "not under version control" }
+        if !path_present(ctx, source)? { reason = "bad source" }
+        let target_info = fs_lstat(absolute(ctx, target)?) else |e| match e {
+            not_found => { List[int]() },
+            denied => { return denied },
+            io => { return io },
+        }
+        if target_info.len != 0 && (!force || target_info[0] == 1) { reason = "destination exists" }
+        if reason != "" {
+            if skip_errors { continue }
+            return Fatal("{reason}, source={text(source)?}, destination={text(target)?}")
+        }
+        safe_parents(ctx, source, false)?
+        safe_parents(ctx, target, false)?
+        (mut plans).push(MovePlan { source: owned_bytes(source), destination: target })
+    }
+    plans
+}
+
+/// Execute prevalidated renames and refresh each moved entry's own metadata.
+/// Caller holds index.lock. On a later filesystem error, completed moves remain
+/// visible (as with ordinary multi-path filesystem commands); index is not saved.
+pub fn move_paths(ctx: Context, mut value: index.Index, plans: List[MovePlan]) -> () ! WorkErrors {
+    let _ = index.serialize(value)?
+    for plan in plans {
+        safe_parents(ctx, plan.source, false)?
+        safe_parents(ctx, plan.destination, false)?
+        let before = copy value
+        fs_rename(absolute(ctx, plan.source)?, absolute(ctx, plan.destination)?)?
+        for entry in before.entries {
+            if !under(entry.path, plan.source) { continue }
+            var target = owned_bytes(plan.destination)
+            bytes_add(mut target, entry.path[plan.source.len..entry.path.len])
+            var moved = copy entry
+            moved.path = target
+            let file = read_file(ctx, moved.path, [copy moved])?
+            if file.mode == moved.stat[6] && oid.equal(file.id, moved.id) {
+                moved = entry_for(file, [copy moved], add_options())?
+            }
+            value = index.remove_path(value, entry.path)?
+            value = index.replace_entry(value, moved)?
+        }
+    }
+}
