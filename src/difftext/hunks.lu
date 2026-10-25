@@ -12,7 +12,7 @@ fn output_line(mut out: List[byte], prefix: byte, data: List[byte], line: Line) 
     (mut out).push(prefix)
     for i in line.start..line.end { (mut out).push(data[i]) }
     if data[line.end - 1] != 10 as byte {
-        append(mut out, "\n\\ No newline at end of file\n".bytes())
+        append(mut out, "\n".bytes())
     }
 }
 
