@@ -1,0 +1,6 @@
+build: target/native/den
+build: target/release/den
+diff endpoints 426 / 426 failures []
+diff parity 336 / 336 failed []
+diff endpoints 426 / 426 failures []
+diff parity 336 / 336 failed []

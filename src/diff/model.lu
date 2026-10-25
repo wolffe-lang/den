@@ -1,0 +1,105 @@
+use oid
+// Original diff endpoint and patch model; no VCS implementation consulted.
+use worktree
+
+/// One present endpoint. Missing endpoints are empty lists in Change.
+pub struct File { path: List[byte], mode: int, id: oid.Oid, data: List[byte] }
+
+/// An ordered pair with zero/one endpoint per side, plus rename/copy metadata.
+pub struct Change { before: List[File], after: List[File], status: str, percent: int }
+
+/// Read-only command controls. Context/widths are bounded at the CLI edge.
+pub struct Options {
+    cached: bool,
+    context: int,
+    indent: bool,
+    patch: bool,
+    stat: bool,
+    names: bool,
+    name_status: bool,
+    numstat: bool,
+    shortstat: bool,
+    nul: bool,
+    binary_patch: bool,
+    full_index: bool,
+    abbreviate: int,
+    renames: bool,
+    copies: bool,
+    threshold: int,
+    exit_code: bool,
+    quiet: bool,
+    text: bool,
+    reverse: bool,
+    width: int,
+    name_width: int,
+    graph_width: int,
+    stat_count: int,
+    quote_path: bool,
+    paths: List[str],
+    revisions: List[str],
+}
+
+/// Default patch output and rename threshold, before configuration is applied.
+pub fn defaults() -> Options {
+    Options {
+        cached: false,
+        context: 3,
+        indent: true,
+        patch: true,
+        stat: false,
+        names: false,
+        name_status: false,
+        numstat: false,
+        shortstat: false,
+        nul: false,
+        binary_patch: false,
+        full_index: false,
+        abbreviate: 7,
+        renames: true,
+        copies: false,
+        threshold: 50,
+        exit_code: false,
+        quiet: false,
+        text: false,
+        reverse: false,
+        width: 80,
+        name_width: 0,
+        graph_width: 0,
+        stat_count: 0,
+        quote_path: true,
+        paths: [],
+        revisions: [],
+    }
+}
+
+fn add(mut out: List[byte], value: List[byte]) { for b in value { (mut out).push(b) } }
+
+fn owned(value: List[byte]) -> List[byte] {
+    var out = List[byte]()
+    add(mut out, value)
+    out
+}
+
+fn compare(a: List[byte], b: List[byte]) -> int {
+    var i = 0
+    while i < a.len && i < b.len { if a[i] != b[i] { return a[i] as int - b[i] as int }; i += 1 }
+    if a.len < b.len { return -1 }
+    if a.len > b.len { return 1 }
+    0
+}
+
+fn path(change: Change) -> List[byte] {
+    if change.after.len > 0 { return owned(change.after[0].path) }
+    owned(change.before[0].path)
+}
+
+fn under(value: List[byte], prefix: List[byte]) -> bool {
+    if prefix.len == 0 { return true }
+    if value.len < prefix.len { return false }
+    for i in 0..prefix.len { if value[i] != prefix[i] { return false } }
+    value.len == prefix.len || value[prefix.len] == 47 as byte
+}
+
+fn text(value: List[byte]) -> str ! worktree.WorkErrors {
+    str_from_utf8(value) else |_| { return Unsupported("non-UTF-8 diff path") }
+}

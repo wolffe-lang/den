@@ -1,6 +1,7 @@
 //! member: false
 
 use commit
+use diff
 use plumbing
 use worktree
 
@@ -34,6 +35,7 @@ fn main() -> int {
     if args.len > 0 {
         match args[0] {
             "commit" => { return commit.run(args) },
+            "diff" => { return diff.run(args) },
             "add" | "rm" | "mv" | "status" | "restore" | "check-ignore" => {
                 return worktree.run(args)
             },

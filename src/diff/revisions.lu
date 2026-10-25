@@ -1,0 +1,45 @@
+// Small endpoint-only ancestry adapter; general ranges and walks remain M3.
+use object
+use oid
+use worktree
+
+fn resolve(ctx: worktree.Context, name: str) -> oid.Oid ! worktree.WorkErrors {
+    var split = name.len
+    for i in 0..name.len {
+        if name.bytes()[i] == 94 as byte || name.bytes()[i] == 126 as byte { split = i; break }
+    }
+    var current = object.resolve(ctx.repo, name[0..split])?
+    var pos = split
+    while pos < name.len {
+        let kind = name.bytes()[pos]
+        pos += 1
+        let start = pos
+        while pos < name.len && name.bytes()[pos] as int >= 48 && name.bytes()[pos] as int <= 57 {
+            pos += 1
+        }
+        let count = if pos == start then 1 else integer(name[start..pos], 10000)?
+        let steps = if kind == 126 as byte then count else if count == 0 then 0 else 1
+        for _ in 0..steps {
+            let stored = object.read_object(ctx.repo, current, 16777216)?
+            if stored.kind != "commit" { return Unsupported("non-commit ancestry {name}") }
+            let headers = object.parse_commit(stored.data, "sha1")?
+            let wanted = if kind == 126 as byte then 1 else count
+            var at = 0, found = false
+            for header in headers.fields {
+                if header.key == "parent" {
+                    at += 1
+                    if at == wanted {
+                        current = oid.parse("sha1", text(header.value)?)?
+                        found = true
+                        break
+                    }
+                }
+            }
+            if !found { return Fatal("bad revision '{name}'") }
+        }
+        if pos < name.len && name.bytes()[pos] != 94 as byte && name.bytes()[pos] != 126 as byte {
+            return Unsupported("revision expression {name}")
+        }
+    }
+    current
+}

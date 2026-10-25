@@ -1,0 +1,189 @@
+use std.fs
+use repository
+use worktree
+
+fn integer(value: str, maximum: int) -> int ! worktree.WorkErrors {
+    let n = value.to_int() else |_| { return invalid }
+    if n < 0 || n > maximum { return invalid }
+    n
+}
+
+fn threshold(value: str) -> int ! worktree.WorkErrors {
+    if value == "" { return 50 }
+    if value.ends_with("%") { return integer(value[0..value.len - 1], 100)? }
+    let n = integer(value, 10000)?
+    var denominator = 1
+    for _ in 0..value.len { denominator *= 10 }
+    if n * 100 / denominator > 100 { return invalid }
+    n * 100 / denominator
+}
+
+fn parse(ctx: worktree.Context, args: List[str]) -> Options ! worktree.WorkErrors {
+    var options = defaults()
+    options.context = integer(ctx.repo.config["diff.context"] else "3", 200000)?
+    options.indent = worktree.config_bool(ctx, "diff.indentheuristic", true)?
+    options.quote_path = worktree.config_bool(ctx, "core.quotepath", true)?
+    let renames = (ctx.repo.config["diff.renames"] else "true").lower()
+    options.copies = renames == "copies"
+    options.renames = if options.copies {
+        true
+    } else {
+        worktree.config_bool(ctx, "diff.renames", true)?
+    }
+    options.name_width = integer(ctx.repo.config["diff.statnamewidth"] else "0", 100000)?
+    options.graph_width = integer(ctx.repo.config["diff.statgraphwidth"] else "0", 100000)?
+    options.abbreviate = integer(ctx.repo.config["core.abbrev"] else "7", 40)?
+    if options.abbreviate < 4 { options.abbreviate = 4 }
+    var paths = false, explicit_patch = false
+    for arg in args {
+        if paths { (mut options.paths).push(arg); continue }
+        if arg == "--" { paths = true; continue }
+        if arg == "--cached" || arg == "--staged" {
+            options.cached = true
+        } else if arg == "-p" || arg == "--patch" || arg == "-u" || arg == "-U" {
+            options.patch = true
+            explicit_patch = true
+        } else if arg == "-s" || arg == "--no-patch" {
+            options.patch = false
+            explicit_patch = true
+        } else if arg.starts_with("-U") {
+            options.context = integer(arg[2..], 200000)?
+            options.patch = true
+            explicit_patch = true
+        } else if arg.starts_with("--unified=") {
+            options.context = integer(arg[10..], 200000)?
+            options.patch = true
+            explicit_patch = true
+        } else if arg == "--indent-heuristic" {
+            options.indent = true
+        } else if arg == "--no-indent-heuristic" {
+            options.indent = false
+        } else if arg == "--name-only" {
+            options.names = true
+            options.name_status = false
+            options.patch = false
+        } else if arg == "--name-status" {
+            options.name_status = true
+            options.names = false
+            options.patch = false
+        } else if arg == "-z" {
+            options.nul = true
+        } else if arg == "--stat" || arg.starts_with("--stat=") {
+            options.stat = true
+            if !explicit_patch { options.patch = false }
+            if arg.starts_with("--stat=") {
+                let fields = arg[7..].split(",")
+                if fields.len > 3 { return invalid }
+                if fields[0] != "" { options.width = integer(fields[0], 100000)? }
+                if fields.len > 1 && fields[1] != "" {
+                    options.name_width = integer(fields[1], 100000)?
+                }
+                if fields.len > 2 && fields[2] != "" {
+                    options.stat_count = integer(fields[2], 100000)?
+                }
+            }
+        } else if arg.starts_with("--stat-width=") {
+            options.width = integer(arg[13..], 100000)?
+        } else if arg.starts_with("--stat-name-width=") {
+            options.name_width = integer(arg[18..], 100000)?
+        } else if arg.starts_with("--stat-graph-width=") {
+            options.graph_width = integer(arg[19..], 100000)?
+        } else if arg.starts_with("--stat-count=") {
+            options.stat_count = integer(arg[13..], 100000)?
+        } else if arg == "--numstat" {
+            options.numstat = true
+            if !explicit_patch { options.patch = false }
+        } else if arg == "--shortstat" {
+            options.shortstat = true
+            if !explicit_patch { options.patch = false }
+        } else if arg == "--full-index" {
+            options.full_index = true
+        } else if arg == "--binary" {
+            options.binary_patch = true
+            options.full_index = true
+            options.patch = true
+            explicit_patch = true
+        } else if arg.starts_with("--abbrev=") {
+            options.abbreviate = integer(arg[9..], 40)?
+            if options.abbreviate < 4 { options.abbreviate = 4 }
+        } else if arg == "--no-renames" {
+            options.renames = false
+            options.copies = false
+        } else if arg.starts_with("-M") {
+            options.renames = true
+            options.threshold = threshold(arg[2..])?
+        } else if arg == "--find-renames" {
+            options.renames = true
+            options.threshold = 50
+        } else if arg.starts_with("--find-renames=") {
+            options.renames = true
+            options.threshold = threshold(arg[15..])?
+        } else if arg.starts_with("-C") {
+            options.renames = true
+            options.copies = true
+            options.threshold = threshold(arg[2..])?
+        } else if arg == "--find-copies" {
+            options.renames = true
+            options.copies = true
+        } else if arg.starts_with("--find-copies=") {
+            options.renames = true
+            options.copies = true
+            options.threshold = threshold(arg[14..])?
+        } else if arg == "--exit-code" {
+            options.exit_code = true
+        } else if arg == "--quiet" {
+            options.exit_code = true
+            options.quiet = true
+        } else if arg == "-a" || arg == "--text" {
+            options.text = true
+        } else if arg == "-R" {
+            options.reverse = true
+        } else if arg == "--no-ext-diff" ||
+            arg == "--no-textconv" ||
+            arg == "--no-color" ||
+            arg == "--color=never" {} else if arg.starts_with("-") {
+            return Unsupported("diff option {arg}")
+        } else {
+            let _ = resolve(ctx, arg) else |_| {
+                (mut options.paths).push(arg)
+                continue
+            }
+            (mut options.revisions).push(arg)
+        }
+    }
+    if options.revisions.len > 2 || options.cached && options.revisions.len > 1 { return invalid }
+    options
+}
+
+fn dispatch(args: List[str]) -> int ! worktree.WorkErrors {
+    let repo = repository.discover(".")?
+    let bare = (repo.config["core.bare"] else "false") == "true"
+    let ctx = if bare {
+        worktree.Context { repo: repo, root: "", cwd: ".", prefix: "" }
+    } else {
+        worktree.discover(".")?
+    }
+    let options = parse(ctx, args[1..])?
+    if bare && !options.cached && options.revisions.len < 2 {
+        return Fatal("this operation must be run in a work tree")
+    }
+    let edits = collect(ctx, options)?
+    let bytes = render(ctx, edits, options)?
+    var stdout = fs.stdout()
+    fs.write_chunk(mut stdout, bytes)?
+    if options.exit_code && edits.len > 0 then 1 else 0
+}
+
+/// Read-only CLI boundary. Unsupported features are explicit exit-2 refusals.
+pub fn run(args: List[str]) -> int {
+    repository.check_config(".") else |e| match e {
+        ConfigDiagnostic(message) => { eprint(message); return 128 },
+        _ => {},
+    }
+    dispatch(args) else |e| match e {
+        Unsupported(feature) => { eprint("den: not yet implemented: {feature}"); 2 },
+        Fatal(message) => { eprint("fatal: {message}"); 128 },
+        Failure(message) => { eprint(message); 1 },
+        _ => { eprint("fatal: {e}"); 128 },
+    }
+}

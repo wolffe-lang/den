@@ -1,0 +1,270 @@
+// Original pathspec adapter from gitglossary(7), pathspec. The bounded DP
+// follows den's own ignore matcher shape; normal pathspec wildcards cross '/'.
+use worktree
+
+struct Spec { pattern: List[byte], literal: bool, glob: bool, icase: bool, exclude: bool }
+
+struct Atom { kind: int, value: byte, members: List[byte] }
+
+fn folded(value: List[byte], icase: bool) -> List[byte] {
+    var out = List[byte]()
+    for b in value {
+        (mut out).push(
+            if icase && b as int >= 65 && b as int <= 90 then (b as int + 32) as byte else b,
+        )
+    }
+    out
+}
+
+fn class_member(name: str, n: int) -> bool {
+    let alpha = n >= 65 && n <= 90 || n >= 97 && n <= 122
+    let digit = n >= 48 && n <= 57
+    match name {
+        "alnum" => alpha || digit,
+        "alpha" => alpha,
+        "blank" => n == 9 || n == 32,
+        "cntrl" => n < 32 || n == 127,
+        "digit" => digit,
+        "graph" => n >= 33 && n <= 126,
+        "lower" => n >= 97 && n <= 122,
+        "upper" => n >= 65 && n <= 90,
+        "print" => n >= 32 && n <= 126,
+        "punct" => n >= 33 && n <= 126 && !alpha && !digit,
+        "space" => n == 32 || n >= 9 && n <= 13,
+        "xdigit" => digit || n >= 65 && n <= 70 || n >= 97 && n <= 102,
+        _ => false,
+    }
+}
+
+fn atoms(pattern: List[byte], pathname: bool) -> List[Atom] ! worktree.WorkErrors {
+    var out = List[Atom]()
+    var i = 0
+    while i < pattern.len {
+        let c = pattern[i]
+        i += 1
+        if c == 92 as byte {
+            if i == pattern.len { return invalid }
+            (mut out).push(Atom { kind: 0, value: pattern[i], members: [] })
+            i += 1
+        } else if c == 42 as byte {
+            let start = i - 1
+            while i < pattern.len && pattern[i] == 42 as byte { i += 1 }
+            var kind = 2
+            if pathname && i - start >= 2 && (start == 0 || pattern[start - 1] == 47 as byte) {
+                if i == pattern.len {
+                    kind = 3
+                } else if pattern[i] == 47 as byte {
+                    kind = 4
+                    i += 1
+                }
+            }
+            if !pathname { kind = 3 }
+            (mut out).push(Atom { kind: kind, value: 0 as byte, members: [] })
+        } else if c == 63 as byte {
+            (mut out).push(Atom { kind: 1, value: 0 as byte, members: [] })
+        } else if c == 91 as byte {
+            let begin = i - 1
+            var members = List[byte]()
+            for _ in 0..256 { (mut members).push(0 as byte) }
+            var inverse = false
+            if i < pattern.len && (pattern[i] == 33 as byte || pattern[i] == 94 as byte) {
+                inverse = true
+                i += 1
+            }
+            var first = true
+            var closed = false
+            while i < pattern.len {
+                if pattern[i] == 93 as byte && !first {
+                    i += 1
+                    closed = true
+                    break
+                }
+                first = false
+                if i + 1 < pattern.len && pattern[i] == 91 as byte && pattern[i + 1] == 58 as byte {
+                    let start = i + 2
+                    var end = start
+                    while end + 1 < pattern.len &&
+                        !(pattern[end] == 58 as byte && pattern[end + 1] == 93 as byte) { end += 1 }
+                    if end + 1 == pattern.len { return invalid }
+                    let name = text(pattern[start..end])?
+                    for n in 0..256 { if class_member(name, n) { members[n] = 1 as byte } }
+                    i = end + 2
+                    continue
+                }
+                var low = pattern[i]
+                i += 1
+                if low == 92 as byte && i < pattern.len { low = pattern[i]; i += 1 }
+                if i + 1 < pattern.len && pattern[i] == 45 as byte && pattern[i + 1] != 93 as byte {
+                    i += 1
+                    var high = pattern[i]
+                    i += 1
+                    if high == 92 as byte && i < pattern.len { high = pattern[i]; i += 1 }
+                    for n in 0..256 {
+                        if n >= low as int && n <= high as int { members[n] = 1 as byte }
+                    }
+                } else {
+                    members[low as int] = 1 as byte
+                }
+            }
+            if !closed {
+                i = begin + 1
+                (mut out).push(Atom { kind: 0, value: 91 as byte, members: [] })
+                continue
+            }
+            if inverse {
+                for n in 0..256 {
+                    members[n] = if members[n] == 0 as byte then 1 as byte else 0 as byte
+                }
+            }
+            if pathname { members[47] = 0 as byte }
+            (mut out).push(Atom { kind: 5, value: 0 as byte, members: members })
+        } else {
+            (mut out).push(Atom { kind: 0, value: c, members: [] })
+        }
+    }
+    out
+}
+
+fn wildcard(pattern: List[byte], value: List[byte], pathname: bool) -> bool ! worktree.WorkErrors {
+    if pattern.len > 4096 || value.len > 65536 { return limit }
+    let tokens = atoms(pattern, pathname)?
+    if tokens.len > 0 && value.len > 4000000 / tokens.len { return limit }
+    let width = value.len + 1
+    var rows = List[bool]()
+    for _ in 0..2 * width { (mut rows).push(false) }
+    rows[0] = true
+    var previous = 0, current = width
+    for token in tokens {
+        rows[current] = token.kind >= 2 && token.kind <= 4 && rows[previous]
+        var seen = rows[previous]
+        for j in 1..width {
+            let b = value[j - 1]
+            rows[current + j] = match token.kind {
+                0 => rows[previous + j - 1] && b == token.value,
+                1 => rows[previous + j - 1] && (!pathname || b != 47 as byte),
+                2 | 3 =>
+                    rows[previous + j] ||
+                        rows[current + j - 1] && (token.kind == 3 || b != 47 as byte),
+                4 => rows[previous + j] || seen && b == 47 as byte,
+                _ => rows[previous + j - 1] && token.members[b as int] == 1 as byte,
+            }
+            seen = seen || rows[previous + j]
+        }
+        let old = previous
+        previous = current
+        current = old
+    }
+    rows[previous + value.len]
+}
+
+fn pathspecs(ctx: worktree.Context, words: List[str]) -> List[Spec] ! worktree.WorkErrors {
+    var out = List[Spec]()
+    for word in words {
+        if word == ":" {
+            if words.len != 1 { return invalid }
+            return [
+                Spec {
+                    pattern: owned(ctx.prefix.bytes()),
+                    literal: true,
+                    glob: false,
+                    icase: false,
+                    exclude: false,
+                },
+            ]
+        }
+        var raw = word
+        var top = false
+        var literal = false
+        var glob = false
+        var icase = false
+        var exclude = false
+        if raw.starts_with(":(") {
+            let end = raw.find(")") else |_| { return invalid }
+            for magic in raw[2..end].split(",") {
+                match magic {
+                    "top" => { top = true },
+                    "literal" => { literal = true },
+                    "glob" => { glob = true },
+                    "icase" => { icase = true },
+                    "exclude" => { exclude = true },
+                    "" => {},
+                    _ => { return Unsupported("diff pathspec magic {magic}") },
+                }
+            }
+            raw = raw[end + 1..]
+        } else if raw.starts_with(":") {
+            raw = raw[1..]
+            loop {
+                if raw.starts_with("/") {
+                    top = true
+                    raw = raw[1..]
+                } else if raw.starts_with("!") || raw.starts_with("^") {
+                    exclude = true
+                    raw = raw[1..]
+                } else {
+                    break
+                }
+            }
+            if raw.starts_with(":") { raw = raw[1..] }
+        }
+        if literal && glob { return Fatal("'literal' and 'glob' are incompatible") }
+        if raw.starts_with("/") {
+            if raw == ctx.root {
+                raw = ""
+            } else if raw.starts_with("{ctx.root}/") {
+                raw = raw[ctx.root.len + 1..]
+            } else {
+                return Fatal("'{word}' is outside repository at '{ctx.root}'")
+            }
+        } else if !top && ctx.prefix != "" {
+            raw = "{ctx.prefix}/{raw}"
+        }
+        var pieces = List[str]()
+        for part in raw.split("/") {
+            if part == "" || part == "." { continue }
+            if part == ".." {
+                let _ = (mut pieces).pop() else |_| {
+                    return Fatal("'{word}' is outside repository at '{ctx.root}'")
+                }
+            } else {
+                (mut pieces).push(part)
+            }
+        }
+        var pattern = List[byte]()
+        for i in 0..pieces.len {
+            if i > 0 { (mut pattern).push(47 as byte) }
+            add(mut pattern, pieces[i].bytes())
+        }
+        (mut out).push(Spec {
+            pattern: folded(pattern, icase),
+            literal: literal,
+            glob: glob,
+            icase: icase,
+            exclude: exclude,
+        })
+    }
+    out
+}
+
+fn selected(value: List[byte], specs: List[Spec]) -> bool ! worktree.WorkErrors {
+    var included = specs.len == 0
+    var positive = false
+    for spec in specs { if !spec.exclude { positive = true } }
+    if !positive { included = true }
+    for spec in specs {
+        if spec.exclude { continue }
+        let path = folded(value, spec.icase)
+        if under(path, spec.pattern) || !spec.literal && wildcard(spec.pattern, path, spec.glob)? {
+            included = true
+        }
+    }
+    if !included { return false }
+    for spec in specs {
+        if !spec.exclude { continue }
+        let path = folded(value, spec.icase)
+        if under(path, spec.pattern) || !spec.literal && wildcard(spec.pattern, path, spec.glob)? {
+            return false
+        }
+    }
+    included
+}

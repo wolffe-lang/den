@@ -1,0 +1,204 @@
+use delta
+use difftext
+use worktree
+
+struct Stat {
+    name: List[byte],
+    added: int,
+    deleted: int,
+    binary: bool,
+    old_size: int,
+    new_size: int,
+}
+
+fn rename_name(before: List[byte], after: List[byte]) -> List[byte] {
+    var prefix = 0, i = 0
+    while i < before.len && i < after.len && before[i] == after[i] {
+        if before[i] == 47 as byte { prefix = i + 1 }
+        i += 1
+    }
+    var suffix = 0
+    i = 0
+    while i < before.len - prefix &&
+        i < after.len - prefix &&
+        before[before.len - 1 - i] == after[after.len - 1 - i] {
+        if before[before.len - 1 - i] == 47 as byte { suffix = i + 1 }
+        i += 1
+    }
+    var out = List[byte]()
+    if prefix > 0 || suffix > 0 { add(mut out, before[0..prefix]); (mut out).push(123 as byte) }
+    add(mut out, before[prefix..before.len - suffix])
+    add(mut out, " => ".bytes())
+    add(mut out, after[prefix..after.len - suffix])
+    if prefix > 0 || suffix > 0 {
+        (mut out).push(125 as byte)
+        add(mut out, before[before.len - suffix..])
+    }
+    out
+}
+
+fn statistics(change: Change, options: Options) -> Stat ! worktree.WorkErrors {
+    let raw = if change.before.len == 1 &&
+        change.after.len == 1 &&
+        compare(change.before[0].path, change.after[0].path) != 0 {
+        rename_name(change.before[0].path, change.after[0].path)
+    } else {
+        path(change)
+    }
+    let before = data(change.before), after = data(change.after)
+    let binary = !options.text && (delta.binary(before) || delta.binary(after))
+    var added = 0, deleted = 0
+    if !binary && !unchanged(change) {
+        for edit in difftext.edits(before, after)? {
+            added += edit.new_count
+            deleted += edit.old_count
+        }
+    }
+    Stat {
+        name: quoted(raw, options),
+        added: added,
+        deleted: deleted,
+        binary: binary,
+        old_size: size(change.before),
+        new_size: size(change.after),
+    }
+}
+
+fn pad(mut out: List[byte], n: int) { for _ in 0..n { (mut out).push(32 as byte) } }
+
+fn graph_scale(count: int, maximum: int, width: int) -> int {
+    if count == 0 { return 0 }
+    if maximum <= width { return count }
+    1 + count * (width - 1) / maximum
+}
+
+fn short(mut out: List[byte], files: int, added: int, deleted: int) {
+    if files == 0 { return }
+    add(mut out, " {files} {if files==1 then "file" else "files"} changed".bytes())
+    if added > 0 || deleted == 0 {
+        add(mut out, ", {added} {if added==1 then "insertion" else "insertions"}(+)".bytes())
+    }
+    if deleted > 0 || added == 0 {
+        add(mut out, ", {deleted} {if deleted==1 then "deletion" else "deletions"}(-)".bytes())
+    }
+    (mut out).push(10 as byte)
+}
+
+fn render_stats(
+    mut out: List[byte],
+    changes: List[Change],
+    options: Options,
+) -> () ! worktree.WorkErrors {
+    var rows = List[Stat]()
+    var name_width = 0, maximum = 0, total_added = 0, total_deleted = 0
+    for change in changes {
+        let row = statistics(change, options)?
+        if (options.stat_count == 0 || rows.len < options.stat_count) && row.name.len > name_width {
+            name_width = row.name.len
+        }
+        if (options.stat_count == 0 || rows.len < options.stat_count) &&
+            row.added + row.deleted > maximum {
+            maximum = row.added + row.deleted
+        }
+        total_added += row.added
+        total_deleted += row.deleted
+        (mut rows).push(row)
+    }
+    var number_width = "{maximum}".len
+    for i in 0..rows.len {
+        if (options.stat_count == 0 || i < options.stat_count) &&
+            rows[i].binary &&
+            number_width < 3 {
+            number_width = 3
+        }
+    }
+    let width = if options.width < 25 then 25 else options.width
+    var name_cap = if options.name_width > 0 then options.name_width else width - width * 3 / 8
+    var maximum_plot = maximum
+    if options.graph_width > 0 && maximum_plot > options.graph_width {
+        maximum_plot = options.graph_width
+    }
+    let unused_graph = width - maximum_plot - number_width - 6
+    if options.name_width == 0 && unused_graph > name_cap { name_cap = unused_graph }
+    let minimum_graph = if maximum_plot < 6 then maximum_plot else 6
+    let fitting_name = width - number_width - 6 - minimum_graph
+    if name_cap > fitting_name { name_cap = fitting_name }
+    if name_cap < 3 { name_cap = 3 }
+    if name_width > name_cap { name_width = name_cap }
+    var graph_width = width - name_width - number_width - 6
+    if graph_width < 1 { graph_width = 1 }
+    if options.graph_width > 0 && graph_width > options.graph_width {
+        graph_width = options.graph_width
+    }
+    if options.numstat {
+        for i in 0..rows.len {
+            let row = copy rows[i]
+            let change = copy changes[i]
+            if row.binary {
+                add(mut out, "-\t-\t".bytes())
+            } else {
+                add(mut out, "{row.added}\t{row.deleted}\t".bytes())
+            }
+            if options.nul {
+                if change.before.len == 1 &&
+                    change.after.len == 1 &&
+                    compare(change.before[0].path, change.after[0].path) != 0 {
+                    (mut out).push(0 as byte)
+                    add(mut out, change.before[0].path)
+                    (mut out).push(0 as byte)
+                }
+                add(mut out, path(change))
+                (mut out).push(0 as byte)
+            } else {
+                add(mut out, row.name)
+                (mut out).push(10 as byte)
+            }
+        }
+    }
+    if options.stat {
+        var count = rows.len
+        if options.stat_count > 0 && count > options.stat_count { count = options.stat_count }
+        for i in 0..count {
+            let row = copy rows[i]
+            var name = owned(row.name)
+            if name.len > name_width {
+                let keep = if name_width > 3 then name_width - 3 else 0
+                var at = name.len - keep
+                for j in at..name.len { if name[j] == 47 as byte { at = j; break } }
+                let tail = name[at..]
+                name = owned("...".bytes())
+                add(mut name, tail)
+            }
+            (mut out).push(32 as byte)
+            add(mut out, name)
+            pad(mut out, name_width - name.len)
+            add(mut out, " | ".bytes())
+            if row.binary {
+                add(mut out, "Bin {row.old_size} -> {row.new_size} bytes\n".bytes())
+                continue
+            }
+            let total = row.added + row.deleted
+            let number = "{total}"
+            pad(mut out, number_width - number.len)
+            add(mut out, number.bytes())
+            if total > 0 {
+                (mut out).push(32 as byte)
+                var amount = graph_scale(total, maximum, graph_width)
+                if row.added > 0 && row.deleted > 0 && amount < 2 { amount = 2 }
+                var plus = 0, minus = 0
+                if row.added < row.deleted {
+                    plus = graph_scale(row.added, maximum, graph_width)
+                    minus = amount - plus
+                } else {
+                    minus = graph_scale(row.deleted, maximum, graph_width)
+                    plus = amount - minus
+                }
+                for _ in 0..plus { (mut out).push(43 as byte) }
+                for _ in 0..minus { (mut out).push(45 as byte) }
+            }
+            (mut out).push(10 as byte)
+        }
+        if count < rows.len { add(mut out, " ...\n".bytes()) }
+    }
+    if options.stat || options.shortstat { short(mut out, changes.len, total_added, total_deleted) }
+}

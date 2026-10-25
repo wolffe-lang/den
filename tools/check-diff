@@ -1,0 +1,35 @@
+#!/bin/sh
+# Ordinary output is exact; two explicitly bound R-vc04-3 hunk rows are reported.
+set -eu
+DEN_ROOT=$(cd "$(dirname "$0")/.." && pwd)
+export DEN_ROOT
+cd "$DEN_ROOT"
+. tools/lib-toolchain.sh
+case "${1-}" in ''|--units-only|--corpus-only) ;; *) exit 2 ;; esac
+for tier in native release; do
+    flag=
+    if [ "$tier" = release ]; then flag=--release; fi
+    mkdir -p "target/$tier"
+    if [ "${1-}" != --corpus-only ]; then
+        for unit in difftext rename; do
+            "$WOLF" build $flag --deny-warnings "src/${unit}_test.lu" -o "target/$tier/$unit-test"
+            "target/$tier/$unit-test"
+        done
+    fi
+    if [ "${1-}" != --units-only ]; then
+        "$WOLF" build $flag --deny-warnings probes/difftext-client/main.lu -o "target/$tier/difftext-client"
+        tools/env python3 -I tools/diff-oracle.py --tier "$tier" --output "target/diff-$tier.json"
+        tools/env python3 -I tools/diff-endpoints-test.py --tier "$tier" --output "target/diff-endpoints-$tier.json"
+        tools/env python3 -I tools/diff-hunks-test.py --tier "$tier" --output "target/diff-hunks-$tier.json"
+    fi
+done
+if [ "${1-}" != --corpus-only ]; then
+    "$WOLF" conform-run src/difftext_test.lu --checked --json > target/difftext-checked.json
+    cat target/difftext-checked.json
+    python3 -I - target/difftext-checked.json <<'PY'
+import json,sys
+rows=[json.loads(line) for line in open(sys.argv[1]) if line.startswith('{')]
+assert len(rows)==1 and rows[0]['verdict']=='exit(0)',rows
+PY
+fi
+echo 'diff: exact ordinary command outputs/state, capture-bound hunk differences separately counted; zero skips'

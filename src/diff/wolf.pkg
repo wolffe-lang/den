@@ -1,0 +1,11 @@
+pkg {
+    name: "diff",
+    edition: "1",
+    capabilities: [env, fs],
+    deps: {
+        diffbinary: {path: "../diffbinary"}, zlib: {path: "../zlib"},
+        delta: {path: "../delta"}, difftext: {path: "../difftext"},
+        index: {path: "../index"}, object: {path: "../object"}, oid: {path: "../oid"},
+        rename: {path: "../rename"}, repository: {path: "../repository"}, worktree: {path: "../worktree"},
+    },
+}

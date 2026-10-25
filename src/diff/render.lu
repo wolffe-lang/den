@@ -1,0 +1,216 @@
+use delta
+use difftext
+use diffbinary
+use object
+use oid
+use worktree
+
+fn data(files: List[File]) -> List[byte] { if files.len == 0 { return [] }; owned(files[0].data) }
+
+fn size(files: List[File]) -> int { if files.len == 0 { return 0 }; files[0].data.len }
+
+fn unchanged(change: Change) -> bool {
+    change.before.len == 1 &&
+        change.after.len == 1 &&
+        oid.equal(change.before[0].id, change.after[0].id)
+}
+
+fn quoted(value: List[byte], options: Options) -> List[byte] {
+    worktree.quote(value, options.quote_path, false)
+}
+
+fn prefixed(prefix: str, value: List[byte]) -> List[byte] {
+    var out = owned(prefix.bytes())
+    add(mut out, value)
+    out
+}
+
+fn abbreviation(
+    ctx: worktree.Context,
+    files: List[File],
+    options: Options,
+) -> str ! worktree.WorkErrors {
+    let width = if options.full_index || options.binary_patch then 40 else options.abbreviate
+    if files.len == 0 { return "0000000000000000000000000000000000000000"[0..width] }
+    let full = oid.hex(files[0].id)?
+    var n = width
+    while n < 40 {
+        object.lookup(ctx.repo, full[0..n]) else |e| match e {
+            ambiguous => { n += 1; continue },
+            _ => { break },
+        }
+        break
+    }
+    full[0..n]
+}
+
+fn header_name(mut out: List[byte], marker: str, prefix: str, files: List[File], options: Options) {
+    add(mut out, marker.bytes())
+    if files.len == 0 { add(mut out, "/dev/null\n".bytes()); return }
+    let path = prefixed(prefix, files[0].path)
+    let display = quoted(path, options)
+    add(mut out, display)
+    var space = false
+    for b in path { if b == 32 as byte { space = true } }
+    if space && display.len > 0 && display[0] != 34 as byte { (mut out).push(9 as byte) }
+    (mut out).push(10 as byte)
+}
+
+fn patch_one(
+    mut out: List[byte],
+    ctx: worktree.Context,
+    change: Change,
+    options: Options,
+) -> () ! worktree.WorkErrors {
+    let old_path = if change.before.len > 0 {
+        owned(change.before[0].path)
+    } else {
+        owned(change.after[0].path)
+    }
+    let new_path = if change.after.len > 0 {
+        owned(change.after[0].path)
+    } else {
+        owned(change.before[0].path)
+    }
+    add(mut out, "diff --git ".bytes())
+    add(mut out, quoted(prefixed(if options.reverse then "b/" else "a/", old_path), options))
+    (mut out).push(32 as byte)
+    add(mut out, quoted(prefixed(if options.reverse then "a/" else "b/", new_path), options))
+    (mut out).push(10 as byte)
+    if change.before.len == 0 {
+        add(mut out, "new file mode {object.mode_text(change.after[0].mode)?}\n".bytes())
+    } else if change.after.len == 0 {
+        add(mut out, "deleted file mode {object.mode_text(change.before[0].mode)?}\n".bytes())
+    } else if change.before[0].mode != change.after[0].mode {
+        add(
+            mut out,
+            "old mode {object.mode_text(change.before[0].mode)?}\nnew mode {object.mode_text(change.after[0].mode)?}\n".
+                bytes(),
+        )
+    }
+    if change.status == "R" || change.status == "C" {
+        let verb = if change.status == "R" then "rename" else "copy"
+        add(mut out, "similarity index {change.percent}%\n{verb} from ".bytes())
+        add(mut out, quoted(old_path, options))
+        add(mut out, "\n{verb} to ".bytes())
+        add(mut out, quoted(new_path, options))
+        (mut out).push(10 as byte)
+    }
+    if unchanged(change) { return }
+    add(
+        mut out,
+        "index {abbreviation(ctx,change.before,options)?}..{abbreviation(ctx,change.after,options)?}".
+            bytes(),
+    )
+    if change.before.len > 0 &&
+        change.after.len > 0 &&
+        change.before[0].mode == change.after[0].mode {
+        add(mut out, " {object.mode_text(change.before[0].mode)?}".bytes())
+    }
+    (mut out).push(10 as byte)
+    let before = data(change.before), after = data(change.after)
+    if !options.text && (delta.binary(before) || delta.binary(after)) {
+        if options.binary_patch { add(mut out, diffbinary.patch(before, after)?); return }
+        add(mut out, "Binary files ".bytes())
+        add(
+            mut out,
+            if change.before.len == 0 {
+                owned("/dev/null".bytes())
+            } else {
+                quoted(prefixed(if options.reverse then "b/" else "a/", old_path), options)
+            },
+        )
+        add(mut out, " and ".bytes())
+        add(
+            mut out,
+            if change.after.len == 0 {
+                owned("/dev/null".bytes())
+            } else {
+                quoted(prefixed(if options.reverse then "a/" else "b/", new_path), options)
+            },
+        )
+        add(mut out, " differ\n".bytes())
+        return
+    }
+    let body = difftext.hunks(before, after, options.context, options.indent)?
+    if body.len > 0 {
+        header_name(mut out, "--- ", if options.reverse then "b/" else "a/", change.before, options)
+        header_name(mut out, "+++ ", if options.reverse then "a/" else "b/", change.after, options)
+        add(mut out, body)
+    }
+}
+
+fn name_record(mut out: List[byte], change: Change, options: Options) {
+    let sep = if options.nul then 0 as byte else 9 as byte
+    if options.name_status {
+        add(mut out, change.status.bytes())
+        if change.status == "R" || change.status == "C" {
+            if change.percent < 100 { (mut out).push(48 as byte) }
+            if change.percent < 10 { (mut out).push(48 as byte) }
+            add(mut out, "{change.percent}".bytes())
+        }
+        (mut out).push(sep)
+        if change.status == "R" || change.status == "C" {
+            add(
+                mut out,
+                if options.nul {
+                    owned(change.before[0].path)
+                } else {
+                    quoted(change.before[0].path, options)
+                },
+            )
+            (mut out).push(sep)
+        }
+    }
+    let value = if options.name_status &&
+        change.status == "M" &&
+        change.before.len == 1 &&
+        change.after.len == 1 {
+        owned(change.before[0].path)
+    } else {
+        path(change)
+    }
+    add(mut out, if options.nul then owned(value) else quoted(value, options))
+    (mut out).push(if options.nul then 0 as byte else 10 as byte)
+}
+
+/// Render all requested display modes in Git order; never publishes objects.
+pub fn render(
+    ctx: worktree.Context,
+    changes: List[Change],
+    options: Options,
+) -> List[byte] ! worktree.WorkErrors {
+    var out = List[byte]()
+    if options.quiet { return out }
+    if options.names || options.name_status {
+        for change in changes { name_record(mut out, change, options) }
+        return out
+    }
+    if options.stat || options.numstat || options.shortstat {
+        render_stats(mut out, changes, options)?
+    }
+    if options.patch {
+        if changes.len > 0 && (options.stat || options.numstat || options.shortstat) {
+            (mut out).push(10 as byte)
+        }
+        for change in changes {
+            if change.status == "T" {
+                patch_one(
+                    mut out,
+                    ctx,
+                    Change { before: copy change.before, after: [], status: "D", percent: 0 },
+                    options,
+                )?
+                patch_one(
+                    mut out,
+                    ctx,
+                    Change { before: [], after: copy change.after, status: "A", percent: 0 },
+                    options,
+                )?
+            } else {
+                patch_one(mut out, ctx, change, options)?
+            }
+        }
+    }
+    out
+}
