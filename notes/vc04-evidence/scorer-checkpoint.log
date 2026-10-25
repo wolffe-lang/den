@@ -1,0 +1,23 @@
+delta: similarity boundaries, multiset weighting and text detection pass
+initial 123 / 123
+random 300 / 300
+hash 522 / 522
+structural 90 / 90
+equivalence 301 / 301
+wrap 174 / 174
+collisions 24 / 24
+PASS 1510 inherited pairs plus 24 independent collisions; zero skips
+delta: similarity boundaries, multiset weighting and text detection pass
+initial 123 / 123
+random 300 / 300
+hash 522 / 522
+structural 90 / 90
+equivalence 301 / 301
+wrap 174 / 174
+collisions 24 / 24
+PASS 1510 inherited pairs plus 24 independent collisions; zero skips
+{"commit":"cf0c13d","diagnostics":[],"file":"src/delta_test.lu","impl":"wolfgang","impl_version":"0.2.35","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"delta: similarity boundaries, multiset weighting and text detection pass\n","stdout_sha256":"110346e89f1d4d450e7bdb535cd5993a12bff7861bdd832ef2f949db9a3ba99d","verdict":"exit(0)","warnings":[]}
+delta: native/release scorer, 1510 inherited pairs + 24 collisions per tier; checked exit verified; zero skips
+build: target/native/den
+build: target/release/den
+SCORER INPUT MANIFEST UNCHANGED 6

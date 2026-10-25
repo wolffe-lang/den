@@ -1,0 +1,24 @@
+#!/bin/sh
+# Standalone scorer gate; the unfinished diff command is not in tools/gate yet.
+set -eu
+DEN_ROOT=$(cd "$(dirname "$0")/.." && pwd)
+export DEN_ROOT
+cd "$DEN_ROOT"
+. tools/lib-toolchain.sh
+for tier in native release; do
+    flag=
+    if [ "$tier" = release ]; then flag=--release; fi
+    mkdir -p "target/$tier"
+    "$WOLF" build $flag --deny-warnings src/delta_test.lu -o "target/$tier/delta-test"
+    "target/$tier/delta-test"
+    "$WOLF" build $flag --deny-warnings probes/delta-client/main.lu -o "target/$tier/delta-client"
+    python3 -I tools/rename-scorer-test.py --tier "$tier"
+done
+"$WOLF" conform-run src/delta_test.lu --checked --json > target/delta-checked.json
+cat target/delta-checked.json
+python3 -I - target/delta-checked.json <<'PY'
+import json,sys
+rows=[json.loads(line) for line in open(sys.argv[1]) if line.startswith('{')]
+assert len(rows)==1 and rows[0]['verdict']=='exit(0)',rows
+PY
+echo 'delta: native/release scorer, 1510 inherited pairs + 24 collisions per tier; checked exit verified; zero skips'
