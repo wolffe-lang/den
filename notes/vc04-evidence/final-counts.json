@@ -1,0 +1,148 @@
+{
+  "source_files": 234,
+  "main": {
+    "parity": 167,
+    "not_yet": 20,
+    "shape": 1,
+    "failures": 0,
+    "reviewed": 0
+  },
+  "tiers": {
+    "native": {
+      "diff": {
+        "total": 336,
+        "parity": 336
+      },
+      "diff-api": {
+        "total": 12,
+        "parity": 12
+      },
+      "diff-endpoints": {
+        "total": 575,
+        "parity": 575
+      },
+      "diff-hunks": {
+        "total": 684,
+        "exact": 676,
+        "capture_bound_differences": 8,
+        "oracle_indent_modes_differ": 56,
+        "equal_edit_counts": true
+      },
+      "diff-refresh": {
+        "total": 66,
+        "parity": 66
+      },
+      "pairing": {
+        "parity": 267,
+        "total": 267,
+        "consumer_parity": 1044,
+        "consumer_total": 1044
+      },
+      "similarity": {
+        "initial": 123,
+        "random": 300,
+        "hash": 522,
+        "structural": 90,
+        "equivalence": 301,
+        "wrap": 174,
+        "collisions": 24
+      },
+      "binary": {
+        "total": 250,
+        "byte_identical": 154,
+        "capture_bound_differences": 96,
+        "forward_reverse_apply": 250,
+        "exact_cli_envelopes": 250,
+        "corrupt_rejected": 4
+      },
+      "diff-terminal": {
+        "total": 90,
+        "parity": 90
+      }
+    },
+    "release": {
+      "diff": {
+        "total": 336,
+        "parity": 336
+      },
+      "diff-api": {
+        "total": 12,
+        "parity": 12
+      },
+      "diff-endpoints": {
+        "total": 575,
+        "parity": 575
+      },
+      "diff-hunks": {
+        "total": 684,
+        "exact": 676,
+        "capture_bound_differences": 8,
+        "oracle_indent_modes_differ": 56,
+        "equal_edit_counts": true
+      },
+      "diff-refresh": {
+        "total": 66,
+        "parity": 66
+      },
+      "pairing": {
+        "parity": 267,
+        "total": 267,
+        "consumer_parity": 1044,
+        "consumer_total": 1044
+      },
+      "similarity": {
+        "initial": 123,
+        "random": 300,
+        "hash": 522,
+        "structural": 90,
+        "equivalence": 301,
+        "wrap": 174,
+        "collisions": 24
+      },
+      "binary": {
+        "total": 250,
+        "byte_identical": 154,
+        "capture_bound_differences": 96,
+        "forward_reverse_apply": 250,
+        "exact_cli_envelopes": 250,
+        "corrupt_rejected": 4
+      },
+      "diff-terminal": {
+        "total": 90,
+        "parity": 90
+      }
+    }
+  },
+  "new_checked": {
+    "delta": "exit(0)",
+    "rename": "exit(0)",
+    "difftext": "exit(0)",
+    "diffbinary": "exit(0)"
+  },
+  "plants": [
+    {
+      "pr": 13,
+      "head": "40e94ad1283be384f76fd253ced9702fe9891867",
+      "run": 40222929774,
+      "row": "vc04 gate: exact unified hunk header"
+    },
+    {
+      "pr": 14,
+      "head": "c704b47a1c5fc80565577ef0a27bfa61631f5da1",
+      "run": 40222930228,
+      "row": "vc04 gate: reject a rename at 49 percent"
+    },
+    {
+      "pr": 15,
+      "head": "6b16a4aeadb916bc6b6cacdf122be2d96e61a96c",
+      "run": 40222930811,
+      "row": "vc04 gate: missing-final-newline marker"
+    }
+  ],
+  "plant_verification": "Coordinator read the corrected-head CI runs and confirmed the intended rows; first-head preflight failures are not counted.",
+  "gate_start": "2026-10-25T19:24:43Z",
+  "gate_end": "2026-10-25T19:30:43Z",
+  "gate_status": 0,
+  "tested_source_head": "3f77ca6815b311382bfe0b91622bcb32f799c153",
+  "gate_log_sha256": "3f6aa8a77b35aadf01b5486fc30f8a9c6127af2b9815c3c3009fe0a14988038d"
+}

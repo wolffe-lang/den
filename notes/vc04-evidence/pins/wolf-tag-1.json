@@ -1,0 +1,36 @@
+{
+  "ref": {
+    "ref": "refs/tags/v0.2.35",
+    "node_id": "REF_kwDOTyvVqrFyZWZzL3RhZ3MvdjAuMi4zNQ",
+    "url": "https://api.github.com/repos/wolffe-lang/wolf-lang/git/refs/tags/v0.2.35",
+    "object": {
+      "sha": "4bb355ca30977b1c6413c2195e82e4369778bd84",
+      "type": "tag",
+      "url": "https://api.github.com/repos/wolffe-lang/wolf-lang/git/tags/4bb355ca30977b1c6413c2195e82e4369778bd84"
+    }
+  },
+  "tag": {
+    "node_id": "TA_kwDOTyvVqtoAKDRiYjM1NWNhMzA5NzdiMWM2NDEzYzIxOTVlODJlNDM2OTc3OGJkODQ",
+    "sha": "4bb355ca30977b1c6413c2195e82e4369778bd84",
+    "url": "https://api.github.com/repos/wolffe-lang/wolf-lang/git/tags/4bb355ca30977b1c6413c2195e82e4369778bd84",
+    "tagger": {
+      "name": "mfwolffe",
+      "email": "mfwolffe@outlook.com",
+      "date": "2026-10-23T08:35:09Z"
+    },
+    "object": {
+      "sha": "cf0c13d38479f444b69bb8356ad5709d07eff323",
+      "type": "commit",
+      "url": "https://api.github.com/repos/wolffe-lang/wolf-lang/git/commits/cf0c13d38479f444b69bb8356ad5709d07eff323"
+    },
+    "tag": "v0.2.35",
+    "message": "wolf 0.2.35\n\nThe per-slot union layout (s257: an enum or row with mixed payloads compiles natively, std.json natively, the per-layout copy), E0409 for a member read or method call on a !T (s258), the loop regions with List.reset/List.reserve (s255), the process-wide stack-overflow trap (s256), refusals naming FILE:LINE:COL and E0301 for an unresolved type argument (s259), and the musl portability patch (#886); paired with lupin 0.1.56; STD-PIN 2386522e (wolf-std at sc70). r40.\n",
+    "verification": {
+      "verified": false,
+      "reason": "unsigned",
+      "signature": null,
+      "payload": null,
+      "verified_at": null
+    }
+  }
+}
