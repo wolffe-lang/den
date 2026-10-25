@@ -1,0 +1,8 @@
+diffbinary: pinned literal bytes, empty blocks, delta choice pass
+diffbinary native: bytes 154/250; forward/reverse indexed apply 250/250; corrupt rejected 4/4; base85 symbols 85/85; zero skips
+BYTE PARITY FAIL: 96 named differences retained under /work/den/target/diffbinary-native
+diffbinary: pinned literal bytes, empty blocks, delta choice pass
+diffbinary release: bytes 154/250; forward/reverse indexed apply 250/250; corrupt rejected 4/4; base85 symbols 85/85; zero skips
+BYTE PARITY FAIL: 96 named differences retained under /work/den/target/diffbinary-release
+{"commit":"cf0c13d","diagnostics":[],"file":"src/diffbinary_test.lu","impl":"wolfgang","impl_version":"0.2.35","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"diffbinary: pinned literal bytes, empty blocks, delta choice pass\n","stdout_sha256":"0e7c39c2951f14591ee64f555e382b5ad0ec0e2b46f07106171bcf879704cc07","verdict":"exit(0)","warnings":[]}
+diffbinary: BYTE PARITY FAILED; native/release witnesses retained; checked witness passed

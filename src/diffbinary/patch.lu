@@ -1,0 +1,161 @@
+// Original encoder: RFC 1950/1951 through the org-owned zlib module;
+// pack delta opcodes from gitformat-pack(5), binary envelope/base85 measured
+// against the pinned Git executable. No implementation source consulted.
+use zlib
+
+/// limit: an input exceeds 16 MiB or compression exceeds its bounded cap.
+/// invalid: the internal compressor rejects a fixed valid configuration.
+pub error BinaryPatchErrors = {invalid, limit}
+
+fn append(mut out: List[byte], data: List[byte]) {
+    for b in data { (mut out).push(b) }
+}
+
+fn number(mut out: List[byte], value: int) {
+    var n = value
+    while n >= 128 {
+        (mut out).push((n & 127 | 128) as byte)
+        n = n >> 7
+    }
+    (mut out).push(n as byte)
+}
+
+fn copied(mut out: List[byte], offset: int, length: int) {
+    var pos = offset, remaining = length
+    while remaining > 0 {
+        let n = if remaining > 65536 then 65536 else remaining
+        var op = 128
+        var fields = List[byte]()
+        for i in 0..4 {
+            let b = pos >> i * 8 & 255
+            if b != 0 { op = op | 1 << i; (mut fields).push(b as byte) }
+        }
+        if n != 65536 {
+            for i in 0..3 {
+                let b = n >> i * 8 & 255
+                if b != 0 { op = op | 1 << i + 4; (mut fields).push(b as byte) }
+            }
+        }
+        (mut out).push(op as byte)
+        append(mut out, fields)
+        pos += n
+        remaining -= n
+    }
+}
+
+fn inserted(mut out: List[byte], data: List[byte], start: int, end: int) {
+    var pos = start
+    while pos < end {
+        let n = if end - pos > 127 then 127 else end - pos
+        (mut out).push(n as byte)
+        for i in pos..pos + n { (mut out).push(data[i]) }
+        pos += n
+    }
+}
+
+fn fingerprint(data: List[byte], pos: int) -> int {
+    var key = 0
+    for i in pos..pos + 16 { key = key * 257 + data[i] as int & 0xffffffff }
+    key
+}
+
+// Bounded original greedy matcher, not a reproduction of Git's delta search.
+// One candidate per sampled 16-byte fingerprint; collisions are verified.
+fn delta(before: List[byte], after: List[byte]) -> List[byte] {
+    var out = List[byte]()
+    number(mut out, before.len)
+    number(mut out, after.len)
+    var table = Map[int, int]()
+    var pos = 0
+    while pos + 16 <= before.len {
+        let key = fingerprint(before, pos)
+        let existing = table[key] else -1
+        if existing == -1 { table[key] = pos }
+        pos += 16
+    }
+    pos = 0
+    var pending = 0
+    while pos + 16 <= after.len {
+        let candidate = table[fingerprint(after, pos)] else -1
+        var length = 0
+        if candidate >= 0 {
+            while candidate + length < before.len &&
+                pos + length < after.len &&
+                before[candidate + length] == after[pos + length] { length += 1 }
+        }
+        if length >= 16 {
+            inserted(mut out, after, pending, pos)
+            copied(mut out, candidate, length)
+            pos += length
+            pending = pos
+        } else {
+            pos += 1
+        }
+    }
+    inserted(mut out, after, pending, after.len)
+    out
+}
+
+fn compressed(data: List[byte]) -> List[byte] ! BinaryPatchErrors {
+    zlib.deflate(data, 1, 18000000) else |e| match e {
+        limit => { return limit },
+        invalid => { return invalid },
+        unsupported_level => { return invalid },
+    }
+}
+
+fn encoded(mut out: List[byte], data: List[byte]) {
+    let alphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz!#$%&()*+-;<=>?@^_`{{|}}~"
+    var pos = 0
+    while pos < data.len {
+        let n = if data.len - pos > 52 then 52 else data.len - pos
+        (mut out).push((if n <= 26 then 64 + n else 96 + n - 26) as byte)
+        var group = pos
+        while group < pos + n {
+            var value = 0
+            for i in 0..4 {
+                value = value << 8
+                if group + i < pos + n { value = value | data[group + i] as int }
+            }
+            var digits = [0 as byte, 0 as byte, 0 as byte, 0 as byte, 0 as byte]
+            for i in 0..5 {
+                digits[4 - i] = alphabet.bytes()[value % 85]
+                value = value / 85
+            }
+            append(mut out, digits)
+            group += 4
+        }
+        (mut out).push(10 as byte)
+        pos += n
+    }
+    (mut out).push(10 as byte)
+}
+
+fn block(mut out: List[byte], before: List[byte], after: List[byte]) -> () ! BinaryPatchErrors {
+    let literal = compressed(after)?
+    if before.len >= 16 && after.len >= 16 {
+        region delta_candidate {
+            let instructions = delta(before, after)
+            let packed = compressed(instructions)?
+            if packed.len < literal.len {
+                append(mut out, "delta {instructions.len}\n".bytes())
+                encoded(mut out, packed)
+                return
+            }
+        }
+    }
+    append(mut out, "literal {after.len}\n".bytes())
+    encoded(mut out, literal)
+}
+
+/// Binary patch body only, with forward and reverse blocks. Caller owns the
+/// diff/index headers and unchanged-file suppression. Inputs are borrowed;
+/// result owns its bytes. Delta/compression bytes are not promised Git-identical.
+pub fn patch(before: List[byte], after: List[byte]) -> List[byte] ! BinaryPatchErrors {
+    if before.len > 16777216 || after.len > 16777216 { return limit }
+    var out = List[byte]()
+    append(mut out, "GIT binary patch\n".bytes())
+    block(mut out, before, after)?
+    block(mut out, after, before)?
+    out
+}

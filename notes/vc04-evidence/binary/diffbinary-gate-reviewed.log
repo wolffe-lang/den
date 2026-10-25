@@ -1,0 +1,104 @@
+diffbinary: pinned literal bytes, empty blocks, delta choice pass
+diffbinary native: bytes 154/250; forward/reverse indexed apply 250/250; corrupt rejected 4/4; base85 symbols 85/85; zero skips
+OUTER HEADER DIFFERENCES: 45 cases; kind/size discrepancies are OUTSIDE the compression-only scope
+REVIEWED COMPRESSION: 50 capture-bound exceptions; 46 rejected; not byte parity
+REVIEW REJECT insert-32: outside-compression-scope
+REVIEW REJECT replace-32: outside-compression-scope
+REVIEW REJECT delete-32: outside-compression-scope
+REVIEW REJECT insert-63: outside-compression-scope
+REVIEW REJECT delete-63: outside-compression-scope
+REVIEW REJECT insert-64: outside-compression-scope
+REVIEW REJECT replace-64: outside-compression-scope
+REVIEW REJECT delete-64: outside-compression-scope
+REVIEW REJECT insert-127: outside-compression-scope
+REVIEW REJECT replace-127: outside-compression-scope
+REVIEW REJECT delete-127: outside-compression-scope
+REVIEW REJECT insert-128: outside-compression-scope
+REVIEW REJECT replace-128: outside-compression-scope
+REVIEW REJECT delete-128: outside-compression-scope
+REVIEW REJECT insert-255: outside-compression-scope
+REVIEW REJECT replace-255: outside-compression-scope
+REVIEW REJECT delete-255: outside-compression-scope
+REVIEW REJECT insert-256: outside-compression-scope
+REVIEW REJECT replace-256: outside-compression-scope
+REVIEW REJECT delete-256: outside-compression-scope
+REVIEW REJECT insert-1024: outside-compression-scope
+REVIEW REJECT replace-1024: outside-compression-scope
+REVIEW REJECT delete-1024: outside-compression-scope
+REVIEW REJECT insert-8192: outside-compression-scope
+REVIEW REJECT replace-8192: outside-compression-scope
+REVIEW REJECT delete-8192: outside-compression-scope
+REVIEW REJECT repeat-8192: outside-compression-scope
+REVIEW REJECT insert-32768: outside-compression-scope
+REVIEW REJECT replace-32768: outside-compression-scope
+REVIEW REJECT delete-32768: outside-compression-scope
+REVIEW REJECT repeat-32768: outside-compression-scope
+REVIEW REJECT insert-65536: outside-compression-scope
+REVIEW REJECT replace-65536: outside-compression-scope
+REVIEW REJECT delete-65536: outside-compression-scope
+REVIEW REJECT repeat-65536: outside-compression-scope
+REVIEW REJECT insert-131072: outside-compression-scope
+REVIEW REJECT replace-131072: outside-compression-scope
+REVIEW REJECT delete-131072: outside-compression-scope
+REVIEW REJECT repeat-131072: outside-compression-scope
+REVIEW REJECT move-2048: outside-compression-scope
+REVIEW REJECT multi-edit-2048: outside-compression-scope
+REVIEW REJECT copy-offset-2048: outside-compression-scope
+REVIEW REJECT move-70000: outside-compression-scope
+REVIEW REJECT multi-edit-70000: outside-compression-scope
+REVIEW REJECT copy-offset-70000: outside-compression-scope
+REVIEW REJECT line-boundary-90: unreviewed
+BYTE PARITY FAIL: 96 named differences retained under /work/den/target/diffbinary-native
+diffbinary: pinned literal bytes, empty blocks, delta choice pass
+diffbinary release: bytes 154/250; forward/reverse indexed apply 250/250; corrupt rejected 4/4; base85 symbols 85/85; zero skips
+OUTER HEADER DIFFERENCES: 45 cases; kind/size discrepancies are OUTSIDE the compression-only scope
+REVIEWED COMPRESSION: 50 capture-bound exceptions; 46 rejected; not byte parity
+REVIEW REJECT insert-32: outside-compression-scope
+REVIEW REJECT replace-32: outside-compression-scope
+REVIEW REJECT delete-32: outside-compression-scope
+REVIEW REJECT insert-63: outside-compression-scope
+REVIEW REJECT delete-63: outside-compression-scope
+REVIEW REJECT insert-64: outside-compression-scope
+REVIEW REJECT replace-64: outside-compression-scope
+REVIEW REJECT delete-64: outside-compression-scope
+REVIEW REJECT insert-127: outside-compression-scope
+REVIEW REJECT replace-127: outside-compression-scope
+REVIEW REJECT delete-127: outside-compression-scope
+REVIEW REJECT insert-128: outside-compression-scope
+REVIEW REJECT replace-128: outside-compression-scope
+REVIEW REJECT delete-128: outside-compression-scope
+REVIEW REJECT insert-255: outside-compression-scope
+REVIEW REJECT replace-255: outside-compression-scope
+REVIEW REJECT delete-255: outside-compression-scope
+REVIEW REJECT insert-256: outside-compression-scope
+REVIEW REJECT replace-256: outside-compression-scope
+REVIEW REJECT delete-256: outside-compression-scope
+REVIEW REJECT insert-1024: outside-compression-scope
+REVIEW REJECT replace-1024: outside-compression-scope
+REVIEW REJECT delete-1024: outside-compression-scope
+REVIEW REJECT insert-8192: outside-compression-scope
+REVIEW REJECT replace-8192: outside-compression-scope
+REVIEW REJECT delete-8192: outside-compression-scope
+REVIEW REJECT repeat-8192: outside-compression-scope
+REVIEW REJECT insert-32768: outside-compression-scope
+REVIEW REJECT replace-32768: outside-compression-scope
+REVIEW REJECT delete-32768: outside-compression-scope
+REVIEW REJECT repeat-32768: outside-compression-scope
+REVIEW REJECT insert-65536: outside-compression-scope
+REVIEW REJECT replace-65536: outside-compression-scope
+REVIEW REJECT delete-65536: outside-compression-scope
+REVIEW REJECT repeat-65536: outside-compression-scope
+REVIEW REJECT insert-131072: outside-compression-scope
+REVIEW REJECT replace-131072: outside-compression-scope
+REVIEW REJECT delete-131072: outside-compression-scope
+REVIEW REJECT repeat-131072: outside-compression-scope
+REVIEW REJECT move-2048: outside-compression-scope
+REVIEW REJECT multi-edit-2048: outside-compression-scope
+REVIEW REJECT copy-offset-2048: outside-compression-scope
+REVIEW REJECT move-70000: outside-compression-scope
+REVIEW REJECT multi-edit-70000: outside-compression-scope
+REVIEW REJECT copy-offset-70000: outside-compression-scope
+REVIEW REJECT line-boundary-90: unreviewed
+BYTE PARITY FAIL: 96 named differences retained under /work/den/target/diffbinary-release
+{"commit":"cf0c13d","diagnostics":[],"file":"src/diffbinary_test.lu","impl":"wolfgang","impl_version":"0.2.35","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"diffbinary: pinned literal bytes, empty blocks, delta choice pass\n","stdout_sha256":"0e7c39c2951f14591ee64f555e382b5ad0ec0e2b46f07106171bcf879704cc07","verdict":"exit(0)","warnings":[]}
+diffbinary: --reviewed-compression FAILED; native/release witnesses retained; checked witness passed

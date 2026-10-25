@@ -1,0 +1,36 @@
+#!/bin/sh
+# Standalone binary module gate. Byte parity is strict unless the caller
+# explicitly requests interoperability-only evidence for an unresolved ruling.
+set -eu
+DEN_ROOT=$(cd "$(dirname "$0")/.." && pwd)
+export DEN_ROOT
+cd "$DEN_ROOT"
+. tools/lib-toolchain.sh
+case "${1-}" in
+    '') ;;
+    --interoperability-only|--reviewed-compression|--reviewed-body) ;;
+    *) echo 'usage: tools/check-diffbinary [--interoperability-only|--reviewed-compression|--reviewed-body]' >&2; exit 2 ;;
+esac
+status=0
+for tier in native release; do
+    flag=
+    if [ "$tier" = release ]; then flag=--release; fi
+    mkdir -p "target/$tier"
+    "$WOLF" build $flag --deny-warnings src/diffbinary_test.lu -o "target/$tier/diffbinary-test"
+    "target/$tier/diffbinary-test"
+    "$WOLF" build $flag --deny-warnings probes/diffbinary-client/main.lu -o "target/$tier/diffbinary-client"
+    python3 -I tools/diffbinary-oracle.py --tier "$tier" "$@" || status=1
+done
+"$WOLF" conform-run src/diffbinary_test.lu --checked --json > target/diffbinary-checked.json
+cat target/diffbinary-checked.json
+python3 -I - target/diffbinary-checked.json <<'PY'
+import json,sys
+rows=[json.loads(line) for line in open(sys.argv[1]) if line.startswith('{')]
+assert len(rows)==1 and rows[0]['verdict']=='exit(0)',rows
+PY
+if [ "$status" = 0 ]; then
+    echo "diffbinary: native/release ${1-byte-parity} and checked witnesses passed; zero skips"
+else
+    echo "diffbinary: ${1-byte-parity} FAILED; native/release witnesses retained; checked witness passed" >&2
+fi
+exit "$status"

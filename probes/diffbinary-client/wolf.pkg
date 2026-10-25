@@ -1,0 +1,9 @@
+pkg {
+    name: "diffbinary-client",
+    edition: "1",
+    capabilities: [env, fs],
+    deps: {
+        diffbinary: {path: "../../src/diffbinary"},
+        zlib: {path: "../../src/zlib"},
+    },
+}

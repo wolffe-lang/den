@@ -1,0 +1,36 @@
+use std.fs
+use diffbinary
+
+error ProbeErrors = {invalid, limit, not_found, denied, io}
+
+fn input(path: str) -> List[byte] ! ProbeErrors {
+    var file = fs.open(path)?
+    defer fs.close(take file) else |_| {}
+    var out = List[byte]()
+    loop {
+        region part {
+            let bytes = fs.read_chunk(mut file, 65536) else |e| match e {
+                eof => { break },
+                io => { return io },
+            }
+            if bytes.len > 16777216 - out.len { return limit }
+            for b in bytes { (mut out).push(b) }
+        }
+    }
+    out
+}
+
+fn work(args: List[str]) -> int ! ProbeErrors {
+    if args.len != 3 { return invalid }
+    let before = input(args[0])?
+    let after = input(args[1])?
+    let body = diffbinary.patch(before, after)?
+    var file = fs.create(args[2])?
+    defer fs.close(take file) else |_| {}
+    fs.write_chunk(mut file, body)?
+    0
+}
+
+fn main() -> int {
+    work(env_args()) else |e| { eprint("{e}"); 1 }
+}

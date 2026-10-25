@@ -1,0 +1,2540 @@
+{
+  "schema": 1,
+  "scope": "R-vc04-4 binary representation; exact reconstruction and validated framing",
+  "description": "96 exact capture bindings under refined R-vc04-4; representation-dependent delta choices and lengths allowed only with validated framing and exact forward/reverse blob reconstruction. New or changed captures fail.",
+  "oracle_sha256": "c4848492938c4ebfffbefe1fbbaa68b9af90c86d1f6a20e76816c5ff37fcfa60",
+  "rows": [
+    {
+      "name": "short-25",
+      "captures": {
+        "before_sha256": "2a6013f83555ed1c5f4c16e2eba14a1cf64b3bf6be8268fe291e2a000378193d",
+        "after_sha256": "49356f024f367d8101e3c27d6b9b111d94431fbd4c414ad8a4c69f30ef5fce3c",
+        "actual_body_sha256": "b8e69d773ad66b92d6d35ef0e298d49906469d9b7a715ce5a0ddc3099a53c95f",
+        "oracle_body_sha256": "5c891491202890fccfa99898e861cf670c4aa7c9ea3dd3d807b311d6b93a4f15",
+        "actual_full_patch_sha256": "649a6b7d706bfaff21095696bd7a1b777b00b889000d89e5ae96577382cfa721",
+        "oracle_full_stdout_sha256": "fe352bcccebbd3bcc059b746061608a472ae4601671207189dc6df20b9bcc31f",
+        "oracle_apply_patch_sha256": "30dfbaa8331149c9fb0051214eea78791c2952c58e32bf0cd6317387bc385fb4",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:deflate-bytes"
+      ],
+      "outer_differences": [],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "short-29",
+      "captures": {
+        "before_sha256": "2a6013f83555ed1c5f4c16e2eba14a1cf64b3bf6be8268fe291e2a000378193d",
+        "after_sha256": "8074ec93672234eec26d5401d6e2e754f94d8e4f8ac2f50c2fff93cf782e36ae",
+        "actual_body_sha256": "da2c4e38b5b8a8ee1a657372b2c3c98a498b8a4c2c6f0e940ffdba5ffbe14fbf",
+        "oracle_body_sha256": "200715539811d9297dd0c1fcccb23a8d3ecc23aa3dd3e8150c891bfb415ee373",
+        "actual_full_patch_sha256": "38e3e444f327252a15ff0838eddf0d00099182281d6ed5587afba56cfd64a642",
+        "oracle_full_stdout_sha256": "f2184987bfbf1e157701747d229cccd05783ce108286f828c5c45d3705b6cf44",
+        "oracle_apply_patch_sha256": "e96d2cd893e7d282687aa7e5f38afb097a4e6cf5f43c68f5d2cfe52e9f1da76b",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:deflate-bytes"
+      ],
+      "outer_differences": [],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "short-34",
+      "captures": {
+        "before_sha256": "2a6013f83555ed1c5f4c16e2eba14a1cf64b3bf6be8268fe291e2a000378193d",
+        "after_sha256": "5e486c0459502420a1add991b12eb2610fcb76329787032a2d3fbe546b49cf78",
+        "actual_body_sha256": "6ea064dc0657a694e51c82e615b9bc6fe8f478c2288acee8976e2e56baedb786",
+        "oracle_body_sha256": "86207c347dba4fd0011b3a0e0efd8a561fa152e9688ee2c22f81006042311efc",
+        "actual_full_patch_sha256": "9aa8bcc0ac107e8bc95aa47e2702a3d55d658ea0e24abde561bbda1372470ab0",
+        "oracle_full_stdout_sha256": "75284b7e8d7a0b410c3c88a76445dd7ce3551446c55d98e5ad320c353af8e3b5",
+        "oracle_apply_patch_sha256": "7e3a0cf4cb20728a7ff3e0ca6f354df46e2b3b33b28a4d7b7efafbf6b6901d0a",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:deflate-bytes"
+      ],
+      "outer_differences": [],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "short-35",
+      "captures": {
+        "before_sha256": "2a6013f83555ed1c5f4c16e2eba14a1cf64b3bf6be8268fe291e2a000378193d",
+        "after_sha256": "7bbf451d6a74249f094fb81d789ca31fe0b1eec74685ce870525931f41caea8e",
+        "actual_body_sha256": "3e61efb55da3754df792deb157806f466aa3c998ed1a0e911d993bdbcb36737b",
+        "oracle_body_sha256": "1be74600b2667019ab755919028349a3d76cb06e686ed25d746db91a55161e62",
+        "actual_full_patch_sha256": "32f7bf23d7aa9ca73998963ff28797df29e18bd594945f0daeb787c4df21f52f",
+        "oracle_full_stdout_sha256": "fb13f758cd82e004f7697d9505f8867bc091e79c19fdec60ec6de05ee9905291",
+        "oracle_apply_patch_sha256": "38a1bc5dd1bcdc99ba295b5b84bf6901a61f2cac967c40e0360e28e10f2925fa",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:deflate-bytes"
+      ],
+      "outer_differences": [],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "short-36",
+      "captures": {
+        "before_sha256": "2a6013f83555ed1c5f4c16e2eba14a1cf64b3bf6be8268fe291e2a000378193d",
+        "after_sha256": "158838ac23b725287f83b753df2d6d59f73da4bc5a4ffad7742aeed8afed1035",
+        "actual_body_sha256": "a646af04e95a988bb1c993f0c679e545f81b61df6f3bc5d2f4e08288152462f5",
+        "oracle_body_sha256": "a0cba5edff5b7854794086e30e0fe4448d60e8b3612088e62b912c1a70fdb35c",
+        "actual_full_patch_sha256": "67c4cd3c39944ee8fe3e5e2feae16c9096ca415a20221a026d262fc786146fa9",
+        "oracle_full_stdout_sha256": "57cd9129188f9f1a36c6b446ee9db4103ad1c29a316f5f83bc24a125cf87683e",
+        "oracle_apply_patch_sha256": "bfe6295e7846931b71a36e9874ce8d76fd2ddd209c902a608d0b9715e2d08d1b",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:deflate-bytes"
+      ],
+      "outer_differences": [],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "short-38",
+      "captures": {
+        "before_sha256": "2a6013f83555ed1c5f4c16e2eba14a1cf64b3bf6be8268fe291e2a000378193d",
+        "after_sha256": "290b694ab82c241371f0b12265b1b596836502edfe17c0c940e2e6467eceae17",
+        "actual_body_sha256": "96424dbc48304cc16a7250084bbc324556c57072a3b0bead735208626faba3f4",
+        "oracle_body_sha256": "3aaf675c779f86971c64464043301fd8d8e5d72bf24903e343dcfccbd852d569",
+        "actual_full_patch_sha256": "af8a6f00f13d40bc96248934761c5de62c171a69a85f51f2ff8095611296fd7b",
+        "oracle_full_stdout_sha256": "bb00370960cd9fb06bf2d6aa3412dbc361846f0a0a8b2f5fd9dc1c54a47e7ee7",
+        "oracle_apply_patch_sha256": "401eb9ca5049b7a8252cc3f96d5158bd4d33b17365f739f143152e237d53e577",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:deflate-bytes"
+      ],
+      "outer_differences": [],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "short-39",
+      "captures": {
+        "before_sha256": "2a6013f83555ed1c5f4c16e2eba14a1cf64b3bf6be8268fe291e2a000378193d",
+        "after_sha256": "4234362d6ed211181e533eb0bcb9a7fe8ea68fb03a9e119c391f87ee9fbaf16f",
+        "actual_body_sha256": "ad5533c53f4dcc9293fc521b79a5d3b8dfaae2b62e2fbe52e87f37455291c81f",
+        "oracle_body_sha256": "9428ad8f0608cf506bb248c2e8f70f40d73ebd61d18d7952dd4ed60304f2bd5a",
+        "actual_full_patch_sha256": "7fb36544adb9bf2dee78ed9780bedecabcac60c1cc932fe48f6d06cdc6284703",
+        "oracle_full_stdout_sha256": "246909cd09d55800d548d2ae7bbac52345697b32e02bbc5070ffb920363872db",
+        "oracle_apply_patch_sha256": "d9578735b6b3ce3fd3eb1330be29fb0018d39cbf123abfc56ce58f62c663b99e",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:deflate-bytes"
+      ],
+      "outer_differences": [],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "short-40",
+      "captures": {
+        "before_sha256": "2a6013f83555ed1c5f4c16e2eba14a1cf64b3bf6be8268fe291e2a000378193d",
+        "after_sha256": "7946705418c61078c432549eccc9bb1601568f8a1f6b46d4c1955842800da03b",
+        "actual_body_sha256": "a78f11d1af5916c9068a2989817eadddc1728dd3c279c9426ddf1a69b9bacbf6",
+        "oracle_body_sha256": "8b4f800887b2aeb50f7e1ff1fa00a0e618f52cf2b2cd309d2e5e79c8871f1813",
+        "actual_full_patch_sha256": "7589f59e6499e7a39bdd0f2c8ea4370020b5d69c437ed25c620e066f552f907b",
+        "oracle_full_stdout_sha256": "3181b6e4a665c076955b80a719e8c6c589ee57bce898754f92637377fafc4300",
+        "oracle_apply_patch_sha256": "526cffc7f1e38ccdd2a999f375ac08838c3992422748488dd4cade7c0913230e",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:deflate-bytes"
+      ],
+      "outer_differences": [],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "short-42",
+      "captures": {
+        "before_sha256": "2a6013f83555ed1c5f4c16e2eba14a1cf64b3bf6be8268fe291e2a000378193d",
+        "after_sha256": "a1031e64bd9102449f75c7df912f416d1158a1f409f0298b2e2ec24d7a206c9d",
+        "actual_body_sha256": "1d081369c44b9834fe096fecd3f9f643405883b2b4e555dcbf3ae8b6f4304f21",
+        "oracle_body_sha256": "3053c6c5fbc0c354ad5cece8c2e4af6243d012000ef4a5f7d50915221824e2ab",
+        "actual_full_patch_sha256": "4dd2313bf2e39dde4c6919926cdf74e9e2585f9446332934169c957515b21d98",
+        "oracle_full_stdout_sha256": "a67e0e6d7788327305344bbac4a00f70f0d138d4688517620384a8e06cc7c500",
+        "oracle_apply_patch_sha256": "e27ea3a02281f4a875b5628a4456038b7625430ee44e88e225ce039f8c8a87f0",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:deflate-bytes"
+      ],
+      "outer_differences": [],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "short-43",
+      "captures": {
+        "before_sha256": "2a6013f83555ed1c5f4c16e2eba14a1cf64b3bf6be8268fe291e2a000378193d",
+        "after_sha256": "d65fcb8bba56afa7dcf0d7d409b334f4c5d244a3954824840e761946334ab920",
+        "actual_body_sha256": "6ca5f759db4b60d5e9b3ee68dc923be37e10d35781133a289a9e7958f76679f3",
+        "oracle_body_sha256": "99cd39d91cf714e3a195d5ff44cca0e6bdc803fc57f9909dc6b99aea5dcedfe5",
+        "actual_full_patch_sha256": "41ccb43c56b7b2cf35a0dbb13e673127518aa2346587c22d52f22773ad0b62fa",
+        "oracle_full_stdout_sha256": "3b9f523ae52b58c6c0b3d387d9455c77bfc4450f1397352c085315ac090116c4",
+        "oracle_apply_patch_sha256": "e8a0500ec3a8ae562c29762b088fa3d511c5669f2c60634ca37e3ed977c579cf",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:deflate-bytes"
+      ],
+      "outer_differences": [],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "short-44",
+      "captures": {
+        "before_sha256": "2a6013f83555ed1c5f4c16e2eba14a1cf64b3bf6be8268fe291e2a000378193d",
+        "after_sha256": "b6cc23ecf01796500437dca02b0b1b3383218f55bc89f5b7a9cdcdb5e54f5488",
+        "actual_body_sha256": "e84c498d95dedc90f8379e342448a3bcc6fd811c150646b71f0104b64b801213",
+        "oracle_body_sha256": "7fef3e13b8458cb2903a54e46608a5d6dd6f0536b58892e8c1ed3bd64e06339b",
+        "actual_full_patch_sha256": "461c4ae8b25bd695804a2c874003d8c71302e6d0aaf7bce5f71823888befdb22",
+        "oracle_full_stdout_sha256": "aff97121cc2e92758cf1f13e84792ba74f2625c1ee7c1e1b57c6a826a95e8cfb",
+        "oracle_apply_patch_sha256": "7f02a91a541b0050d0922637e336dbb00dcfdf247c98fce53ac219da113bedfb",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:deflate-bytes"
+      ],
+      "outer_differences": [],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "short-45",
+      "captures": {
+        "before_sha256": "2a6013f83555ed1c5f4c16e2eba14a1cf64b3bf6be8268fe291e2a000378193d",
+        "after_sha256": "a559099f31289d5d50c204cfde1ea60735f7672944c023cbccb3f49a0d4367c6",
+        "actual_body_sha256": "8517328eb65cc4d68dc8204a26b74ec69976291ef846540922708a14bd0763a7",
+        "oracle_body_sha256": "2f3faa8abd9ac55fbbcf083dbecf77f6502ca4893b434ca4e7fad4d950eec5d9",
+        "actual_full_patch_sha256": "89d9c8e44bb02133e5e9e40d7250ff1ddd2d9ac5025348f8a786c5a37b0cab2c",
+        "oracle_full_stdout_sha256": "46101bdb792b6b27dc2678dac017d0ccae8d1055f59b093ed13edc1bd0540659",
+        "oracle_apply_patch_sha256": "30a30dabe77013d3e622db647cc5dc741f38daf061656ace7bdc7dea996cbd6b",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:deflate-bytes"
+      ],
+      "outer_differences": [],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "short-46",
+      "captures": {
+        "before_sha256": "2a6013f83555ed1c5f4c16e2eba14a1cf64b3bf6be8268fe291e2a000378193d",
+        "after_sha256": "b644cb2f1524e79555f9b3340f243845a348f55dcc7106d15797880cfa1966c9",
+        "actual_body_sha256": "9987c94e3c12683b24506d42dac3dc26f268184af792b1173c1ba75adfb36043",
+        "oracle_body_sha256": "e3261aba3c1fbb2fdbc502bf53e4a40ffd3be9c219bdcf8b798db9a479c0a2d4",
+        "actual_full_patch_sha256": "78d2496d41b98d6448287281582770538b39e7f4ce05dbcd5028dcde6f1f50fb",
+        "oracle_full_stdout_sha256": "dca702952ade66b317c20ea81b03c2f4d3da499066eb8867b367106ea59c08cb",
+        "oracle_apply_patch_sha256": "3b7ab59732036c05921429df95aeab82a0302482649a67033eabac7922d257e4",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:deflate-bytes"
+      ],
+      "outer_differences": [],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "short-47",
+      "captures": {
+        "before_sha256": "2a6013f83555ed1c5f4c16e2eba14a1cf64b3bf6be8268fe291e2a000378193d",
+        "after_sha256": "6d1a02a0209256d2ed26cdd29e9c2052701575aa108d589056ae28c61887110f",
+        "actual_body_sha256": "26b2bf2a6704b9c66348511f28ad6d62df252238cd5ac0f1cc71e28e208f2872",
+        "oracle_body_sha256": "f9a813b1e348d2ee833d5d04ad843548ca847edd68e04629c1e61f8007315a39",
+        "actual_full_patch_sha256": "ba2b2c4023bb95dc71e7b3603cf37a238ecf474ec2cb6cee484fe839b941d911",
+        "oracle_full_stdout_sha256": "c1492c46272ce7f2d4cbb4a3a94dfe9e6c6249fb74ebc6043ff56b1e2a370d91",
+        "oracle_apply_patch_sha256": "bfb892fd28e36e9ec41166bd87982686aed8bd06edc3289f8270b0b8564f6eda",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:deflate-bytes"
+      ],
+      "outer_differences": [],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "short-48",
+      "captures": {
+        "before_sha256": "2a6013f83555ed1c5f4c16e2eba14a1cf64b3bf6be8268fe291e2a000378193d",
+        "after_sha256": "2f2376e02415d7fa6d301e6d55d2648c840ca5ad31330dc01375f7e280cc55da",
+        "actual_body_sha256": "9b36214a41b1f4c5e93a6fba2371e49f2520176322cb5245ab2651939c4f7d3e",
+        "oracle_body_sha256": "396c8bf527b9c28fb0762bcef12f54d0c4a1761ac709032c3f5e020f341b6662",
+        "actual_full_patch_sha256": "dfd9c51a1b78460a687fa116324df9e3132040a83e01dfe4fa0c8e56e2d3e3e0",
+        "oracle_full_stdout_sha256": "13e249d237d28ef04402825dc54c41af4fca272b725100fa34d597172dc58cdd",
+        "oracle_apply_patch_sha256": "3fe3c8e05cbfd78afed78f7ec58e9e4ca19d843c43252246c81232438be974c1",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:deflate-bytes"
+      ],
+      "outer_differences": [],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "short-49",
+      "captures": {
+        "before_sha256": "2a6013f83555ed1c5f4c16e2eba14a1cf64b3bf6be8268fe291e2a000378193d",
+        "after_sha256": "875990d8b77f67247598dd23bc4a74dea097c37382373f9a59c28ae84e101d7f",
+        "actual_body_sha256": "4977c297921c4b60a42acb6ab56772eeefabdc41897c3c6ee8cfdaef24d8e0ac",
+        "oracle_body_sha256": "4b1ef16df07e3d72f6e573ca014f135573da932b00b686449b306a5f0b015fd2",
+        "actual_full_patch_sha256": "1eb3ea56d47054f7404f984943b6a7c0f1c3abc7a2610ada8eb66474dfcfcef4",
+        "oracle_full_stdout_sha256": "2a35cfc61cee3a68acea38f9b8a0a272a6823c0370db64fe3c662275f355d19c",
+        "oracle_apply_patch_sha256": "a9ab628df1a2787555aaa839ec70fefe52e2f74e987d0ab271d62ed8c80aabb7",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:deflate-bytes"
+      ],
+      "outer_differences": [],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "short-50",
+      "captures": {
+        "before_sha256": "2a6013f83555ed1c5f4c16e2eba14a1cf64b3bf6be8268fe291e2a000378193d",
+        "after_sha256": "4de6384617f9b29cca2847f7cadb922f9db9d746d259d5b6de9309e88e278211",
+        "actual_body_sha256": "888e3e40517b556519c4ed0ac16141830703cbaa110dcd2506f0d8a1f016f134",
+        "oracle_body_sha256": "342c05d65cfdd2ca24b15c88ca08c17c89fcbc4670be46bb0a38c2e814a9d79b",
+        "actual_full_patch_sha256": "19c62430bc1df7f1aa7966957805929c8292984db5c2eb2d1c467f57944b5a04",
+        "oracle_full_stdout_sha256": "ed6b116f8449cea053eb912e5d6fa34fa5619517f2e01bcfe255df2dbdc689ef",
+        "oracle_apply_patch_sha256": "4b3798b4768226763ac936f7ba3ae520c868aa92464aa6d1b105ebd408838cd1",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:deflate-bytes"
+      ],
+      "outer_differences": [],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "short-51",
+      "captures": {
+        "before_sha256": "2a6013f83555ed1c5f4c16e2eba14a1cf64b3bf6be8268fe291e2a000378193d",
+        "after_sha256": "b2168a4617c3bf65e5c5f7042b7046f664214a0b7672bbef90f36e58b00eccc6",
+        "actual_body_sha256": "35f0efcf0837688299accd90ea192fbac14156f1a45d31cbf13605c63b81959f",
+        "oracle_body_sha256": "971603340a861d1aa6ff9053c49965d7d7113709cb40d646d5205fe56a63a5b1",
+        "actual_full_patch_sha256": "a4174aba238a9a028f99ce1eb93a7ee5d816938bb621d575cf755fedab91bac2",
+        "oracle_full_stdout_sha256": "d4f7aaa69bd5dc58d41c7ba436768024893100de59428ecff030ae0f4d5fe615",
+        "oracle_apply_patch_sha256": "3330a307f4d5193c4566d583a947f4a4f0ab774a61e2982a5d12eeb98e85f4e4",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:deflate-bytes"
+      ],
+      "outer_differences": [],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "short-52",
+      "captures": {
+        "before_sha256": "2a6013f83555ed1c5f4c16e2eba14a1cf64b3bf6be8268fe291e2a000378193d",
+        "after_sha256": "870d93083d883fc8bdec2c0a543fbce08e8bdc1bf8d5f6c2fc7e38ad9d988052",
+        "actual_body_sha256": "b952fd6227c1e1bdecca6b7f80ae06c6f86e2a9674f7b0c1d4e998290ca1f3b0",
+        "oracle_body_sha256": "2919d8284265e88fdc14474a55c4a79cfe3ffac3564efaae6f531d2fdc006531",
+        "actual_full_patch_sha256": "364a61fd2bd78823920f9c90c1228db7182e73b95bebd6bf1265d057deaf8b83",
+        "oracle_full_stdout_sha256": "64765d309c6b3deea9085d6d74d85ca3cb8a8502aa7477297833d592e72fe109",
+        "oracle_apply_patch_sha256": "a6f85c9de23e037b7ce803efe56a98bb8a797def0fe7398b61f27d9b470c9fa4",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:deflate-bytes"
+      ],
+      "outer_differences": [],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "short-53",
+      "captures": {
+        "before_sha256": "2a6013f83555ed1c5f4c16e2eba14a1cf64b3bf6be8268fe291e2a000378193d",
+        "after_sha256": "a47df7497bb4a7124e66225f987fe1141732fa5ead942297ac379e64c415b610",
+        "actual_body_sha256": "635995f2344bef53208b8508a056af7b7dca77160a4d720f971e81db0bb12837",
+        "oracle_body_sha256": "8463a078ac84729fe5b455b70330bca122f981f34890c61e41c6ca64ccc21e9e",
+        "actual_full_patch_sha256": "13cb3a2a30f7909fa8f780617e7ef85536b013e9db5759d9f42fd0fadd4d0d3d",
+        "oracle_full_stdout_sha256": "f7f3590059b83829340540d8992320ebeaf89f7e8403b7bc7f66fd2c17a59d38",
+        "oracle_apply_patch_sha256": "a710bf27fd0e388e94505241f22fa644d98b9231f005b05eb66f2625ad3a2ee3",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:deflate-bytes"
+      ],
+      "outer_differences": [],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "short-54",
+      "captures": {
+        "before_sha256": "2a6013f83555ed1c5f4c16e2eba14a1cf64b3bf6be8268fe291e2a000378193d",
+        "after_sha256": "b7f55b85665c7186c1e743307c65d88914afa44cca728104ceec37092a5d5948",
+        "actual_body_sha256": "1f68fbb0d6efc3132a6018442a0fd56bc7f5a1f2f1cf8e791492387c888919b1",
+        "oracle_body_sha256": "03d49ce8eb367aa434c84799b1dbaa8ff8f4a72a2c69e4bf30aa4313a1533675",
+        "actual_full_patch_sha256": "2ea297c9258cd070ab04c3474c3eb824f993f3d29ba12a5b90c4715d696ccbba",
+        "oracle_full_stdout_sha256": "4a1b9763f651467b70447e3bc0a29fe14379c75a64d5a1c90bd90dd9c0ce5031",
+        "oracle_apply_patch_sha256": "55b00173601947ccf27ad6b655db0d43c1ee00b41222fa24b323159ac1feba72",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:deflate-bytes"
+      ],
+      "outer_differences": [],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "short-55",
+      "captures": {
+        "before_sha256": "2a6013f83555ed1c5f4c16e2eba14a1cf64b3bf6be8268fe291e2a000378193d",
+        "after_sha256": "26f2c71a1ad64f0744b4e761a5b29cd76f0d1aabea5d53717ba5c62591b4d336",
+        "actual_body_sha256": "6b9e1e6794ee87226472e5a6426fdbebe4dddc208609645aa5f29ddbebbb040d",
+        "oracle_body_sha256": "7e0b0b1cc30d54ae4e1c7c7748f673ea2bb348ed321547028446af69b914901f",
+        "actual_full_patch_sha256": "e0fb8013dbdf6526fe56da3f52aceba746a37314c51648e9d63e71ae2205c8a3",
+        "oracle_full_stdout_sha256": "1661979afbb5d1d1a623e1234d0028719ad923f660de4379e7a0df142c329883",
+        "oracle_apply_patch_sha256": "6da9a526c8213f1884238f3bf5725c05acb3da9ca21318e28a4def8e588fbc03",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:deflate-bytes"
+      ],
+      "outer_differences": [],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "short-56",
+      "captures": {
+        "before_sha256": "2a6013f83555ed1c5f4c16e2eba14a1cf64b3bf6be8268fe291e2a000378193d",
+        "after_sha256": "ec66d8f752e58408a6524f114b1f7b8b146d4561d14dd8e9f186a6375804db39",
+        "actual_body_sha256": "f4e8b5e92c5a7bd5c83e8a8723f212dfb8e3218f542af361ee204d52990d0865",
+        "oracle_body_sha256": "e2ccc7522e85ca2c79fe1d805609e6a35ce8ce897dc698b6c5287506f80c7c57",
+        "actual_full_patch_sha256": "822602d1c0c674fbda3c0d1a3479cd83de2a15e17491530f7d89c4cda83a0716",
+        "oracle_full_stdout_sha256": "4325f75ef3cf041ac62322749152c44f91f4dbcb1814c640d52a31747e1a1ae9",
+        "oracle_apply_patch_sha256": "e518d27327048efe94d7960a202e8b9a0c741ce440173dc34c538a6a6f479b7c",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:deflate-bytes"
+      ],
+      "outer_differences": [],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "short-58",
+      "captures": {
+        "before_sha256": "2a6013f83555ed1c5f4c16e2eba14a1cf64b3bf6be8268fe291e2a000378193d",
+        "after_sha256": "2f1b9643d8153b4168d3cae4a9df3e58fc3f6eaebe84ebe43fe7a4c770c528b1",
+        "actual_body_sha256": "5449ca6fb973fd755e02d4694b10d47fe8cb40cd2f706df27d483d287ef20ed4",
+        "oracle_body_sha256": "ec8db734a15856a60abd07f3cef7dc20d49de2cb9174294590d498a1d02549ec",
+        "actual_full_patch_sha256": "dde723b66856abb38c8051dee50518067a09c9591ce839e02a7ef50663a37e13",
+        "oracle_full_stdout_sha256": "9ecf4ec85949637d51c7f1f237c335d014b06dd5db3730dfeb6b82be023c1a56",
+        "oracle_apply_patch_sha256": "0b2be4f970d0eed1dca648c61067345360fd6167cd7cc4ab367a2cf0862fe5a5",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:deflate-bytes"
+      ],
+      "outer_differences": [],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "short-59",
+      "captures": {
+        "before_sha256": "2a6013f83555ed1c5f4c16e2eba14a1cf64b3bf6be8268fe291e2a000378193d",
+        "after_sha256": "6960bd65989610be9907e90e55a874fbf70421bf26f82f6917475e0fd7e94f20",
+        "actual_body_sha256": "d49e4081568d0698b5f44d06f5128aaab7772e129e166a4cbfff90f141ccac00",
+        "oracle_body_sha256": "3c2b4849eecc93fabbc5ed7ba7b20cbf123aad546c6647a98f126e107e2623c9",
+        "actual_full_patch_sha256": "aa2b32c8e3350c4e620fc68387558b005fa491d6c5103e1a6b6bf955371f5d1a",
+        "oracle_full_stdout_sha256": "cfa35fadef092960ccce544bf5674c5940e54982e8dfcd342c5f03d1d7b87297",
+        "oracle_apply_patch_sha256": "7ac1c002314f884d632bcefb57f5e649aae69d7f4137cfad9e6694b92a911f7a",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:deflate-bytes"
+      ],
+      "outer_differences": [],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "short-60",
+      "captures": {
+        "before_sha256": "2a6013f83555ed1c5f4c16e2eba14a1cf64b3bf6be8268fe291e2a000378193d",
+        "after_sha256": "d16e6f929379258640f0975ebd2e13ce6b22b141e86b1025d92e2c40ba7e4e72",
+        "actual_body_sha256": "582f50b46891c8ece44b1c2825e1ac56e37f860bc5eb0b673844c2ec65f6d09b",
+        "oracle_body_sha256": "8792ce4867b066d7b5fa7c06cd4eea08f822931c22e59ab4b562a342c1e9c9a8",
+        "actual_full_patch_sha256": "0661747e50d6314f269f8a81f7ee749393733c81440bbf582ef4102ca66c27ac",
+        "oracle_full_stdout_sha256": "41b9b5fcc95ebaba37a27d4669ccedd365c8046394445cc5904b49db3aec21f7",
+        "oracle_apply_patch_sha256": "7d440b8bdc1df466c40de5275318c9fd11ecd0792fe047ec979120914281c8c9",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:deflate-bytes"
+      ],
+      "outer_differences": [],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "short-62",
+      "captures": {
+        "before_sha256": "2a6013f83555ed1c5f4c16e2eba14a1cf64b3bf6be8268fe291e2a000378193d",
+        "after_sha256": "579a711fa0f00295827c0721b11337421f6eedf9aaaa4e9988719d326ce45561",
+        "actual_body_sha256": "a0df5a1f972abe4a634fd5f03994d5b411de50370cbcd445de35431b0444f987",
+        "oracle_body_sha256": "9fa6b131bfd89c11bab4bf01ec19ca6d33cdbc7d4078ca953ffc49fb69704631",
+        "actual_full_patch_sha256": "0a3deafce1fb89a2ac42f62447d4eefbccb5bbae97482957dc09328fb6821a9a",
+        "oracle_full_stdout_sha256": "efc980f29a494779f6a7cc57bb016e8973ac37ce9c328247c082e2d219a12f98",
+        "oracle_apply_patch_sha256": "dc26f1b43539ba18697b10395db881f091f6a75304e8cf106c67afa0a3007083",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:deflate-bytes"
+      ],
+      "outer_differences": [],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "short-63",
+      "captures": {
+        "before_sha256": "2a6013f83555ed1c5f4c16e2eba14a1cf64b3bf6be8268fe291e2a000378193d",
+        "after_sha256": "70b4fe759c6c2eaaa11d93fbcf30de9c47bf479b0d458166c07ded35535564c7",
+        "actual_body_sha256": "760dcdc5c596e6fbff61869f5b5cbe789a453e8b115799c2178886bbf24c231b",
+        "oracle_body_sha256": "ac3e7f7cb823a53447861a87c2ed82b751fd1f5e98458c138a75fd4c8a430862",
+        "actual_full_patch_sha256": "85316c0a6d54dfb72bb973db67b4c7a503367c96f023499fe4e3847dc8903141",
+        "oracle_full_stdout_sha256": "24b934b57fe6f8029804e38504543d79d04b3ae48967cb86697e59e12fd3017a",
+        "oracle_apply_patch_sha256": "1ef4da9c7a4c4aa3160cbcef88a8a983e93a388eb131e0c2b578e2b1de2ece1c",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:deflate-bytes"
+      ],
+      "outer_differences": [],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "short-64",
+      "captures": {
+        "before_sha256": "2a6013f83555ed1c5f4c16e2eba14a1cf64b3bf6be8268fe291e2a000378193d",
+        "after_sha256": "25c47840f528c45266512f2e83e2e77d3628089f3a6b21d484ad1d5e9cff86ae",
+        "actual_body_sha256": "5f1e341aab0d89bd8f3dff18cbdde1913ac50dfa1c7ad779c3681f3451e77eb2",
+        "oracle_body_sha256": "61e6cb2a1825dde66e5c59af057fe0b27cfcd5700a9b4d1530b30350b3ea9270",
+        "actual_full_patch_sha256": "a04d617270daa425ea93923fe840d59384d1ba3fcc5e1ad23b879e403a04a70f",
+        "oracle_full_stdout_sha256": "3c6aaa2a6b10e3e2117f6f014f42d2771c56eb0a3c83ca42388430472f64e701",
+        "oracle_apply_patch_sha256": "ca8989d0f5b6b48cd7406f3fe688a00705d271edd8a5fb4084ea9d32080ba62a",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:deflate-bytes"
+      ],
+      "outer_differences": [],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "short-65",
+      "captures": {
+        "before_sha256": "2a6013f83555ed1c5f4c16e2eba14a1cf64b3bf6be8268fe291e2a000378193d",
+        "after_sha256": "822b63582f8c8d4322e7ef7de548f8772d7de9f2edda4ad63a3e9155de69dd85",
+        "actual_body_sha256": "57b5be889b4db776864aa115b159cca32e428f07396b1fc2117ba0b81c51f304",
+        "oracle_body_sha256": "6459b86a923f0d326a746bb4bf9045db4383a403f8ba5e8c25c8bce507cef525",
+        "actual_full_patch_sha256": "263950217b2a64b6cdc2f5fe0027c9496c9cb7a5e59693c1e6cfac47306275f8",
+        "oracle_full_stdout_sha256": "5d6f0a51ce69361926b52140a4f85e22bb0d3da4f4e76e4c199b7dc03b890860",
+        "oracle_apply_patch_sha256": "628ed76320be64f7f739188c791a0fd04ae51a936e6a661b51aa6cff7adaefd7",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:deflate-bytes"
+      ],
+      "outer_differences": [],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "short-66",
+      "captures": {
+        "before_sha256": "2a6013f83555ed1c5f4c16e2eba14a1cf64b3bf6be8268fe291e2a000378193d",
+        "after_sha256": "f6067d47c6e2cbf730d83de1f849826b3311626bbaf9e3cef8e52b8c10ccaf88",
+        "actual_body_sha256": "d6c48afae5219bf7049eb85ac55f05dbb5bb2609299a2f4f0d1977c9c6533825",
+        "oracle_body_sha256": "41bd018f5092770fb74703593b4b85cae59e30421e3576e0c686f872fd61aa9e",
+        "actual_full_patch_sha256": "b0bfd601d406955bd68979a11b414e63d2591a191ceda0b26c8c46ffd1fc9b6a",
+        "oracle_full_stdout_sha256": "bcb5c1a5d21715cc13d74552bf2a1c251fea6f66f5f0cc5aa16064ada9dd3014",
+        "oracle_apply_patch_sha256": "91cfb26ccf22f36648233257a285d8644648a639a834f3e88b2e9e934b8ad910",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:deflate-bytes"
+      ],
+      "outer_differences": [],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "short-67",
+      "captures": {
+        "before_sha256": "2a6013f83555ed1c5f4c16e2eba14a1cf64b3bf6be8268fe291e2a000378193d",
+        "after_sha256": "e72818a434529019f646688f058b536540e0ef9955be8688de5ac6841ef2e302",
+        "actual_body_sha256": "fdd8fc5783f42f9a7b44f808a2ad9f32e5a9810530e504c36dfb8e27a16ad25b",
+        "oracle_body_sha256": "b3224050ac01b50eb7602aaf8d71d44a3b66b08488687e4161bfa9c089e1863b",
+        "actual_full_patch_sha256": "ab4c25ab8c562c9bd102260b447e6f00b3560d3a24aafe8d26e1a579e928a2a6",
+        "oracle_full_stdout_sha256": "243caafec79c954fcd824846260eb132de8eb7d797144a42f173e5ba0ce84cdb",
+        "oracle_apply_patch_sha256": "33a327a59bb3bf07075702a1ab8a789de57d9a3842f54c005fbe6ddf89652ac1",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:deflate-bytes"
+      ],
+      "outer_differences": [],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "short-68",
+      "captures": {
+        "before_sha256": "2a6013f83555ed1c5f4c16e2eba14a1cf64b3bf6be8268fe291e2a000378193d",
+        "after_sha256": "2ff9a4da636e7a594e121798d32e9905cd5cde8cbbdcf96c5662ee5c20673e24",
+        "actual_body_sha256": "6a00eae9599fdc982cad493e21a3c35c890341a6f91cdf54a104416cd93be474",
+        "oracle_body_sha256": "e1d9ceb9cb6ee17b82deb3e398ca54241ecd810cf30b07b881c24b8fc796f5c8",
+        "actual_full_patch_sha256": "b5cdc5bb75393fdb3f5fbd3ee77ba190fa2cab35cae362ca5d2e33cbec1da25a",
+        "oracle_full_stdout_sha256": "b2b6adbf34daf65fd234708f8e810a2dc961ad93591310562b9764b33edf72e5",
+        "oracle_apply_patch_sha256": "3e7da56c469e41642e0af6b8aea9e69d7a2008ee168be9acbf1b3cf380bd0c65",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:deflate-bytes"
+      ],
+      "outer_differences": [],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "short-70",
+      "captures": {
+        "before_sha256": "2a6013f83555ed1c5f4c16e2eba14a1cf64b3bf6be8268fe291e2a000378193d",
+        "after_sha256": "116221e833ccbeee14a75960992586779c41f1efde630726c0f59f173a90d0e9",
+        "actual_body_sha256": "686e37d28d795d3c78c17396f396ae4fd60ad376dbd1b22f3c499500a1247628",
+        "oracle_body_sha256": "871da0f6d7559f4d36122abd95597311c6c4a0153facad4675314d6a72b8c108",
+        "actual_full_patch_sha256": "87209f61607406f3e3b7f8e796af41413aaedcfece4acb82512390275cd02e00",
+        "oracle_full_stdout_sha256": "3007ffd61a6a06e78a9d90a76f657e7042327c8c2c0c60cbfac7e1057820ddbb",
+        "oracle_apply_patch_sha256": "0fd032cbf3a4569004001b4655288c5ba25169f2549c8b02f3e0d49e2dd00f93",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:deflate-bytes"
+      ],
+      "outer_differences": [],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "short-71",
+      "captures": {
+        "before_sha256": "2a6013f83555ed1c5f4c16e2eba14a1cf64b3bf6be8268fe291e2a000378193d",
+        "after_sha256": "b8bcdacf07ee0786ce8b9002be5f5728a822aaeea109249ee3703c7d504ea95d",
+        "actual_body_sha256": "34b427e1efda0a38a328785dd48c7ed8ff26425ccd7e2e3508de6a858018d4ac",
+        "oracle_body_sha256": "507c04a08113592580c82e7d72dcfb052e77c78af970be923e7c3da5ebaf384f",
+        "actual_full_patch_sha256": "c119b6b907245175eb922873a6ea3ea818908de1287883b56f9d29a22e04be06",
+        "oracle_full_stdout_sha256": "46085a1f0fbfd207c55dc354503a4188c30883aa5447b2aa1ddffa19aa1dc0f5",
+        "oracle_apply_patch_sha256": "1d3abc4b8425de9fb8a80798b7d74d92db9e0d976f3ce4dbc8c08dbaeb937443",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:deflate-bytes"
+      ],
+      "outer_differences": [],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "short-75",
+      "captures": {
+        "before_sha256": "2a6013f83555ed1c5f4c16e2eba14a1cf64b3bf6be8268fe291e2a000378193d",
+        "after_sha256": "1bde0553e8a49d34f7134ab8a6f2e749036cc1dac06305693aa68fc3b2d0de81",
+        "actual_body_sha256": "751f49a3b1e8399c2a158e97b9c84fa3477958516437a173f94c95cab6907e02",
+        "oracle_body_sha256": "b3df19a774dab06a10bf28c9331fc910a17f636a247fd1518c7294427ce11508",
+        "actual_full_patch_sha256": "2365fdc37a9510be8cc4b97a6ad47a533695714f7b4b6f602055922855471f2d",
+        "oracle_full_stdout_sha256": "6b82e588fce7f22db09b4c952367768dc293923157f124a58c19d096b7343ce9",
+        "oracle_apply_patch_sha256": "90a10727d9832c363a1573e350a629e549a5abc92270b5dca7de7ff1b56a3a41",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:deflate-bytes"
+      ],
+      "outer_differences": [],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "insert-31",
+      "captures": {
+        "before_sha256": "8724c78a3b84d7c7e299857d84b5745b0758785bc1b8ea94a55e608c07015b19",
+        "after_sha256": "3c6ef63a5c58d5fbba267ddd82628394b3066e0dfdb6dd70361dcc5ecea3b96a",
+        "actual_body_sha256": "18504976351a0daa71fc91f90814d2e88e1181ecb1c3c165d1e2e91b34810f4d",
+        "oracle_body_sha256": "481cefe3cee28fa4f21d9c908201a7096724ffffb7214e75cbf97ffab9cc02e8",
+        "actual_full_patch_sha256": "637ad66de383439c1abc65e7f0aff4e6da45242d2ca5e02edf19971b283733f9",
+        "oracle_full_stdout_sha256": "5a446e1041ddd86649401031092415c6841689be5244d8e15884de7048ce06d1",
+        "oracle_apply_patch_sha256": "611c39d7a846e5413cca07a4b7d199dd3873fa688ca3e7bbac038b9a58c1fd5b",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:deflate-bytes",
+        "reverse:deflate-bytes"
+      ],
+      "outer_differences": [],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "replace-31",
+      "captures": {
+        "before_sha256": "8724c78a3b84d7c7e299857d84b5745b0758785bc1b8ea94a55e608c07015b19",
+        "after_sha256": "77f47c737236d6c71c934589c5dddb03353d21b7a80a8ff8e125af20e45f47e4",
+        "actual_body_sha256": "c7f661d1f1bbe1a08536c3e8f80c07c0c4d06c7f11f98655b7671bcba2730d13",
+        "oracle_body_sha256": "fd1b982b83cc2d8a818c467822d9b56558f667fcd8fa90f5e12b9a82c3b0197b",
+        "actual_full_patch_sha256": "f30d2f85c4fd0984287bf6332d4f4989e0f44710f1a497e6faaf0bc0202efe86",
+        "oracle_full_stdout_sha256": "954021f24b3cd578262ad8d96e632579c014c8d50c7934be7ff886a4f926cb2e",
+        "oracle_apply_patch_sha256": "7579e0ea923da201d78a95d477161eaf651449b17c627e8126851dcd14762337",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "reverse:deflate-bytes"
+      ],
+      "outer_differences": [],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "delete-31",
+      "captures": {
+        "before_sha256": "8724c78a3b84d7c7e299857d84b5745b0758785bc1b8ea94a55e608c07015b19",
+        "after_sha256": "87b4f2175b63f1e881f52a2acc8e43a189b93b4b4104870be133578a6f8de153",
+        "actual_body_sha256": "8f21285ae3527cfa72b6d902abf15f7a4222c52eeeceda4edef66ad9f69269bc",
+        "oracle_body_sha256": "6581529c3c2073c9beb8230dde3b78b21f640544738c4610a31b56b4574fd742",
+        "actual_full_patch_sha256": "73458ee56c47d562df1006eaa674ef188acfcbddaae7c29e9ff3706e917761ca",
+        "oracle_full_stdout_sha256": "979be745e5b80f7dd728e1ca688eb6ea7f3c37a9fd49e42a686088a7c9e5184f",
+        "oracle_apply_patch_sha256": "42e8c48c4e807d05a132383800d8c30987b5778904d1d66fdd7e2f749fe17b39",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "reverse:deflate-bytes"
+      ],
+      "outer_differences": [],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "repeat-31",
+      "captures": {
+        "before_sha256": "ceff56f3fa93fe1043642041a081d9e3aea596a2f8afe3b640b157e416ee1dea",
+        "after_sha256": "a54c37aac42ce5a665171ec205c754d91497b2f833be1e5afe2a48ec68b14fb7",
+        "actual_body_sha256": "fd86e5ede46554a1ca7157468954337756f057e59e5248b8ee9c87338ed6d6cc",
+        "oracle_body_sha256": "fcc38cdaa4769be6338f1022d981005f24481882b96bb66b81053ab0813a32be",
+        "actual_full_patch_sha256": "baa8d5ca8a230680d56151f0b1b1ab3973dac6663133f504abd50b3953a0b0b3",
+        "oracle_full_stdout_sha256": "27668ee6e9a5cda0fc2954b6eadd32e976ef6280531c29d60d3951dc54017768",
+        "oracle_apply_patch_sha256": "7fa6fbcb24caaf8e5915dccc4fd3e1887c80ad6fb421408567a484084646fe10",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:deflate-bytes"
+      ],
+      "outer_differences": [],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "insert-32",
+      "captures": {
+        "before_sha256": "45c6bdfae72eef3f5ce69f93fca5913a8847c2943cfc58d6bfe2d73286470ed3",
+        "after_sha256": "6424ae1a402c26b7f65f9a37fb2a109f70de0eb83b74e05659badab84a114265",
+        "actual_body_sha256": "b02c625695a92b2998848db0d1f84ebff7b2d2a13ff9812bd7c7e558e641d01e",
+        "oracle_body_sha256": "e38b30ee1ba637f091ada1bb275f0b4bafaba4f66b45031b0b8ed304d0e701e5",
+        "actual_full_patch_sha256": "f919c8bcf4d7039a10ce32e130c88ee0cf8cf63ff566d6d5cd07d4ef913f3855",
+        "oracle_full_stdout_sha256": "93246755819fee5a137fc53c9a261a7c5d14a5aa44a60e1903e3854a1a771f20",
+        "oracle_apply_patch_sha256": "2fe146c7ab8718a9c21ef6080bf13d270f68fcdcf84b87c8cd4ab1e7fd3d89aa",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:block-choice",
+        "reverse:block-choice"
+      ],
+      "outer_differences": [
+        {
+          "direction": "forward",
+          "actual": "delta 12",
+          "oracle": "literal 36"
+        },
+        {
+          "direction": "reverse",
+          "actual": "delta 21",
+          "oracle": "literal 32"
+        }
+      ],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "replace-32",
+      "captures": {
+        "before_sha256": "45c6bdfae72eef3f5ce69f93fca5913a8847c2943cfc58d6bfe2d73286470ed3",
+        "after_sha256": "3d4d3ec42ac15f18370eddbe1d71543b012258db8e9e027a02015c558ecbca6d",
+        "actual_body_sha256": "157cf855e565baf834fd0f6a0a76192b9e5736f3ff9cdf0206a19635007f02fb",
+        "oracle_body_sha256": "5296b08bc4fc1fbdf4128e49b7541ecce3e1b8282bbcb0e692f0926e7b8b3bdc",
+        "actual_full_patch_sha256": "b474cb908a908bd6e1c7456893e7480a9cd4c0c6dffb015906df9951b74af771",
+        "oracle_full_stdout_sha256": "b794243d63fa98c0fbebcdd19917213906adb9e848502a0179b47381e376a62e",
+        "oracle_apply_patch_sha256": "a2936ff07657e6292c18ce74c8a09ff335e91d715d58207e0930ed0c8e926368",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:block-choice",
+        "reverse:block-choice"
+      ],
+      "outer_differences": [
+        {
+          "direction": "forward",
+          "actual": "delta 21",
+          "oracle": "literal 32"
+        },
+        {
+          "direction": "reverse",
+          "actual": "delta 21",
+          "oracle": "literal 32"
+        }
+      ],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "delete-32",
+      "captures": {
+        "before_sha256": "45c6bdfae72eef3f5ce69f93fca5913a8847c2943cfc58d6bfe2d73286470ed3",
+        "after_sha256": "0527fcc4c0cb2f15030bbb4891824d8cd083c03eb20a0f08d89a887c355fdbf8",
+        "actual_body_sha256": "ad3da2d198ac10002aa058931715f02173ccc2e290a07b6faeb59ff95dc7adca",
+        "oracle_body_sha256": "babb1987169baa432ad6b156271ac00a5a67bf47e4cd0a3300eb615dd74e2a40",
+        "actual_full_patch_sha256": "80d98bcebf2c9901d311e027f09cfd619b924f4f3bfd71df7a3494d57b509377",
+        "oracle_full_stdout_sha256": "6b1b833c04c885a833f9dd808e4a7b475f39fc1b01890be30a12e469658072e1",
+        "oracle_apply_patch_sha256": "0f43fbeaf9a1105e75aa33b129d106767bbc03f211e25dac65a03ed94d3347d1",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:block-choice",
+        "reverse:block-choice"
+      ],
+      "outer_differences": [
+        {
+          "direction": "forward",
+          "actual": "delta 8",
+          "oracle": "literal 19"
+        },
+        {
+          "direction": "reverse",
+          "actual": "delta 21",
+          "oracle": "literal 32"
+        }
+      ],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "repeat-32",
+      "captures": {
+        "before_sha256": "db6c6afe43e689da3e4a939948b24e8932dc68b92b0f06f0e15cab7f8ddee923",
+        "after_sha256": "cd6e28d8937e5f145eea1bde19937af70814a256483ba70596806f5f239d12e8",
+        "actual_body_sha256": "c4f71757423d8fd5ea7e1b638e02bbf709110c8284582af544e5dc88dbf43776",
+        "oracle_body_sha256": "ebae0aef936e68ebc0ff961ee75b5ad7815487c6683bc6863d8ed521fa426193",
+        "actual_full_patch_sha256": "6265bea07b44aae90a16ca33ac3d07a3f01fd6e1a7245b0964071f1ee0e1f885",
+        "oracle_full_stdout_sha256": "ea2bba03a907a470d08d5bacb2a5f08235968c14b9e447868a4e734a90c6698b",
+        "oracle_apply_patch_sha256": "be15eedfd54ae3dae43be9688a971f7483fa646ef7d99447db8ba3f6daa80ece",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:deflate-bytes"
+      ],
+      "outer_differences": [],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "insert-63",
+      "captures": {
+        "before_sha256": "741fc57277ca3b3442bc89ca7a472c118d42ad5c0354bda47a7534f47270f83b",
+        "after_sha256": "e6cf450eb7ca4d709a48c84cd565c7e876688d6a594bc5eda88f08d5d82a30df",
+        "actual_body_sha256": "d5c569c9957c7c3ed752d6c006baa73988556297c81789a915b9be5a4d296826",
+        "oracle_body_sha256": "cbda3ac2b29ad1aca3f9bb07eed25b955f8ad20a1ab151171f6c96aa82def637",
+        "actual_full_patch_sha256": "ae8299c3e4360e8b6323b5b5eb40422068c7bea4509f30735bf9119b96b7bed0",
+        "oracle_full_stdout_sha256": "09092ec181561d36108a46c8246a75201a241e7121dedb1a2f53e5065acb8d99",
+        "oracle_apply_patch_sha256": "38646d8d7c2a500af12958d901d449b194f25cdbe54c46cba2c7039ff017f432",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:delta-instructions",
+        "reverse:delta-instructions"
+      ],
+      "outer_differences": [
+        {
+          "direction": "forward",
+          "actual": "delta 13",
+          "oracle": "delta 12"
+        },
+        {
+          "direction": "reverse",
+          "actual": "delta 21",
+          "oracle": "delta 37"
+        }
+      ],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "replace-63",
+      "captures": {
+        "before_sha256": "741fc57277ca3b3442bc89ca7a472c118d42ad5c0354bda47a7534f47270f83b",
+        "after_sha256": "3d81d2313bff636bdb527828858a92f29c8dca8c913541ba06af9f0b3c6a70a5",
+        "actual_body_sha256": "21d6a15a5cc044c19eb35f87500c61e25e8678e7fad4711a862b2fb278c59f2f",
+        "oracle_body_sha256": "33b467b0349b6367156518f7257245a9c99896c5d6c24580f32bd0b23e3c4723",
+        "actual_full_patch_sha256": "319ebb60ad72550f4c3f66ef39a548b162d2c51249576260c3e124b984fab3cd",
+        "oracle_full_stdout_sha256": "1277858a4a222bc45207c65bb0e82c174332139bc0cae6c5e6a4e04381667ec0",
+        "oracle_apply_patch_sha256": "f562e92b8b75a717e0041670daea8cd1ec5a3e2f239ff7448f555cdcba6b3778",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:deflate-bytes",
+        "reverse:deflate-bytes"
+      ],
+      "outer_differences": [],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "delete-63",
+      "captures": {
+        "before_sha256": "741fc57277ca3b3442bc89ca7a472c118d42ad5c0354bda47a7534f47270f83b",
+        "after_sha256": "75d2645f74c55cd1bfe84c26baaddee34df7571a2986c043edbd68aa6146aa50",
+        "actual_body_sha256": "856c316f3de4ea22581714cc0c926bf62d3ab2b2f890b07e4fa77883ca882e39",
+        "oracle_body_sha256": "c1dbd279204350bb24e478bfe3e9286b8460c9c8cf3ec0e91b86516f2e3ecea2",
+        "actual_full_patch_sha256": "69a8b394b3e89c806b3b6e6ee17829674a376addeae054aea15960cbc5a3dc00",
+        "oracle_full_stdout_sha256": "ba6cd0fface985a1c4d095289517be939b1258cf3608365064cb38a92b9afebd",
+        "oracle_apply_patch_sha256": "970692e1ea8493cd5746dcad99753aa0ac2f3275a4cac9c01bfadee6f7f2e0b0",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "reverse:delta-instructions"
+      ],
+      "outer_differences": [
+        {
+          "direction": "reverse",
+          "actual": "delta 22",
+          "oracle": "delta 37"
+        }
+      ],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "repeat-63",
+      "captures": {
+        "before_sha256": "d27f02fdcc3a66d80344f433c0c9679a5c8cecf0921e288a2b84c3e3188e4fe0",
+        "after_sha256": "960e0863bb924f6d57f705f7a6ddf4c6749f9bdae8c2c4830d228764ea4ff033",
+        "actual_body_sha256": "a543e5a7a6e74694f4c040a237b2df61c1cca7bde94ecedccaa839572d6e3c7c",
+        "oracle_body_sha256": "c367044a8d2349f1943a32f09d9c40e8308a587fff02ad941e37d1ee4c15e3fa",
+        "actual_full_patch_sha256": "2f492cce91e95b09705bb87ec73656e0a0d983fde5e7e89ccdf50c8862214658",
+        "oracle_full_stdout_sha256": "4e292af66275881b9a348eb390eae493dfbb97f6c5fff4c10aa99c35117486d9",
+        "oracle_apply_patch_sha256": "77cdb6859f4611420494ef29b49de4885d5823fcbb20df42bcd47cb455d8ea36",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:deflate-bytes"
+      ],
+      "outer_differences": [],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "insert-64",
+      "captures": {
+        "before_sha256": "86bfe6dfd11c07adf1049fa65f1a1f489eada5d72ab2864f80fea475ba30fea4",
+        "after_sha256": "e5c0dbc7fd8bc933af5fa53b1f13f2a55e3adb485e762e11b019471a0c2ac0c2",
+        "actual_body_sha256": "7eb72fe73b3a008bac68e913d0292d47bcbff7995e5798e7955cf1c313cf3c5b",
+        "oracle_body_sha256": "9bb1485fca883986341569ada2bc1b1f42ca6d517139429584ca5ec08ee543e4",
+        "actual_full_patch_sha256": "70a2d7903c0f246d84d89a020f881f4dc8a9d60f5b8f85aa4caa203c8cf43a94",
+        "oracle_full_stdout_sha256": "1e1b1d8b053fb242324dba941ae262ff873c5d18b8a9b915292bdf939727d85a",
+        "oracle_apply_patch_sha256": "82c03edd61d2659b4208d9c77553054452c8e5e2bdc40ba78cf3b61eb9d51d43",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "reverse:delta-instructions"
+      ],
+      "outer_differences": [
+        {
+          "direction": "reverse",
+          "actual": "delta 20",
+          "oracle": "delta 7"
+        }
+      ],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "replace-64",
+      "captures": {
+        "before_sha256": "86bfe6dfd11c07adf1049fa65f1a1f489eada5d72ab2864f80fea475ba30fea4",
+        "after_sha256": "7e5d6d76079ada039b116de39d992122d465900a54ad167ae83bac627e26360c",
+        "actual_body_sha256": "8fbcea0ca378810fbc9b397015aeb2a936e57282701dbd56997af97c2996df23",
+        "oracle_body_sha256": "14aef936a5f583940af1c212e38b0c4b60ee57de740463c8e7957fa68d31d9aa",
+        "actual_full_patch_sha256": "2f24dc7a9acc82bc9f6975c0d7f8ef1903842123d14c44a01ce2ac0ff4293819",
+        "oracle_full_stdout_sha256": "c6a449ce3c3892ff1fb808e7094f18be4b720eedaceec5c5894049b8dd86c314",
+        "oracle_apply_patch_sha256": "d329c805ee015c6152dab77b14f91ef0ac8397728df37867b03f2f0e9afd9951",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:delta-instructions",
+        "reverse:delta-instructions"
+      ],
+      "outer_differences": [
+        {
+          "direction": "forward",
+          "actual": "delta 24",
+          "oracle": "delta 37"
+        },
+        {
+          "direction": "reverse",
+          "actual": "delta 24",
+          "oracle": "delta 37"
+        }
+      ],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "delete-64",
+      "captures": {
+        "before_sha256": "86bfe6dfd11c07adf1049fa65f1a1f489eada5d72ab2864f80fea475ba30fea4",
+        "after_sha256": "b330b756b4e7fa618ca674bde7e03427d5186c18047bb5932e6f191bdd0c884f",
+        "actual_body_sha256": "b68a07755cfa6f298ed03e048c80ec9ab1419bc4c2ab9720cd67fcb6375ca880",
+        "oracle_body_sha256": "8e8373f4ae3e52a349057faf3d8ec7569d254e8bba81fa075bde05ebe5fc837a",
+        "actual_full_patch_sha256": "b94b5c2976b3c32e19c08ed30dcb0a638ec0ebe5c095ff203bcd7284ddefce06",
+        "oracle_full_stdout_sha256": "3753150d3d6e483b78bba42d3dfc29e7da6941ddbe7ff0524fb2e5c18b5d0484",
+        "oracle_apply_patch_sha256": "bc0b709ed7020a27eebb44efbc07f05f42b5ffabba20f1cecdff9a4aeb9dc5d2",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:delta-instructions",
+        "reverse:delta-instructions"
+      ],
+      "outer_differences": [
+        {
+          "direction": "forward",
+          "actual": "delta 11",
+          "oracle": "delta 24"
+        },
+        {
+          "direction": "reverse",
+          "actual": "delta 21",
+          "oracle": "delta 37"
+        }
+      ],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "repeat-64",
+      "captures": {
+        "before_sha256": "5a5d31b952d97029378f621c53cdf962af49a0d0f450e0d84d4221403fc4cef5",
+        "after_sha256": "9ef17daac379444c8b721f82df762474bad9c8d2768ab44b34b02c5f1d406444",
+        "actual_body_sha256": "c764f256708cf6954ccedc253d1d8618d806409133dd10f411f7f4829e2fcd66",
+        "oracle_body_sha256": "042c8cfc22697c6a478ec3249f3c8088cb390be1474b36a3bb75eee354e88b5e",
+        "actual_full_patch_sha256": "a4d871fa466055904bab3379e551241405df4dcabc43aedba0e51d0753777364",
+        "oracle_full_stdout_sha256": "342fb87a13843c485f7166e1505e7221dff7dc2867e248b00572178887a8f46f",
+        "oracle_apply_patch_sha256": "f513c1a71e4ba7eba3f91378ecce3d1a1b4a15fa060ac96c05229aa0366a30c7",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:deflate-bytes"
+      ],
+      "outer_differences": [],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "insert-127",
+      "captures": {
+        "before_sha256": "4a305829abc5811e2dc2242eb5560f4fe289a7a6c9f906cd0d52087afc93245a",
+        "after_sha256": "97b58b4d8b0d5808076985338dcc7235666229b2647848b0d3e3e816f88fbfea",
+        "actual_body_sha256": "1081334089fb72a0db825db22df7aa3f59677b92f894c597c71e3a98331e54a6",
+        "oracle_body_sha256": "b8145251fde33c455c61257737f9aeb5cd2db414ed5d9f2c845ed0415533982a",
+        "actual_full_patch_sha256": "14536568c2bd758b3839af002900e3d36ea6b92087f602eaae625724dd54ac49",
+        "oracle_full_stdout_sha256": "7960e49665941b2b51f8f13b2a4763ec577780e7d4d4487e36ba232f17ba9df5",
+        "oracle_apply_patch_sha256": "b122fc017facea568f7d407567420620946d3ce8b1dbf00fad1a303c2ead9897",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:delta-instructions",
+        "reverse:delta-instructions"
+      ],
+      "outer_differences": [
+        {
+          "direction": "forward",
+          "actual": "delta 14",
+          "oracle": "delta 13"
+        },
+        {
+          "direction": "reverse",
+          "actual": "delta 22",
+          "oracle": "delta 8"
+        }
+      ],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "replace-127",
+      "captures": {
+        "before_sha256": "4a305829abc5811e2dc2242eb5560f4fe289a7a6c9f906cd0d52087afc93245a",
+        "after_sha256": "d5e66629914ae079854423219e7158d4fc04b309d18258dc06cd82ca599dfc98",
+        "actual_body_sha256": "4129a438bc33fc13a13c354d59bb375a6da023d20ff1c7e610e242639b9c045f",
+        "oracle_body_sha256": "edd4c8f65d519ce6b54f28a4e54c3f1bb643dd581fc6daf2bafe19ac4b2485d9",
+        "actual_full_patch_sha256": "119979fd4800b8d4662513d9277183be9252a45ecee11d87284a57a6b3374524",
+        "oracle_full_stdout_sha256": "1cf773a83655af506ca7d96a29a68d2c68933b9a37d5f63a7fdd088eb56a0251",
+        "oracle_apply_patch_sha256": "28bb3d7c2d0be5e21b20b3e09888d61f1f1beb8b30bbeaba674cee62446a43fb",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:delta-instructions",
+        "reverse:delta-instructions"
+      ],
+      "outer_differences": [
+        {
+          "direction": "forward",
+          "actual": "delta 25",
+          "oracle": "delta 11"
+        },
+        {
+          "direction": "reverse",
+          "actual": "delta 25",
+          "oracle": "delta 11"
+        }
+      ],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "delete-127",
+      "captures": {
+        "before_sha256": "4a305829abc5811e2dc2242eb5560f4fe289a7a6c9f906cd0d52087afc93245a",
+        "after_sha256": "b91a85d61e4e07a005f258c610ee1fafcf538d32394fc31db2d8777f957c3945",
+        "actual_body_sha256": "0895734bfb8156e03bfc92cc34e68598581afbfda2fa3388ab7a02f5dac58c0e",
+        "oracle_body_sha256": "62e8e02ef3eb07b3a3b7d8fc3a41f8cfd2ba7192a7e65dd46e2b6f35b97931da",
+        "actual_full_patch_sha256": "f88e2dd3d60c76ae30137685756bb9bfd5f7295ff711b7f085f80b9e325b2eff",
+        "oracle_full_stdout_sha256": "72b7c013f49130695fb6b8664cfb043c4b0b05f8a3b9da52e48a04999fece77a",
+        "oracle_apply_patch_sha256": "fc6f5468fe7e72bf2f67d4d2305f74cbcce1d6644364f1eb14960e1d8a77237e",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:delta-instructions",
+        "reverse:delta-instructions"
+      ],
+      "outer_differences": [
+        {
+          "direction": "forward",
+          "actual": "delta 12",
+          "oracle": "delta 7"
+        },
+        {
+          "direction": "reverse",
+          "actual": "delta 22",
+          "oracle": "delta 21"
+        }
+      ],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "repeat-127",
+      "captures": {
+        "before_sha256": "bcf1afc9628af856b84927bbfb34fdf43d826099153f7d633264508bc7a242c1",
+        "after_sha256": "111b5b02bb46b0c01ad75d6d093e35e9394899f67be9fc9c5c3334597f95f6d9",
+        "actual_body_sha256": "19f9b54e49ad36ccea37f3374d76a6f5604015f3726421c9fcdfe6d3ad95ecd0",
+        "oracle_body_sha256": "19d3f731c7ab5ff16ba8a62115a9e39c16e6dbffb321fb2f29ccf7cdb6823421",
+        "actual_full_patch_sha256": "28fefb07817dc35fec8edbcdb18a14cbd7a16ce311b1f6ae8d7e9ea41354c3e8",
+        "oracle_full_stdout_sha256": "c2e1e9191a0dff16473601a058c375a6551763f335818a75432180e75d5c34a2",
+        "oracle_apply_patch_sha256": "4d6ca51cf7718d14e9a230acc1c6300db8c3f8b20058acc0f5d295ae7ebfc2ef",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:deflate-bytes"
+      ],
+      "outer_differences": [],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "insert-128",
+      "captures": {
+        "before_sha256": "befcad6ac85bc66af92ce977d4e4433bafbc675488090b70b3942abc47aa2660",
+        "after_sha256": "5f4c904291e134e1743718dd9817c945edda3c3e37990a31bd06cf1fa25864f1",
+        "actual_body_sha256": "20ec48150f94b22d903af473144010b0f6efe4265514b1e3038a2c2fde7a97b8",
+        "oracle_body_sha256": "29cd44ee4e17bfc033d37fb75b51d7275c3506e11c213afb13ee6279b44910ed",
+        "actual_full_patch_sha256": "4ac5c387bd11f963239afa3ad00ca4e8aecc3a4a82e672d667df3f3478e79863",
+        "oracle_full_stdout_sha256": "e7cd81bd1cc9bb7c32d501e2919c1268a591647cab6fcdf2b1f2e69cdc5d6193",
+        "oracle_apply_patch_sha256": "a056dac917f66194e0702e5b90c6a231d47f1f6c2a30e39af886ddbe20243a26",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "reverse:delta-instructions"
+      ],
+      "outer_differences": [
+        {
+          "direction": "reverse",
+          "actual": "delta 22",
+          "oracle": "delta 9"
+        }
+      ],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "replace-128",
+      "captures": {
+        "before_sha256": "befcad6ac85bc66af92ce977d4e4433bafbc675488090b70b3942abc47aa2660",
+        "after_sha256": "036d9acbc111dafdb4dcf6963b5c9c720278f492c3e571fe562dd5fa860a572b",
+        "actual_body_sha256": "52b84c144195c477dec1a39cb84fae68bbd81a3430755d5d0a2e460d78c73fd7",
+        "oracle_body_sha256": "03538c6611fde4f747a3486f0dba2c1827ad14eeb31bd16faeab242608d15086",
+        "actual_full_patch_sha256": "2c23045c132763e6e32d81cccca3b38bceed838f9264227c1216fc3db36fedb6",
+        "oracle_full_stdout_sha256": "c4c07ad2b443f3ddac146cd2819e83edf3039c868a888b7378b7a6bc9c2c07b0",
+        "oracle_apply_patch_sha256": "3cecfb1d11f6a83ee5a5f1f780ca376a32c58a973ceec839561a5d462e7f8ed8",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:delta-instructions",
+        "reverse:delta-instructions"
+      ],
+      "outer_differences": [
+        {
+          "direction": "forward",
+          "actual": "delta 26",
+          "oracle": "delta 13"
+        },
+        {
+          "direction": "reverse",
+          "actual": "delta 26",
+          "oracle": "delta 13"
+        }
+      ],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "delete-128",
+      "captures": {
+        "before_sha256": "befcad6ac85bc66af92ce977d4e4433bafbc675488090b70b3942abc47aa2660",
+        "after_sha256": "cdd065a46c3a980945c19f8a603c9a9f98f1433de3182399750a0cd4b2d1d0b8",
+        "actual_body_sha256": "169fc013fe98108d1acf97fdd35c24ed10a5c3655c34d766a2415351b3539f74",
+        "oracle_body_sha256": "54518221f4ba52d8470f241c7db956c50a0d16e81cd032b6021453239c6ac2bc",
+        "actual_full_patch_sha256": "927c7b9d9dd08b1a2b63ee3f529d273acb4b237a441fc33e41c5cda388516044",
+        "oracle_full_stdout_sha256": "e6901615f33b048140eb62b9fbdfdfb90efe85f4c17e697f2f88729a255bfe08",
+        "oracle_apply_patch_sha256": "878b789a412dd0a2ec33490fd8198b403d8d80be732c41ab83accd166116d421",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:delta-instructions"
+      ],
+      "outer_differences": [
+        {
+          "direction": "forward",
+          "actual": "delta 12",
+          "oracle": "delta 8"
+        }
+      ],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "repeat-128",
+      "captures": {
+        "before_sha256": "621e0a2ab4b943be09204176db024551fecf5e4e1314579ad1e2501d0b4e3fdd",
+        "after_sha256": "5e07477c41e5d9cb18bf429f5264f9bc7c287032a210ce460192375ba6b9ff4f",
+        "actual_body_sha256": "9c2c51fdba4f2fc6301a869af61b5290b8f083696b29f8a3800d5a82d031fea9",
+        "oracle_body_sha256": "c80e2d7e5d5b751c92d4a7fd325ff08ed11b892822dab1e8cdd48875722d279b",
+        "actual_full_patch_sha256": "bf8f808dcdfdb02aac99538c37100b8d8edbe846fb8c0d5af62b9ab6c707fbb7",
+        "oracle_full_stdout_sha256": "773e870e0d0102c185b694553546769becd3cc066341fdf17bb87b914270811d",
+        "oracle_apply_patch_sha256": "778b9364673e9af6a244c08ab9e9d07fca216955fff01c404c1209ba04fa86b0",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:deflate-bytes"
+      ],
+      "outer_differences": [],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "insert-255",
+      "captures": {
+        "before_sha256": "626edd145376be218b2c583287ef52a17d963743c15030f2465a80a863751240",
+        "after_sha256": "3687c75d35add0cf6a92a977184b48a7124718f9702aea9f8d043c602f7191cd",
+        "actual_body_sha256": "b8540c0def40bfddc3d932b1b32c76d32cddf618e76b29f72ad0e6c9b5500da8",
+        "oracle_body_sha256": "e513c1912af56e72a8d3a67fe8a948fccff35b6e66f6b61c979c287640972148",
+        "actual_full_patch_sha256": "f0a9f93eb60e9bd82642aa5278244c31b10ddbe73b764b1b008bbea6869e09da",
+        "oracle_full_stdout_sha256": "28832ad1be98e64749c4c1fb861ec0ea38ee3c4d2908d0de839c4add3715f493",
+        "oracle_apply_patch_sha256": "547809d3ccfc912257e3ddd6c807e28e864b82b59dce68daaab92556e6560349",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:delta-instructions",
+        "reverse:delta-instructions"
+      ],
+      "outer_differences": [
+        {
+          "direction": "forward",
+          "actual": "delta 15",
+          "oracle": "delta 14"
+        },
+        {
+          "direction": "reverse",
+          "actual": "delta 23",
+          "oracle": "delta 9"
+        }
+      ],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "replace-255",
+      "captures": {
+        "before_sha256": "626edd145376be218b2c583287ef52a17d963743c15030f2465a80a863751240",
+        "after_sha256": "191b4976c95fb8b8b2954fb5235268f30e284ea9ce4b8406c8c8169c80e707b5",
+        "actual_body_sha256": "e220249d0e47ffa9bcb15173c078160b276bb64be4adda096f1f4cdde917730e",
+        "oracle_body_sha256": "1f489d8d1c3b7d220c268da2a49b2873fb33e2d69abc70575b0fbc1badc73fa4",
+        "actual_full_patch_sha256": "b7cc7c560b07a3bb058552d59675a9f1c263bb1ac43fdf0f542ae9ed0836324c",
+        "oracle_full_stdout_sha256": "270abe14606894192bf4564620ee6350a2122200b95d78346171b3f8e9301d56",
+        "oracle_apply_patch_sha256": "50f5360f6f6bf9e20d452c817bcd19ccf8f3816eeea7bbd924889fe4397fbc07",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:delta-instructions",
+        "reverse:delta-instructions"
+      ],
+      "outer_differences": [
+        {
+          "direction": "forward",
+          "actual": "delta 27",
+          "oracle": "delta 13"
+        },
+        {
+          "direction": "reverse",
+          "actual": "delta 27",
+          "oracle": "delta 13"
+        }
+      ],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "delete-255",
+      "captures": {
+        "before_sha256": "626edd145376be218b2c583287ef52a17d963743c15030f2465a80a863751240",
+        "after_sha256": "5401d56822cfd4979a328c19a81b0180c63c26dab6b6a12d6195f2ccb0ce0628",
+        "actual_body_sha256": "557d558365ecd7087591ae1801f9fbc95c27c5f1ef12a85e24a1bef571c1a592",
+        "oracle_body_sha256": "da849f0b01fd5916c8ca13ea2dd64d31a69a144232f05bc4b467a67273094dc5",
+        "actual_full_patch_sha256": "a0f7c3572d49c011a343d5b98b8e67dcba882232a9acb8b9b65b955c7e6233d2",
+        "oracle_full_stdout_sha256": "b5bcedb609f51b5c3dc59fcabaa9c8f08ea3d3e2629965804a5b06f9f1ba073f",
+        "oracle_apply_patch_sha256": "ac38287b6357c420c78703c417cda018b6c3d5690b69eeedb57a23e4422499ab",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:delta-instructions",
+        "reverse:delta-instructions"
+      ],
+      "outer_differences": [
+        {
+          "direction": "forward",
+          "actual": "delta 14",
+          "oracle": "delta 9"
+        },
+        {
+          "direction": "reverse",
+          "actual": "delta 24",
+          "oracle": "delta 23"
+        }
+      ],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "repeat-255",
+      "captures": {
+        "before_sha256": "339dc7b30d8088b04878142d3c298f39fa0972426fe138fdfbe0dac09af0af3d",
+        "after_sha256": "1665371027dbae3f644f9cc8f290c27ea60f3c606d51f691764c1c76f2fffa3e",
+        "actual_body_sha256": "462bfde8aa7c436d346e3af7a90255c3aa50f3e65d38a24cce7e7ee05924af0c",
+        "oracle_body_sha256": "a0cc7f042826cfde2be90c18ea400b59d66d1475de79cded0960dcaa76853e84",
+        "actual_full_patch_sha256": "33f2098ac942ae1dd2697de44f243a312aa819d59361ba54017e3d3a09dd3702",
+        "oracle_full_stdout_sha256": "4a237213487fd61b73499d442a0138724c9362ce8c6f50deea521f4eb48fd228",
+        "oracle_apply_patch_sha256": "ff7231e45fbf54ac36de728ca0bd3dd71a5a9e74357edf960c8c967d66f752e1",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:deflate-bytes"
+      ],
+      "outer_differences": [],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "insert-256",
+      "captures": {
+        "before_sha256": "343091b79fc4a0133d8f2741e434518181da5f42d0970a960f12580ee50839bc",
+        "after_sha256": "a8caa5200d1f793116b3b99cd92ce2d50c4a3f977fab613b4ddc5676e7b255d2",
+        "actual_body_sha256": "aa3ee2a94592c3b727b3c661e70f9590e1bc6b7e7998a56279d858a599b21e48",
+        "oracle_body_sha256": "83c7763dc20a17f057216f1ae8e590b33963e7abb9f6503886d23324e2b2d97e",
+        "actual_full_patch_sha256": "dc46a3eeca4d34e22afca6fc7553c1fa726ba848da9fe6364b7ea8f6ab425383",
+        "oracle_full_stdout_sha256": "edcb81b4eb6249dfdfbb04817b092f80ba712eb302ce839bcdafabc732a0d378",
+        "oracle_apply_patch_sha256": "9738fd6a522b11b86c9a770019478ee648126fb6f105d0247f7b3e4569ac1ef5",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "reverse:delta-instructions"
+      ],
+      "outer_differences": [
+        {
+          "direction": "reverse",
+          "actual": "delta 22",
+          "oracle": "delta 9"
+        }
+      ],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "replace-256",
+      "captures": {
+        "before_sha256": "343091b79fc4a0133d8f2741e434518181da5f42d0970a960f12580ee50839bc",
+        "after_sha256": "5183e0fdbc5ed55398cc639007b816635e1fe58554c49973db78297c03dbf0a5",
+        "actual_body_sha256": "e163aed8de5ffd6e479a8a0bb2fde7040b881cdf1a0a4380558d5813d7387e19",
+        "oracle_body_sha256": "597d8627d35b2e04326a723afed56ad10de4a2a76e262343a1eeae26f76fcd2f",
+        "actual_full_patch_sha256": "d204dbf0b27b9c9d480b53f9d9fcdf57fa7b8d054c9ea43228b508871e6c9f7a",
+        "oracle_full_stdout_sha256": "6888772b9a11b17c262a284123da1cd9b3ef45d611239f6f3c3036b8da2027f3",
+        "oracle_apply_patch_sha256": "1c725e43a9a3d9c5a0a1bf99ec09033d4957efa8f74712626cf112feffdacee2",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:delta-instructions",
+        "reverse:delta-instructions"
+      ],
+      "outer_differences": [
+        {
+          "direction": "forward",
+          "actual": "delta 26",
+          "oracle": "delta 13"
+        },
+        {
+          "direction": "reverse",
+          "actual": "delta 26",
+          "oracle": "delta 13"
+        }
+      ],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "delete-256",
+      "captures": {
+        "before_sha256": "343091b79fc4a0133d8f2741e434518181da5f42d0970a960f12580ee50839bc",
+        "after_sha256": "13e37373dc859d6381e20dc86bbbf7aba8d70163bc2496ff2becd77b60d4e4f4",
+        "actual_body_sha256": "56fb412d4cf5610e8ce0c307c96b8ec01a94ca6c08ea77ee5341479685281a20",
+        "oracle_body_sha256": "566dc8e78232c1b9bfef6dcbd74fc50c23e31096fa9e654fbb8985bbf4f31d68",
+        "actual_full_patch_sha256": "eab089f2a0c63d1f0b582e88e04ee2250266863f52c2cf55c1b26bf5335c4cc9",
+        "oracle_full_stdout_sha256": "60f2cbb2131706904087a55d964488cec13f71be98d322a2ecaa01b73a848da4",
+        "oracle_apply_patch_sha256": "2355be1a4d287c95435d8ec673116c5e57b634eddf9863e8c49057020500cbbf",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:delta-instructions"
+      ],
+      "outer_differences": [
+        {
+          "direction": "forward",
+          "actual": "delta 13",
+          "oracle": "delta 9"
+        }
+      ],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "repeat-256",
+      "captures": {
+        "before_sha256": "947e76858cac6cccc53db852c4e28d27f13d613d733a25db68c2cb1278794615",
+        "after_sha256": "06527f0c3b209fb2de7ed02877921dc15c7b44fab8cf36011598eabc9e87286e",
+        "actual_body_sha256": "dc6d69eacd3f4217b58ff62293c3606d4f42f0e27d115a7cedace456f389505d",
+        "oracle_body_sha256": "8fe4a26b885267d7016d51a1a5d13b2cb17852ffb6710f622d689f5a133614ec",
+        "actual_full_patch_sha256": "60a2d27542d1cd2773ea6c906c094cbe0bd8086efb0350a0ec779d22f3438174",
+        "oracle_full_stdout_sha256": "79205dce6f02609e5a60226fc698753793818244e4b2aa83394aeb16ec2906ec",
+        "oracle_apply_patch_sha256": "007bd7ae09d93882910bdaff1b0f30880a0e84b308b1fd88f2d7d11e64f4fa5b",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:deflate-bytes"
+      ],
+      "outer_differences": [],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "insert-1024",
+      "captures": {
+        "before_sha256": "6e19bf8a346a8d6e3295a918ea06ae7d4e9a5830b28c4255fc14950a6aefedd8",
+        "after_sha256": "ec91569570d030bc3e9434c583ed28c76d79f3bc0eba8b295cfe77f4727149e9",
+        "actual_body_sha256": "fb93ab5a757f0ca92197488521853c4a04a2644643184eff471b1a10a9136ce9",
+        "oracle_body_sha256": "3299997215f3e008b653f625b3775323a844bff533251f43a11e2610883fd462",
+        "actual_full_patch_sha256": "c16239eb107e9b43cd72b5cccb2b738874b79ccfa487ee6181a36cacbdc69d75",
+        "oracle_full_stdout_sha256": "af8df653f589dcbbb707c2ed3f4081623193026d49025bdde7228560d8b41c77",
+        "oracle_apply_patch_sha256": "f96364cd1daa5556121083b9014adf3b9dffb71ab7492a3ea35c00979e52ab6a",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "reverse:delta-instructions"
+      ],
+      "outer_differences": [
+        {
+          "direction": "reverse",
+          "actual": "delta 24",
+          "oracle": "delta 10"
+        }
+      ],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "replace-1024",
+      "captures": {
+        "before_sha256": "6e19bf8a346a8d6e3295a918ea06ae7d4e9a5830b28c4255fc14950a6aefedd8",
+        "after_sha256": "557c271aa2a83ed96a38c4036548ef8cea6bf02b6538b4d2d9e721ff4e2568c4",
+        "actual_body_sha256": "13505a815f50616e50b971f31a058b449cff44e7dca6e85ba2c478378bc863e4",
+        "oracle_body_sha256": "159a304a9a93de85ec39028071f7689471c4f0b0bcdd3c8b9172dcb5eb08b6c5",
+        "actual_full_patch_sha256": "b982805706c122ac25de1e9290255d26d20ac732deb9c9298438ecf37ebeed15",
+        "oracle_full_stdout_sha256": "3d69e1546fcb6e11dfd3ee5bc434a3ba5e9473d0802239964ba8a7374c21fadd",
+        "oracle_apply_patch_sha256": "3b1cf854580f7c9792a50f50b5cd1a96b793db9c07df52ffc33f2d81e98f9d03",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:delta-instructions",
+        "reverse:delta-instructions"
+      ],
+      "outer_differences": [
+        {
+          "direction": "forward",
+          "actual": "delta 28",
+          "oracle": "delta 15"
+        },
+        {
+          "direction": "reverse",
+          "actual": "delta 28",
+          "oracle": "delta 15"
+        }
+      ],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "delete-1024",
+      "captures": {
+        "before_sha256": "6e19bf8a346a8d6e3295a918ea06ae7d4e9a5830b28c4255fc14950a6aefedd8",
+        "after_sha256": "e12528c70362348fbbe5d303825c6c5848d9fd2dd0f35774f0dd7836c0a75200",
+        "actual_body_sha256": "d97f73a9b88402b7e04edfb645b85b5346f0ff3b7c83b91a2955d3558e6da337",
+        "oracle_body_sha256": "8541e5339356d49e345ccb26e28acaa78f9126852781ca2eb0cfc61490d6958e",
+        "actual_full_patch_sha256": "f321b0861f2b447427d0af89d070ca8ea9b7ecb390b70c654c642187cb8d7f6b",
+        "oracle_full_stdout_sha256": "973ebcb41a3a36f152e0479621bbbb374399ad032ba93b7db543c3ae3e66adf1",
+        "oracle_apply_patch_sha256": "2f506907fb0cf372bc1650d50d9f861331ba9f3dcb6b6c6ee53210a77acbd63b",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:delta-instructions"
+      ],
+      "outer_differences": [
+        {
+          "direction": "forward",
+          "actual": "delta 15",
+          "oracle": "delta 11"
+        }
+      ],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "repeat-1024",
+      "captures": {
+        "before_sha256": "77942448051152f6eb534e25436ade9247693deed95190fbe14af341ac771514",
+        "after_sha256": "946971434bb04d8113f09e1d8de8f3178e22cf0ffcdfe4899ebef52d06fb59dd",
+        "actual_body_sha256": "ba8c59f9a4ca554bb72a2fdb75ba42116a49c677db61643a798f703eb4c67df5",
+        "oracle_body_sha256": "f401d7e5deec5495cff4792b9c25a0952b9ab3736c32ef460f17ded9d8d23bfd",
+        "actual_full_patch_sha256": "9eeaa96d2dfbc74cb24e1daed94486ffc4ba47c3aeb28b5cf119ca443a2a3794",
+        "oracle_full_stdout_sha256": "cdcd4418efe41428f741a373f7f61fb578af0b8fc61b741de874ab9143063c53",
+        "oracle_apply_patch_sha256": "794a497e20cdd7460ec4a29fdf4b13fa2cb3243fba744035a7d09023ecb3f233",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:deflate-bytes",
+        "reverse:deflate-bytes"
+      ],
+      "outer_differences": [],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "insert-8192",
+      "captures": {
+        "before_sha256": "e1ee70d7c61e21768f1b2ba0706dc91ae409372301f1be7c896b75e0c33f31c9",
+        "after_sha256": "deae6c0ab5eb9924d0864d6ad5170f9e27faf744999eabf1593daba1cf02a06b",
+        "actual_body_sha256": "51485667249220d64df1374cf1850e7abc5e8b27263f4107896283999412a179",
+        "oracle_body_sha256": "7c69d6dd9341372c7df564eaa2b9b097950a1dae03ff9b7898cceec47e0b9880",
+        "actual_full_patch_sha256": "dc615437bce9b35a2ac472890d00c6fe3a101c250419f833a34bdb47700963cb",
+        "oracle_full_stdout_sha256": "9d6b06d30454554ba2e6a822e6833dfb18410683eb2aa08649f24960de51579e",
+        "oracle_apply_patch_sha256": "a4bfe9a562ce44c62cdc5d16d1bb94ac2bbed67404a72151a13ac6e43c07b9ee",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "reverse:delta-instructions"
+      ],
+      "outer_differences": [
+        {
+          "direction": "reverse",
+          "actual": "delta 24",
+          "oracle": "delta 10"
+        }
+      ],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "replace-8192",
+      "captures": {
+        "before_sha256": "e1ee70d7c61e21768f1b2ba0706dc91ae409372301f1be7c896b75e0c33f31c9",
+        "after_sha256": "8aacde379a4d18f4b4f7259c3f3bfd26bab5d4507f616bcbd9cfa38f0f31f59a",
+        "actual_body_sha256": "fe1dd610e33c4ca6766827ee94806dfe97678454ff9e89785a98a1df1516e11a",
+        "oracle_body_sha256": "f68a6869805cf8e9bbf8a311b5f0bd6c0dfb0738ad9adc3578612efd8132dd81",
+        "actual_full_patch_sha256": "c8d24f336cc1c6fc8ad40cf38b3f65e95c3361e9127edaec79764be52911cbda",
+        "oracle_full_stdout_sha256": "1ae9c76c98620f1de1ff77046e8cfcf7f1111aefd08823aba8b564dc439ff04b",
+        "oracle_apply_patch_sha256": "c244ec12babf646283b52440dacdf55fc098442d1074aa98f616e0657c141d2c",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:delta-instructions",
+        "reverse:delta-instructions"
+      ],
+      "outer_differences": [
+        {
+          "direction": "forward",
+          "actual": "delta 28",
+          "oracle": "delta 15"
+        },
+        {
+          "direction": "reverse",
+          "actual": "delta 28",
+          "oracle": "delta 15"
+        }
+      ],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "delete-8192",
+      "captures": {
+        "before_sha256": "e1ee70d7c61e21768f1b2ba0706dc91ae409372301f1be7c896b75e0c33f31c9",
+        "after_sha256": "6c32cc7c60b5724ad74d40e73c71f2230938136c61cd903006a78630d2317544",
+        "actual_body_sha256": "40663d5f37847324aec653a50e9c2903633a5a9965d46c69a7a0a667ce998eab",
+        "oracle_body_sha256": "a2a22e08b2353cdf13c5c560c59d7873d4c2290a9029789561b88b4457c4e12f",
+        "actual_full_patch_sha256": "f4532f74b668fcd710f8424eadbfdb449beacfdb5fdd3f480d6a9da07811068a",
+        "oracle_full_stdout_sha256": "0692acd93a199788f83b43b082546e60de19f048cf49100f7becd56205067f0d",
+        "oracle_apply_patch_sha256": "015578ab41ed91194d9076e15f2e6f8f874c097800fadedbf5a9f981f554e9e9",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:delta-instructions"
+      ],
+      "outer_differences": [
+        {
+          "direction": "forward",
+          "actual": "delta 15",
+          "oracle": "delta 11"
+        }
+      ],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "repeat-8192",
+      "captures": {
+        "before_sha256": "222f8ca84f700b4d753c454b2496a641652118803b4207fa265577aeb2880f62",
+        "after_sha256": "0c1997b36d5fa96a303dd36c58111c2b59f91f1bba78bb4562a0694550cde670",
+        "actual_body_sha256": "686b9d8cf4de9400109d9d705236f9f31b2ddb04574c6e9f512e301ef46bc8f2",
+        "oracle_body_sha256": "51862a5e38b0007e55daca21931dce5894154be8372646caf00722d2098dada1",
+        "actual_full_patch_sha256": "587bc7cc50ea19412fe6706a23798d095d40db0ee9743b39ed880ca718236146",
+        "oracle_full_stdout_sha256": "e05bb75eababf4860fa863f7c41c48c52b742d32550fe503785ac788c2ba5222",
+        "oracle_apply_patch_sha256": "28b12be15224339d2131eb582f6a546f4c633e454c73e4eff3c3ec3ce8b3412e",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:delta-instructions",
+        "reverse:delta-instructions"
+      ],
+      "outer_differences": [
+        {
+          "direction": "reverse",
+          "actual": "delta 27",
+          "oracle": "delta 14"
+        }
+      ],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "insert-32768",
+      "captures": {
+        "before_sha256": "b16cc93f86c552bd0e2c48378b16e50546a65edc1a243df3dc3c0c23226e8342",
+        "after_sha256": "2eaf528499161f9dfcd11e4629e8fc71ec2cb5715035a2f8c2b6c22fa089c91d",
+        "actual_body_sha256": "24c50fb1b3aec0977f781e696552bd6fa1a89d399776c46221bfea9a4d6d4560",
+        "oracle_body_sha256": "cbeb7fb0424827b78fc178ee89d834c1cdb517e024895a14376fd2ff1548bc7b",
+        "actual_full_patch_sha256": "4afe1df3689caa7f7301a5236f30007e89ea7ddc24391bfd4c39e317e2d1eed3",
+        "oracle_full_stdout_sha256": "41d450c7c8a6dad131d9c68bb8001eff4ce50a2d89fdcb3b8d1ba4d1294c31e9",
+        "oracle_apply_patch_sha256": "6a503d4a65932f1da611809a5c20e121d5cd944498739d95e04d303791453a64",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "reverse:delta-instructions"
+      ],
+      "outer_differences": [
+        {
+          "direction": "reverse",
+          "actual": "delta 26",
+          "oracle": "delta 12"
+        }
+      ],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "replace-32768",
+      "captures": {
+        "before_sha256": "b16cc93f86c552bd0e2c48378b16e50546a65edc1a243df3dc3c0c23226e8342",
+        "after_sha256": "074a6f4729159df2966db9c975dc5f5204d96d2ce86831e7c67bb98f0d104c4e",
+        "actual_body_sha256": "0664fe9af8af8ddae5fff4aa824493ee31680fda1b6fe8286defa6b4b6acef81",
+        "oracle_body_sha256": "e4701e98ee925a66064a6ec34b97e0e4a96013276acf88e22a09c110b662db67",
+        "actual_full_patch_sha256": "e89b15d44399cd461594842f30aa63fabebf0ab5b9a7d2066d62528398102119",
+        "oracle_full_stdout_sha256": "e146900d92299ff7bc66fc9272cf74104f87c4b55b88f511af2db306a06497d4",
+        "oracle_apply_patch_sha256": "5e3c0ca2a68bb49099fdd51de62138342d1376eb10702bc8f32a5574361593f0",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:delta-instructions",
+        "reverse:delta-instructions"
+      ],
+      "outer_differences": [
+        {
+          "direction": "forward",
+          "actual": "delta 30",
+          "oracle": "delta 17"
+        },
+        {
+          "direction": "reverse",
+          "actual": "delta 30",
+          "oracle": "delta 17"
+        }
+      ],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "delete-32768",
+      "captures": {
+        "before_sha256": "b16cc93f86c552bd0e2c48378b16e50546a65edc1a243df3dc3c0c23226e8342",
+        "after_sha256": "174b40e97625bbcaae3791368ec83ebbf02d9b28a28ba599cacdb78eebed27cd",
+        "actual_body_sha256": "74aed46c20c83a0a533148bea190cbf51341bb51d6c67ca96403b410b39ecee4",
+        "oracle_body_sha256": "aece822aa91d15e128a4fa9ebdcc91e60df7fb397e8bb9b77817620faa064b12",
+        "actual_full_patch_sha256": "5508be0c9706d6689f23c894154c05a31d09e5470ac05887fc6376f62d9f08b2",
+        "oracle_full_stdout_sha256": "1282f3796917347e2d7a459d94f2d4630765c50bad815e0f4840b85c3e23646b",
+        "oracle_apply_patch_sha256": "8f1fe138401ab6aecbbb99983d36c23bc9cd45721dedcfc2646c3ae40c260c94",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:delta-instructions"
+      ],
+      "outer_differences": [
+        {
+          "direction": "forward",
+          "actual": "delta 17",
+          "oracle": "delta 13"
+        }
+      ],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "repeat-32768",
+      "captures": {
+        "before_sha256": "b3df45714f6a99d6fafaf1f7af447cc2511598d51cdb4aca0a63d2d2609e356c",
+        "after_sha256": "b6ae86fa9dece1095805cb58e3e2b6fdf554dbf2ce4f5a4a90e50d3c9336e6f9",
+        "actual_body_sha256": "f27280345cb6dd9ff55ac4d2766a48ff3aa488f5fd1dbd33649904578d3bf780",
+        "oracle_body_sha256": "ab3c0d4a779dcda73f8eb6efbb3b21c8fd34b5cd44ec76a1c01d83c0403b37fe",
+        "actual_full_patch_sha256": "acaa22986c2413e14822b992d83026088bb5cfe8c651f5f96d7d986284577c6a",
+        "oracle_full_stdout_sha256": "cfdde68ecd3060045ed6865fbbe58b8bb3f859c6e012041cdbe97ec7597b0655",
+        "oracle_apply_patch_sha256": "38dc9e29c2db308ba6a16873be4f43a61eba6b8b968dfefbb90c7a7322cb5ae6",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:delta-instructions",
+        "reverse:delta-instructions"
+      ],
+      "outer_differences": [
+        {
+          "direction": "reverse",
+          "actual": "delta 29",
+          "oracle": "delta 16"
+        }
+      ],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "insert-65536",
+      "captures": {
+        "before_sha256": "d17f1011d3952a7aebe87878669d9b614739a24d17fa5a9be5c49a9c3b958431",
+        "after_sha256": "f69300a473a19f97f0caa8c0faf6835a175c4be1207eb8261c10fc1ec2c59ae9",
+        "actual_body_sha256": "90bc49e1ad9d31d4f8d02fdb2c301fec9b6d4224a3add7baf99ad4180d5b1f9c",
+        "oracle_body_sha256": "fa0c792943f9c5d3d38f8bc4588d3794034b5a5c186b017b4164f13690f75781",
+        "actual_full_patch_sha256": "92119e0b7a90acb1b8236039a983fcfe22415b25c8dd9d3b01b044b64ab449b4",
+        "oracle_full_stdout_sha256": "1b1f75a1384bb18a8cb7c6ee98624ae162ce05f197858469798bd17b48c68b59",
+        "oracle_apply_patch_sha256": "0aba19fb1786d290c248d745c376637845b748a335c018ce38ead7296d223c40",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "reverse:delta-instructions"
+      ],
+      "outer_differences": [
+        {
+          "direction": "reverse",
+          "actual": "delta 26",
+          "oracle": "delta 12"
+        }
+      ],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "replace-65536",
+      "captures": {
+        "before_sha256": "d17f1011d3952a7aebe87878669d9b614739a24d17fa5a9be5c49a9c3b958431",
+        "after_sha256": "59374a699aeeeca0c82edde04a51c9498b78456f850b013d1dbae26dd730c3c8",
+        "actual_body_sha256": "6b5b72f2d975adf901c4a0cb6bb2af7bf800fbfedb22ede4edab942ff55850fc",
+        "oracle_body_sha256": "a5f2a5c2a4241c94484c7ad1cb7ce69cf328348f97e0c14f64e9cd1a8dfd4fa5",
+        "actual_full_patch_sha256": "999a4cc6b6a297d10fea1163f951da5b9d1c0c6c8b509df51eb7043c8d3919e7",
+        "oracle_full_stdout_sha256": "4a3e6422779e1e275f264dcf7a2eed6ecb2fef8f40af528d890b331b2b7171bd",
+        "oracle_apply_patch_sha256": "9e0173ee8c034d8e2975ae0576129818a592585a70f1bc86b08c19f45e72d2d2",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:delta-instructions",
+        "reverse:delta-instructions"
+      ],
+      "outer_differences": [
+        {
+          "direction": "forward",
+          "actual": "delta 30",
+          "oracle": "delta 17"
+        },
+        {
+          "direction": "reverse",
+          "actual": "delta 30",
+          "oracle": "delta 17"
+        }
+      ],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "delete-65536",
+      "captures": {
+        "before_sha256": "d17f1011d3952a7aebe87878669d9b614739a24d17fa5a9be5c49a9c3b958431",
+        "after_sha256": "809117c15385379064d188a66741f52a05dd08863bc670c6e7e644e5ad5044a6",
+        "actual_body_sha256": "f7e43e5e271e11cd72084c3c7a94259b78fc216a44e59a931cb2fa97fd52fba9",
+        "oracle_body_sha256": "7e3353135cfbc0362ac38d8c3b029b2544f7e19cb92a6ef545176bb2f93b4692",
+        "actual_full_patch_sha256": "5d43ca3951c785e7a0de6470397851ab0c2e81cb3c1d9a82db19fcd00fd91d9e",
+        "oracle_full_stdout_sha256": "8a404ccde63316305af967804be6b09448b6b0d305b4bdbd03857b2f7a8e8fde",
+        "oracle_apply_patch_sha256": "52bcdba224210ba2a9170fe9a3c1600b40bee0c39c3b289f0836390f9572988f",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:delta-instructions"
+      ],
+      "outer_differences": [
+        {
+          "direction": "forward",
+          "actual": "delta 17",
+          "oracle": "delta 13"
+        }
+      ],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "repeat-65536",
+      "captures": {
+        "before_sha256": "ccdfd982948b0f498fe03527626494b8ea4783821e8c02a7fa0970d9524af567",
+        "after_sha256": "43ded00f79915c110212f82f0cd958a9ad1a3f74bad76b51ab2b00aa4054f0f3",
+        "actual_body_sha256": "98445c669c0d985d809093c2bb6f29626eddfd1082ab6325403b6aa836626c10",
+        "oracle_body_sha256": "549f324ba2d03aca58e4f8b432396d55319382f381431be800ec5895258436c0",
+        "actual_full_patch_sha256": "c58e9d588474a839214e7947cd3b943186628dc759f2d23150e6961914a6db3b",
+        "oracle_full_stdout_sha256": "f1058d134e6f7d823c98e7c66d68f6fa2151a7ab89ae3f5915c124ad5c69969d",
+        "oracle_apply_patch_sha256": "c553cbbb2722572d15bf3585a084ab3155a584620fafd02eb07330bc7f9d52bf",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:delta-instructions",
+        "reverse:delta-instructions"
+      ],
+      "outer_differences": [
+        {
+          "direction": "reverse",
+          "actual": "delta 29",
+          "oracle": "delta 16"
+        }
+      ],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "insert-131072",
+      "captures": {
+        "before_sha256": "76811bc8d1e200a688e465005ec76beadec76245832091e62c68d78b10a887fc",
+        "after_sha256": "5a3fb3a6bf3e350c3267429bac08e8b39d8ea901e293137dcf8bf841d410dd15",
+        "actual_body_sha256": "784c03161b0f4e848d0d88c334a4688a6309ea0f6be555e1b691829f5fc9e980",
+        "oracle_body_sha256": "c9b6783ed70d3959127e95ca4a73add2c236f91b8dda4233955f2316a7c97514",
+        "actual_full_patch_sha256": "b49eff1e790b36565af43e7609d0e7a9ad423c4059515aeca0b1867b7bc700b2",
+        "oracle_full_stdout_sha256": "7b9c0c3fdbabfb99195cf86626ebe45af893fd1cf31e3779ebf8c663e1145b22",
+        "oracle_apply_patch_sha256": "d37323fc5c55650337e575e8c1eccc63994ea90985f15ed5861b8c680cab6e7e",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "reverse:delta-instructions"
+      ],
+      "outer_differences": [
+        {
+          "direction": "reverse",
+          "actual": "delta 25",
+          "oracle": "delta 10"
+        }
+      ],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "replace-131072",
+      "captures": {
+        "before_sha256": "76811bc8d1e200a688e465005ec76beadec76245832091e62c68d78b10a887fc",
+        "after_sha256": "20e753458197efa460c03fe3e35e5c93c18e582ea0a41c9be5d0bdaac8f435f4",
+        "actual_body_sha256": "526540dc680bbc0b73058557a2b6d175be4d097ccb1f9b21f1012c3436f1db91",
+        "oracle_body_sha256": "94eb3e8b22d92990fcc59c18efdaf4a3fd4076b2150d52cbd57ced78a992454e",
+        "actual_full_patch_sha256": "0ce4fa48af5e6972ec105919c44f453e23bce185058e3405ad1696e0266e5630",
+        "oracle_full_stdout_sha256": "d812329becaab662d6667ff2c91530b35404e662d26692fa19fc2db62c227012",
+        "oracle_apply_patch_sha256": "a05d804f159c79ffeb7651085e4b95729514b70014a1f9a10724bdba3c1ce0de",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:delta-instructions",
+        "reverse:delta-instructions"
+      ],
+      "outer_differences": [
+        {
+          "direction": "forward",
+          "actual": "delta 29",
+          "oracle": "delta 16"
+        },
+        {
+          "direction": "reverse",
+          "actual": "delta 29",
+          "oracle": "delta 16"
+        }
+      ],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "delete-131072",
+      "captures": {
+        "before_sha256": "76811bc8d1e200a688e465005ec76beadec76245832091e62c68d78b10a887fc",
+        "after_sha256": "979f7adc68e3cd5b9676fa75c79f31a5252eeb89b86e523b5f5c8fb74bc16a4c",
+        "actual_body_sha256": "f2348a6777e103392dd03b751402368d5b18a9e60abaf91f2ec2865d47dba7d6",
+        "oracle_body_sha256": "6c450f0fef76c9df29a59a9ec3a87cab19c19403b179e5bb0145b4a1dc4df9f7",
+        "actual_full_patch_sha256": "7d673cd14fbd6d122e6177962f6d5a173856e412aca636d5686bf417fe5a4dc2",
+        "oracle_full_stdout_sha256": "8def06f31cffcdeba1658a9ae75ddf1ca5c95876964658951966db2a04c83cad",
+        "oracle_apply_patch_sha256": "4f212e2282b70ff66b6986d572ca218e3726d45813d93c969fe3edb174262917",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:delta-instructions"
+      ],
+      "outer_differences": [
+        {
+          "direction": "forward",
+          "actual": "delta 16",
+          "oracle": "delta 12"
+        }
+      ],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "repeat-131072",
+      "captures": {
+        "before_sha256": "fff99828d4daa2809dc222752a715575e8d9cb6b46c5aebf9803a56cb8cb9d5d",
+        "after_sha256": "0a186a23ed273d6b8546d7c772496516087899d9507a71e5051477ffbc5708f6",
+        "actual_body_sha256": "4deaa62f0b883c6ec2d2baecb5bf3fb82e654921490ccd53617c80494ac8577f",
+        "oracle_body_sha256": "fda654f1c2c00def1316356144858fa89ea5f34f154ba330a5cd421910cc3d6e",
+        "actual_full_patch_sha256": "20ea50475e56c242c88d40a6f535f47067da915497c747d00a552ff43406b417",
+        "oracle_full_stdout_sha256": "7db242972e29033a0d11f7f4711f9f791215492e809b6f5cbae457964c9b5f7b",
+        "oracle_apply_patch_sha256": "6a6b4901ae82b6c573536888cde456e3820c6e7bcec729f47fc8cabcd4ea4a1c",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:delta-instructions",
+        "reverse:delta-instructions"
+      ],
+      "outer_differences": [
+        {
+          "direction": "forward",
+          "actual": "delta 16",
+          "oracle": "delta 14"
+        },
+        {
+          "direction": "reverse",
+          "actual": "delta 30",
+          "oracle": "delta 14"
+        }
+      ],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "move-2048",
+      "captures": {
+        "before_sha256": "64f47d5fd172a987de67ed66a6eaf787b08f8fc4200533efee704447afb64cb5",
+        "after_sha256": "53c71b263a07aca88bb48fbaa24f1418cdbfba3183a156d1b617caaeb1808bb5",
+        "actual_body_sha256": "6057666609eed62caf6cfee4ca6451e2be640fe10c449c87441933a8e13bd02f",
+        "oracle_body_sha256": "5c7f2f02e0fdfb2097d4cb6e3fa0cdd2e94870294a77981c38cbafd2c8b76182",
+        "actual_full_patch_sha256": "e995152fe28f2aef01e99888badfc217bcfd1c0bf94b3d1ea6d842caa3f53980",
+        "oracle_full_stdout_sha256": "60c4f47bf52178fd39b45163c5865a754f34b38970ac560a340fddeb15a0f9ac",
+        "oracle_apply_patch_sha256": "eebcb5ed283993c26e94ba27a72901989f87bdf30494c446505f4e119e58814a",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "reverse:delta-instructions"
+      ],
+      "outer_differences": [
+        {
+          "direction": "reverse",
+          "actual": "delta 28",
+          "oracle": "delta 11"
+        }
+      ],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "multi-edit-2048",
+      "captures": {
+        "before_sha256": "64f47d5fd172a987de67ed66a6eaf787b08f8fc4200533efee704447afb64cb5",
+        "after_sha256": "2e7f8874e9fef39d33f49a35ca243cfb165a846bd622bcbaf552ebcf2855f4ad",
+        "actual_body_sha256": "0c11d8563e4c642862da5cf6e90efc0a525bd8be07ef23c3facee4ab9f99c008",
+        "oracle_body_sha256": "1cb98198ba28444eab6d17ebd94cd8a550d07c67a9d0162ec61e8e5812fdc527",
+        "actual_full_patch_sha256": "f2ad12ef8357e9749c7183bc4c185045ac13a50d8ae0d6ccdf9d08793d0bc71b",
+        "oracle_full_stdout_sha256": "75b86d74db52d377edd80777d22d6ed112dc7e2864a3d7262f16986254292a4c",
+        "oracle_apply_patch_sha256": "d7a5fab57789f3460da2c4dd808b49e9f01347019fdf664e0bd1a6cb06dc5963",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:delta-instructions",
+        "reverse:delta-instructions"
+      ],
+      "outer_differences": [
+        {
+          "direction": "forward",
+          "actual": "delta 37",
+          "oracle": "delta 24"
+        },
+        {
+          "direction": "reverse",
+          "actual": "delta 237",
+          "oracle": "delta 225"
+        }
+      ],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "copy-offset-2048",
+      "captures": {
+        "before_sha256": "64f47d5fd172a987de67ed66a6eaf787b08f8fc4200533efee704447afb64cb5",
+        "after_sha256": "c68f11b4c3043c8592a4665fe7b4244ea1ee47fcb1ff6f15c69ea8169e728903",
+        "actual_body_sha256": "5951bd6807c06239e90818d8ccfede6c87446d42d16c62dce1805dbfbefdd9d4",
+        "oracle_body_sha256": "ac690b83d7238ad44e9022dd5f84262be638eb26b8cb448832f328066bc8964b",
+        "actual_full_patch_sha256": "8ec34939a1e367ee4ea31207b50bb75a73b447a167cf6be1bb107de927c09c1c",
+        "oracle_full_stdout_sha256": "b5bd9956e1c16894718c23f917fe48ec50bd344e94c2150a04b858c8f1702436",
+        "oracle_apply_patch_sha256": "7a7442a02e53d69029dfed4669faba6c15971d36bc0c684ad1c15f0aaf07de8a",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:delta-instructions",
+        "reverse:delta-instructions"
+      ],
+      "outer_differences": [
+        {
+          "direction": "forward",
+          "actual": "delta 31",
+          "oracle": "delta 16"
+        },
+        {
+          "direction": "reverse",
+          "actual": "delta 1824",
+          "oracle": "delta 1815"
+        }
+      ],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "move-70000",
+      "captures": {
+        "before_sha256": "95b6239184f8af30501818805885a049b649291c71bda57f27c10fa5577e0b8c",
+        "after_sha256": "6d41e4fb13ac31f3047512bb0be6c3b3c7fe5f3ddba00821f7a3e904e5b63db0",
+        "actual_body_sha256": "03e4e953fcc2a96b0a84a9b871e5b91fb34606834f9226f225ad77cb25d8f066",
+        "oracle_body_sha256": "9577956f6a716dbffa0071f3ba1e7daf855849f8366f54ecfad952923cd73375",
+        "actual_full_patch_sha256": "00d8914ad39a4b8bc14b465bdf93eec8d5dfc3d2c6486dbd246465490abf9690",
+        "oracle_full_stdout_sha256": "bb551e3db59d68eb3ce184478e2ae004efb354dfd4e3920f34891362f7b7096e",
+        "oracle_apply_patch_sha256": "9e06c5096aba995c30400e36592e482628a90650c0203a6e2df6c58768cfc399",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:delta-instructions",
+        "reverse:delta-instructions"
+      ],
+      "outer_differences": [
+        {
+          "direction": "forward",
+          "actual": "delta 23",
+          "oracle": "delta 14"
+        },
+        {
+          "direction": "reverse",
+          "actual": "delta 22",
+          "oracle": "delta 14"
+        }
+      ],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "multi-edit-70000",
+      "captures": {
+        "before_sha256": "95b6239184f8af30501818805885a049b649291c71bda57f27c10fa5577e0b8c",
+        "after_sha256": "ca14b1ad35a65bcbe5d851e69225cb862028e5c4bf201c8566c233e64a574b4d",
+        "actual_body_sha256": "cd6d29df35f54043c2293d6dec96f6dfe57421e1fab05dcf0b909610fb3f47b4",
+        "oracle_body_sha256": "cc24410506c243097bcb996aabaf49fdc68141d58202d7730a0226af8991a741",
+        "actual_full_patch_sha256": "aab3565ec7a96817b676973c8bab804804f7652e8ceedd6d0bced43b39717341",
+        "oracle_full_stdout_sha256": "bfd4b530f5b3a22d125da259b3b52957acd74aa9156c9bb66fc06db6a17284eb",
+        "oracle_apply_patch_sha256": "b82c177561cc6feb40aae0a5ef06dc6701620fbd22d7fa7a661d12af3165e008",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:delta-instructions",
+        "reverse:delta-instructions"
+      ],
+      "outer_differences": [
+        {
+          "direction": "forward",
+          "actual": "delta 43",
+          "oracle": "delta 30"
+        },
+        {
+          "direction": "reverse",
+          "actual": "delta 243",
+          "oracle": "delta 231"
+        }
+      ],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "copy-offset-70000",
+      "captures": {
+        "before_sha256": "95b6239184f8af30501818805885a049b649291c71bda57f27c10fa5577e0b8c",
+        "after_sha256": "edbe6a686e83829704fa4a0a1cc41ccbb0ed7ae566357048d96fa5f5a4bf294d",
+        "actual_body_sha256": "41dd35d9b6722c9a6da91a6ec1be8321d9070f49c0b921d04e5bb7096956b7a4",
+        "oracle_body_sha256": "f811c40fc515d86603363b2dff64a0e76986c63be3d78d044671fde93819d982",
+        "actual_full_patch_sha256": "e969b5878d7d24f8676c73a8224466b7ecae43faf862358e2be1e6012bc80295",
+        "oracle_full_stdout_sha256": "450651d24f8f6aa8c9f2135e57a95fb78590a3b1a357fed41e0922c70c7a848a",
+        "oracle_apply_patch_sha256": "ca5742aa563a6179c8735bd94039abd96694a411ad81fee99d4d38dd77dace22",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:delta-instructions",
+        "reverse:deflate-bytes"
+      ],
+      "outer_differences": [
+        {
+          "direction": "forward",
+          "actual": "delta 33",
+          "oracle": "delta 18"
+        }
+      ],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "unrelated-compressible",
+      "captures": {
+        "before_sha256": "aa12e95c130b6fa81a7d9b5bab58f821ccc57a159ef12772537e2897e2f26ea9",
+        "after_sha256": "39fde65c35c21134ffddbababff86ed4cce767beadeb99fb63cb4c666870cf67",
+        "actual_body_sha256": "23660d9a996e41ea89bd500f910e56dcac775b23104e098c64b392a150d2a5c1",
+        "oracle_body_sha256": "c225e9a7ef7b3e36518a40020b586c3a9d8e5c01aa3d3c3279259097850f7c7c",
+        "actual_full_patch_sha256": "6eabd9704fee96fa2136978f544a833464c9eaf1476b725425ac1ed244373d90",
+        "oracle_full_stdout_sha256": "e0560044ed2d7b3515fd82ad15862a7c9a0dc839135326e9a5821d494e2ec828",
+        "oracle_apply_patch_sha256": "2460ef3724538fb21120c23424770e4bfd3f00726b5b6b400350d1a3dff8ba7d",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "differences": [
+        "forward:deflate-bytes",
+        "reverse:deflate-bytes"
+      ],
+      "outer_differences": [],
+      "reason": "R-vc04-4: independently validated binary-body representation; not byte parity"
+    },
+    {
+      "name": "line-boundary-90",
+      "captures": {
+        "before_sha256": "2a6013f83555ed1c5f4c16e2eba14a1cf64b3bf6be8268fe291e2a000378193d",
+        "after_sha256": "619860346a581f11ce49236a8460ab0d1d9ae68633d247483f842fc475be31d7",
+        "actual_body_sha256": "ea04008d3c67d766c55a1281b25c5f61adab39b19400bb57a4912a5f343a7e49",
+        "oracle_body_sha256": "af8b6d0322480cdc15e348f976a7551e7d7d0880363ec178016c112cc74ff97f",
+        "actual_full_patch_sha256": "e4d83b0defd11f2d3d4db693a8fc60bed34e95dae39932425fb315e138581784",
+        "oracle_full_stdout_sha256": "3e781bd5b27a1bd098e99a197f0b6bff17c9e7f922d1a4c63f472ecd5fd56dca",
+        "oracle_apply_patch_sha256": "9d2dfacd3450c4d7dedd6552609ded5a98832e4a349f07c54a7eca663878fe82",
+        "oracle_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "oracle_status": 1,
+        "actual_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "actual_status": 0
+      },
+      "outer_differences": [],
+      "reason": "R-vc04-4: independently validated level-1 compression representation; exact blob reconstruction"
+    }
+  ],
+  "issue_or_ruling": "R-vc04-4, refined by coordinator by analogy to R4c"
+}

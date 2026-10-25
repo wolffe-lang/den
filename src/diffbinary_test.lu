@@ -1,0 +1,24 @@
+//! member: false
+
+use diffbinary
+
+fn text(data: List[byte]) -> str { str_from_utf8(data) else "INVALID UTF8" }
+
+fn main() -> int ! diffbinary.BinaryPatchErrors {
+    // Independent pinned-Git literals: forward and reverse order, base85,
+    // short group padding and the blank line between/trailing the blocks.
+    assert(
+        text(diffbinary.patch([0 as byte], [78 as byte, 69 as byte, 87 as byte, 0 as byte])?) ==
+            "GIT binary patch\nliteral 4\nLcmeZs4QBuV0=WR|\n\nliteral 1\nIcmZPo000310RR91\n\n",
+    )
+    assert(
+        text(diffbinary.patch([], [])?) ==
+            "GIT binary patch\nliteral 0\nHcmV?d00001\n\nliteral 0\nHcmV?d00001\n\n",
+    )
+    var data = List[byte]()
+    for i in 0..256 { (mut data).push(i as byte) }
+    let body = text(diffbinary.patch(data, data)?)
+    assert(body.starts_with("GIT binary patch\ndelta "))
+    print("diffbinary: pinned literal bytes, empty blocks, delta choice pass")
+    0
+}
