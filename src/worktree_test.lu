@@ -1,0 +1,563 @@
+//! member: false
+
+use index
+use object
+use oid
+use repository
+use worktree
+
+fn bytes(text: str) -> List[byte] {
+    var out = List[byte]()
+    for b in text.bytes() { (mut out).push(b) }
+    out
+}
+
+fn equal(a: List[byte], b: List[byte]) -> bool {
+    if a.len != b.len { return false }
+    for i in 0..a.len { if a[i] != b[i] { return false } }
+    true
+}
+
+fn context() -> worktree.Context {
+    worktree.Context {
+        repo: repository.Repo { gitdir: "/repo/.git", config: Map[str, str]() },
+        root: "/repo",
+        cwd: "/repo/sub",
+        prefix: "sub",
+    }
+}
+
+fn entry(path: str, body: str, flags: int) -> index.Entry ! worktree.WorkErrors {
+    index.Entry {
+        path: bytes(path),
+        stat: [0, 0, 0, 0, 0, 0, 0o100644, 0, 0, 0],
+        id: object.identify("blob", body.bytes())?,
+        flags: flags,
+        extended: 0,
+    }
+}
+
+fn file(path: str, body: str) -> worktree.FileState ! worktree.WorkErrors {
+    worktree.FileState {
+        path: bytes(path),
+        mode: 0o100644,
+        id: object.identify("blob", body.bytes())?,
+        data: bytes(body),
+        stat: [],
+        kind: 0,
+    }
+}
+
+fn options() -> worktree.StatusOptions {
+    worktree.StatusOptions {
+        short: true,
+        porcelain: true,
+        branch: false,
+        nul: false,
+        untracked: "all",
+        ignored: false,
+        renames: false,
+        copies: false,
+        relative: true,
+        hints: true,
+        quote_path: true,
+        paths: [],
+    }
+}
+
+fn main() -> int ! worktree.WorkErrors {
+    var bool_context = context()
+    bool_context.repo.config["core.filemode"] = ""
+    assert(!worktree.config_bool(bool_context, "core.filemode", true)?)
+    bool_context.repo.config["core.filemode"] = "true"
+    assert(worktree.config_bool(bool_context, "core.filemode", false)?)
+
+    let ctx = context()
+    assert(equal(worktree.normalize(ctx, "../a")?, bytes("a")))
+    assert(equal(worktree.normalize(ctx, "./x/../y")?, bytes("sub/y")))
+    assert(equal(worktree.normalize(ctx, "/repo/a")?, bytes("a")))
+    assert(worktree.normalize(ctx, ":/")?.len == 0)
+    for bad in ["../../outside", "/other/file", "../.git/config", "a\0b", ":(glob)*", "*.c"] {
+        var refused = false
+        let _ = worktree.normalize(ctx, bad) else |_| { refused = true; [] }
+        assert(refused)
+    }
+    // Measured filesystem regression: a tracked descendant makes its literal
+    // directory operand bypass ignore rules unless --no-index is requested.
+    // Witness target/ignore-filesystem-full-v3.json, tracked :nested rows.
+    var ignored_index = index.empty(2)?
+    (mut ignored_index.entries).push(entry("literal*name", "x", 0)?)
+    (mut ignored_index.entries).push(entry("nested/track.tmp", "x", 0)?)
+    assert(worktree.tracked_for_ignore(ignored_index, bytes("nested")))
+    assert(worktree.tracked_for_ignore(ignored_index, bytes("nested/track.tmp")))
+    assert(worktree.tracked_for_ignore(ignored_index, bytes("literal*name")))
+    for path in ["nest", "nested-other", "nested/other.tmp", "nested/tra", "literalXname"] {
+        assert(!worktree.tracked_for_ignore(ignored_index, bytes(path)))
+    }
+    assert(!worktree.tracked_for_ignore(index.empty(2)?, bytes("nested")))
+    assert(equal(worktree.quote(bytes("a b"), true, true), bytes("\"a b\"")))
+    assert(equal(worktree.quote([255 as byte, 10 as byte], true, true), bytes("\"\\377\\n\"")))
+    assert(equal(worktree.quote([255 as byte], false, false), [255 as byte]))
+    let original = object.identify("blob", "old".bytes())?
+    let head_entries = [worktree.FlatEntry { path: bytes("a"), mode: 0o100644, id: copy original }]
+    var value = index.empty(2)?
+    (mut value.entries).push(entry("a", "staged", 0)?)
+    let disk = [file("a", "working")?]
+    let rows = worktree.compare_status(ctx, value, head_entries, disk)?
+    assert(rows.len == 1 && rows[0].x == "M" && rows[0].y == "M")
+    // This context has no real filesystem root. Neither suppressed untracked
+    // rows nor an all-tracked comparison may query any ignore source.
+    var warnings = ["earlier operation warning"]
+    let mixed_files = [copy disk[0], file("untracked", "new")?]
+    let tracked_only = worktree.compare_status_with_warnings(
+        ctx,
+        value,
+        head_entries,
+        mixed_files,
+        false,
+        mut warnings,
+    )?
+    assert(tracked_only.len == 1 && tracked_only[0].x == "M" && tracked_only[0].y == "M")
+    assert(warnings.len == 1 && warnings[0] == "earlier operation warning")
+    let no_untracked = worktree.compare_status_with_warnings(
+        ctx,
+        value,
+        head_entries,
+        disk,
+        true,
+        mut warnings,
+    )?
+    assert(no_untracked.len == 1 && warnings.len == 1)
+    var malformed_index = copy value
+    malformed_index.entries[0].stat = []
+    var bad_index = false
+    let _ = worktree.compare_status_with_warnings(
+        ctx,
+        malformed_index,
+        head_entries,
+        mixed_files,
+        false,
+        mut warnings,
+    ) else |e| {
+        bad_index = "{e}" == "invalid_index"
+        List[worktree.StatusRow]()
+    }
+    assert(bad_index && warnings.len == 1 && warnings[0] == "earlier operation warning")
+    var snapshot = worktree.Snapshot {
+        context: copy ctx,
+        head: worktree.Head {
+            reference: "refs/heads/main",
+            branch: "main",
+            detached: false,
+            commits: [copy original],
+            checkout: [],
+        },
+        index: copy value,
+        head_entries: head_entries,
+        files: disk,
+        directories: [],
+        rows: rows,
+    }
+    var opts = options()
+    assert(equal(worktree.render_status(snapshot, opts)?, bytes("MM a\n")))
+    opts.porcelain = false
+    assert(equal(worktree.render_status(snapshot, opts)?, bytes("MM ../a\n")))
+    opts = options()
+    opts.short = false
+    opts.porcelain = false
+    let human = str_from_utf8(worktree.render_status(snapshot, opts)?) else ""
+    assert(
+        human.contains("Changes to be committed:") &&
+            human.contains("Changes not staged for commit:"),
+    )
+    assert(human.contains("modified:   ../a"))
+    assert(human.starts_with("On branch main\nChanges to be committed:\n"))
+    assert(!human.starts_with("On branch main\n\n"))
+    opts.hints = false
+    let no_hints = str_from_utf8(worktree.render_status(snapshot, opts)?) else ""
+    assert(
+        no_hints ==
+            "On branch main\nChanges to be committed:\n\tmodified:   ../a\n\nChanges not staged for commit:\n\tmodified:   ../a\n\n",
+    )
+
+    // Even a same-inode no-op add invalidates TREE; generic replacement does not.
+    var cached = copy value
+    let assembly = index.build_trees(cached)?
+    cached.extensions = [index.Extension { signature: "TREE", data: copy assembly.cache }]
+    let unchanged = worktree.stage_entry(cached, cached.entries[0])?
+    assert(equal(unchanged.extensions[0].data, bytes("\0-1 0\n")))
+    assert(
+        equal(
+            index.serialize(index.replace_entry(cached, cached.entries[0])?)?,
+            index.serialize(cached)?,
+        ),
+    )
+    for word in [0, 1, 2, 3, 4, 5, 7, 8, 9] {
+        var refreshed = copy cached.entries[0]
+        refreshed.stat[word] += 1
+        let generic = index.replace_entry(cached, refreshed)?
+        assert(equal(generic.extensions[0].data, assembly.cache))
+        let staged_refresh = worktree.stage_entry(cached, refreshed)?
+        assert(equal(staged_refresh.extensions[0].data, bytes("\0-1 0\n")))
+    }
+    var executable = copy cached.entries[0]
+    executable.stat[6] = 0o100755
+    assert(equal(worktree.stage_entry(cached, executable)?.extensions[0].data, bytes("\0-1 0\n")))
+    value.entries[0].flags = 0x8000
+    let assumed = worktree.compare_status(ctx, value, snapshot.head_entries, snapshot.files)?
+    assert(assumed.len == 1 && assumed[0].x == "M" && assumed[0].y == " ")
+    value.entries[0].flags = 0
+    value.entries[0].extended = 0x4000
+    let skipped = worktree.compare_status(ctx, value, snapshot.head_entries, snapshot.files)?
+    assert(skipped[0].y == " ")
+    value.entries[0].extended = 0x2000
+    let intent = worktree.compare_status(ctx, value, [], snapshot.files)?
+    assert(intent[0].x == " " && intent[0].y == "A")
+    value.entries = [entry("conflict", "x", 4096)?]
+    let conflict = worktree.compare_status(ctx, value, [], [])?
+    assert(conflict[0].x == "D" && conflict[0].y == "D")
+    var moved = index.empty(2)?
+    (mut moved.entries).push(entry("new", "old", 0)?)
+    snapshot.index = moved
+    snapshot.head_entries = [
+        worktree.FlatEntry { path: bytes("old"), mode: 0o100644, id: copy original },
+    ]
+    snapshot.rows = [
+        worktree.StatusRow {
+            path: bytes("new"),
+            original_path: [],
+            x: "A",
+            y: " ",
+            ignored: false,
+            untracked: false,
+        },
+        worktree.StatusRow {
+            path: bytes("old"),
+            original_path: [],
+            x: "D",
+            y: " ",
+            ignored: false,
+            untracked: false,
+        },
+    ]
+    opts = options()
+    opts.renames = true
+    assert(equal(worktree.render_status(snapshot, opts)?, bytes("R  old -> new\n")))
+    let exact_snapshot = copy snapshot
+    for (old_mode, new_mode) in [(0o100644, 0o100755), (0o100755, 0o100644), (0o120000, 0o120000)] {
+        snapshot = copy exact_snapshot
+        snapshot.head_entries[0].mode = old_mode
+        snapshot.index.entries[0].stat[6] = new_mode
+        opts = options()
+        opts.renames = true
+        assert(equal(worktree.render_status(snapshot, opts)?, bytes("R  old -> new\n")))
+        opts.nul = true
+        assert(equal(worktree.render_status(snapshot, opts)?, bytes("R  new\0old\0")))
+        opts.nul = false
+        opts.short = false
+        opts.porcelain = false
+        opts.relative = false
+        opts.hints = false
+        assert(
+            equal(
+                worktree.render_status(snapshot, opts)?,
+                bytes("On branch main\nChanges to be committed:\n\trenamed:    old -> new\n\n"),
+            ),
+        )
+    }
+    for (old_mode, new_mode) in [(0o100644, 0o120000), (0o120000, 0o100644)] {
+        snapshot = copy exact_snapshot
+        snapshot.head_entries[0].mode = old_mode
+        snapshot.index.entries[0].stat[6] = new_mode
+        opts = options()
+        opts.renames = true
+        assert(equal(worktree.render_status(snapshot, opts)?, bytes("A  new\nD  old\n")))
+        snapshot.index.entries[0].id = object.identify("blob", "different target".bytes())?
+        assert(equal(worktree.render_status(snapshot, opts)?, bytes("A  new\nD  old\n")))
+    }
+    for (old_mode, new_mode) in [(0o100644, 0o100755), (0o100755, 0o100644)] {
+        snapshot = copy exact_snapshot
+        snapshot.head_entries[0].mode = old_mode
+        snapshot.index.entries[0].stat[6] = new_mode
+        var changed_source = entry("old", "changed source", 0)?
+        changed_source.stat[6] = old_mode
+        (mut snapshot.index.entries).push(changed_source)
+        snapshot.rows[1].x = "M"
+        opts = options()
+        opts.renames = true
+        opts.copies = true
+        assert(equal(worktree.render_status(snapshot, opts)?, bytes("C  old -> new\nM  old\n")))
+        snapshot.index.entries[0].stat[6] = 0o120000
+        assert(equal(worktree.render_status(snapshot, opts)?, bytes("A  new\nM  old\n")))
+    }
+    snapshot = copy exact_snapshot
+    snapshot.index.entries[0].id = object.identify("blob", "edited body".bytes())?
+    opts = options()
+    opts.renames = true
+    var inexact_refused = false
+    let _ = worktree.render_status(snapshot, opts) else |e| {
+        inexact_refused = "{e}".contains("inexact staged rename detection")
+        List[byte]()
+    }
+    assert(inexact_refused)
+    snapshot = copy exact_snapshot
+    opts = options()
+    opts.renames = true
+    opts.nul = true
+    assert(equal(worktree.render_status(snapshot, opts)?, bytes("R  new\0old\0")))
+    snapshot.head.commits = []
+    opts.branch = true
+    let unborn = worktree.render_status(snapshot, opts)?
+    let heading = bytes("## No commits yet on main\0")
+    assert(unborn.len >= heading.len && equal(unborn[0..heading.len], heading))
+    snapshot.rows = [
+        worktree.StatusRow {
+            path: bytes("u/file"),
+            original_path: [],
+            x: "?",
+            y: "?",
+            ignored: false,
+            untracked: true,
+        },
+    ]
+    opts = options()
+    opts.untracked = "normal"
+    assert(equal(worktree.render_status(snapshot, opts)?, bytes("?? u/\n")))
+    opts.untracked = "no"
+    assert(worktree.render_status(snapshot, opts)?.len == 0)
+
+    // m2-ignore: ignored siblings do not force an untracked directory open.
+    // Conversely its nonignored children prevent collapsing ignored siblings.
+    let before_grouping = copy snapshot
+    snapshot.context.prefix = ""
+    snapshot.context.cwd = snapshot.context.root
+    snapshot.index = index.empty(2)?
+    snapshot.head_entries = []
+    snapshot.rows = [
+        worktree.StatusRow {
+            path: bytes("nested/.gitignore"),
+            original_path: [],
+            x: "?",
+            y: "?",
+            ignored: false,
+            untracked: true,
+        },
+        worktree.StatusRow {
+            path: bytes("nested/drop.tmp"),
+            original_path: [],
+            x: "!",
+            y: "!",
+            ignored: true,
+            untracked: false,
+        },
+        worktree.StatusRow {
+            path: bytes("nested/keep.tmp"),
+            original_path: [],
+            x: "?",
+            y: "?",
+            ignored: false,
+            untracked: true,
+        },
+    ]
+    let mixed_directory = copy snapshot.rows
+    opts = options()
+    opts.untracked = "normal"
+    assert(equal(worktree.render_status(snapshot, opts)?, bytes("?? nested/\n")))
+    opts.porcelain = false
+    assert(equal(worktree.render_status(snapshot, opts)?, bytes("?? nested/\n")))
+    opts.nul = true
+    assert(equal(worktree.render_status(snapshot, opts)?, bytes("?? nested/\0")))
+    opts = options()
+    opts.untracked = "normal"
+    opts.ignored = true
+    assert(
+        equal(worktree.render_status(snapshot, opts)?, bytes("?? nested/\n!! nested/drop.tmp\n")),
+    )
+    let before_human_group = copy snapshot
+    snapshot.head.commits = [copy original]
+    opts.short = false
+    opts.porcelain = false
+    opts.hints = false
+    assert(
+        equal(
+            worktree.render_status(snapshot, opts)?,
+            bytes(
+                "On branch main\nUntracked files:\n\tnested/\n\nIgnored files:\n\tnested/drop.tmp\n\nnothing added to commit but untracked files present\n",
+            ),
+        ),
+    )
+    snapshot = copy before_human_group
+    opts = options()
+    opts.untracked = "normal"
+    opts.ignored = true
+    opts.nul = true
+    assert(
+        equal(worktree.render_status(snapshot, opts)?, bytes("?? nested/\0!! nested/drop.tmp\0")),
+    )
+    opts.nul = false
+    opts.untracked = "all"
+    assert(
+        equal(
+            worktree.render_status(snapshot, opts)?,
+            bytes("?? nested/.gitignore\n?? nested/keep.tmp\n!! nested/drop.tmp\n"),
+        ),
+    )
+    opts.untracked = "normal"
+    (mut snapshot.index.entries).push(entry("nested/tracked", "kept", 0)?)
+    assert(
+        equal(
+            worktree.render_status(snapshot, opts)?,
+            bytes("?? nested/.gitignore\n?? nested/keep.tmp\n!! nested/drop.tmp\n"),
+        ),
+    )
+    snapshot.index = index.empty(2)?
+    snapshot.rows = [
+        copy mixed_directory[0],
+        worktree.StatusRow {
+            path: bytes("nested/deleted"),
+            original_path: [],
+            x: "D",
+            y: " ",
+            ignored: false,
+            untracked: false,
+        },
+        copy mixed_directory[1],
+        copy mixed_directory[2],
+    ]
+    assert(
+        equal(
+            worktree.render_status(snapshot, opts)?,
+            bytes("D  nested/deleted\n?? nested/\n!! nested/drop.tmp\n"),
+        ),
+    )
+    snapshot.rows = [
+        worktree.StatusRow {
+            path: bytes("cache/one"),
+            original_path: [],
+            x: "!",
+            y: "!",
+            ignored: true,
+            untracked: false,
+        },
+        worktree.StatusRow {
+            path: bytes("cache/two"),
+            original_path: [],
+            x: "!",
+            y: "!",
+            ignored: true,
+            untracked: false,
+        },
+        copy mixed_directory[0],
+        copy mixed_directory[1],
+        copy mixed_directory[2],
+    ]
+    assert(
+        equal(
+            worktree.render_status(snapshot, opts)?,
+            bytes("?? nested/\n!! cache/\n!! nested/drop.tmp\n"),
+        ),
+    )
+    snapshot = copy before_grouping
+    snapshot.rows = []
+    opts = options()
+    opts.short = false
+    opts.porcelain = false
+    assert(
+        equal(
+            worktree.render_status(snapshot, opts)?,
+            bytes(
+                "On branch main\n\nNo commits yet\n\nnothing to commit (create/copy files and use \"git add\" to track)\n",
+            ),
+        ),
+    )
+    snapshot.head.commits = [copy original]
+    snapshot.rows = [
+        worktree.StatusRow {
+            path: bytes("a"),
+            original_path: [],
+            x: "!",
+            y: "!",
+            ignored: true,
+            untracked: false,
+        },
+        worktree.StatusRow {
+            path: bytes("b"),
+            original_path: [],
+            x: "?",
+            y: "?",
+            ignored: false,
+            untracked: true,
+        },
+        worktree.StatusRow {
+            path: bytes("z"),
+            original_path: [],
+            x: "M",
+            y: " ",
+            ignored: false,
+            untracked: false,
+        },
+    ]
+    opts = options()
+    opts.ignored = true
+    assert(equal(worktree.render_status(snapshot, opts)?, bytes("M  z\n?? b\n!! a\n")))
+    opts.nul = true
+    assert(equal(worktree.render_status(snapshot, opts)?, bytes("M  z\0?? b\0!! a\0")))
+    snapshot.rows = []
+    snapshot.head.detached = true
+    snapshot.head.reference = ""
+    snapshot.head.branch = ""
+    snapshot.head.checkout = []
+    opts = options()
+    opts.short = false
+    opts.porcelain = false
+    assert(
+        equal(
+            worktree.render_status(snapshot, opts)?,
+            bytes("Not currently on any branch.\nnothing to commit, working tree clean\n"),
+        ),
+    )
+    let old_hex = oid.hex(original)?
+    let checkout_log = bytes(
+        "{old_hex} {old_hex} Probe <probe> 1 +0000\tcheckout: moving from main to HEAD\n",
+    )
+    let checkout = worktree.parse_checkout_origin(checkout_log)?
+    assert(checkout.len == 1 && checkout[0].target == "HEAD" && checkout[0].label == old_hex[0..7])
+    snapshot.head.checkout = checkout
+    assert(
+        equal(
+            worktree.render_status(snapshot, opts)?,
+            bytes("HEAD detached at {old_hex[0..7]}\nnothing to commit, working tree clean\n"),
+        ),
+    )
+    let child = object.identify("blob", "child".bytes())?
+    let child_hex = oid.hex(child)?
+    let commit_line = "{old_hex} {child_hex} Probe <probe> 2 +0000\tcommit: child\n"
+    assert(worktree.parse_checkout_origin(commit_line.bytes())?.len == 0)
+    var after_commit = copy checkout_log
+    for b in commit_line.bytes() { (mut after_commit).push(b) }
+    snapshot.head.checkout = worktree.parse_checkout_origin(after_commit)?
+    snapshot.head.commits = [copy child]
+    assert(
+        equal(
+            worktree.render_status(snapshot, opts)?,
+            bytes("HEAD detached from {old_hex[0..7]}\nnothing to commit, working tree clean\n"),
+        ),
+    )
+    for malformed in [
+        "bad\tcheckout: moving from main to HEAD\n",
+        "{old_hex} {old_hex[0..39]}z Probe <probe> 1 +0000\tcheckout: moving from main to HEAD\n",
+        "{old_hex} {old_hex} Probe <probe> 1 +0000\tcheckout: moving from main to \n",
+        "{old_hex} {old_hex} Probe <probe> 1 +0000\tcheckout: moving from main to HEAD",
+    ] {
+        var refused = false
+        let _ = worktree.parse_checkout_origin(malformed.bytes()) else |_| {
+            refused = true
+            List[worktree.CheckoutOrigin]()
+        }
+        assert(refused)
+    }
+    print(
+        "PASS worktree paths, raw quoting, status codes, flags, ITA, conflicts, exact rename and grouping",
+    )
+    0
+}

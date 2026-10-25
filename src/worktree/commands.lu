@@ -1,0 +1,340 @@
+use index
+use repository
+
+fn arguments(ctx: Context, words: List[str]) -> List[List[byte]] ! WorkErrors {
+    var paths = List[List[byte]]()
+    for word in words { (mut paths).push(normalize(ctx, word)?) }
+    paths
+}
+
+fn emit_ignore_warnings(warnings: List[str]) {
+    for warning in warnings { eprint(warning) }
+}
+
+fn status_command(ctx: Context, args: List[str]) -> int ! WorkErrors {
+    var options = status_options(ctx)?
+    var literal = false
+    var format = false
+    for arg in args {
+        if !literal && arg == "--" { literal = true; continue }
+        if !literal && (arg == "--porcelain" || arg == "--porcelain=1" || arg == "--porcelain=v1") {
+            options.porcelain = true
+            options.short = true
+            format = true
+        } else if !literal && (arg == "-s" || arg == "--short") {
+            options.short = true
+            format = true
+        } else if !literal && (arg == "-b" || arg == "--branch") {
+            options.branch = true
+        } else if !literal && (arg == "-sb" || arg == "-bs") {
+            options.short = true
+            options.branch = true
+            format = true
+        } else if !literal && arg == "-z" {
+            options.nul = true
+        } else if !literal && arg == "--long" {
+            options.short = false
+            options.porcelain = false
+            format = true
+        } else if !literal && (arg == "--ignored" || arg == "--ignored=traditional") {
+            options.ignored = true
+        } else if !literal && arg == "--ignored=no" {
+            options.ignored = false
+        } else if !literal && arg == "--no-renames" {
+            options.renames = false
+        } else if !literal && arg == "--renames" {
+            options.renames = true
+        } else if !literal &&
+            (
+                arg.starts_with("--untracked-files=") ||
+                    arg.starts_with("-u") ||
+                    arg == "--untracked-files"
+            ) {
+            var mode = if arg == "-u" || arg == "--untracked-files" {
+                "all"
+            } else if arg.starts_with("-u") {
+                arg[2..]
+            } else {
+                arg[18..]
+            }
+            if mode == "true" || mode == "yes" || mode == "on" || mode == "1" { mode = "normal" }
+            if mode == "false" || mode == "no" || mode == "off" || mode == "0" { mode = "no" }
+            if mode != "no" && mode != "normal" && mode != "all" {
+                return Fatal("Invalid untracked files mode '{mode}'")
+            }
+            options.untracked = mode
+        } else if !literal && arg.starts_with("-") {
+            return Unsupported("status {arg}")
+        } else {
+            (mut options.paths).push(normalize(ctx, arg)?)
+        }
+    }
+    if options.nul && !format { options.porcelain = true; options.short = true }
+    var warnings = List[str]()
+    defer emit_ignore_warnings(warnings)
+    let snapshot = scan_with_warnings(ctx, options.untracked != "no", mut warnings)?
+    let bytes = render_status(snapshot, options)?
+    let output = fs_open_mode("/dev/stdout", 2)?
+    defer fs_close(output) else |_| {}
+    fs_write_chunk(output, bytes)?
+    0
+}
+
+fn add_command(ctx: Context, args: List[str]) -> int ! WorkErrors {
+    var options = add_options()
+    var words = List[str]()
+    var literal = false
+    for arg in args {
+        if !literal && arg == "--" { literal = true; continue }
+        if !literal && (arg == "--all" || arg == "--no-ignore-removal") {
+            options.all = true
+            options.update = false
+            options.ignore_removal = false
+        } else if !literal && arg == "--update" {
+            options.update = true
+            options.all = false
+        } else if !literal && (arg == "--ignore-removal" || arg == "--no-all") {
+            options.ignore_removal = true
+            options.all = false
+            options.update = false
+        } else if !literal && arg == "--force" {
+            options.force = true
+        } else if !literal && arg == "--intent-to-add" {
+            options.intent = true
+        } else if !literal && arg == "--verbose" {
+            options.verbose = true
+        } else if !literal && arg == "--dry-run" {
+            options.dry_run = true
+        } else if !literal && arg.starts_with("--chmod=") {
+            if arg == "--chmod=+x" {
+                options.chmod = 1
+            } else if arg == "--chmod=-x" {
+                options.chmod = 0
+            } else {
+                return Fatal("invalid chmod parameter '{arg[8..]}'")
+            }
+        } else if !literal && arg.len > 1 && arg.starts_with("-") && !arg.starts_with("--") {
+            for octet in arg[1..].bytes() {
+                match octet as int {
+                    65 => {
+                        options.all = true
+                        options.update = false
+                        options.ignore_removal = false
+                    },
+                    117 => { options.update = true; options.all = false },
+                    102 => { options.force = true },
+                    78 => { options.intent = true },
+                    118 => { options.verbose = true },
+                    110 => { options.dry_run = true },
+                    _ => { return Unsupported("add {arg}") },
+                }
+            }
+        } else if !literal && arg.starts_with("-") {
+            return Unsupported("add {arg}")
+        } else {
+            (mut words).push(arg)
+        }
+    }
+    if words.len == 0 && !options.all && !options.update {
+        eprint("Nothing specified, nothing added.")
+        if config_bool(ctx, "advice.addemptypathspec", true)? {
+            eprint(
+                "hint: Maybe you wanted to say 'git add .'?\nhint: Disable this message with \"git config set advice.addEmptyPathspec false\"",
+            )
+        }
+        return 0
+    }
+    let paths = arguments(ctx, words)?
+    var warnings = List[str]()
+    defer emit_ignore_warnings(warnings)
+    var tx = index.begin(ctx.repo, 1000000000, index_version(ctx)?)?
+    defer index.abort(mut tx)
+    let changed = stage_paths_with_warnings(ctx, mut tx.value, paths, options, mut warnings)?
+    if !options.dry_run && changed.len > 0 { index.commit(mut tx)? }
+    if options.verbose || options.dry_run {
+        for path in changed {
+            print("{if path_present(ctx, path)? then "add" else "remove"} '{text(path)?}'")
+        }
+    }
+    0
+}
+
+fn remove_command(ctx: Context, args: List[str]) -> int ! WorkErrors {
+    var options = RemoveOptions {
+        cached: false,
+        recursive: false,
+        force: false,
+        quiet: false,
+        dry_run: false,
+        ignore_unmatch: false,
+    }
+    var words = List[str]()
+    var literal = false
+    for arg in args {
+        if !literal && arg == "--" { literal = true; continue }
+        if !literal && arg == "--cached" {
+            options.cached = true
+        } else if !literal && arg == "--force" {
+            options.force = true
+        } else if !literal && arg == "--quiet" {
+            options.quiet = true
+        } else if !literal && arg == "--dry-run" {
+            options.dry_run = true
+        } else if !literal && arg == "--ignore-unmatch" {
+            options.ignore_unmatch = true
+        } else if !literal && arg.len > 1 && arg.starts_with("-") && !arg.starts_with("--") {
+            for octet in arg[1..].bytes() {
+                match octet as int {
+                    114 => { options.recursive = true },
+                    102 => { options.force = true },
+                    113 => { options.quiet = true },
+                    110 => { options.dry_run = true },
+                    _ => { return Unsupported("rm {arg}") },
+                }
+            }
+        } else if !literal && arg.starts_with("-") {
+            return Unsupported("rm {arg}")
+        } else {
+            (mut words).push(arg)
+        }
+    }
+    let paths = arguments(ctx, words)?
+    var tx = index.begin(ctx.repo, 1000000000, index_version(ctx)?)?
+    defer index.abort(mut tx)
+    let removed = remove_paths(ctx, mut tx.value, paths, options)?
+    if !options.dry_run && removed.len > 0 { index.commit(mut tx)? }
+    if !options.quiet { for path in removed { print("rm '{text(path)?}'") } }
+    0
+}
+
+fn restore_command(ctx: Context, args: List[str], checkout: bool) -> int ! WorkErrors {
+    var options = RestoreOptions { staged: false, worktree: false, source: "", overlay: checkout }
+    var words = List[str]()
+    var literal = false
+    var location = false
+    var pos = 0
+    if checkout {
+        if args.len == 0 || args[0] != "--" {
+            return Unsupported("checkout (only -- <paths> alias)")
+        }
+        options.worktree = true
+    }
+    while pos < args.len {
+        let arg = args[pos]
+        pos += 1
+        if !literal && arg == "--" { literal = true; continue }
+        if !literal && (arg == "--staged" || arg == "-S") {
+            options.staged = true
+            location = true
+        } else if !literal && (arg == "--worktree" || arg == "-W") {
+            options.worktree = true
+            location = true
+        } else if !literal && (arg == "-SW" || arg == "-WS") {
+            options.staged = true
+            options.worktree = true
+            location = true
+        } else if !literal && arg.starts_with("--source=") {
+            options.source = arg[9..]
+            if options.source == "" { return Fatal("option '--source' requires a value") }
+        } else if !literal && (arg == "-s" || arg == "--source") {
+            if pos == args.len { return Fatal("option '{arg}' requires a value") }
+            options.source = args[pos]
+            pos += 1
+        } else if !literal &&
+            (arg == "-q" || arg == "--quiet" || arg == "--no-progress") {} else if !literal &&
+            arg == "--overlay" {
+            options.overlay = true
+        } else if !literal && arg == "--no-overlay" {
+            options.overlay = false
+        } else if !literal && arg.starts_with("-") {
+            return Unsupported("restore {arg}")
+        } else {
+            (mut words).push(arg)
+        }
+    }
+    if !location { options.worktree = true }
+    let paths = arguments(ctx, words)?
+    var tx = index.begin(ctx.repo, 1000000000, index_version(ctx)?)?
+    defer index.abort(mut tx)
+    restore_paths(ctx, mut tx.value, paths, options)?
+    if options.staged || options.source == "" { index.commit(mut tx)? }
+    0
+}
+
+fn move_command(ctx: Context, args: List[str]) -> int ! WorkErrors {
+    var force = false, skip = false, verbose = false, dry_run = false, literal = false
+    var words = List[str]()
+    for arg in args {
+        if !literal && arg == "--" { literal = true; continue }
+        if !literal && (arg == "-f" || arg == "--force") {
+            force = true
+        } else if !literal && arg == "-k" {
+            skip = true
+        } else if !literal && (arg == "-v" || arg == "--verbose") {
+            verbose = true
+        } else if !literal && (arg == "-n" || arg == "--dry-run") {
+            dry_run = true
+        } else if !literal && arg.starts_with("-") {
+            return Unsupported("mv {arg}")
+        } else {
+            (mut words).push(arg)
+        }
+    }
+    if words.len < 2 { return Fatal("source and destination are required") }
+    let destination = normalize(ctx, words[words.len - 1])?
+    let sources = arguments(ctx, words[0..words.len - 1])?
+    var tx = index.begin(ctx.repo, 1000000000, index_version(ctx)?)?
+    defer index.abort(mut tx)
+    let plans = plan_moves(ctx, tx.value, sources, destination, force, skip)?
+    if !dry_run && plans.len > 0 { move_paths(ctx, mut tx.value, plans)?; index.commit(mut tx)? }
+    if verbose || dry_run {
+        for plan in plans { print("Renaming {text(plan.source)?} to {text(plan.destination)?}") }
+    }
+    0
+}
+
+fn dispatch(args: List[str]) -> int ! WorkErrors {
+    if args.len == 0 { return Unsupported("worktree command") }
+    let ctx = discover(".")?
+    let rest = args[1..args.len]
+    match args[0] {
+        "add" => add_command(ctx, rest)?,
+        "rm" => remove_command(ctx, rest)?,
+        "mv" => move_command(ctx, rest)?,
+        "status" => status_command(ctx, rest)?,
+        "restore" => restore_command(ctx, rest, false)?,
+        "checkout" => restore_command(ctx, rest, true)?,
+        "check-ignore" => check_ignore_command(ctx, rest)?,
+        _ => { return Unsupported(args[0]) },
+    }
+}
+
+/// Command edge for den's dispatcher; args includes add/rm/mv/status/restore or
+/// checkout/check-ignore at index zero. Unsupported options return 2, ordinary fatal errors
+/// 128, safety/ignored refusals 1. Human diagnostic strings await oracle proof.
+pub fn run(args: List[str]) -> int {
+    repository.check_config(".") else |e| match e {
+        ConfigDiagnostic(message) => { eprint(message); return 128 },
+        _ => {},
+    }
+    dispatch(args) else |e| match e {
+        Unsupported(feature) => { eprint("den: not yet implemented: {feature}"); 2 },
+        Fatal(message) => { eprint("fatal: {message}"); 128 },
+        Failure(message) => { eprint(message); 1 },
+        Pathspec(path) => { eprint("fatal: pathspec '{path}' did not match any files"); 128 },
+        exists => {
+            let ctx = discover(".") else |_| { eprint("fatal: index.lock exists"); return 128 }
+            eprint("fatal: {index.lock_message(ctx.repo)}{index.lock_advice()}")
+            128
+        },
+        not_found => {
+            eprint("fatal: not a git repository (or any of the parent directories): .git")
+            128
+        },
+        unmerged => {
+            eprint("error: unresolved index entries are not supported by this operation")
+            1
+        },
+        _ => { eprint("fatal: {e}"); 128 },
+    }
+}

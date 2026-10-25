@@ -1,0 +1,11 @@
+pkg {
+    name: "worktree-client",
+    edition: "1",
+    capabilities: [env, fs],
+    deps: {
+        worktree: {path: "../../src/worktree"}, index: {path: "../../src/index"},
+        ignore: {path: "../../src/ignore"}, object: {path: "../../src/object"},
+        oid: {path: "../../src/oid"}, repository: {path: "../../src/repository"},
+        hash: {path: "../../src/hash"}, zlib: {path: "../../src/zlib"},
+    },
+}

@@ -1,0 +1,332 @@
+use std.fs
+use index
+use object
+use oid
+use repository
+use worktree
+
+fn raw(text: str) -> List[byte] {
+    var out = List[byte]()
+    for b in text.bytes() { (mut out).push(b) }
+    out
+}
+
+fn hex(bytes: List[byte]) -> str {
+    var out = List[byte]()
+    for b in bytes {
+        (mut out).push("0123456789abcdef".bytes()[b as int / 16])
+        (mut out).push("0123456789abcdef".bytes()[b as int % 16])
+    }
+    str_from_utf8(out) else ""
+}
+
+fn fixture_tag(
+    repo: repository.Repo,
+    target: oid.Oid,
+    kind: str,
+    name: str,
+) -> oid.Oid ! worktree.WorkErrors {
+    let message = raw("tag fixture\n")
+    let body = object.build_tag(target, kind, name, "Probe <probe> 1 +0000", message)?
+    object.write_object(repo, "tag", body)?
+}
+
+fn exercise(root: str) -> int ! worktree.WorkErrors {
+    if fs.exists(root) { return exists }
+    let (repo, _) = repository.init(root, false, "main")?
+    fs.create_dir_all("{root}/dir")?
+    fs.write_text("{root}/a", "first\n")?
+    fs.write_text("{root}/dir/b", "second\n")?
+    fs_symlink("a", "{root}/link")?
+    let ctx = worktree.discover(root)?
+    assert(worktree.head(ctx)?.commits.len == 0)
+    var tx = index.begin(repo, 1000000000, 0)?
+    defer index.abort(mut tx)
+    var add = worktree.add_options()
+    add.all = true
+    let staged = worktree.stage_paths(ctx, mut tx.value, [], add)?
+    assert(staged.len == 3)
+    index.commit(mut tx)?
+    let tree = index.write_tree(repo, 1000000000)?
+    let fixture_message = "fixture\n".bytes()
+    let body = object.build_commit(
+        tree,
+        [],
+        "Probe <probe> 1 +0000",
+        "Probe <probe> 1 +0000",
+        "",
+        fixture_message,
+    )?
+    let commit = object.write_object(repo, "commit", body)?
+    fs.write_text("{repo.gitdir}/refs/heads/main", "{oid.hex(commit)?}\n")?
+    assert(worktree.scan(ctx)?.rows.len == 0)
+    // The pinned oracle invalidates TREE even for this same-inode no-op add.
+    tx = index.begin(repo, 1000000000, 0)?
+    let expected_noop = index.invalidate_tree(tx.value, raw("a"))?
+    let noop_paths = worktree.stage_paths(ctx, mut tx.value, [raw("a")], worktree.add_options())?
+    assert(noop_paths.len == 1)
+    assert(hex(tx.value.extensions[0].data) == hex(expected_noop.extensions[0].data))
+    index.commit(mut tx)?
+    fs.write_text("{root}/a", "changed\n")?
+    fs.write_text("{root}/untracked", "new\n")?
+    let dirty = worktree.scan(ctx)?
+    assert(dirty.rows.len == 2)
+    assert(dirty.rows[0].x == " " && dirty.rows[0].y == "M")
+    tx = index.begin(repo, 1000000000, 0)?
+    worktree.restore_paths(ctx, mut tx.value, [
+        raw("a"),
+    ], worktree.RestoreOptions { staged: false, worktree: true, source: "", overlay: false })?
+    index.commit(mut tx)?
+    assert(fs.read_text("{root}/a")? == "first\n")
+    let source_restore_before = repository.read_bytes("{repo.gitdir}/index", 1000000000)?
+    fs.write_text("{root}/a", "second unstaged edit\n")?
+    tx = index.begin(repo, 1000000000, 0)?
+    let source_restore_value = index.serialize(tx.value)?
+    worktree.restore_paths(ctx, mut tx.value, [raw("a")], worktree.RestoreOptions {
+        staged: false,
+        worktree: true,
+        source: "HEAD",
+        overlay: false,
+    })?
+    assert(hex(index.serialize(tx.value)?) == hex(source_restore_value))
+    index.abort(mut tx)
+    assert(
+        hex(repository.read_bytes("{repo.gitdir}/index", 1000000000)?) ==
+            hex(source_restore_before),
+    )
+    assert(fs.read_text("{root}/a")? == "first\n")
+    tx = index.begin(repo, 1000000000, 0)?
+    let plans = worktree.plan_moves(ctx, tx.value, [raw("dir/b")], raw("moved"), false, false)?
+    worktree.move_paths(ctx, mut tx.value, plans)?
+    index.commit(mut tx)?
+    assert(fs.read_text("{root}/moved")? == "second\n")
+    assert(!fs.exists("{root}/dir/b"))
+    tx = index.begin(repo, 1000000000, 0)?
+    let removed = worktree.remove_paths(ctx, mut tx.value, [raw("a")], worktree.RemoveOptions {
+        cached: true,
+        recursive: false,
+        force: false,
+        quiet: true,
+        dry_run: false,
+        ignore_unmatch: false,
+    })?
+    assert(removed.len == 1)
+    index.commit(mut tx)?
+    assert(fs.exists("{root}/a"))
+    fs.write_text("{root}/.gitignore", "a\nlink\nuntracked\n!visible\nliteral\\*name\n")?
+    assert(worktree.query_ignore(ctx, "a", false)?.ignored)
+    assert(!worktree.query_ignore(ctx, "link", false)?.matched)
+    assert(worktree.query_ignore(ctx, "link", true)?.ignored)
+    let negated = worktree.query_ignore(ctx, "visible", false)?
+    assert(negated.matched && !negated.ignored)
+    assert(worktree.query_ignore(ctx, "literal*name", false)?.ignored)
+
+    // The operation owns one diagnostic collection. Repeated source visits,
+    // including directory preflight plus child queries, must deduplicate.
+    fs.remove("{root}/.gitignore")?
+    fs.write_text("{root}/rules", "*.tmp\n")?
+    fs_symlink("rules", "{root}/.gitignore")?
+    fs.create_dir("{root}/warning-dir")?
+    fs.write_text("{root}/warning-dir/one", "one\n")?
+    fs.write_text("{root}/warning-dir/two", "two\n")?
+    let source_warning = "warning: unable to access '.gitignore': Too many levels of symbolic links"
+    var warnings = List[str]()
+    let warned = worktree.scan_with_warnings(ctx, true, mut warnings)?
+    assert(warnings.len == 1 && warnings[0] == source_warning)
+    let _ = worktree.scan_with_warnings(ctx, true, mut warnings)?
+    assert(warnings.len == 1)
+    assert(worktree.scan(ctx)?.rows.len == warned.rows.len)
+    warnings = List[str]()
+    let suppressed = worktree.scan_with_warnings(ctx, false, mut warnings)?
+    for row in suppressed.rows { assert(!row.untracked && !row.ignored) }
+    assert(warnings.len == 0)
+
+    var warning_tx = index.begin(repo, 1000000000, 0)?
+    defer index.abort(mut warning_tx)
+    var dry = worktree.add_options()
+    dry.dry_run = true
+    let _ = worktree.stage_paths_with_warnings(
+        ctx,
+        mut warning_tx.value,
+        [raw("moved")],
+        dry,
+        mut warnings,
+    )?
+    assert(warnings.len == 0)
+    var update = copy dry
+    update.update = true
+    let _ = worktree.stage_paths_with_warnings(ctx, mut warning_tx.value, [], update, mut warnings)?
+    assert(warnings.len == 0)
+    let _ = worktree.stage_paths_with_warnings(
+        ctx,
+        mut warning_tx.value,
+        [raw("untracked")],
+        dry,
+        mut warnings,
+    )?
+    assert(warnings.len == 1 && warnings[0] == source_warning)
+    let _ = worktree.stage_paths_with_warnings(
+        ctx,
+        mut warning_tx.value,
+        [raw("warning-dir")],
+        dry,
+        mut warnings,
+    )?
+    assert(warnings.len == 1)
+    warnings = List[str]()
+    let _ = worktree.stage_paths_with_warnings(
+        ctx,
+        mut warning_tx.value,
+        [List[byte]()],
+        dry,
+        mut warnings,
+    )?
+    assert(warnings.len == 1 && warnings[0] == source_warning)
+
+    // Poison-source positive controls distinguish 'never queried' from merely
+    // discarding a warning. Normal untracked queries must encounter this error.
+    var poisoned = copy ctx
+    poisoned.repo.config["core.excludesfile"] = "~den-warning-test-user/rules"
+    warnings = List[str]()
+    let without_ignore = worktree.scan_with_warnings(poisoned, false, mut warnings)?
+    for row in without_ignore.rows { assert(!row.untracked && !row.ignored) }
+    assert(without_ignore.files.len == warning_tx.value.entries.len)
+    for file in without_ignore.files {
+        var tracked = false
+        for entry in warning_tx.value.entries {
+            if hex(entry.path) == hex(file.path) { tracked = true; break }
+        }
+        assert(tracked)
+    }
+    let _ = worktree.stage_paths_with_warnings(
+        poisoned,
+        mut warning_tx.value,
+        [raw("moved")],
+        dry,
+        mut warnings,
+    )?
+    let _ = worktree.stage_paths_with_warnings(
+        poisoned,
+        mut warning_tx.value,
+        [],
+        update,
+        mut warnings,
+    )?
+    assert(warnings.len == 0)
+    var queried = false
+    let _ = worktree.scan_with_warnings(poisoned, true, mut warnings) else |e| {
+        queried = "{e}".contains("core.excludesFile ~user expansion")
+        copy warned
+    }
+    assert(queried)
+    queried = false
+    let _ = worktree.stage_paths_with_warnings(
+        poisoned,
+        mut warning_tx.value,
+        [raw("untracked")],
+        dry,
+        mut warnings,
+    ) else |e| {
+        queried = "{e}".contains("core.excludesFile ~user expansion")
+        List[List[byte]]()
+    }
+    assert(queried)
+    fs_symlink("../rules", "{root}/warning-dir/.gitignore")?
+    warnings = List[str]()
+    let _ = worktree.stage_paths_with_warnings(
+        ctx,
+        mut warning_tx.value,
+        [raw("warning-dir")],
+        dry,
+        mut warnings,
+    )?
+    assert(warnings.len == 2 && warnings[0] == source_warning)
+    assert(
+        warnings[1] ==
+            "warning: unable to access 'warning-dir/.gitignore': Too many levels of symbolic links",
+    )
+    let _ = worktree.stage_paths_with_warnings(
+        ctx,
+        mut warning_tx.value,
+        [raw("warning-dir")],
+        dry,
+        mut warnings,
+    )?
+    assert(warnings.len == 2)
+    index.abort(mut warning_tx)
+
+    // Annotated and nested tag names identify the peeled checkout commit.
+    // These refs/objects belong solely to this newly created fixture.
+    let attached_head = fs.read_text("{repo.gitdir}/HEAD")?
+    let commit_hex = oid.hex(commit)?
+    let anchor = fixture_tag(repo, commit, "commit", "anchor")?
+    fs.write_text("{repo.gitdir}/refs/tags/anchor", "{oid.hex(anchor)?}\n")?
+    fs.create_dir_all("{repo.gitdir}/logs")?
+    fs.write_text("{repo.gitdir}/HEAD", "{commit_hex}\n")?
+    fs.write_text(
+        "{repo.gitdir}/logs/HEAD",
+        "{commit_hex} {commit_hex} Probe <probe> 1 +0000\tcheckout: moving from main to anchor\n",
+    )?
+    let tagged_head = worktree.head(ctx)?
+    assert(tagged_head.detached && tagged_head.checkout.len == 1)
+    assert(
+        tagged_head.checkout[0].label == "anchor" && oid.equal(tagged_head.checkout[0].id, commit),
+    )
+    let outer = fixture_tag(repo, anchor, "tag", "outer")?
+    fs.write_text("{repo.gitdir}/refs/tags/outer", "{oid.hex(outer)?}\n")?
+    fs.write_text(
+        "{repo.gitdir}/logs/HEAD",
+        "{commit_hex} {commit_hex} Probe <probe> 2 +0000\tcheckout: moving from main to outer\n",
+    )?
+    assert(worktree.head(ctx)?.checkout[0].label == "outer")
+    let noncommit_body = raw("not a commit")
+    let noncommit = object.write_object(repo, "blob", noncommit_body)?
+    let blob_tag = fixture_tag(repo, noncommit, "blob", "blob-tag")?
+    fs.write_text("{repo.gitdir}/refs/tags/blob-tag", "{oid.hex(blob_tag)?}\n")?
+    fs.write_text(
+        "{repo.gitdir}/logs/HEAD",
+        "{commit_hex} {commit_hex} Probe <probe> 3 +0000\tcheckout: moving from main to blob-tag\n",
+    )?
+    assert(worktree.head(ctx)?.checkout[0].label == commit_hex[0..7])
+    var deep = copy anchor
+    for depth in 0..64 { deep = fixture_tag(repo, deep, "tag", "depth-{depth}")? }
+    fs.write_text("{repo.gitdir}/refs/tags/deep", "{oid.hex(deep)?}\n")?
+    fs.write_text(
+        "{repo.gitdir}/logs/HEAD",
+        "{commit_hex} {commit_hex} Probe <probe> 4 +0000\tcheckout: moving from main to deep\n",
+    )?
+    assert(worktree.head(ctx)?.checkout[0].label == commit_hex[0..7])
+    fs.write_text("{repo.gitdir}/HEAD", attached_head)?
+    fs.remove("{repo.gitdir}/logs/HEAD")?
+    print(
+        "PASS independent worktree add/stat/link/tree/HEAD/scan/restore/move/cached-remove/ignore/warnings/tag-label fixture",
+    )
+    0
+}
+
+fn inspect(args: List[str]) -> int ! worktree.WorkErrors {
+    if args.len != 2 { return invalid }
+    let snapshot = worktree.scan(worktree.discover(args[1])?)?
+    print("root {snapshot.context.root}")
+    print("prefix {snapshot.context.prefix}")
+    print("head {snapshot.head.branch} {snapshot.head.detached} {snapshot.head.commits.len}")
+    for entry in snapshot.head_entries {
+        print("tree {hex(entry.path)} {entry.mode} {oid.hex(entry.id)?}")
+    }
+    for file in snapshot.files {
+        print("file {hex(file.path)} {file.kind} {file.mode} {oid.hex(file.id)?}")
+    }
+    for row in snapshot.rows {
+        print("row {row.x}{row.y} {hex(row.path)} {hex(row.original_path)}")
+    }
+    0
+}
+
+fn main() -> int {
+    let args = env_args()
+    if args.len > 0 && args[0] == "scan" { return inspect(args) else |e| { eprint("{e}"); 1 } }
+    if args.len == 2 && args[0] == "exercise" {
+        return exercise(args[1]) else |e| { eprint("{e}"); 1 }
+    }
+    worktree.run(args)
+}

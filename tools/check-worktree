@@ -1,0 +1,26 @@
+#!/bin/sh
+set -eu
+DEN_ROOT=$(cd "$(dirname "$0")/.." && pwd)
+export DEN_ROOT
+cd "$DEN_ROOT"
+. tools/lib-toolchain.sh
+for tier in native release; do
+    flag=
+    if [ "$tier" = release ]; then flag=--release; fi
+    mkdir -p "target/$tier"
+    "$WOLF" build $flag --deny-warnings src/worktree_test.lu -o "target/$tier/worktree-test"
+    "target/$tier/worktree-test"
+    "$WOLF" build $flag --deny-warnings probes/worktree-client/main.lu -o "target/$tier/worktree-client"
+    fixture=$(mktemp -d "$DEN_ROOT/target/worktree-$tier.XXXXXX")
+    rmdir "$fixture"
+    "target/$tier/worktree-client" exercise "$fixture"
+    tools/env python3 -I tools/worktree-oracle.py --tier "$tier"
+done
+"$WOLF" conform-run src/worktree_test.lu --checked --json > target/worktree-checked.json
+cat target/worktree-checked.json
+python3 -I - target/worktree-checked.json <<'PY'
+import json,sys
+rows=[json.loads(line) for line in open(sys.argv[1]) if line.startswith('{')]
+assert len(rows)==1 and rows[0]['verdict']=='exit(0)',rows
+PY
+echo 'worktree: native/release unit, API exercise and strict repository matrix; actual checked exit(0)'
