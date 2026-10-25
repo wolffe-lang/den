@@ -4,7 +4,7 @@ fn append(mut out: List[byte], bytes: List[byte]) {
 
 fn range_text(start: int, count: int) -> str {
     if count == 0 { return "{start},0" }
-    if count == 1 { return "{start + 1}" }
+    if count == 1 { return "{start + 2}" }
     "{start + 1},{count}"
 }
 
