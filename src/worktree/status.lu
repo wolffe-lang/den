@@ -1,0 +1,463 @@
+use oid
+
+/// Render controls are independent of scanning, so vc04/vc05 can reuse rows.
+pub struct StatusOptions {
+    short: bool,
+    porcelain: bool,
+    branch: bool,
+    nul: bool,
+    untracked: str,
+    ignored: bool,
+    renames: bool,
+    copies: bool,
+    relative: bool,
+    hints: bool,
+    quote_path: bool,
+    paths: List[List[byte]],
+}
+
+/// Defaults from status configuration; unsupported modes remain named refusals.
+pub fn status_options(ctx: Context) -> StatusOptions ! WorkErrors {
+    let setting = ctx.repo.config["status.renames"] else "true"
+    let copies = setting.lower() == "copies"
+    let renames = if copies then true else config_bool(ctx, "status.renames", true)?
+    var untracked = ctx.repo.config["status.showuntrackedfiles"] else "normal"
+    if untracked == "true" { untracked = "normal" }
+    if untracked == "false" { untracked = "no" }
+    if untracked != "no" && untracked != "normal" && untracked != "all" {
+        return Unsupported("status.showUntrackedFiles={untracked}")
+    }
+    StatusOptions {
+        short: config_bool(ctx, "status.short", false)?,
+        porcelain: false,
+        branch: config_bool(ctx, "status.branch", false)?,
+        nul: false,
+        untracked: untracked,
+        ignored: false,
+        renames: renames,
+        copies: copies,
+        relative: config_bool(ctx, "status.relativepaths", true)?,
+        hints: config_bool(ctx, "advice.statushints", true)?,
+        quote_path: config_bool(ctx, "core.quotepath", true)?,
+        paths: [],
+    }
+}
+
+fn selected(path: List[byte], paths: List[List[byte]]) -> bool {
+    if paths.len == 0 { return true }
+    for candidate in paths { if under(path, candidate) { return true } }
+    false
+}
+
+fn relative_path(ctx: Context, path: List[byte]) -> List[byte] {
+    if ctx.prefix == "" { return owned_bytes(path) }
+    let prefix = "{ctx.prefix}/"
+    var common = 0
+    var i = 0
+    while i < prefix.len && i < path.len && prefix.bytes()[i] == path[i] {
+        if path[i] == 47 as byte { common = i + 1 }
+        i += 1
+    }
+    var out = List[byte]()
+    for j in common..prefix.len {
+        if prefix.bytes()[j] == 47 as byte { bytes_add(mut out, "../".bytes()) }
+    }
+    bytes_add(mut out, path[common..path.len])
+    out
+}
+
+/// Git-style C quoting over raw bytes; NUL output never invokes quoting.
+pub fn quote(path: List[byte], high_bytes: bool, spaces: bool) -> List[byte] {
+    var needed = false
+    for b in path {
+        if b as int < 32 ||
+            b == 127 as byte ||
+            b == 34 as byte ||
+            b == 92 as byte ||
+            spaces && b == 32 as byte ||
+            high_bytes && b as int >= 128 {
+            needed = true
+        }
+    }
+    if !needed { return owned_bytes(path) }
+    var out = [34 as byte]
+    for b in path {
+        let n = b as int
+        if n == 34 || n == 92 {
+            (mut out).push(92 as byte)
+            (mut out).push(b)
+        } else if n >= 7 && n <= 13 {
+            (mut out).push(92 as byte)
+            (mut out).push("abtnvfr".bytes()[n - 7])
+        } else if n < 32 || n == 127 || high_bytes && n >= 128 {
+            (mut out).push(92 as byte)
+            (mut out).push((48 + n / 64) as byte)
+            (mut out).push((48 + n / 8 % 8) as byte)
+            (mut out).push((48 + n % 8) as byte)
+        } else {
+            (mut out).push(b)
+        }
+    }
+    (mut out).push(34 as byte)
+    out
+}
+
+fn display(ctx: Context, path: List[byte], options: StatusOptions) -> List[byte] {
+    let relative = if options.relative && !options.porcelain {
+        relative_path(ctx, path)
+    } else {
+        copy path
+    }
+    if options.nul {
+        relative
+    } else {
+        quote(relative, options.quote_path, options.short || options.porcelain)
+    }
+}
+
+fn same_file_type(a: int, b: int) -> bool {
+    a & 0o170000 == b & 0o170000
+}
+
+fn renames(snapshot: Snapshot, options: StatusOptions) -> List[StatusRow] ! WorkErrors {
+    var rows = copy snapshot.rows
+    if !options.renames { return rows }
+    var dropped = List[int]()
+    for i in 0..rows.len {
+        if rows[i].x != "A" { continue }
+        let added = index_at(snapshot.index.entries, rows[i].path)
+        if added < 0 { continue }
+        for j in 0..rows.len {
+            if rows[j].x != "D" { continue }
+            var taken = false
+            for removed in dropped { if removed == j { taken = true } }
+            if taken { continue }
+            let old = flat_at(snapshot.head_entries, rows[j].path)
+            if old < 0 { continue }
+            if same_file_type(
+                snapshot.head_entries[old].mode,
+                snapshot.index.entries[added].stat[6],
+            ) &&
+                oid.equal(snapshot.head_entries[old].id, snapshot.index.entries[added].id) {
+                rows[i].x = "R"
+                rows[i].original_path = copy rows[j].path
+                (mut dropped).push(j)
+                break
+            }
+        }
+        if rows[i].x == "A" && options.copies {
+            for old in snapshot.head_entries {
+                let now = index_at(snapshot.index.entries, old.path)
+                if now >= 0 &&
+                    !oid.equal(old.id, snapshot.index.entries[now].id) &&
+                    same_file_type(old.mode, snapshot.index.entries[added].stat[6]) &&
+                    oid.equal(old.id, snapshot.index.entries[added].id) {
+                    rows[i].x = "C"
+                    rows[i].original_path = copy old.path
+                    break
+                }
+            }
+        }
+    }
+    var result = List[StatusRow]()
+    for i in 0..rows.len {
+        var drop = false
+        for removed in dropped { if removed == i { drop = true } }
+        if !drop { (mut result).push(copy rows[i]) }
+    }
+    // Similarity scoring belongs to the measured diff engine. Do not silently
+    // claim an exact-only detector agrees on edited-content rename candidates.
+    for row in result {
+        if row.x != "A" { continue }
+        let added = index_at(snapshot.index.entries, row.path)
+        if added < 0 { continue }
+        for other in result {
+            if other.x != "D" { continue }
+            let old = flat_at(snapshot.head_entries, other.path)
+            if old >= 0 &&
+                same_file_type(
+                    snapshot.head_entries[old].mode,
+                    snapshot.index.entries[added].stat[6],
+                ) {
+                return Unsupported("inexact staged rename detection")
+            }
+        }
+    }
+    result
+}
+
+fn grouped(snapshot: Snapshot, rows: List[StatusRow], options: StatusOptions) -> List[StatusRow] {
+    var result = List[StatusRow]()
+    for original in rows {
+        if !selected(original.path, options.paths) &&
+            !selected(original.original_path, options.paths) {
+            continue
+        }
+        if original.untracked && options.untracked == "no" { continue }
+        if original.ignored && !options.ignored { continue }
+        var row = copy original
+        if (row.untracked || row.ignored) && options.untracked != "all" {
+            for i in 0..row.path.len {
+                if row.path[i] != 47 as byte { continue }
+                let directory = row.path[0..i]
+                var tracked = false
+                for entry in snapshot.index.entries {
+                    if under(entry.path, directory) { tracked = true; break }
+                }
+                if !tracked {
+                    // An untracked directory collapses whenever the index has
+                    // no descendant, even with ignored children or staged-D
+                    // rows. Ignored grouping is asymmetric: nonignored peers
+                    // still prevent an ignored row from swallowing the directory.
+                    var mixed = false
+                    if row.ignored {
+                        for peer in rows {
+                            if under(peer.path, directory) && !peer.ignored {
+                                mixed = true
+                                break
+                            }
+                        }
+                    }
+                    if !mixed { row.path = row.path[0..i + 1]; break }
+                }
+            }
+        }
+        var seen = false
+        for previous in result {
+            if previous.x == row.x && previous.y == row.y && compare(previous.path, row.path) == 0 {
+                seen = true
+                break
+            }
+        }
+        if !seen { (mut result).push(row) }
+    }
+    // Git emits three status sections even in short/porcelain/-z output.
+    // Keep unsigned path order within each section, never interleave ignored
+    // rows with untracked or tracked rows merely because their names sort first.
+    var ordered = List[StatusRow]()
+    for category in 0..3 {
+        for row in result {
+            let kind = if row.ignored then 2 else if row.untracked then 1 else 0
+            if kind == category { (mut ordered).push(copy row) }
+        }
+    }
+    ordered
+}
+
+fn conflict_row(row: StatusRow) -> bool {
+    row.x == "U" || row.y == "U" || row.x == "A" && row.y == "A" || row.x == "D" && row.y == "D"
+}
+
+fn label(code: str) -> str {
+    match code {
+        "M" => "modified:   ",
+        "T" => "typechange: ",
+        "A" => "new file:   ",
+        "D" => "deleted:    ",
+        "R" => "renamed:    ",
+        "C" => "copied:     ",
+        _ => "unmerged:   ",
+    }
+}
+
+fn line(mut out: List[byte], text: str) {
+    bytes_add(mut out, text.bytes())
+    (mut out).push(10 as byte)
+}
+
+fn row_path(mut out: List[byte], ctx: Context, row: StatusRow, options: StatusOptions) {
+    if row.original_path.len > 0 {
+        bytes_add(mut out, display(ctx, row.original_path, options))
+        bytes_add(mut out, " -> ".bytes())
+    }
+    bytes_add(mut out, display(ctx, row.path, options))
+}
+
+/// Render short/porcelain-v1/-z or human output. Human text is provisional until
+/// the parent lane's pinned-oracle byte matrix confirms each heading/hint.
+pub fn render_status(snapshot: Snapshot, options: StatusOptions) -> List[byte] ! WorkErrors {
+    if !snapshot.head.detached &&
+        (snapshot.context.repo.config["branch.{snapshot.head.branch}.merge"] else "") != "" {
+        return Unsupported("status upstream tracking")
+    }
+    let rows = grouped(snapshot, renames(snapshot, options)?, options)
+    let ctx = copy snapshot.context
+    let unborn = snapshot.head.commits.len == 0
+    var out = List[byte]()
+    if options.short || options.porcelain || options.nul {
+        if options.branch {
+            let branch = if snapshot.head.detached {
+                "HEAD (no branch)"
+            } else if unborn {
+                "No commits yet on {snapshot.head.branch}"
+            } else {
+                snapshot.head.branch
+            }
+            bytes_add(mut out, "## {branch}".bytes())
+            (mut out).push(if options.nul then 0 as byte else 10 as byte)
+        }
+        for row in rows {
+            bytes_add(mut out, "{row.x}{row.y} ".bytes())
+            if options.nul {
+                bytes_add(mut out, display(ctx, row.path, options))
+                (mut out).push(0 as byte)
+                if row.original_path.len > 0 {
+                    bytes_add(mut out, display(ctx, row.original_path, options))
+                    (mut out).push(0 as byte)
+                }
+            } else {
+                row_path(mut out, ctx, row, options)
+                (mut out).push(10 as byte)
+            }
+        }
+        return out
+    }
+    if snapshot.head.detached {
+        if snapshot.head.commits.len != 1 { return invalid }
+        if snapshot.head.checkout.len > 1 { return invalid }
+        if snapshot.head.checkout.len == 0 {
+            line(mut out, "Not currently on any branch.")
+        } else {
+            let origin = copy snapshot.head.checkout[0]
+            let relation = if oid.equal(origin.id, snapshot.head.commits[0]) then "at" else "from"
+            line(mut out, "HEAD detached {relation} {origin.label}")
+        }
+    } else {
+        line(mut out, "On branch {snapshot.head.branch}")
+    }
+    if unborn { line(mut out, ""); line(mut out, "No commits yet") }
+    var staged = false, unstaged = false, untracked = false, ignored = false, conflicts = false
+    for row in rows {
+        if row.untracked {
+            untracked = true
+        } else if row.ignored {
+            ignored = true
+        } else if row.x == "U" ||
+            row.y == "U" ||
+            row.x == "A" && row.y == "A" ||
+            row.x == "D" && row.y == "D" {
+            conflicts = true
+        } else {
+            if row.x != " " { staged = true }
+            if row.y != " " { unstaged = true }
+        }
+    }
+    if unborn { line(mut out, "") }
+    if staged {
+        line(mut out, "Changes to be committed:")
+        if options.hints {
+            line(
+                mut out,
+                if unborn {
+                    "  (use \"git rm --cached <file>...\" to unstage)"
+                } else {
+                    "  (use \"git restore --staged <file>...\" to unstage)"
+                },
+            )
+        }
+        for row in rows {
+            if row.untracked || row.ignored || row.x == " " || conflict_row(row) { continue }
+            bytes_add(mut out, "\t{label(row.x)}".bytes())
+            row_path(mut out, ctx, row, options)
+            line(mut out, "")
+        }
+        line(mut out, "")
+    }
+    if conflicts {
+        line(mut out, "Unmerged paths:")
+        if options.hints { line(mut out, "  (use \"git add <file>...\" to mark resolution)") }
+        for row in rows {
+            if row.untracked || row.ignored { continue }
+            if !conflict_row(row) { continue }
+            let name = match "{row.x}{row.y}" {
+                "DD" => "both deleted:   ",
+                "AU" => "added by us:    ",
+                "UD" => "deleted by them:",
+                "UA" => "added by them:  ",
+                "DU" => "deleted by us:  ",
+                "AA" => "both added:     ",
+                _ => "both modified:  ",
+            }
+            bytes_add(mut out, "\t{name} ".bytes())
+            row_path(mut out, ctx, row, options)
+            line(mut out, "")
+        }
+        line(mut out, "")
+    }
+    if unstaged {
+        line(mut out, "Changes not staged for commit:")
+        if options.hints {
+            var deleted = false
+            for row in rows { if row.y == "D" { deleted = true } }
+            line(
+                mut out,
+                if deleted {
+                    "  (use \"git add/rm <file>...\" to update what will be committed)"
+                } else {
+                    "  (use \"git add <file>...\" to update what will be committed)"
+                },
+            )
+            line(
+                mut out,
+                "  (use \"git restore <file>...\" to discard changes in working directory)",
+            )
+        }
+        for row in rows {
+            if row.untracked || row.ignored || row.y == " " || conflict_row(row) { continue }
+            bytes_add(mut out, "\t{label(row.y)}".bytes())
+            bytes_add(mut out, display(ctx, row.path, options))
+            line(mut out, "")
+        }
+        line(mut out, "")
+    }
+    for ignored_group in [false, true] {
+        if ignored_group && !ignored || !ignored_group && !untracked { continue }
+        line(mut out, if ignored_group then "Ignored files:" else "Untracked files:")
+        if options.hints {
+            line(
+                mut out,
+                if ignored_group {
+                    "  (use \"git add -f <file>...\" to include in what will be committed)"
+                } else {
+                    "  (use \"git add <file>...\" to include in what will be committed)"
+                },
+            )
+        }
+        for row in rows {
+            if ignored_group && row.ignored || !ignored_group && row.untracked {
+                bytes_add(mut out, "\t".bytes())
+                bytes_add(mut out, display(ctx, row.path, options))
+                line(mut out, "")
+            }
+        }
+        line(mut out, "")
+    }
+    if !staged {
+        if conflicts || unstaged {
+            line(
+                mut out,
+                if options.hints {
+                    "no changes added to commit (use \"git add\" and/or \"git commit -a\")"
+                } else {
+                    "no changes added to commit"
+                },
+            )
+        } else if untracked {
+            line(
+                mut out,
+                if options.hints {
+                    "nothing added to commit but untracked files present (use \"git add\" to track)"
+                } else {
+                    "nothing added to commit but untracked files present"
+                },
+            )
+        } else if unborn {
+            line(mut out, "nothing to commit (create/copy files and use \"git add\" to track)")
+        } else if options.untracked == "no" {
+            line(mut out, "nothing to commit (use -u to show untracked files)")
+        } else {
+            line(mut out, "nothing to commit, working tree clean")
+        }
+    }
+    out
+}

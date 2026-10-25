@@ -1,0 +1,161 @@
+use ignore
+use index
+
+/// Literal tracked-file bypass used by check-ignore. A directory operand is
+/// tracked when any indexed pathname is beneath its slash-delimited prefix.
+/// This is not a wildcard/pathspec match (even for *, ? and [ bytes).
+pub fn tracked_for_ignore(value: index.Index, path: List[byte]) -> bool {
+    for entry in value.entries { if under(entry.path, path) { return true } }
+    false
+}
+
+fn query_ignore_index(
+    ctx: Context,
+    value: index.Index,
+    operand: str,
+    mut warnings: List[str],
+) -> ignore.Match ! WorkErrors {
+    let path = normalize_literal(ctx, operand)?
+    if path.len == 0 { return ignore.unmatched() }
+    let tracked = tracked_for_ignore(value, path)
+    if tracked { return ignore.unmatched() }
+    var parents_present = true
+    safe_parents(ctx, path, false) else |e| match e {
+        not_found => { parents_present = false },
+        _ => { return Fatal("'{operand}' is beyond an unavailable or symbolic-link ancestor") },
+    }
+    var directory = false
+    if parents_present {
+        let info = fs_lstat(absolute(ctx, path)?) else |e| match e {
+            not_found => { List[int]() },
+            denied => { return denied },
+            io => { return io },
+        }
+        directory = info.len != 0 && info[0] == 1
+    }
+    ignore.query_tracked_with_warnings(
+        ctx.repo,
+        ctx.root,
+        text(path)?,
+        directory,
+        false,
+        mut warnings,
+    )?
+}
+
+/// Canonicalize one literal operand relative to cwd, bypass tracked paths unless
+/// no_index. Match provenance is unchanged; nonexistent operands are supported.
+/// Unlike add/restore pathspecs, '*', '?' and '[' in operands are literal bytes.
+/// This compatibility wrapper discards nonfatal diagnostics; the warning-aware
+/// sibling lets command callers preserve them without implicit stderr.
+pub fn query_ignore(ctx: Context, operand: str, no_index: bool) -> ignore.Match ! WorkErrors {
+    var warnings = List[str]()
+    query_ignore_with_warnings(ctx, operand, no_index, mut warnings)?
+}
+
+/// Warning-aware literal query. Keep one warnings list per operation and emit
+/// its complete nonfatal lines at the command edge; this API never prints.
+/// no_index=true does not read the index, including a nonexistent/corrupt one.
+pub fn query_ignore_with_warnings(
+    ctx: Context,
+    operand: str,
+    no_index: bool,
+    mut warnings: List[str],
+) -> ignore.Match ! WorkErrors {
+    let value = if no_index then index.empty(2)? else read_index(ctx)?
+    query_ignore_index(ctx, value, operand, mut warnings)?
+}
+
+fn ignore_stdin(nul: bool) -> List[str] ! WorkErrors {
+    let fd = fs_open_mode("/dev/stdin", 0)?
+    defer fs_close(fd) else |_| {}
+    var data = List[byte]()
+    loop {
+        region chunk {
+            let bytes = fs_read_chunk(fd, 65536) else |e| match e {
+                eof => { break },
+                io => { return io },
+            }
+            if bytes.len > 16777216 - data.len { return limit }
+            for b in bytes { (mut data).push(b) }
+        }
+    }
+    var words = List[str]()
+    let delimiter = if nul then 0 as byte else 10 as byte
+    var start = 0
+    for pos in 0..=data.len {
+        if pos == data.len || data[pos] == delimiter {
+            // A final delimiter does not produce another empty operand.
+            if pos == data.len && start == pos { break }
+            let word = str_from_utf8(data[start..pos]) else |_| {
+                return Unsupported("non-UTF-8 check-ignore stdin path")
+            }
+            if !nul && word.starts_with("\"") {
+                return Unsupported("check-ignore C-quoted stdin path")
+            }
+            (mut words).push(word)
+            start = pos + 1
+        }
+    }
+    words
+}
+
+fn check_ignore_command(ctx: Context, args: List[str]) -> int ! WorkErrors {
+    var warnings = List[str]()
+    // Also flush before the outer fatal handler if a later operand fails.
+    defer { for message in warnings { eprint(message) } }
+    var verbose = false, quiet = false, non_matching = false, nul = false
+    var no_index = false, stdin = false, literal = false
+    var operands = List[str]()
+    for arg in args {
+        if !literal && arg == "--" { literal = true; continue }
+        if !literal && (arg == "-v" || arg == "--verbose") {
+            verbose = true
+        } else if !literal && (arg == "-q" || arg == "--quiet") {
+            quiet = true
+        } else if !literal && (arg == "-n" || arg == "--non-matching") {
+            non_matching = true
+        } else if !literal && arg == "-z" {
+            nul = true
+        } else if !literal && arg == "--no-index" {
+            no_index = true
+        } else if !literal && arg == "--stdin" {
+            stdin = true
+        } else if !literal && arg.starts_with("-") {
+            return Unsupported("check-ignore {arg}")
+        } else {
+            (mut operands).push(arg)
+        }
+    }
+    if quiet && verbose { return Fatal("--quiet and --verbose cannot be used together") }
+    if non_matching && !verbose { return Fatal("--non-matching is only valid with --verbose") }
+    if nul && !stdin { return Fatal("-z only makes sense with --stdin") }
+    if stdin {
+        if operands.len > 0 { return Fatal("cannot specify pathnames with --stdin") }
+        operands = ignore_stdin(nul)?
+    } else if operands.len == 0 {
+        return Fatal("no path specified")
+    }
+    if quiet && operands.len != 1 { return Fatal("--quiet is only valid with a single pathname") }
+    let value = if no_index then index.empty(2)? else read_index(ctx)?
+    let quote_non_ascii = config_bool(ctx, "core.quotepath", true)?
+    var any = false
+    var out = List[byte]()
+    for operand in operands {
+        let result = query_ignore_index(ctx, value, operand, mut warnings)?
+        if verbose && result.matched || !verbose && result.ignored { any = true }
+        if !quiet {
+            let original = owned_bytes(operand.bytes())
+            bytes_add(
+                mut out,
+                ignore.format(result, original, verbose, nul, non_matching, quote_non_ascii)?,
+            )
+        }
+    }
+    if !quiet && out.len > 0 {
+        let output = fs_open_mode("/dev/stdout", 2)?
+        defer fs_close(output) else |_| {}
+        fs_write_chunk(output, out)?
+    }
+    if any then 0 else 1
+}
