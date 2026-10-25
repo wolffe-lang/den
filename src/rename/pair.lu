@@ -24,7 +24,7 @@ pub struct Options { enabled: bool, copies: bool, threshold: int }
 pub struct Pair { source: int, destination: int, units: int, percent: int, is_copy: bool }
 
 /// Default rename detection at fifty percent, without copy detection.
-pub fn defaults() -> Options { Options { enabled: true, copies: false, threshold: 50 } }
+pub fn defaults() -> Options { Options { enabled: true, copies: false, threshold: 49 } }
 
 fn compare(a: List[byte], b: List[byte]) -> int {
     var i = 0
