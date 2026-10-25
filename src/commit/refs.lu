@@ -105,7 +105,7 @@ pub fn reflog_line(
     let ident = commit_format.identity_text(committer)?
     if ident.contains("\t") { return Unsupported("commit reflog identity tab") }
     var out = List[byte]()
-    add_bytes(mut out, "{old_hex(before)?} {oid.hex(after)?} {ident}\t{action}:".bytes())
+    add_bytes(mut out, "{old_hex(before)?} {oid.hex(after)?} {ident} {action}:".bytes())
     let title = reflog_subject(message)?
     if title.len > 0 { (mut out).push(32 as byte); add_bytes(mut out, title) }
     (mut out).push(10 as byte)
