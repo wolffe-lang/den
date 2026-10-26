@@ -169,7 +169,8 @@
       "-n",
       "2"
     ],
-    "lane": "M2, vc05"
+    "lane": "M2, vc05",
+    "require_parity": true
   },
   {
     "name": "log-oneline",
@@ -178,7 +179,8 @@
       "log",
       "--oneline"
     ],
-    "lane": "M2, vc05"
+    "lane": "M2, vc05",
+    "require_parity": true
   },
   {
     "name": "show",

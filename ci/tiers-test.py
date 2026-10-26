@@ -97,9 +97,9 @@ for path in ("src/object/store.lu", "src/oid/oid.lu", "src/index/index.lu", "src
     say(p["tier"] == "pr" and p["jobs"] == PR, "T2 object gate path " + path)
 gate = open(os.path.join(ROOT, "tools", "gate")).read()
 say("tools/check-objects" in gate, "T2 object integration gate is mandatory")
-for command in ("tools/check-config", "tools/check-index", "tools/check-ignore", "tools/check-worktree", "tools/check-commit"):
+for command in ("tools/check-config", "tools/check-index", "tools/check-ignore", "tools/check-worktree", "tools/check-commit", "tools/check-history"):
     say(command in gate, "T2 M2 integration gate is mandatory: " + command)
-say("--filter log-default --strict" in gate, "T2 strict witness remains unimplemented")
+say("--filter branch --strict" in gate, "T2 strict witness remains unimplemented")
 for command in ("tools/check-diff --units-only", "tools/check-delta", "tools/check-rename", "tools/check-diff --corpus-only", "tools/check-diffbinary --reviewed-body --with-cli"):
     say(command in gate, "T2 diff integration gate is mandatory: " + command)
 cases = json.load(open(os.path.join(ROOT, "tests", "cases.json")))
