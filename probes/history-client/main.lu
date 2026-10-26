@@ -4,10 +4,13 @@ use pretty
 use walk
 use worktree
 
-fn main() -> int ! worktree.WorkErrors {
+fn run() -> int ! worktree.WorkErrors {
     let ctx = worktree.discover(".")?
     let head = worktree.head(ctx)?
-    let values = walk.collect(ctx.repo, head.commits, 100, 0, 1000, false)?
+    let args = env_args()
+    let count = if args.len == 1 && args[0] == "zero" then 0 else 100
+    let budget = if args.len == 1 && args[0] == "limit" then 1 else 1000
+    let values = walk.collect(ctx.repo, head.commits, count, 0, budget, false)?
     var stdout = fs.stdout()
     for value in values {
         var ids = [history.abbreviate(ctx.repo, value.id, 7)?]
@@ -16,3 +19,5 @@ fn main() -> int ! worktree.WorkErrors {
     }
     0
 }
+
+fn main() -> int { run() else |e| { eprint("{e}"); 1 } }

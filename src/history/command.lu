@@ -139,7 +139,13 @@ fn dispatch(args: List[str]) -> int ! worktree.WorkErrors {
     display.patch = show
     var format = ctx.repo.config["format.pretty"] else "medium"
     var date_style = ctx.repo.config["log.date"] else "default"
-    var abbrev = false, first_parent = false, reverse = false, explicit_patch = false
+    var abbrev = worktree.config_bool(ctx, "log.abbrevcommit", false)?,
+        first_parent = false,
+        reverse = false,
+        explicit_patch = false
+    var mailmap = true, notes = true
+    var decoration = ctx.repo.config["log.decorate"] else "auto"
+    let root_diff = worktree.config_bool(ctx, "log.showroot", true)?
     var count = 100000, skip = 0, minimum = display.abbreviate
     var revisions = List[str](), i = 1
     while i < args.len {
@@ -215,11 +221,13 @@ fn dispatch(args: List[str]) -> int ! worktree.WorkErrors {
             count = number(arg[1..])?
         } else if arg == "--" {
             if i + 1 < args.len { return Unsupported("history path limiting") }
-        } else if arg == "--no-decorate" ||
-            arg == "--no-color" ||
-            arg == "--color=never" ||
-            arg == "--no-notes" ||
-            arg == "--no-mailmap" {} else if arg.starts_with("-") {
+        } else if arg == "--no-decorate" {
+            decoration = "no"
+        } else if arg == "--no-notes" {
+            notes = false
+        } else if arg == "--no-mailmap" {
+            mailmap = false
+        } else if arg == "--no-color" || arg == "--color=never" {} else if arg.starts_with("-") {
             return Unsupported("{args[0]} option {arg}")
         } else {
             (mut revisions).push(arg)
@@ -232,10 +240,30 @@ fn dispatch(args: List[str]) -> int ! worktree.WorkErrors {
             return Unsupported("history local timezone {tz}")
         }
     }
+    if decoration != "no" && decoration != "false" && decoration != "auto" ||
+        decoration == "auto" && (os_isatty(fs.stdout().fd) else false) {
+        return Unsupported("history decorations")
+    }
+    if worktree.config_bool(ctx, "log.showsignature", false)? {
+        return Unsupported("history signatures")
+    }
+    if (ctx.repo.config["log.diffmerges"] else "") != "" {
+        return Unsupported("history log.diffMerges")
+    }
+    for path in ["refs/replace", "info/grafts"] {
+        if fs.exists("{ctx.repo.gitdir}/{path}") { return Unsupported("history {path}") }
+    }
+    if notes &&
+        (fs.exists("{ctx.repo.gitdir}/refs/notes") || (env_get("GIT_NOTES_REF") else "") != "") {
+        return Unsupported("history notes")
+    }
     if fs.exists("{ctx.repo.gitdir}/shallow") { return Unsupported("history shallow repository") }
-    if fs.exists("{ctx.root}/.mailmap") ||
-        (ctx.repo.config["mailmap.file"] else "") != "" ||
-        (ctx.repo.config["mailmap.blob"] else "") != "" {
+    if mailmap &&
+        (
+            fs.exists("{ctx.root}/.mailmap") ||
+                (ctx.repo.config["mailmap.file"] else "") != "" ||
+                (ctx.repo.config["mailmap.blob"] else "") != ""
+        ) {
         return Unsupported("history mailmap")
     }
     if (ctx.repo.config["i18n.logoutputencoding"] else "UTF-8") != "UTF-8" {
@@ -340,7 +368,11 @@ fn dispatch(args: List[str]) -> int ! worktree.WorkErrors {
             _ => { return invalid },
         }
         add(mut out, formatted)
-        let changes = patch(ctx, value, display, first_parent)?
+        let changes = if !show && !root_diff && value.parents.len == 0 {
+            List[byte]()
+        } else {
+            patch(ctx, value, display, first_parent)?
+        }
         if changes.len > 0 {
             if display.patch && display.stat {
                 add(mut out, "---\n".bytes())

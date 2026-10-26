@@ -55,6 +55,9 @@ for fixture in range(24):
 client=R/f'target/{a.tier}/history-client'
 before=state(); expected=run(G,['log','--oneline']); actual=run(client,[])
 assert actual==expected and before==state(),('external client',expected,actual)
+for mode,status,stderr in [('zero',0,b''),('limit',1,b'limit\n')]:
+ before=state(); actual=run(client,[mode])
+ assert actual=={'status':status,'stdout':'','stderr':stderr.hex()} and before==state(),(mode,actual)
 for kind,obj in [('blob',blob),('tree',tree)]:
  for extra in [[],['--oneline'],['-s']]: check(f'show-{kind}-{extra}',['show',*extra,obj])
 for msg in [b'tag message\n',b'tag message\n\n',b'tag message',b'']:
@@ -69,6 +72,11 @@ for extra in [['-n0'],['-n1'],['--skip=1'],['--reverse']]:
  before=state(); expected=run(G,args); actual=run(DEN,args)
  assert actual=={'status':2,'stdout':'','stderr':b'den: not yet implemented: show revision limiting\n'.hex()} and state()==before
  refusals.append({'args':args,'expected':expected,'actual':actual,'reason':'show revision limiting is not implemented; NOT parity'})
+for key,value,args in [('log.date','iso',['log']),('format.pretty','fuller',['log']),('log.abbrevCommit','true',['log']),('log.showRoot','false',['log','-p'])]:
+ g('config',key,value);check('config-'+key,args);g('config','--unset',key)
+g('config','log.decorate','full');check('override-decoration',['log','--no-decorate']);g('config','--unset','log.decorate')
+(root/'.mailmap').write_text('Other <other@example.invalid> A <a@b>\n')
+check('no-mailmap',['log','--no-mailmap']);(root/'.mailmap').unlink()
 # Prefix collisions must grow the requested minimum, not print ambiguous names.
 full=nodes[-1]
 for nonce in range(1000000):
@@ -90,7 +98,7 @@ for args,feature in [(['log','--graph'],'log option --graph'),(['log','main..HEA
 # Unborn error bytes and no index requirements.
 (root/'.git/HEAD').write_text('ref: refs/heads/unborn\n')
 check('unborn-log',['log']);check('unborn-show',['show'])
-summary={'tier':a.tier,'total':len(rows),'exact':len(rows)-len(failures),'failures':failures,'zero_skips':True,'rows':rows,'named_refusals':refusals,'external_clients':1}
+summary={'tier':a.tier,'total':len(rows),'exact':len(rows)-len(failures),'failures':failures,'zero_skips':True,'rows':rows,'named_refusals':refusals,'external_clients':3}
 (R/f'target/history-{a.tier}.json').write_text(json.dumps(summary,indent=2)+'\n')
 print(f'history: {len(rows)-len(failures)}/{len(rows)} exact stdout/stderr/status and state; zero skips',flush=True)
 raise SystemExit(bool(failures))
