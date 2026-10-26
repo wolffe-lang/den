@@ -1,0 +1,14 @@
+Mon Oct 26 05:25:14 PM UTC 2026
+x86_64-unknown-linux-gnu wolf=4cc4045bbbb605c07835bc4f32685953c784eeef4cd3139a48b457dfc90dad1a lupin=ad703550ac4787e8e4bb26989d591a731410274d7332f2b4e8b9a64c878822cc std=2386522eb059cca5a84108562c2c0a0e72345d34
+2386522eb059cca5a84108562c2c0a0e72345d34
+def1d450147beaed53780481abb124bfa2882e3f8a79b095ae39107b63de7bcc  /home/mfwolffe/lanes/vc05/den/.wolf-bin/wolf
+991d54cf28e4f182b339d9eeb4dba7b2df3ad2618acb3bb53bddca42856b4bb9  /home/mfwolffe/lanes/vc05/den/.wolf-bin/lupin
+9efc68e1d0c3a1e1c5c1b43ab1448a3c1b42963596b8d8d106e4fbda12ebbee7  /home/mfwolffe/lanes/vc05/den/.wolf-bin/libwolf_rt.a
+c4848492938c4ebfffbefe1fbbaa68b9af90c86d1f6a20e76816c5ff37fcfa60  /home/mfwolffe/lanes/vc05/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git
+Mon Oct 26 05:25:14 PM UTC 2026
+x86_64-unknown-linux-gnu wolf=4cc4045bbbb605c07835bc4f32685953c784eeef4cd3139a48b457dfc90dad1a lupin=ad703550ac4787e8e4bb26989d591a731410274d7332f2b4e8b9a64c878822cc std=2386522eb059cca5a84108562c2c0a0e72345d34
+2386522eb059cca5a84108562c2c0a0e72345d34
+def1d450147beaed53780481abb124bfa2882e3f8a79b095ae39107b63de7bcc  /home/mfwolffe/lanes/vc05/den/.wolf-bin/wolf
+991d54cf28e4f182b339d9eeb4dba7b2df3ad2618acb3bb53bddca42856b4bb9  /home/mfwolffe/lanes/vc05/den/.wolf-bin/lupin
+9efc68e1d0c3a1e1c5c1b43ab1448a3c1b42963596b8d8d106e4fbda12ebbee7  /home/mfwolffe/lanes/vc05/den/.wolf-bin/libwolf_rt.a
+c4848492938c4ebfffbefe1fbbaa68b9af90c86d1f6a20e76816c5ff37fcfa60  /home/mfwolffe/lanes/vc05/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git

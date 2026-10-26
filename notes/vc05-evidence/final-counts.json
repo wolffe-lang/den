@@ -1,0 +1,34 @@
+{
+  "functional_head": "2900a031a9521d51d568880f168c58e5e103f9b5",
+  "functional_inputs": 242,
+  "unchanged": true,
+  "excluded_generated_cache_entries": 678,
+  "gate_exit": 0,
+  "history": {
+    "native": {
+      "total": 575,
+      "exact": 575,
+      "failures": [],
+      "zero_skips": true,
+      "external_clients": 3,
+      "named_refusals": 8
+    },
+    "release": {
+      "total": 575,
+      "exact": 575,
+      "failures": [],
+      "zero_skips": true,
+      "external_clients": 3,
+      "named_refusals": 8
+    }
+  },
+  "main": {
+    "parity": 170,
+    "not_yet": 17,
+    "shape": 1
+  },
+  "checked": {
+    "pretty": "exit(0)",
+    "walk": "exit(0)"
+  }
+}
