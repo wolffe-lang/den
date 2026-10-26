@@ -4,9 +4,10 @@ A version control system in [wolf](https://github.com/wolffe-lang/wolf-lang),
 working toward Git-compatible repositories and wire protocols. Where a wolf
 keeps what it has.
 
-**State: loose objects, a writable index, worktree/commit commands and bounded diff.**
-This is not a replacement for Git, and M2 is not complete. History commands,
-general ref operations, packs and transports remain unfinished. Text diff has
+**State: loose objects, a writable index, worktree/commit commands, bounded diff and history.**
+This is not a replacement for Git, and M2 is not complete. Log/show support
+bounded loose history; combined merge display, general ref operations, packs
+and transports remain unfinished. Text diff has
 two recorded equal-cost alignment differences; binary patches reconstruct the
 exact blobs but do not always use Git's byte representation. `den --version`
 prints `den 0.0.0 (built with wolf 0.2.35)`.
@@ -25,7 +26,7 @@ measured bytes and documentation discrepancies.
 
 Archive and oracle pins are in `wolf-toolchain.toml` and `den-oracle.toml`.
 Downloads fail on a digest mismatch. Both release-metadata reads are retained
-in `notes/vc04-evidence/pins/` (earlier reads in `notes/vc03-evidence/`); the original signature verification and two matching
+in `notes/vc05-evidence/pins/` (earlier reads in `notes/vc04-evidence/pins/`); the original signature verification and two matching
 oracle builds are in `notes/vc00-evidence/`.
 
 ## Commands implemented so far
@@ -39,6 +40,7 @@ oracle builds are in `notes/vc00-evidence/`.
 | Status | Human, short and porcelain v1, branch/unborn/detached headings, NUL output, untracked grouping and ignored paths |
 | Commit | Ordered `-m`, `-F`, `-a`, `--amend`, `--reset-author`, `--author`, fixed `--date`, cleanup modes, quiet and allow-empty options; attached loose branch/ref/reflog updates |
 | Diff | Worktree/index, `--cached`, two loose commits/trees or blobs; unified context, final-newline markers, modes, binary patches, stat/name forms, rename/copy detection and common pathspec magic |
+| History | `log` default/oneline/short/full/fuller, `-n`, `--skip`, `--reverse`, `--first-parent`, fixed date formats, patch/stat; `show` loose commits, trees, blobs, annotated tags and `REV:path` |
 | Restore | Index-to-worktree `restore`, `--staged`, `--worktree`, `--source`; `checkout -- <paths>` only, not branch checkout |
 
 Status, commit summaries and diff share one rename/copy pairer. Exact OIDs are
@@ -76,6 +78,7 @@ tools/check-index
 tools/check-ignore
 tools/check-worktree
 tools/check-commit
+tools/check-history
 tools/check-delta
 tools/check-rename
 tools/check-diff
@@ -92,12 +95,13 @@ full repository-byte comparisons. Formatting/date API comparisons are not a
 claim of CLI stderr/exit-status parity. A checked result means the JSON verdict
 from `wolf conform-run --checked`, not merely a successful process exit.
 
-The expanded main matrix contains 188 cases: 167 parity, 20 named not-yet and
+The expanded main matrix contains 188 cases: 170 parity, 17 named not-yet and
 one version-shape check. Generated diff, similarity, pairing and application
 matrices are reported separately in `notes/vc04-evidence/`; their explicit
 representation/alignment differences are never added to the parity count.
-The full local gate passed with all 234 functional input hashes unchanged,
-including twice-identical static builds. CI remains the merge gate, not a
+History has a separate exact command/state matrix on native and release,
+bounded actual-checked units and an independent package client. The inherited
+diff exceptions remain separately counted. CI remains the merge gate, not a
 consequence of a successful local run.
 There is no production dependency on Git, Python, zlib or OpenSSL. Shipped wolf
 code uses wolf-std and the provenance-marked SHA-1 code from boreutils.
@@ -130,7 +134,8 @@ OS paths have named upstream limitations. SHA-256 IDs are representable, but
 SHA-256 repositories are refused before writes. Packs, alternates, linked
 worktrees, submodules and general revision expressions remain unsupported.
 Diff accepts loose names/IDs and bounded `^n`/`~n` ancestry; this is not a general
-revision grammar or a history walk.
+revision grammar. Log adds a timestamp-ordered reachable-commit walk, with
+stable parent-order ties, duplicate suppression and a first-parent option.
 
 TREE and REUC index extensions are validated and preserved. UNTR, FSMN, IEOT,
 EOIE, split-index `link`, sparse-index `sdir` and unknown extensions are refused
@@ -157,6 +162,21 @@ Diff bodies are limited to 16 MiB per file, aggregate endpoints to 128 MiB,
 text sequences to 200,000 lines and general edit searches to 2,000 changed
 lines. Rename pools are limited to 2,000 candidates per side. Exceeding a bound
 returns a named failure, never an approximate result presented as exact.
+
+History readers never write the index, objects, refs or reflogs. Root patches
+compare with an in-memory empty endpoint; ordinary patches reuse the shared
+diff collector and renderer. Unique abbreviations grow past collisions.
+History caps each object at 16 MiB, discovered commit data and rendered output
+at 128 MiB, and the CLI walk at 10,000 commits. The public walker accepts an
+explicit node budget. It is a bounded whole-history reader, not a pack walker.
+
+Default `log -p` omits merge patches as Git does. Combined merge `show` is a
+named refusal; `show -s` renders its ordered parents and message. Show-specific
+revision limiting, history path simplification, ranges, graph/topological order,
+custom formats, relative/human dates, non-UTC local zones, message transcoding,
+mailmaps and tabs after non-ASCII text remain named unsupported surfaces.
+Fixed dates include default, short, raw, unix, ISO, strict ISO and RFC forms;
+UTC-local variants are measured. None of these limitations is a parity pass.
 
 Commit writes target an attached loose branch, not detached HEAD. Amend retains
 the existing parents and normally its author; it does not change ORIG_HEAD.
