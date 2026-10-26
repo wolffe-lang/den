@@ -1,0 +1,23 @@
+vc05 Prediction (committed before implementation)
+
+Default log walks reachable commits using descending committer timestamps among
+pending parents, with stable insertion ties, rather than author dates or a global
+sort. Shared ancestors appear once. Default pretty uses the author identity/date;
+oneline folds the first message paragraph, not the reflog's first physical line.
+Show prints one object without walking; ordinary commits compare to their first
+parent, roots compare to an empty tree, and merges need an explicitly measured
+policy rather than pretending the first-parent patch is the default.
+
+Dates retain the object's numeric timezone; UTC environment does not overwrite
+that stored zone. Negative epochs, non-hour offsets, absent final message LF,
+multiline subjects and ordered merge parents will distinguish implementations.
+All history operations are read-only, including foreign index locks, unborn and
+detached HEAD, and caller-owned pure rendering inputs. No index.write_tree or
+porcelain subprocess is permitted. The existing hunk/binary exceptions remain
+separately counted and are not log/show byte-parity passes.
+
+Forbidden: other VCS implementation source; Git/libgit2 source; package installs;
+planning or ~/.claude edits; labels/merge/tag/release/issues; host processes outside
+this lane. Build/oracle work only on hasu A in the existing rootless container.
+The wrapper cannot write Markdown lane notes; the final five-section note and
+vc06 draft will be in the PR body for materialization by the orchestrator.
