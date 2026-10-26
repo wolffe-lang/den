@@ -1,0 +1,4 @@
+pkg {
+    name: "pretty", edition: "1", capabilities: [env, fs],
+    deps: {commit: {path: "../commit"}, oid: {path: "../oid"}, walk: {path: "../walk"}, worktree: {path: "../worktree"}},
+}
