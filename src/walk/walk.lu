@@ -65,7 +65,8 @@ pub fn collect(
 ) -> List[Commit] ! worktree.WorkErrors {
     if max_count < 0 || skip < 0 || max_nodes < 1 || max_nodes > 100000 { return invalid }
     var total = 0
-    var pending = List[Commit](), seen = Map[str, bool](), out = List[Commit]()
+    var nodes = List[Commit](), active = List[bool](), queued = 0
+    var seen = Map[str, bool](), out = List[Commit]()
     if max_count == 0 { return out }
     for id in starts {
         let key = oid.hex(id)?
@@ -75,16 +76,20 @@ pub fn collect(
         let node = read(repo, id)?
         total += node.encoded_size
         if total > 134217728 { return limit }
-        (mut pending).push(node)
+        (mut nodes).push(node)
+        (mut active).push(true)
+        queued += 1
     }
     var visited = 0
-    while pending.len > 0 && out.len < max_count {
-        var best = 0
-        for i in 1..pending.len { if pending[i].timestamp > pending[best].timestamp { best = i } }
-        let item = copy pending[best]
-        var rest = List[Commit]()
-        for i in 0..pending.len { if i != best { (mut rest).push(copy pending[i]) } }
-        pending = rest
+    while queued > 0 && out.len < max_count {
+        var best = -1
+        for i in 0..nodes.len {
+            if active[i] && (best < 0 || nodes[i].timestamp > nodes[best].timestamp) { best = i }
+        }
+        if best < 0 { return invalid }
+        active[best] = false
+        queued -= 1
+        let item = copy nodes[best]
         if visited >= skip { (mut out).push(copy item) }
         visited += 1
         if out.len == max_count { break }
@@ -97,7 +102,9 @@ pub fn collect(
             let node = read(repo, item.parents[i])?
             total += node.encoded_size
             if total > 134217728 { return limit }
-            (mut pending).push(node)
+            (mut nodes).push(node)
+            (mut active).push(true)
+            queued += 1
         }
     }
     out
