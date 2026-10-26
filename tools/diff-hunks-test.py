@@ -68,7 +68,11 @@ def main():
                 (apply/'file').write_bytes(a)
                 for reverse,expected_body in ((False,b),(True,a)):
                     command=[git,'apply','--unidiff-zero','--whitespace=nowarn',*(['-R'] if reverse else []),'-']
-                    applied=subprocess.run(command,cwd=apply,input=patch,capture_output=True,timeout=30)
+                    # This patch is intentionally relative to the scratch apply directory,
+                    # not the enclosing den checkout. Git otherwise silently skips it
+                    # when this harness runs from a clone rather than an exported tree.
+                    applied=subprocess.run(command,cwd=apply,input=patch,capture_output=True,timeout=30,
+                        env={**os.environ,'GIT_CEILING_DIRECTORIES':str(base.resolve())})
                     assert applied.returncode==0,(name,context,reverse,applied.stderr)
                     assert (apply/'file').read_bytes()==expected_body,(name,context,reverse,'wrong reconstruction')
             else:assert a==b,(name,'empty edit script')
