@@ -2,8 +2,8 @@
 
 The codec, owned OIDs, bounded loose store and binary parsers underpin the
 index/worktree/commit interface and diff. The dispatcher routes the implemented
-porcelain, plumbing and diff commands. History commands, general refs, packs
-and transports remain separate work; M2 is not complete. Diff's known hunk
+porcelain, plumbing, diff and bounded log/show commands. Combined merge show,
+general refs, packs and transports remain separate work; M2 is not complete. Diff's known hunk
 alignment differences and binary representation exceptions are explicit below,
 not a blanket byte-parity claim.
 
@@ -145,7 +145,7 @@ fixtures plus ignore, staged rename, modes/symlink, unborn, amend, index-v4 and
 edited-rename states. The original nine builders remain unchanged. The two
 independent corpus builds compare OID manifests, not inode-dependent stat data.
 `tests/cases.json` defines 188 main cases; its latest measured main comparison
-is 167 parity / 20 named not-yet / 1 version-shape / 0 reviewed / 0 failures.
+is 170 parity / 17 named not-yet / 1 version-shape / 0 reviewed / 0 failures.
 Implemented diff and edited-rename cases require parity and cannot regress to
 a named refusal unnoticed. Generated component matrices remain separately
 counted. Historical vc03 counts and 636 stat-proof rows are retained in
@@ -619,3 +619,47 @@ Ninety separate pipe/private-PTY cases per tier measure COLUMNS, window sizes
 and explicit width overrides; explicit zero width means 80, not terminal width.
 Per-file patch/count scratch is reclaimed by explicit regions; this is a
 bounded whole-file implementation, not a streaming-memory benchmark claim.
+
+
+## History consumers (vc05)
+
+`walk.Commit` owns its OID, tree OID, ordered parent OIDs, lossless
+`object.Headers`, committer timestamp and encoded input size. `walk.parse`
+validates a bounded SHA-1 commit without changing its raw message or unknown
+header continuations. `walk.read` reads one loose commit. `walk.collect(repo,
+starts, max_count, skip, max_nodes, first_parent)` visits each reachable commit
+once, selecting the greatest committer timestamp from the active frontier and
+retaining enqueue order on ties. Its node budget is explicit; commit data is
+limited to 128 MiB in aggregate. Author dates never determine default order.
+No index, ref or reflog is written.
+
+`pretty.date`, `identity`, `message` and `render` are presentation boundaries.
+Raw objects remain unchanged. The renderer receives caller-computed unique
+abbreviations (commit, then ordered parents), checks their prefixes, and uses
+`commit.subject` for human one-line summaries, not `commit.reflog_subject`.
+Default output preserves leading/internal message bytes, trims trailing ASCII
+whitespace, expands ASCII tabs, and distinguishes empty messages from a blank
+paragraph. NUL terminates presentation only. Non-UTF-8 bytes without tab-width
+ambiguity remain bytes; message transcoding is an explicit refusal.
+
+`history.abbreviate` checks the loose object namespace for collisions.
+`history.patch` compares a root against an in-memory empty endpoint with
+`diff.changes`; nonroots use `diff.collect`. Both paths call `diff.render` with
+`diff.configured` defaults. They never invoke `diff.run` or `index.write_tree`.
+`diff.resolve` is now public: its bounded caret/tilde adapter is unchanged.
+Show handles loose commits, blobs, tree entries, annotated tags and a literal
+`REV:path` traversal; these are not a general revision grammar.
+
+`tools/check-history` is mandatory: native/release command stdout, stderr,
+status and complete file-byte/mode state; an independent importing package;
+bounded pretty and raw-walk actual-checked programs. Captures include negative
+scope rows separately from exact comparisons. A foreign index lock and dirty
+worktree are present throughout. The two named hunk witnesses and capture-bound
+binary representation policy remain unchanged and are not history parity.
+
+Remaining M2 surfaces: combined merge show, show revision limiting, history
+path simplification, graph/topological order, custom pretty formats,
+relative/human dates and non-UTC local zones. ASCII tab rendering is supported;
+non-ASCII prefixes before tabs require a future display-width surface. General
+revision grammar stays M3. M2 is not complete merely because the bounded
+history matrix passes.

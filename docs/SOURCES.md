@@ -218,3 +218,28 @@ Primary references are Git v2.56.0 Documentation, read as documentation only:
   wrapper were read for stat-width defaults. The command queries the builtin
   directly, without importing foreground-process operations or adding an exec
   capability. Private-PTY and COLUMNS tests use only terminals they create.
+
+
+## History walking and presentation (vc05)
+
+Read from the pinned Git 2.56.0 tarball's Documentation directory only:
+
+- git-log(1), Synopsis, Description, Options, revision/path arguments and Diff
+  Formatting (default merge-patch suppression).
+- git-show(1), Synopsis, Description, Options, Diff Formatting and Examples:
+  object-kind display and dense-combined merge semantics.
+- pretty-formats.adoc, introduction, merge-parent line, oneline, short, medium,
+  full and fuller formats. Custom format placeholders were not implemented.
+- rev-list-options.adoc, Commit Limiting (max-count and skip), Commit Ordering
+  (default, date/author-date/topological ordering, reverse), and --date formats.
+- Existing own object/header, commit human/reflog subjects, worktree HEAD and
+  diff consumer APIs. No new gitformat-* or gitprotocol-* format was introduced;
+  the inherited parsers and their cited format documentation remain the source
+  of raw object validation.
+
+`tools/history-measure.py` retains black-box whitespace, timezone, empty-message,
+NUL, ordered-parent and tag/tree observations. `tools/history-test.py` constructs
+raw commits independently through the pinned executable, including tied/skewed
+DAG clocks, without loading any Git implementation source. Native/release
+results bind complete stdout/stderr/status and immutable repository/worktree
+state. Non-ASCII tab widths and combined merge diffs are refused, not guessed.
