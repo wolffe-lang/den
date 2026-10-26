@@ -189,7 +189,8 @@
       "show",
       "HEAD:raw.bin"
     ],
-    "lane": "M2, vc05"
+    "lane": "M2, vc05",
+    "require_parity": true
   },
   {
     "name": "branch",

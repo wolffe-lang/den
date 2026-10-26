@@ -103,8 +103,8 @@ say("--filter branch --strict" in gate, "T2 strict witness remains unimplemented
 for command in ("tools/check-diff --units-only", "tools/check-delta", "tools/check-rename", "tools/check-diff --corpus-only", "tools/check-diffbinary --reviewed-body --with-cli"):
     say(command in gate, "T2 diff integration gate is mandatory: " + command)
 cases = json.load(open(os.path.join(ROOT, "tests", "cases.json")))
-say(all(c.get("require_parity") for c in cases if c["args"][0] == "diff"),
-    "T2 implemented diff cases cannot regress to named refusals")
+say(all(c.get("require_parity") for c in cases if c["args"][0] in ("diff", "log", "show")),
+    "T2 implemented diff/history cases cannot regress to named refusals")
 # T3
 p = plan(["somewhere/new"], event="pull_request", action="opened")
 say(p["tier"] == "full", "T3 a path no rule names is full")
