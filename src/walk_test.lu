@@ -1,0 +1,19 @@
+//! member: false
+
+use oid
+use walk
+use worktree
+
+fn main() -> int ! worktree.WorkErrors {
+    let id = oid.parse("sha1", "0123456789012345678901234567890123456789")?
+    let raw = "tree 0123456789012345678901234567890123456789\nparent 1111111111111111111111111111111111111111\nparent 2222222222222222222222222222222222222222\nauthor A <a@b> 1 +0000\ncommitter C <c@d> 2 +0000\nx-extra one\n two\n\nraw\nmessage"
+    let value = walk.parse(id, raw.bytes())?
+    assert(value.parents.len == 2 && value.timestamp == 2)
+    assert(oid.hex(value.parents[0])? == "1111111111111111111111111111111111111111")
+    assert(oid.hex(value.parents[1])? == "2222222222222222222222222222222222222222")
+    assert(value.headers.message.len == 11)
+    assert(value.headers.fields[5].value.len == 8)
+    let bad = walk.parse(id, "tree broken\n\nx".bytes()) else |_| { return 0 }
+    let _ = bad
+    1
+}

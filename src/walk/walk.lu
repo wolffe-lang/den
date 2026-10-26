@@ -1,0 +1,104 @@
+// Original bounded walker. Git 2.56.0 rev-list-options: Commit Ordering.
+use object
+use oid
+use repository
+use worktree
+
+/// Owned raw headers/message and ordered parents; no index or ref mutation.
+pub struct Commit {
+    id: oid.Oid,
+    tree: oid.Oid,
+    parents: List[oid.Oid],
+    headers: object.Headers,
+    timestamp: int,
+    encoded_size: int,
+}
+
+/// Decode a commit without reserializing its headers or normalizing its message.
+pub fn parse(id: oid.Oid, data: List[byte]) -> Commit ! worktree.WorkErrors {
+    if data.len > 16777216 { return limit }
+    let _ = oid.hex(id)?
+    if id.algorithm != "sha1" { return unsupported_format }
+    let headers = object.parse_commit(data, "sha1")?
+    var tree = copy id, parents = List[oid.Oid](), timestamp = 0
+    for field in headers.fields {
+        if field.key == "tree" || field.key == "parent" {
+            let text = str_from_utf8(field.value)?
+            let parsed = oid.parse("sha1", text)?
+            if field.key == "tree" { tree = parsed } else { (mut parents).push(parsed) }
+        } else if field.key == "committer" {
+            let text = str_from_utf8(field.value)?
+            let end = text.rfind(">") else |_| { return invalid_header }
+            let words = text[end + 1..].words()
+            if words.len != 2 { return invalid_header }
+            timestamp = words[0].to_int() else |_| { return invalid_header }
+            if timestamp < 0 { return Unsupported("history negative timestamp") }
+        }
+    }
+    Commit {
+        id: copy id,
+        tree: tree,
+        parents: parents,
+        headers: headers,
+        timestamp: timestamp,
+        encoded_size: data.len,
+    }
+}
+
+/// Read one bounded loose commit. Tags must be peeled by the resolver first.
+pub fn read(repo: repository.Repo, id: oid.Oid) -> Commit ! worktree.WorkErrors {
+    let value = object.read_object(repo, id, 16777216)?
+    if value.kind != "commit" { return Unsupported("history non-commit {value.kind}") }
+    parse(id, value.data)?
+}
+
+/// Visit reachable commits, once each, by timestamp among the pending frontier.
+/// Equal timestamps retain enqueue order; parents retain raw header order.
+/// max_count/skip are output controls; max_nodes is the hard resource bound.
+pub fn collect(
+    repo: repository.Repo,
+    starts: List[oid.Oid],
+    max_count: int,
+    skip: int,
+    max_nodes: int,
+    first_parent: bool,
+) -> List[Commit] ! worktree.WorkErrors {
+    if max_count < 0 || skip < 0 || max_nodes < 1 || max_nodes > 100000 { return invalid }
+    var total = 0
+    var pending = List[Commit](), seen = Map[str, bool](), out = List[Commit]()
+    if max_count == 0 { return out }
+    for id in starts {
+        let key = oid.hex(id)?
+        if seen[key] else false { continue }
+        if seen.len >= max_nodes { return limit }
+        seen[key] = true
+        let node = read(repo, id)?
+        total += node.encoded_size
+        if total > 134217728 { return limit }
+        (mut pending).push(node)
+    }
+    var visited = 0
+    while pending.len > 0 && out.len < max_count {
+        var best = 0
+        for i in 1..pending.len { if pending[i].timestamp > pending[best].timestamp { best = i } }
+        let item = copy pending[best]
+        var rest = List[Commit]()
+        for i in 0..pending.len { if i != best { (mut rest).push(copy pending[i]) } }
+        pending = rest
+        if visited >= skip { (mut out).push(copy item) }
+        visited += 1
+        if out.len == max_count { break }
+        for i in 0..item.parents.len {
+            if first_parent && i > 0 { break }
+            let key = oid.hex(item.parents[i])?
+            if seen[key] else false { continue }
+            if seen.len >= max_nodes { return limit }
+            seen[key] = true
+            let node = read(repo, item.parents[i])?
+            total += node.encoded_size
+            if total > 134217728 { return limit }
+            (mut pending).push(node)
+        }
+    }
+    out
+}
