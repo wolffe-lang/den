@@ -1,0 +1,18 @@
+use std.fs
+use history
+use pretty
+use walk
+use worktree
+
+fn main() -> int ! worktree.WorkErrors {
+    let ctx = worktree.discover(".")?
+    let head = worktree.head(ctx)?
+    let values = walk.collect(ctx.repo, head.commits, 100, 0, 1000, false)?
+    var stdout = fs.stdout()
+    for value in values {
+        var ids = [history.abbreviate(ctx.repo, value.id, 7)?]
+        for parent in value.parents { (mut ids).push(history.abbreviate(ctx.repo, parent, 7)?) }
+        fs.write_chunk(mut stdout, pretty.render(value, "oneline", "default", ids, true)?)?
+    }
+    0
+}

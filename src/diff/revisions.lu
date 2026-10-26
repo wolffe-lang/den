@@ -3,7 +3,8 @@ use object
 use oid
 use worktree
 
-fn resolve(ctx: worktree.Context, name: str) -> oid.Oid ! worktree.WorkErrors {
+/// Resolve a bounded loose endpoint without publishing repository state.
+pub fn resolve(ctx: worktree.Context, name: str) -> oid.Oid ! worktree.WorkErrors {
     var split = name.len
     for i in 0..name.len {
         if name.bytes()[i] == 94 as byte || name.bytes()[i] == 126 as byte { split = i; break }

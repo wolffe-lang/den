@@ -1,0 +1,370 @@
+// Git 2.56.0 git-log/git-show/pretty-formats documentation and binary witnesses.
+use std.fs
+use diff
+use object
+use oid
+use pretty
+use repository
+use walk
+use worktree
+
+fn add(mut out: List[byte], value: List[byte]) { for b in value { (mut out).push(b) } }
+
+fn number(value: str) -> int ! worktree.WorkErrors {
+    let n = value.to_int() else |_| { return invalid }
+    if n < 0 || n > 100000 { return invalid }
+    n
+}
+
+/// Unique loose-object abbreviation. No fixed seven-digit collision assumption.
+pub fn abbreviate(repo: repository.Repo, id: oid.Oid, minimum: int) -> str ! worktree.WorkErrors {
+    if minimum < 4 || minimum > 40 { return invalid }
+    let full = oid.hex(id)?
+    for length in minimum..40 {
+        let found = object.lookup(repo, full[0..length]) else |e| match e {
+            ambiguous => { continue },
+            _ => { return invalid },
+        }
+        if oid.equal(found, id) { return full[0..length] }
+    }
+    full
+}
+
+fn peel(repo: repository.Repo, id: oid.Oid) -> oid.Oid ! worktree.WorkErrors {
+    var current = copy id
+    for _ in 0..64 {
+        let value = object.read_object(repo, current, 16777216)?
+        if value.kind != "tag" { return current }
+        let parsed = object.parse_tag(value.data, "sha1")?
+        for field in parsed.fields {
+            if field.key == "object" {
+                current = oid.parse("sha1", str_from_utf8(field.value)?)?
+                break
+            }
+        }
+    }
+    limit
+}
+
+fn root_files(ctx: worktree.Context, id: oid.Oid) -> List[diff.File] ! worktree.WorkErrors {
+    var out = List[diff.File](), total = 0
+    for entry in worktree.flatten_tree(ctx.repo, id)? {
+        if entry.mode == 0o160000 { return Unsupported("history submodule diff") }
+        let value = object.read_object(ctx.repo, entry.id, 16777216)?
+        if value.kind != "blob" { return invalid_tree }
+        total += value.data.len
+        if total > 134217728 { return limit }
+        (mut out).push(diff.File {
+            path: copy entry.path,
+            mode: entry.mode,
+            id: copy entry.id,
+            data: copy value.data,
+        })
+    }
+    out
+}
+
+/// Read-only patch/stat consumer. Roots compare to empty, never write an empty
+/// tree or call index.write_tree. Ordinary history uses diff.collect/render.
+pub fn patch(
+    ctx: worktree.Context,
+    value: walk.Commit,
+    options: diff.Options,
+    first_parent: bool,
+) -> List[byte] ! worktree.WorkErrors {
+    if !options.patch && !options.stat { return List[byte]() }
+    if value.parents.len > 1 && !first_parent { return List[byte]() }
+    var display = copy options
+    var changes = List[diff.Change]()
+    if value.parents.len == 0 {
+        if fs.exists("{ctx.root}/.gitattributes") ||
+            fs.exists("{ctx.repo.gitdir}/info/attributes") ||
+            (ctx.repo.config["core.attributesfile"] else "") != "" {
+            return Unsupported("diff attributes")
+        }
+        changes = diff.changes(List[diff.File](), root_files(ctx, value.tree)?, display)?
+    } else {
+        display.revisions = [oid.hex(value.parents[0])?, oid.hex(value.id)?]
+        changes = diff.collect(ctx, display)?
+    }
+    diff.render(ctx, changes, display)?
+}
+
+fn show_resolve(ctx: worktree.Context, name: str) -> oid.Oid ! worktree.WorkErrors {
+    let colon = name.find(":") else |_| { return diff.resolve(ctx, name)? }
+    if colon == 0 { return Unsupported("show index expression {name}") }
+    let revision = name[0..colon]
+    let path = name[colon + 1..]
+    var id = peel(ctx.repo, diff.resolve(ctx, revision)?)?
+    let stored = object.read_object(ctx.repo, id, 16777216)?
+    if stored.kind == "commit" {
+        id = walk.parse(id, stored.data)?.tree
+    } else if stored.kind != "tree" {
+        return invalid_tree
+    }
+    if path == "" { return id }
+    let parts = path.split("/")
+    if parts.len > 256 { return limit }
+    for part in parts {
+        if part == "" || part == "." || part == ".." {
+            return Unsupported("show relative object path")
+        }
+        let tree = object.read_object(ctx.repo, id, 16777216)?
+        if tree.kind != "tree" { return Fatal("path '{path}' does not exist in '{revision}'") }
+        var found = false
+        for entry in object.parse_tree(tree.data, "sha1")? {
+            if entry.name.len != part.len { continue }
+            var equal = true
+            for j in 0..part.len { if entry.name[j] != part.bytes()[j] { equal = false } }
+            if equal {
+                id = copy entry.id
+                found = true
+                break
+            }
+        }
+        if !found { return Fatal("path '{path}' does not exist in '{revision}'") }
+    }
+    id
+}
+
+fn dispatch(args: List[str]) -> int ! worktree.WorkErrors {
+    let repo = repository.discover(".")?
+    let ctx = if (repo.config["core.bare"] else "false") == "true" {
+        worktree.Context { repo: repo, root: "", cwd: ".", prefix: "" }
+    } else {
+        worktree.discover(".")?
+    }
+    let show = args[0] == "show"
+    var display = diff.configured(ctx)?
+    display.patch = show
+    var format = ctx.repo.config["format.pretty"] else "medium"
+    var date_style = ctx.repo.config["log.date"] else "default"
+    var abbrev = false, first_parent = false, reverse = false, explicit_patch = false
+    var count = 100000, skip = 0, minimum = display.abbreviate
+    var revisions = List[str](), i = 1
+    while i < args.len {
+        let arg = args[i]
+        if show &&
+            (
+                arg == "--reverse" ||
+                    arg.starts_with("--skip=") ||
+                    arg.starts_with("--max-count") ||
+                    arg.starts_with("-n") ||
+                    arg.len > 1 &&
+                        arg.bytes()[0] == 45 as byte &&
+                        arg.bytes()[1] >= 48 as byte &&
+                        arg.bytes()[1] <= 57 as byte
+            ) {
+            return Unsupported("show revision limiting")
+        }
+        if arg == "--oneline" {
+            format = "oneline"
+            abbrev = true
+        } else if arg.starts_with("--pretty=") {
+            format = arg[9..]
+        } else if arg.starts_with("--format=") {
+            format = arg[9..]
+        } else if arg == "--abbrev-commit" {
+            abbrev = true
+        } else if arg == "--no-abbrev-commit" {
+            abbrev = false
+        } else if arg.starts_with("--abbrev=") {
+            minimum = number(arg[9..])?
+            if minimum < 4 { minimum = 4 }
+            if minimum > 40 { minimum = 40 }
+        } else if arg.starts_with("--date=") {
+            date_style = arg[7..]
+        } else if arg == "-p" || arg == "--patch" {
+            display.patch = true
+            explicit_patch = true
+        } else if arg == "-s" || arg == "--no-patch" {
+            display.patch = false
+            display.stat = false
+            explicit_patch = true
+        } else if arg == "--stat" {
+            display.stat = true
+            if !explicit_patch { display.patch = false }
+        } else if arg.starts_with("-U") {
+            display.context = number(arg[2..])?
+            display.patch = true
+            explicit_patch = true
+        } else if arg == "--binary" {
+            display.binary_patch = true
+            display.patch = true
+            explicit_patch = true
+        } else if arg == "--no-renames" {
+            display.renames = false
+        } else if arg == "--first-parent" {
+            first_parent = true
+        } else if arg == "--reverse" {
+            reverse = true
+        } else if arg == "-n" || arg == "--max-count" {
+            i += 1
+            if i >= args.len { return invalid }
+            count = number(args[i])?
+        } else if arg.starts_with("--max-count=") {
+            count = number(arg[12..])?
+        } else if arg.starts_with("--skip=") {
+            skip = number(arg[7..])?
+        } else if arg.starts_with("-n") {
+            count = number(arg[2..])?
+        } else if arg.len > 1 &&
+            arg.bytes()[0] == 45 as byte &&
+            arg.bytes()[1] >= 48 as byte &&
+            arg.bytes()[1] <= 57 as byte {
+            count = number(arg[1..])?
+        } else if arg == "--" {
+            if i + 1 < args.len { return Unsupported("history path limiting") }
+        } else if arg == "--no-decorate" ||
+            arg == "--no-color" ||
+            arg == "--color=never" ||
+            arg == "--no-notes" ||
+            arg == "--no-mailmap" {} else if arg.starts_with("-") {
+            return Unsupported("{args[0]} option {arg}")
+        } else {
+            (mut revisions).push(arg)
+        }
+        i += 1
+    }
+    if date_style == "local" || date_style.ends_with("-local") {
+        let tz = env_get("TZ") else "UTC"
+        if tz != "UTC" && tz != "UTC0" && tz != "Etc/UTC" && tz != "GMT" {
+            return Unsupported("history local timezone {tz}")
+        }
+    }
+    if fs.exists("{ctx.repo.gitdir}/shallow") { return Unsupported("history shallow repository") }
+    if fs.exists("{ctx.root}/.mailmap") ||
+        (ctx.repo.config["mailmap.file"] else "") != "" ||
+        (ctx.repo.config["mailmap.blob"] else "") != "" {
+        return Unsupported("history mailmap")
+    }
+    if (ctx.repo.config["i18n.logoutputencoding"] else "UTF-8") != "UTF-8" {
+        return Unsupported("history output encoding")
+    }
+    if revisions.len == 0 {
+        let head = worktree.head(ctx)?
+        if head.commits.len == 0 {
+            return Fatal("your current branch '{head.branch}' does not have any commits yet")
+        }
+        (mut revisions).push("HEAD")
+    }
+    var starts = List[oid.Oid]()
+    for name in revisions {
+        if name.contains("..") ||
+            name.starts_with("^") ||
+            !show && name.contains(":") ||
+            name.contains("{{") {
+            return Unsupported("history revision expression {name}")
+        }
+        let id = if show then show_resolve(ctx, name)? else diff.resolve(ctx, name)?
+        (mut starts).push(if show then id else peel(ctx.repo, id)?)
+    }
+    var commits = List[walk.Commit](), out = List[byte](), printed_commit = false
+    if !show { commits = walk.collect(ctx.repo, starts, count, skip, 10000, first_parent)? }
+    let length = if show then starts.len else commits.len
+    for n in 0..length {
+        let at = if reverse then length - n - 1 else n
+        var id = if show then copy starts[at] else copy commits[at].id
+        let value = if show {
+            var stored = object.read_object(ctx.repo, id, 16777216)?
+            var tag_depth = 0
+            while stored.kind == "tag" {
+                tag_depth += 1
+                if tag_depth > 64 { return limit }
+                let headers = object.parse_tag(stored.data, "sha1")?
+                for field in headers.fields {
+                    if field.key == "tag" {
+                        add(mut out, "tag ".bytes())
+                        add(mut out, field.value)
+                        (mut out).push(10 as byte)
+                    }
+                }
+                for field in headers.fields {
+                    if field.key == "object" {
+                        id = oid.parse("sha1", str_from_utf8(field.value)?)?
+                    }
+                    if field.key == "tagger" && format != "oneline" {
+                        let (person, seconds, zone) = pretty.identity(field.value)?
+                        add(
+                            mut out,
+                            "Tagger: {person}\nDate:   {pretty.date(seconds, zone, date_style)?}\n".
+                                bytes(),
+                        )
+                    }
+                }
+                (mut out).push(10 as byte)
+                for b in headers.message { if b == 0 as byte { break }; (mut out).push(b) }
+                if format != "oneline" { (mut out).push(10 as byte) }
+                if out.len > 134217728 { return limit }
+                stored = object.read_object(ctx.repo, id, 16777216)?
+            }
+            if stored.kind == "blob" {
+                add(mut out, stored.data)
+                if out.len > 134217728 { return limit }
+                continue
+            }
+            if stored.kind == "tree" {
+                if printed_commit && format != "oneline" { (mut out).push(10 as byte) }
+                let name = if tag_depth == 0 then revisions[at] else oid.hex(id)?
+                add(mut out, "tree {name}\n\n".bytes())
+                for entry in object.parse_tree(stored.data, "sha1")? {
+                    add(mut out, worktree.quote(entry.name, display.quote_path, false))
+                    if entry.mode == 0o40000 { (mut out).push(47 as byte) }
+                    (mut out).push(10 as byte)
+                }
+                if out.len > 134217728 { return limit }
+                continue
+            }
+            if stored.kind != "commit" { return Unsupported("show {stored.kind}") }
+            walk.parse(id, stored.data)?
+        } else {
+            copy commits[at]
+        }
+        if show && value.parents.len > 1 && (display.patch || display.stat) && !first_parent {
+            return Unsupported("show combined merge diff")
+        }
+        if printed_commit && format != "oneline" { (mut out).push(10 as byte) }
+        printed_commit = true
+        var ids = [abbreviate(ctx.repo, value.id, minimum)?]
+        for parent in value.parents { (mut ids).push(abbreviate(ctx.repo, parent, minimum)?) }
+        let formatted = pretty.render(value, format, date_style, ids, abbrev) else |e| match e {
+            Fatal(message) => {
+                let id = if abbrev then ids[0] else oid.hex(value.id)?
+                add(mut out, "commit {id}\n".bytes())
+                var stdout = fs.stdout()
+                fs.write_chunk(mut stdout, out)?
+                eprint("fatal: {message}")
+                return 128
+            },
+            Unsupported(feature) => { return Unsupported(feature) },
+            _ => { return invalid },
+        }
+        add(mut out, formatted)
+        let changes = patch(ctx, value, display, first_parent)?
+        if changes.len > 0 {
+            if display.patch && display.stat {
+                add(mut out, "---\n".bytes())
+            } else if format != "oneline" {
+                (mut out).push(10 as byte)
+            }
+            add(mut out, changes)
+        }
+        if out.len > 134217728 { return limit }
+    }
+    var stdout = fs.stdout()
+    fs.write_chunk(mut stdout, out)?
+    0
+}
+
+/// CLI boundary: exact measured output or an explicit unsupported feature.
+pub fn run(args: List[str]) -> int {
+    repository.check_config(".") else |e| match e {
+        ConfigDiagnostic(message) => { eprint(message); return 128 },
+        _ => {},
+    }
+    dispatch(args) else |e| match e {
+        Unsupported(feature) => { eprint("den: not yet implemented: {feature}"); 2 },
+        Fatal(message) => { eprint("fatal: {message}"); 128 },
+        _ => { eprint("fatal: {e}"); 128 },
+    }
+}

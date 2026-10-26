@@ -1,0 +1,4 @@
+pkg {
+    name: "history-client", edition: "1", capabilities: [env, fs],
+    deps: {history: {path: "../../src/history"}, pretty: {path: "../../src/pretty"}, walk: {path: "../../src/walk"}, worktree: {path: "../../src/worktree"}},
+}
