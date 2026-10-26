@@ -154,7 +154,7 @@ pub fn render(
         if field.key != "author" && field.key != "committer" { continue }
         let (person, seconds, zone) = identity(field.value)?
         if field.key == "author" {
-            line(mut out, if format == "fuller" then "Author:     {person}" else "Author: {person}")
+            line(mut out, if format == "fuller" then "Author:     {person}" else "Writer: {person}")
             if format == "medium" { line(mut out, "Date:   {date(seconds, zone, date_style)?}") }
             if format == "fuller" {
                 line(mut out, "AuthorDate: {date(seconds, zone, date_style)?}")
