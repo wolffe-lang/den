@@ -42,10 +42,12 @@ pub fn bases(nodes: List[Node], ours: str, theirs: str, cap: int) -> List[str] !
         if (left[node.id] else false) && (right[node.id] else false) { (mut common).push(node.id) }
     }
     var dominated = Map[str, bool]()
-    for name in common {
-        let seen = reachable(nodes, name, cap)?
-        for candidate in common {
-            if candidate != name && (seen[candidate] else false) { dominated[candidate] = true }
+    // Common ancestry is parent-closed. Every non-best common node is a
+    // parent of another common node, so one edge sweep removes all dominated
+    // nodes without constructing one transitive closure per common ancestor.
+    for node in nodes {
+        if (left[node.id] else false) && (right[node.id] else false) {
+            for parent in node.parents { dominated[parent] = true }
         }
     }
     var result = List[str]()

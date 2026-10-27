@@ -96,8 +96,67 @@ pub fn merge(
                 changed = true
             }
         }
-        let left = side(base, bl, ours, ol, oe, ob, oi, lo, hi)
-        let right = side(base, bl, theirs, tl, te, tb, ti, lo, hi)
+        var left = side(base, bl, ours, ol, oe, ob, oi, lo, hi)
+        var right = side(base, bl, theirs, tl, te, tb, ti, lo, hi)
+        // Black-box merge-file witnesses: default style joins conflicting
+        // regions separated by at most three unchanged base lines. diff3 styles
+        // keep them distinct. Work from edit coordinates, never parse markers.
+        if style == "merge" && ob < oi && tb < ti && !equal(left, right) {
+            while oi < oe.len && ti < te.len {
+                let next_lo = if oe[oi].old_start < te[ti].old_start {
+                    oe[oi].old_start
+                } else {
+                    te[ti].old_start
+                }
+                if next_lo - hi > 3 { break }
+                var next_hi = next_lo, no = oi, nt = ti, more = true
+                while more {
+                    more = false
+                    while no < oe.len && oe[no].old_start <= next_hi {
+                        let end = oe[no].old_start + oe[no].old_count
+                        if end > next_hi { next_hi = end }
+                        no += 1
+                        more = true
+                    }
+                    while nt < te.len && te[nt].old_start <= next_hi {
+                        let end = te[nt].old_start + te[nt].old_count
+                        if end > next_hi { next_hi = end }
+                        nt += 1
+                        more = true
+                    }
+                }
+                if no == oi || nt == ti { break }
+                let nl = side(base, bl, ours, ol, oe, oi, no, next_lo, next_hi)
+                let nr = side(base, bl, theirs, tl, te, ti, nt, next_lo, next_hi)
+                if equal(nl, nr) { break }
+                let cl = difftext.lines(left)?, cr = difftext.lines(right)?
+                let nll = difftext.lines(nl)?, nrl = difftext.lines(nr)?
+                var tail = 0, front = 0, current_front = 0
+                while current_front < cl.len &&
+                    current_front < cr.len &&
+                    equal(
+                        span(left, cl, current_front, current_front + 1),
+                        span(right, cr, current_front, current_front + 1),
+                    ) { current_front += 1 }
+                while tail < cl.len - current_front &&
+                    tail < cr.len - current_front &&
+                    equal(
+                        span(left, cl, cl.len - tail - 1, cl.len - tail),
+                        span(right, cr, cr.len - tail - 1, cr.len - tail),
+                    ) { tail += 1 }
+                while front < nll.len &&
+                    front < nrl.len &&
+                    equal(span(nl, nll, front, front + 1), span(nr, nrl, front, front + 1)) {
+                    front += 1
+                }
+                if next_lo - hi + tail + front > 3 { break }
+                oi = no
+                ti = nt
+                hi = next_hi
+                left = side(base, bl, ours, ol, oe, ob, oi, lo, hi)
+                right = side(base, bl, theirs, tl, te, tb, ti, lo, hi)
+            }
+        }
         if ob == oi {
             append(mut out, right)
         } else if tb == ti || equal(left, right) {

@@ -1,0 +1,8 @@
+pkg {
+    name: "mergefile",
+    edition: "1",
+    deps: {
+        delta: {path: "../delta"},
+        difftext: {path: "../difftext"},
+    },
+}

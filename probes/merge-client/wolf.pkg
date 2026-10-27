@@ -1,0 +1,8 @@
+pkg {
+    name: "merge-client",
+    edition: "1",
+    capabilities: [env, fs],
+    deps: {
+        mergefile: {path: "../../src/mergefile"},
+    },
+}

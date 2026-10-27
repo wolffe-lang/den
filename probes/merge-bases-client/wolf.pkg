@@ -1,0 +1,10 @@
+pkg {
+    name: "merge-bases-client",
+    edition: "1",
+    capabilities: [env, fs],
+    deps: {
+        mergetree: {path: "../../src/mergetree"},
+        oid: {path: "../../src/oid"},
+        repository: {path: "../../src/repository"},
+    },
+}

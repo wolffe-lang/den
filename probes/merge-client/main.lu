@@ -1,0 +1,11 @@
+use std.fs
+use mergefile
+
+fn main() -> !int {
+    let args = env_args()
+    if args.len != 4 { return 2 }
+    let result = mergefile.merge(fs.read_bytes(args[0])?,fs.read_bytes(args[1])?,fs.read_bytes(args[2])?,"ours","base","theirs",args[3])?
+    var stdout = fs.stdout()
+    fs.write_chunk(mut stdout,result.data)?
+    if result.conflicts > 127 then 127 else result.conflicts
+}
