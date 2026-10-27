@@ -3,6 +3,7 @@ import argparse, hashlib, json, os, pathlib, runpy, shutil, subprocess
 p=argparse.ArgumentParser();p.add_argument('--tier',default='native');p.add_argument('--measure',action='store_true');a=p.parse_args()
 R=pathlib.Path(__file__).resolve().parent.parent
 G=os.environ['DEN_GIT'];D=R/f'target/{a.tier}/den';client=R/f'target/{a.tier}/revision-client'
+assert hashlib.sha256(pathlib.Path(G).read_bytes()).hexdigest()=='c4848492938c4ebfffbefe1fbbaa68b9af90c86d1f6a20e76816c5ff37fcfa60', 'revision gate requires the pinned oracle, not the image system git'
 pack=runpy.run_path(str(R/'tools/packed-fixture.py'))['pack_fixture']
 root=R/f'target/revision-{a.tier}';shutil.rmtree(root,ignore_errors=True);root.mkdir(parents=True)
 rows=[];fail=[];clients=[];scopes=[]
@@ -33,6 +34,14 @@ for n in range(100000):
   g(base,'hash-object','-w','--stdin',data=seen[prefix]);g(base,'hash-object','-w','--stdin',data=data);collision=prefix;break
  seen[prefix]=data
 else:raise AssertionError('collision not found')
+hint_commit=g(base,'hash-object','-w','-t','commit','--stdin',data=f'tree {tree}\nauthor A <a@b> 946684800 +0530\ncommitter C <c@d> 1700000000 -0230\n\nfirst line\nsecond line\n\nbody\n'.encode())
+hint_tag=g(base,'hash-object','-w','-t','tag','--stdin',data=f'object {merge}\ntype commit\ntag hint-tag\ntagger A <a@b> 946684800 +0530\n\nmessage\n'.encode())
+mixed=[]
+for kind,id in [('commit',hint_commit),('tag',hint_tag)]:
+ for n in range(2000000):
+  data=f'hint collision {kind} {n}\n'.encode();digest=hashlib.sha1(f'blob {len(data)}\0'.encode()+data).hexdigest()
+  if digest[:4]==id[:4]:g(base,'hash-object','-w','--stdin',data=data);mixed.append((id[:4],id));break
+ else:raise AssertionError('typed collision not found')
 # Explicit deterministic reflogs, including detach and checkout history.
 zero='0'*40
 identity='A <a@b> 1700000000 +0000'
@@ -42,10 +51,12 @@ for name,id in [('ORIG_HEAD',c1),('CHERRY_PICK_HEAD',c2),('REBASE_HEAD',side),('
 # A foreign index lock and dirty file are mandatory read-only witnesses.
 (base/'dirty').write_bytes(b'leave unchanged\n');(base/'.git/index.lock').write_bytes(b'foreign\n')
 atoms=['HEAD','@','main','heads/main','refs/heads/main','tags/v1','refs/tags/v1','origin/main','origin','order','dup','v1','v2',merge,merge[:10],'ORIG_HEAD','CHERRY_PICK_HEAD','REBASE_HEAD','MERGE_HEAD','HEAD^','HEAD^0','HEAD^1','HEAD^2','HEAD~','HEAD~2','HEAD^2~','v1^0','v2^{}','v2^{commit}','HEAD^{tree}','v2^{tag}','HEAD^{object}','HEAD@{0}','HEAD@{1}','main@{1}','@{1}','@{-1}','@{-2}']
-bad=['does-not-exist','HEAD^3','HEAD~9','HEAD^{','HEAD^{bad}','HEAD^2x','a....b',collision,'file','HEAD@{99}']
+bad=['does-not-exist','HEAD^3','HEAD~9','HEAD^{','HEAD^{bad}','HEAD^{tag}',blob+'^{commit}','HEAD^2x','a....b',collision,'file','HEAD@{99}']
 commands=[]
+for prefix,id in mixed:
+ commands += [['log','--oneline','-n1',prefix],['show','-s',prefix],['cat-file','-t',prefix],['log','--oneline','-n1',prefix+'^{commit}'],['show','-s',prefix+'^0']]
 for name in atoms: commands += [['log','--oneline','-n1',name],['show','-s',name]]
-for name in ['HEAD:file','HEAD:','v2:file',tree+':file','HEAD:missing']:commands += [['show','-s',name]]
+for name in ['HEAD:file','HEAD:','v2:file',tree+':file','HEAD:missing','HEAD~1:missing','v2^{}:missing']:commands += [['show','-s',name]]
 for names in [['topic..HEAD'],['topic...side'],['..HEAD'],['HEAD..'],['..'],['...'],['HEAD','^topic'],['topic..HEAD','side'],['topic...HEAD'],['side..topic']]:
  for flags in [[],['-n1'],['--skip=1'],['--first-parent'],['--reverse']]: commands += [['log','--oneline',*flags,*names]]
 for name in ['topic..HEAD','topic...side','..HEAD','HEAD..']:
@@ -70,6 +81,17 @@ for mode in ['loose','packed']:
   actual=run(client,['--raw'],repo);expected=dict(status=0,stdout=(rawblob+'\n').encode().hex(),stderr='')
   clients.append(dict(mode=mode,name='raw-byte-path',expected=expected,actual=actual))
   if expected!=actual:fail.append(['client',mode,'raw-byte-path'])
+  for args,out in [(['--limits'],b'limits\n'),(['--invalid-ast'],b'invalid\n'),* [(['--commit',prefix],(id+'\n').encode()) for prefix,id in mixed]]:
+   before=state(repo);actual=run(client,args,repo);expected=dict(status=0,stdout=out.hex(),stderr='')
+   clients.append(dict(mode=mode,name=args,expected=expected,actual=actual,unchanged=before==state(repo)))
+   if expected!=actual or state(repo)!=before:fail.append(['client',mode,args]);print('FAIL client',mode,args,expected,actual,flush=True)
+  saved_head=(repo/'.git/HEAD').read_bytes()
+  for heading,expected_text in [(b'ref: refs/heads/main\n','refs/heads/main false false\n'),((merge+'\n').encode(),'HEAD true false\n'),(b'ref: refs/heads/unborn\n','refs/heads/unborn false true\n')]:
+   (repo/'.git/HEAD').write_bytes(heading);before=state(repo)
+   actual=run(client,['--provenance'],repo);expected=dict(status=0,stdout=expected_text.encode().hex(),stderr='')
+   clients.append(dict(mode=mode,name='provenance-'+heading.decode().strip(),expected=expected,actual=actual,unchanged=before==state(repo)))
+   if expected!=actual or state(repo)!=before:fail.append(['provenance',mode,heading.decode()])
+  (repo/'.git/HEAD').write_bytes(saved_head)
   for name,feature in [('@{yesterday}','revision date selector'),(':/text','revision message search'),('HEAD^@','revision parent-set shorthand'),('HEAD^!','revision parent-set shorthand'),('HEAD^-2','revision parent-set shorthand'),(':0:file','revision index expression'),('@{upstream}','revision upstream tracking'),('@{push}','revision push tracking')]:
    before=state(repo);actual=run(D,['show','-s',name],repo);expected=dict(status=2,stdout='',stderr=f'den: not yet implemented: {feature}\n'.encode().hex())
    scopes.append(dict(mode=mode,name=name,actual=actual,expected=expected,unchanged=state(repo)==before))

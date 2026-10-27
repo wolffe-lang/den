@@ -19,6 +19,7 @@ PY
 export DEN_GIT
 tools/check-fmt
 tools/build --all
+tools/check-revision
 tools/check-history
 tools/check-refs
 tools/check-merge

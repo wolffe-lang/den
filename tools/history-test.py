@@ -90,8 +90,10 @@ for nonce in range(1000000):
   break
 else: raise AssertionError('deterministic collision search exhausted')
 check('abbrev-collision',['log','--oneline','--abbrev=4','-n1'])
+# Retired range refusal now requires exact empty-set selection.
+check('implemented-main-range',['log','main..HEAD'])
 # Explicit unsupported surface rows are NOT parity and are never skipped.
-for args,feature in [(['log','--graph'],'log option --graph'),(['log','main..HEAD'],'history revision expression main..HEAD'),(['log','--','dirty'],'history path limiting'),(['log','--date=relative'],'history date format relative')]:
+for args,feature in [(['log','--graph'],'log option --graph'),(['log','--','dirty'],'history path limiting'),(['log','--date=relative'],'history date format relative')]:
  before=state();q=run(DEN,args)
  assert q=={'status':2,'stdout':'','stderr':f'den: not yet implemented: {feature}\n'.encode().hex()},(args,q)
  assert state()==before

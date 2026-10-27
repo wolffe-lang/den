@@ -103,9 +103,9 @@ case('scope-symlink','clean','symlink',[['cherry-pick','first']])
 case('scope-rename','clean','topic:rename',[['rebase','--onto','main','empty']])
 case('rebase-detached','clean','topic:detached',[['rebase','main']])
 case('rebase-noop','clean','topic',[['rebase','HEAD']])
-for operand in ('source','refs/heads/source','refs/tags/first','@first','@prefix'):
+for operand in ('source','refs/heads/source','refs/tags/first','@first','@prefix','first^0','topic~2','topic~2^{commit}','heads/source'):
     case('pick-name-'+operand,'clean','',[['cherry-pick',operand]])
-for operand in ('refs/heads/main','@ours'):
+for operand in ('refs/heads/main','@ours','main^0','main@{0}','main^{commit}'):
     case('rebase-name-'+operand,'clean','topic',[['rebase',operand]])
 case('pick-orig-head','clean','orig-head',[['cherry-pick','ORIG_HEAD']])
 case('scope-config-rebase','clean','topic:config:rebase.autostash=true',[['rebase','main']])

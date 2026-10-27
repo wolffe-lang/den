@@ -100,6 +100,8 @@ say("tools/check-objects" in gate, "T2 object integration gate is mandatory")
 for command in ("tools/check-config", "tools/check-index", "tools/check-ignore", "tools/check-worktree", "tools/check-commit", "tools/check-history"):
     say(command in gate, "T2 M2 integration gate is mandatory: " + command)
 say("--filter blame --strict" in gate, "T2 strict witness remains unimplemented")
+say("tools/check-revision" in gate, "T2 shared revision grammar gate is mandatory")
+say("tools/check-history" in gate, "T2 inherited history gate remains mandatory")
 say("tools/check-refs" in gate, "T2 refs integration gate is mandatory")
 say("tools/check-merge" in gate, "T2 merge integration gate is mandatory")
 say("tools/check-replay" in gate, "T2 replay integration gate is mandatory")
@@ -112,7 +114,7 @@ for command in ("tools/check-diff --units-only", "tools/check-delta", "tools/che
 cases = json.load(open(os.path.join(ROOT, "tests", "cases.json")))
 say(all(c.get("require_parity") for c in cases if c["args"][0] in ("diff", "log", "show", "branch", "tag", "switch", "merge")),
     "T2 implemented diff/history/refs cases cannot regress to named refusals")
-say(all(c.get("require_parity") for c in cases if c["name"] in ("rebase-up-to-date", "cherry-pick-redundant")),
+say(all(c.get("require_parity") for c in cases if c["name"] in ("rebase", "rebase-up-to-date", "cherry-pick-redundant")),
     "T2 replay parity rows cannot regress to named refusals")
 # T3
 p = plan(["somewhere/new"], event="pull_request", action="opened")

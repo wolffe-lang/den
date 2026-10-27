@@ -48,7 +48,7 @@ for args in (['add','a'], ['commit','--no-edit','-m','resolved']):
 for style in ('diff3','zdiff3'):
     cases.append(('conflict',['merge','--no-edit','topic'],style))
 for kind in ('ff','clean','conflict'):
-    for operand in ('refs/heads/topic','light','refs/tags/light','@oid','@short'):
+    for operand in ('refs/heads/topic','light','refs/tags/light','@oid','@short','topic^0','topic@{0}','heads/topic'):
         cases.append((kind,['merge','--no-edit',operand],''))
     cases.append((kind,['merge','topic'],''))
 for setup in ('unborn','annotated','rename','crisscross'):
@@ -56,7 +56,7 @@ for setup in ('unborn','annotated','rename','crisscross'):
 cases.append(('clean',['revert','--no-edit','HEAD'],'merge-head'))
 cases.append(('clean',['revert','-m','1','HEAD'],'merge-head'))
 for kind in ('uptodate','clean','conflict'):
-    for args in (['revert','--no-edit','HEAD'],['revert','--no-edit','topic'],['revert','--no-commit','HEAD']):
+    for args in (['revert','--no-edit','HEAD'],['revert','--no-edit','HEAD^0'],['revert','--no-edit','HEAD@{0}'],['revert','--no-edit','topic'],['revert','--no-commit','HEAD']):
         cases.append((kind,args,''))
 for kind in ('ff','clean'):
     for setup in ('add-file','delete-file','mode-file'):

@@ -65,6 +65,11 @@ commands = [
  ['switch', '-C', 'topic', first], ['switch', '-C', 'main', first],
  ['checkout', '-B', 'topic', first], ['switch', '-f', 'topic'],
 ]
+for expression in ['HEAD~1', 'HEAD^', 'annotated^0', 'HEAD^{commit}', 'HEAD@{0}', 'heads/topic']:
+    commands.extend([['branch', 'grammar', expression], ['tag', 'grammar', expression],
+                     ['reset', '--soft', expression], ['reset', '--mixed', expression],
+                     ['reset', '--hard', expression], ['switch', '--detach', expression],
+                     ['checkout', '--detach', expression], ['restore', '--source='+expression, '--', 'a']])
 for packed in (False, True):
     for detached in (False, True):
         for i, command in enumerate(commands):
@@ -81,6 +86,9 @@ for setup in ('dirty', 'staged', 'unborn', 'index.lock', 'HEAD.lock', 'refs/head
 for packed in (False, True):
     for force_delete in (False, True):
         cases.append(dict(name=f'divergent-{int(packed)}-{int(force_delete)}', args=['branch', '-D' if force_delete else '-d', 'topic'], packed=packed, detached=False, setup='diverged'))
+for packed in (False, True):
+    for command in [['switch', '@{-1}'], ['checkout', '@{-1}'], ['switch', '--detach', '@{-1}']]:
+        cases.append(dict(name='previous-'+str(int(packed))+'-'+str(len(cases)), args=command, packed=packed, detached=False, setup='previous'))
 for case in cases:
     root = base / case['name']; root.mkdir(); repo = root / 'repo'
     fixture = root / 'fixture'
@@ -90,7 +98,10 @@ for case in cases:
     if case['detached']:
         subprocess.run([G, 'switch', '--detach', '-q', second], cwd=fixture, check=True, capture_output=True)
     setup = case.get('setup', '')
-    if setup == 'diverged':
+    if setup == 'previous':
+        for branch in ['topic', 'main']:
+            subprocess.run([G, 'switch', '-q', branch], cwd=fixture, check=True, capture_output=True)
+    elif setup == 'diverged':
         subprocess.run([G, 'update-ref', 'refs/heads/topic', dated], cwd=fixture, check=True, capture_output=True)
     elif setup == 'dirty' or setup == 'staged':
         (fixture / 'a').write_bytes(b'local change\n')
@@ -131,7 +142,12 @@ for i, (args, feature) in enumerate([
     (['switch', '--orphan', 'new'], 'switch --orphan'),
     (['checkout', '-m', 'topic'], 'checkout -m'),
     (['reset', '--merge', 'HEAD'], 'reset --merge'),
-    (['reset', '--soft', 'HEAD~1'], 'reset (M3, vc06)'),
+    *[(args, 'revision set in single-object consumer') for args in (
+        ['branch','grammar','main..HEAD'], ['tag','grammar','main..HEAD'],
+        ['reset','--soft','main..HEAD'], ['switch','--detach','main..HEAD'],
+        ['checkout','--detach','main..HEAD'], ['merge','--no-edit','main..HEAD'],
+        ['revert','--no-edit','main..HEAD'], ['cherry-pick','main..HEAD'],
+        ['rebase','main..HEAD'], ['restore','--source=main..HEAD','--','a'])],
 ]):
     repo = base / f'unsupported-{i}'
     shutil.copytree(seed, repo)

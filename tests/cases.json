@@ -250,9 +250,9 @@
       "rebase",
       "HEAD~1"
     ],
-    "lane": "M3, vc08",
-    "refusal_feature": "replay revision grammar",
-    "refusal_style": "feature-only"
+    "lane": "M3, vc10",
+    "require_parity": true,
+    "comparison": "index-stat-proven"
   },
   {
     "name": "rebase-up-to-date",
