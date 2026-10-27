@@ -1,0 +1,28 @@
+#!/bin/sh
+# Bounded refs/HEAD/reflog clients and exact complete-state command comparisons.
+set -eu
+DEN_ROOT=$(cd "$(dirname "$0")/.." && pwd)
+export DEN_ROOT
+cd "$DEN_ROOT"
+. tools/lib-toolchain.sh
+mkdir -p target/runs/vc06-evidence
+for tier in native release; do
+    flag=
+    [ "$tier" != release ] || flag=--release
+    mkdir -p "target/$tier"
+    for unit in refs reflog; do
+        "$WOLF" build $flag --deny-warnings "src/${unit}_test.lu" -o "target/$tier/$unit-test"
+        "target/$tier/$unit-test"
+    done
+    "$WOLF" build $flag --deny-warnings probes/refs-client/main.lu -o "target/$tier/refs-client"
+    tools/env python3 -I tools/refs-api-test.py --tier "$tier"
+    tools/env python3 -I tools/refs-test.py --tier "$tier"
+    cp "target/refs-api-$tier.json" "target/refs-oracle-$tier.json" target/runs/vc06-evidence/
+done
+for unit in refs reflog; do
+    "$WOLF" conform-run "src/${unit}_test.lu" --checked --json > "target/${unit}-checked.json"
+    cat "target/${unit}-checked.json"
+    python3 -I -c 'import json,sys; rows=[json.loads(x) for x in open(sys.argv[1]) if x.startswith("{")]; assert len(rows)==1 and rows[0]["verdict"]=="exit(0)", rows' "target/${unit}-checked.json"
+    cp "target/${unit}-checked.json" target/runs/vc06-evidence/
+done
+echo 'refs: native/release complete state, independent client, two actual checked exits; zero skips'

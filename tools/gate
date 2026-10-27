@@ -20,6 +20,7 @@ export DEN_GIT
 tools/check-fmt
 tools/build --all
 tools/check-history
+tools/check-refs
 tools/check-diff --units-only
 tools/check-test
 TLS_PROBE_LOCAL_ONLY=1 tools/probe-tls
@@ -54,7 +55,7 @@ PYREPORT
 done
 tools/oracle --selftest
 tools/oracle
-if tools/oracle --filter branch --strict; then
+if tools/oracle --filter rebase --strict; then
     echo "gate: strict not-yet unexpectedly passed" >&2
     exit 1
 else

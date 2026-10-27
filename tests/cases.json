@@ -198,7 +198,8 @@
     "args": [
       "branch"
     ],
-    "lane": "M3, vc06"
+    "lane": "M3, vc06",
+    "require_parity": true
   },
   {
     "name": "tag",
@@ -207,7 +208,8 @@
       "tag",
       "v0"
     ],
-    "lane": "M3, vc06"
+    "lane": "M3, vc06",
+    "require_parity": true
   },
   {
     "name": "switch",
@@ -216,7 +218,9 @@
       "switch",
       "side"
     ],
-    "lane": "M3, vc06"
+    "lane": "M3, vc06",
+    "comparison": "index-stat-proven",
+    "require_parity": true
   },
   {
     "name": "reset",
