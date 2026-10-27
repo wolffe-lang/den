@@ -1,0 +1,73 @@
+// Original decoder from Git 2.56.0 gitformat-pack, Deltified representation.
+// CRC polynomial is the zlib/IEEE reflected CRC-32; no library source consulted.
+/// Explicit filesystem and named format/limit failures, never unchecked offsets.
+pub error PackErrors = {not_found, denied, io, Unsupported(str)}
+/// Malformed delta instructions versus the caller's inclusive output bound.
+pub error DeltaErrors = {invalid, limit}
+
+/// CRC-32 of the complete packed entry, including header and base reference.
+pub fn crc32(data: List[byte]) -> int {
+    var crc: int = 4294967295
+    for b in data {
+        crc ^= b as int
+        for _ in 0..8 {
+            crc = if (crc & 1) != 0 then (crc >> 1) ^ 3988292384 else crc >> 1
+        }
+    }
+    crc ^ 4294967295
+}
+
+fn variable(src: List[byte], mut pos: int) -> int ! {invalid} {
+    var value: int = 0, scale: int = 1
+    for _ in 0..9 {
+        if pos >= src.len { return invalid }
+        let b = src[pos] as int
+        pos += 1
+        let digit = b & 127
+        if digit > (9223372036854775807 - value) / scale { return invalid }
+        value += digit * scale
+        if b < 128 { return value }
+        if scale > 9223372036854775807 / 128 { return invalid }
+        scale *= 128
+    }
+    invalid
+}
+
+/// Apply exact copy/insert instructions, inclusive output cap and owned result.
+/// No instruction may read outside its base or overflow the declared target.
+pub fn apply_delta(base: List[byte], src: List[byte], cap: int) -> List[byte] ! DeltaErrors {
+    if cap < 0 { return invalid }
+    var pos: int = 0
+    let before = variable(src, mut pos)?
+    let after = variable(src, mut pos)?
+    if before != base.len { return invalid }
+    if after > cap { return limit }
+    var out = List[byte]()
+    while pos < src.len {
+        let op = src[pos] as int
+        pos += 1
+        if op == 0 { return invalid }
+        if op < 128 {
+            if op > src.len - pos || op > after - out.len { return invalid }
+            for i in 0..op { (mut out).push(src[pos + i]) }
+            pos += op
+        } else {
+            var offset: int = 0, length: int = 0, scale: int = 1
+            for bit in 0..7 {
+                if bit == 4 { scale = 1 }
+                if (op & (1 << bit)) != 0 {
+                    if pos == src.len { return invalid }
+                    if bit < 4 { offset += (src[pos] as int) * scale }
+                    else { length += (src[pos] as int) * scale }
+                    pos += 1
+                }
+                scale *= 256
+            }
+            if length == 0 { length = 65536 }
+            if offset > base.len || length > base.len - offset || length > after - out.len { return invalid }
+            for i in 0..length { (mut out).push(base[offset + i]) }
+        }
+    }
+    if out.len != after { return invalid }
+    out
+}

@@ -4,6 +4,7 @@ pkg {
     capabilities: [fs, env],
     deps: {
         oid: {path: "../oid"},
+        pack: {path: "../pack"},
         refs: {path: "../refs"},
         hash: {path: "../hash"},
         zlib: {path: "../zlib"},

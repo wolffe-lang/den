@@ -1,0 +1,84 @@
+// Git 2.56.0 gitformat-pack, Version 2 pack-*.idx files and Checksums.
+use hash
+use oid
+
+struct Entry {
+    name: str,
+    offset: int,
+    crc: int,
+}
+
+struct Index {
+    entries: List[Entry],
+    by_offset: Map[int, int],
+    by_name: Map[str, int],
+    pack_sum: List[byte],
+}
+
+fn be32(data: List[byte], pos: int) -> int {
+    var n: int = 0
+    for i in 0..4 { n = n * 256 + data[pos + i] as int }
+    n
+}
+
+fn same(a: List[byte], b: List[byte]) -> bool {
+    if a.len != b.len { return false }
+    for i in 0..a.len { if a[i] != b[i] { return false } }
+    true
+}
+
+fn parse_index(data: List[byte]) -> Index ! PackErrors {
+    if data.len < 1072 { return Unsupported("pack index truncated") }
+    if !same(data[0..4], [255 as byte, 116 as byte, 79 as byte, 99 as byte]) || be32(data, 4) != 2 {
+        return Unsupported("pack index version (requires v2)")
+    }
+    if !same(hash.sum1(data[0..data.len - 20]), data[data.len - 20..]) {
+        return Unsupported("pack index checksum")
+    }
+    let count = be32(data, 1028)
+    if count > 400000 { return Unsupported("pack index object count limit") }
+    let fixed = 1032 + count * 28 + 40
+    if fixed > data.len || (data.len - fixed) % 8 != 0 { return Unsupported("pack index length") }
+    let large_count = (data.len - fixed) / 8
+    var previous: int = 0
+    for i in 0..256 {
+        let n = be32(data, 8 + 4 * i)
+        if n < previous || n > count { return Unsupported("pack index fanout") }
+        previous = n
+    }
+    var entries = List[Entry](), by_offset = Map[int, int](), by_name = Map[str, int]()
+    var bucket = 0, name_before = ""
+    var large_used = Map[int, bool]()
+    for i in 0..count {
+        let pos = 1032 + 20 * i
+        let first = data[pos] as int
+        while bucket < first {
+            if be32(data, 8 + bucket * 4) != i { return Unsupported("pack index fanout") }
+            bucket += 1
+        }
+        let id = oid.from_bytes("sha1", data[pos..pos + 20]) else |_| { return Unsupported("pack index name") }
+        let name = oid.hex(id) else |_| { return Unsupported("pack index name") }
+        if i > 0 && name <= name_before { return Unsupported("pack index name order") }
+        name_before = name
+        var offset = be32(data, 1032 + count * 24 + i * 4)
+        if offset >= 2147483648 {
+            let slot = offset - 2147483648
+            if slot >= large_count || (large_used[slot] else false) { return Unsupported("pack index large offsets") }
+            large_used[slot] = true
+            let start = 1032 + count * 28 + slot * 8
+            let high = be32(data, start)
+            if high > 2147483647 { return Unsupported("pack offset range") }
+            offset = high * 4294967296 + be32(data, start + 4)
+        }
+        if offset < 12 || (by_offset[offset] else -1) != -1 { return Unsupported("pack index offsets") }
+        by_offset[offset] = i
+        by_name[name] = i
+        (mut entries).push(Entry {name: name, offset: offset, crc: be32(data, 1032 + count * 20 + i * 4)})
+    }
+    while bucket < 256 {
+        if be32(data, 8 + bucket * 4) != count { return Unsupported("pack index fanout") }
+        bucket += 1
+    }
+    if large_used.len != large_count { return Unsupported("pack index large offsets") }
+    Index {entries: entries, by_offset: by_offset, by_name: by_name, pack_sum: data[data.len - 40..data.len - 20]}
+}

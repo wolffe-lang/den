@@ -1,0 +1,223 @@
+// Bounded offset reads; no mmap, whole-pack buffer, process or persistent cache.
+use std.fs
+use hash
+use oid
+use zlib
+
+/// Owned canonical object body. The object module supplies the public adapter.
+pub struct Body { kind: str, data: List[byte] }
+
+fn read_window(fd: int, start: int, count: int) -> List[byte] ! PackErrors {
+    let bytes = fs_read_at(fd, start, count) else |e| match e {
+        eof => { return Unsupported("pack truncated") },
+        _ => { return io },
+    }
+    if bytes.len == 0 { return Unsupported("pack truncated") }
+    bytes
+}
+
+fn range_bytes(fd: int, start: int, count: int) -> List[byte] ! PackErrors {
+    if start < 0 || count < 0 || start > 9223372036854775807 - count { return Unsupported("pack offset range") }
+    var out = List[byte](), pos: int = 0
+    while pos < count {
+        region window {
+            let want = if count - pos > 65536 then 65536 else count - pos
+            let bytes = read_window(fd, start + pos, want)?
+            for b in bytes { (mut out).push(b) }
+            pos += bytes.len
+        }
+    }
+    out
+}
+
+fn file_size(fd: int) -> int ! PackErrors {
+    let info = fs_fstat_record(fd) else |_| { return io }
+    if info[1] < 0 { return Unsupported("pack file size") }
+    info[1]
+}
+
+fn load_index(path: str) -> Index ! PackErrors {
+    let fd = fs_open(path)?
+    defer fs_close(fd) else |_| {}
+    let size = file_size(fd)?
+    if size > 16777216 { return Unsupported("pack index size limit") }
+    let bytes = range_bytes(fd, 0, size)?
+    if file_size(fd)? != size { return Unsupported("pack index changed") }
+    parse_index(bytes)?
+}
+
+fn verify(fd: int, index: Index) -> int ! PackErrors {
+    let size = file_size(fd)?
+    if size < 32 { return Unsupported("pack truncated") }
+    let header = range_bytes(fd, 0, 12)?
+    if !same(header[0..4], "PACK".bytes()) || be32(header, 4) != 2 { return Unsupported("pack version (requires v2)") }
+    if be32(header, 8) != index.entries.len { return Unsupported("pack object count") }
+    if index.entries.len > 0 && (index.by_offset[12] else -1) == -1 { return Unsupported("pack index offsets") }
+    if index.entries.len == 0 && size != 32 { return Unsupported("pack index offsets") }
+    for entry in index.entries {
+        if entry.offset >= size - 20 { return Unsupported("pack index offsets") }
+    }
+    var state = hash.new1(), pos: int = 0
+    while pos < size - 20 {
+        region window {
+            let count = if size - 20 - pos > 65536 then 65536 else size - 20 - pos
+            let bytes = range_bytes(fd, pos, count)?
+            hash.update1(mut state, bytes)
+            pos += count
+        }
+    }
+    let trailer = range_bytes(fd, size - 20, 20)?
+    if !same(hash.final1(take state), trailer) { return Unsupported("pack checksum") }
+    if !same(trailer, index.pack_sum) { return Unsupported("pack index binding") }
+    if file_size(fd)? != size { return Unsupported("pack changed") }
+    size - 20
+}
+
+fn charge(mut total: int, count: int) -> () ! PackErrors {
+    if count < 0 || count > 134217728 - total { return Unsupported("pack reconstruction memory limit") }
+    total += count
+}
+
+fn unpack(fd: int, end: int, index: Index, slot: int, mut seen: Map[int, bool], mut total: int, depth: int) -> Body ! PackErrors {
+    if depth > 64 { return Unsupported("pack delta depth limit") }
+    let offset = index.entries[slot].offset
+    if seen[offset] else false { return Unsupported("pack delta cycle") }
+    seen[offset] = true
+    var next = end
+    for entry in index.entries { if entry.offset > offset && entry.offset < next { next = entry.offset } }
+    let length = next - offset
+    if length > 17000000 { return Unsupported("pack compressed entry size limit") }
+    charge(mut total, length)?
+    let bytes = range_bytes(fd, offset, length)?
+    if crc32(bytes) != index.entries[slot].crc { return Unsupported("pack entry CRC") }
+    if bytes.len == 0 { return Unsupported("pack entry header") }
+    var byte0 = bytes[0] as int, pos: int = 1, size: int = byte0 & 15, scale: int = 16
+    let kind = (byte0 >> 4) & 7
+    while byte0 >= 128 {
+        if pos == bytes.len { return Unsupported("pack entry header") }
+        byte0 = bytes[pos] as int
+        pos += 1
+        if (byte0 & 127) > (16777216 - size) / scale { return Unsupported("pack object size limit") }
+        size += (byte0 & 127) * scale
+        if byte0 >= 128 {
+            if scale > 16777216 / 128 { return Unsupported("pack object size limit") }
+            scale *= 128
+        }
+    }
+    if size > 16777216 { return Unsupported("pack object size limit") }
+    var base_slot: int = -1
+    if kind == 6 {
+        if pos == bytes.len { return Unsupported("pack OFS_DELTA offset") }
+        var b = bytes[pos] as int, distance: int = b & 127
+        pos += 1
+        while b >= 128 {
+            if pos == bytes.len || distance >= offset / 128 { return Unsupported("pack OFS_DELTA offset") }
+            b = bytes[pos] as int
+            pos += 1
+            distance = (distance + 1) * 128 + (b & 127)
+        }
+        if distance <= 0 || distance > offset - 12 { return Unsupported("pack OFS_DELTA offset") }
+        base_slot = index.by_offset[offset - distance] else -1
+        if base_slot < 0 { return Unsupported("pack OFS_DELTA base boundary") }
+    } else if kind == 7 {
+        if bytes.len - pos < 20 { return Unsupported("pack REF_DELTA name") }
+        let id = oid.from_bytes("sha1", bytes[pos..pos + 20]) else |_| { return Unsupported("pack REF_DELTA name") }
+        let name = oid.hex(id) else |_| { return Unsupported("pack REF_DELTA name") }
+        base_slot = index.by_name[name] else -1
+        if base_slot < 0 { return Unsupported("thin pack REF_DELTA base") }
+        pos += 20
+    } else if kind < 1 || kind > 4 { return Unsupported("pack object type") }
+    charge(mut total, size)?
+    let inflated = zlib.inflate(bytes[pos..], size) else |e| { return Unsupported("pack zlib {e}") }
+    if inflated.consumed != bytes.len - pos || inflated.data.len != size { return Unsupported("pack entry size or trailing bytes") }
+    var result = Body {kind: "", data: List[byte]()}
+    if base_slot >= 0 {
+        let base = unpack(fd, end, index, base_slot, mut seen, mut total, depth + 1)?
+        var delta_pos: int = 0
+        let _ = variable(inflated.data, mut delta_pos) else |_| { return Unsupported("pack delta invalid") }
+        let target_size = variable(inflated.data, mut delta_pos) else |_| { return Unsupported("pack delta invalid") }
+        if target_size > 16777216 { return Unsupported("pack object size limit") }
+        charge(mut total, target_size)?
+        let data = apply_delta(base.data, inflated.data, 16777216) else |e| { return Unsupported("pack delta {e}") }
+        result = Body {kind: base.kind, data: data}
+    } else {
+        let name = match kind { 1 => "commit", 2 => "tree", 3 => "blob", _ => "tag" }
+        result = Body {kind: name, data: copy inflated.data}
+    }
+    var digest = hash.new1()
+    hash.update1(mut digest, "{result.kind} {result.data.len}\0".bytes())
+    hash.update1(mut digest, result.data)
+    let id = oid.from_bytes("sha1", hash.final1(take digest)) else |_| { return Unsupported("pack object identity") }
+    if (oid.hex(id) else "") != index.entries[slot].name { return Unsupported("pack object identity") }
+    result
+}
+
+fn indexes(gitdir: str) -> List[str] ! PackErrors {
+    let dir = "{gitdir}/objects/pack"
+    let entries = fs.entries(dir) else |e| match e {
+        not_found => { return List[str]() },
+        denied => { return denied },
+        io => { return io },
+    }
+    var out = List[str]()
+    if entries.len > 8192 { return Unsupported("pack directory entry limit") }
+    for entry in entries {
+        let name = str_from_utf8(entry.name) else |_| { return Unsupported("non-UTF-8 pack path") }
+        if name == "multi-pack-index" || name == "multi-pack-index.d" { return Unsupported("multi-pack-index") }
+        if name.ends_with(".bitmap") { return Unsupported("pack bitmap") }
+        if name.starts_with("pack-") && name.ends_with(".idx") {
+            if entry.kind != 0 { return Unsupported("pack index file type") }
+            if out.len >= 256 { return Unsupported("pack count limit") }
+            (mut out).push("{dir}/{name}")
+        }
+    }
+    out
+}
+
+/// Full-width lookup. Loose precedence is the caller's responsibility.
+pub fn read_object(gitdir: str, name: str, cap: int) -> Body ! PackErrors {
+    for path in indexes(gitdir)? {
+        // Per-pack scratch is reclaimed; the returned body is explicitly owned.
+        var result = Body {kind: "", data: List[byte]()}, found = false
+        region candidate {
+            let index = load_index(path)?
+            let fd = fs_open("{path[0..path.len - 4]}.pack")?
+            defer fs_close(fd) else |_| {}
+            let end = verify(fd, index)?
+            let slot = index.by_name[name] else -1
+            if slot >= 0 {
+                var seen = Map[int, bool](), total: int = 0
+                let value = unpack(fd, end, index, slot, mut seen, mut total, 0)?
+                result = copy value
+                found = true
+            }
+        }
+        if found {
+            if result.data.len > cap { return Unsupported("pack object size limit") }
+            return result
+        }
+    }
+    not_found
+}
+
+/// Return at most two distinct matching names, sufficient for ambiguity checks.
+/// Validate both trailing checksums and the binding even for prefix-only reads.
+pub fn prefix(gitdir: str, prefix: str) -> List[str] ! PackErrors {
+    var out = List[str]()
+    for path in indexes(gitdir)? {
+        region candidate {
+            let index = load_index(path)?
+            let fd = fs_open("{path[0..path.len - 4]}.pack")?
+            defer fs_close(fd) else |_| {}
+            let _ = verify(fd, index)?
+            for entry in index.entries {
+                if entry.name.starts_with(prefix) {
+                    var duplicate = false
+                    for name in out { if name == entry.name { duplicate = true } }
+                    if !duplicate && out.len < 2 { (mut out).push(copy entry.name) }
+                }
+            }
+        }
+    }
+    out
+}
