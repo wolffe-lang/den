@@ -101,10 +101,11 @@ for command in ("tools/check-config", "tools/check-index", "tools/check-ignore",
     say(command in gate, "T2 M2 integration gate is mandatory: " + command)
 say("--filter rebase --strict" in gate, "T2 strict witness remains unimplemented")
 say("tools/check-refs" in gate, "T2 refs integration gate is mandatory")
+say("tools/check-merge" in gate, "T2 merge integration gate is mandatory")
 for command in ("tools/check-diff --units-only", "tools/check-delta", "tools/check-rename", "tools/check-diff --corpus-only", "tools/check-diffbinary --reviewed-body --with-cli"):
     say(command in gate, "T2 diff integration gate is mandatory: " + command)
 cases = json.load(open(os.path.join(ROOT, "tests", "cases.json")))
-say(all(c.get("require_parity") for c in cases if c["args"][0] in ("diff", "log", "show", "branch", "tag", "switch")),
+say(all(c.get("require_parity") for c in cases if c["args"][0] in ("diff", "log", "show", "branch", "tag", "switch", "merge")),
     "T2 implemented diff/history/refs cases cannot regress to named refusals")
 # T3
 p = plan(["somewhere/new"], event="pull_request", action="opened")

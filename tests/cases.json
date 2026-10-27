@@ -239,7 +239,9 @@
       "merge",
       "side"
     ],
-    "lane": "M3, vc07"
+    "lane": "M3, vc07",
+    "comparison": "index-stat-proven",
+    "require_parity": true
   },
   {
     "name": "rebase",

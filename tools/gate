@@ -21,6 +21,7 @@ tools/check-fmt
 tools/build --all
 tools/check-history
 tools/check-refs
+tools/check-merge
 tools/check-diff --units-only
 tools/check-test
 TLS_PROBE_LOCAL_ONLY=1 tools/probe-tls
