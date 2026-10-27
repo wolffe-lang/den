@@ -4,12 +4,12 @@ A version control system in [wolf](https://github.com/wolffe-lang/wolf-lang),
 working toward Git-compatible repositories and wire protocols. Where a wolf
 keeps what it has.
 
-**State: loose objects, a writable index, worktree/commit commands, bounded diff, history, refs and merges.**
+**State: loose objects, a writable index, worktree/commit commands, bounded diff, history, refs, merges and replay.**
 This is not a replacement for Git; M2 and M3 remain incomplete. Log/show support
 bounded loose history; branches, tags, branch switching and resets share
-loose/packed ref storage. Merge and single-commit revert now cover the measured
-regular-file subset below. Combined merge display, rebase, packs
-and transports remain unfinished. Text diff has
+loose/packed ref storage. Merge, single-commit revert, cherry-pick and linear
+rebase cover the measured subsets below. Combined merge display, full replay
+semantics, packs and transports remain unfinished. Text diff has
 two recorded equal-cost alignment differences; binary patches reconstruct the
 exact blobs but do not always use Git's byte representation. `den --version`
 prints `den 0.0.0 (built with wolf 0.2.35)`.
@@ -28,7 +28,7 @@ measured bytes and documentation discrepancies.
 
 Archive and oracle pins are in `wolf-toolchain.toml` and `den-oracle.toml`.
 Downloads fail on a digest mismatch. Both release-metadata reads are retained
-in `notes/vc07-evidence/pins/` (earlier reads in `notes/vc06-evidence/pins/`); the original signature verification and two matching
+in `notes/vc08-evidence/pins/` (earlier reads in `notes/vc07-evidence/pins/`); the original signature verification and two matching
 oracle builds are in `notes/vc00-evidence/`.
 
 ## Commands implemented so far
@@ -48,6 +48,8 @@ oracle builds are in `notes/vc00-evidence/`.
 | Branch worktree | `switch` and branch `checkout`, `-c`/`-b` creation, explicit and implicit detached HEAD, dirty-worktree protection; `reset --soft/--mixed/--hard` |
 | Merge | Fast-forward, already-up-to-date, bounded regular-file three-way merges, conflict stages and merge/diff3/zdiff3 markers; `--no-ff`, `--ff-only`, `--squash`, `--no-commit`, `--no-edit`, `-m`, `-F`, `--abort` |
 | Revert / resolution | Single ordinary or root commit, `--no-edit`, `--no-commit`; merge-parent refusal; `add` saves REUC when resolving/deleting higher stages, and `commit` completes a resolved merge |
+| Cherry-pick | Single commits and explicit commit lists; preserved source author/date, current committer, durable todo/head/options, conflicts, resolved `--continue`, `--skip`, `--abort`, `--allow-empty`, `--keep-redundant-commits` and `--empty=keep/drop/stop` |
+| Rebase | Linear current-branch replay with explicit upstream, `--onto`, `--reapply-cherry-picks`, durable `rebase-merge` state, conflict stops, skip/abort and continuation after an explicit resolution commit; editor-dependent continuation remains refused |
 
 Status, commit summaries and diff share one rename/copy pairer. Exact OIDs are
 matched first; edited regular files use measured chunk-hash similarity, with
@@ -89,6 +91,7 @@ tools/check-commit
 tools/check-history
 tools/check-refs
 tools/check-merge
+tools/check-replay
 tools/check-delta
 tools/check-rename
 tools/check-diff
@@ -105,7 +108,7 @@ full repository-byte comparisons. Formatting/date API comparisons are not a
 claim of CLI stderr/exit-status parity. A checked result means the JSON verdict
 from `wolf conform-run --checked`, not merely a successful process exit.
 
-The expanded main matrix contains 188 cases: 174 parity, 13 named not-yet and
+The expanded main matrix contains 190 cases: 176 parity, 13 named not-yet and
 one version-shape check. Generated diff, similarity, pairing and application
 matrices are reported separately in `notes/vc04-evidence/`; their explicit
 representation/alignment differences are never added to the parity count.
@@ -120,7 +123,7 @@ code uses wolf-std and the provenance-marked SHA-1 code from boreutils.
 
 The corpus now defines 16 repositories: the original nine object/history
 fixtures plus ignore, staged rename, modes/symlink, unborn, amend, index-v4 and
-edited-rename states. `tests/cases.json` currently defines 188 main cases.
+edited-rename states. `tests/cases.json` currently defines 190 main cases.
 The main classifications are stated above. The generated config,
 index, ignore, worktree, commit and diff matrices run separately.
 
@@ -222,6 +225,30 @@ annotated-tag messages and dirty/staged true-merge recovery are also refused.
 Fast-forward dirty/untracked safety remains measured. `revert -m`, sequences,
 `--continue`/`--skip` and revert abort are not implemented. Merge editor execution,
 combined merge show and the previously named history limits remain open.
+
+The replay gate compares **89 exact complete-state scenarios** and **20 named
+scope captures** on each native/release tier, including multi-process resolution
+and recovery sequences. An independent importing client checks 136 records per
+tier; a bounded actual-checked program covers records, empty policy and the
+conservative equivalence checksum. All repository files remain in comparisons.
+
+Replay reuses the same tree/file engine and rename scorer; it does not remove
+any merge limits above. Default rebase refuses possible upstream patch equivalence
+rather than silently replaying a commit Git would omit. Its conservative
+whitespace-normalized net-line checksum is only a refusal filter, never a reason
+to drop a commit. `--reapply-cherry-picks` bypasses that preliminary check, not the
+merge engine's alignment limits. Empty results are then dropped as measured.
+
+Interactive and apply-backend rebase, merge replay, upstream/branch inference,
+a separate branch operand, and editor-dependent continuation remain unsupported.
+To continue after resolving a rebase conflict, explicitly commit the staged
+resolution with the desired message/author/date before `rebase --continue`.
+Cherry-pick dirty skip/abort and foreign `AUTO_MERGE.lock` cases retain named
+transient-stat boundaries; no index field is excluded to call them parity.
+Recovery refuses a changed original rebase branch or cherry-pick abort tip,
+unfamiliar state files and unsupported replay configuration before writing. Replay state files are data, never scripts
+to execute. Selected commit data is bounded at 128 MiB, todo records at 16 MiB
+and 100,000 entries; each applied step has reclaimable scratch storage.
 
 Commit writes support attached and detached HEAD. Loose refs override packed
 records; an unchanged packed tip is not needlessly unpacked. Amend retains
