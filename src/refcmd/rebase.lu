@@ -50,7 +50,8 @@ fn rebase_stop_files(ctx: worktree.Context, item: walk.Commit) -> () ! commit.Co
 
 fn rebase_conflict(ctx: worktree.Context, item: walk.Commit) -> int ! commit.CommitErrors {
     rebase_stop_files(ctx, item)?
-    let short = abbrev(ctx.repo, item.id)?, subject = str_from_utf8(commit.subject(item.headers.message)?)?
+    let short = abbrev(ctx.repo, item.id)?,
+        subject = str_from_utf8(commit.subject(item.headers.message)?)?
     eprint(
         "error: could not apply {short}... {subject}\nhint: Resolve all conflicts manually, mark them as resolved with\nhint: \"git add/rm <conflicted_files>\", then run \"git rebase --continue\".\nhint: You can instead skip this commit: run \"git rebase --skip\".\nhint: To abort and get back to the state before \"git rebase\", run \"git rebase --abort\".\nhint: Disable this message with \"git config set advice.mergeConflict false\"\nCould not apply {short}... # {subject}",
     )
@@ -137,45 +138,64 @@ fn rebase_steps(ctx: worktree.Context) -> int ! commit.CommitErrors {
     var number = sequencer.parse(initial_done.bytes())?.len
     for at in 0..steps.len {
         region replay_step {
-        var done = if fs.exists("{ctx.repo.gitdir}/rebase-merge/done") then replay_read(ctx, "rebase-merge/done")? else ""
-        let item = walk.read(ctx.repo, replay_target(ctx, steps[at].name)?)?
-        // Fail before advancing progress for an unsupported tree operation.
-        let _ = replay_plan(ctx, worktree.head(ctx)?.commits[0], item)?
-        number += 1
-        done += str_from_utf8(sequencer.render([copy steps[at]])?)?
-        replay_write(ctx, "rebase-merge/done", done.bytes())?
-        replay_write(ctx, "rebase-merge/git-rebase-todo", sequencer.render(steps[at + 1..])?)?
-        replay_write(ctx, "rebase-merge/msgnum", "{number}\n".bytes())?
-        rebase_author(ctx, item)?
-        eprint_raw("Rebasing ({number}/{total})\r")
-        let result = pick_one(ctx, item, PickOptions { allow_empty: true, empty: "drop" }, true)?
-        if result != 0 {
-            if fs.exists("{ctx.repo.gitdir}/HEAD.lock") && !fs.exists("{ctx.repo.gitdir}/rebase-merge/stopped-sha") {
-                replay_write(ctx, "CHERRY_PICK_HEAD", "{oid.hex(item.id)?}\n".bytes())?
-                rebase_stop_files(ctx, item)?
-                eprint("Could not apply {abbrev(ctx.repo, item.id)?}... # {str_from_utf8(commit.subject(item.headers.message)?)?}")
+            var done = if fs.exists("{ctx.repo.gitdir}/rebase-merge/done") {
+                replay_read(ctx, "rebase-merge/done")?
+            } else {
+                ""
             }
-            return result
-        }
-        replay_remove(ctx, "REBASE_HEAD")?
-        var rewritten = if fs.exists("{ctx.repo.gitdir}/rebase-merge/rewritten-list") {
-            replay_read(ctx, "rebase-merge/rewritten-list")?
-        } else {
-            ""
-        }
-        rewritten += "{oid.hex(item.id)?} {oid.hex(worktree.head(ctx)?.commits[0])?}\n"
-        replay_write(ctx, "rebase-merge/rewritten-list", rewritten.bytes())?
+            let item = walk.read(ctx.repo, replay_target(ctx, steps[at].name)?)?
+            // Fail before advancing progress for an unsupported tree operation.
+            let _ = replay_plan(ctx, worktree.head(ctx)?.commits[0], item)?
+            number += 1
+            done += str_from_utf8(sequencer.render([copy steps[at]])?)?
+            replay_write(ctx, "rebase-merge/done", done.bytes())?
+            replay_write(ctx, "rebase-merge/git-rebase-todo", sequencer.render(steps[at + 1..])?)?
+            replay_write(ctx, "rebase-merge/msgnum", "{number}\n".bytes())?
+            rebase_author(ctx, item)?
+            eprint_raw("Rebasing ({number}/{total})\r")
+            let result = pick_one(
+                ctx,
+                item,
+                PickOptions { allow_empty: true, empty: "drop" },
+                true,
+            )?
+            if result != 0 {
+                if fs.exists("{ctx.repo.gitdir}/HEAD.lock") &&
+                    !fs.exists("{ctx.repo.gitdir}/rebase-merge/stopped-sha") {
+                    replay_write(ctx, "CHERRY_PICK_HEAD", "{oid.hex(item.id)?}\n".bytes())?
+                    rebase_stop_files(ctx, item)?
+                    eprint(
+                        "Could not apply {abbrev(ctx.repo, item.id)?}... # {str_from_utf8(commit.subject(item.headers.message)?)?}",
+                    )
+                }
+                return result
+            }
+            replay_remove(ctx, "REBASE_HEAD")?
+            var rewritten = if fs.exists("{ctx.repo.gitdir}/rebase-merge/rewritten-list") {
+                replay_read(ctx, "rebase-merge/rewritten-list")?
+            } else {
+                ""
+            }
+            rewritten += "{oid.hex(item.id)?} {oid.hex(worktree.head(ctx)?.commits[0])?}\n"
+            replay_write(ctx, "rebase-merge/rewritten-list", rewritten.bytes())?
         }
     }
     rebase_finish(ctx)?
 }
 
-fn rebase_reset(ctx: worktree.Context, mut value: index.Index, target: List[worktree.FlatEntry]) -> () ! commit.CommitErrors {
+fn rebase_reset(
+    ctx: worktree.Context,
+    mut value: index.Index,
+    target: List[worktree.FlatEntry],
+) -> () ! commit.CommitErrors {
     var collapsed = List[index.Entry]()
     for source in value.entries {
         var entry = copy source
         entry.flags -= index.stage(entry) * 4096
-        if collapsed.len > 0 && str_from_utf8(collapsed[collapsed.len - 1].path)? == str_from_utf8(entry.path)? { continue }
+        if collapsed.len > 0 &&
+            str_from_utf8(collapsed[collapsed.len - 1].path)? == str_from_utf8(entry.path)? {
+            continue
+        }
         (mut collapsed).push(entry)
     }
     value.entries = collapsed
@@ -191,9 +211,13 @@ fn rebase_resume(ctx: worktree.Context, action: str) -> int ! commit.CommitError
     let head = worktree.head(ctx)?
     if !head.detached { return Unsupported("rebase attached in-progress HEAD") }
     if branch != "detached HEAD" {
-        if !branch.starts_with("refs/heads/") || !refs.valid(branch) { return Unsupported("rebase invalid saved branch") }
+        if !branch.starts_with("refs/heads/") || !refs.valid(branch) {
+            return Unsupported("rebase invalid saved branch")
+        }
         let original = oid.parse("sha1", replay_read(ctx, "rebase-merge/orig-head")?.trim())?
-        if !oid.equal(refs.read(ctx.repo, branch)?, original) { return Unsupported("rebase changed original branch") }
+        if !oid.equal(refs.read(ctx.repo, branch)?, original) {
+            return Unsupported("rebase changed original branch")
+        }
     }
     if action == "--abort" || action == "--skip" {
         let target = if action == "--abort" {
@@ -201,7 +225,11 @@ fn rebase_resume(ctx: worktree.Context, action: str) -> int ! commit.CommitError
         } else {
             copy head.commits[0]
         }
-        let reset_error = if action == "--skip" then "could not discard worktree changes" else "could not move back to {oid.hex(target)?}"
+        let reset_error = if action == "--skip" {
+            "could not discard worktree changes"
+        } else {
+            "could not move back to {oid.hex(target)?}"
+        }
         var tx = index_start(ctx) else |e| match e {
             Fatal(text) => { eprint("error: {text}"); return Fatal(reset_error) },
             _ => { return Fatal("{reset_error}: {e}") },
@@ -221,7 +249,12 @@ fn rebase_resume(ctx: worktree.Context, action: str) -> int ! commit.CommitError
                 identity(ctx)?,
                 "rebase (abort): returning to {branch}",
             ) else |e| match e {
-                exists => { eprint("error: cannot lock ref 'HEAD': {lock_text("{ctx.repo.gitdir}/HEAD.lock")}"); return Fatal(reset_error) },
+                exists => {
+                    eprint(
+                        "error: cannot lock ref 'HEAD': {lock_text("{ctx.repo.gitdir}/HEAD.lock")}",
+                    )
+                    return Fatal(reset_error)
+                },
                 _ => { return Fatal("{reset_error}: {e}") },
             }
             cleanup_state(ctx)
@@ -262,28 +295,45 @@ fn rebase_change_key(ctx: worktree.Context, item: walk.Commit) -> str ! commit.C
     if item.parents.len > 1 { return Unsupported("rebase upstream merge comparison") }
     for file in mergetree.files(ctx.repo, item.id)? { sum += sequencer.line_sum(file.data)? }
     if item.parents.len == 1 {
-        for file in mergetree.files(ctx.repo, item.parents[0])? { sum -= sequencer.line_sum(file.data)? }
+        for file in mergetree.files(ctx.repo, item.parents[0])? {
+            sum -= sequencer.line_sum(file.data)?
+        }
     }
     "{(sum >> 32) as int}:{(sum & 4294967295) as int}"
 }
 
-fn rebase_equivalence_scope(ctx: worktree.Context, selected: List[walk.Commit], upstream: oid.Oid, common: oid.Oid) -> () ! commit.CommitErrors {
+fn rebase_equivalence_scope(
+    ctx: worktree.Context,
+    selected: List[walk.Commit],
+    upstream: oid.Oid,
+    common: oid.Oid,
+) -> () ! commit.CommitErrors {
     var possible = Map[str, bool]()
     for item in selected {
         region patch {
-            if item.parents.len == 1 && oid.equal(item.tree, walk.read(ctx.repo, item.parents[0])?.tree) { continue }
+            if item.parents.len == 1 &&
+                oid.equal(item.tree, walk.read(ctx.repo, item.parents[0])?.tree) {
+                continue
+            }
             let key = rebase_change_key(ctx, item)?
             possible[copy key] = true
         }
     }
     var excluded = Map[str, bool]()
-    for item in walk.collect(ctx.repo, [copy common], 100001, 0, 100000, false)? { excluded[oid.hex(item.id)?] = true }
+    for item in walk.collect(ctx.repo, [copy common], 100001, 0, 100000, false)? {
+        excluded[oid.hex(item.id)?] = true
+    }
     for item in walk.collect(ctx.repo, [copy upstream], 100001, 0, 100000, false)? {
         if excluded[oid.hex(item.id)?] else false { continue }
         region patch {
-            if item.parents.len == 1 && oid.equal(item.tree, walk.read(ctx.repo, item.parents[0])?.tree) { continue }
+            if item.parents.len == 1 &&
+                oid.equal(item.tree, walk.read(ctx.repo, item.parents[0])?.tree) {
+                continue
+            }
             if possible[rebase_change_key(ctx, item)?] else false {
-                return Unsupported("rebase possible upstream patch equivalence; use --reapply-cherry-picks")
+                return Unsupported(
+                    "rebase possible upstream patch equivalence; use --reapply-cherry-picks",
+                )
             }
         }
     }
@@ -305,7 +355,8 @@ fn rebase_command(args: List[str]) -> int ! commit.CommitErrors {
             if at == args.len { return Unsupported("rebase missing onto") }
             onto_name = args[at]
             at += 1
-        } else if arg == "--reapply-cherry-picks" { reapply = true
+        } else if arg == "--reapply-cherry-picks" {
+            reapply = true
         } else if arg == "--merge" || arg == "--no-fork-point" {} else if arg.starts_with("-") {
             return Unsupported("rebase {arg}")
         } else {

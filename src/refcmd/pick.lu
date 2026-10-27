@@ -39,7 +39,11 @@ fn replay_remove(ctx: worktree.Context, name: str) -> () ! commit.CommitErrors {
     if fs.exists(path) { fs.remove(path)? }
 }
 
-fn replay_state_scope(ctx: worktree.Context, directory: str, allowed: List[str]) -> () ! commit.CommitErrors {
+fn replay_state_scope(
+    ctx: worktree.Context,
+    directory: str,
+    allowed: List[str],
+) -> () ! commit.CommitErrors {
     let entries = fs.entries("{ctx.repo.gitdir}/{directory}")?
     for entry in entries {
         let name = str_from_utf8(entry.name)?
@@ -69,10 +73,15 @@ fn replay_target(ctx: worktree.Context, name: str) -> oid.Oid ! commit.CommitErr
 
 fn replay_controls(ctx: worktree.Context, command: str) -> () ! commit.CommitErrors {
     controls(ctx, command)?
-    if (env_get("GIT_REFLOG_ACTION") else "") != "" { return Unsupported("replay GIT_REFLOG_ACTION") }
+    if (env_get("GIT_REFLOG_ACTION") else "") != "" {
+        return Unsupported("replay GIT_REFLOG_ACTION")
+    }
     for (key, value) in ctx.repo.config.pairs() {
-        if key.starts_with("rebase.") || key.starts_with("sequencer.") || key.starts_with("rerere.") ||
-            key.starts_with("merge.") && key != "merge.conflictstyle" || key == "commit.cleanup" ||
+        if key.starts_with("rebase.") ||
+            key.starts_with("sequencer.") ||
+            key.starts_with("rerere.") ||
+            key.starts_with("merge.") && key != "merge.conflictstyle" ||
+            key == "commit.cleanup" ||
             (key == "core.commentchar" || key == "core.commentstring") && value != "#" ||
             key == "advice.mergeconflict" && value != "true" {
             return Unsupported("replay configuration {key}")
@@ -86,9 +95,14 @@ fn replay_plan(
     item: walk.Commit,
 ) -> mergetree.Plan ! commit.CommitErrors {
     if item.parents.len > 1 { return Unsupported("cherry-pick merge mainline") }
-    let _ = str_from_utf8(item.headers.message) else |_| { return Unsupported("replay non-UTF-8 message") }
+    let _ = str_from_utf8(item.headers.message) else |_| {
+        return Unsupported("replay non-UTF-8 message")
+    }
     for field in item.headers.fields {
-        if field.key != "tree" && field.key != "parent" && field.key != "author" && field.key != "committer" {
+        if field.key != "tree" &&
+            field.key != "parent" &&
+            field.key != "author" &&
+            field.key != "committer" {
             return Unsupported("replay commit header {field.key}")
         }
     }
@@ -128,7 +142,11 @@ fn pick_empty(ctx: worktree.Context, item: walk.Commit) -> int ! commit.CommitEr
     1
 }
 
-fn replay_unmerged(ctx: worktree.Context, value: index.Index, rebasing: bool) -> bool ! commit.CommitErrors {
+fn replay_unmerged(
+    ctx: worktree.Context,
+    value: index.Index,
+    rebasing: bool,
+) -> bool ! commit.CommitErrors {
     var previous = "", found = false
     let high = worktree.config_bool(ctx, "core.quotepath", true)?
     for entry in value.entries {
@@ -152,7 +170,9 @@ fn pick_commit(
     if allow { (mut args).push("--allow-empty") }
     let value = worktree.read_index(ctx)?
     if replay_unmerged(ctx, value, false)? {
-        eprint("error: Committing is not possible because you have unmerged files.\nhint: Fix them up in the work tree, and then use 'git add/rm <file>'\nhint: as appropriate to mark resolution and make a commit.")
+        eprint(
+            "error: Committing is not possible because you have unmerged files.\nhint: Fix them up in the work tree, and then use 'git add/rm <file>'\nhint: as appropriate to mark resolution and make a commit.",
+        )
         return Fatal("Exiting because of an unresolved conflict.")
     }
     let tree = index.build_trees(value)?
@@ -161,7 +181,9 @@ fn pick_commit(
         return pick_empty(ctx, item)?
     }
     var originally_empty = item.parents.len == 0 && mergetree.files(ctx.repo, item.id)?.len == 0
-    if item.parents.len == 1 { originally_empty = oid.equal(item.tree, walk.read(ctx.repo, item.parents[0])?.tree) }
+    if item.parents.len == 1 {
+        originally_empty = oid.equal(item.tree, walk.read(ctx.repo, item.parents[0])?.tree)
+    }
     if direct then commit.run_pick(args, !originally_empty) else commit.run(args)
 }
 
@@ -291,7 +313,10 @@ fn pick_reset(ctx: worktree.Context, target: oid.Oid) -> () ! commit.CommitError
         "reset",
         "moving to {oid.hex(target)?}".bytes(),
     ) else |e| match e {
-        Fatal(text) => { cleanup_state(ctx); return Failure("update_ref failed for ref 'HEAD': {text}") },
+        Fatal(text) => {
+            cleanup_state(ctx)
+            return Failure("update_ref failed for ref 'HEAD': {text}")
+        },
         _ => { return Fatal("reset publication: {e}") },
     }
     cleanup_state(ctx)
@@ -305,17 +330,17 @@ fn pick_steps(
 ) -> int ! commit.CommitErrors {
     for at in 0..steps.len {
         region replay_step {
-        if persistent { replay_write(ctx, "sequencer/todo", sequencer.render(steps[at..])?)? }
-        let item = walk.read(ctx.repo, replay_target(ctx, steps[at].name)?)?
-        let result = pick_one(ctx, item, options, false)?
-        if persistent {
-            replay_write(
-                ctx,
-                "sequencer/abort-safety",
-                "{oid.hex(worktree.head(ctx)?.commits[0])?}\n".bytes(),
-            )?
-        }
-        if result != 0 { return result }
+            if persistent { replay_write(ctx, "sequencer/todo", sequencer.render(steps[at..])?)? }
+            let item = walk.read(ctx.repo, replay_target(ctx, steps[at].name)?)?
+            let result = pick_one(ctx, item, options, false)?
+            if persistent {
+                replay_write(
+                    ctx,
+                    "sequencer/abort-safety",
+                    "{oid.hex(worktree.head(ctx)?.commits[0])?}\n".bytes(),
+                )?
+            }
+            if result != 0 { return result }
         }
     }
     if persistent { sequence_remove(ctx)? }
@@ -344,13 +369,18 @@ fn pick_resume(ctx: worktree.Context, action: str) -> int ! commit.CommitErrors 
     let stopped = fs.exists("{ctx.repo.gitdir}/CHERRY_PICK_HEAD")
     if !persistent && !stopped {
         if action == "--continue" { replay_refresh(ctx)? }
-        if action == "--skip" { eprint("error: no cherry-pick in progress") }
-        else { eprint("error: no cherry-pick or revert in progress") }
+        if action == "--skip" {
+            eprint("error: no cherry-pick in progress")
+        } else {
+            eprint("error: no cherry-pick or revert in progress")
+        }
         return Fatal("cherry-pick failed")
     }
     if persistent {
         replay_state_scope(ctx, "sequencer", ["head", "todo", "abort-safety", "opts"])?
-        if action == "--abort" && replay_read(ctx, "sequencer/abort-safety")?.trim() != oid.hex(worktree.head(ctx)?.commits[0])? {
+        if action == "--abort" &&
+            replay_read(ctx, "sequencer/abort-safety")?.trim() !=
+                oid.hex(worktree.head(ctx)?.commits[0])? {
             return Unsupported("cherry-pick abort moved HEAD")
         }
     }
@@ -371,13 +401,20 @@ fn pick_resume(ctx: worktree.Context, action: str) -> int ! commit.CommitErrors 
     if persistent { steps = sequencer.parse(replay_read(ctx, "sequencer/todo")?.bytes())? }
     var options = PickOptions { allow_empty: false, empty: "stop" }
     if fs.exists("{ctx.repo.gitdir}/sequencer/opts") {
-        let saved = repository.parse_config(replay_read(ctx, "sequencer/opts")?) else |_| { return Unsupported("cherry-pick invalid persisted options") }
+        let saved = repository.parse_config(replay_read(ctx, "sequencer/opts")?) else |_| {
+            return Unsupported("cherry-pick invalid persisted options")
+        }
         for option in saved {
             if option.value != "true" { return Unsupported("cherry-pick persisted option value") }
-            if option.key == "options.allow-empty" { options.allow_empty = true }
-            else if option.key == "options.keep-redundant-commits" { options.empty = "keep" }
-            else if option.key == "options.drop-redundant-commits" { options.empty = "drop" }
-            else { return Unsupported("cherry-pick persisted option {option.key}") }
+            if option.key == "options.allow-empty" {
+                options.allow_empty = true
+            } else if option.key == "options.keep-redundant-commits" {
+                options.empty = "keep"
+            } else if option.key == "options.drop-redundant-commits" {
+                options.empty = "drop"
+            } else {
+                return Unsupported("cherry-pick persisted option {option.key}")
+            }
         }
     }
     if action == "--abort" || action == "--skip" {

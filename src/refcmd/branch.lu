@@ -19,8 +19,13 @@ fn context() -> worktree.Context ! commit.CommitErrors {
 }
 
 fn controls(ctx: worktree.Context, command: str) -> () ! commit.CommitErrors {
-    if command == "branch" || command == "switch" || command == "checkout" || command == "merge" || command == "revert" {
-        if fs.exists("{ctx.repo.gitdir}/rebase-merge") || fs.exists("{ctx.repo.gitdir}/rebase-apply") {
+    if command == "branch" ||
+        command == "switch" ||
+        command == "checkout" ||
+        command == "merge" ||
+        command == "revert" {
+        if fs.exists("{ctx.repo.gitdir}/rebase-merge") ||
+            fs.exists("{ctx.repo.gitdir}/rebase-apply") {
             return Unsupported("{command} in-progress rebase")
         }
     }
