@@ -4,9 +4,10 @@ A version control system in [wolf](https://github.com/wolffe-lang/wolf-lang),
 working toward Git-compatible repositories and wire protocols. Where a wolf
 keeps what it has.
 
-**State: loose objects, a writable index, worktree/commit commands, bounded diff and history.**
+**State: loose objects, a writable index, worktree/commit commands, bounded diff, history and refs.**
 This is not a replacement for Git, and M2 is not complete. Log/show support
-bounded loose history; combined merge display, general ref operations, packs
+bounded loose history; branches, tags, branch switching and resets now share
+loose/packed ref storage. Combined merge display, merge/rebase, packs
 and transports remain unfinished. Text diff has
 two recorded equal-cost alignment differences; binary patches reconstruct the
 exact blobs but do not always use Git's byte representation. `den --version`
@@ -26,7 +27,7 @@ measured bytes and documentation discrepancies.
 
 Archive and oracle pins are in `wolf-toolchain.toml` and `den-oracle.toml`.
 Downloads fail on a digest mismatch. Both release-metadata reads are retained
-in `notes/vc05-evidence/pins/` (earlier reads in `notes/vc04-evidence/pins/`); the original signature verification and two matching
+in `notes/vc06-evidence/pins/` (earlier reads in `notes/vc05-evidence/pins/`); the original signature verification and two matching
 oracle builds are in `notes/vc00-evidence/`.
 
 ## Commands implemented so far
@@ -38,10 +39,12 @@ oracle builds are in `notes/vc00-evidence/`.
 | Config / ignore | Read-only `config --get`; `check-ignore` with provenance, negation, tracked-file bypass and `--no-index` |
 | Worktree | `add` paths/directories, `-A`, `-u`, `--ignore-removal`, `-f`, `-N`, `--chmod`; `rm`, `mv` and their implemented safety/force/recursive options |
 | Status | Human, short and porcelain v1, branch/unborn/detached headings, NUL output, untracked grouping and ignored paths |
-| Commit | Ordered `-m`, `-F`, `-a`, `--amend`, `--reset-author`, `--author`, fixed `--date`, cleanup modes, quiet and allow-empty options; attached loose branch/ref/reflog updates |
+| Commit | Ordered `-m`, `-F`, `-a`, `--amend`, `--reset-author`, `--author`, fixed `--date`, cleanup modes, quiet and allow-empty options; attached/detached HEAD and loose-over-packed branch updates |
 | Diff | Worktree/index, `--cached`, two loose commits/trees or blobs; unified context, final-newline markers, modes, binary patches, stat/name forms, rename/copy detection and common pathspec magic |
 | History | `log` default/oneline/short/full/fuller, `-n`, `--skip`, `--reverse`, `--first-parent`, fixed date formats, patch/stat; `show` loose commits, trees, blobs, annotated tags and `REV:path` |
-| Restore | Index-to-worktree `restore`, `--staged`, `--worktree`, `--source`; `checkout -- <paths>` only, not branch checkout |
+| Restore | Index-to-worktree `restore`, `--staged`, `--worktree`, `--source`; `checkout -- <paths>` |
+| Refs | Loose and packed refs with peeled tag records; branch list/create/force/delete/rename, lightweight and message-supplied annotated tags, command reflogs |
+| Branch worktree | `switch` and branch `checkout`, `-c`/`-b` creation, explicit and implicit detached HEAD, dirty-worktree protection; `reset --soft/--mixed/--hard` |
 
 Status, commit summaries and diff share one rename/copy pairer. Exact OIDs are
 matched first; edited regular files use measured chunk-hash similarity, with
@@ -63,6 +66,8 @@ headers, literal sizes, blob identities and framing remain exact or validated.
 Run `tools/gate` inside the pinned Ubuntu container, holding the assigned
 core-block lock and applying `taskset` inside the container. Rootless hosts
 without delegated cpusets must not rely on pinning only the outer process.
+Keep the CI build mount `/work/den`: the default oracle binary's pinned digest
+also depends on its build path, not merely the base image and version.
 The gate checks formatting, builds native/release binaries, runs actual checked
 programs, constructs the corpus twice, compares against the pinned oracle and
 builds the static Linux archive. `tools/mkden OUTDIR` checks ET_EXEC/no PT_INTERP
@@ -79,6 +84,7 @@ tools/check-ignore
 tools/check-worktree
 tools/check-commit
 tools/check-history
+tools/check-refs
 tools/check-delta
 tools/check-rename
 tools/check-diff
@@ -95,7 +101,7 @@ full repository-byte comparisons. Formatting/date API comparisons are not a
 claim of CLI stderr/exit-status parity. A checked result means the JSON verdict
 from `wolf conform-run --checked`, not merely a successful process exit.
 
-The expanded main matrix contains 188 cases: 170 parity, 17 named not-yet and
+The expanded main matrix contains 188 cases: 173 parity, 14 named not-yet and
 one version-shape check. Generated diff, similarity, pairing and application
 matrices are reported separately in `notes/vc04-evidence/`; their explicit
 representation/alignment differences are never added to the parity count.
@@ -178,7 +184,25 @@ mailmaps and tabs after non-ASCII text remain named unsupported surfaces.
 Fixed dates include default, short, raw, unix, ISO, strict ISO and RFC forms;
 UTC-local variants are measured. None of these limitations is a parity pass.
 
-Commit writes target an attached loose branch, not detached HEAD. Amend retains
+The refs gate separately compares 430 command/state rows per native tier,
+with eight named unsupported cases kept outside that count, fourteen independent
+client checks, and two bounded actual-checked programs. It compares command
+output, exit status, objects, HEAD, loose/packed refs, reflogs, index and worktree
+state on native and release.
+Branch/tag listing patterns, tracking configuration, overlapping rename paths,
+merge-mode checkout, orphan branches and general revision grammar stay outside
+this bounded surface. Explicit unsupported cases are counted separately.
+
+Ref commands accept HEAD, full ref names, short branch/tag names, full OIDs and
+unambiguous loose-object prefixes. They do not add ancestry, ranges, reflog
+selectors or previous-checkout syntax. Packed files are bounded at 16 MiB and
+100,000 records; a listing is bounded at 4,096 entries. Tree transitions refuse
+higher-stage or flagged index entries and submodules rather than losing their
+metadata. `switch` protects in-progress operations; `reset --soft` refuses an
+in-progress merge. Reflog management/expiry commands remain future work.
+
+Commit writes support attached and detached HEAD. Loose refs override packed
+records; an unchanged packed tip is not needlessly unpacked. Amend retains
 the existing parents and normally its author; it does not change ORIG_HEAD.
 Index/ref/reflog publication is not a multi-file atomic transaction. An ordinary
 commit can refresh the index before a message/editor abort, whereas `commit -a`
