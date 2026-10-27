@@ -1,0 +1,109 @@
+[
+     {
+          "Id": "f59d9fe871ff769948fb33a83d9eb8e16bea271b17a6c2a10f50043a314d928e",
+          "Digest": "sha256:239ba34b8a0eb302f34f98f8050d432964f44e39b7392435206e82bc94225e00",
+          "RepoTags": [
+               "localhost/den-vc06-oracle:latest",
+               "localhost/den-vc03:latest"
+          ],
+          "RepoDigests": [
+               "localhost/den-vc03@sha256:239ba34b8a0eb302f34f98f8050d432964f44e39b7392435206e82bc94225e00",
+               "localhost/den-vc06-oracle@sha256:239ba34b8a0eb302f34f98f8050d432964f44e39b7392435206e82bc94225e00"
+          ],
+          "Parent": "704f8898dc3ea10c5926a5f355c1c034d4d624f9d82145348ec7718c04284277",
+          "Comment": "",
+          "Created": "2026-10-24T22:31:21.540178786Z",
+          "Config": {
+               "Env": [
+                    "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                    "LC_ALL=C",
+                    "CARGO_INCREMENTAL=0"
+               ],
+               "Cmd": [
+                    "/bin/bash"
+               ],
+               "WorkingDir": "/work/den",
+               "Labels": {
+                    "io.buildah.version": "1.43.5",
+                    "org.opencontainers.image.version": "24.04"
+               }
+          },
+          "Version": "",
+          "Author": "",
+          "Architecture": "amd64",
+          "Os": "linux",
+          "Size": 1184463503,
+          "VirtualSize": 1184463503,
+          "GraphDriver": {
+               "Name": "overlay",
+               "Data": {
+                    "LowerDir": "/home/mfwolffe/lanes/hasu-env/storage/overlay/d81fb2a7c6ee3be05fdefaa7fd223be219c1ab172083ec1b994c3ecda33ac0a8/diff",
+                    "UpperDir": "/home/mfwolffe/lanes/hasu-env/storage/overlay/88cac84360548ecdbc36d50bfcf8dd58562446b2a7a25df5d9af9899ecf19423/diff",
+                    "WorkDir": "/home/mfwolffe/lanes/hasu-env/storage/overlay/88cac84360548ecdbc36d50bfcf8dd58562446b2a7a25df5d9af9899ecf19423/work"
+               }
+          },
+          "RootFS": {
+               "Type": "layers",
+               "Layers": [
+                    "sha256:d81fb2a7c6ee3be05fdefaa7fd223be219c1ab172083ec1b994c3ecda33ac0a8",
+                    "sha256:5832fa3b620eb36ca3c43309863c129d0569305d319aa569969ae2c4f1fb043f"
+               ]
+          },
+          "Labels": {
+               "io.buildah.version": "1.43.5",
+               "org.opencontainers.image.version": "24.04"
+          },
+          "Annotations": {
+               "org.opencontainers.image.base.digest": "sha256:f610ab94648195aa356059f5b41d6085c9d4d903c072430cdd1af7bdb646106b",
+               "org.opencontainers.image.base.name": "docker.io/library/ubuntu@sha256:534baea6a22c03a63003dbc8dbe78fe34bc0d7e595d9a9dc9834884ff530eb55",
+               "org.opencontainers.image.created": "2026-10-24T22:31:21.540178786Z"
+          },
+          "ManifestType": "application/vnd.oci.image.manifest.v1+json",
+          "User": "",
+          "History": [
+               {
+                    "created": "2026-09-18T21:20:35.594318434Z",
+                    "created_by": "/bin/sh -c #(nop)  ARG RELEASE",
+                    "empty_layer": true
+               },
+               {
+                    "created": "2026-09-18T21:20:35.618842266Z",
+                    "created_by": "/bin/sh -c #(nop)  ARG LAUNCHPAD_BUILD_ARCH",
+                    "empty_layer": true
+               },
+               {
+                    "created": "2026-09-18T21:20:35.647177412Z",
+                    "created_by": "/bin/sh -c #(nop)  LABEL org.opencontainers.image.version=24.04",
+                    "empty_layer": true
+               },
+               {
+                    "created": "2026-09-18T21:20:37.722192569Z",
+                    "created_by": "/bin/sh -c #(nop) ADD file:6c214fc3c3c22122c7eb68f7fb32783df308e60b1eaeb9baf7e4d0cc961d448d in / "
+               },
+               {
+                    "created": "2026-09-18T21:20:38.103397332Z",
+                    "created_by": "/bin/sh -c #(nop)  CMD [\"/bin/bash\"]",
+                    "empty_layer": true
+               },
+               {
+                    "created": "2026-10-24T22:31:16.127664776Z",
+                    "created_by": "/bin/sh -c apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends build-essential cargo rustc binutils clang lld ca-certificates curl git gnupg python3 gettext libssl-dev libcurl4-openssl-dev libexpat1-dev zlib1g-dev perl tcl libz-dev time xz-utils openssl && rm -rf /var/lib/apt/lists/*",
+                    "comment": "FROM docker.io/library/ubuntu@sha256:534baea6a22c03a63003dbc8dbe78fe34bc0d7e595d9a9dc9834884ff530eb55"
+               },
+               {
+                    "created": "2026-10-24T22:31:21.403147532Z",
+                    "created_by": "/bin/sh -c #(nop) ENV LC_ALL=C CARGO_INCREMENTAL=0",
+                    "empty_layer": true
+               },
+               {
+                    "created": "2026-10-24T22:31:21.540597478Z",
+                    "created_by": "/bin/sh -c #(nop) WORKDIR /work/den",
+                    "empty_layer": true
+               }
+          ],
+          "NamesHistory": [
+               "localhost/den-vc03:latest",
+               "localhost/den-vc06-oracle:latest"
+          ]
+     }
+]

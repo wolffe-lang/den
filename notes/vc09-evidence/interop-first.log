@@ -1,0 +1,38 @@
+corpus: 16 repositories
+pack structural: 141/141; zero skips
+pack interop binary ofs 5
+pack interop binary ref 5
+pack interop empty ofs 2
+pack interop empty ref 2
+pack interop linear ofs 31
+pack interop linear ref 31
+pack interop m2-amend ofs 9
+pack interop m2-amend ref 9
+pack interop m2-edited-rename ofs 5
+pack interop m2-edited-rename ref 5
+pack interop m2-ignore ofs 4
+pack interop m2-ignore ref 4
+pack interop m2-index-v4 ofs 4
+pack interop m2-index-v4 ref 4
+pack interop m2-modes ofs 6
+pack interop m2-modes ref 6
+pack interop m2-staged-rename ofs 4
+pack interop m2-staged-rename ref 4
+pack interop m2-unborn ofs 0
+pack interop m2-unborn ref 0
+pack interop merge ofs 12
+pack interop merge ref 12
+pack interop packed ofs 31
+pack interop packed ref 31
+pack interop rename ofs 6
+pack interop rename ref 6
+pack interop symlink ofs 5
+pack interop symlink ref 5
+pack interop thousand ofs 1002
+pack interop thousand ref 1002
+pack interop two ofs 4
+pack interop two ref 4
+pack interop generated ofs 91
+pack interop generated ref 91
+pack interop: 2442/2442 exact raw objects; 34 packed fixtures; zero skips
+{"commit":"cf0c13d","diagnostics":[],"file":"src/pack_test.lu","impl":"wolfgang","impl_version":"0.2.35","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"pack: crc and bounded delta units\n","stdout_sha256":"631d57d479885bc7bbb3ddc8bda424d7202b33c463611148b0c37783137f7cb0","verdict":"exit(0)","warnings":[]}

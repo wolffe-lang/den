@@ -1,0 +1,22 @@
+[
+  {
+    "args": [
+      "index-pack",
+      "--index-version=2,1",
+      "/work/den/target/vc09-threshold-probe/.git/objects/pack/pack-55c72f3d7e037d65f9e700f9204dd613c225b257.pack"
+    ],
+    "status": 0,
+    "stdout": "55c72f3d7e037d65f9e700f9204dd613c225b257\n",
+    "stderr": ""
+  },
+  {
+    "args": [
+      "cat-file",
+      "--batch-all-objects",
+      "--batch-check=%(objectname)"
+    ],
+    "status": 0,
+    "stdout": "",
+    "stderr": "error: wrong index v2 file size in .git/objects/pack/pack-55c72f3d7e037d65f9e700f9204dd613c225b257.idx\n"
+  }
+]

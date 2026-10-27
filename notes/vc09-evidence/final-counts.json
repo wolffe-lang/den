@@ -1,0 +1,150 @@
+{
+  "tiers": {
+    "native": {
+      "structural": {
+        "exact": 141,
+        "total": 141
+      },
+      "interop": {
+        "objects": 2442,
+        "exact": 2442,
+        "fixtures": 34,
+        "entry_types": {
+          "1": 134,
+          "2": 132,
+          "3": 2108,
+          "4": 2,
+          "6": 33,
+          "7": 33
+        }
+      },
+      "history": {
+        "exact": 575,
+        "total": 575,
+        "named": 8,
+        "clients": 3
+      },
+      "refs": {
+        "exact": 434,
+        "total": 434
+      },
+      "refs_scope": {
+        "named": 8
+      },
+      "merge": {
+        "exact": 117,
+        "named": 12,
+        "total": 129
+      },
+      "replay": {
+        "exact_scenarios": 89,
+        "named": 20,
+        "total": 109,
+        "process_comparisons": 150
+      }
+    },
+    "release": {
+      "structural": {
+        "exact": 141,
+        "total": 141
+      },
+      "interop": {
+        "objects": 2442,
+        "exact": 2442,
+        "fixtures": 34,
+        "entry_types": {
+          "1": 134,
+          "2": 132,
+          "3": 2108,
+          "4": 2,
+          "6": 33,
+          "7": 33
+        }
+      },
+      "history": {
+        "exact": 575,
+        "total": 575,
+        "named": 8,
+        "clients": 3
+      },
+      "refs": {
+        "exact": 434,
+        "total": 434
+      },
+      "refs_scope": {
+        "named": 8
+      },
+      "merge": {
+        "exact": 117,
+        "named": 12,
+        "total": 129
+      },
+      "replay": {
+        "exact_scenarios": 89,
+        "named": 20,
+        "total": 109,
+        "process_comparisons": 150
+      }
+    }
+  },
+  "captures": {
+    "structural-native.json.gz": {
+      "sha256": "e690d794578e5c6b5e370d54c85b7b422a1aa60c55174d57ab16ebfc7d142f84",
+      "uncompressed_bytes": 26003
+    },
+    "interop-native.json.gz": {
+      "sha256": "c8a06eb59f7ceabd26b81d32dc80fe9020f15025b21497d75f8725cc56bfdb5f",
+      "uncompressed_bytes": 1171630
+    },
+    "history-native.json.gz": {
+      "sha256": "191ce68f1b5a0278d9b26a2beaf937dd9d4477d7147ea66b860542145a8133f2",
+      "uncompressed_bytes": 714612
+    },
+    "refs-native.json.gz": {
+      "sha256": "53cfac247b1d1ed38491542dcc07102b47123910d3454cf823f8f0d301409a78",
+      "uncompressed_bytes": 8779881
+    },
+    "refs_scope-native.json.gz": {
+      "sha256": "9b1520d7f45698d7bd103abd63fc25a02f2a5e434697a6b2ec28e940a43b39ad",
+      "uncompressed_bytes": 143836
+    },
+    "merge-native.json.gz": {
+      "sha256": "2e134b4c466cc7b70b0e879eb7c9e25f07ffd0a6c1a6341fbcebfb8ecd8b4de1",
+      "uncompressed_bytes": 3273944
+    },
+    "replay-native.json.gz": {
+      "sha256": "02742b939a5a8ccdcacf510c32ce0970ef24290519dafd8f24f7061486e386fd",
+      "uncompressed_bytes": 6013193
+    },
+    "structural-release.json.gz": {
+      "sha256": "e690d794578e5c6b5e370d54c85b7b422a1aa60c55174d57ab16ebfc7d142f84",
+      "uncompressed_bytes": 26003
+    },
+    "interop-release.json.gz": {
+      "sha256": "be566e905c7b2a708d126707d553eae3d1be811413ea12323e21f9aa5492d873",
+      "uncompressed_bytes": 1171665
+    },
+    "history-release.json.gz": {
+      "sha256": "187fda86ba6486fcac271a3c8758d2fb344412b5d5500536b322174dc0b9bec0",
+      "uncompressed_bytes": 714613
+    },
+    "refs-release.json.gz": {
+      "sha256": "cf212f37407a9c1513db13333371362cb07d41bc86df179786f8bae83bb59d9a",
+      "uncompressed_bytes": 8779994
+    },
+    "refs_scope-release.json.gz": {
+      "sha256": "f9935cebac8990accf7a2dbc0b30b4989eedb9690c80390b80b60797bb98e9fc",
+      "uncompressed_bytes": 143836
+    },
+    "merge-release.json.gz": {
+      "sha256": "3a7143c475f095e655702fcf05404e6784ee9820cf609c9ca73ff6fecb1075e3",
+      "uncompressed_bytes": 3273996
+    },
+    "replay-release.json.gz": {
+      "sha256": "e0391350ee6ea5089cbf1369a7faffc2c27dd823e93dd9246107d4a761ec3d43",
+      "uncompressed_bytes": 6013312
+    }
+  },
+  "checked_verdict": "exit(0)",
+  "zero_new_skips": true
+}

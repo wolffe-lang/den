@@ -1,0 +1,8 @@
+vc09 final gauntlet accounting
+Functional head: 28ae0ea9f1784515d53eda410ac50c4b586d104f.
+Window from raw log: 2026-10-27 19:35:57 through 19:52:03 UTC, hasu block A.
+Exactly one complete tools/gate invocation. It returned 0: bash -ec continued to the following input verifier after both identical static builds and the gate's EXIT evidence collection.
+The enclosing runner returned 1, preserved as FINAL EXIT 1 in final-gate.log. Its final-inputs.py accidentally hashed compiler-generated .lu-cache files as inputs. The post-run assertion names only generated .lu-cache additions/changes, not source changes. This failure is not relabelled as a zero wrapper exit.
+The original 550-entry final-inputs.json and failed verifier are retained unchanged. verify-functional.py excludes only generated cache paths, checks the entire remaining path set both ways, and adds the five tests/ files independently bound to the functional Git head. It verifies 318 unchanged functional inputs. Both hasu and the final Mac tree are checked with it; verified-functional-inputs.json retains the original manifest hash and all verified hashes.
+No functional source or expected command result was changed after the complete gate. No second gauntlet was run.
+Native/release counts derive from retained full compressed captures via counts.py. pack-checked.json is the actual checked machine's exit(0), not wolf run --checked.
