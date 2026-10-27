@@ -129,7 +129,9 @@ fn role_date(role: str) -> commit_format.Date ! CommitErrors {
     selected_date(date)?
 }
 
-fn environment_identity(
+/// Resolve identity from environment/config using the commit date parser.
+/// The caller supplies a worktree context only for its repository configuration.
+pub fn environment_identity(
     ctx: worktree.Context,
     role: str,
     override_date: str,

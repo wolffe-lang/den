@@ -1,0 +1,16 @@
+pkg {
+    name: "refcmd",
+    edition: "1",
+    capabilities: [env, fs],
+    deps: {
+        commit: {path: "../commit"},
+        commit_format: {path: "../commit_format"},
+        history: {path: "../history"},
+        object: {path: "../object"},
+        oid: {path: "../oid"},
+        refs: {path: "../refs"},
+        repository: {path: "../repository"},
+        walk: {path: "../walk"},
+        worktree: {path: "../worktree"},
+    },
+}
