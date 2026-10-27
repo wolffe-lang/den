@@ -1,0 +1,11 @@
+vc08 prediction, before implementation
+
+Cherry-pick replays parent-to-commit changes onto HEAD, preserves the source author identity/date, and supplies the current committer identity/date. Its reflog uses cherry-pick rather than ordinary commit wording. A conflict publishes worktree markers, stages and CHERRY_PICK_HEAD before returning nonzero. A resolved continuation records REUC through the existing add/index boundary. Abort restores the initial tip; skip must not accidentally commit the stopped change.
+
+A list of picks has durable sequencer head/todo metadata; one pick may use only CHERRY_PICK_HEAD. Linear rebase detaches HEAD at onto, stores original branch/tip/upstream and progress, then updates the original branch at completion. Failure after index/worktree or reflog publication is not atomic rollback. Foreign locks must preserve their bytes, while earlier published state is compared explicitly.
+
+Originally empty picks differ from changes made redundant by the destination history. Default, allow-empty and keep-redundant options must be measured separately. Rebase's empty handling may differ from cherry-pick's. Rebase --onto selects upstream-exclusive linear history, not a guessed timestamp slice.
+
+Reuse owned walk, mergetree plan, index transactions, refs, commit boundaries and shared rename scorer. Retain explicit prewrite refusals for dirty true-replay recovery, repeated-anchor/multi-hunk histogram ambiguity, recursive bases, rename topology, nonregular/binary/modify-delete conflicts until individually proved. Interactive rebase, real merge replay, editor execution and general revision grammar remain named boundaries. No arbitrary-replay or M3-complete claim.
+
+Predict exact complete-state native/release matrices plus independent importing client and bounded actual-checked sequencer units; record all disagreements and named non-parity captures without altering expected oracle bytes. Preserve inherited M2 limitations and the eight hunk contexts / 96 binary representation exceptions.
