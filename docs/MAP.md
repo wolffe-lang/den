@@ -2,8 +2,8 @@
 
 The codec, owned OIDs, bounded loose store and binary parsers underpin the
 index/worktree/commit interface and diff. The dispatcher routes the implemented
-porcelain, plumbing, diff, bounded log/show, ref commands and merge/revert.
-Combined merge show, recursive/complex merges, rebase, packs and transports
+porcelain, plumbing, diff, bounded log/show, ref commands, merge/revert and replay.
+Combined merge show, recursive/complex merges, full replay semantics, packs and transports
 remain separate work; M2 and M3 are not complete. Diff's known hunk
 alignment differences and binary representation exceptions are explicit below,
 not a blanket byte-parity claim.
@@ -145,8 +145,8 @@ is needed beyond referring to the equivalent `DeflateErrors` alias.
 fixtures plus ignore, staged rename, modes/symlink, unborn, amend, index-v4 and
 edited-rename states. The original nine builders remain unchanged. The two
 independent corpus builds compare OID manifests, not inode-dependent stat data.
-`tests/cases.json` defines 188 main cases; its latest measured main comparison
-is 174 parity / 13 named not-yet / 1 version-shape / 0 reviewed / 0 failures.
+`tests/cases.json` defines 190 main cases; its latest measured main comparison
+is 176 parity / 13 named not-yet / 1 version-shape / 0 reviewed / 0 failures.
 Implemented diff and edited-rename cases require parity and cannot regress to
 a named refusal unnoticed. Generated component matrices remain separately
 counted. Historical vc03 counts and 636 stat-proof rows are retained in
@@ -784,6 +784,61 @@ internal recovery commits and transient stat writes are additional observable
 state, not permission to ignore those files. The full gate runs `check-merge`.
 
 M2's combined merge show/editor/history limits and the two hunk witnesses/eight
-contexts plus 96 binary representations are unchanged. Sequencer commands,
-revert mainline selection and the recursive/rename/alignment limits above remain
+contexts plus 96 binary representations are unchanged. Revert sequences and
+mainline selection and the recursive/rename/alignment limits above remain
 follow-on work; a green bounded merge matrix does not complete M3.
+
+## Replay and durable progress (vc08)
+
+`sequencer.Step {name, subject}` owns a lowercase full/prefix SHA-1 name and a
+single physical subject line. `parse(data)` accepts pick records and comments;
+other commands, malformed names, NUL/CR, invalid UTF-8, data above 16 MiB and
+more than 100,000 records are errors. `render(steps)` validates and returns owned
+LF-terminated records. Neither API reads repositories or executes instructions.
+`empty_action(originally_empty, allow_empty, policy)` distinguishes initially
+empty commits from changes made redundant at the destination.
+
+`line_sum(data)` returns a wrapping-u64 sum of whitespace-normalized line
+checksums, bounded at 16 MiB. Equal net changes are only *possible* upstream
+patch equivalence. Default rebase refuses such a match; collisions and ignored
+path/order information can cause additional refusals, never dropped commits.
+This is not Git's patch-id algorithm. Explicit `--reapply-cherry-picks` bypasses
+that preselection guard; the tree merge and empty-result policies still apply.
+
+The refcmd replay controller uses owned `walk.Commit`, `mergetree.plan`, index
+transactions, `worktree.transition`/`abort_merge`, refs and commit publication.
+It never uses `index.write_tree` for history reads, forks the rename scorer or
+invokes Git. Selected commit data is bounded at 128 MiB. Applied steps reclaim
+scratch between commits; later unsupported trees retain earlier published
+commits and progress rather than claiming whole-sequence rollback.
+
+Single cherry-picks use CHERRY_PICK_HEAD/MERGE_MSG/AUTO_MERGE. Explicit lists add
+sequencer/head, todo, abort-safety and options. Rebase uses rebase-merge/head-name,
+onto, orig-head, todo/backup, done, end/msgnum, author-script, stopped-sha,
+message, patch and rewritten-list as measured. The author-script file is inert
+data. Unknown state files and unsupported todo commands are refused. State
+metadata writes use exclusive locks, sync, rename and directory sync; this is not an
+atomic transaction spanning worktree, index, objects, reflogs and refs.
+
+Automatic picks preserve original author/date while resolving the current
+committer. Direct versus ordinary commit completion have distinct reflog and
+COMMIT_EDITMSG/AUTO_MERGE lifecycles. The ordinary commit edge consumes resolved
+CHERRY_PICK_HEAD and preserves author provenance. Rebase skip/abort restores
+hard, unlike cherry-pick's merge-style reset. HEAD-lock failures can leave the
+new index/worktree visible; initial and recovery failure phases are compared.
+
+`tools/check-replay` is mandatory. Per native/release tier it measures 89 exact
+complete-state scenarios, 20 separately named scope captures, and 136 independent
+importing-client checks. One bounded actual-checked program covers records,
+empty policy and the conservative checksum. Each intermediate process result is
+compared in multi-step scenarios; no repository file or index is excluded.
+
+Named limits include editor-dependent staged rebase continuation (explicitly
+commit the resolution first, then continue), dirty cherry-pick recovery and
+AUTO_MERGE-lock transient stat history, possible upstream equivalence, foreign
+or changed operation state, non-default replay configuration, apply/interactive
+backends, real merge replay, branch/upstream inference and a separate branch
+operand. The inherited repeated-line/multi-hunk, rename, nonregular, binary and
+modify/delete boundaries remain; recursive true-merge bases and dirty true-merge
+recovery are not closed by this lane. General revision grammar stays vc10.
+M2 editor/combined-show/history limits and all diff exceptions remain open.

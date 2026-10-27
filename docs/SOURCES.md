@@ -325,3 +325,50 @@ metadata. Those inputs now refuse without mutation and remain named non-parity
 captures; no files were excluded or oracle expectations changed to excuse them.
 The default tree consumer refuses repeated-base-line and multi-hunk ambiguity
 rather than claiming the file API's Myers result is generally ort-compatible.
+
+## Cherry-pick, rebase and sequencer (vc08)
+
+Read the versioned Git v2.56.0 Documentation pages, not implementation files:
+
+- git-cherry-pick(1), Description, Options (authoring, empty commits, redundant
+  commits and no-commit), Sequencer Subcommands and Examples.
+- git-rebase(1), Description, Transplanting a Topic Branch with --onto, Mode
+  Options, Options, Behavioral Differences, Interactive Mode and Rebasing Merges.
+  Interactive, apply and real-merge replay remain named refusals.
+- git-revert(1), Description, Options and Sequencer Subcommands; sequencer.adoc
+  in full for continue, skip, quit and abort semantics.
+- gitrepository-layout(5), Description, especially HEAD, refs and logs. This
+  page does not specify the sequencer/rebase metadata schema; those bytes were
+  measured, not attributed to an absent documentation section.
+- git-commit(1), Commit Information, Environment and Configuration Variables,
+  and Files: source author versus current committer, editor selection and
+  COMMIT_EDITMSG lifetime. Existing identity/date parsers remain shared.
+- git-reflog(1), Description and Options, especially HEAD's branch-switch records.
+
+No new gitformat-* or gitprotocol-* parser was introduced. Existing object,
+index/REUC, ref and worktree documentation remains authoritative. Implementation
+references are den's own walk, mergetree/file, index, refs, commit and diff APIs;
+there is no Git, shell, Python or external codec dependency in production.
+
+The independent replay matrix captures every intermediate process's output,
+status and complete repository/worktree state. Measurements distinguish direct
+and continued cherry-pick messages/reflogs, initially empty versus redundant
+commits, progress files, rebase's inert author-script, hard versus merge-style
+recovery, and ref failures after index/worktree publication. Rebase backup-help
+text is measured command output, not copied implementation source.
+
+The initial generic commit guard still rejected CHERRY_PICK_HEAD; retained reds
+led to its measured removal. Further retained discrepancies corrected object
+publication before dirty/untracked errors, empty direct-path COMMIT_EDITMSG,
+index refresh on early exits, recovery diagnostics and failure cleanup order.
+Foreign AUTO_MERGE locks and dirty cherry-pick recovery expose stat values from
+an earlier observation than the inherited stat proof permits. They now refuse
+before writes rather than excluding the index or inventing a proof.
+
+Default rebase uses an original conservative net-line checksum only to refuse
+possible upstream patch equivalence. It is deliberately not a patch-id
+implementation: path/order omissions and collisions can refuse extra inputs,
+never discard commits. Explicit reapplication is measured separately. Actual
+editor-dependent continuation remains named; the resolution-commit-then-continue
+workflow is compared exactly. No oracle expectation was rewritten to fit a
+byte discrepancy.
