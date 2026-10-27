@@ -118,6 +118,20 @@ fn pick_empty(ctx: worktree.Context, item: walk.Commit) -> int ! commit.CommitEr
     1
 }
 
+fn replay_unmerged(ctx: worktree.Context, value: index.Index, rebasing: bool) -> bool ! commit.CommitErrors {
+    var previous = "", found = false
+    let high = worktree.config_bool(ctx, "core.quotepath", true)?
+    for entry in value.entries {
+        if index.stage(entry) == 0 { continue }
+        let name = str_from_utf8(worktree.quote(entry.path, high, false))?
+        if found && name == previous { continue }
+        print(if rebasing then "{name}: needs merge" else "U\t{name}")
+        previous = name
+        found = true
+    }
+    found
+}
+
 fn pick_commit(
     ctx: worktree.Context,
     item: walk.Commit,
@@ -127,6 +141,10 @@ fn pick_commit(
     var args = ["commit", "--no-edit", "--cleanup=strip", "-F", "{ctx.repo.gitdir}/MERGE_MSG"]
     if allow { (mut args).push("--allow-empty") }
     let value = worktree.read_index(ctx)?
+    if replay_unmerged(ctx, value, false)? {
+        eprint("error: Committing is not possible because you have unmerged files.\nhint: Fix them up in the work tree, and then use 'git add/rm <file>'\nhint: as appropriate to mark resolution and make a commit.")
+        return Fatal("Exiting because of an unresolved conflict.")
+    }
     let tree = index.build_trees(value)?
     let head = worktree.head(ctx)?
     if !allow && oid.equal(tree.root, walk.read(ctx.repo, head.commits[0])?.tree) {
@@ -262,7 +280,10 @@ fn pick_reset(ctx: worktree.Context, target: oid.Oid) -> () ! commit.CommitError
         commit.environment_identity(ctx, "COMMITTER", "")?,
         "reset",
         "moving to {oid.hex(target)?}".bytes(),
-    )?
+    ) else |e| match e {
+        Fatal(text) => { cleanup_state(ctx); return Failure("update_ref failed for ref 'HEAD': {text}") },
+        _ => { return Fatal("reset publication: {e}") },
+    }
     cleanup_state(ctx)
 }
 
@@ -318,6 +339,18 @@ fn pick_resume(ctx: worktree.Context, action: str) -> int ! commit.CommitErrors 
         return Fatal("cherry-pick failed")
     }
     replay_lock_scope(ctx)?
+    if action == "--skip" || action == "--abort" {
+        let snapshot = worktree.scan(ctx)?
+        var conflicts = Map[str, bool]()
+        for entry in snapshot.index.entries {
+            if index.stage(entry) != 0 { conflicts[str_from_utf8(entry.path)?] = true }
+        }
+        for row in snapshot.rows {
+            if !row.untracked && row.y != " " && !(conflicts[str_from_utf8(row.path)?] else false) {
+                return Unsupported("cherry-pick dirty recovery transient stat")
+            }
+        }
+    }
     var steps = List[sequencer.Step]()
     if persistent { steps = sequencer.parse(replay_read(ctx, "sequencer/todo")?.bytes())? }
     var options = PickOptions { allow_empty: false, empty: "stop" }
@@ -336,7 +369,15 @@ fn pick_resume(ctx: worktree.Context, action: str) -> int ! commit.CommitErrors 
         if persistent && action == "--abort" {
             target = oid.parse("sha1", replay_read(ctx, "sequencer/head")?.trim())?
         }
-        pick_reset(ctx, target)?
+        pick_reset(ctx, target) else |e| {
+            match e {
+                Fatal(text) => eprint("fatal: {text}"),
+                Failure(text) => eprint("error: {text}"),
+                _ => eprint("fatal: reset failed: {e}"),
+            }
+            if action == "--skip" { eprint("error: failed to skip the commit") }
+            return Fatal("cherry-pick failed")
+        }
         if action == "--abort" { if persistent { sequence_remove(ctx)? }; return 0 }
     } else if stopped {
         let item = walk.read(ctx.repo, replay_target(ctx, "CHERRY_PICK_HEAD")?)?

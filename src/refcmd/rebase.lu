@@ -31,9 +31,7 @@ fn rebase_author(ctx: worktree.Context, item: walk.Commit) -> () ! commit.Commit
     )?
 }
 
-fn rebase_conflict(ctx: worktree.Context, item: walk.Commit) -> int ! commit.CommitErrors {
-    let short = abbrev(ctx.repo, item.id)?,
-        subject = str_from_utf8(commit.subject(item.headers.message)?)?
+fn rebase_stop_files(ctx: worktree.Context, item: walk.Commit) -> () ! commit.CommitErrors {
     replay_write(ctx, "rebase-merge/stopped-sha", "{oid.hex(item.id)?}\n".bytes())?
     replay_write(ctx, "rebase-merge/message", replay_read(ctx, "MERGE_MSG")?.bytes())?
     var options = diff.configured(ctx)?
@@ -48,6 +46,11 @@ fn rebase_conflict(ctx: worktree.Context, item: walk.Commit) -> int ! commit.Com
         options,
     )?
     replay_write(ctx, "rebase-merge/patch", patch)?
+}
+
+fn rebase_conflict(ctx: worktree.Context, item: walk.Commit) -> int ! commit.CommitErrors {
+    rebase_stop_files(ctx, item)?
+    let short = abbrev(ctx.repo, item.id)?, subject = str_from_utf8(commit.subject(item.headers.message)?)?
     eprint(
         "error: could not apply {short}... {subject}\nhint: Resolve all conflicts manually, mark them as resolved with\nhint: \"git add/rm <conflicted_files>\", then run \"git rebase --continue\".\nhint: You can instead skip this commit: run \"git rebase --skip\".\nhint: To abort and get back to the state before \"git rebase\", run \"git rebase --abort\".\nhint: Disable this message with \"git config set advice.mergeConflict false\"\nCould not apply {short}... # {subject}",
     )
@@ -142,7 +145,14 @@ fn rebase_steps(ctx: worktree.Context) -> int ! commit.CommitErrors {
         rebase_author(ctx, item)?
         eprint_raw("Rebasing ({number}/{total})\r")
         let result = pick_one(ctx, item, PickOptions { allow_empty: true, empty: "drop" }, true)?
-        if result != 0 { return result }
+        if result != 0 {
+            if fs.exists("{ctx.repo.gitdir}/HEAD.lock") && !fs.exists("{ctx.repo.gitdir}/rebase-merge/stopped-sha") {
+                replay_write(ctx, "CHERRY_PICK_HEAD", "{oid.hex(item.id)?}\n".bytes())?
+                rebase_stop_files(ctx, item)?
+                eprint("Could not apply {abbrev(ctx.repo, item.id)?}... # {str_from_utf8(commit.subject(item.headers.message)?)?}")
+            }
+            return result
+        }
         replay_remove(ctx, "REBASE_HEAD")?
         var rewritten = if fs.exists("{ctx.repo.gitdir}/rebase-merge/rewritten-list") {
             replay_read(ctx, "rebase-merge/rewritten-list")?
@@ -180,35 +190,40 @@ fn rebase_resume(ctx: worktree.Context, action: str) -> int ! commit.CommitError
         } else {
             copy head.commits[0]
         }
-        var tx = index_start(ctx)?
+        let reset_error = if action == "--skip" then "could not discard worktree changes" else "could not move back to {oid.hex(target)?}"
+        var tx = index_start(ctx) else |e| match e {
+            Fatal(text) => { eprint("error: {text}"); return Fatal(reset_error) },
+            _ => { return Fatal("{reset_error}: {e}") },
+        }
         defer index.abort(mut tx)
         // Rebase abort/skip use hard restoration, unlike cherry-pick's reset --merge.
         let target_files = worktree.flatten_tree(ctx.repo, target)?
         rebase_reset(ctx, mut tx.value, target_files)?
         index.commit(mut tx)?
-        cleanup_state(ctx)
-        replay_remove(ctx, "REBASE_HEAD")?
         if action == "--abort" {
             refs.set_head(
                 ctx.repo,
                 replay_read(ctx, "HEAD")?,
                 if branch == "detached HEAD" then "{oid.hex(target)?}\n" else "ref: {branch}\n",
                 head.commits,
-                [target],
+                [copy target],
                 identity(ctx)?,
                 "rebase (abort): returning to {branch}",
-            )?
+            ) else |e| match e {
+                exists => { eprint("error: cannot lock ref 'HEAD': {lock_text("{ctx.repo.gitdir}/HEAD.lock")}"); return Fatal(reset_error) },
+                _ => { return Fatal("{reset_error}: {e}") },
+            }
+            cleanup_state(ctx)
             rebase_remove(ctx)?
             return 0
         }
+        cleanup_state(ctx)
+        replay_remove(ctx, "REBASE_HEAD")?
     } else {
         let value = worktree.read_index(ctx)?
-        for entry in value.entries {
-            if index.stage(entry) != 0 {
-                return Failure(
-                    "you must edit all merge conflicts and then\nmark them as resolved using git add",
-                )
-            }
+        if replay_unmerged(ctx, value, true)? {
+            print("You must edit all merge conflicts and then\nmark them as resolved using git add")
+            return 1
         }
         let tree = index.build_trees(value)?
         if !oid.equal(tree.root, walk.read(ctx.repo, head.commits[0])?.tree) {
@@ -216,16 +231,16 @@ fn rebase_resume(ctx: worktree.Context, action: str) -> int ! commit.CommitError
             // explicitly commit the resolution first, then --continue.
             return Unsupported("rebase continuation editor execution")
         }
-        if fs.exists("{ctx.repo.gitdir}/rebase-merge/stopped-sha") {
-            let old = replay_read(ctx, "rebase-merge/stopped-sha")?.trim()
-            var rewritten = if fs.exists("{ctx.repo.gitdir}/rebase-merge/rewritten-list") {
-                replay_read(ctx, "rebase-merge/rewritten-list")?
-            } else {
-                ""
-            }
-            rewritten += "{old} {oid.hex(head.commits[0])?}\n"
-            replay_write(ctx, "rebase-merge/rewritten-list", rewritten.bytes())?
+    }
+    if fs.exists("{ctx.repo.gitdir}/rebase-merge/stopped-sha") {
+        let old = replay_read(ctx, "rebase-merge/stopped-sha")?.trim()
+        var rewritten = if fs.exists("{ctx.repo.gitdir}/rebase-merge/rewritten-list") {
+            replay_read(ctx, "rebase-merge/rewritten-list")?
+        } else {
+            ""
         }
+        rewritten += "{old} {oid.hex(head.commits[0])?}\n"
+        replay_write(ctx, "rebase-merge/rewritten-list", rewritten.bytes())?
     }
     for name in ["message", "patch", "stopped-sha"] { replay_remove(ctx, "rebase-merge/{name}")? }
     rebase_steps(ctx)?

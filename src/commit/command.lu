@@ -374,7 +374,7 @@ fn dispatch(
     }
     publish_ref(ctx, expected, id, committer, action, log_message) else |e| match e {
         Fatal(text) => {
-            if reverting || picking { return Failure("error: {text}") }
+            if reverting || picking || replay_action != "" { return Failure("error: {text}") }
             return Fatal(text)
         },
         _ => { return Fatal("cannot publish commit: {e}") },

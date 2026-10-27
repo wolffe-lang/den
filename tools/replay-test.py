@@ -144,6 +144,7 @@ for n,(name,kind,setup,steps) in enumerate(CASES):
         if name.startswith('scope-'):
             refusal=(0,steps[0][0]+' '+steps[0][1])
         if name=='pick-setup-AUTO_MERGE.lock': refusal=(0,'replay AUTO_MERGE lock transient stat')
+        if name in ('cherry-pick-dirty-skip','cherry-pick-dirty-abort'): refusal=(1,'cherry-pick dirty recovery transient stat')
         if name=='rebase-reapply': refusal=(0,'merge multi-hunk alignment')
         if name=='rebase-equivalent': refusal=(0,'rebase possible upstream patch equivalence; use --reapply-cherry-picks')
         if name=='rebase-continue': refusal=(len(actual)-1,'rebase continuation editor execution')
