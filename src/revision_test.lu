@@ -23,7 +23,7 @@ fn capped() -> bool {
 
 fn main() {
     let one = revsyntax.parse("topic~2^3^{{tree}}:dir/a:b") else { assert(false); return }
-    assert(one.kind == "single")
+    assert(one.kind == "broken")
     assert(one.left.base == "topic")
     assert(one.left.steps.len == 3)
     assert(one.left.steps[0].kind == "~" && one.left.steps[0].count == 2)
