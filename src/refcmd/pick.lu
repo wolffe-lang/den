@@ -39,6 +39,16 @@ fn replay_remove(ctx: worktree.Context, name: str) -> () ! commit.CommitErrors {
     if fs.exists(path) { fs.remove(path)? }
 }
 
+fn replay_state_scope(ctx: worktree.Context, directory: str, allowed: List[str]) -> () ! commit.CommitErrors {
+    let entries = fs.entries("{ctx.repo.gitdir}/{directory}")?
+    for entry in entries {
+        let name = str_from_utf8(entry.name)?
+        var known = false
+        for candidate in allowed { if candidate == name { known = true } }
+        if !known || entry.kind != 0 { return Unsupported("replay state entry {directory}/{name}") }
+    }
+}
+
 fn sequence_remove(ctx: worktree.Context) -> () ! commit.CommitErrors {
     if !fs.exists("{ctx.repo.gitdir}/sequencer") { return }
     for name in ["head", "todo", "abort-safety", "opts"] {
@@ -337,6 +347,12 @@ fn pick_resume(ctx: worktree.Context, action: str) -> int ! commit.CommitErrors 
         if action == "--skip" { eprint("error: no cherry-pick in progress") }
         else { eprint("error: no cherry-pick or revert in progress") }
         return Fatal("cherry-pick failed")
+    }
+    if persistent {
+        replay_state_scope(ctx, "sequencer", ["head", "todo", "abort-safety", "opts"])?
+        if action == "--abort" && replay_read(ctx, "sequencer/abort-safety")?.trim() != oid.hex(worktree.head(ctx)?.commits[0])? {
+            return Unsupported("cherry-pick abort moved HEAD")
+        }
     }
     replay_lock_scope(ctx)?
     if action == "--skip" || action == "--abort" {

@@ -19,11 +19,14 @@ def git(repo, *args, **kw):
     return p.stdout.decode().strip()
 def seed(repo, kind):
     repo.mkdir(); git(repo, 'init', '-q')
-    (repo/'a').write_text('first\nmiddle\nlast\n'); (repo/'keep').write_text('keep\n')
+    baseline=b'first\nmiddle\nlast\n'
+    if kind=='repeated': baseline=b'same\nmiddle\nsame\n'
+    if kind=='binary': baseline=b'first\0\nmiddle\nlast\n'
+    (repo/'a').write_bytes(baseline); (repo/'keep').write_text('keep\n')
     git(repo, 'add', '.'); git(repo, 'commit', '-qm', 'base')
     root = git(repo, 'rev-parse', 'HEAD'); git(repo, 'branch', 'base')
     git(repo, 'switch', '-qc', 'topic')
-    (repo/'a').write_text('theirs\nmiddle\nlast\n')
+    (repo/'a').write_bytes(b'theirs\0\nmiddle\nlast\n' if kind=='binary' else b'theirs\nmiddle\nsame\n' if kind=='repeated' else b'theirs\nmiddle\nlast\n')
     env = dict(os.environ, GIT_AUTHOR_NAME='Original Author', GIT_AUTHOR_EMAIL='original@example.invalid', GIT_AUTHOR_DATE='1600000000 +0530')
     git(repo, 'commit', '-qam', 'first pick\n\nbody', env=env)
     first = git(repo, 'rev-parse', 'HEAD'); git(repo, 'tag', 'first', first)
@@ -36,11 +39,16 @@ def seed(repo, kind):
     git(repo, 'commit', '--allow-empty', '-qm', 'empty pick', env=env)
     empty = git(repo, 'rev-parse', 'HEAD'); git(repo, 'tag', 'empty', empty)
     git(repo, 'switch', '-q', 'main')
-    if kind in ('conflict', 'clean', 'second-conflict'):
-        (repo/'a').write_text('ours\nmiddle\nlast\n' if kind=='conflict' else 'first\nmiddle\nours\n')
+    if kind in ('conflict', 'clean', 'second-conflict','binary','repeated'):
+        ours=b'ours\nmiddle\nlast\n' if kind=='conflict' else b'first\nmiddle\nours\n'
+        if kind=='repeated': ours=b'same\nmiddle\nours\n'
+        if kind=='binary': ours=b'ours\0\nmiddle\nlast\n'
+        (repo/'a').write_bytes(ours)
         git(repo, 'commit', '-qam', 'ours')
     if kind == 'redundant': git(repo, 'cherry-pick', first)
-    return dict(root=root, first=first, second=second, empty=empty)
+    git(repo,'branch','source',first)
+    ours=git(repo,'rev-parse','HEAD')
+    return dict(root=root, first=first, second=second, empty=empty, ours=ours, prefix=first[:9])
 CASES=[]
 def case(name, kind, setup, steps): CASES.append((name,kind,setup,steps))
 for kind in ('ff','clean','conflict','redundant'):
@@ -86,6 +94,26 @@ for action in ('skip','abort'):
 case('rebase-equivalent','clean','topic:equivalent',[['rebase','main']])
 case('rebase-reapply','clean','topic:equivalent',[['rebase','--reapply-cherry-picks','main']])
 case('rebase-reapply-simple','ff','topic:equivalent-simple',[['rebase','--reapply-cherry-picks','main']])
+case('scope-repeat','repeated','',[['cherry-pick','first']])
+case('scope-binary','binary','',[['cherry-pick','first']])
+case('scope-delete','ff','delete',[['cherry-pick','first']])
+case('scope-symlink','clean','symlink',[['cherry-pick','first']])
+case('scope-rename','clean','topic:rename',[['rebase','--onto','main','empty']])
+case('rebase-detached','clean','topic:detached',[['rebase','main']])
+case('rebase-noop','clean','topic',[['rebase','HEAD']])
+for operand in ('source','refs/heads/source','refs/tags/first','@first','@prefix'):
+    case('pick-name-'+operand,'clean','',[['cherry-pick',operand]])
+for operand in ('refs/heads/main','@ours'):
+    case('rebase-name-'+operand,'clean','topic',[['rebase',operand]])
+case('pick-orig-head','clean','orig-head',[['cherry-pick','ORIG_HEAD']])
+case('scope-config-rebase','clean','topic:config:rebase.autostash=true',[['rebase','main']])
+case('scope-config-pick','clean','config:commit.cleanup=verbatim',[['cherry-pick','first']])
+case('scope-moved-pick','conflict','',[
+    ['cherry-pick','@first','@second'],['@writeid','.git/refs/heads/main','@root'],['cherry-pick','--abort']])
+case('scope-moved-branch','conflict','topic',[
+    ['rebase','main'],['@writeid','.git/refs/heads/topic','@root'],['rebase','--abort']])
+case('scope-foreign-state','conflict','topic',[
+    ['rebase','main'],['@write','.git/rebase-merge/foreign','leave intact\n'],['rebase','--abort']])
 for cmd in ('cherry-pick','rebase'):
     for action in ('skip','abort'):
         initial=[cmd,'@first','@second'] if cmd=='cherry-pick' else [cmd,'main']
@@ -111,7 +139,14 @@ for n,(name,kind,setup,steps) in enumerate(CASES):
     root.mkdir(); fixture=root/'fixture'; ids=seed(fixture,kind)
     if setup.startswith('topic'):
         git(fixture,'switch','-q','topic'); setup=setup.removeprefix('topic').removeprefix(':')
-    if setup=='equivalent-simple':
+    if setup=='delete': git(fixture,'rm','a'); git(fixture,'commit','-qm','delete')
+    elif setup=='symlink':
+        (fixture/'link').symlink_to('a'); git(fixture,'add','link'); git(fixture,'commit','-qm','link')
+    elif setup=='rename': git(fixture,'mv','keep','moved'); git(fixture,'commit','-qm','rename')
+    elif setup=='orig-head': (fixture/'.git/ORIG_HEAD').write_text(ids['first']+'\n')
+    elif setup.startswith('config:'):
+        key,value=setup.removeprefix('config:').split('=',1); git(fixture,'config',key,value)
+    elif setup=='equivalent-simple':
         git(fixture,'switch','-q','main')
         git(fixture,'cherry-pick','first',env=dict(os.environ,GIT_COMMITTER_DATE='1700000001 +0000'))
         git(fixture,'switch','-q','topic')
@@ -133,6 +168,7 @@ for n,(name,kind,setup,steps) in enumerate(CASES):
         out=[]; before=[]
         for step in steps:
             if step[0]=='@write': (repo/step[1]).write_text(step[2]); continue
+            if step[0]=='@writeid': (repo/step[1]).write_text(step[2]+'\n'); continue
             before.append((O['snapshot'](repo),O['worktree_snapshot'](repo)))
             out.append(O['capture']([exe,*step],repo,index_proof=True))
         return out,before
@@ -141,8 +177,15 @@ for n,(name,kind,setup,steps) in enumerate(CASES):
     if not a.measure:
         actual,before=execute(D); row['den']=actual
         refusal=None
-        if name.startswith('scope-'):
+        if name.startswith(('scope-rebase-','scope-cherry-pick-')):
             refusal=(0,steps[0][0]+' '+steps[0][1])
+        inherited={'scope-repeat':'merge repeated-line alignment','scope-binary':'merge binary conflict','scope-delete':'merge modify/delete conflict','scope-symlink':'merge nonregular tree entry','scope-rename':'merge rename topology'}
+        if name in inherited: refusal=(0,inherited[name])
+        if name=='scope-config-rebase': refusal=(0,'replay configuration rebase.autostash')
+        if name=='scope-config-pick': refusal=(0,'replay configuration commit.cleanup')
+        if name=='scope-moved-pick': refusal=(1,'cherry-pick abort moved HEAD')
+        if name=='scope-moved-branch': refusal=(1,'rebase changed original branch')
+        if name=='scope-foreign-state': refusal=(1,'replay state entry rebase-merge/foreign')
         if name=='pick-setup-AUTO_MERGE.lock': refusal=(0,'replay AUTO_MERGE lock transient stat')
         if name in ('cherry-pick-dirty-skip','cherry-pick-dirty-abort'): refusal=(1,'cherry-pick dirty recovery transient stat')
         if name=='rebase-reapply': refusal=(0,'merge multi-hunk alignment')
@@ -162,7 +205,7 @@ for n,(name,kind,setup,steps) in enumerate(CASES):
         print(name,('NAMED' if refusal else 'PASS') if row['verified'] else 'FAIL',flush=True)
     else:
         print('\nCASE',name,flush=True)
-        for step,result in zip([s for s in steps if s[0]!='@write'],expected):
+        for step,result in zip([s for s in steps if not s[0].startswith('@')],expected):
             print(step,'status',result['status'],'stdout',bytes.fromhex(result['stdout']),'stderr',bytes.fromhex(result['stderr']),flush=True)
             for key,value in result['repository'].items():
                 if key in ('HEAD','ORIG_HEAD','CHERRY_PICK_HEAD','REBASE_HEAD','MERGE_MSG','AUTO_MERGE','COMMIT_EDITMSG') or key.startswith(('sequencer/','rebase-merge/','rebase-apply/','logs/')):

@@ -19,6 +19,11 @@ fn context() -> worktree.Context ! commit.CommitErrors {
 }
 
 fn controls(ctx: worktree.Context, command: str) -> () ! commit.CommitErrors {
+    if command == "branch" || command == "switch" || command == "checkout" || command == "merge" || command == "revert" {
+        if fs.exists("{ctx.repo.gitdir}/rebase-merge") || fs.exists("{ctx.repo.gitdir}/rebase-apply") {
+            return Unsupported("{command} in-progress rebase")
+        }
+    }
     if fs.is_dir("{ctx.repo.gitdir}/worktrees") { return Unsupported("{command} linked worktrees") }
     let hook = ctx.repo.config["core.hookspath"] else "{ctx.repo.gitdir}/hooks"
     let path = if hook.starts_with("/") then hook else "{ctx.root}/{hook}"

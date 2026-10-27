@@ -57,9 +57,8 @@ fn rebase_conflict(ctx: worktree.Context, item: walk.Commit) -> int ! commit.Com
     1
 }
 
-fn rebase_remove(ctx: worktree.Context) -> () ! commit.CommitErrors {
-    // Do not recursively remove unknown state or a foreign lock.
-    for name in [
+fn rebase_state_names() -> List[str] {
+    [
         "author-script",
         "done",
         "drop_redundant_commits",
@@ -77,7 +76,12 @@ fn rebase_remove(ctx: worktree.Context) -> () ! commit.CommitErrors {
         "stopped-sha",
         "rewritten-list",
         "rewritten-pending",
-    ] {
+    ]
+}
+
+fn rebase_remove(ctx: worktree.Context) -> () ! commit.CommitErrors {
+    replay_state_scope(ctx, "rebase-merge", rebase_state_names())?
+    for name in rebase_state_names() {
         replay_remove(ctx, "rebase-merge/{name}")?
     }
     fs.remove_dir("{ctx.repo.gitdir}/rebase-merge")?
@@ -182,8 +186,15 @@ fn rebase_reset(ctx: worktree.Context, mut value: index.Index, target: List[work
 fn rebase_resume(ctx: worktree.Context, action: str) -> int ! commit.CommitErrors {
     if fs.exists("{ctx.repo.gitdir}/rebase-apply") { return Unsupported("rebase apply backend") }
     if !fs.exists("{ctx.repo.gitdir}/rebase-merge") { return Fatal("no rebase in progress") }
+    replay_state_scope(ctx, "rebase-merge", rebase_state_names())?
     let branch = replay_read(ctx, "rebase-merge/head-name")?.trim()
     let head = worktree.head(ctx)?
+    if !head.detached { return Unsupported("rebase attached in-progress HEAD") }
+    if branch != "detached HEAD" {
+        if !branch.starts_with("refs/heads/") || !refs.valid(branch) { return Unsupported("rebase invalid saved branch") }
+        let original = oid.parse("sha1", replay_read(ctx, "rebase-merge/orig-head")?.trim())?
+        if !oid.equal(refs.read(ctx.repo, branch)?, original) { return Unsupported("rebase changed original branch") }
+    }
     if action == "--abort" || action == "--skip" {
         let target = if action == "--abort" {
             oid.parse("sha1", replay_read(ctx, "rebase-merge/orig-head")?.trim())?
@@ -344,7 +355,7 @@ fn rebase_command(args: List[str]) -> int ! commit.CommitErrors {
         eprint("error: Please commit or stash them.")
         return 1
     }
-    if oid.equal(current, onto) && reverse.len > 0 {
+    if oid.equal(current, onto) {
         replay_refresh(ctx)?
         print("Current branch {if head.detached then "HEAD" else head.branch} is up to date.")
         return 0
