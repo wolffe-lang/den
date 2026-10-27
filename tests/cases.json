@@ -253,6 +253,22 @@
     "lane": "M3, vc08"
   },
   {
+    "name": "rebase-up-to-date",
+    "repo": "linear",
+    "args": ["rebase", "HEAD"],
+    "lane": "M3, vc08",
+    "comparison": "index-stat-proven",
+    "require_parity": true
+  },
+  {
+    "name": "cherry-pick-redundant",
+    "repo": "linear",
+    "args": ["cherry-pick", "--keep-redundant-commits", "HEAD"],
+    "lane": "M3, vc08",
+    "comparison": "index-stat-proven",
+    "require_parity": true
+  },
+  {
     "name": "blame",
     "repo": "two",
     "args": [

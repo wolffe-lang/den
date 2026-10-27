@@ -1,0 +1,22 @@
+#!/bin/sh
+# Original sequencer units, independent importing client and complete replay state.
+set -eu
+DEN_ROOT=$(cd "$(dirname "$0")/.." && pwd)
+export DEN_ROOT
+cd "$DEN_ROOT"
+. tools/lib-toolchain.sh
+mkdir -p target/runs/vc08-evidence
+trap 'status=$?; for f in target/replay-native.json target/replay-release.json target/sequencer-checked.json target/sequencer-api-native/results.json target/sequencer-api-release/results.json; do [ ! -f "$f" ] || cp "$f" "target/runs/vc08-evidence/$(echo "$f" | tr / _)"; done; exit "$status"' EXIT
+for tier in native release; do
+    flag=
+    [ "$tier" != release ] || flag=--release
+    "$WOLF" build $flag --deny-warnings src/sequencer_test.lu -o "target/$tier/sequencer-test"
+    "target/$tier/sequencer-test"
+    "$WOLF" build $flag --deny-warnings probes/sequencer-client/main.lu -o "target/$tier/sequencer-client"
+    tools/env python3 -I tools/sequencer-api-test.py --tier "$tier"
+    tools/env python3 -I tools/replay-test.py --tier "$tier"
+done
+"$WOLF" conform-run src/sequencer_test.lu --checked --json > target/sequencer-checked.json
+cat target/sequencer-checked.json
+python3 -I -c 'import json; rows=[json.loads(x) for x in open("target/sequencer-checked.json") if x.startswith("{")]; assert len(rows)==1 and rows[0]["verdict"]=="exit(0)",rows'
+echo 'replay: native/release complete-state matrices, independent importing client, actual checked exit; zero skips'
