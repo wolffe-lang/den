@@ -179,7 +179,7 @@ pub fn merge(
                     ) { suffix += 1 }
             }
             append(mut out, span(left, ll, 0, prefix))
-            append(mut out, "<<<<<<< {ours_label}\n".bytes())
+            append(mut out, "<<<<<< {ours_label}\n".bytes())
             terminated(mut out, span(left, ll, prefix, ll.len - suffix))
             if style != "merge" {
                 append(mut out, "||||||| {base_label}\n".bytes())
