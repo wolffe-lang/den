@@ -230,7 +230,9 @@
       "--soft",
       "HEAD~1"
     ],
-    "lane": "M3, vc06"
+    "lane": "M3, vc10",
+    "require_parity": true,
+    "comparison": "index-stat-proven"
   },
   {
     "name": "merge",

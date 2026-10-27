@@ -114,7 +114,7 @@ for command in ("tools/check-diff --units-only", "tools/check-delta", "tools/che
 cases = json.load(open(os.path.join(ROOT, "tests", "cases.json")))
 say(all(c.get("require_parity") for c in cases if c["args"][0] in ("diff", "log", "show", "branch", "tag", "switch", "merge")),
     "T2 implemented diff/history/refs cases cannot regress to named refusals")
-say(all(c.get("require_parity") for c in cases if c["name"] in ("rebase", "rebase-up-to-date", "cherry-pick-redundant")),
+say(all(c.get("require_parity") for c in cases if c["name"] in ("reset", "rebase", "rebase-up-to-date", "cherry-pick-redundant")),
     "T2 replay parity rows cannot regress to named refusals")
 # T3
 p = plan(["somewhere/new"], event="pull_request", action="opened")
