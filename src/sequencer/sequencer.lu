@@ -61,7 +61,7 @@ pub fn line_sum(data: List[byte]) -> wrapping[u64] ! {limit} {
             line = 14695981039346656037
             start = at + 1
         } else if b != 32 as byte && !(b >= 9 as byte && b <= 13 as byte) {
-            line = (line ^ (b as wrapping[u64])) * 1099511628211
+            line = (line ^ (b as int as wrapping[u64])) * 1099511628211
         }
     }
     if start < data.len { total += line }
