@@ -57,12 +57,31 @@ fn replay_target(ctx: worktree.Context, name: str) -> oid.Oid ! commit.CommitErr
     resolve_commit(ctx.repo, name)?
 }
 
+fn replay_controls(ctx: worktree.Context, command: str) -> () ! commit.CommitErrors {
+    controls(ctx, command)?
+    if (env_get("GIT_REFLOG_ACTION") else "") != "" { return Unsupported("replay GIT_REFLOG_ACTION") }
+    for (key, value) in ctx.repo.config.pairs() {
+        if key.starts_with("rebase.") || key.starts_with("sequencer.") || key.starts_with("rerere.") ||
+            key.starts_with("merge.") && key != "merge.conflictstyle" || key == "commit.cleanup" ||
+            (key == "core.commentchar" || key == "core.commentstring") && value != "#" ||
+            key == "advice.mergeconflict" && value != "true" {
+            return Unsupported("replay configuration {key}")
+        }
+    }
+}
+
 fn replay_plan(
     ctx: worktree.Context,
     head: oid.Oid,
     item: walk.Commit,
 ) -> mergetree.Plan ! commit.CommitErrors {
     if item.parents.len > 1 { return Unsupported("cherry-pick merge mainline") }
+    let _ = str_from_utf8(item.headers.message) else |_| { return Unsupported("replay non-UTF-8 message") }
+    for field in item.headers.fields {
+        if field.key != "tree" && field.key != "parent" && field.key != "author" && field.key != "committer" {
+            return Unsupported("replay commit header {field.key}")
+        }
+    }
     var base = List[diff.File]()
     if item.parents.len == 1 { base = mergetree.files(ctx.repo, item.parents[0])? }
     let short = abbrev(ctx.repo, item.id)?,
@@ -331,7 +350,7 @@ fn pick_resume(ctx: worktree.Context, action: str) -> int ! commit.CommitErrors 
 
 fn pick_command(args: List[str]) -> int ! commit.CommitErrors {
     let ctx = worktree.discover(".")?
-    controls(ctx, "cherry-pick")?
+    replay_controls(ctx, "cherry-pick")?
     if worktree.config_bool(ctx, "commit.gpgsign", false)? {
         return Unsupported("cherry-pick signing")
     }

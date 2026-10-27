@@ -156,6 +156,19 @@ fn rebase_steps(ctx: worktree.Context) -> int ! commit.CommitErrors {
     rebase_finish(ctx)?
 }
 
+fn rebase_reset(ctx: worktree.Context, mut value: index.Index, target: List[worktree.FlatEntry]) -> () ! commit.CommitErrors {
+    var collapsed = List[index.Entry]()
+    for source in value.entries {
+        var entry = copy source
+        entry.flags -= index.stage(entry) * 4096
+        if collapsed.len > 0 && str_from_utf8(collapsed[collapsed.len - 1].path)? == str_from_utf8(entry.path)? { continue }
+        (mut collapsed).push(entry)
+    }
+    value.entries = collapsed
+    value.extensions = []
+    worktree.transition(ctx, mut value, target, "hard")?
+}
+
 fn rebase_resume(ctx: worktree.Context, action: str) -> int ! commit.CommitErrors {
     if fs.exists("{ctx.repo.gitdir}/rebase-apply") { return Unsupported("rebase apply backend") }
     if !fs.exists("{ctx.repo.gitdir}/rebase-merge") { return Fatal("no rebase in progress") }
@@ -169,10 +182,9 @@ fn rebase_resume(ctx: worktree.Context, action: str) -> int ! commit.CommitError
         }
         var tx = index_start(ctx)?
         defer index.abort(mut tx)
-        // A hard restoration deliberately replaces conflicted entries; remove
-        // stages only after worktree safety has been checked by abort_merge.
+        // Rebase abort/skip use hard restoration, unlike cherry-pick's reset --merge.
         let target_files = worktree.flatten_tree(ctx.repo, target)?
-        worktree.abort_merge(ctx, mut tx.value, target_files)?
+        rebase_reset(ctx, mut tx.value, target_files)?
         index.commit(mut tx)?
         cleanup_state(ctx)
         replay_remove(ctx, "REBASE_HEAD")?
@@ -253,7 +265,7 @@ fn rebase_equivalence_scope(ctx: worktree.Context, selected: List[walk.Commit], 
 
 fn rebase_command(args: List[str]) -> int ! commit.CommitErrors {
     let ctx = worktree.discover(".")?
-    controls(ctx, "rebase")?
+    replay_controls(ctx, "rebase")?
     replay_lock_scope(ctx)?
     if worktree.config_bool(ctx, "commit.gpgsign", false)? { return Unsupported("rebase signing") }
     if args.len == 2 && (args[1] == "--continue" || args[1] == "--skip" || args[1] == "--abort") {

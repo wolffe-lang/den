@@ -85,6 +85,21 @@ for action in ('skip','abort'):
     case('rebase-second-'+action,'second-conflict','topic',[['rebase','main'],['rebase','--'+action]])
 case('rebase-equivalent','clean','topic:equivalent',[['rebase','main']])
 case('rebase-reapply','clean','topic:equivalent',[['rebase','--reapply-cherry-picks','main']])
+case('rebase-reapply-simple','ff','topic:equivalent-simple',[['rebase','--reapply-cherry-picks','main']])
+for cmd in ('cherry-pick','rebase'):
+    for action in ('skip','abort'):
+        initial=[cmd,'@first','@second'] if cmd=='cherry-pick' else [cmd,'main']
+        case(cmd+'-dirty-'+action,'conflict','topic' if cmd=='rebase' else '',[
+            initial,['@write','keep','local during operation\n'],[cmd,'--'+action]])
+for cmd in ('cherry-pick','rebase'):
+    initial=[cmd,'@first','@second'] if cmd=='cherry-pick' else [cmd,'main']
+    setup='topic' if cmd=='rebase' else ''
+    case(cmd+'-unresolved-continue','conflict',setup,[initial,[cmd,'--continue']])
+    for action in ('skip','abort'):
+        for lock in ('index.lock','HEAD.lock'):
+            case(cmd+'-'+action+'-'+lock,'conflict',setup,[initial,['@write','.git/'+lock,'foreign lock\n'],[cmd,'--'+action]])
+for cmd,flag,operand in [('rebase','-i','main'),('rebase','--apply','main'),('rebase','--rebase-merges','main'),('cherry-pick','-n','first')]:
+    case('scope-'+cmd+'-'+flag,'clean','topic' if cmd=='rebase' else '',[[cmd,flag,operand]])
 for cmd in ('cherry-pick','rebase'):
     for action in ('continue','skip','abort'):
         case(cmd+'-absent-'+action,'ff','',[[cmd,'--'+action]])
@@ -96,7 +111,11 @@ for n,(name,kind,setup,steps) in enumerate(CASES):
     root.mkdir(); fixture=root/'fixture'; ids=seed(fixture,kind)
     if setup.startswith('topic'):
         git(fixture,'switch','-q','topic'); setup=setup.removeprefix('topic').removeprefix(':')
-    if setup=='equivalent':
+    if setup=='equivalent-simple':
+        git(fixture,'switch','-q','main')
+        git(fixture,'cherry-pick','first',env=dict(os.environ,GIT_COMMITTER_DATE='1700000001 +0000'))
+        git(fixture,'switch','-q','topic')
+    elif setup=='equivalent':
         git(fixture,'switch','-q','main'); git(fixture,'cherry-pick','first'); git(fixture,'switch','-q','topic')
     elif setup=='packed': git(fixture,'pack-refs','--all')
     elif setup=='detached': git(fixture,'switch','--detach','-q','HEAD')
@@ -122,7 +141,10 @@ for n,(name,kind,setup,steps) in enumerate(CASES):
     if not a.measure:
         actual,before=execute(D); row['den']=actual
         refusal=None
+        if name.startswith('scope-'):
+            refusal=(0,steps[0][0]+' '+steps[0][1])
         if name=='pick-setup-AUTO_MERGE.lock': refusal=(0,'replay AUTO_MERGE lock transient stat')
+        if name=='rebase-reapply': refusal=(0,'merge multi-hunk alignment')
         if name=='rebase-equivalent': refusal=(0,'rebase possible upstream patch equivalence; use --reapply-cherry-picks')
         if name=='rebase-continue': refusal=(len(actual)-1,'rebase continuation editor execution')
         checks=[]
