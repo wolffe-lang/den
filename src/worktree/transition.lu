@@ -1,0 +1,156 @@
+use index
+use object
+use oid
+
+fn same_flat(a: List[FlatEntry], ai: int, b: List[FlatEntry], bi: int) -> bool {
+    if ai < 0 || bi < 0 { return ai < 0 && bi < 0 }
+    a[ai].mode == b[bi].mode && oid.equal(a[ai].id, b[bi].id)
+}
+
+/// Apply a whole-tree switch or reset under the caller's index transaction.
+/// switch preserves compatible local modifications; hard discards tracked
+/// changes; mixed changes only the index. All source blobs are verified first.
+/// This API never publishes refs, objects or the index transaction itself.
+pub fn transition(
+    ctx: Context,
+    mut value: index.Index,
+    target: List[FlatEntry],
+    mode: str,
+) -> () ! WorkErrors {
+    if mode != "switch" && mode != "hard" && mode != "mixed" { return invalid }
+    let snapshot = scan_index(ctx, value)?
+    var indexed = List[FlatEntry]()
+    for entry in value.entries {
+        if index.stage(entry) != 0 { return Unsupported("unmerged tree transition") }
+        if entry.extended != 0 || entry.flags & 0x8000 != 0 {
+            return Unsupported("flagged tree transition")
+        }
+        (mut indexed).push(FlatEntry {
+            path: copy entry.path,
+            mode: entry.stat[6],
+            id: copy entry.id,
+        })
+    }
+    for entry in target {
+        if entry.mode == 0o160000 { return Unsupported("submodule tree transition") }
+        let data = object.read_object(ctx.repo, entry.id, 1000000000)?
+        if data.kind != "blob" { return bad_oid }
+    }
+    var paths = List[List[byte]]()
+    for entry in indexed { (mut paths).push(copy entry.path) }
+    for entry in target {
+        if flat_at(indexed, entry.path) < 0 { (mut paths).push(copy entry.path) }
+    }
+    var keep = Map[str, bool]()
+    var dirty = List[List[byte]](), untracked = List[List[byte]]()
+    for path in paths {
+        let old = flat_at(snapshot.head_entries, path)
+        let next = flat_at(target, path)
+        let at = flat_at(indexed, path)
+        let disk = file_at(snapshot.files, path)
+        if mode == "switch" {
+            if same_flat(snapshot.head_entries, old, target, next) ||
+                same_flat(indexed, at, target, next) {
+                keep[text(path)?] = true
+                continue
+            }
+            if at < 0 && next >= 0 && disk >= 0 {
+                (mut untracked).push(copy path)
+                continue
+            }
+            let clean = disk < 0 ||
+                at >= 0 &&
+                    snapshot.files[disk].mode == indexed[at].mode &&
+                    oid.equal(snapshot.files[disk].id, indexed[at].id)
+            if !same_flat(indexed, at, snapshot.head_entries, old) || !clean {
+                (mut dirty).push(copy path)
+            }
+        }
+    }
+    if dirty.len > 0 || untracked.len > 0 {
+        var message = ""
+        if dirty.len > 0 {
+            message = "Your local changes to the following files would be overwritten by checkout:\n"
+            for path in dirty { message += "\t{text(path)?}\n" }
+            message += "Please commit your changes or stash them before you switch branches.\n"
+        }
+        if untracked.len > 0 {
+            if message != "" { message += "error: " }
+            message += "The following untracked working tree files would be overwritten by checkout:\n"
+            for path in untracked { message += "\t{text(path)?}\n" }
+            message += "Please move or remove them before you switch branches.\n"
+        }
+        return Failure("{message}Aborting")
+    }
+    let previous = copy value
+    // Remove first so a tracked directory-to-file change can be installed.
+    if mode != "mixed" {
+        for path in paths {
+            if keep[text(path)?] else false { continue }
+            if flat_at(target, path) < 0 { remove_file(ctx, path)? }
+        }
+    }
+    var entries = List[index.Entry]()
+    for path in paths {
+        let at = index_at(previous.entries, path)
+        let next = flat_at(target, path)
+        if keep[text(path)?] else false {
+            if at >= 0 {
+                var entry = copy previous.entries[at]
+                let disk = file_at(snapshot.files, path)
+                if disk >= 0 &&
+                    snapshot.files[disk].mode == entry.stat[6] &&
+                    oid.equal(snapshot.files[disk].id, entry.id) {
+                    entry = entry_for(snapshot.files[disk], [copy entry], add_options())?
+                }
+                (mut entries).push(entry)
+            }
+            continue
+        }
+        if next < 0 { continue }
+        let desired = copy target[next]
+        var prior = List[index.Entry]()
+        if at >= 0 { (mut prior).push(copy previous.entries[at]) }
+        var entry = cached_entry(desired, prior)
+        if mode != "mixed" {
+            let disk = file_at(snapshot.files, path)
+            if disk < 0 ||
+                snapshot.files[disk].mode != desired.mode ||
+                !oid.equal(snapshot.files[disk].id, desired.id) {
+                install(ctx, desired)?
+            }
+        }
+        let file = read_file(ctx, path, [copy entry]) else |e| match e {
+            not_found => { (mut entries).push(entry); continue },
+            _ => { return Unsupported("tree transition unreadable path {text(path)?}: {e}") },
+        }
+        if file.mode == desired.mode && oid.equal(file.id, desired.id) {
+            entry = entry_for(file, [copy entry], add_options())?
+            entry.stat[6] = desired.mode
+        }
+        (mut entries).push(entry)
+    }
+    // Preserve the index's unsigned pathname order independent of target order.
+    for i in 1..entries.len {
+        var n = i
+        while n > 0 && compare(entries[n - 1].path, entries[n].path) > 0 {
+            let temp = copy entries[n - 1]
+            entries[n - 1] = copy entries[n]
+            entries[n] = temp
+            n -= 1
+        }
+    }
+    value.entries = entries
+    if mode == "mixed" {
+        value.extensions = copy previous.extensions
+        for path in paths {
+            if !same_flat(indexed, flat_at(indexed, path), target, flat_at(target, path)) {
+                value = index.invalidate_tree(value, path)?
+            }
+        }
+    } else {
+        value.extensions = []
+        let tree = index.build_trees(value)?
+        value.extensions = [index.Extension { signature: "TREE", data: copy tree.cache }]
+    }
+}

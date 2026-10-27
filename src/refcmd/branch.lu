@@ -95,12 +95,18 @@ fn branch(args: List[str]) -> int ! commit.CommitErrors {
     let head = worktree.head(ctx)?
     var names = List[str]()
     var list = false, current = false, force = false, deleting = false, quiet = false, log = false
+    var moving = false
     for arg in args[1..] {
         if arg == "--list" || arg == "-l" {
             list = true
         } else if arg == "--show-current" {
             current = true
         } else if arg == "-f" || arg == "--force" {
+            force = true
+        } else if arg == "-m" || arg == "--move" {
+            moving = true
+        } else if arg == "-M" {
+            moving = true
             force = true
         } else if arg == "-d" || arg == "--delete" {
             deleting = true
@@ -120,6 +126,7 @@ fn branch(args: List[str]) -> int ! commit.CommitErrors {
             (mut names).push(arg)
         }
     }
+    if moving { return move_branch(ctx, head, names, force)? }
     if current { if !head.detached { print(head.branch) }; return 0 }
     if list || names.len == 0 {
         if head.detached && names.len == 0 {
@@ -208,10 +215,17 @@ fn branch(args: List[str]) -> int ! commit.CommitErrors {
     0
 }
 
+fn dispatch(args: List[str]) -> int ! commit.CommitErrors {
+    if args[0] == "tag" { return tag(args)? }
+    if args[0] == "switch" || args[0] == "checkout" { return switch_branch(args)? }
+    if args[0] == "reset" { return reset(args)? }
+    branch(args)?
+}
+
 /// Bounded ref porcelain command edge; unsupported grammar remains named.
 pub fn run(args: List[str]) -> int {
     if args.len == 0 { return 2 }
-    let result = branch(args) else |e| match e {
+    let result = dispatch(args) else |e| match e {
         Fatal(message) => { eprint("fatal: {message}"); return 128 },
         Failure(message) => { eprint("error: {message}"); return 1 },
         Unsupported(message) => { eprint("den: not yet implemented: {message}"); return 2 },

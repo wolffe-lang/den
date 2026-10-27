@@ -1,0 +1,247 @@
+use std.fs
+use commit
+use commit_format
+use index
+use oid
+use refs
+use repository
+use walk
+use worktree
+
+fn head_bytes(ctx: worktree.Context) -> str ! commit.CommitErrors {
+    str_from_utf8(repository.read_bytes("{ctx.repo.gitdir}/HEAD", 4096)?)?
+}
+
+fn index_start(ctx: worktree.Context) -> index.Transaction ! commit.CommitErrors {
+    index.begin(ctx.repo, 1000000000, worktree.index_version(ctx)?) else |e| match e {
+        exists => {
+            return Fatal(
+                "Unable to create '{ctx.repo.gitdir}/index.lock': File exists.\n\nAnother git process seems to be running in this repository, or the lock file may be stale",
+            )
+        },
+        _ => { return Fatal("cannot read index: {e}") },
+    }
+}
+
+fn title(ctx: worktree.Context, id: oid.Oid) -> str ! commit.CommitErrors {
+    let item = walk.read(ctx.repo, id)?
+    str_from_utf8(commit.subject(item.headers.message)?)?
+}
+
+fn switch_branch(args: List[str]) -> int ! commit.CommitErrors {
+    let ctx = worktree.discover(".")?
+    controls(ctx, args[0])?
+    let old = worktree.head(ctx)?
+    let expected = head_bytes(ctx)?
+    var detach = false, quiet = false, force = false, create_force = false, implicit_detach = false
+    var create = "", names = List[str]()
+    var at = 1
+    while at < args.len {
+        let arg = args[at]
+        at += 1
+        if arg == "--detach" || arg == "-d" {
+            detach = true
+        } else if arg == "-q" || arg == "--quiet" {
+            quiet = true
+        } else if arg == "-f" || arg == "--force" || arg == "--discard-changes" {
+            force = true
+        } else if arg == "--no-guess" || arg == "--no-track" {} else if arg == "-c" ||
+            arg == "-C" ||
+            arg == "-b" ||
+            arg == "-B" {
+            if at == args.len { return Unsupported("{args[0]} missing branch name") }
+            create = args[at]
+            at += 1
+            create_force = arg == "-C" || arg == "-B"
+        } else if arg.starts_with("-") {
+            return Unsupported("{args[0]} {arg}")
+        } else {
+            (mut names).push(arg)
+        }
+    }
+    if names.len > 1 { return Unsupported("{args[0]} multiple targets") }
+    let operand = if names.len == 1 then names[0] else "HEAD"
+    var branch = if create != "" then create else operand
+    var target = List[oid.Oid]()
+    if create != "" && (!refs.valid("refs/heads/{create}") || create == "HEAD") {
+        return Fatal("'{create}' is not a valid branch name")
+    }
+    let creating = create != ""
+    var previous = List[oid.Oid]()
+    if creating {
+        previous = refs.optional(ctx.repo, "refs/heads/{create}")?
+        if previous.len > 0 && !create_force {
+            return Fatal("a branch named '{create}' already exists")
+        }
+    }
+    if !creating && !detach {
+        if operand == "HEAD" {
+            if old.detached { detach = true } else { branch = old.branch }
+        }
+        if !detach && refs.valid("refs/heads/{branch}") {
+            target = refs.optional(ctx.repo, "refs/heads/{branch}")?
+        }
+        if target.len == 0 && !(branch == old.branch && old.commits.len == 0) {
+            if args[0] == "checkout" {
+                detach = true
+                implicit_detach = true
+            } else {
+                return Fatal("invalid reference: {operand}")
+            }
+        }
+    }
+    if target.len == 0 && !(operand == "HEAD" && old.commits.len == 0) {
+        (mut target).push(
+            resolve_commit(ctx.repo, operand) else |_| {
+                return Fatal("invalid reference: {operand}")
+            },
+        )
+    }
+    if detach && target.len == 0 { return Fatal("You are on a branch yet to be born") }
+    var tree = List[worktree.FlatEntry]()
+    if target.len > 0 { tree = worktree.flatten_tree(ctx.repo, target[0])? }
+    if !(creating && names.len == 0 && !force) {
+        var tx = index_start(ctx)?
+        defer index.abort(mut tx)
+        worktree.transition(ctx, mut tx.value, tree, if force then "hard" else "switch")?
+        index.commit(mut tx)?
+    }
+    if creating && target.len > 0 {
+        let start = if names.len == 0 then "HEAD" else operand
+        write_ref(
+            ctx,
+            "refs/heads/{branch}",
+            previous,
+            target,
+            "branch: Created from {start}",
+            false,
+        )?
+    }
+    let from = if old.detached then oid.hex(old.commits[0])? else old.branch
+    let destination = if creating then branch else operand
+    let next = if detach then "{oid.hex(target[0])?}\n" else "ref: refs/heads/{branch}\n"
+    refs.set_head(
+        ctx.repo,
+        expected,
+        next,
+        old.commits,
+        target,
+        identity(ctx)?,
+        "checkout: moving from {from} to {destination}",
+    ) else |e| match e {
+        exists => {
+            eprint("error: cannot lock ref 'HEAD': {lock_text("{ctx.repo.gitdir}/HEAD.lock")}")
+            return Fatal("unable to update HEAD")
+        },
+        _ => { return Fatal("unable to update HEAD: {e}") },
+    }
+    if !quiet {
+        if implicit_detach &&
+            !old.detached &&
+            worktree.config_bool(ctx, "advice.detachedhead", true)? {
+            eprint(
+                "Note: switching to '{operand}'.\n\nYou are in 'detached HEAD' state. You can look around, make experimental\nchanges and commit them, and you can discard any commits you make in this\nstate without impacting any branches by switching back to a branch.\n\nIf you want to create a new branch to retain commits you create, you may\ndo so (now or later) by using -c with the switch command. Example:\n\n  git switch -c <new-branch-name>\n\nOr undo this operation with:\n\n  git switch -\n\nTurn off this advice by setting config variable advice.detachedHead to false\n",
+            )
+        }
+        if old.detached && target.len > 0 && !oid.equal(old.commits[0], target[0]) {
+            eprint(
+                "Previous HEAD position was {abbrev(ctx.repo, old.commits[0])?} {title(ctx, old.commits[0])?}",
+            )
+        }
+        if detach {
+            eprint("HEAD is now at {abbrev(ctx.repo, target[0])?} {title(ctx, target[0])?}")
+        } else if creating {
+            eprint("Switched to a new branch '{branch}'")
+        } else if old.reference == "refs/heads/{branch}" {
+            eprint("Already on '{branch}'")
+        } else {
+            eprint("Switched to branch '{branch}'")
+        }
+    }
+    cleanup_state(ctx)
+    0
+}
+
+fn orig_head(ctx: worktree.Context, old: List[oid.Oid]) -> () ! commit.CommitErrors {
+    if old.len == 0 { return }
+    let path = refs.administrative(ctx.repo, "ORIG_HEAD", false)?
+    let lock = "{path}.lock"
+    let file = fs.create_new_with_mode(lock, 0o666)?
+    var fd = file.fd, active = true
+    defer { if fd >= 0 { fs_close(fd) else |_| {} }; if active { fs.remove(lock) else |_| {} } }
+    fs_write_chunk(fd, "{oid.hex(old[0])?}\n".bytes())?
+    fs_sync(fd)?
+    fs_close(fd)?
+    fd = -1
+    fs_rename(lock, path)?
+    active = false
+}
+
+fn reset(args: List[str]) -> int ! commit.CommitErrors {
+    let ctx = worktree.discover(".")?
+    controls(ctx, "reset")?
+    var mode = "mixed", name = "HEAD", quiet = false, supplied = false
+    for arg in args[1..] {
+        if arg == "--soft" {
+            mode = "soft"
+        } else if arg == "--mixed" {
+            mode = "mixed"
+        } else if arg == "--hard" {
+            mode = "hard"
+        } else if arg == "-q" || arg == "--quiet" {
+            quiet = true
+        } else if arg.starts_with("-") || supplied {
+            return Unsupported("reset {arg}")
+        } else {
+            name = arg
+            supplied = true
+        }
+    }
+    if name.contains("~") || name.contains("^") || name.contains("..") || name.contains("@{{") {
+        return Unsupported("reset (M3, vc06)")
+    }
+    let old = worktree.head(ctx)?
+    var target = List[oid.Oid]()
+    if name != "HEAD" || old.commits.len > 0 { (mut target).push(resolve_commit(ctx.repo, name)?) }
+    if mode != "soft" {
+        var tree = List[worktree.FlatEntry]()
+        if target.len > 0 { tree = worktree.flatten_tree(ctx.repo, target[0])? }
+        var tx = index_start(ctx)?
+        defer index.abort(mut tx)
+        worktree.transition(ctx, mut tx.value, tree, mode)?
+        index.commit(mut tx)?
+    }
+    if !quiet && mode == "mixed" { reset_changes(ctx)? }
+    orig_head(ctx, old.commits)?
+    if target.len > 0 {
+        let committer = commit.environment_identity(ctx, "COMMITTER", "")?
+        if old.detached {
+            refs.update(
+                ctx.repo,
+                "HEAD",
+                old.commits,
+                target,
+                commit_format.identity_text(committer)?,
+                "reset: moving to {name}",
+                false,
+            )?
+        } else {
+            commit.publish_ref(
+                ctx,
+                old,
+                target[0],
+                committer,
+                "reset",
+                "moving to {name}".bytes(),
+            ) else |e| match e {
+                Fatal(message) => { return Failure("update_ref failed for ref 'HEAD': {message}") },
+                _ => { return Failure("update_ref failed for ref 'HEAD': {e}") },
+            }
+        }
+    }
+    if !quiet && mode == "hard" && target.len > 0 {
+        print("HEAD is now at {abbrev(ctx.repo, target[0])?} {title(ctx, target[0])?}")
+    }
+    cleanup_state(ctx)
+    0
+}

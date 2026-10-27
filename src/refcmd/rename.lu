@@ -1,0 +1,71 @@
+use std.fs
+use commit
+use refs
+use repository
+use worktree
+
+fn move_branch(
+    ctx: worktree.Context,
+    head: worktree.Head,
+    names: List[str],
+    force: bool,
+) -> int ! commit.CommitErrors {
+    if names.len < 1 || names.len > 2 { return Unsupported("branch rename argument count") }
+    if names.len == 1 && head.detached {
+        return Fatal("cannot rename the current branch while not on any")
+    }
+    let before = if names.len == 1 then head.branch else names[0]
+    let after = names[names.len - 1]
+    let from = "refs/heads/{before}"
+    let to = "refs/heads/{after}"
+    if !refs.valid(to) || after.starts_with("-") || after == "HEAD" {
+        return Fatal("'{after}' is not a valid branch name")
+    }
+    let old = refs.optional(ctx.repo, from)?
+    if old.len == 0 && from != head.reference { return Fatal("no branch named '{before}'") }
+    let replaced = refs.optional(ctx.repo, to)?
+    if replaced.len > 0 && from != to && !force {
+        return Fatal("a branch named '{after}' already exists")
+    }
+    if from != to && to == head.reference {
+        return Fatal("cannot force update the branch '{after}' used by worktree at '{ctx.root}'")
+    }
+    let expected = str_from_utf8(repository.read_bytes("{ctx.repo.gitdir}/HEAD", 4096)?)?
+    let who = identity(ctx)?
+    if old.len > 0 {
+        refs.rename_ref(ctx.repo, from, to, old[0], replaced, who) else |e| match e {
+            exists => {
+                let source_lock = "{ctx.repo.gitdir}/{from}.lock"
+                let head_lock = "{ctx.repo.gitdir}/HEAD.lock"
+                let packed_lock = "{ctx.repo.gitdir}/packed-refs.lock"
+                if fs.exists(source_lock) {
+                    eprint("error: cannot lock ref '{from}': {lock_text(source_lock)}")
+                    eprint("error: unable to delete old {from}")
+                    eprint("error: unable to lock {from} for rollback: {lock_text(source_lock)}")
+                } else if head.reference == from && fs.exists(head_lock) {
+                    eprint("error: cannot lock ref '{from}': {lock_text(head_lock)}")
+                    eprint("error: unable to delete old {from}")
+                } else if fs.exists(packed_lock) {
+                    eprint("error: {lock_text(packed_lock)}")
+                    eprint("error: unable to delete old {from}")
+                } else {
+                    return Unsupported("branch rename destination lock failure")
+                }
+                return Fatal("branch rename failed")
+            },
+            _ => { return Fatal("branch rename failed: {e}") },
+        }
+    }
+    if head.reference == from && (old.len == 0 || from == to) {
+        refs.set_head(
+            ctx.repo,
+            expected,
+            "ref: {to}\n",
+            if from == to then copy head.commits else [],
+            head.commits,
+            who,
+            "Branch: renamed {from} to {to}",
+        )?
+    }
+    0
+}

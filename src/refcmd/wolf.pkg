@@ -5,9 +5,11 @@ pkg {
     deps: {
         commit: {path: "../commit"},
         commit_format: {path: "../commit_format"},
+        index: {path: "../index"},
         history: {path: "../history"},
         object: {path: "../object"},
         oid: {path: "../oid"},
+        pretty: {path: "../pretty"},
         refs: {path: "../refs"},
         repository: {path: "../repository"},
         walk: {path: "../walk"},

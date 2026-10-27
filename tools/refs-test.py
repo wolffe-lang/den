@@ -19,6 +19,9 @@ git('branch', 'topic')
 (seed / 'a').write_bytes(b'two\n'); git('commit', '-qam', 'two')
 second = git('rev-parse', 'HEAD')
 git('tag', 'light', first); git('tag', '-am', 'annotation', 'annotated', first)
+tree = git('rev-parse', 'HEAD^{tree}'); blob = git('rev-parse', 'HEAD:a')
+dated = subprocess.check_output([G, 'commit-tree', tree, '-m', 'first line\nsecond line'], cwd=seed,
+    env=dict(os.environ, GIT_AUTHOR_DATE='946684800 +1400', GIT_COMMITTER_DATE='978307200 -1200')).decode().strip()
 cases = []
 commands = [
  ['branch'], ['branch', '--show-current'], ['branch', '--list', 'topic'],
@@ -30,12 +33,46 @@ commands = [
  ['branch', '-d', 'absent'], ['branch', '-D', 'main'], ['branch', '-f', 'main'],
  ['branch', 'topic'], ['branch', 'new', 'absent'],
  ['branch', 'nested/topic'], ['branch', 'a./b'], ['branch', 'é'],
+ ['tag'], ['tag', '--list', 'light'], ['tag', 'new'], ['tag', 'new', 'light'],
+ ['tag', '-a', '-m', 'annotation', 'new'], ['tag', '-m', 'one', '-m', 'two', 'new'],
+ ['tag', '-a', '-m', '', 'new'], ['tag', '-m', ' #comment\nbody\n', 'new'],
+ ['tag', '--cleanup=verbatim', '-m', '  body  ', 'new'],
+ ['tag', '-f', 'light', second], ['tag', '-f', 'light', first],
+ ['tag', '-f', '-m', 'replacement', 'light'],
+ ['tag', '-d', 'light'], ['tag', '-d', 'annotated'], ['tag', '-d', 'absent'],
+ ['tag', 'light'], ['tag', 'new', 'absent'], ['tag', 'nested/new'],
+ ['branch', '-m', 'topic', 'other'], ['branch', '-m', 'main', 'other'],
+ ['branch', '-m', 'other'], ['branch', '-M', 'topic', 'main'],
+ ['branch', '-m', 'topic', 'main'], ['branch', '-m', 'absent', 'new'],
+ ['branch', '-m', 'topic', 'topic'],
+ ['switch', 'topic'], ['switch', 'main'], ['switch', '--detach', first],
+ ['switch', '-q', '--detach', first], ['switch', '-c', 'new'],
+ ['switch', '-c', 'new', first], ['checkout', 'topic'], ['checkout', '-b', 'new'],
+ ['checkout', '-q', '--detach', first],
+ ['reset', '--soft', first], ['reset', '--mixed', first], ['reset', '--hard', first],
+ ['reset', '--soft'], ['reset', '--mixed'], ['reset', '--hard'],
+ ['tag', '--create-reflog', 'new'], ['tag', '--create-reflog', '-m', 'annotation', 'new'],
+ ['tag', '--create-reflog', 'new', tree], ['tag', '--create-reflog', 'new', blob],
+ ['tag', '--create-reflog', 'new', 'annotated'],
+ ['tag', '--create-reflog', '-m', 'nested', 'new', 'annotated'],
+ ['tag', '--create-reflog', 'new', dated],
+ ['checkout', '--detach', first], ['checkout', first],
+ ['commit', '--allow-empty', '-m', 'third'], ['commit', '--amend', '-m', 'amended'],
+ ['commit', '--amend', '--no-edit'],
 ]
 for packed in (False, True):
     for detached in (False, True):
         for i, command in enumerate(commands):
             cases.append(dict(name=f'{int(packed)}-{int(detached)}-{i}', args=command, packed=packed, detached=detached))
 rows = []
+for setup in ('dirty', 'staged', 'unborn', 'index.lock', 'HEAD.lock', 'refs/heads/main.lock', 'packed-refs.lock'):
+    for i, command in enumerate([
+        ['branch'], ['branch', '--show-current'], ['branch', 'new'], ['branch', '-m', 'new'],
+        ['tag', 'new'], ['tag', '-m', 'annotation', 'new'],
+        ['switch', 'topic'], ['switch', '-c', 'new'],
+        ['reset', '--soft', first], ['reset', '--mixed', first], ['reset', '--hard', first],
+    ]):
+        cases.append(dict(name=f'extra-{setup.replace("/", "-")}-{i}', args=command, packed=False, detached=False, setup=setup))
 for case in cases:
     root = base / case['name']; root.mkdir(); repo = root / 'repo'
     fixture = root / 'fixture'
@@ -44,12 +81,26 @@ for case in cases:
         subprocess.run([G, 'pack-refs', '--all'], cwd=fixture, check=True, capture_output=True)
     if case['detached']:
         subprocess.run([G, 'switch', '--detach', '-q', second], cwd=fixture, check=True, capture_output=True)
+    setup = case.get('setup', '')
+    if setup == 'dirty' or setup == 'staged':
+        (fixture / 'a').write_bytes(b'local change\n')
+        if setup == 'staged':
+            subprocess.run([G, 'add', 'a'], cwd=fixture, check=True, capture_output=True)
+    elif setup == 'unborn':
+        # Keep the objects available, but make HEAD genuinely unborn with no index.
+        (fixture / '.git/refs/heads/main').unlink()
+        (fixture / '.git/index').unlink()
+        shutil.rmtree(fixture / '.git/logs')
+    elif setup:
+        p = fixture / '.git' / setup
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_bytes(b'foreign lock\n')
     def restore():
         if repo.exists(): shutil.rmtree(repo)
         shutil.copytree(fixture, repo, symlinks=True)
-    restore(); expected = O['capture']([G, *case['args']], repo)
-    restore(); actual = O['capture']([D, *case['args']], repo)
-    good = O['equivalent'](expected, actual)
+    restore(); expected = O['capture']([G, *case['args']], repo, index_proof=True)
+    restore(); actual = O['capture']([D, *case['args']], repo, index_proof=True)
+    good = O['equivalent'](expected, actual, 'index-stat-proven')
     rows.append(dict(case=case, git=expected, den=actual, equal=good))
     print(('parity' if good else 'FAIL') + ': ' + case['name'], flush=True)
     if not good:

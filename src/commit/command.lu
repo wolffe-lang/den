@@ -139,7 +139,9 @@ fn commit_summary(
     var out = List[byte]()
     let hex = oid.hex(id)?
     let initial = if parents.len == 0 && !value.amend then " (root-commit)" else ""
-    add_bytes(mut out, "[{worktree.head(ctx)?.branch}{initial} {hex[0..7]}] ".bytes())
+    let head = worktree.head(ctx)?
+    let label = if head.detached then "detached HEAD" else head.branch
+    add_bytes(mut out, "[{label}{initial} {hex[0..7]}] ".bytes())
     add_bytes(mut out, subject(message)?)
     (mut out).push(10 as byte)
     if author.name != committer.name || author.email != committer.email {
@@ -157,8 +159,9 @@ fn dispatch(args: List[str], fail: str) -> int ! CommitErrors {
     let value = options(args)?
     let ctx = worktree.discover(".")?
     let expected = worktree.head(ctx)?
-    if expected.detached { return Unsupported("commit detached HEAD write") }
-    if !valid_reference(expected.reference) { return Unsupported("commit non-branch HEAD") }
+    if !expected.detached && !valid_reference(expected.reference) {
+        return Unsupported("commit non-branch HEAD")
+    }
     if value.amend && expected.commits.len == 0 { return Fatal("You have nothing to amend.") }
     validate_identity_environment()?
     hooks_empty(ctx)?

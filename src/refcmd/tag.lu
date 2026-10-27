@@ -1,0 +1,161 @@
+use commit
+use commit_format
+use object
+use oid
+use pretty
+use refs
+use repository
+use walk
+use worktree
+
+fn tag(args: List[str]) -> int ! commit.CommitErrors {
+    let ctx = context()?
+    controls(ctx, "tag")?
+    var names = List[str](), messages = List[List[byte]]()
+    var listing = false, deleting = false, force = false, annotated = false, supplied = false
+    var cleanup = "strip", file = ""
+    var no_sign = false, log = false
+    var at = 1
+    while at < args.len {
+        let arg = args[at]
+        at += 1
+        if arg == "-l" || arg == "--list" {
+            listing = true
+        } else if arg == "-d" || arg == "--delete" {
+            deleting = true
+        } else if arg == "-f" || arg == "--force" {
+            force = true
+        } else if arg == "-a" || arg == "--annotate" {
+            annotated = true
+        } else if arg == "--no-sign" {
+            no_sign = true
+        } else if arg == "--create-reflog" {
+            log = true
+        } else if arg == "--no-create-reflog" {
+            log = false
+        } else if arg == "--no-column" {} else if arg == "-m" ||
+            arg == "--message" ||
+            arg == "-F" ||
+            arg == "--file" {
+            if at == args.len { return Unsupported("tag missing option value") }
+            annotated = true
+            supplied = true
+            if arg == "-F" || arg == "--file" {
+                file = args[at]
+            } else {
+                var bytes = List[byte]()
+                for b in args[at].bytes() { (mut bytes).push(b) }
+                (mut messages).push(bytes)
+            }
+            at += 1
+        } else if arg.starts_with("--cleanup=") {
+            cleanup = arg[10..]
+        } else if arg.starts_with("-m") && arg.len > 2 {
+            annotated = true
+            supplied = true
+            var bytes = List[byte]()
+            for b in arg[2..].bytes() { (mut bytes).push(b) }
+            (mut messages).push(bytes)
+        } else if arg.starts_with("-") {
+            return Unsupported("tag {arg}")
+        } else {
+            (mut names).push(arg)
+        }
+    }
+    if listing || names.len == 0 {
+        for item in refs.list(ctx.repo, "refs/tags/")? {
+            let name = item.name[10..]
+            var selected = names.len == 0
+            for pattern in names {
+                if pattern.contains("*") || pattern.contains("?") || pattern.contains("[") {
+                    return Unsupported("tag list patterns")
+                }
+                if name == pattern { selected = true }
+            }
+            if selected { print(name) }
+        }
+        return 0
+    }
+    if deleting {
+        var status = 0
+        for name in names {
+            let full = "refs/tags/{name}"
+            if !refs.valid(full) {
+                eprint("error: tag '{name}' not found.")
+                status = 1
+                continue
+            }
+            let old = refs.optional(ctx.repo, full)?
+            if old.len == 0 {
+                eprint("error: tag '{name}' not found.")
+                status = 1
+                continue
+            }
+            let short = abbrev(ctx.repo, old[0])?
+            write_ref(ctx, full, old, [], "", false)?
+            print("Deleted tag '{name}' (was {short})")
+        }
+        return status
+    }
+    if names.len > 2 { return Unsupported("tag argument count") }
+    let name = names[0]
+    let full = "refs/tags/{name}"
+    if !refs.valid(full) || name.starts_with("-") {
+        return Fatal("'{name}' is not a valid tag name.")
+    }
+    let old = refs.optional(ctx.repo, full)?
+    if old.len > 0 && !force { return Fatal("tag '{name}' already exists") }
+    if !no_sign && worktree.config_bool(ctx, "tag.gpgsign", false)? {
+        return Unsupported("tag signing")
+    }
+    let target = if names.len == 2 then names[1] else "HEAD"
+    var id = object.resolve(ctx.repo, target) else |_| {
+        return Fatal("Failed to resolve '{target}' as a valid ref.")
+    }
+    let obj = object.read_object(ctx.repo, id, 16777216)?
+    let short = abbrev(ctx.repo, id)?
+    var description = "{obj.kind} object"
+    if obj.kind == "tag" { description = "other tag object" }
+    if obj.kind == "commit" {
+        let item = walk.read(ctx.repo, id)?
+        let subject = str_from_utf8(commit.reflog_subject(item.headers.message)?)?
+        description = "{subject}, {pretty.date(item.timestamp, "+0000", "short")?}"
+    }
+    let log_message = "tag: tagging {short} ({description})"
+    if annotated && obj.kind == "tag" && worktree.config_bool(ctx, "advice.nestedtag", true)? {
+        eprint(
+            "hint: You have created a nested tag. The object referred to by your new tag is\nhint: already a tag. If you meant to tag the object that it points to, use:\nhint:\nhint: \tgit tag -f {name} {target}^{{}}\nhint: Disable this message with \"git config set advice.nestedTag false\"",
+        )
+    }
+    if annotated {
+        if !supplied { return Unsupported("tag editor") }
+        if file != "" && messages.len > 0 {
+            return Fatal("options '-m' and '-F' cannot be used together")
+        }
+        if file == "-" { return Unsupported("tag stdin message") }
+        var input = List[byte]()
+        if file != "" {
+            input = repository.read_bytes(file, 16777216)?
+        } else {
+            for i in 0..messages.len {
+                if i > 0 { (mut input).push(10 as byte); (mut input).push(10 as byte) }
+                for b in messages[i] { (mut input).push(b) }
+            }
+        }
+        if cleanup != "strip" && cleanup != "whitespace" && cleanup != "verbatim" {
+            return Fatal("Invalid cleanup mode {cleanup}")
+        }
+        let comment = ctx.repo.config["core.commentstring"] else (
+            ctx.repo.config["core.commentchar"] else "#"
+        )
+        let message = commit_format.cleanup(input, cleanup, comment, false)?
+        let tagger = identity(ctx)?
+        let data = object.build_tag(id, obj.kind, name, tagger, message)?
+        id = object.write_object(ctx.repo, "tag", data)?
+    }
+    write_ref(ctx, full, old, [copy id], log_message, log)?
+    if old.len > 0 && !oid.equal(old[0], id) {
+        print("Updated tag '{name}' (was {abbrev(ctx.repo, old[0])?})")
+    }
+    0
+}

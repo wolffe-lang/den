@@ -1,0 +1,46 @@
+use std.fs
+use commit
+use refs
+use worktree
+
+fn lock_text(path: str) -> str {
+    "Unable to create '{path}': File exists.\n\nAnother git process seems to be running in this repository, or the lock file may be stale"
+}
+
+fn cleanup_state(ctx: worktree.Context) {
+    for name in [
+        "MERGE_HEAD",
+        "MERGE_MSG",
+        "MERGE_MODE",
+        "SQUASH_MSG",
+        "CHERRY_PICK_HEAD",
+        "REVERT_HEAD",
+    ] {
+        let path = refs.administrative(ctx.repo, name, false) else |_| { continue }
+        if fs.exists(path) { fs.remove(path) else |_| {} }
+    }
+    // Black-box AUTO_MERGE.lock witnesses distinguish the two cleanup attempts.
+    for _ in 0..2 {
+        refs.remove_auto_merge(ctx.repo) else |e| match e {
+            exists => {
+                let own = "{ctx.repo.gitdir}/AUTO_MERGE.lock"
+                if fs.exists(own) {
+                    eprint("error: cannot lock ref 'AUTO_MERGE': {lock_text(own)}")
+                } else {
+                    eprint("error: {lock_text("{ctx.repo.gitdir}/packed-refs.lock")}")
+                }
+            },
+            _ => { eprint("error: cannot remove AUTO_MERGE: {e}") },
+        }
+    }
+}
+
+fn reset_changes(ctx: worktree.Context) -> () ! commit.CommitErrors {
+    let snapshot = worktree.scan(ctx)?
+    var printed = false
+    for row in snapshot.rows {
+        if row.y == " " || row.untracked || row.ignored { continue }
+        if !printed { print("Unstaged changes after reset:"); printed = true }
+        print("{row.y}\t{str_from_utf8(row.path)?}")
+    }
+}

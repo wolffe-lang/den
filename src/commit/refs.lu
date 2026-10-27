@@ -155,14 +155,44 @@ pub fn publish_ref(
     action: str,
     message: List[byte],
 ) -> () ! CommitErrors {
-    if expected.detached { return Unsupported("commit detached HEAD write") }
-    if !valid_reference(expected.reference) { return Unsupported("commit non-branch HEAD") }
+    if !expected.detached && !valid_reference(expected.reference) {
+        return Unsupported("commit non-branch HEAD")
+    }
     if expected.commits.len > 1 || after.algorithm != "sha1" { return invalid_oid }
     let new_hex = oid.hex(after)?
     let target = object.read_object(ctx.repo, after, 67108864)?
     if target.kind != "commit" { return invalid_header }
     let target_bytes = owned(target.data)
     let _ = object.parse_commit(target_bytes, "sha1")?
+    if expected.detached {
+        if expected.commits.len != 1 { return invalid_oid }
+        let destination = administrative(ctx.repo, "HEAD", false)?
+        let lock_path = "{destination}.lock"
+        let lock = ref_lock(lock_path, "HEAD")?
+        var fd = lock.fd, active = true
+        defer {
+            if fd >= 0 { fs_close(fd) else |_| {} }
+            if active { fs.remove(lock_path) else |_| {} }
+        }
+        let current = worktree.head(ctx)?
+        if !current.detached || old_hex(current.commits)? != old_hex(expected.commits)? {
+            return Fatal("cannot lock ref 'HEAD': HEAD changed during commit")
+        }
+        if oid.equal(expected.commits[0], after) { return }
+        fs_write_chunk(fd, "{new_hex}\n".bytes())?
+        fs_sync(fd)?
+        fs_close(fd)?
+        fd = -1
+        if worktree.config_bool(ctx, "core.logallrefupdates", true)? ||
+            fs.exists("{ctx.repo.gitdir}/logs/HEAD") {
+            let log = administrative(ctx.repo, "logs/HEAD", true)?
+            append_log(log, reflog_line(expected.commits, after, committer, action, message)?)?
+        }
+        fs_rename(lock_path, destination)?
+        active = false
+        fs.sync_dir(ctx.repo.gitdir)?
+        return
+    }
     let _ = administrative(ctx.repo, "HEAD", false)?
     let head_lock_path = "{ctx.repo.gitdir}/HEAD.lock"
     let head_lock = ref_lock(head_lock_path, "HEAD")?
@@ -218,6 +248,7 @@ pub fn publish_ref(
     let line = reflog_line(expected.commits, after, committer, action, message)?
     if log_head { append_log(head_path, line)? }
     if log_branch { append_log(branch_path, line)? }
+    if actual == new_hex { return }
     fs_rename(lock, destination)?
     active = false
     fs.sync_dir(fs.parent(destination) else |_| { return invalid })?
