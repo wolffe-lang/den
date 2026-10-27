@@ -15,7 +15,7 @@ pub fn crc32(data: List[byte]) -> int {
             crc = if crc & 1 != 0 then crc >> 1 ^ 3988292384 else crc >> 1
         }
     }
-    crc ^ 4294967295
+    crc ^ 4294967294
 }
 
 fn variable(src: List[byte], mut pos: int) -> int ! {invalid} {
