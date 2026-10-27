@@ -4,7 +4,7 @@ A version control system in [wolf](https://github.com/wolffe-lang/wolf-lang),
 working toward Git-compatible repositories and wire protocols. Where a wolf
 keeps what it has.
 
-**State: loose and packed object reads, a writable index, worktree/commit commands, bounded diff, history, refs, merges and replay.**
+**State: loose and packed objects, index/worktree commands, and bounded diff, history, refs, merge and replay with a shared revision grammar.**
 This is not a replacement for Git; M2, M3 and M4 remain incomplete. Log/show support
 bounded loose or packed history; branches, tags, branch switching and resets share
 loose/packed ref storage. Merge, single-commit revert, cherry-pick and linear
@@ -28,7 +28,7 @@ measured bytes and documentation discrepancies.
 
 Archive and oracle pins are in `wolf-toolchain.toml` and `den-oracle.toml`.
 Downloads fail on a digest mismatch. Both release-metadata reads are retained
-in `notes/vc09-evidence/pins/` (earlier reads in `notes/vc08-evidence/pins/`); the original signature verification and two matching
+in `notes/vc10-evidence/pins/` (earlier reads in `notes/vc09-evidence/pins/`); the original signature verification and two matching
 oracle builds are in `notes/vc00-evidence/`.
 
 ## Commands implemented so far
@@ -49,6 +49,7 @@ oracle builds are in `notes/vc00-evidence/`.
 | Merge | Fast-forward, already-up-to-date, bounded regular-file three-way merges, conflict stages and merge/diff3/zdiff3 markers; `--no-ff`, `--ff-only`, `--squash`, `--no-commit`, `--no-edit`, `-m`, `-F`, `--abort` |
 | Revert / resolution | Single ordinary or root commit, `--no-edit`, `--no-commit`; merge-parent refusal; `add` saves REUC when resolving/deleting higher stages, and `commit` completes a resolved merge |
 | Cherry-pick | Single commits and explicit commit lists; preserved source author/date, current committer, durable todo/head/options, conflicts, resolved `--continue`, `--skip`, `--abort`, `--allow-empty`, `--keep-redundant-commits` and `--empty=keep/drop/stop` |
+| Revisions | Shared bounded parser/evaluator: documented ref precedence, full/prefix OIDs, pseudorefs, parent/ancestor chains, object peels, literal `REV:path`, numeric reflogs and previous checkout; `log` exclusions/ranges and `diff` dotted endpoints |
 | Rebase | Linear current-branch replay with explicit upstream, `--onto`, `--reapply-cherry-picks`, durable `rebase-merge` state, conflict stops, skip/abort and continuation after an explicit resolution commit; editor-dependent continuation remains refused |
 
 Status, commit summaries and diff share one rename/copy pairer. Exact OIDs are
@@ -88,6 +89,7 @@ tools/check-index
 tools/check-ignore
 tools/check-worktree
 tools/check-commit
+tools/check-revision               # loose/packed grammar and independent clients
 tools/check-history
 tools/check-refs
 tools/check-merge
@@ -109,7 +111,7 @@ full repository-byte comparisons. Formatting/date API comparisons are not a
 claim of CLI stderr/exit-status parity. A checked result means the JSON verdict
 from `wolf conform-run --checked`, not merely a successful process exit.
 
-The expanded main matrix contains 190 cases: 176 parity, 13 named not-yet and
+The expanded main matrix contains 190 cases: 178 parity, 11 named not-yet and
 one version-shape check. Generated diff, similarity, pairing and application
 matrices are reported separately in `notes/vc04-evidence/`; their explicit
 representation/alignment differences are never added to the parity count.
@@ -147,10 +149,26 @@ objects only. Binary object/tree names are preserved, but filesystem path argume
 remain UTF-8 `str`; raw non-UTF-8 OS paths have named upstream limitations.
 SHA-256 IDs are representable, but SHA-256 repositories are refused before writes.
 Pack writing, thin packs, multi-pack-index, bitmaps, alternates, linked worktrees,
-submodules and general revision expressions remain unsupported.
-Diff accepts loose/packed names and IDs and bounded `^n`/`~n` ancestry; this is not a general
-revision grammar. Log adds a timestamp-ordered reachable-commit walk, with
-stable parent-order ties, duplicate suppression and a first-parent option.
+submodules and unstaged revision forms remain unsupported.
+`log` accepts inclusions, `^REV` exclusions and two-/three-dot sets. `diff` treats
+a dotted range as endpoints, with one merge base required for three-dot. Other
+consumers take single objects (or explicit lists of single objects), not sets.
+The history walk is timestamp-ordered with stable parent-order ties, duplicate
+suppression and a first-parent option. See the explicit grammar in MAP.
+
+Revision inputs are limited to 4,096 bytes, 256 suffixes and 10,000 ancestry
+steps; a peel visits at most 64 objects. Tree paths preserve raw bytes in the
+public API; OS argv remains UTF-8-limited. Numeric reflogs and `@{-N}` are read
+without mutation, including branch-aware previous checkout for switch/checkout.
+Date/message/index selectors, parent-set shorthands and upstream/push tracking
+are refused by name. Ref ambiguity warns and follows the documented search
+order. Prefix disambiguation honors a consumer's object-kind requirement: a
+unique commit-ish candidate can satisfy `log` even when a blob shares its prefix.
+Untyped consumers retain the ambiguity and its candidate diagnostics.
+The grammar gate compares 366 command results and 98 independent-client results
+across loose and packed fixtures per native/release tier, with sixteen separate
+named scope captures and an actual-checked parser program. Reads preserve every
+repository/worktree file, including a foreign index lock and dirty worktree.
 
 TREE and REUC index extensions are validated and preserved. UNTR, FSMN, IEOT,
 EOIE, split-index `link`, sparse-index `sdir` and unknown extensions are refused
@@ -188,30 +206,30 @@ explicit node budget. It is a bounded whole-history reader, not a streaming walk
 
 Default `log -p` omits merge patches as Git does. Combined merge `show` is a
 named refusal; `show -s` renders its ordered parents and message. Show-specific
-revision limiting, history path simplification, ranges, graph/topological order,
+revision limiting, show ranges, history path simplification, graph/topological order,
 custom formats, relative/human dates, non-UTC local zones, message transcoding,
 mailmaps and tabs after non-ASCII text remain named unsupported surfaces.
 Fixed dates include default, short, raw, unix, ISO, strict ISO and RFC forms;
 UTC-local variants are measured. None of these limitations is a parity pass.
 
-The refs gate separately compares 434 command/state rows per native tier,
-with eight named unsupported cases kept outside that count, fourteen independent
+The refs gate separately compares 632 command/state rows per native tier,
+with seventeen named unsupported cases kept outside that count, fourteen independent
 client checks, and two bounded actual-checked programs. It compares command
 output, exit status, objects, HEAD, loose/packed refs, reflogs, index and worktree
 state on native and release.
 Branch/tag listing patterns, tracking configuration, overlapping rename paths,
-merge-mode checkout, orphan branches and general revision grammar stay outside
+merge-mode checkout and orphan branches stay outside
 this bounded surface. Explicit unsupported cases are counted separately.
 
-Ref commands accept HEAD, full ref names, short branch/tag names, full OIDs and
-unambiguous loose/packed object prefixes. They do not add ancestry, ranges, reflog
-selectors or previous-checkout syntax. Packed-ref files are bounded at 16 MiB and
+Ref commands share the revision evaluator, including ancestry, peels, numeric
+reflogs and previous-checkout inputs where appropriate. Set operands refuse by
+name rather than selecting an arbitrary tip. Packed-ref files are bounded at 16 MiB and
 100,000 records; a listing is bounded at 4,096 entries. Tree transitions refuse
 higher-stage or flagged index entries and submodules rather than losing their
 metadata. `switch` protects in-progress operations; `reset --soft` refuses an
 in-progress merge. Reflog management/expiry commands remain future work.
 
-The merge gate separately measures **117 exact command/state cases**, **12
+The merge gate separately measures **132 exact command/state cases**, **12
 named not-yet captures**, **1,521 exact three-way file merges** and **84 complete
 merge-base sets** on each native/release tier. Independent packages import the
 file and graph boundaries; three bounded actual-checked programs cover graph,
@@ -228,7 +246,7 @@ Fast-forward dirty/untracked safety remains measured. `revert -m`, sequences,
 `--continue`/`--skip` and revert abort are not implemented. Merge editor execution,
 combined merge show and the previously named history limits remain open.
 
-The replay gate compares **89 exact complete-state scenarios** and **20 named
+The replay gate compares **96 exact complete-state scenarios** and **20 named
 scope captures** on each native/release tier, including multi-process resolution
 and recovery sequences. An independent importing client checks 136 records per
 tier; a bounded actual-checked program covers records, empty policy and the
