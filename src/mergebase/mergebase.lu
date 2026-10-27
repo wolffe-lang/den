@@ -1,0 +1,54 @@
+// Original graph algorithm from git-merge-base(1), Description/Discussion.
+/// Owned graph node; IDs are opaque unique caller-validated names.
+pub struct Node { id: str, parents: List[str] }
+
+/// Invalid duplicate IDs, missing referenced nodes, or explicit resource limit.
+pub error GraphErrors = {invalid, missing, limit}
+
+fn reachable(nodes: List[Node], tip: str, cap: int) -> Map[str, bool] ! GraphErrors {
+    if cap < 1 || cap > 100000 || nodes.len > cap { return limit }
+    var slots = Map[str, int]()
+    for i in 0..nodes.len {
+        if nodes[i].id == "" || (slots[nodes[i].id] else -1) >= 0 { return invalid }
+        slots[nodes[i].id] = i
+    }
+    var pending = [tip], seen = Map[str, bool](), at = 0
+    seen[tip] = true
+    while at < pending.len {
+        let i = slots[pending[at]] else |_| { return missing }
+        at += 1
+        for parent in nodes[i].parents {
+            if seen[parent] else false { continue }
+            if pending.len >= cap { return limit }
+            seen[parent] = true
+            (mut pending).push(parent)
+        }
+    }
+    seen
+}
+
+/// True exactly when older is reachable from newer, including equality.
+pub fn ancestor(nodes: List[Node], older: str, newer: str, cap: int) -> bool ! GraphErrors {
+    let seen = reachable(nodes, newer, cap)?
+    seen[older] else false
+}
+
+/// Return every best common ancestor, in supplied node order, never an arbitrary
+/// first criss-cross base. The caller must recursively merge multiple bases.
+pub fn bases(nodes: List[Node], ours: str, theirs: str, cap: int) -> List[str] ! GraphErrors {
+    let left = reachable(nodes, ours, cap)?, right = reachable(nodes, theirs, cap)?
+    var common = List[str]()
+    for node in nodes {
+        if (left[node.id] else false) && (right[node.id] else false) { (mut common).push(node.id) }
+    }
+    var dominated = Map[str, bool]()
+    for name in common {
+        let seen = reachable(nodes, name, cap)?
+        for candidate in common {
+            if candidate != name && (seen[candidate] else false) { dominated[candidate] = true }
+        }
+    }
+    var result = List[str]()
+    for name in common { if !(dominated[name] else false) { (mut result).push(name) } }
+    result
+}

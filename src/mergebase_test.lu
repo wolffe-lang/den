@@ -14,6 +14,10 @@ fn main() -> !int {
     assert(one.len == 1 && one[0] == "root")
     assert(mergebase.ancestor(graph, "left", "a", 8)?)
     assert(!mergebase.ancestor(graph, "a", "left", 8)?)
-    assert((mergebase.bases(graph, "missing", "a", 8) else |e| match e { missing => ["missing"], _ => [] }) == ["missing"])
+    let missing_row = mergebase.bases(graph, "missing", "a", 8) else |e| match e {
+        missing => ["missing"],
+        _ => [],
+    }
+    assert(missing_row.len == 1 && missing_row[0] == "missing")
     0
 }

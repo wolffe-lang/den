@@ -1,0 +1,138 @@
+use delta
+// Original three-way byte-line merge. git-merge-file(1), Description/Options.
+// Reuses den's owned difftext edit engine; no external merge implementation.
+use difftext
+
+/// Owned merged bytes and the number of unresolved conflict regions.
+pub struct Result { data: List[byte], conflicts: int }
+
+/// Invalid options/labels, bounded edit limits, or conflicting binary content.
+pub error MergeErrors = {invalid, limit, binary}
+
+fn append(mut out: List[byte], data: List[byte]) {
+    for b in data { (mut out).push(b) }
+}
+
+fn equal(a: List[byte], b: List[byte]) -> bool {
+    if a.len != b.len { return false }
+    for i in 0..a.len { if a[i] != b[i] { return false } }
+    true
+}
+
+fn span(data: List[byte], lines: List[difftext.Line], start: int, end: int) -> List[byte] {
+    if start == end { return [] }
+    data[lines[start].start..lines[end - 1].end]
+}
+
+fn side(
+    base: List[byte],
+    lines: List[difftext.Line],
+    data: List[byte],
+    other: List[difftext.Line],
+    edits: List[difftext.Edit],
+    begin: int,
+    end: int,
+    lo: int,
+    hi: int,
+) -> List[byte] {
+    var out = List[byte](), pos = lo
+    for i in begin..end {
+        let e = copy edits[i]
+        append(mut out, span(base, lines, pos, e.old_start))
+        append(mut out, span(data, other, e.new_start, e.new_start + e.new_count))
+        pos = e.old_start + e.old_count
+    }
+    append(mut out, span(base, lines, pos, hi))
+    out
+}
+
+fn terminated(mut out: List[byte], data: List[byte]) {
+    append(mut out, data)
+    if data.len > 0 && data[data.len - 1] != 10 as byte { (mut out).push(10 as byte) }
+}
+
+/// Byte-owned result; labels must be single physical lines. Explicit file/line
+/// limits are inherited from difftext. Binary content is refused, not decoded.
+pub fn merge(
+    base: List[byte],
+    ours: List[byte],
+    theirs: List[byte],
+    ours_label: str,
+    base_label: str,
+    theirs_label: str,
+    style: str,
+) -> Result ! MergeErrors {
+    if style != "merge" && style != "diff3" && style != "zdiff3" { return invalid }
+    for label in [ours_label, base_label, theirs_label] {
+        if label.contains("\n") || label.contains("\r") || label.contains("\0") { return invalid }
+    }
+    if base.len > 16777216 || ours.len > 16777216 || theirs.len > 16777216 { return limit }
+    if equal(ours, theirs) { return Result { data: copy ours, conflicts: 0 } }
+    if equal(base, ours) { return Result { data: copy theirs, conflicts: 0 } }
+    if equal(base, theirs) { return Result { data: copy ours, conflicts: 0 } }
+    if delta.binary(base) || delta.binary(ours) || delta.binary(theirs) { return binary }
+    let bl = difftext.lines(base)?, ol = difftext.lines(ours)?, tl = difftext.lines(theirs)?
+    let oe = difftext.edits(base, ours)?, te = difftext.edits(base, theirs)?
+    var oi = 0, ti = 0, pos = 0, conflicts = 0, out = List[byte]()
+    while oi < oe.len || ti < te.len {
+        var lo = bl.len
+        if oi < oe.len { lo = oe[oi].old_start }
+        if ti < te.len && te[ti].old_start < lo { lo = te[ti].old_start }
+        append(mut out, span(base, bl, pos, lo))
+        let ob = oi, tb = ti
+        var hi = lo, changed = true
+        while changed {
+            changed = false
+            while oi < oe.len && oe[oi].old_start <= hi {
+                let end = oe[oi].old_start + oe[oi].old_count
+                if end > hi { hi = end }
+                oi += 1
+                changed = true
+            }
+            while ti < te.len && te[ti].old_start <= hi {
+                let end = te[ti].old_start + te[ti].old_count
+                if end > hi { hi = end }
+                ti += 1
+                changed = true
+            }
+        }
+        let left = side(base, bl, ours, ol, oe, ob, oi, lo, hi)
+        let right = side(base, bl, theirs, tl, te, tb, ti, lo, hi)
+        if ob == oi {
+            append(mut out, right)
+        } else if tb == ti || equal(left, right) {
+            append(mut out, left)
+        } else {
+            conflicts += 1
+            let ll = difftext.lines(left)?, rl = difftext.lines(right)?
+            var prefix = 0, suffix = 0
+            if style != "diff3" {
+                while prefix < ll.len &&
+                    prefix < rl.len &&
+                    equal(span(left, ll, prefix, prefix + 1), span(right, rl, prefix, prefix + 1)) {
+                    prefix += 1
+                }
+                while suffix < ll.len - prefix &&
+                    suffix < rl.len - prefix &&
+                    equal(
+                        span(left, ll, ll.len - suffix - 1, ll.len - suffix),
+                        span(right, rl, rl.len - suffix - 1, rl.len - suffix),
+                    ) { suffix += 1 }
+            }
+            append(mut out, span(left, ll, 0, prefix))
+            append(mut out, "<<<<<<< {ours_label}\n".bytes())
+            terminated(mut out, span(left, ll, prefix, ll.len - suffix))
+            if style != "merge" {
+                append(mut out, "||||||| {base_label}\n".bytes())
+                terminated(mut out, span(base, bl, lo, hi))
+            }
+            append(mut out, "=======\n".bytes())
+            terminated(mut out, span(right, rl, prefix, rl.len - suffix))
+            append(mut out, ">>>>>>> {theirs_label}\n".bytes())
+            append(mut out, span(left, ll, ll.len - suffix, ll.len))
+        }
+        pos = hi
+    }
+    append(mut out, span(base, bl, pos, bl.len))
+    Result { data: out, conflicts: conflicts }
+}

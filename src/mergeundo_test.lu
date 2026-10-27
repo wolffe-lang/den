@@ -1,0 +1,32 @@
+use index
+use oid
+
+fn main() -> !int {
+    let a = oid.parse("sha1", "1111111111111111111111111111111111111111")?
+    let b = oid.parse("sha1", "2222222222222222222222222222222222222222")?
+    var value = index.empty(2)?
+    value.entries = [
+        index.conflict_entry("file".bytes(), 0o100644, a, 1)?,
+        index.conflict_entry("file".bytes(), 0o100755, b, 3)?,
+    ]
+    let saved = index.record_undo(value, "file".bytes())?
+    assert(saved.entries.len == 2 && saved.extensions.len == 1)
+    assert(saved.extensions[0].signature == "REUC")
+    let raw = copy saved.extensions[0].data
+    assert(raw.len == 61)
+    assert(str_from_utf8(raw[0..21])? == "file\0" + "100644\0" + "0\0" + "100755\0")
+    for i in 21..41 { assert(raw[i] == 17 as byte) }
+    for i in 41..61 { assert(raw[i] == 34 as byte) }
+    let again = index.record_undo(saved, "file".bytes())?
+    assert(again.extensions.len == 1 && again.extensions[0].data.len == 61)
+    let parsed = index.parse(index.serialize(again)?)?
+    assert(parsed.entries.len == 2 && parsed.extensions.len == 1)
+    var resolved = index.conflict_entry("file".bytes(), 0o100644, b, 1)?
+    resolved.flags -= 4096
+    let replaced = index.replace_entry(value, resolved)?
+    assert(replaced.entries.len == 1 && index.stage(replaced.entries[0]) == 0)
+    assert(replaced.extensions.len == 1 && replaced.extensions[0].data.len == 61)
+    let removed = index.remove_path(value, "file".bytes())?
+    assert(removed.entries.len == 0 && removed.extensions[0].data.len == 61)
+    0
+}

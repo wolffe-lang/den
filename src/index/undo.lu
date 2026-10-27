@@ -1,0 +1,89 @@
+// Original gitformat-index(5), Resolve undo encoder.
+use object
+use oid
+
+struct Undo { path: List[byte], raw: List[byte] }
+
+fn undo_records(data: List[byte]) -> List[Undo] ! IndexErrors {
+    validate_reuc(data)?
+    var out = List[Undo](), pos = 0
+    while pos < data.len {
+        let begin = pos
+        while data[pos] != 0 as byte { pos += 1 }
+        let path = data[begin..pos]
+        pos += 1
+        var count = 0
+        for _ in 0..3 {
+            if data[pos] != 48 as byte { count += 1 }
+            while data[pos] != 0 as byte { pos += 1 }
+            pos += 1
+        }
+        pos += 20 * count
+        (mut out).push(Undo { path: path, raw: data[begin..pos] })
+    }
+    out
+}
+
+/// Save the current higher stages for one path to sorted REUC, replacing an
+/// older undo record for that path. Stage-zero paths leave extensions unchanged.
+/// Returns owned bytes; malformed index entries/extensions raise IndexErrors.
+pub fn record_undo(value: Index, path: List[byte]) -> Index ! IndexErrors {
+    validate_entries(value.entries)?
+    validate_extensions(value.extensions)?
+    if !valid_path(path) { return invalid_index }
+    var slots = [-1, -1, -1]
+    for i in 0..value.entries.len {
+        let e = copy value.entries[i]
+        if byte_compare(e.path, path) == 0 && stage(e) != 0 { slots[stage(e) - 1] = i }
+    }
+    if slots[0] < 0 && slots[1] < 0 && slots[2] < 0 { return copy value }
+    var record = owned_path(path)
+    (mut record).push(0 as byte)
+    for slot in slots {
+        let mode = if slot < 0 then "0" else object.mode_text(value.entries[slot].stat[6])?
+        append(mut record, mode.bytes())
+        (mut record).push(0 as byte)
+    }
+    for slot in slots { if slot >= 0 { append(mut record, value.entries[slot].id.bytes) } }
+    var previous = List[Undo](), extension = -1
+    for i in 0..value.extensions.len {
+        if value.extensions[i].signature == "REUC" {
+            previous = undo_records(value.extensions[i].data)?
+            extension = i
+        }
+    }
+    var records = List[Undo](), inserted = false
+    for old in previous {
+        let cmp = byte_compare(old.path, path)
+        if !inserted && cmp >= 0 { (mut records).push(Undo { path: owned_path(path), raw: copy record }); inserted = true }
+        if cmp != 0 { (mut records).push(copy old) }
+    }
+    if !inserted { (mut records).push(Undo { path: owned_path(path), raw: record }) }
+    var data = List[byte]()
+    for old in records { append(mut data, old.raw) }
+    var result = copy value
+    if extension < 0 { (mut result.extensions).push(Extension { signature: "REUC", data: data }) } else { result.extensions[extension].data = data }
+    result
+}
+
+/// Create a zero-stat higher-stage entry from an owned tree leaf. Stage must
+/// be 1, 2 or 3; mode/path/OID validation is identical to ordinary index entries.
+pub fn conflict_entry(
+    path: List[byte],
+    mode: int,
+    id: oid.Oid,
+    number: int,
+) -> Entry ! IndexErrors {
+    if number < 1 || number > 3 { return invalid_index }
+    var words = [0, 0, 0, 0, 0, 0, mode, 0, 0, 0]
+    let length = if path.len < 4095 then path.len else 4095
+    let result = Entry {
+        stat: words,
+        id: copy id,
+        flags: number * 4096 + length,
+        extended: 0,
+        path: owned_path(path),
+    }
+    validate_entry(result)?
+    result
+}

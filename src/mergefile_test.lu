@@ -1,15 +1,42 @@
 use mergefile
 
 fn main() -> !int {
-    let clean = mergefile.merge("a\nb\nc\n".bytes(), "A\nb\nc\n".bytes(), "a\nb\nC\n".bytes(), "HEAD", "base", "topic", "merge")?
+    let clean = mergefile.merge(
+        "a\nb\nc\n".bytes(),
+        "A\nb\nc\n".bytes(),
+        "a\nb\nC\n".bytes(),
+        "HEAD",
+        "base",
+        "topic",
+        "merge",
+    )?
     assert(clean.conflicts == 0)
     assert(str_from_utf8(clean.data)? == "A\nb\nC\n")
-    let conflict = mergefile.merge("old\n".bytes(), "ours\n".bytes(), "theirs\n".bytes(), "HEAD", "base", "topic", "merge")?
+    let conflict = mergefile.merge(
+        "old\n".bytes(),
+        "ours\n".bytes(),
+        "theirs\n".bytes(),
+        "HEAD",
+        "base",
+        "topic",
+        "merge",
+    )?
     assert(conflict.conflicts == 1)
     assert(str_from_utf8(conflict.data)? == "<<<<<<< HEAD\nours\n=======\ntheirs\n>>>>>>> topic\n")
     let same = mergefile.merge("old".bytes(), "new".bytes(), "new".bytes(), "a", "b", "c", "merge")?
     assert(same.conflicts == 0 && str_from_utf8(same.data)? == "new")
-    let diff3 = mergefile.merge("old".bytes(), "ours".bytes(), "theirs".bytes(), "a", "b", "c", "diff3")?
-    assert(str_from_utf8(diff3.data)? == "<<<<<<< a\nours\n||||||| b\nold\n=======\ntheirs\n>>>>>>> c\n")
+    let diff3 = mergefile.merge(
+        "old".bytes(),
+        "ours".bytes(),
+        "theirs".bytes(),
+        "a",
+        "b",
+        "c",
+        "diff3",
+    )?
+    assert(
+        str_from_utf8(diff3.data)? ==
+            "<<<<<<< a\nours\n||||||| b\nold\n=======\ntheirs\n>>>>>>> c\n",
+    )
     0
 }
