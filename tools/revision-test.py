@@ -74,13 +74,13 @@ for mode in ['loose','packed']:
    fail.append([mode,args]);print('FAIL',mode,args,'expected',expected,'actual',actual,flush=True)
  if not a.measure:
   for name in atoms+['HEAD:file','v2:file',tree+':file']:
-   expected=run(G,['rev-parse','--verify',name],repo);actual=run(client,[name],repo)
-   clients.append(dict(mode=mode,name=name,expected=expected,actual=actual))
-   if expected!=actual:fail.append(['client',mode,name]);print('FAIL client',mode,name,expected,actual,flush=True)
+   before=state(repo);expected=run(G,['rev-parse','--verify',name],repo);actual=run(client,[name],repo)
+   clients.append(dict(mode=mode,name=name,expected=expected,actual=actual,unchanged=before==state(repo)))
+   if expected!=actual or state(repo)!=before:fail.append(['client',mode,name]);print('FAIL client',mode,name,expected,actual,flush=True)
   # Raw byte path cannot be passed via wolf argv; public owned-byte API must support it.
-  actual=run(client,['--raw'],repo);expected=dict(status=0,stdout=(rawblob+'\n').encode().hex(),stderr='')
-  clients.append(dict(mode=mode,name='raw-byte-path',expected=expected,actual=actual))
-  if expected!=actual:fail.append(['client',mode,'raw-byte-path'])
+  before=state(repo);actual=run(client,['--raw'],repo);expected=dict(status=0,stdout=(rawblob+'\n').encode().hex(),stderr='')
+  clients.append(dict(mode=mode,name='raw-byte-path',expected=expected,actual=actual,unchanged=before==state(repo)))
+  if expected!=actual or state(repo)!=before:fail.append(['client',mode,'raw-byte-path'])
   for args,out in [(['--limits'],b'limits\n'),(['--invalid-ast'],b'invalid\n'),* [(['--commit',prefix],(id+'\n').encode()) for prefix,id in mixed]]:
    before=state(repo);actual=run(client,args,repo);expected=dict(status=0,stdout=out.hex(),stderr='')
    clients.append(dict(mode=mode,name=args,expected=expected,actual=actual,unchanged=before==state(repo)))

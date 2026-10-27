@@ -125,6 +125,7 @@ fn candidates(repo: repository.Repo, prefix: str) -> List[oid.Oid] ! RevisionErr
             },
             _ => { return Unsupported("revision object {e}") },
         }
+        if out.len >= 256 { return Unsupported("revision ambiguity candidate limit") }
         (mut out).push(id)
     }
     out
