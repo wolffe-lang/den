@@ -1,0 +1,26 @@
+vc07 prediction, before implementation
+
+Base dd1533c. Merge/revert must use owned walk/object/index/refs/worktree APIs.
+I predict fast-forward updates ORIG_HEAD before publishing HEAD; up-to-date
+merges may still change ORIG_HEAD. Squash modifies worktree/index without
+MERGE_HEAD or moving HEAD. A conflicted ordinary merge retains stages 1/2/3,
+MERGE_HEAD/MERGE_MSG/MERGE_MODE and AUTO_MERGE; resolving entries must create
+REUC before any current higher-stage mutation guard can be lifted. Abort has
+observable ordered side effects and cannot be modelled as deleting state files.
+Single-commit revert applies the inverse parent-to-commit delta, with root
+commits using an empty base and merge commits requiring explicit mainline.
+Conflict labels and missing-newline handling need black-box measurements.
+Criss-cross bases require recursive virtual bases, not an arbitrary first base;
+unsupported cases must remain named refusals until measured and implemented.
+Dirty/untracked files, foreign locks, packed refs, detached/unborn HEAD and
+same-OID updates will expose transaction ordering differences. Index stat proof
+must remain per-entry, with no excluded state paths or broad normalization.
+
+Plan: verify inputs twice; read primary documentation; measure oracle; add tests
+before implementation; implement bounded merge bases/text/index and command
+transactions; independent import clients and actual-checked units; named plant
+red; full inherited gauntlet and static repeat; refresh README/API/source record;
+PR five-section report including M3/M2 limits and vc08 sequencer draft. Never
+read Git/libgit2 implementation source, fork the scorer, or use write_tree for
+history reads. Preserve the two hunk witnesses/eight contexts and 96 binary
+representation differences as distinct non-parity evidence.
