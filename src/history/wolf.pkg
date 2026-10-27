@@ -1,4 +1,4 @@
 pkg {
     name: "history", edition: "1", capabilities: [env, fs],
-    deps: {diff: {path: "../diff"}, object: {path: "../object"}, oid: {path: "../oid"}, pretty: {path: "../pretty"}, repository: {path: "../repository"}, walk: {path: "../walk"}, worktree: {path: "../worktree"}},
+    deps: {revision: {path: "../revision"}, revset: {path: "../revset"}, diff: {path: "../diff"}, object: {path: "../object"}, oid: {path: "../oid"}, pretty: {path: "../pretty"}, repository: {path: "../repository"}, walk: {path: "../walk"}, worktree: {path: "../worktree"}},
 }

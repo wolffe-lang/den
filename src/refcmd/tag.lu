@@ -5,6 +5,7 @@ use oid
 use pretty
 use refs
 use repository
+use revision
 use walk
 use worktree
 
@@ -111,8 +112,9 @@ fn tag(args: List[str]) -> int ! commit.CommitErrors {
         return Unsupported("tag signing")
     }
     let target = if names.len == 2 then names[1] else "HEAD"
-    var id = object.resolve(ctx.repo, target) else |_| {
-        return Fatal("Failed to resolve '{target}' as a valid ref.")
+    var id = revision.resolve(ctx.repo, target) else |e| match e {
+        Unsupported(feature) => { return Unsupported(feature) },
+        _ => { return Fatal("Failed to resolve '{target}' as a valid ref.") },
     }
     let obj = object.read_object(ctx.repo, id, 16777216)?
     let short = abbrev(ctx.repo, id)?

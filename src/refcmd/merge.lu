@@ -10,6 +10,7 @@ use oid
 use pretty
 use refs
 use repository
+use revision
 use walk
 use worktree
 
@@ -216,9 +217,6 @@ fn merge_command(args: List[str]) -> int ! commit.CommitErrors {
         }
     }
     if name == "" { return Unsupported("merge upstream selection") }
-    if name.contains("~") || name.contains("^") || name.contains("..") || name.contains("@{{") {
-        return Unsupported("merge revision grammar")
-    }
     if fs.exists("{ctx.repo.gitdir}/MERGE_HEAD") {
         return Fatal(
             "You have not concluded your merge (MERGE_HEAD exists).\nPlease, commit your changes before you merge.",
@@ -231,13 +229,14 @@ fn merge_command(args: List[str]) -> int ! commit.CommitErrors {
     }
     let head = worktree.head(ctx)?
     if head.commits.len == 0 { return Unsupported("merge unborn HEAD") }
-    let raw_target = object.resolve(ctx.repo, name) else |_| {
-        return Failure("{name} - not something we can merge")
+    let raw_target = revision.resolve(ctx.repo, name) else |e| match e {
+        Unsupported(feature) => { return Unsupported(feature) },
+        _ => { return Failure("{name} - not something we can merge") },
     }
     if object.read_object(ctx.repo, raw_target, 16777216)?.kind == "tag" {
         return Unsupported("merge annotated tag message")
     }
-    let target = resolve_commit(ctx.repo, name) else |_| {
+    let target = revision.peel(ctx.repo, raw_target, "commit") else |_| {
         return Failure("{name} - not something we can merge")
     }
     let bases = mergetree.bases(ctx.repo, head.commits[0], target)?

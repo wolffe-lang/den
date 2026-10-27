@@ -23,9 +23,6 @@ fn revert_command(args: List[str]) -> int ! commit.CommitErrors {
         }
     }
     if name == "" { return Unsupported("revert missing commit") }
-    if name.contains("~") || name.contains("^") || name.contains("..") {
-        return Unsupported("revert revision grammar")
-    }
     for marker in ["MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD"] {
         if fs.exists("{ctx.repo.gitdir}/{marker}") {
             return Unsupported("revert in-progress {marker}")

@@ -62,12 +62,6 @@ fn sequence_remove(ctx: worktree.Context) -> () ! commit.CommitErrors {
 }
 
 fn replay_target(ctx: worktree.Context, name: str) -> oid.Oid ! commit.CommitErrors {
-    if name.contains("~") || name.contains("^") || name.contains("..") || name.contains("@{{") {
-        return Unsupported("replay revision grammar")
-    }
-    if name == "ORIG_HEAD" || name == "CHERRY_PICK_HEAD" || name == "REBASE_HEAD" {
-        return oid.parse("sha1", replay_read(ctx, name)?.trim())?
-    }
     resolve_commit(ctx.repo, name)?
 }
 

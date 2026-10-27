@@ -2,7 +2,7 @@ use std.fs
 use commit
 use commit_format
 use history
-use object
+use revision
 use oid
 use refs
 use repository
@@ -53,26 +53,7 @@ fn identity(ctx: worktree.Context) -> str ! commit.CommitErrors {
 }
 
 fn resolve_commit(repo: repository.Repo, name: str) -> oid.Oid ! commit.CommitErrors {
-    var id = object.resolve(repo, name)?
-    for _ in 0..64 {
-        let obj = object.read_object(repo, id, 16777216)?
-        if obj.kind == "commit" { let _ = object.parse_commit(obj.data, "sha1")?; return id }
-        if obj.kind != "tag" { return invalid_header }
-        let headers = object.parse_tag(obj.data, "sha1")?
-        var found = false
-        for field in headers.fields {
-            if field.key == "object" {
-                id = oid.parse(
-                    "sha1",
-                    str_from_utf8(field.value) else |_| { return invalid_header },
-                )?
-                found = true
-                break
-            }
-        }
-        if !found { return invalid_header }
-    }
-    limit
+    revision.peel(repo, revision.resolve(repo, name)?, "commit")?
 }
 
 fn abbrev(repo: repository.Repo, id: oid.Oid) -> str ! commit.CommitErrors {

@@ -3,8 +3,13 @@ use index
 use object
 use oid
 use repository
+use revision
 
 error Errors = {
+    Fatal(str),
+    Failure(str),
+    Pathspec(str),
+    utf8,
     invalid_tree,
     duplicate_name,
     invalid_header,
@@ -208,35 +213,6 @@ fn hash_object(args: List[str]) -> int ! Errors {
     0
 }
 
-fn ambiguity(repo: repository.Repo, name: str) -> () ! Errors {
-    let prefix = oid.prefix("sha1", name)?
-    let names = fs.read_dir("{repo.gitdir}/objects/{prefix[0..2]}") else |_| { return io }
-    var candidates = List[str]()
-    for suffix in names {
-        let text = "{prefix[0..2]}{suffix}"
-        let _ = oid.parse("sha1", text) else |_| { continue }
-        if text.starts_with(prefix) { (mut candidates).push(text) }
-    }
-    for candidate in candidates {
-        let stored = object.read_object(repo, oid.parse("sha1", candidate)?, 1000000000)?
-        if stored.kind == "commit" || stored.kind == "tag" {
-            return Unsupported("cat-file ambiguous history hints")
-        }
-    }
-    eprint("error: short object ID {name} is ambiguous")
-    eprint("hint: The candidates are:")
-    for candidate in candidates {
-        var width = 7
-        for other in candidates {
-            if other != candidate {
-                while width < 40 && candidate[0..width] == other[0..width] { width += 1 }
-            }
-        }
-        let stored = object.read_object(repo, oid.parse("sha1", candidate)?, 1000000000)?
-        eprint("hint:   {candidate[0..width]} {stored.kind}")
-    }
-}
-
 fn cat_file(args: List[str]) -> int ! Errors {
     if args.len != 3 { return Unsupported("cat-file options") }
     let option = args[1]
@@ -245,12 +221,8 @@ fn cat_file(args: List[str]) -> int ! Errors {
     }
     let repo = repository.discover(".")?
     let name = args[2]
-    let id = object.resolve(repo, name) else |e| match e {
-        ambiguous => {
-            ambiguity(repo, name)?
-            eprint("fatal: Not a valid object name {name}")
-            return 128
-        },
+    let id = revision.resolve(repo, name) else |e| match e {
+        Unsupported(feature) => { return Unsupported(feature) },
         _ => { eprint("fatal: Not a valid object name {name}"); return 128 },
     }
     let stored = object.read_object(repo, id, 1000000000) else |e| match e {
@@ -378,7 +350,7 @@ fn commit_tree(args: List[str]) -> int ! Errors {
             if i == args.len { return Unsupported("commit-tree missing value") }
             let value = args[i]
             if arg == "-p" {
-                let id = object.resolve(repo, value)?
+                let id = revision.resolve(repo, value)?
                 if object.read_object(repo, id, 1000000000)?.kind != "commit" {
                     return invalid_header
                 }
@@ -407,7 +379,7 @@ fn commit_tree(args: List[str]) -> int ! Errors {
         i += 1
     }
     if tree == "" { return Unsupported("commit-tree missing tree") }
-    let id = object.resolve(repo, tree)?
+    let id = revision.resolve(repo, tree)?
     if object.read_object(repo, id, 1000000000)?.kind != "tree" { return invalid_tree }
     if !specified { message = input("-")? }
     for b in message {
@@ -583,6 +555,7 @@ pub fn run(args: List[str]) -> int {
         _ => {},
     }
     dispatch(args) else |e| match e {
+        Fatal(message) => { eprint("fatal: {message}"); 128 },
         Unsupported(feature) => {
             let milestone = if feature.starts_with("config") then "M2, vc03" else "M1, vc02"
             eprint("den: not yet implemented: {feature} ({milestone})")

@@ -1,6 +1,14 @@
 use std.fs
 use repository
+use oid
+use revset
+use revsyntax
 use worktree
+
+fn dotted(name: str) -> bool {
+    let expression = revsyntax.parse(name) else { return false }
+    expression.kind == "two" || expression.kind == "three"
+}
 
 fn terminal_width() -> int {
     let columns = (env_get("COLUMNS") else "").to_int() else 0
@@ -153,11 +161,21 @@ fn parse(ctx: worktree.Context, args: List[str]) -> Options ! worktree.WorkError
             arg == "--color=never" {} else if arg.starts_with("-") {
             return Unsupported("diff option {arg}")
         } else {
-            let _ = resolve(ctx, arg) else |_| {
-                (mut options.paths).push(arg)
+            if dotted(arg) {
+                if options.revisions.len != 0 || options.cached { return Unsupported("diff mixed range operands") }
+                options.revisions = revset.endpoints(ctx.repo, arg)?
                 continue
             }
-            (mut options.revisions).push(arg)
+            let id = resolve(ctx, arg) else |e| match e {
+                Unsupported(feature) => { return Unsupported(feature) },
+                Fatal(message) => {
+                    if !fs.exists("{ctx.cwd}/{arg}") { return Fatal(message) }
+                    (mut options.paths).push(arg)
+                    continue
+                },
+                _ => { return invalid },
+            }
+            (mut options.revisions).push(oid.hex(id)?)
         }
     }
     if options.revisions.len > 2 || options.cached && options.revisions.len > 1 { return invalid }

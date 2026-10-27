@@ -3,6 +3,7 @@ pkg {
     edition: "1",
     capabilities: [env, fs],
     deps: {
+        revision: {path: "../revision"}, revset: {path: "../revset"}, revsyntax: {path: "../revsyntax"},
         diffbinary: {path: "../diffbinary"}, zlib: {path: "../zlib"},
         delta: {path: "../delta"}, difftext: {path: "../difftext"},
         index: {path: "../index"}, object: {path: "../object"}, oid: {path: "../oid"},

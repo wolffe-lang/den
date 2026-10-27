@@ -5,6 +5,8 @@ use object
 use oid
 use pretty
 use repository
+use revision
+use revset
 use walk
 use worktree
 
@@ -28,22 +30,6 @@ pub fn abbreviate(repo: repository.Repo, id: oid.Oid, minimum: int) -> str ! wor
         if oid.equal(found, id) { return full[0..length] }
     }
     full
-}
-
-fn peel(repo: repository.Repo, id: oid.Oid) -> oid.Oid ! worktree.WorkErrors {
-    var current = copy id
-    for _ in 0..64 {
-        let value = object.read_object(repo, current, 16777216)?
-        if value.kind != "tag" { return current }
-        let parsed = object.parse_tag(value.data, "sha1")?
-        for field in parsed.fields {
-            if field.key == "object" {
-                current = oid.parse("sha1", str_from_utf8(field.value)?)?
-                break
-            }
-        }
-    }
-    limit
 }
 
 fn root_files(ctx: worktree.Context, id: oid.Oid) -> List[diff.File] ! worktree.WorkErrors {
@@ -88,43 +74,6 @@ pub fn patch(
         changes = diff.collect(ctx, display)?
     }
     diff.render(ctx, changes, display)?
-}
-
-fn show_resolve(ctx: worktree.Context, name: str) -> oid.Oid ! worktree.WorkErrors {
-    let colon = name.find(":") else |_| { return diff.resolve(ctx, name)? }
-    if colon == 0 { return Unsupported("show index expression {name}") }
-    let revision = name[0..colon]
-    let path = name[colon + 1..]
-    var id = peel(ctx.repo, diff.resolve(ctx, revision)?)?
-    let stored = object.read_object(ctx.repo, id, 16777216)?
-    if stored.kind == "commit" {
-        id = walk.parse(id, stored.data)?.tree
-    } else if stored.kind != "tree" {
-        return invalid_tree
-    }
-    if path == "" { return id }
-    let parts = path.split("/")
-    if parts.len > 256 { return limit }
-    for part in parts {
-        if part == "" || part == "." || part == ".." {
-            return Unsupported("show relative object path")
-        }
-        let tree = object.read_object(ctx.repo, id, 16777216)?
-        if tree.kind != "tree" { return Fatal("path '{path}' does not exist in '{revision}'") }
-        var found = false
-        for entry in object.parse_tree(tree.data, "sha1")? {
-            if entry.name.len != part.len { continue }
-            var equal = true
-            for j in 0..part.len { if entry.name[j] != part.bytes()[j] { equal = false } }
-            if equal {
-                id = copy entry.id
-                found = true
-                break
-            }
-        }
-        if !found { return Fatal("path '{path}' does not exist in '{revision}'") }
-    }
-    id
 }
 
 fn dispatch(args: List[str]) -> int ! worktree.WorkErrors {
@@ -278,17 +227,13 @@ fn dispatch(args: List[str]) -> int ! worktree.WorkErrors {
     }
     var starts = List[oid.Oid]()
     for name in revisions {
-        if name.contains("..") ||
-            name.starts_with("^") ||
-            !show && name.contains(":") ||
-            name.contains("{{") {
-            return Unsupported("history revision expression {name}")
+        if name == ".." {
+            return Fatal("..: '..' is outside repository at '{ctx.root}'")
         }
-        let id = if show then show_resolve(ctx, name)? else diff.resolve(ctx, name)?
-        (mut starts).push(if show then id else peel(ctx.repo, id)?)
+        if show { (mut starts).push(revision.resolve(ctx.repo, name)?) }
     }
     var commits = List[walk.Commit](), out = List[byte](), printed_commit = false
-    if !show { commits = walk.collect(ctx.repo, starts, count, skip, 10000, first_parent)? }
+    if !show { commits = revset.collect(ctx.repo, revset.expand(ctx.repo, revisions)?, count, skip, first_parent)? }
     let length = if show then starts.len else commits.len
     for n in 0..length {
         let at = if reverse then length - n - 1 else n
@@ -336,7 +281,7 @@ fn dispatch(args: List[str]) -> int ! worktree.WorkErrors {
                 let name = if tag_depth == 0 then revisions[at] else oid.hex(id)?
                 add(mut out, "tree {name}\n\n".bytes())
                 for entry in object.parse_tree(stored.data, "sha1")? {
-                    add(mut out, worktree.quote(entry.name, display.quote_path, false))
+                    add(mut out, entry.name)
                     if entry.mode == 0o40000 { (mut out).push(47 as byte) }
                     (mut out).push(10 as byte)
                 }
