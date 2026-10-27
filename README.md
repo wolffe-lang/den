@@ -4,12 +4,12 @@ A version control system in [wolf](https://github.com/wolffe-lang/wolf-lang),
 working toward Git-compatible repositories and wire protocols. Where a wolf
 keeps what it has.
 
-**State: loose objects, a writable index, worktree/commit commands, bounded diff, history, refs, merges and replay.**
-This is not a replacement for Git; M2 and M3 remain incomplete. Log/show support
-bounded loose history; branches, tags, branch switching and resets share
+**State: loose and packed object reads, a writable index, worktree/commit commands, bounded diff, history, refs, merges and replay.**
+This is not a replacement for Git; M2, M3 and M4 remain incomplete. Log/show support
+bounded loose or packed history; branches, tags, branch switching and resets share
 loose/packed ref storage. Merge, single-commit revert, cherry-pick and linear
 rebase cover the measured subsets below. Combined merge display, full replay
-semantics, packs and transports remain unfinished. Text diff has
+semantics, pack writing and transports remain unfinished. Text diff has
 two recorded equal-cost alignment differences; binary patches reconstruct the
 exact blobs but do not always use Git's byte representation. `den --version`
 prints `den 0.0.0 (built with wolf 0.2.35)`.
@@ -28,7 +28,7 @@ measured bytes and documentation discrepancies.
 
 Archive and oracle pins are in `wolf-toolchain.toml` and `den-oracle.toml`.
 Downloads fail on a digest mismatch. Both release-metadata reads are retained
-in `notes/vc08-evidence/pins/` (earlier reads in `notes/vc07-evidence/pins/`); the original signature verification and two matching
+in `notes/vc09-evidence/pins/` (earlier reads in `notes/vc08-evidence/pins/`); the original signature verification and two matching
 oracle builds are in `notes/vc00-evidence/`.
 
 ## Commands implemented so far
@@ -41,8 +41,8 @@ oracle builds are in `notes/vc00-evidence/`.
 | Worktree | `add` paths/directories, `-A`, `-u`, `--ignore-removal`, `-f`, `-N`, `--chmod`; `rm`, `mv` and their implemented safety/force/recursive options |
 | Status | Human, short and porcelain v1, branch/unborn/detached headings, NUL output, untracked grouping and ignored paths |
 | Commit | Ordered `-m`, `-F`, `-a`, `--amend`, `--reset-author`, `--author`, fixed `--date`, cleanup modes, quiet and allow-empty options; attached/detached HEAD and loose-over-packed branch updates |
-| Diff | Worktree/index, `--cached`, two loose commits/trees or blobs; unified context, final-newline markers, modes, binary patches, stat/name forms, rename/copy detection and common pathspec magic |
-| History | `log` default/oneline/short/full/fuller, `-n`, `--skip`, `--reverse`, `--first-parent`, fixed date formats, patch/stat; `show` loose commits, trees, blobs, annotated tags and `REV:path` |
+| Diff | Worktree/index, `--cached`, two commits/trees or blobs; unified context, final-newline markers, modes, binary patches, stat/name forms, rename/copy detection and common pathspec magic |
+| History | `log` default/oneline/short/full/fuller, `-n`, `--skip`, `--reverse`, `--first-parent`, fixed date formats, patch/stat; `show` commits, trees, blobs, annotated tags and `REV:path` |
 | Restore | Index-to-worktree `restore`, `--staged`, `--worktree`, `--source`; `checkout -- <paths>` |
 | Refs | Loose and packed refs with peeled tag records; branch list/create/force/delete/rename, lightweight and message-supplied annotated tags, command reflogs |
 | Branch worktree | `switch` and branch `checkout`, `-c`/`-b` creation, explicit and implicit detached HEAD, dirty-worktree protection; `reset --soft/--mixed/--hard` |
@@ -92,6 +92,7 @@ tools/check-history
 tools/check-refs
 tools/check-merge
 tools/check-replay
+tools/check-pack                   # after corpus and inherited client builds
 tools/check-delta
 tools/check-rename
 tools/check-diff
@@ -141,12 +142,13 @@ repository state to a specific case; there are no wildcard exclusions.
 
 ## Repository and command limits
 
-The store reads/writes loose SHA-1 repositories only. Binary object/tree names
-are preserved, but filesystem path arguments remain UTF-8 `str`; raw non-UTF-8
-OS paths have named upstream limitations. SHA-256 IDs are representable, but
-SHA-256 repositories are refused before writes. Packs, alternates, linked
-worktrees, submodules and general revision expressions remain unsupported.
-Diff accepts loose names/IDs and bounded `^n`/`~n` ancestry; this is not a general
+The SHA-1 store reads loose objects and pack-v2/idx-v2 files; it writes loose
+objects only. Binary object/tree names are preserved, but filesystem path arguments
+remain UTF-8 `str`; raw non-UTF-8 OS paths have named upstream limitations.
+SHA-256 IDs are representable, but SHA-256 repositories are refused before writes.
+Pack writing, thin packs, multi-pack-index, bitmaps, alternates, linked worktrees,
+submodules and general revision expressions remain unsupported.
+Diff accepts loose/packed names and IDs and bounded `^n`/`~n` ancestry; this is not a general
 revision grammar. Log adds a timestamp-ordered reachable-commit walk, with
 stable parent-order ties, duplicate suppression and a first-parent option.
 
@@ -182,7 +184,7 @@ compare with an in-memory empty endpoint; ordinary patches reuse the shared
 diff collector and renderer. Unique abbreviations grow past collisions.
 History caps each object at 16 MiB, discovered commit data and rendered output
 at 128 MiB, and the CLI walk at 10,000 commits. The public walker accepts an
-explicit node budget. It is a bounded whole-history reader, not a pack walker.
+explicit node budget. It is a bounded whole-history reader, not a streaming walk.
 
 Default `log -p` omits merge patches as Git does. Combined merge `show` is a
 named refusal; `show -s` renders its ordered parents and message. Show-specific
@@ -202,8 +204,8 @@ merge-mode checkout, orphan branches and general revision grammar stay outside
 this bounded surface. Explicit unsupported cases are counted separately.
 
 Ref commands accept HEAD, full ref names, short branch/tag names, full OIDs and
-unambiguous loose-object prefixes. They do not add ancestry, ranges, reflog
-selectors or previous-checkout syntax. Packed files are bounded at 16 MiB and
+unambiguous loose/packed object prefixes. They do not add ancestry, ranges, reflog
+selectors or previous-checkout syntax. Packed-ref files are bounded at 16 MiB and
 100,000 records; a listing is bounded at 4,096 entries. Tree transitions refuse
 higher-stage or flagged index entries and submodules rather than losing their
 metadata. `switch` protects in-progress operations; `reset --soft` refuses an
@@ -259,6 +261,37 @@ keeps its prepared index unpublished until ref publication succeeds. FORMATS
 records these lifecycle differences and the possible earlier object/message
 side effects. Unsupported-command refusals must not be confused with rollback
 of every ordinary commit failure.
+
+## Packed object reads
+
+Packed lookup sits beneath the existing object API. Loose objects take precedence;
+only absence falls back to packs. Prefix lookup merges and deduplicates both
+namespaces, and writes do not duplicate objects already packed. Multiple packs
+and `.keep` files need no special caller behavior. OFS_DELTA and in-pack REF_DELTA
+chains reconstruct owned bodies, including forward REF bases.
+
+Both file SHA-1 trailers and their binding are verified before lookup results
+are used. The index validates fan-out, sorted unique names, CRC entries and
+32/64-bit offsets. Each reconstructed entry checks CRC, zlib consumption, sizes,
+delta instructions and its independent object identity. Corruption is a named
+error, not a missing-object fallback.
+
+Pack hashing and file reads use reclaimed 64-KiB offset windows without mmap.
+Compressed entries and reconstructed bodies are bounded whole-object buffers:
+16 MiB per inflated entry/body, 17,000,000 compressed bytes, 64 delta links and
+128 MiB of charged reconstruction input/output per read. Indexes are bounded at
+16 MiB/400,000 objects, directories at 8,192 entries and 256 packs. No persistent
+verification cache or pack-size-independent CPU cost is claimed: checksums scan
+candidate packs again on each lookup.
+
+`tools/check-pack` checks 2,442 raw objects across 34 oracle-packed fixtures per
+native/release tier, plus independent corruption/limit inputs, an importing client,
+a bounded actual-checked delta/CRC program, and the existing history, refs, merge
+and replay matrices over packed copies. The fixture builder checks that packing
+preserves the entire object namespace, including unreachable objects. Existing
+M2/M3 refusals and diff representation exceptions remain unchanged. Pack writing,
+`gc`/`repack`, `fsck`, `count-objects` and `verify-pack` commands remain future work;
+those Git commands are test oracles, not den features.
 
 ## Loose objects and historical measurements
 
