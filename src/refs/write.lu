@@ -77,7 +77,7 @@ pub fn log_line(
         }
     }
     if clean.len > 0 {
-        (mut out).push(9 as byte)
+        (mut out).push(32 as byte)
         for b in clean { (mut out).push(b) }
     }
     (mut out).push(10 as byte)
