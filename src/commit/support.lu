@@ -226,27 +226,7 @@ fn repaired_message(data: List[byte]) -> List[byte] {
 /// ASCII whitespace on each line, preserve its leading/internal bytes, and
 /// join adjacent nonblank lines with one SP. No decoding or repair occurs.
 pub fn subject(message: List[byte]) -> List[byte] ! CommitErrors {
-    if message.len > 16777216 { return limit }
-    var out = List[byte]()
-    var pos = 0
-    while pos < message.len {
-        let begin = pos
-        while pos < message.len && message[pos] != 10 as byte { pos += 1 }
-        var end = pos
-        while end > begin {
-            let b = message[end - 1]
-            if b != 32 as byte && (b as int < 9 || b as int > 13) { break }
-            end -= 1
-        }
-        if end == begin {
-            if out.len > 0 { break }
-        } else {
-            if out.len > 0 { (mut out).push(32 as byte) }
-            for i in begin..end { (mut out).push(message[i]) }
-        }
-        if pos < message.len { pos += 1 }
-    }
-    out
+    object.subject(message)?
 }
 
 /// Normalize only the first physical line for a reflog, trimming/collapsing

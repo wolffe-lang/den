@@ -1,0 +1,25 @@
+// Extracted unchanged from den commit/support.lu (vc03), org-owned code.
+/// Return the first nonblank physical paragraph, joining lines with spaces.
+/// Trailing ASCII whitespace is trimmed per line; content remains raw bytes.
+pub fn subject(message: List[byte]) -> List[byte] ! {limit} {
+    if message.len > 16777216 { return limit }
+    var out = List[byte](), pos = 0
+    while pos < message.len {
+        let begin = pos
+        while pos < message.len && message[pos] != 10 as byte { pos += 1 }
+        var end = pos
+        while end > begin {
+            let b = message[end - 1]
+            if b != 32 as byte && (b as int < 9 || b as int > 13) { break }
+            end -= 1
+        }
+        if end == begin {
+            if out.len > 0 { break }
+        } else {
+            if out.len > 0 { (mut out).push(32 as byte) }
+            for i in begin..end { (mut out).push(message[i]) }
+        }
+        if pos < message.len { pos += 1 }
+    }
+    out
+}
