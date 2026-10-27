@@ -1,31 +1,64 @@
 // Original evaluator over owned revsyntax; no mutation or index tree writes.
 use std.fs
+use std.time
 use object
 use oid
 use refs
 use repository
 use revsyntax
-use walk
-use worktree
+
+/// Object/ref/IO failures plus exact command diagnostics and named limits.
+pub error RevisionErrors = {
+    invalid,
+    invalid_oid,
+    unsupported_format,
+    bad_header,
+    bad_size,
+    bad_oid,
+    truncated,
+    dictionary,
+    checksum,
+    limit,
+    trailing,
+    unsupported_level,
+    not_found,
+    denied,
+    io,
+    exists,
+    unsupported,
+    Unsupported(str),
+    ambiguous,
+    cross_device,
+    invalid_header,
+    invalid_tree,
+    duplicate_name,
+    utf8,
+    Fatal(str),
+}
 
 /// Owned identity plus chosen reference and current detached provenance.
 pub struct Resolved { id: oid.Oid, reference: str, detached: bool }
+
 /// Read-only HEAD origin; unborn is distinct from detached.
 pub struct Provenance { reference: str, detached: bool, unborn: bool }
 
 /// Read HEAD without inventing an OID for an unborn symbolic target.
-pub fn provenance(repo: repository.Repo) -> Provenance ! worktree.WorkErrors {
+pub fn provenance(repo: repository.Repo) -> Provenance ! RevisionErrors {
     let text = str_from_utf8(repository.read_bytes("{repo.gitdir}/HEAD", 4096)?)?.trim()
     if text.starts_with("ref: ") {
         let target = text[5..]
         if !refs.valid(target) { return invalid_oid }
-        return Provenance { reference: target, detached: false, unborn: refs.optional(repo, target)?.len == 0 }
+        return Provenance {
+            reference: target,
+            detached: false,
+            unborn: refs.optional(repo, target)?.len == 0,
+        }
     }
     let _ = oid.parse("sha1", text)?
     Provenance { reference: "HEAD", detached: true, unborn: false }
 }
 
-fn read_ref(repo: repository.Repo, name: str) -> oid.Oid ! worktree.WorkErrors {
+fn read_ref(repo: repository.Repo, name: str) -> oid.Oid ! RevisionErrors {
     var parent = repo.gitdir
     let parts = name.split("/")
     for i in 0..parts.len - 1 {
@@ -42,10 +75,21 @@ fn read_ref(repo: repository.Repo, name: str) -> oid.Oid ! worktree.WorkErrors {
     oid.parse("sha1", line)?
 }
 
-fn atom_ref(repo: repository.Repo, name: str, mut warnings: List[str]) -> Resolved ! worktree.WorkErrors {
+fn atom_ref(
+    repo: repository.Repo,
+    name: str,
+    mut warnings: List[str],
+) -> Resolved ! RevisionErrors {
     if !refs.valid("refs/{name}") { return not_found }
     var selected = List[oid.Oid](), reference = "", matches = 0
-    for candidate in [name, "refs/{name}", "refs/tags/{name}", "refs/heads/{name}", "refs/remotes/{name}", "refs/remotes/{name}/HEAD"] {
+    for candidate in [
+        name,
+        "refs/{name}",
+        "refs/tags/{name}",
+        "refs/heads/{name}",
+        "refs/remotes/{name}",
+        "refs/remotes/{name}/HEAD",
+    ] {
         let id = read_ref(repo, candidate) else |e| match e {
             not_found => { continue },
             invalid_oid => { continue },
@@ -65,12 +109,14 @@ fn atom_ref(repo: repository.Repo, name: str, mut warnings: List[str]) -> Resolv
 /// Full candidate enumeration is diagnostic-only. It shares the loose/pack
 /// namespace, splitting only ambiguous prefixes, rather than reading objects
 /// through another store. Explicit bounds prevent a hostile namespace explosion.
-fn candidates(repo: repository.Repo, prefix: str) -> List[oid.Oid] ! worktree.WorkErrors {
+fn candidates(repo: repository.Repo, prefix: str) -> List[oid.Oid] ! RevisionErrors {
     var pending = [prefix], out = List[oid.Oid](), nodes = 0
     while pending.len > 0 {
         let name = (mut pending).pop() else { return invalid }
         nodes += 1
-        if nodes > 65536 || out.len > 256 { return Unsupported("revision ambiguity candidate limit") }
+        if nodes > 65536 || out.len > 256 {
+            return Unsupported("revision ambiguity candidate limit")
+        }
         let id = object.lookup(repo, name) else |e| match e {
             not_found => { continue },
             ambiguous => {
@@ -84,9 +130,37 @@ fn candidates(repo: repository.Repo, prefix: str) -> List[oid.Oid] ! worktree.Wo
     out
 }
 
-fn ambiguity(repo: repository.Repo, prefix: str, mut warnings: List[str]) -> () ! worktree.WorkErrors {
+struct Hint { rank: int, full: str, text: str }
+
+fn hint_date(value: List[byte]) -> str ! RevisionErrors {
+    let text = str_from_utf8(value)?
+    let close = text.rfind(">") else { return invalid_header }
+    let parts = text[close + 1..].words()
+    if parts.len != 2 { return invalid_header }
+    let seconds = parts[0].to_int() else { return invalid_header }
+    let zone = parts[1]
+    if zone.len != 5 || !zone.starts_with("+") && !zone.starts_with("-") { return invalid_header }
+    let hours = zone[1..3].to_int() else { return invalid_header }
+    let minutes = zone[3..].to_int() else { return invalid_header }
+    if hours < 0 ||
+        hours > 23 ||
+        minutes < 0 ||
+        minutes > 59 ||
+        seconds < 0 ||
+        seconds > 253401938459 {
+        return Unsupported("revision hint date range")
+    }
+    let local = seconds + (hours * 60 + minutes) * (if zone.starts_with("-") then -60 else 60)
+    if local < 0 { return Unsupported("revision hint date range") }
+    time.format(time.local_in("UTC", local) else { return invalid_header }, "%Y-%m-%d") else {
+        return invalid_header
+    }
+}
+
+fn ambiguity(repo: repository.Repo, prefix: str, mut warnings: List[str]) -> () ! RevisionErrors {
     (mut warnings).push("error: short object ID {prefix} is ambiguous")
     (mut warnings).push("hint: The candidates are:")
+    var hints = List[Hint](), used = 0
     for id in candidates(repo, prefix)? {
         let full = oid.hex(id)?
         var short = full[0..7]
@@ -98,24 +172,85 @@ fn ambiguity(repo: repository.Repo, prefix: str, mut warnings: List[str]) -> () 
             short = full[0..n]
             break
         }
-        let stored = object.read_object(repo, id, 16777216)?
+        let stored = charged(repo, id, mut used)?
+        var suffix = "", rank = 3
         if stored.kind == "commit" || stored.kind == "tag" {
-            return Unsupported("revision ambiguous {stored.kind} hint presentation")
+            let parsed = if stored.kind == "commit" {
+                object.parse_commit(stored.data, "sha1")?
+            } else {
+                object.parse_tag(stored.data, "sha1")?
+            }
+            var date = "", title = ""
+            for field in parsed.fields {
+                if stored.kind == "commit" && field.key == "author" ||
+                    stored.kind == "tag" && field.key == "tagger" {
+                    date = hint_date(field.value)?
+                }
+                if field.key == "tag" { title = str_from_utf8(field.value)? }
+            }
+            if stored.kind == "commit" { title = str_from_utf8(object.subject(parsed.message)?)? }
+            suffix = " {date} - {title}"
+            rank = if stored.kind == "commit" then 0 else 1
+        } else if stored.kind == "tree" {
+            rank = 2
         }
-        (mut warnings).push("hint:   {short} {stored.kind}")
+        let hint = Hint { rank: rank, full: full, text: "hint:   {short} {stored.kind}{suffix}" }
+        (mut hints).push(copy hint)
+        var at = hints.len - 1
+        while at > 0 &&
+            (hints[at - 1].rank > rank || hints[at - 1].rank == rank && hints[at - 1].full > full) {
+            hints[at] = copy hints[at - 1]
+            at -= 1
+        }
+        hints[at] = hint
     }
+    for hint in hints { (mut warnings).push(hint.text) }
 }
 
-fn base(repo: repository.Repo, name: str, mut warnings: List[str]) -> Resolved ! worktree.WorkErrors {
+fn base(
+    repo: repository.Repo,
+    name: str,
+    preference: str,
+    mut warnings: List[str],
+) -> Resolved ! RevisionErrors {
     let prefix = oid.prefix("sha1", name) else ""
     if prefix.len == 40 {
-        return Resolved { id: oid.parse("sha1", prefix)?, reference: "", detached: provenance(repo)?.detached }
+        return Resolved {
+            id: oid.parse("sha1", prefix)?,
+            reference: "",
+            detached: provenance(repo)?.detached,
+        }
     }
     let reference = atom_ref(repo, name, mut warnings) else |e| match e {
         not_found => {
             if prefix == "" { return not_found }
             let id = object.lookup(repo, prefix) else |failure| match failure {
-                ambiguous => { ambiguity(repo, prefix, mut warnings)?; return ambiguous },
+                ambiguous => {
+                    if preference != "" && preference != "object" && preference != "peel" {
+                        var matching = List[oid.Oid](), used = 0
+                        for candidate in candidates(repo, prefix)? {
+                            let _ = peel_budget(
+                                repo,
+                                candidate,
+                                preference,
+                                mut used,
+                            ) else |e| match e {
+                                not_found => { continue },
+                                _ => { return Unsupported("revision candidate type {e}") },
+                            }
+                            (mut matching).push(copy candidate)
+                        }
+                        if matching.len == 1 {
+                            return Resolved {
+                                id: copy matching[0],
+                                reference: "",
+                                detached: provenance(repo)?.detached,
+                            }
+                        }
+                    }
+                    ambiguity(repo, prefix, mut warnings)?
+                    return ambiguous
+                },
                 not_found => { return not_found },
                 _ => { return Unsupported("revision object {failure}") },
             }
@@ -126,26 +261,50 @@ fn base(repo: repository.Repo, name: str, mut warnings: List[str]) -> Resolved !
     reference
 }
 
-fn reflog(repo: repository.Repo, value: revsyntax.Atom, mut warnings: List[str]) -> Resolved ! worktree.WorkErrors {
+fn previous(repo: repository.Repo, selector: str) -> str ! RevisionErrors {
+    let wanted = selector[1..].to_int() else { return invalid }
+    if wanted <= 0 || wanted > 10000 { return invalid }
+    let data = str_from_utf8(repository.read_bytes("{repo.gitdir}/logs/HEAD", 16777216)?)?
+    let lines = data.split("\n")
+    if lines.len > 100001 { return limit }
+    var count = 0
+    for i in 0..lines.len {
+        let line = lines[lines.len - i - 1]
+        let tab = line.find("\tcheckout: moving from ") else { continue }
+        let message = line[tab + 23..]
+        let end = message.find(" to ") else { return invalid }
+        count += 1
+        if count == wanted { return message[0..end] }
+    }
+    not_found
+}
+
+/// Preserve the previous checkout's branch spelling for branch-taking edges;
+/// other expressions are returned unchanged and remain single-object inputs.
+pub fn checkout_name(repo: repository.Repo, name: str) -> str ! RevisionErrors {
+    let expression = revsyntax.parse(name) else { return name }
+    if expression.kind == "single" &&
+        expression.left.base == "" &&
+        expression.left.selector.starts_with("-") &&
+        expression.left.steps.len == 0 &&
+        !expression.left.has_path {
+        return previous(repo, expression.left.selector)?
+    }
+    name
+}
+
+fn reflog(
+    repo: repository.Repo,
+    value: revsyntax.Atom,
+    mut warnings: List[str],
+) -> Resolved ! RevisionErrors {
     let selector = value.selector
-    if selector == "upstream" || selector == "u" { return Unsupported("revision upstream tracking") }
+    if selector == "upstream" || selector == "u" {
+        return Unsupported("revision upstream tracking")
+    }
     if selector == "push" { return Unsupported("revision push tracking") }
     if selector.starts_with("-") {
-        let wanted = selector[1..].to_int() else { return invalid }
-        if wanted <= 0 || wanted > 10000 { return invalid }
-        let data = str_from_utf8(repository.read_bytes("{repo.gitdir}/logs/HEAD", 16777216)?)?
-        let lines = data.split("\n")
-        if lines.len > 100001 { return limit }
-        var count = 0
-        for i in 0..lines.len {
-            let line = lines[lines.len - i - 1]
-            let tab = line.find("\tcheckout: moving from ") else { continue }
-            let message = line[tab + 23..]
-            let end = message.find(" to ") else { return invalid }
-            count += 1
-            if count == wanted { return base(repo, message[0..end], mut warnings)? }
-        }
-        return not_found
+        return base(repo, previous(repo, selector)?, "", mut warnings)?
     }
     let name = if value.base == "" then provenance(repo)?.reference else value.base
     let reference = atom_ref(repo, name, mut warnings)?
@@ -159,56 +318,167 @@ fn reflog(repo: repository.Repo, value: revsyntax.Atom, mut warnings: List[str])
     if count < 0 || count > 10000 { return invalid }
     if count >= records.len { return Fatal("log for '{name}' only has {records.len} entries") }
     let line = records[records.len - count - 1]
-    if line.len < 82 || line.bytes()[40] != 32 as byte || line.bytes()[81] != 32 as byte { return invalid }
-    Resolved { id: oid.parse("sha1", line[41..81])?, reference: reference.reference, detached: reference.detached }
+    if line.len < 82 || line.bytes()[40] != 32 as byte || line.bytes()[81] != 32 as byte {
+        return invalid
+    }
+    Resolved {
+        id: oid.parse("sha1", line[41..81])?,
+        reference: reference.reference,
+        detached: reference.detached,
+    }
+}
+
+fn charged(repo: repository.Repo, id: oid.Oid, mut used: int) -> object.Object ! RevisionErrors {
+    let stored = object.read_object(repo, id, 16777216)?
+    used += stored.data.len
+    if used > 134217728 { return Unsupported("revision object payload limit") }
+    stored
+}
+
+fn commit_ids(
+    repo: repository.Repo,
+    id: oid.Oid,
+    key: str,
+    mut used: int,
+) -> List[oid.Oid] ! RevisionErrors {
+    let stored = charged(repo, id, mut used)?
+    if stored.kind != "commit" { return invalid_header }
+    var out = List[oid.Oid]()
+    for field in object.parse_commit(stored.data, "sha1")?.fields {
+        if field.key == key { (mut out).push(oid.parse("sha1", str_from_utf8(field.value)?)?) }
+    }
+    out
 }
 
 /// Peel only the documented types, checking raw tag and commit headers.
-pub fn peel(repo: repository.Repo, id: oid.Oid, kind: str) -> oid.Oid ! worktree.WorkErrors {
+pub fn peel(repo: repository.Repo, id: oid.Oid, kind: str) -> oid.Oid ! RevisionErrors {
+    var used = 0
+    peel_budget(repo, id, kind, mut used)?
+}
+
+fn peel_budget(
+    repo: repository.Repo,
+    id: oid.Oid,
+    kind: str,
+    mut used: int,
+) -> oid.Oid ! RevisionErrors {
     var current = copy id
     for _ in 0..64 {
-        let value = object.read_object(repo, current, 16777216)?
-        if kind == "object" || value.kind == kind || kind == "peel" && value.kind != "tag" { return current }
+        let value = charged(repo, current, mut used)?
+        if kind == "object" || value.kind == kind || kind == "peel" && value.kind != "tag" {
+            return current
+        }
         if value.kind == "tag" {
             let parsed = object.parse_tag(value.data, "sha1")?
             for field in parsed.fields {
-                if field.key == "object" { current = oid.parse("sha1", str_from_utf8(field.value)?)?; break }
+                if field.key == "object" {
+                    current = oid.parse("sha1", str_from_utf8(field.value)?)?
+                    break
+                }
             }
         } else if value.kind == "commit" && kind == "tree" {
-            return walk.parse(current, value.data)?.tree
-        } else { return not_found }
+            let trees = commit_ids(repo, current, "tree", mut used)?
+            if trees.len != 1 { return invalid_header }
+            return copy trees[0]
+        } else {
+            return not_found
+        }
     }
     Unsupported("revision tag depth limit")
 }
 
 /// Resolve an owned atom; diagnostics are returned to the caller, never printed.
-pub fn evaluate(repo: repository.Repo, value: revsyntax.Atom, mut warnings: List[str]) -> Resolved ! worktree.WorkErrors {
-    if value.base.len > 4096 || value.selector.len > 4096 || value.path.len > 4096 || value.steps.len > 256 { return limit }
+pub fn evaluate(
+    repo: repository.Repo,
+    value: revsyntax.Atom,
+    mut warnings: List[str],
+) -> Resolved ! RevisionErrors {
+    evaluate_typed(repo, value, "", mut warnings)?
+}
+
+/// Apply a consumer's object-kind preference only when a prefix is ambiguous;
+/// retain the original tag identity after disambiguating a commit-ish candidate.
+pub fn evaluate_typed(
+    repo: repository.Repo,
+    value: revsyntax.Atom,
+    preference: str,
+    mut warnings: List[str],
+) -> Resolved ! RevisionErrors {
+    if preference != "" &&
+        preference != "commit" &&
+        preference != "tree" &&
+        preference != "tag" &&
+        preference != "blob" &&
+        preference != "object" &&
+        preference != "peel" {
+        return invalid
+    }
+    if value.source.len > 4096 ||
+        value.base.len > 4096 ||
+        value.selector.len > 4096 ||
+        value.path.len > 4096 ||
+        value.steps.len > 256 {
+        return limit
+    }
     for step in value.steps {
-        if step.count < 0 || step.count > 10000 { return invalid }
-        if step.kind != "^" && step.kind != "~" && step.kind != "commit" && step.kind != "tree" && step.kind != "tag" && step.kind != "object" && step.kind != "peel" { return invalid }
+        if step.count < 0 ||
+            step.count > 10000 ||
+            step.kind != "^" && step.kind != "~" && step.count != 0 {
+            return invalid
+        }
+        if step.kind != "^" &&
+            step.kind != "~" &&
+            step.kind != "commit" &&
+            step.kind != "tree" &&
+            step.kind != "tag" &&
+            step.kind != "object" &&
+            step.kind != "peel" {
+            return invalid
+        }
     }
     if !value.has_path && value.path.len != 0 { return invalid }
-    var result = if value.selector != "" then reflog(repo, value, mut warnings)? else base(repo, value.base, mut warnings)?
-    var steps = 0
+    var wanted = preference
+    if value.steps.len > 0 {
+        wanted = value.steps[0].kind
+        if wanted == "^" || wanted == "~" { wanted = "commit" }
+    } else if value.has_path {
+        wanted = "tree"
+    }
+    var result = if value.selector != "" {
+        reflog(repo, value, mut warnings)?
+    } else {
+        base(repo, value.base, wanted, mut warnings)?
+    }
+    var steps = 0, used = 0
     for step in value.steps {
         if step.kind == "^" || step.kind == "~" {
-            result.id = peel(repo, result.id, "commit")?
+            result.id = peel_budget(repo, result.id, "commit", mut used)?
             let count = if step.kind == "^" && step.count != 0 then 1 else step.count
             steps += count
             if steps > 10000 { return Unsupported("revision ancestry step limit") }
             for _ in 0..count {
-                let item = walk.read(repo, result.id)?
+                let parents = commit_ids(repo, result.id, "parent", mut used)?
                 let parent = if step.kind == "~" then 1 else step.count
-                if parent > item.parents.len { return not_found }
-                result.id = copy item.parents[parent - 1]
+                if parent > parents.len { return not_found }
+                result.id = copy parents[parent - 1]
             }
         } else {
-            result.id = peel(repo, result.id, step.kind)?
+            result.id = peel_budget(repo, result.id, step.kind, mut used) else |e| match e {
+                not_found => {
+                    let terminal = peel_budget(repo, result.id, "peel", mut used)?
+                    let stored = charged(repo, terminal, mut used)?
+                    let actual = if stored.kind == "commit" then "tree" else stored.kind
+                    (mut warnings).push(
+                        "error: {value.source}: expected {step.kind} type, but the object dereferences to {actual} type",
+                    )
+                    return not_found
+                },
+                _ => { return Unsupported("revision peel {e}") },
+            }
         }
     }
     if value.has_path {
-        result.id = peel(repo, result.id, "tree")?
+        result.id = peel_budget(repo, result.id, "tree", mut used)?
         var start = 0, components = 0
         for at in 0..=value.path.len {
             if at != value.path.len && value.path[at] != 47 as byte { continue }
@@ -217,22 +487,30 @@ pub fn evaluate(repo: repository.Repo, value: revsyntax.Atom, mut warnings: List
             if components > 256 { return limit }
             var part = List[byte]()
             for i in start..at { (mut part).push(value.path[i]) }
-            if part.len == 0 || part.len == 1 && part[0] == 46 as byte || part.len == 2 && part[0] == 46 as byte && part[1] == 46 as byte {
+            if part.len == 0 ||
+                part.len == 1 && part[0] == 46 as byte ||
+                part.len == 2 && part[0] == 46 as byte && part[1] == 46 as byte {
                 return Unsupported("revision relative object path")
             }
-            let tree = object.read_object(repo, result.id, 16777216)?
+            let tree = charged(repo, result.id, mut used)?
             var found = false
             if tree.kind == "tree" {
                 for entry in object.parse_tree(tree.data, "sha1")? {
                     if entry.name.len != part.len { continue }
                     var equal = true
                     for i in 0..part.len { if entry.name[i] != part[i] { equal = false } }
-                    if equal { result.id = copy entry.id; found = true; break }
+                    if equal {
+                        result.id = copy entry.id
+                        found = true
+                        break
+                    }
                 }
             }
             if !found {
-                let path = str_from_utf8(value.path) else { return Unsupported("revision missing non-UTF-8 path diagnostic") }
-                return Fatal("path '{path}' does not exist in '{value.base}'")
+                let path = str_from_utf8(value.path) else {
+                    return Unsupported("revision missing non-UTF-8 path diagnostic")
+                }
+                return Fatal("path '{path}' does not exist in '{value.source}'")
             }
             start = at + 1
         }
@@ -246,21 +524,48 @@ pub fn unknown(name: str) -> str {
 }
 
 /// Command adapter; the non-printing evaluator above is the importing API.
-pub fn resolve(repo: repository.Repo, name: str) -> oid.Oid ! worktree.WorkErrors {
+pub fn resolve(repo: repository.Repo, name: str) -> oid.Oid ! RevisionErrors {
+    resolve_typed(repo, name, "")?
+}
+
+/// Resolve a single object with a command's prefix-kind preference.
+pub fn resolve_typed(
+    repo: repository.Repo,
+    name: str,
+    preference: str,
+) -> oid.Oid ! RevisionErrors {
     let expression = revsyntax.parse(name) else |e| match e {
         Unsupported(feature) => { return Unsupported(feature) },
         limit => { return Unsupported("revision parser limit") },
         _ => { return Fatal(unknown(name)) },
     }
     if expression.kind != "single" { return Unsupported("revision set in single-object consumer") }
-    resolve_atom(repo, expression.left, name)?
+    resolve_atom_typed(repo, expression.left, name, preference)?
 }
 
 /// Command adapter for an already parsed atom; preserves pending warnings on error.
-pub fn resolve_atom(repo: repository.Repo, value: revsyntax.Atom, name: str) -> oid.Oid ! worktree.WorkErrors {
+pub fn resolve_atom(
+    repo: repository.Repo,
+    value: revsyntax.Atom,
+    name: str,
+) -> oid.Oid ! RevisionErrors {
+    resolve_atom_typed(repo, value, name, "")?
+}
+
+/// Command adapter retaining a consumer's prefix-kind preference.
+pub fn resolve_atom_typed(
+    repo: repository.Repo,
+    value: revsyntax.Atom,
+    name: str,
+    preference: str,
+) -> oid.Oid ! RevisionErrors {
     var warnings = List[str]()
-    let result = evaluate(repo, value, mut warnings) else |e| {
-        for line in warnings { eprint(line) }
+    let result = evaluate_typed(repo, value, preference, mut warnings) else |e| {
+        for line in warnings {
+            eprint(line)
+            // Porcelain's revision/path probes report this type error twice.
+            if line.starts_with("error: ") && line.contains(": expected ") { eprint(line) }
+        }
         match e {
             not_found => { return Fatal(unknown(name)) },
             ambiguous => { return Fatal(unknown(name)) },

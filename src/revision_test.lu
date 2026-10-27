@@ -41,9 +41,20 @@ fn main() {
     assert(log.left.base == "" && log.left.selector == "2")
     let previous = revsyntax.parse("@{{-1}}") else { assert(false); return }
     assert(previous.left.selector == "-1")
-    let raw = revsyntax.parse_bytes([72 as byte,69 as byte,65 as byte,68 as byte,58 as byte,255 as byte]) else { assert(false); return }
+    let raw = revsyntax.parse_bytes(
+        [72 as byte, 69 as byte, 65 as byte, 68 as byte, 58 as byte, 255 as byte],
+    ) else { assert(false); return }
     assert(raw.left.path[0] == 255 as byte)
-    for bad in ["", "main^{{", "main^{{bad}}", "main@{{}}", "main^2x", "a....b", "^", "main..topic..other"] {
+    for bad in [
+        "",
+        "main^{{",
+        "main^{{bad}}",
+        "main@{{}}",
+        "main^2x",
+        "a....b",
+        "^",
+        "main..topic..other",
+    ] {
         assert(fails(bad))
     }
     for unsupported in ["@{{yesterday}}", ":/text", "HEAD^@", "HEAD^!", "HEAD^-2", ":0:file"] {

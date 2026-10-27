@@ -14,7 +14,11 @@ fn ancestry(repo: repository.Repo, id: oid.Oid) -> List[walk.Commit] ! worktree.
     walk.collect(repo, [revision.peel(repo, id, "commit")?], 100000, 0, 10000, false)?
 }
 
-fn exclude(repo: repository.Repo, id: oid.Oid, mut selected: Map[str, bool]) -> () ! worktree.WorkErrors {
+fn exclude(
+    repo: repository.Repo,
+    id: oid.Oid,
+    mut selected: Map[str, bool],
+) -> () ! worktree.WorkErrors {
     for item in ancestry(repo, id)? { selected[oid.hex(item.id)?] = true }
 }
 
@@ -28,16 +32,20 @@ pub fn expand(repo: repository.Repo, names: List[str]) -> Selection ! worktree.W
             limit => { return Unsupported("revision parser limit") },
             _ => { return Fatal(revision.unknown(name)) },
         }
-        let left = revision.resolve_atom(repo, expression.left, name)?
+        let left = revision.resolve_atom_typed(repo, expression.left, name, "commit")?
         if expression.kind == "single" {
             let id = revision.peel(repo, left, "peel")?
-            if object.read_object(repo, id, 16777216)?.kind == "commit" { (mut out.starts).push(id) }
+            if object.read_object(repo, id, 16777216)?.kind == "commit" {
+                (mut out.starts).push(id)
+            }
         } else if expression.kind == "exclude" {
             exclude(repo, left, mut out.excluded)?
         } else {
-            let right = revision.resolve_atom(repo, expression.right, name)?
+            let right = revision.resolve_atom_typed(repo, expression.right, name, "commit")?
             (mut out.starts).push(revision.peel(repo, right, "commit")?)
-            if expression.kind == "two" { exclude(repo, left, mut out.excluded)? } else {
+            if expression.kind == "two" {
+                exclude(repo, left, mut out.excluded)?
+            } else {
                 (mut out.starts).push(revision.peel(repo, left, "commit")?)
                 var leftset = Map[str, bool]()
                 exclude(repo, left, mut leftset)?
@@ -53,7 +61,13 @@ pub fn expand(repo: repository.Repo, names: List[str]) -> Selection ! worktree.W
 
 /// Exclusions precede count and skip, and traverse every parent even when the
 /// positive walk is first-parent. No timestamp pruning of shared ancestry.
-pub fn collect(repo: repository.Repo, selected: Selection, count: int, skip: int, first_parent: bool) -> List[walk.Commit] ! worktree.WorkErrors {
+pub fn collect(
+    repo: repository.Repo,
+    selected: Selection,
+    count: int,
+    skip: int,
+    first_parent: bool,
+) -> List[walk.Commit] ! worktree.WorkErrors {
     var out = List[walk.Commit](), skipped = 0
     if count == 0 { return out }
     for item in walk.collect(repo, selected.starts, 100000, 0, 10000, first_parent)? {
@@ -72,9 +86,11 @@ pub fn endpoints(repo: repository.Repo, name: str) -> List[str] ! worktree.WorkE
         Unsupported(feature) => { return Unsupported(feature) },
         _ => { return Fatal(revision.unknown(name)) },
     }
-    if expression.kind != "two" && expression.kind != "three" { return Unsupported("diff revision set") }
-    var left = revision.resolve_atom(repo, expression.left, name)?
-    let right = revision.resolve_atom(repo, expression.right, name)?
+    if expression.kind != "two" && expression.kind != "three" {
+        return Unsupported("diff revision set")
+    }
+    var left = revision.resolve_atom_typed(repo, expression.left, name, "commit")?
+    let right = revision.resolve_atom_typed(repo, expression.right, name, "commit")?
     if expression.kind == "three" {
         let lnodes = ancestry(repo, left)?, rnodes = ancestry(repo, right)?
         var leftset = Map[str, bool](), common = Map[str, bool](), dominated = Map[str, bool]()
@@ -90,7 +106,9 @@ pub fn endpoints(repo: repository.Repo, name: str) -> List[str] ! worktree.WorkE
         var bases = List[oid.Oid]()
         for item in rnodes {
             let key = oid.hex(item.id)?
-            if (common[key] else false) && !(dominated[key] else false) { (mut bases).push(copy item.id) }
+            if (common[key] else false) && !(dominated[key] else false) {
+                (mut bases).push(copy item.id)
+            }
         }
         if bases.len == 0 { return Fatal("{name}: no merge base") }
         if bases.len != 1 { return Unsupported("diff multiple merge bases") }

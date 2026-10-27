@@ -229,7 +229,7 @@ fn merge_command(args: List[str]) -> int ! commit.CommitErrors {
     }
     let head = worktree.head(ctx)?
     if head.commits.len == 0 { return Unsupported("merge unborn HEAD") }
-    let raw_target = revision.resolve(ctx.repo, name) else |e| match e {
+    let raw_target = revision.resolve_typed(ctx.repo, name, "commit") else |e| match e {
         Unsupported(feature) => { return Unsupported(feature) },
         _ => { return Failure("{name} - not something we can merge") },
     }
@@ -358,9 +358,11 @@ fn merge_command(args: List[str]) -> int ! commit.CommitErrors {
     }
     if !supplied_message {
         message = "Merge commit '{name}'"
-        if name.starts_with("refs/heads/") {
+        if name.starts_with("refs/heads/") && refs.valid(name) ||
+            name.starts_with("heads/") && refs.valid("refs/{name}") {
             message = "Merge branch '{name}'"
-        } else if name.starts_with("refs/tags/") {
+        } else if name.starts_with("refs/tags/") && refs.valid(name) ||
+            name.starts_with("tags/") && refs.valid("refs/{name}") {
             message = "Merge tag '{name}'"
         } else if refs.valid("refs/heads/{name}") &&
             refs.optional(ctx.repo, "refs/heads/{name}")?.len > 0 {

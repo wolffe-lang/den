@@ -1,6 +1,6 @@
 use std.fs
-use repository
 use oid
+use repository
 use revset
 use revsyntax
 use worktree
@@ -162,7 +162,9 @@ fn parse(ctx: worktree.Context, args: List[str]) -> Options ! worktree.WorkError
             return Unsupported("diff option {arg}")
         } else {
             if dotted(arg) {
-                if options.revisions.len != 0 || options.cached { return Unsupported("diff mixed range operands") }
+                if options.revisions.len != 0 || options.cached {
+                    return Unsupported("diff mixed range operands")
+                }
                 options.revisions = revset.endpoints(ctx.repo, arg)?
                 continue
             }

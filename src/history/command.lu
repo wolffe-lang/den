@@ -233,7 +233,15 @@ fn dispatch(args: List[str]) -> int ! worktree.WorkErrors {
         if show { (mut starts).push(revision.resolve(ctx.repo, name)?) }
     }
     var commits = List[walk.Commit](), out = List[byte](), printed_commit = false
-    if !show { commits = revset.collect(ctx.repo, revset.expand(ctx.repo, revisions)?, count, skip, first_parent)? }
+    if !show {
+        commits = revset.collect(
+            ctx.repo,
+            revset.expand(ctx.repo, revisions)?,
+            count,
+            skip,
+            first_parent,
+        )?
+    }
     let length = if show then starts.len else commits.len
     for n in 0..length {
         let at = if reverse then length - n - 1 else n

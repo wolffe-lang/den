@@ -1,19 +1,62 @@
-use revision
-use revsyntax
 use oid
 use repository
+use revision
+use revsyntax
+
+fn limited(text: str) -> bool {
+    let _ = revsyntax.parse(text) else |e| match e {
+        limit => { return true },
+        _ => { return false },
+    }
+    false
+}
 
 fn main() -> int {
     let args = env_args()
+    if args.len == 0 { return 1 }
     let repo = repository.discover(".") else { return 1 }
     let text = args[0]
-    var warnings = List[str]()
-    let expression = if text == "--raw" {
-        revsyntax.parse_bytes([72 as byte,69 as byte,65 as byte,68 as byte,58 as byte,255 as byte]) else { return 1 }
-    } else {
-        revsyntax.parse(text) else { return 1 }
+    if text == "--provenance" {
+        let state = revision.provenance(repo) else { return 1 }
+        print("{state.reference} {state.detached} {state.unborn}")
+        return 0
     }
-    let value = revision.evaluate(repo, expression.left, mut warnings) else { return 1 }
+    if text == "--limits" {
+        var long = "", chain = "HEAD"
+        for _ in 0..4096 { long += "x" }
+        let _ = revsyntax.parse(long) else { return 1 }
+        assert(limited(long + "x"))
+        for _ in 0..256 { chain += "^0" }
+        let _ = revsyntax.parse(chain) else { return 1 }
+        assert(limited(chain + "^0"))
+        let _ = revsyntax.parse("HEAD~10000") else { return 1 }
+        assert(limited("HEAD~10001"))
+        print("limits")
+        return 0
+    }
+    var warnings = List[str]()
+    if text == "--invalid-ast" {
+        var value = revsyntax.parse("HEAD^1") else { return 1 }
+        value.left.steps[0].count = -1
+        let _ = revision.evaluate(repo, value.left, mut warnings) else |e| match e {
+            invalid => { print("invalid"); return 0 },
+            _ => { return 1 },
+        }
+        return 1
+    }
+    let expression = if text == "--raw" {
+        revsyntax.parse_bytes(
+            [72 as byte, 69 as byte, 65 as byte, 68 as byte, 58 as byte, 255 as byte],
+        ) else { return 1 }
+    } else {
+        revsyntax.parse(if text == "--commit" then args[1] else text) else { return 1 }
+    }
+    let value = revision.evaluate_typed(
+        repo,
+        expression.left,
+        if text == "--commit" then "commit" else "",
+        mut warnings,
+    ) else { return 1 }
     for warning in warnings { eprint(warning) }
     print(oid.hex(value.id) else { return 1 })
     0

@@ -2,6 +2,7 @@ use std.fs
 use index
 use object
 use oid
+use revision
 
 /// Removal controls; force bypasses content checks but not index format checks.
 pub struct RemoveOptions {
@@ -228,8 +229,9 @@ pub fn restore_paths(
     var source = List[FlatEntry]()
     if options.source != "" || options.staged {
         let name = if options.source == "" then "HEAD" else options.source
-        let id = object.resolve(ctx.repo, name) else |_| {
-            return Fatal("could not resolve {name}")
+        let id = revision.resolve(ctx.repo, name) else |e| match e {
+            Unsupported(feature) => { return Unsupported(feature) },
+            _ => { return Fatal("could not resolve {name}") },
         }
         source = flatten_tree(ctx.repo, id)?
     } else {

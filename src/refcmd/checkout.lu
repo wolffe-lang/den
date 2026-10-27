@@ -5,6 +5,7 @@ use index
 use oid
 use refs
 use repository
+use revision
 use walk
 use worktree
 
@@ -74,7 +75,7 @@ fn switch_branch(args: List[str]) -> int ! commit.CommitErrors {
         }
     }
     if names.len > 1 { return Unsupported("{args[0]} multiple targets") }
-    let operand = if names.len == 1 then names[0] else "HEAD"
+    let operand = revision.checkout_name(ctx.repo, if names.len == 1 then names[0] else "HEAD")?
     var branch = if create != "" then create else operand
     var target = List[oid.Oid]()
     if create != "" && (!refs.valid("refs/heads/{create}") || create == "HEAD") {
@@ -106,8 +107,9 @@ fn switch_branch(args: List[str]) -> int ! commit.CommitErrors {
     }
     if target.len == 0 && !(operand == "HEAD" && old.commits.len == 0) {
         (mut target).push(
-            resolve_commit(ctx.repo, operand) else |_| {
-                return Fatal("invalid reference: {operand}")
+            resolve_commit(ctx.repo, operand) else |e| match e {
+                Unsupported(feature) => { return Unsupported(feature) },
+                _ => { return Fatal("invalid reference: {operand}") },
             },
         )
     }
@@ -161,20 +163,22 @@ fn switch_branch(args: List[str]) -> int ! commit.CommitErrors {
     } else {
         copy old.commits
     }
-    refs.set_head(
-        ctx.repo,
-        expected,
-        next,
-        before_checkout,
-        target,
-        identity(ctx)?,
-        "checkout: moving from {from} to {destination}",
-    ) else |e| match e {
-        exists => {
-            eprint("error: cannot lock ref 'HEAD': {lock_text("{ctx.repo.gitdir}/HEAD.lock")}")
-            return Fatal("unable to update HEAD")
-        },
-        _ => { return Fatal("unable to update HEAD: {e}") },
+    if !(detach && old.detached && target.len > 0 && oid.equal(old.commits[0], target[0])) {
+        refs.set_head(
+            ctx.repo,
+            expected,
+            next,
+            before_checkout,
+            target,
+            identity(ctx)?,
+            "checkout: moving from {from} to {destination}",
+        ) else |e| match e {
+            exists => {
+                eprint("error: cannot lock ref 'HEAD': {lock_text("{ctx.repo.gitdir}/HEAD.lock")}")
+                return Fatal("unable to update HEAD")
+            },
+            _ => { return Fatal("unable to update HEAD: {e}") },
+        }
     }
     if !quiet {
         if implicit_detach &&
@@ -243,9 +247,6 @@ fn reset(args: List[str]) -> int ! commit.CommitErrors {
             name = arg
             supplied = true
         }
-    }
-    if name.contains("~") || name.contains("^") || name.contains("..") || name.contains("@{{") {
-        return Unsupported("reset (M3, vc06)")
     }
     if mode == "soft" {
         var merging = fs.exists("{ctx.repo.gitdir}/MERGE_HEAD")

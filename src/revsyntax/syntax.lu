@@ -2,15 +2,32 @@
 // No repository IO, resolution, walking or command output in this module.
 /// Invalid syntax, inclusive resource bound, or explicitly unstaged grammar.
 pub error ParseErrors = {invalid, limit, Unsupported(str)}
+
 /// Ordered parent/ancestor operation or named object peel; count is nonnegative.
 pub struct Step { kind: str, count: int }
+
 /// Owned base, optional selector, ordered suffixes and literal raw tree path.
-pub struct Atom { base: str, selector: str, steps: List[Step], has_path: bool, path: List[byte] }
+pub struct Atom {
+    source: str,
+    base: str,
+    selector: str,
+    steps: List[Step],
+    has_path: bool,
+    path: List[byte],
+}
+
 /// Single/exclude uses left; two/three uses both independently owned endpoints.
 pub struct Expression { kind: str, left: Atom, right: Atom }
 
 fn empty_atom() -> Atom {
-    Atom { base: "HEAD", selector: "", steps: List[Step](), has_path: false, path: List[byte]() }
+    Atom {
+        source: "HEAD",
+        base: "HEAD",
+        selector: "",
+        steps: List[Step](),
+        has_path: false,
+        path: List[byte](),
+    }
 }
 
 fn decimal(text: str) -> int ! ParseErrors {
@@ -30,10 +47,14 @@ fn atom(text: str, has_path: bool, path: List[byte]) -> Atom ! ParseErrors {
     var out = empty_atom(), at = 0
     while at < text.len {
         let b = text.bytes()[at]
-        if b == 94 as byte || b == 126 as byte ||
-            b == 64 as byte && at + 1 < text.len && text.bytes()[at + 1] == 123 as byte { break }
+        if b == 94 as byte ||
+            b == 126 as byte ||
+            b == 64 as byte && at + 1 < text.len && text.bytes()[at + 1] == 123 as byte {
+            break
+        }
         at += 1
     }
+    out.source = text
     out.base = text[0..at]
     if out.base == "@" { out.base = "HEAD" }
     if at < text.len && text.bytes()[at] == 64 as byte {
@@ -42,8 +63,9 @@ fn atom(text: str, has_path: bool, path: List[byte]) -> Atom ! ParseErrors {
         if out.selector == "" { return invalid }
         if out.selector.starts_with("-") {
             if out.base != "" || decimal(out.selector[1..])? == 0 { return invalid }
-        } else if out.selector == "upstream" || out.selector == "u" || out.selector == "push" {
-        } else {
+        } else if out.selector == "upstream" ||
+            out.selector == "u" ||
+            out.selector == "push" {} else {
             let _ = decimal(out.selector) else |e| match e {
                 limit => { return limit },
                 _ => { return Unsupported("revision date selector") },
@@ -61,18 +83,29 @@ fn atom(text: str, has_path: bool, path: List[byte]) -> Atom ! ParseErrors {
             let end = at + 1 + (text[at + 1..].find("}}") else { return invalid })
             let kind = text[at + 1..end]
             if kind.starts_with("/") { return Unsupported("revision message search") }
-            if kind != "" && kind != "commit" && kind != "tree" && kind != "tag" && kind != "object" {
+            if kind != "" &&
+                kind != "commit" &&
+                kind != "tree" &&
+                kind != "tag" &&
+                kind != "object" {
                 return invalid
             }
             (mut out.steps).push(Step { kind: if kind == "" then "peel" else kind, count: 0 })
             at = end + 1
         } else {
-            if b == 94 as byte && at < text.len &&
-                (text.bytes()[at] == 64 as byte || text.bytes()[at] == 33 as byte || text.bytes()[at] == 45 as byte) {
+            if b == 94 as byte &&
+                at < text.len &&
+                (
+                    text.bytes()[at] == 64 as byte ||
+                        text.bytes()[at] == 33 as byte ||
+                        text.bytes()[at] == 45 as byte
+                ) {
                 return Unsupported("revision parent-set shorthand")
             }
             let start = at
-            while at < text.len && text.bytes()[at] >= 48 as byte && text.bytes()[at] <= 57 as byte { at += 1 }
+            while at < text.len &&
+                text.bytes()[at] >= 48 as byte &&
+                text.bytes()[at] <= 57 as byte { at += 1 }
             let count = if at == start then 1 else decimal(text[start..at])?
             (mut out.steps).push(Step { kind: if b == 94 as byte then "^" else "~", count: count })
         }
@@ -115,13 +148,19 @@ pub fn parse_bytes(data: List[byte]) -> Expression ! ParseErrors {
             split = at
             while at < text.len && text.bytes()[at] == 46 as byte { dots += 1; at += 1 }
             if dots != 2 && dots != 3 { return invalid }
-        } else { at += 1 }
+        } else {
+            at += 1
+        }
     }
     if split >= 0 {
         if colon < data.len || text.starts_with("^") { return invalid }
         let left = if split == 0 then "HEAD" else text[0..split]
         let right = if split + dots == text.len then "HEAD" else text[split + dots..]
-        return Expression { kind: if dots == 2 then "two" else "three", left: atom(left, false, path)?, right: atom(right, false, path)? }
+        return Expression {
+            kind: if dots == 2 then "two" else "three",
+            left: atom(left, false, path)?,
+            right: atom(right, false, path)?,
+        }
     }
     let exclude = text.starts_with("^")
     Expression {
