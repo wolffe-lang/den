@@ -380,7 +380,7 @@ fn dispatch(
         _ => { return Fatal("cannot publish commit: {e}") },
     }
     if value.all { index.install(mut tx)? }
-    if merging || reverting || picking || replay_action != "" {
+    if merging || reverting || picking || replay_action != "" || fs.is_dir("{ctx.repo.gitdir}/rebase-merge") {
         for name in ["MERGE_HEAD", "MERGE_MSG", "MERGE_MODE", "REVERT_HEAD", "CHERRY_PICK_HEAD"] {
             let path = refs.administrative(ctx.repo, name, false)?
             if fs.exists(path) { fs.remove(path)? }
@@ -405,8 +405,8 @@ pub fn run_revert(args: List[str]) -> int {
 
 /// Automatic replay shares the measured direct commit boundary with revert.
 /// CHERRY_PICK_HEAD supplies author provenance; no subprocess is invoked.
-pub fn run_pick(args: List[str]) -> int {
-    command_run(args, "", true, "")
+pub fn run_pick(args: List[str], preserve_empty_message_file: bool) -> int {
+    command_run(args, "", true, if preserve_empty_message_file then "cherry-pick" else "")
 }
 
 /// Explicit index-write/index-sync preparation failure seam for fixture tests.

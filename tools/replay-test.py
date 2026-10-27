@@ -27,12 +27,16 @@ def seed(repo, kind):
     env = dict(os.environ, GIT_AUTHOR_NAME='Original Author', GIT_AUTHOR_EMAIL='original@example.invalid', GIT_AUTHOR_DATE='1600000000 +0530')
     git(repo, 'commit', '-qam', 'first pick\n\nbody', env=env)
     first = git(repo, 'rev-parse', 'HEAD'); git(repo, 'tag', 'first', first)
-    (repo/'second').write_text('second\n'); git(repo, 'add', 'second'); git(repo, 'commit', '-qm', 'second pick', env=env)
+    if kind=='second-conflict':
+        (repo/'a').write_text('theirs\nmiddle\nsecond\n'); git(repo,'add','a')
+    else:
+        (repo/'second').write_text('second\n'); git(repo, 'add', 'second')
+    git(repo, 'commit', '-qm', 'second pick', env=env)
     second = git(repo, 'rev-parse', 'HEAD')
     git(repo, 'commit', '--allow-empty', '-qm', 'empty pick', env=env)
     empty = git(repo, 'rev-parse', 'HEAD'); git(repo, 'tag', 'empty', empty)
     git(repo, 'switch', '-q', 'main')
-    if kind in ('conflict', 'clean'):
+    if kind in ('conflict', 'clean', 'second-conflict'):
         (repo/'a').write_text('ours\nmiddle\nlast\n' if kind=='conflict' else 'first\nmiddle\nours\n')
         git(repo, 'commit', '-qam', 'ours')
     if kind == 'redundant': git(repo, 'cherry-pick', first)
@@ -72,6 +76,13 @@ case('rebase-continue-committed','conflict','topic',[
     ['rebase','--continue']])
 for setup in ('packed','dirty','staged','index.lock','HEAD.lock','ORIG_HEAD.lock','refs/heads/topic.lock'):
     case('rebase-setup-'+setup,'clean','topic:'+setup,[['rebase','main']])
+for action in ('continue','skip','abort'):
+    steps=[['cherry-pick','@first','@second']]
+    if action=='continue': steps += [['@write','a','resolved\n'],['add','a']]
+    steps += [['cherry-pick','--'+action]]
+    case('sequence-second-'+action,'second-conflict','',steps)
+for action in ('skip','abort'):
+    case('rebase-second-'+action,'second-conflict','topic',[['rebase','main'],['rebase','--'+action]])
 for cmd in ('cherry-pick','rebase'):
     for action in ('continue','skip','abort'):
         case(cmd+'-absent-'+action,'ff','',[[cmd,'--'+action]])
@@ -96,17 +107,31 @@ for n,(name,kind,setup,steps) in enumerate(CASES):
     def execute(exe):
         if repo.exists(): shutil.rmtree(repo)
         shutil.copytree(fixture,repo,symlinks=True)
-        out=[]
+        out=[]; before=[]
         for step in steps:
             if step[0]=='@write': (repo/step[1]).write_text(step[2]); continue
+            before.append((O['snapshot'](repo),O['worktree_snapshot'](repo)))
             out.append(O['capture']([exe,*step],repo,index_proof=True))
-        return out
-    expected=execute(G)
+        return out,before
+    expected,_=execute(G)
     row=dict(name=name,kind=kind,setup=setup,steps=steps,git=expected)
     if not a.measure:
-        actual=execute(D); row['den']=actual
-        row['equal']=len(expected)==len(actual) and all(O['equivalent'](e,d,'index-stat-proven') for e,d in zip(expected,actual))
-        print(name,'PASS' if row['equal'] else 'FAIL',flush=True)
+        actual,before=execute(D); row['den']=actual
+        refusal=None
+        if name=='pick-setup-AUTO_MERGE.lock': refusal=(0,'replay AUTO_MERGE lock transient stat')
+        if name=='rebase-continue': refusal=(len(actual)-1,'rebase continuation editor execution')
+        checks=[]
+        for i,(e,d) in enumerate(zip(expected,actual)):
+            if refusal and i==refusal[0]:
+                good=(d['status']==2 and d['stdout']=='' and bytes.fromhex(d['stderr'])==f'den: not yet implemented: {refusal[1]}\n'.encode()
+                      and d['repository']==before[i][0] and d['worktree']==before[i][1])
+                row['reason']=refusal[1]
+            else: good=O['equivalent'](e,d,'index-stat-proven')
+            checks.append(good)
+        row['verified']=len(expected)==len(actual) and all(checks)
+        row['disposition']='named-not-yet' if refusal else 'parity'
+        row['equal']=row['verified'] and not refusal
+        print(name,('NAMED' if refusal else 'PASS') if row['verified'] else 'FAIL',flush=True)
     else:
         print('\nCASE',name,flush=True)
         for step,result in zip([s for s in steps if s[0]!='@write'],expected):
@@ -119,6 +144,7 @@ assert rows, 'empty selection'
 path=R/f'target/replay-{"measure" if a.measure else a.tier}.json'
 path.write_text(json.dumps(rows,indent=2)+'\n')
 if not a.measure:
-    failures=sum(not r['equal'] for r in rows)
-    print(f'replay: {len(rows)-failures}/{len(rows)} exact; {failures} failures')
+    failures=sum(not r['verified'] for r in rows)
+    parity=[r for r in rows if r['disposition']=='parity']
+    print(f'replay: {sum(r["equal"] for r in parity)}/{len(parity)} exact; {len(rows)-len(parity)} named; {failures} failures')
     raise SystemExit(bool(failures))

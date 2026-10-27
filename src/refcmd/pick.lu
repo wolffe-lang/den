@@ -113,7 +113,9 @@ fn pick_commit(
     if !allow && oid.equal(tree.root, walk.read(ctx.repo, head.commits[0])?.tree) {
         return pick_empty(ctx, item)?
     }
-    if direct then commit.run_pick(args) else commit.run(args)
+    var originally_empty = item.parents.len == 0 && mergetree.files(ctx.repo, item.id)?.len == 0
+    if item.parents.len == 1 { originally_empty = oid.equal(item.tree, walk.read(ctx.repo, item.parents[0])?.tree) }
+    if direct then commit.run_pick(args, !originally_empty) else commit.run(args)
 }
 
 fn pick_one(
