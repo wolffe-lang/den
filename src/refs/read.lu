@@ -1,0 +1,117 @@
+use std.fs
+use oid
+use repository
+
+/// Read packed records without opening the object store. Missing is empty;
+/// corruption, denied access and size limits are never treated as absence.
+pub fn packed(repo: repository.Repo) -> List[Packed] ! RefErrors {
+    let data = repository.read_bytes("{repo.gitdir}/packed-refs", 16777216) else |e| match e {
+        not_found => { return List[Packed]() },
+        denied => { return denied },
+        io => { return io },
+        invalid => { return invalid },
+        exists => { return exists },
+        unsupported => { return unsupported },
+        limit => { return limit },
+        Unsupported(reason) => { return Unsupported(reason) },
+    }
+    parse_packed(data)?
+}
+
+/// Resolve a full ref or HEAD. Loose data shadows packed data, including a
+/// malformed loose ref. Symbolic chains are bounded; unborn targets are missing.
+pub fn read(repo: repository.Repo, name: str) -> oid.Oid ! RefErrors {
+    var current = name
+    for _ in 0..16 {
+        if current != "HEAD" && !valid(current) { return invalid_oid }
+        let data = repository.read_bytes("{repo.gitdir}/{current}", 4096) else |e| match e {
+            not_found => {
+                for record in packed(repo)? {
+                    if record.name == current { return copy record.id }
+                }
+                return not_found
+            },
+            denied => { return denied },
+            io => { return io },
+            invalid => { return invalid },
+            exists => { return exists },
+            unsupported => { return unsupported },
+            limit => { return limit },
+            Unsupported(reason) => { return Unsupported(reason) },
+        }
+        let text = (str_from_utf8(data) else |_| { return invalid_oid }).trim()
+        if text.starts_with("ref: ") {
+            current = text[5..]
+        } else {
+            return oid.parse("sha1", text)?
+        }
+    }
+    invalid_oid
+}
+
+/// An optional resolved OID, with an empty list exclusively for a missing ref.
+pub fn optional(repo: repository.Repo, name: str) -> List[oid.Oid] ! RefErrors {
+    let id = read(repo, name) else |e| match e {
+        not_found => { return List[oid.Oid]() },
+        invalid => { return invalid },
+        invalid_oid => { return invalid_oid },
+        unsupported_format => { return unsupported_format },
+        cross_device => { return cross_device },
+        limit => { return limit },
+        denied => { return denied },
+        io => { return io },
+        exists => { return exists },
+        unsupported => { return unsupported },
+        Unsupported(reason) => { return Unsupported(reason) },
+    }
+    [id]
+}
+
+/// Enumerate a namespace with loose override and unsigned UTF-8 byte ordering.
+/// Filesystem paths remain UTF-8-limited; no opaque filename is silently dropped.
+pub fn list(repo: repository.Repo, prefix: str) -> List[Packed] ! RefErrors {
+    if !valid("{prefix}placeholder") || !prefix.ends_with("/") { return invalid }
+    var names = Map[str, bool]()
+    for record in packed(repo)? {
+        if record.name.starts_with(prefix) { names[record.name] = true }
+    }
+    var pending = [prefix[0..prefix.len - 1]]
+    var visited = 0
+    while pending.len > 0 {
+        let dir = (mut pending).pop() else |_| { return invalid }
+        let entries = fs.entries("{repo.gitdir}/{dir}") else |e| match e {
+            not_found => { continue },
+            denied => { return denied },
+            io => { return io },
+        }
+        for entry in entries {
+            let leaf = str_from_utf8(entry.name) else |_| {
+                return Unsupported("non-UTF-8 ref name")
+            }
+            let name = "{dir}/{leaf}"
+            visited += 1
+            if visited > 100000 { return limit }
+            if leaf.ends_with(".lock") { continue }
+            if entry.kind == 1 {
+                (mut pending).push(name)
+            } else if entry.kind == 0 {
+                if !valid(name) { return invalid_oid }
+                names[name] = true
+            } else {
+                return Unsupported("ref filesystem kind {name}")
+            }
+        }
+    }
+    var out = List[Packed]()
+    for name in names.keys() {
+        let record = Packed { name: name, id: read(repo, name)?, peeled: List[oid.Oid]() }
+        (mut out).push(copy record)
+        var n = out.len - 1
+        while n > 0 && out[n - 1].name > name {
+            out[n] = copy out[n - 1]
+            n -= 1
+        }
+        out[n] = record
+    }
+    out
+}

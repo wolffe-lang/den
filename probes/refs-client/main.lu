@@ -1,0 +1,22 @@
+use oid
+use refs
+use repository
+
+fn main() -> int {
+    let args = env_args()
+    if args.len < 3 { return 2 }
+    let repo = repository.open(args[1]) else |e| { eprint("{e}"); return 1 }
+    if args[0] == "read" {
+        let id = refs.read(repo, args[2]) else |e| { eprint("{e}"); return 1 }
+        print(oid.hex(id) else "invalid")
+    } else if args[0] == "list" {
+        let values = refs.list(repo, args[2]) else |e| { eprint("{e}"); return 1 }
+        for value in values { print("{oid.hex(value.id) else "invalid"} {value.name}") }
+    } else if args[0] == "write" && args.len == 6 {
+        var before = List[oid.Oid](), after = List[oid.Oid]()
+        if args[3] != "-" { (mut before).push(oid.parse("sha1", args[3]) else |_| { return 2 }) }
+        if args[4] != "-" { (mut after).push(oid.parse("sha1", args[4]) else |_| { return 2 }) }
+        refs.update(repo, args[2], before, after, "Den Tester <den@example.invalid> 1700000000 +0000", args[5], false) else |e| { eprint("{e}"); return 1 }
+    } else { return 2 }
+    0
+}

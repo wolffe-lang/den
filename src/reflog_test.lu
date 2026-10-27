@@ -1,0 +1,19 @@
+use oid
+use refs
+
+fn main() -> int ! refs.RefErrors {
+    let a = oid.parse("sha1", "1111111111111111111111111111111111111111")?
+    let b = oid.parse("sha1", "2222222222222222222222222222222222222222")?
+    let who = "Den Tester <den@example.invalid> 1700000000 +0000"
+    let value = refs.log_line([copy a], [copy b], who, "  branch:\tCreated\nfrom main  ")?
+    assert(
+        (str_from_utf8(value) else "") ==
+            "1111111111111111111111111111111111111111 2222222222222222222222222222222222222222 {who}\tbranch: Created from main\n",
+    )
+    let empty = refs.log_line([], [b], who, "")?
+    assert((str_from_utf8(empty) else "").starts_with("0000000000000000000000000000000000000000 "))
+    assert(!(str_from_utf8(empty) else "").contains("\t"))
+    let zero = refs.log_line([a], [], who, "delete")?
+    assert((str_from_utf8(zero) else "").contains(" 0000000000000000000000000000000000000000 "))
+    0
+}

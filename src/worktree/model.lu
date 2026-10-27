@@ -3,6 +3,7 @@ use std.fs
 use index
 use object
 use oid
+use refs
 use repository
 
 /// Format/object/IO rows plus named pathspec and command-edge refusals.
@@ -295,8 +296,8 @@ pub fn read_index(ctx: Context) -> index.Index ! WorkErrors {
     index.parse(bytes)?
 }
 
-/// Read symbolic/unborn/detached HEAD. Packed refs are explicitly outside this
-/// milestone's loose-ref resolver, not guessed from a missing loose branch.
+/// Read symbolic/unborn/detached HEAD with loose-over-packed resolution.
+/// A genuinely missing symbolic target is unborn; malformed targets fail.
 pub fn head(ctx: Context) -> Head ! WorkErrors {
     let raw = repository.read_bytes("{ctx.repo.gitdir}/HEAD", 4096)?
     let line = (str_from_utf8(raw) else |_| { return invalid_oid }).trim()
@@ -307,8 +308,7 @@ pub fn head(ctx: Context) -> Head ! WorkErrors {
         reference = line[5..]
         if !reference.starts_with("refs/") || reference.contains("..") { return invalid_oid }
         branch = if reference.starts_with("refs/heads/") then reference[11..] else reference
-        if !fs.exists("{ctx.repo.gitdir}/{reference}") {
-            if fs.exists("{ctx.repo.gitdir}/packed-refs") { return Unsupported("packed refs") }
+        if refs.optional(ctx.repo, reference)?.len == 0 {
             return Head {
                 reference: reference,
                 branch: branch,

@@ -1,5 +1,6 @@
 use std.fs
 use oid
+use refs
 use repository
 
 /// Loose storage errors include repository configuration and filesystem outcomes.
@@ -63,32 +64,19 @@ pub fn lookup(repo: repository.Repo, name: str) -> oid.Oid ! StoreErrors {
     oid.parse("sha1", found)?
 }
 
-/// Resolve HEAD/loose refs only, with bounded traversal. Revision grammar is later.
+/// Resolve HEAD, loose/packed full refs, short branches/tags and loose OIDs.
+/// General revision grammar is a caller layer, not part of the object store.
 pub fn resolve(repo: repository.Repo, name: str) -> oid.Oid ! StoreErrors {
     let normalized = oid.prefix("sha1", name) else ""
     if normalized != "" { return lookup(repo, normalized)? }
-    if name.contains("..") || name.starts_with("/") || name.contains("\\") { return invalid_oid }
-    var refname = name
-    if name != "HEAD" && !name.starts_with("refs/") {
-        if fs.is_file("{repo.gitdir}/refs/heads/{name}") {
-            refname = "refs/heads/{name}"
-        } else if fs.is_file("{repo.gitdir}/refs/tags/{name}") {
-            refname = "refs/tags/{name}"
-        } else {
-            return not_found
-        }
-    }
-    for _ in 0..8 {
-        let raw = repository.read_bytes("{repo.gitdir}/{refname}", 4096)?
-        let text = str_from_utf8(raw) else |_| { return invalid_oid }
-        let line = text.trim()
-        if !line.starts_with("ref: ") { return oid.parse("sha1", line)? }
-        refname = line[5..]
-        if !refname.starts_with("refs/") || refname.contains("..") || refname.contains("\\") {
-            return invalid_oid
-        }
-    }
-    invalid_oid
+    if name == "HEAD" || name.starts_with("refs/") { return refs.read(repo, name)? }
+    if !refs.valid("refs/heads/{name}") { return invalid_oid }
+    let branch = refs.optional(repo, "refs/heads/{name}")?
+    let tag = refs.optional(repo, "refs/tags/{name}")?
+    if branch.len > 0 && tag.len > 0 { return ambiguous }
+    if branch.len > 0 { return copy branch[0] }
+    if tag.len > 0 { return copy tag[0] }
+    not_found
 }
 
 /// Install complete immutable bytes using exclusive temp + fsync + hard link.

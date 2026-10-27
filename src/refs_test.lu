@@ -1,0 +1,43 @@
+use oid
+use refs
+
+fn main() -> int ! refs.RefErrors {
+    for good in ["refs/heads/main", "refs/heads/a./b", "refs/tags/v1", "refs/heads/é"] {
+        assert(refs.valid(good))
+    }
+    for bad in [
+        "HEAD",
+        "refs/heads/.x",
+        "refs/heads/a.lock",
+        "refs/heads/x.",
+        "refs/heads/a..b",
+        "refs/heads/a@{{b",
+        "refs//x",
+        "refs/heads/a b",
+        "refs/heads/x\\y",
+    ] {
+        assert(!refs.valid(bad))
+    }
+    let a = "1111111111111111111111111111111111111111"
+    let b = "2222222222222222222222222222222222222222"
+    let source = "# pack-refs with: peeled fully-peeled sorted \n{a} refs/heads/main\n{b} refs/tags/v1\n^{a}\n"
+    let records = refs.parse_packed(source.bytes())?
+    assert(records.len == 2)
+    assert(oid.hex(records[1].id)? == b)
+    assert(oid.hex(records[1].peeled[0])? == a)
+    assert((str_from_utf8(refs.packed_bytes(records, "peeled fully-peeled")?) else "") == source)
+    let plain = str_from_utf8(refs.packed_bytes(records, "")?) else ""
+    assert(!plain.contains("fully-peeled"))
+    for bad in [
+        "^{a}\n",
+        "{a} refs/tags/v1\n^{b}\n^{a}\n",
+        "{a} refs/tags/v1\n{b} refs/tags/v1\n",
+        "{a} refs/tags/v1",
+        "oops\n",
+    ] {
+        var failed = false
+        let _ = refs.parse_packed(bad.bytes()) else |_| { failed = true; List[refs.Packed]() }
+        assert(failed)
+    }
+    0
+}

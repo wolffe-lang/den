@@ -1,0 +1,112 @@
+// Clean-room refs format: gitrepository-layout, git-check-ref-format,
+// git-pack-refs and pinned Git 2.56.0 observations; no implementation source.
+use oid
+
+/// Bounded reference syntax, object-id and filesystem failures; Unsupported
+/// names a repository representation outside this module's documented surface.
+pub error RefErrors = {
+    invalid,
+    invalid_oid,
+    unsupported_format,
+    limit,
+    not_found,
+    denied,
+    io,
+    exists,
+    unsupported,
+    cross_device,
+    Unsupported(str),
+}
+
+/// One packed record owns its id and optional peeled target; peeled is metadata,
+/// never a replacement for the tag object's id. The parser preserves input order.
+pub struct Packed { name: str, id: oid.Oid, peeled: List[oid.Oid] }
+
+/// Check a fully qualified reference, without revision or refspec grammar.
+pub fn valid(name: str) -> bool {
+    if !name.starts_with("refs/") ||
+        name.len > 4096 ||
+        name.ends_with(".") ||
+        name.contains("..") ||
+        name.contains("@{{") {
+        return false
+    }
+    for b in name.bytes() {
+        if b as int <= 32 ||
+            b as int == 127 ||
+            b == 92 as byte ||
+            b == 126 as byte ||
+            b == 94 as byte ||
+            b == 58 as byte ||
+            b == 63 as byte ||
+            b == 42 as byte ||
+            b == 91 as byte {
+            return false
+        }
+    }
+    for component in name.split("/") {
+        if component == "" || component.starts_with(".") || component.ends_with(".lock") {
+            return false
+        }
+    }
+    true
+}
+
+/// Parse bounded packed-refs with optional peeled lines. Reject malformed input,
+/// duplicate names and orphan/repeated peeling, never silently drop a record.
+pub fn parse_packed(data: List[byte]) -> List[Packed] ! RefErrors {
+    if data.len > 16777216 { return limit }
+    let text = str_from_utf8(data) else |_| { return Unsupported("non-UTF-8 ref name") }
+    if data.len > 0 && !text.ends_with("\n") { return invalid_oid }
+    var out = List[Packed]()
+    var seen = Map[str, bool]()
+    for line in text.split("\n") {
+        if line == "" || line.starts_with("#") { continue }
+        if line.starts_with("^") {
+            if out.len == 0 || line.len != 41 { return invalid_oid }
+            let n = out.len - 1
+            if out[n].peeled.len != 0 { return invalid_oid }
+            let target = oid.parse("sha1", line[1..])?
+            (mut out[n].peeled).push(target)
+            continue
+        }
+        if line.len < 42 || line.bytes()[40] != 32 as byte { return invalid_oid }
+        let name = line[41..]
+        if !valid(name) || (seen[name] else false) { return invalid_oid }
+        let id = oid.parse("sha1", line[0..40])?
+        seen[name] = true
+        (mut out).push(Packed { name: name, id: id, peeled: List[oid.Oid]() })
+        if out.len > 100000 { return limit }
+    }
+    out
+}
+
+/// Build sorted records retaining only caller-proven peeling traits. A parser
+/// or deleting caller carries the source header's traits, never invents them.
+/// No object is read here, so absent peeled ids cannot prove non-tag objects.
+pub fn packed_bytes(records: List[Packed], traits: str) -> List[byte] ! RefErrors {
+    if traits != "" && traits != "peeled" && traits != "peeled fully-peeled" {
+        return invalid
+    }
+    var out = List[byte]()
+    let header = if traits == "" {
+        "# pack-refs with: sorted \n"
+    } else {
+        "# pack-refs with: {traits} sorted \n"
+    }
+    for b in header.bytes() { (mut out).push(b) }
+    var previous = ""
+    for record in records {
+        if !valid(record.name) ||
+            previous != "" && record.name <= previous ||
+            record.peeled.len > 1 {
+            return invalid_oid
+        }
+        previous = record.name
+        for b in "{oid.hex(record.id)?} {record.name}\n".bytes() { (mut out).push(b) }
+        if record.peeled.len == 1 {
+            for b in "^{oid.hex(record.peeled[0])?}\n".bytes() { (mut out).push(b) }
+        }
+    }
+    out
+}

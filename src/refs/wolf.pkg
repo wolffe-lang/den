@@ -1,0 +1,9 @@
+pkg {
+    name: "refs",
+    edition: "1",
+    capabilities: [fs, env],
+    deps: {
+        oid: {path: "../oid"},
+        repository: {path: "../repository"},
+    },
+}

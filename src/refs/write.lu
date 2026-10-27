@@ -1,0 +1,220 @@
+use std.fs
+use oid
+use repository
+
+/// Validate administrative parents with lstat before any creation. No write
+/// follows a symlink. Existing foreign locks are never removed by this module.
+pub fn administrative(repo: repository.Repo, relative: str, parents: bool) -> str ! RefErrors {
+    var path = repo.gitdir
+    let parts = relative.split("/")
+    for i in 0..parts.len {
+        if parts[i] == "" || parts[i] == "." || parts[i] == ".." || parts[i].contains("\0") {
+            return invalid
+        }
+        path = "{path}/{parts[i]}"
+        let info = fs_lstat(path) else |e| match e {
+            not_found => {
+                if i + 1 == parts.len { return path }
+                if !parents { return not_found }
+                fs.create_dir(path) else |problem| match problem {
+                    exists => {},
+                    not_found => { return not_found },
+                    denied => { return denied },
+                    io => { return io },
+                }
+                let made = fs_lstat(path)?
+                if made[0] != 1 { return Unsupported("ref administrative parent") }
+                continue
+            },
+            denied => { return denied },
+            io => { return io },
+        }
+        if info[0] == 3 { return Unsupported("ref administrative symlink {relative}") }
+        if i + 1 < parts.len && info[0] != 1 { return io }
+        if i + 1 == parts.len && info[0] != 0 { return io }
+    }
+    path
+}
+
+fn equal_optional(a: List[oid.Oid], b: List[oid.Oid]) -> bool {
+    if a.len != b.len { return false }
+    a.len == 0 || oid.equal(a[0], b[0])
+}
+
+fn zero_or_hex(value: List[oid.Oid]) -> str ! RefErrors {
+    if value.len == 0 { return "0000000000000000000000000000000000000000" }
+    if value.len != 1 || value[0].algorithm != "sha1" { return invalid_oid }
+    oid.hex(value[0])?
+}
+
+/// Pure owned reflog record; message whitespace is collapsed exactly once at
+/// the edge, identity must already be Git's validated committer representation.
+pub fn log_line(
+    before: List[oid.Oid],
+    after: List[oid.Oid],
+    identity: str,
+    message: str,
+) -> List[byte] ! RefErrors {
+    if identity == "" ||
+        identity.contains("\n") ||
+        identity.contains("\r") ||
+        identity.contains("\t") ||
+        identity.contains("\0") {
+        return invalid
+    }
+    var out = List[byte]()
+    for b in "{zero_or_hex(before)?} {zero_or_hex(after)?} {identity}".bytes() { (mut out).push(b) }
+    var clean = List[byte]()
+    var space = false
+    for b in message.bytes() {
+        if b == 0 as byte { break }
+        if b == 32 as byte || b as int >= 9 && b as int <= 13 {
+            if clean.len > 0 { space = true }
+        } else {
+            if space { (mut clean).push(32 as byte); space = false }
+            (mut clean).push(b)
+        }
+    }
+    if clean.len > 0 {
+        (mut out).push(9 as byte)
+        for b in clean { (mut out).push(b) }
+    }
+    (mut out).push(10 as byte)
+    out
+}
+
+fn logging(repo: repository.Repo, name: str, force_log: bool) -> bool ! RefErrors {
+    if force_log || fs.exists("{repo.gitdir}/logs/{name}") { return true }
+    let bare = (repo.config["core.bare"] else "false").lower() == "true"
+    let setting = (
+        repo.config["core.logallrefupdates"] else if bare then "false" else "true"
+    ).lower()
+    if setting == "always" { return true }
+    if setting == "false" ||
+        setting == "no" ||
+        setting == "off" ||
+        setting == "0" ||
+        setting == "" {
+        return false
+    }
+    if setting != "true" && setting != "yes" && setting != "on" && setting != "1" {
+        return Unsupported("core.logAllRefUpdates={setting}")
+    }
+    name == "HEAD" ||
+        name.starts_with("refs/heads/") ||
+        name.starts_with("refs/remotes/") ||
+        name.starts_with("refs/notes/")
+}
+
+fn append(repo: repository.Repo, name: str, line: List[byte]) -> () ! RefErrors {
+    let path = administrative(repo, "logs/{name}", true)?
+    let fd = fs_open_mode(path, 18)?
+    defer fs_close(fd) else |_| {}
+    fs_write_chunk(fd, line)?
+    fs_sync(fd)?
+}
+
+/// Compare-and-swap a direct loose ref or detached HEAD. Missing expected is
+/// required absence, not a wildcard. Objects are validated by the caller.
+/// Ref lock precedes packed lock on delete. Logs precede ref publication, so a
+/// later IO error can leave appended logs; this is not multi-file atomicity.
+pub fn update(
+    repo: repository.Repo,
+    name: str,
+    expected: List[oid.Oid],
+    after: List[oid.Oid],
+    identity: str,
+    message: str,
+    force_log: bool,
+) -> () ! RefErrors {
+    if name != "HEAD" && !valid(name) { return invalid_oid }
+    let _ = zero_or_hex(expected)?
+    let encoded = zero_or_hex(after)?
+    let path = administrative(repo, name, true)?
+    let lock_path = "{path}.lock"
+    let lock = fs.create_new_with_mode(lock_path, 0o666)?
+    var fd = lock.fd
+    var active = true
+    defer {
+        if fd >= 0 { fs_close(fd) else |_| {} }
+        if active { fs.remove(lock_path) else |_| {} }
+    }
+    let current = optional(repo, name)?
+    if !equal_optional(current, expected) { return invalid }
+    if fs.exists(path) {
+        let raw = repository.read_bytes(path, 4096)?
+        if (str_from_utf8(raw) else "").starts_with("ref: ") {
+            return Unsupported("symbolic ref direct update")
+        }
+    }
+    if after.len == 0 {
+        remove_packed(repo, name)?
+        if fs.exists(path) { fs.remove(path)? }
+        let log = "{repo.gitdir}/logs/{name}"
+        if fs.exists(log) { let _ = administrative(repo, "logs/{name}", false)?; fs.remove(log)? }
+        return
+    }
+    if equal_optional(current, after) { return }
+    fs_write_chunk(fd, "{encoded}\n".bytes())?
+    fs_sync(fd)?
+    fs_close(fd)?
+    fd = -1
+    if logging(repo, name, force_log)? {
+        append(repo, name, log_line(current, after, identity, message)?)?
+    }
+    fs_rename(lock_path, path)?
+    active = false
+    fs.sync_dir(fs.parent(path) else |_| { return invalid })?
+}
+
+fn remove_packed(repo: repository.Repo, name: str) -> () ! RefErrors {
+    let path = "{repo.gitdir}/packed-refs"
+    if !fs.exists(path) { return }
+    let _ = administrative(repo, "packed-refs", false)?
+    let lock_path = "{path}.lock"
+    let file = fs.create_new_with_mode(lock_path, 0o666)?
+    var fd = file.fd
+    var active = true
+    defer {
+        if fd >= 0 { fs_close(fd) else |_| {} }
+        if active { fs.remove(lock_path) else |_| {} }
+    }
+    let raw = repository.read_bytes(path, 16777216)?
+    let records = parse_packed(raw)?
+    var kept = List[Packed]()
+    var found = false
+    for record in records {
+        if record.name == name { found = true } else { (mut kept).push(copy record) }
+    }
+    if !found { return }
+    let text = str_from_utf8(raw) else |_| { return invalid_oid }
+    var traits = ""
+    for line in text.lines() {
+        if !line.starts_with("# pack-refs with:") { break }
+        let words = line[17..].words()
+        var peeled = false, fully = false
+        for word in words {
+            if word == "peeled" { peeled = true }
+            if word == "fully-peeled" { fully = true }
+        }
+        if peeled { traits = if fully then "peeled fully-peeled" else "peeled" }
+    }
+    // Packed files need not have arrived sorted; sort the retained values.
+    for i in 1..kept.len {
+        var n = i
+        while n > 0 && kept[n - 1].name > kept[n].name {
+            let temp = copy kept[n - 1]
+            kept[n - 1] = copy kept[n]
+            kept[n] = temp
+            n -= 1
+        }
+    }
+    let encoded = packed_bytes(kept, traits)?
+    fs_write_chunk(fd, encoded)?
+    fs_sync(fd)?
+    fs_close(fd)?
+    fd = -1
+    fs_rename(lock_path, path)?
+    active = false
+    fs.sync_dir(repo.gitdir)?
+}

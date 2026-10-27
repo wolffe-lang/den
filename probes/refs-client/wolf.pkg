@@ -1,0 +1,10 @@
+pkg {
+    name: "refs-client",
+    edition: "1",
+    capabilities: [env, fs],
+    deps: {
+        refs: {path: "../../src/refs"},
+        oid: {path: "../../src/oid"},
+        repository: {path: "../../src/repository"},
+    },
+}

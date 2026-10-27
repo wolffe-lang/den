@@ -3,6 +3,7 @@ pkg {
     edition: "1",
     capabilities: [env, fs],
     deps: {
+        refs: {path: "../refs"},
         rename: {path: "../rename"},
         index: {path: "../index"}, ignore: {path: "../ignore"},
         object: {path: "../object"}, oid: {path: "../oid"},
