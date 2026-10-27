@@ -1,5 +1,26 @@
 use revsyntax
 
+fn fails(text: str) -> bool {
+    let _ = revsyntax.parse(text) else { return true }
+    false
+}
+
+fn refused(text: str) -> bool {
+    let _ = revsyntax.parse(text) else |e| match e {
+        Unsupported(_) => { return true },
+        _ => { return false },
+    }
+    false
+}
+
+fn capped() -> bool {
+    let _ = revsyntax.parse("HEAD~10001") else |e| match e {
+        limit => { return true },
+        _ => { return false },
+    }
+    false
+}
+
 fn main() {
     let one = revsyntax.parse("topic~2^3^{{tree}}:dir/a:b") else { assert(false); return }
     assert(one.kind == "single")
@@ -23,22 +44,10 @@ fn main() {
     let raw = revsyntax.parse_bytes([72 as byte,69 as byte,65 as byte,68 as byte,58 as byte,255 as byte]) else { assert(false); return }
     assert(raw.left.path[0] == 255 as byte)
     for bad in ["", "main^{{", "main^{{bad}}", "main@{{}}", "main^2x", "a....b", "^", "main..topic..other"] {
-        var failed = false
-        let _ = revsyntax.parse(bad) else { failed = true }
-        assert(failed)
+        assert(fails(bad))
     }
     for unsupported in ["@{{yesterday}}", ":/text", "HEAD^@", "HEAD^!", "HEAD^-2", ":0:file"] {
-        var refused = false
-        let _ = revsyntax.parse(unsupported) else |e| match e {
-            Unsupported(_) => { refused = true },
-            _ => { assert(false) },
-        }
-        assert(refused)
+        assert(refused(unsupported))
     }
-    var capped = false
-    let _ = revsyntax.parse("HEAD~10001") else |e| match e {
-        limit => { capped = true },
-        _ => { assert(false) },
-    }
-    assert(capped)
+    assert(capped())
 }

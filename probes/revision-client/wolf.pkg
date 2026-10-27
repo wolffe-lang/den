@@ -1,0 +1,4 @@
+pkg {
+    name: "revision-client", edition: "1", capabilities: [env, fs],
+    deps: {revision: {path: "../../src/revision"}, revsyntax: {path: "../../src/revsyntax"}, oid: {path: "../../src/oid"}, repository: {path: "../../src/repository"}},
+}

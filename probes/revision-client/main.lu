@@ -3,17 +3,18 @@ use revsyntax
 use oid
 use repository
 
-fn main() {
+fn main() -> int {
     let args = env_args()
-    let repo = repository.discover(".") else { exit(1) }
-    let text = args[1]
+    let repo = repository.discover(".") else { return 1 }
+    let text = args[0]
     var warnings = List[str]()
     let expression = if text == "--raw" {
-        revsyntax.parse_bytes([72 as byte,69 as byte,65 as byte,68 as byte,58 as byte,255 as byte]) else { exit(1) }
+        revsyntax.parse_bytes([72 as byte,69 as byte,65 as byte,68 as byte,58 as byte,255 as byte]) else { return 1 }
     } else {
-        revsyntax.parse(text) else { exit(1) }
+        revsyntax.parse(text) else { return 1 }
     }
-    let value = revision.evaluate(repo, expression.left, mut warnings) else { exit(1) }
+    let value = revision.evaluate(repo, expression.left, mut warnings) else { return 1 }
     for warning in warnings { eprint(warning) }
-    print(oid.hex(value.id) else { exit(1) })
+    print(oid.hex(value.id) else { return 1 })
+    0
 }

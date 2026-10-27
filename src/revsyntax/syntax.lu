@@ -1,0 +1,135 @@
+// Original bounded grammar from Git 2.56.0 Documentation/revisions.adoc.
+// No repository IO, resolution, walking or command output in this module.
+/// Invalid syntax, inclusive resource bound, or explicitly unstaged grammar.
+pub error ParseErrors = {invalid, limit, Unsupported(str)}
+/// Ordered parent/ancestor operation or named object peel; count is nonnegative.
+pub struct Step { kind: str, count: int }
+/// Owned base, optional selector, ordered suffixes and literal raw tree path.
+pub struct Atom { base: str, selector: str, steps: List[Step], has_path: bool, path: List[byte] }
+/// Single/exclude uses left; two/three uses both independently owned endpoints.
+pub struct Expression { kind: str, left: Atom, right: Atom }
+
+fn empty_atom() -> Atom {
+    Atom { base: "HEAD", selector: "", steps: List[Step](), has_path: false, path: List[byte]() }
+}
+
+fn decimal(text: str) -> int ! ParseErrors {
+    if text == "" { return invalid }
+    var value = 0
+    for b in text.bytes() {
+        if b < 48 as byte || b > 57 as byte { return invalid }
+        if value > 10000 / 10 { return limit }
+        value = value * 10 + b as int - 48
+        if value > 10000 { return limit }
+    }
+    value
+}
+
+fn atom(text: str, has_path: bool, path: List[byte]) -> Atom ! ParseErrors {
+    if text == "" { return invalid }
+    var out = empty_atom(), at = 0
+    while at < text.len {
+        let b = text.bytes()[at]
+        if b == 94 as byte || b == 126 as byte ||
+            b == 64 as byte && at + 1 < text.len && text.bytes()[at + 1] == 123 as byte { break }
+        at += 1
+    }
+    out.base = text[0..at]
+    if out.base == "@" { out.base = "HEAD" }
+    if at < text.len && text.bytes()[at] == 64 as byte {
+        let end = at + 2 + (text[at + 2..].find("}}") else { return invalid })
+        out.selector = text[at + 2..end]
+        if out.selector == "" { return invalid }
+        if out.selector.starts_with("-") {
+            if out.base != "" || decimal(out.selector[1..])? == 0 { return invalid }
+        } else if out.selector == "upstream" || out.selector == "u" || out.selector == "push" {
+        } else {
+            let _ = decimal(out.selector) else |e| match e {
+                limit => { return limit },
+                _ => { return Unsupported("revision date selector") },
+            }
+        }
+        at = end + 1
+    }
+    if out.base == "" && out.selector == "" { return invalid }
+    while at < text.len {
+        if out.steps.len >= 256 { return limit }
+        let b = text.bytes()[at]
+        at += 1
+        if b != 94 as byte && b != 126 as byte { return invalid }
+        if b == 94 as byte && at < text.len && text.bytes()[at] == 123 as byte {
+            let end = at + 1 + (text[at + 1..].find("}}") else { return invalid })
+            let kind = text[at + 1..end]
+            if kind.starts_with("/") { return Unsupported("revision message search") }
+            if kind != "" && kind != "commit" && kind != "tree" && kind != "tag" && kind != "object" {
+                return invalid
+            }
+            (mut out.steps).push(Step { kind: if kind == "" then "peel" else kind, count: 0 })
+            at = end + 1
+        } else {
+            if b == 94 as byte && at < text.len &&
+                (text.bytes()[at] == 64 as byte || text.bytes()[at] == 33 as byte || text.bytes()[at] == 45 as byte) {
+                return Unsupported("revision parent-set shorthand")
+            }
+            let start = at
+            while at < text.len && text.bytes()[at] >= 48 as byte && text.bytes()[at] <= 57 as byte { at += 1 }
+            let count = if at == start then 1 else decimal(text[start..at])?
+            (mut out.steps).push(Step { kind: if b == 94 as byte then "^" else "~", count: count })
+        }
+    }
+    out.has_path = has_path
+    out.path = copy path
+    out
+}
+
+/// An owned tree; raw bytes after the first outside-braces colon are literal.
+pub fn parse_bytes(data: List[byte]) -> Expression ! ParseErrors {
+    if data.len == 0 { return invalid }
+    if data.len > 4096 { return limit }
+    var colon = data.len, braces = false
+    for i in 0..data.len {
+        let b = data[i]
+        if b == 0 as byte { return invalid }
+        if colon != data.len { continue }
+        if b == 123 as byte { braces = true }
+        if b == 125 as byte { braces = false }
+        if b == 58 as byte && !braces { colon = i }
+    }
+    if colon == 0 {
+        if data.len > 1 && data[1] == 47 as byte { return Unsupported("revision message search") }
+        return Unsupported("revision index expression")
+    }
+    var head = List[byte](), path = List[byte]()
+    for i in 0..colon { (mut head).push(data[i]) }
+    if colon < data.len { for i in colon + 1..data.len { (mut path).push(data[i]) } }
+    let text = str_from_utf8(head) else { return invalid }
+    var split = -1, dots = 0
+    braces = false
+    var at = 0
+    while at < text.len {
+        let b = text.bytes()[at]
+        if b == 123 as byte { braces = true }
+        if b == 125 as byte { braces = false }
+        if b == 46 as byte && !braces && at + 1 < text.len && text.bytes()[at + 1] == 46 as byte {
+            if split >= 0 { return invalid }
+            split = at
+            while at < text.len && text.bytes()[at] == 46 as byte { dots += 1; at += 1 }
+            if dots != 2 && dots != 3 { return invalid }
+        } else { at += 1 }
+    }
+    if split >= 0 {
+        if colon < data.len || text.starts_with("^") { return invalid }
+        let left = if split == 0 then "HEAD" else text[0..split]
+        let right = if split + dots == text.len then "HEAD" else text[split + dots..]
+        return Expression { kind: if dots == 2 then "two" else "three", left: atom(left, false, path)?, right: atom(right, false, path)? }
+    }
+    let exclude = text.starts_with("^")
+    Expression {
+        kind: if exclude then "exclude" else "single",
+        left: atom(if exclude then text[1..] else text, colon < data.len, path)?,
+        right: empty_atom(),
+    }
+}
+
+/// UTF-8 command spelling adapter; parse_bytes preserves opaque path bytes.
+pub fn parse(text: str) -> Expression ! ParseErrors { parse_bytes(text.bytes())? }

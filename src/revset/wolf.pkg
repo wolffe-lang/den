@@ -1,0 +1,4 @@
+pkg {
+    name: "revset", edition: "1", capabilities: [env, fs],
+    deps: {object: {path: "../object"}, oid: {path: "../oid"}, repository: {path: "../repository"}, revision: {path: "../revision"}, revsyntax: {path: "../revsyntax"}, walk: {path: "../walk"}, worktree: {path: "../worktree"}},
+}

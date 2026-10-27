@@ -1,0 +1,1 @@
+pkg { name: "revsyntax", edition: "1" }

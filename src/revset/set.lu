@@ -1,0 +1,100 @@
+// Original commit-set layer, separate from syntax and single-object evaluation.
+use object
+use oid
+use repository
+use revision
+use revsyntax
+use walk
+use worktree
+
+/// Owned positive tips and a full-parent ancestry exclusion set.
+pub struct Selection { starts: List[oid.Oid], excluded: Map[str, bool] }
+
+fn ancestry(repo: repository.Repo, id: oid.Oid) -> List[walk.Commit] ! worktree.WorkErrors {
+    walk.collect(repo, [revision.peel(repo, id, "commit")?], 100000, 0, 10000, false)?
+}
+
+fn exclude(repo: repository.Repo, id: oid.Oid, mut selected: Map[str, bool]) -> () ! worktree.WorkErrors {
+    for item in ancestry(repo, id)? { selected[oid.hex(item.id)?] = true }
+}
+
+/// Expand documented inclusions, exclusions and dotted sets without index IO.
+pub fn expand(repo: repository.Repo, names: List[str]) -> Selection ! worktree.WorkErrors {
+    if names.len > 256 { return Unsupported("revision argument limit") }
+    var out = Selection { starts: List[oid.Oid](), excluded: Map[str, bool]() }
+    for name in names {
+        let expression = revsyntax.parse(name) else |e| match e {
+            Unsupported(feature) => { return Unsupported(feature) },
+            limit => { return Unsupported("revision parser limit") },
+            _ => { return Fatal(revision.unknown(name)) },
+        }
+        let left = revision.resolve_atom(repo, expression.left, name)?
+        if expression.kind == "single" {
+            let id = revision.peel(repo, left, "peel")?
+            if object.read_object(repo, id, 16777216)?.kind == "commit" { (mut out.starts).push(id) }
+        } else if expression.kind == "exclude" {
+            exclude(repo, left, mut out.excluded)?
+        } else {
+            let right = revision.resolve_atom(repo, expression.right, name)?
+            (mut out.starts).push(revision.peel(repo, right, "commit")?)
+            if expression.kind == "two" { exclude(repo, left, mut out.excluded)? } else {
+                (mut out.starts).push(revision.peel(repo, left, "commit")?)
+                var leftset = Map[str, bool]()
+                exclude(repo, left, mut leftset)?
+                for item in ancestry(repo, right)? {
+                    let key = oid.hex(item.id)?
+                    if leftset[key] else false { out.excluded[key] = true }
+                }
+            }
+        }
+    }
+    out
+}
+
+/// Exclusions precede count and skip, and traverse every parent even when the
+/// positive walk is first-parent. No timestamp pruning of shared ancestry.
+pub fn collect(repo: repository.Repo, selected: Selection, count: int, skip: int, first_parent: bool) -> List[walk.Commit] ! worktree.WorkErrors {
+    var out = List[walk.Commit](), skipped = 0
+    if count == 0 { return out }
+    for item in walk.collect(repo, selected.starts, 100000, 0, 10000, first_parent)? {
+        if selected.excluded[oid.hex(item.id)?] else false { continue }
+        if skipped < skip { skipped += 1; continue }
+        (mut out).push(copy item)
+        if out.len >= count { break }
+    }
+    out
+}
+
+/// A diff range selects endpoints, not a commit set. Three-dot requires one
+/// best common ancestor; multiple bases remain the inherited named boundary.
+pub fn endpoints(repo: repository.Repo, name: str) -> List[str] ! worktree.WorkErrors {
+    let expression = revsyntax.parse(name) else |e| match e {
+        Unsupported(feature) => { return Unsupported(feature) },
+        _ => { return Fatal(revision.unknown(name)) },
+    }
+    if expression.kind != "two" && expression.kind != "three" { return Unsupported("diff revision set") }
+    var left = revision.resolve_atom(repo, expression.left, name)?
+    let right = revision.resolve_atom(repo, expression.right, name)?
+    if expression.kind == "three" {
+        let lnodes = ancestry(repo, left)?, rnodes = ancestry(repo, right)?
+        var leftset = Map[str, bool](), common = Map[str, bool](), dominated = Map[str, bool]()
+        for item in lnodes { leftset[oid.hex(item.id)?] = true }
+        for item in rnodes {
+            let key = oid.hex(item.id)?
+            if leftset[key] else false { common[key] = true }
+        }
+        for item in rnodes {
+            if !(common[oid.hex(item.id)?] else false) { continue }
+            for parent in item.parents { dominated[oid.hex(parent)?] = true }
+        }
+        var bases = List[oid.Oid]()
+        for item in rnodes {
+            let key = oid.hex(item.id)?
+            if (common[key] else false) && !(dominated[key] else false) { (mut bases).push(copy item.id) }
+        }
+        if bases.len == 0 { return Fatal("{name}: no merge base") }
+        if bases.len != 1 { return Unsupported("diff multiple merge bases") }
+        left = copy bases[0]
+    }
+    [oid.hex(left)?, oid.hex(right)?]
+}
