@@ -243,3 +243,48 @@ raw commits independently through the pinned executable, including tied/skewed
 DAG clocks, without loading any Git implementation source. Native/release
 results bind complete stdout/stderr/status and immutable repository/worktree
 state. Non-ASCII tab widths and combined merge diffs are refused, not guessed.
+
+## Refs and branch transitions (vc06)
+
+Git v2.56.0 documentation pages read from the versioned Documentation URLs;
+only documentation was opened, never implementation files:
+
+- gitrepository-layout(5), Description: refs, packed-refs, HEAD and logs.
+- git-check-ref-format(1), Description and Options: full refname restrictions
+  and the stricter branch-name edge.
+- git-pack-refs(1), Description: packed fallback and loose writes after packing.
+- git-update-ref(1), Description, transaction commands and Logging Updates:
+  expected old OIDs, exclusive preparation and reflog fields.
+- git-symbolic-ref(1), Description, Options and Notes: textual symbolic refs,
+  dereferencing and detached HEAD.
+- git-branch(1), Description and Options: create/force/delete/rename, listing,
+  safety and reflog behavior. Tracking remains outside this lane's surface.
+- git-tag(1), Description, Options and Files: lightweight versus annotated
+  objects, message cleanup, force/delete, optional reflogs and editor boundary.
+- git-switch(1), Description and Options: transactional creation, detached HEAD,
+  dirty-worktree protection and force behavior.
+- git-checkout(1), Description, branch-related Options, Detached HEAD and
+  Argument Disambiguation. Existing explicit path checkout remains vc03's.
+- git-reset(1), Description and Options: soft/mixed/hard, ORIG_HEAD and refresh.
+- git-reflog(1), Description and Options: HEAD records branch switching; reflog
+  management/expiry and revision selectors are not implemented here.
+
+No new gitformat-* or gitprotocol-* parser was introduced. Packed-refs header
+traits and peeled lines were measured with the pinned executable alongside the
+layout/pack-refs documentation. The inherited object and index format sources
+remain authoritative for those parsers.
+
+`tools/refs-measure.py`, `refs-tag-log-measure.py`, `refs-tag-date-measure.py` and
+`refs-cleanup-measure.py` retain original black-box experiments. They distinguish
+current-branch rename's two HEAD log records, same-OID attached/detached reset,
+tag subjects/UTC committer dates, and repeated AUTO_MERGE cleanup attempts.
+The first detached matrix accidentally prepared two different index timestamps;
+the corrected harness copies one prepared fixture to both tools, without
+changing or normalizing expected bytes. The original red captures are retained.
+
+Implementation references are only den's own object/header, commit identity,
+index transaction, worktree installation, history abbreviation and walk APIs.
+There is no subprocess, Git, external VCS or codec implementation in production.
+The signed oracle source was built without opening implementation files.
+Building the identical pinned image at `/work/den`, rather than `/work`, was
+necessary to reproduce the unchanged oracle binary SHA-256.
