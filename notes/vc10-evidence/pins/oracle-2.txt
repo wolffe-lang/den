@@ -1,0 +1,2 @@
+git version 2.43.0
+eb54b535467e0975c1284d4c4d08eea779aeb248a5d34b02e2ee171382e22201  /usr/bin/git

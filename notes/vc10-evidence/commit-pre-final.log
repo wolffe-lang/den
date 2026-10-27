@@ -1,0 +1,283 @@
+PASS pure commit dates, message cleanup, paragraph/file ownership and explicit identities
+PASS bounded line counts, byte subjects and exact TAB/oid/date reflog framing
+parity: date @0 +0000
+parity: date @1 -0000
+parity: date 1700000000 +0000
+parity: date @1700000000 -0730
+parity: date Thu, 07 Apr 2005 22:13:13 +0200
+parity: date 07 Apr 2005 22:13:13 +0200
+parity: date 2005-04-07T22:13:13+02:00
+parity: date 2005-04-07 22:13:13 +0200
+parity: date 2005-04-07T20:13:13Z
+parity: date 2005-04-07T22:13:13.019 +0200
+parity: date 2005.04.07 22:13:13 +0200
+parity: date 04/07/2005 22:13:13 +0200
+parity: date 07.04.2005 22:13:13 +0200
+parity: date 2024-02-29T12:00:00Z
+parity: date 2005-04-07
+parity: date 1969-12-31T23:59:59Z
+parity: date 2000-02-30T12:00:00Z
+parity: date 2000-02-31T12:00:00Z
+parity: date 2023-02-29T12:00:00Z
+parity: date 2005-04-31T12:00:00Z
+parity: date 2005-13-01T12:00:00Z
+parity: date 2005-00-01T12:00:00Z
+parity: date 2005-04-00T12:00:00Z
+parity: date 2005-01-32T12:00:00Z
+parity: date 2005-04-07T24:00:00Z
+parity: date 2005-04-07T22:60:00Z
+parity: date 2005-04-07T22:13:60Z
+parity: date @1 +2400
+parity: date @1 +2460
+parity: date @9223372036854775807 +0000
+commit-format oracle: 150 / 150 parity; 0 mismatches
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: clean-message
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: clean-quiet
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: staged-message
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: staged-quiet
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: both-message
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: both-quiet
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: dirty-message
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: dirty-quiet
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: rename-message
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: rename-quiet
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: root-message
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: root-quiet
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: empty-message
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: empty-quiet
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: allow-empty
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: root-allow-empty
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: allow-empty-message
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: empty-message-refused
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: all
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: paragraphs
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: empty-paragraph
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: cleanup-strip
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: cleanup-whitespace
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: cleanup-verbatim
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: cleanup-scissors
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: cleanup-default
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: file-empty
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: file-nul
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: file-utf8
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: file-latin1
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: author
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: env-ident
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: date-0
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: date-1
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: date-2
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: date-3
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: date-4
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: date-5
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: date-6
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: amend-clean
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: amend-staged
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: amend-both
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: amend-root
+index-stat-proof: 8 tool-side entry rows canonicalized
+parity: amend-merge
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: amend-amend-orig
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: amend-no-edit
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: amend-reset
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: reset-without-amend
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: editor-false
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: index-lock
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: ref-lock
+commit oracle: 51 / 51 parity; 0 mismatches
+commit refs native: independent framing, unborn/same/stale/foreign locks and4 preparation failures PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+index-stat-proof: 2 tool-side entry rows canonicalized
+rename scope native: unpublished -a preview and unequal-R100 human summary, quiet full-state parity, six explicit identity refusals PASS
+PASS pure commit dates, message cleanup, paragraph/file ownership and explicit identities
+PASS bounded line counts, byte subjects and exact TAB/oid/date reflog framing
+parity: date @0 +0000
+parity: date @1 -0000
+parity: date 1700000000 +0000
+parity: date @1700000000 -0730
+parity: date Thu, 07 Apr 2005 22:13:13 +0200
+parity: date 07 Apr 2005 22:13:13 +0200
+parity: date 2005-04-07T22:13:13+02:00
+parity: date 2005-04-07 22:13:13 +0200
+parity: date 2005-04-07T20:13:13Z
+parity: date 2005-04-07T22:13:13.019 +0200
+parity: date 2005.04.07 22:13:13 +0200
+parity: date 04/07/2005 22:13:13 +0200
+parity: date 07.04.2005 22:13:13 +0200
+parity: date 2024-02-29T12:00:00Z
+parity: date 2005-04-07
+parity: date 1969-12-31T23:59:59Z
+parity: date 2000-02-30T12:00:00Z
+parity: date 2000-02-31T12:00:00Z
+parity: date 2023-02-29T12:00:00Z
+parity: date 2005-04-31T12:00:00Z
+parity: date 2005-13-01T12:00:00Z
+parity: date 2005-00-01T12:00:00Z
+parity: date 2005-04-00T12:00:00Z
+parity: date 2005-01-32T12:00:00Z
+parity: date 2005-04-07T24:00:00Z
+parity: date 2005-04-07T22:60:00Z
+parity: date 2005-04-07T22:13:60Z
+parity: date @1 +2400
+parity: date @1 +2460
+parity: date @9223372036854775807 +0000
+commit-format oracle: 150 / 150 parity; 0 mismatches
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: clean-message
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: clean-quiet
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: staged-message
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: staged-quiet
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: both-message
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: both-quiet
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: dirty-message
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: dirty-quiet
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: rename-message
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: rename-quiet
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: root-message
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: root-quiet
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: empty-message
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: empty-quiet
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: allow-empty
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: root-allow-empty
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: allow-empty-message
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: empty-message-refused
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: all
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: paragraphs
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: empty-paragraph
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: cleanup-strip
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: cleanup-whitespace
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: cleanup-verbatim
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: cleanup-scissors
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: cleanup-default
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: file-empty
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: file-nul
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: file-utf8
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: file-latin1
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: author
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: env-ident
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: date-0
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: date-1
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: date-2
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: date-3
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: date-4
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: date-5
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: date-6
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: amend-clean
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: amend-staged
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: amend-both
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: amend-root
+index-stat-proof: 8 tool-side entry rows canonicalized
+parity: amend-merge
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: amend-amend-orig
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: amend-no-edit
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: amend-reset
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: reset-without-amend
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: editor-false
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: index-lock
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: ref-lock
+commit oracle: 51 / 51 parity; 0 mismatches
+commit refs release: independent framing, unborn/same/stale/foreign locks and4 preparation failures PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+index-stat-proof: 2 tool-side entry rows canonicalized
+rename scope release: unpublished -a preview and unequal-R100 human summary, quiet full-state parity, six explicit identity refusals PASS
+{"commit":"cf0c13d","diagnostics":[],"file":"src/commit_format_test.lu","impl":"wolfgang","impl_version":"0.2.35","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"PASS pure commit dates, message cleanup, paragraph/file ownership and explicit identities\n","stdout_sha256":"ee23182e3e7148e5709395895a9cb730b8467294a390b895746df009b32e7623","verdict":"exit(0)","warnings":[]}
+{"commit":"cf0c13d","diagnostics":[],"file":"src/commit_test.lu","impl":"wolfgang","impl_version":"0.2.35","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"PASS bounded line counts, byte subjects and exact TAB/oid/date reflog framing\n","stdout_sha256":"bbd8dbcafa2c05552aa2334bf81d011e458ec9b522cd964b7a66dc4b497e3c9a","verdict":"exit(0)","warnings":[]}
+commit: native/release API, object-byte dates/messages, full CLI state and ref failures; checked exits verified

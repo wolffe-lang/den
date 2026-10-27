@@ -1,0 +1,5 @@
+revision 366 rows 84 clients 16 named scopes 0 failures
+revision 366 rows 84 clients 16 named scopes 0 failures
+{"commit":"cf0c13d","diagnostics":[],"file":"src/revision_test.lu","impl":"wolfgang","impl_version":"0.2.35","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":null,"stdout_sha256":null,"verdict":"exit(0)","warnings":[]}
+revision checked: exit(0)
+revision: exact loose/packed commands and clients; checked syntax exit; zero skips

@@ -1,0 +1,820 @@
+PASS worktree paths, raw quoting, status codes, flags, ITA, conflicts, exact rename and grouping
+PASS independent worktree add/stat/link/tree/HEAD/scan/restore/move/cached-remove/ignore/warnings/tag-label fixture
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-two-human
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-two---porcelain
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-two--s--b
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-two--z
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-two---porcelain---untracked-files=all
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-two---porcelain---untracked-files=no
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-two---porcelain---ignored
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-two-no-hints
+parity: status-unborn-human
+parity: status-unborn---porcelain
+parity: status-unborn--s--b
+parity: status-unborn--z
+parity: status-unborn---porcelain---untracked-files=all
+parity: status-unborn---porcelain---untracked-files=no
+parity: status-unborn---porcelain---ignored
+parity: status-unborn-no-hints
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-staged-human
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-staged---porcelain
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-staged--s--b
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-staged--z
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-staged---porcelain---untracked-files=all
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-staged---porcelain---untracked-files=no
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-staged---porcelain---ignored
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-staged-no-hints
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-both-human
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-both---porcelain
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-both--s--b
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-both--z
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-both---porcelain---untracked-files=all
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-both---porcelain---untracked-files=no
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-both---porcelain---ignored
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-both-no-hints
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-rename-human
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-rename---porcelain
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-rename--s--b
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-rename--z
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-rename---porcelain---untracked-files=all
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-rename---porcelain---untracked-files=no
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-rename---porcelain---ignored
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-rename-no-hints
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-removed-human
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-removed---porcelain
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-removed--s--b
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-removed--z
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-removed---porcelain---untracked-files=all
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-removed---porcelain---untracked-files=no
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-removed---porcelain---ignored
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-removed-no-hints
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-modes-human
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-modes---porcelain
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-modes--s--b
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-modes--z
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-modes---porcelain---untracked-files=all
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-modes---porcelain---untracked-files=no
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-modes---porcelain---ignored
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-modes-no-hints
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-ignore-human
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-ignore---porcelain
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-ignore--s--b
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-ignore--z
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-ignore---porcelain---untracked-files=all
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-ignore---porcelain---untracked-files=no
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-ignore---porcelain---ignored
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-ignore-no-hints
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-intent-human
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-intent---porcelain
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-intent--s--b
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-intent--z
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-intent---porcelain---untracked-files=all
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-intent---porcelain---untracked-files=no
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-intent---porcelain---ignored
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-intent-no-hints
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-detached-human
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-detached---porcelain
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-detached--s--b
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-detached--z
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-detached---porcelain---untracked-files=all
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-detached---porcelain---untracked-files=no
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-detached---porcelain---ignored
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-detached-no-hints
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-nested-human
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-nested---porcelain
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-nested--s--b
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-nested--z
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-nested---porcelain---untracked-files=all
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-nested---porcelain---untracked-files=no
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-nested---porcelain---ignored
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-nested-no-hints
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-assume-human
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-assume---porcelain
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-assume--s--b
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-assume--z
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-assume---porcelain---untracked-files=all
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-assume---porcelain---untracked-files=no
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-assume---porcelain---ignored
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-assume-no-hints
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-skip-human
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-skip---porcelain
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-skip--s--b
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-skip--z
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-skip---porcelain---untracked-files=all
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-skip---porcelain---untracked-files=no
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-skip---porcelain---ignored
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-skip-no-hints
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-rename-mode-human
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-rename-mode---porcelain
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-rename-mode--s--b
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-rename-mode--z
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-rename-mode---porcelain---untracked-files=all
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-rename-mode---porcelain---untracked-files=no
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-rename-mode---porcelain---ignored
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-rename-mode-no-hints
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-detached-tag-human
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-detached-tag---porcelain
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-detached-tag--s--b
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-detached-tag--z
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-detached-tag---porcelain---untracked-files=all
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-detached-tag---porcelain---untracked-files=no
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-detached-tag---porcelain---ignored
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-detached-tag-no-hints
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: add-unchanged
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: add-changed
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: add-new
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: add-directory
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: add-all
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: add-update
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: add-dot
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: add-ignore-removal
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: add-intent
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: add-chmod-plus
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: add-chmod-minus
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: add-missing
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: add-no-path
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: add-ignored
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: add-force
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: add-mode-disabled
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: rm-plain
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: rm-cached
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: rm-quiet
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: rm-modified
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: rm-force
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: rm-staged
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: rm-both
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: rm-cached-both
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: rm-cached-staged
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: rm-missing
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: mv-file
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: mv-modified
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: mv-overwrite
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: mv-force
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: mv-missing
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: mv-skip
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: restore-two-worktree
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: restore-two---staged
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: restore-two---staged---worktree
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: restore-two---source=HEAD
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: restore-staged-worktree
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: restore-staged---staged
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: restore-staged---staged---worktree
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: restore-staged---source=HEAD
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: restore-both-worktree
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: restore-both---staged
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: restore-both---staged---worktree
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: restore-both---source=HEAD
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: restore-removed-worktree
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: restore-removed---staged
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: restore-removed---staged---worktree
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: restore-removed---source=HEAD
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: restore-intent-worktree
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: restore-intent---staged
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: restore-intent---staged---worktree
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: restore-intent---source=HEAD
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: restore-modes-worktree
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: restore-modes---staged
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: restore-modes---staged---worktree
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: restore-modes---source=HEAD
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: restore-missing
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: checkout-path
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: restore-exec
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: restore-link
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: nested-rm-dir
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: nested-rm--r-dir
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: nested-rm---cached--r-dir
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: nested-mv-dir-moved
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: nested-mv-dir-dir/sub
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: nested-restore-dir
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: mv-into-directory
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: mv-multiple
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-nested-quotes
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: add-symlink
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: restore-symlink-false
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: add-symlink-false
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-filemode-false
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-ignored-all
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: add-assume
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: add-skip
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: add-skip-no-hints
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: check-ignore-a.txt
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: check-ignore-hide.tmp
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: check-ignore-keep.tmp
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: check-ignore-cache/hidden
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: check-ignore-dir/new
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-filemode-empty
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: index-lock-add
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: index-lock-rm
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: index-lock-mv
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: index-lock-restore
+worktree oracle native: 207/207 parity, 0 mismatches
+PASS worktree paths, raw quoting, status codes, flags, ITA, conflicts, exact rename and grouping
+PASS independent worktree add/stat/link/tree/HEAD/scan/restore/move/cached-remove/ignore/warnings/tag-label fixture
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-two-human
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-two---porcelain
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-two--s--b
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-two--z
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-two---porcelain---untracked-files=all
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-two---porcelain---untracked-files=no
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-two---porcelain---ignored
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-two-no-hints
+parity: status-unborn-human
+parity: status-unborn---porcelain
+parity: status-unborn--s--b
+parity: status-unborn--z
+parity: status-unborn---porcelain---untracked-files=all
+parity: status-unborn---porcelain---untracked-files=no
+parity: status-unborn---porcelain---ignored
+parity: status-unborn-no-hints
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-staged-human
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-staged---porcelain
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-staged--s--b
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-staged--z
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-staged---porcelain---untracked-files=all
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-staged---porcelain---untracked-files=no
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-staged---porcelain---ignored
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-staged-no-hints
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-both-human
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-both---porcelain
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-both--s--b
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-both--z
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-both---porcelain---untracked-files=all
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-both---porcelain---untracked-files=no
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-both---porcelain---ignored
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-both-no-hints
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-rename-human
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-rename---porcelain
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-rename--s--b
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-rename--z
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-rename---porcelain---untracked-files=all
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-rename---porcelain---untracked-files=no
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-rename---porcelain---ignored
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-rename-no-hints
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-removed-human
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-removed---porcelain
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-removed--s--b
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-removed--z
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-removed---porcelain---untracked-files=all
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-removed---porcelain---untracked-files=no
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-removed---porcelain---ignored
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-removed-no-hints
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-modes-human
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-modes---porcelain
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-modes--s--b
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-modes--z
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-modes---porcelain---untracked-files=all
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-modes---porcelain---untracked-files=no
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-modes---porcelain---ignored
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-modes-no-hints
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-ignore-human
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-ignore---porcelain
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-ignore--s--b
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-ignore--z
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-ignore---porcelain---untracked-files=all
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-ignore---porcelain---untracked-files=no
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-ignore---porcelain---ignored
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-ignore-no-hints
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-intent-human
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-intent---porcelain
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-intent--s--b
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-intent--z
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-intent---porcelain---untracked-files=all
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-intent---porcelain---untracked-files=no
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-intent---porcelain---ignored
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-intent-no-hints
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-detached-human
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-detached---porcelain
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-detached--s--b
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-detached--z
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-detached---porcelain---untracked-files=all
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-detached---porcelain---untracked-files=no
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-detached---porcelain---ignored
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-detached-no-hints
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-nested-human
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-nested---porcelain
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-nested--s--b
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-nested--z
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-nested---porcelain---untracked-files=all
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-nested---porcelain---untracked-files=no
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-nested---porcelain---ignored
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-nested-no-hints
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-assume-human
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-assume---porcelain
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-assume--s--b
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-assume--z
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-assume---porcelain---untracked-files=all
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-assume---porcelain---untracked-files=no
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-assume---porcelain---ignored
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-assume-no-hints
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-skip-human
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-skip---porcelain
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-skip--s--b
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-skip--z
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-skip---porcelain---untracked-files=all
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-skip---porcelain---untracked-files=no
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-skip---porcelain---ignored
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-skip-no-hints
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-rename-mode-human
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-rename-mode---porcelain
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-rename-mode--s--b
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-rename-mode--z
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-rename-mode---porcelain---untracked-files=all
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-rename-mode---porcelain---untracked-files=no
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-rename-mode---porcelain---ignored
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-rename-mode-no-hints
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-detached-tag-human
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-detached-tag---porcelain
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-detached-tag--s--b
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-detached-tag--z
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-detached-tag---porcelain---untracked-files=all
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-detached-tag---porcelain---untracked-files=no
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-detached-tag---porcelain---ignored
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-detached-tag-no-hints
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: add-unchanged
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: add-changed
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: add-new
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: add-directory
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: add-all
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: add-update
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: add-dot
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: add-ignore-removal
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: add-intent
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: add-chmod-plus
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: add-chmod-minus
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: add-missing
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: add-no-path
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: add-ignored
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: add-force
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: add-mode-disabled
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: rm-plain
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: rm-cached
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: rm-quiet
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: rm-modified
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: rm-force
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: rm-staged
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: rm-both
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: rm-cached-both
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: rm-cached-staged
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: rm-missing
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: mv-file
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: mv-modified
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: mv-overwrite
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: mv-force
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: mv-missing
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: mv-skip
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: restore-two-worktree
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: restore-two---staged
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: restore-two---staged---worktree
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: restore-two---source=HEAD
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: restore-staged-worktree
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: restore-staged---staged
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: restore-staged---staged---worktree
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: restore-staged---source=HEAD
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: restore-both-worktree
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: restore-both---staged
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: restore-both---staged---worktree
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: restore-both---source=HEAD
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: restore-removed-worktree
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: restore-removed---staged
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: restore-removed---staged---worktree
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: restore-removed---source=HEAD
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: restore-intent-worktree
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: restore-intent---staged
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: restore-intent---staged---worktree
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: restore-intent---source=HEAD
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: restore-modes-worktree
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: restore-modes---staged
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: restore-modes---staged---worktree
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: restore-modes---source=HEAD
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: restore-missing
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: checkout-path
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: restore-exec
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: restore-link
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: nested-rm-dir
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: nested-rm--r-dir
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: nested-rm---cached--r-dir
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: nested-mv-dir-moved
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: nested-mv-dir-dir/sub
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: nested-restore-dir
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: mv-into-directory
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: mv-multiple
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-nested-quotes
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: add-symlink
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: restore-symlink-false
+index-stat-proof: 2 tool-side entry rows canonicalized
+parity: add-symlink-false
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-filemode-false
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-ignored-all
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: add-assume
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: add-skip
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: add-skip-no-hints
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: check-ignore-a.txt
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: check-ignore-hide.tmp
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: check-ignore-keep.tmp
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: check-ignore-cache/hidden
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: check-ignore-dir/new
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: status-filemode-empty
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: index-lock-add
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: index-lock-rm
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: index-lock-mv
+index-stat-proof: 0 tool-side entry rows canonicalized
+parity: index-lock-restore
+worktree oracle release: 207/207 parity, 0 mismatches
+{"commit":"cf0c13d","diagnostics":[],"file":"src/worktree_test.lu","impl":"wolfgang","impl_version":"0.2.35","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"PASS worktree paths, raw quoting, status codes, flags, ITA, conflicts, exact rename and grouping\n","stdout_sha256":"aa1ab790d3aeb4111bac8b2f245b4bc3763020159d1925232bd8dbe8be14482f","verdict":"exit(0)","warnings":[]}
+worktree: native/release unit, API exercise and strict repository matrix; actual checked exit(0)

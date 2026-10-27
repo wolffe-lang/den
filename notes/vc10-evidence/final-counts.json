@@ -1,0 +1,290 @@
+{
+  "tiers": {
+    "native": {
+      "revision": {
+        "loose": {
+          "exact": 183,
+          "clients": 49,
+          "named": 8
+        },
+        "packed": {
+          "exact": 183,
+          "clients": 49,
+          "named": 8
+        }
+      },
+      "loose": {
+        "history": {
+          "exact": 576,
+          "total": 576,
+          "named": 7,
+          "clients": 3
+        },
+        "refs": {
+          "exact": 632,
+          "total": 632
+        },
+        "refs_scope": {
+          "named": 17
+        },
+        "merge": {
+          "exact": 132,
+          "named": 12,
+          "total": 144
+        },
+        "replay": {
+          "exact_scenarios": 96,
+          "named": 20,
+          "total": 116,
+          "process_captures": 157,
+          "exact_process_comparisons": 137
+        }
+      },
+      "packed": {
+        "history": {
+          "exact": 576,
+          "total": 576,
+          "named": 7,
+          "clients": 3
+        },
+        "refs": {
+          "exact": 632,
+          "total": 632
+        },
+        "refs_scope": {
+          "named": 17
+        },
+        "merge": {
+          "exact": 132,
+          "named": 12,
+          "total": 144
+        },
+        "replay": {
+          "exact_scenarios": 96,
+          "named": 20,
+          "total": 116,
+          "process_captures": 157,
+          "exact_process_comparisons": 137
+        }
+      },
+      "pack_structural": {
+        "exact": 141,
+        "total": 141
+      },
+      "pack_interop": {
+        "exact": 2442,
+        "objects": 2442,
+        "fixtures": 34,
+        "entry_types": {
+          "1": 134,
+          "2": 132,
+          "3": 2108,
+          "4": 2,
+          "6": 33,
+          "7": 33
+        }
+      }
+    },
+    "release": {
+      "revision": {
+        "loose": {
+          "exact": 183,
+          "clients": 49,
+          "named": 8
+        },
+        "packed": {
+          "exact": 183,
+          "clients": 49,
+          "named": 8
+        }
+      },
+      "loose": {
+        "history": {
+          "exact": 576,
+          "total": 576,
+          "named": 7,
+          "clients": 3
+        },
+        "refs": {
+          "exact": 632,
+          "total": 632
+        },
+        "refs_scope": {
+          "named": 17
+        },
+        "merge": {
+          "exact": 132,
+          "named": 12,
+          "total": 144
+        },
+        "replay": {
+          "exact_scenarios": 96,
+          "named": 20,
+          "total": 116,
+          "process_captures": 157,
+          "exact_process_comparisons": 137
+        }
+      },
+      "packed": {
+        "history": {
+          "exact": 576,
+          "total": 576,
+          "named": 7,
+          "clients": 3
+        },
+        "refs": {
+          "exact": 632,
+          "total": 632
+        },
+        "refs_scope": {
+          "named": 17
+        },
+        "merge": {
+          "exact": 132,
+          "named": 12,
+          "total": 144
+        },
+        "replay": {
+          "exact_scenarios": 96,
+          "named": 20,
+          "total": 116,
+          "process_captures": 157,
+          "exact_process_comparisons": 137
+        }
+      },
+      "pack_structural": {
+        "exact": 141,
+        "total": 141
+      },
+      "pack_interop": {
+        "exact": 2442,
+        "objects": 2442,
+        "fixtures": 34,
+        "entry_types": {
+          "1": 134,
+          "2": 132,
+          "3": 2108,
+          "4": 2,
+          "6": 33,
+          "7": 33
+        }
+      }
+    }
+  },
+  "captures": {
+    "revision-native.json.gz": {
+      "sha256": "c847a1f828a4c582d99a7d76eec388d5dc49a4c395fc3fd90a91ee364bfb767e",
+      "bytes": 303505
+    },
+    "history-native-loose.json.gz": {
+      "sha256": "ac943ea57c83d2e384d5927e79411d6bf517bfc21fe12f2501acb7c8dc7a9c34",
+      "bytes": 714640
+    },
+    "refs-native-loose.json.gz": {
+      "sha256": "0a65779775143ffe42c2212c4e19b214feaf3034a61dec4c6e6076f38b2a01d4",
+      "bytes": 9140851
+    },
+    "refs_scope-native-loose.json.gz": {
+      "sha256": "afecb995b2ac7eee9ab7e311d59e587c4ccb13e2edfd32286137c0e4ee79d597",
+      "bytes": 205237
+    },
+    "merge-native-loose.json.gz": {
+      "sha256": "4168043c38f51491edc284370b54df5d5122cfd3befa358ebcf9c59f3ad4be70",
+      "bytes": 2900295
+    },
+    "replay-native-loose.json.gz": {
+      "sha256": "2a8079812487a1f64d41727b1db718d2e8ea16c7923e6d301feff1927f0d2ab9",
+      "bytes": 5585264
+    },
+    "history-native-packed.json.gz": {
+      "sha256": "ac943ea57c83d2e384d5927e79411d6bf517bfc21fe12f2501acb7c8dc7a9c34",
+      "bytes": 714640
+    },
+    "refs-native-packed.json.gz": {
+      "sha256": "19e8b588de4241ae4a0387ba059c8c671844f2ae9787defcd9acb390940ffa18",
+      "bytes": 12817121
+    },
+    "refs_scope-native-packed.json.gz": {
+      "sha256": "3f77454a5ad47685272c66ac9ed75d79c46735b8eb9c0598c7403a3c64eff4c1",
+      "bytes": 304211
+    },
+    "merge-native-packed.json.gz": {
+      "sha256": "4c20858592948353cdcd58c65aa6b515fa2ced6fe556053e86eaa6aad8aaa8db",
+      "bytes": 3651463
+    },
+    "replay-native-packed.json.gz": {
+      "sha256": "96a1096db5b575f264772368bc068216a3deb965473f12bbfbfa7136a08cdca6",
+      "bytes": 6289165
+    },
+    "structural-native.json.gz": {
+      "sha256": "e690d794578e5c6b5e370d54c85b7b422a1aa60c55174d57ab16ebfc7d142f84",
+      "bytes": 26003
+    },
+    "interop-native.json.gz": {
+      "sha256": "c8a06eb59f7ceabd26b81d32dc80fe9020f15025b21497d75f8725cc56bfdb5f",
+      "bytes": 1171630
+    },
+    "revision-release.json.gz": {
+      "sha256": "693bf579312f6279d7a42e9d7fe0e6d5108eede99ef5b19200f4e154b7c03d13",
+      "bytes": 303545
+    },
+    "history-release-loose.json.gz": {
+      "sha256": "a7ed920a93f64c2c1cb635749fee2937415c5c44b300c8844a5c78199b70f0d8",
+      "bytes": 714641
+    },
+    "refs-release-loose.json.gz": {
+      "sha256": "5d071cd5878728301fb35c3f06f932ef22a74617d37e5d0e7034c9814822e443",
+      "bytes": 9143268
+    },
+    "refs_scope-release-loose.json.gz": {
+      "sha256": "64d215ef2c2986d9ce2eab739b3fd3f058b5f13639bd59ef87d21b0f717f2997",
+      "bytes": 205237
+    },
+    "merge-release-loose.json.gz": {
+      "sha256": "308520662b4614965351983c2104190f09cb567e6c2b55a1d9e6540d7438cff6",
+      "bytes": 2900300
+    },
+    "replay-release-loose.json.gz": {
+      "sha256": "7ef7fe6ce908ecafe66999f100e13da9fc01b447c198bc3e9f3f758d93b10e6d",
+      "bytes": 5585370
+    },
+    "history-release-packed.json.gz": {
+      "sha256": "a7ed920a93f64c2c1cb635749fee2937415c5c44b300c8844a5c78199b70f0d8",
+      "bytes": 714641
+    },
+    "refs-release-packed.json.gz": {
+      "sha256": "14bc391707818d1efb60e99461a9336b852319dd1b4cf530254527681f5941d3",
+      "bytes": 12819535
+    },
+    "refs_scope-release-packed.json.gz": {
+      "sha256": "0d8a4a92e1f16456b54184ea615e837568ba10eb4cca0773d1dd1f433ff90dfb",
+      "bytes": 304211
+    },
+    "merge-release-packed.json.gz": {
+      "sha256": "c05ba2de9ae8382888eb1faa6d04235a59b0256364a185aba04772016220b491",
+      "bytes": 3651504
+    },
+    "replay-release-packed.json.gz": {
+      "sha256": "12efdfd9434964aafaaade9b56cf9f534d9fde0746fb8e809e88266242509e1e",
+      "bytes": 6288985
+    },
+    "structural-release.json.gz": {
+      "sha256": "e690d794578e5c6b5e370d54c85b7b422a1aa60c55174d57ab16ebfc7d142f84",
+      "bytes": 26003
+    },
+    "interop-release.json.gz": {
+      "sha256": "cc0d4a7a078a4a0f17e92fabb84b3d752fc5c3a3c7f3de2f2bba4162a0189192",
+      "bytes": 1171665
+    }
+  },
+  "checked_units": [
+    "revision",
+    "pack",
+    "pretty",
+    "walk",
+    "refs",
+    "reflog",
+    "sequencer"
+  ],
+  "zero_new_skips": true
+}
