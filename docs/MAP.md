@@ -2,8 +2,9 @@
 
 The codec, owned OIDs, bounded loose store and binary parsers underpin the
 index/worktree/commit interface and diff. The dispatcher routes the implemented
-porcelain, plumbing, diff, bounded log/show and ref commands. Combined merge show,
-merge/rebase, packs and transports remain separate work; M2 and M3 are not complete. Diff's known hunk
+porcelain, plumbing, diff, bounded log/show, ref commands and merge/revert.
+Combined merge show, recursive/complex merges, rebase, packs and transports
+remain separate work; M2 and M3 are not complete. Diff's known hunk
 alignment differences and binary representation exceptions are explicit below,
 not a blanket byte-parity claim.
 
@@ -145,7 +146,7 @@ fixtures plus ignore, staged rename, modes/symlink, unborn, amend, index-v4 and
 edited-rename states. The original nine builders remain unchanged. The two
 independent corpus builds compare OID manifests, not inode-dependent stat data.
 `tests/cases.json` defines 188 main cases; its latest measured main comparison
-is 173 parity / 14 named not-yet / 1 version-shape / 0 reviewed / 0 failures.
+is 174 parity / 13 named not-yet / 1 version-shape / 0 reviewed / 0 failures.
 Implemented diff and edited-rename cases require parity and cannot regress to
 a named refusal unnoticed. Generated component matrices remain separately
 counted. Historical vc03 counts and 636 stat-proof rows are retained in
@@ -302,8 +303,11 @@ pub fn index.commit(mut tx: Transaction) -> () ! IndexErrors
 
 TREE and REUC
 are validated and preserved; UNTR, FSMN, EOIE, IEOT, sdir, link and unknown
-extensions refuse by name. Resolving/removing higher-stage entries is refused
-until their REUC generation is implemented, rather than losing undo data.
+extensions refuse by name. `record_undo` saves higher stages in sorted REUC;
+`replace_entry` with stage zero and `remove_path` invoke it before dropping
+unmerged entries. `conflict_entry` creates validated zero-stat stages 1/2/3.
+The `add` consumer resolves conflicts; other mutation consumers retain their
+own higher-stage guards until their operation-specific semantics are measured.
 
 `replace_entry`, `remove_path` and `invalidate_tree` maintain sorted entries
 and invalidate affected TREE ancestors. `build_trees` returns owned child-first
@@ -727,3 +731,59 @@ separate. It uses the inherited six-word stat proof, not an index exclusion.
 The original oracle build failed at the non-CI mount `/work`; the identical
 image at `/work/den` reproduced the existing binary pin. The default build path
 is therefore part of the reproducible input contract.
+
+## Merge boundaries (vc07)
+
+`mergebase.Node {id, parents}` is an owned, caller-validated commit DAG.
+`ancestor(nodes, older, newer, cap)` checks reachability; `bases(nodes, left,
+right, cap)` returns every best common ancestor in input-node order. Both tips
+are traversed without timestamp pruning. Since common ancestry is parent-closed,
+a single edge sweep removes dominated common nodes. Missing nodes, duplicate
+IDs and the explicit cap are errors. The cap is at most 100,000 nodes.
+`mergetree.bases(repo, left, right)` adapts the owned loose-object walker; it
+never reads or writes the index. The command refuses multiple criss-cross bases
+rather than choosing one: recursive virtual-base merging is still open.
+
+`mergefile.merge(base, ours, theirs, ours_label, base_label, theirs_label,
+style)` returns owned `{data, conflicts}`. It reuses `difftext.edits`, preserves
+raw bytes and final-newline behavior, and renders merge/diff3/zdiff3 markers.
+Labels are single physical lines. Invalid options, binary conflicts and inherited
+file/edit bounds are distinct errors. The default-style nearby-conflict joining
+rule was measured against `git merge-file`, not copied from an implementation.
+The independent file client compares 1,521 input/style combinations per native
+tier; the independent graph client compares 84 complete base sets and repository
+immutability. Three actual-checked programs cover graph, text and REUC.
+
+`mergetree.files` collects owned regular-file endpoints, capped at 16 MiB per
+blob and 128 MiB per endpoint. `mergetree.plan` returns files, higher stages,
+ordered diagnostics and conflict paths without publication. It uses the existing
+`diff.changes`/rename scorer to detect rename topology, which currently refuses.
+Repeated base-line hashes and multiple edits per changed side also refuse:
+`ort` defaults to histogram, not the file API's Myers algorithm. Other named
+limits are modify/delete and binary conflicts, nonregular entries, annotated-tag
+messages, unborn merge and dirty/staged true-merge recovery. Fast-forward safety
+and clean regular-file merges remain supported, not approximated fallbacks.
+
+`worktree.merge_check` previews safety without writing objects/index/worktree;
+`transition(..., "merge")` installs under the caller's index lock.
+`abort_merge` restores unmerged paths from HEAD, preserves unchanged entries and
+dirty paths, and checks stage-zero stat identity before replacing such a path.
+`commit.refresh_index` exposes the existing content-equal-only refresh policy.
+`commit.run_revert` supplies the measured direct no-editor revert publication:
+a nonempty revert preserves COMMIT_EDITMSG, and AUTO_MERGE remains after success.
+Ordinary `commit` now consumes MERGE_HEAD parents and resolved REVERT_HEAD state.
+
+The command matrix contains 104 exact complete-state rows and 12 separate named
+not-yet captures per native tier. It measures ORIG_HEAD before fast-forward
+publication, MERGE_HEAD/MERGE_MSG/MERGE_MODE, AUTO_MERGE, SQUASH_MSG, REVERT_HEAD,
+ref-lock failure after index publication, packed/detached inputs, root revert,
+conflict resolution/REUC and abort. A named refusal is checked for immutable
+state; it is never counted as oracle parity. The index comparison retains the
+six-word per-file proof. Dirty true merges remain named because the oracle's
+internal recovery commits and transient stat writes are additional observable
+state, not permission to ignore those files. The full gate runs `check-merge`.
+
+M2's combined merge show/editor/history limits and the two hunk witnesses/eight
+contexts plus 96 binary representations are unchanged. Sequencer commands,
+revert mainline selection and the recursive/rename/alignment limits above remain
+follow-on work; a green bounded merge matrix does not complete M3.

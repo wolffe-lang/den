@@ -288,3 +288,40 @@ There is no subprocess, Git, external VCS or codec implementation in production.
 The signed oracle source was built without opening implementation files.
 Building the identical pinned image at `/work/den`, rather than `/work`, was
 necessary to reproduce the unchanged oracle binary SHA-256.
+
+## Merge and revert (vc07)
+
+Read only the versioned Git v2.56.0 Documentation pages before implementation:
+
+- git-merge(1), Description, Options, Pre-merge Checks, Fast-forward Merge,
+  True Merge, Merging Tag, How Conflicts Are Presented and How to Resolve
+  Conflicts. True Merge specifies stages and AUTO_MERGE; Options describes abort.
+- merge-options.adoc, commit/no-commit, edit/no-edit, fast-forward controls,
+  messages, squash, statistics, strategies and unrelated histories.
+- merge-strategies.adoc, ort, recursive virtual ancestor trees, rename handling
+  and the histogram default; other strategies remain outside this surface.
+- git-merge-base(1), Description, Operation Modes, Options and Discussion:
+  all best common ancestors, dominance and criss-cross ambiguity.
+- git-revert(1), Description and Options: inverse changes, root/single commits,
+  no-edit/no-commit and the mainline requirement for merge commits.
+- git-merge-file(1), Description, Options and Examples: marker labels,
+  conflict counts, merge/diff3/zdiff3 and its distinct Myers default.
+- git-read-tree(1), Merging: 3-way stages, trivial collapse and index safety.
+- gitformat-index(5), Index Entry and Resolve Undo: stage flags, sorted paths,
+  REUC pathname, three octal modes and optional object IDs.
+- gitrepository-layout(5), Description: objects, refs, packed-refs, HEAD and
+  configuration. Merge-state file semantics come from git-merge above.
+
+No new gitprotocol-* page or parser was used. The only implementation references
+were den's own object/walk, index, worktree, commit, diff and rename boundaries.
+The signed oracle source was built without opening implementation files.
+
+Independent black-box fixtures measure commands and all resulting files; the
+file client tests generated edit triples, and the base client constructs DAGs
+through commit-tree. Early captures exposed nearby-conflict coalescing, literal
+full-ref message labels, revert's direct commit path and its retained AUTO_MERGE.
+Dirty true merges also create internal recovery objects and transient index
+metadata. Those inputs now refuse without mutation and remain named non-parity
+captures; no files were excluded or oracle expectations changed to excuse them.
+The default tree consumer refuses repeated-base-line and multi-hunk ambiguity
+rather than claiming the file API's Myers result is generally ort-compatible.
