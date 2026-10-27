@@ -1,0 +1,19 @@
+use mergebase
+
+fn main() -> !int {
+    let graph = [
+        mergebase.Node { id: "root", parents: [] },
+        mergebase.Node { id: "left", parents: ["root"] },
+        mergebase.Node { id: "right", parents: ["root"] },
+        mergebase.Node { id: "a", parents: ["left", "right"] },
+        mergebase.Node { id: "b", parents: ["right", "left"] },
+    ]
+    let two = mergebase.bases(graph, "a", "b", 8)?
+    assert(two.len == 2 && two[0] == "left" && two[1] == "right")
+    let one = mergebase.bases(graph, "left", "right", 8)?
+    assert(one.len == 1 && one[0] == "root")
+    assert(mergebase.ancestor(graph, "left", "a", 8)?)
+    assert(!mergebase.ancestor(graph, "a", "left", 8)?)
+    assert((mergebase.bases(graph, "missing", "a", 8) else |e| match e { missing => ["missing"], _ => [] }) == ["missing"])
+    0
+}
