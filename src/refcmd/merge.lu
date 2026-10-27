@@ -160,6 +160,7 @@ fn merge_command(args: List[str]) -> int ! commit.CommitErrors {
     }
     var name = "",
         message = "",
+        supplied_message = false,
         no_ff = configured_ff == "false",
         ff_only = configured_ff == "only",
         squash = false,
@@ -195,6 +196,7 @@ fn merge_command(args: List[str]) -> int ! commit.CommitErrors {
         } else if arg == "--quiet" || arg == "-q" {
             quiet = true
         } else if arg == "-m" || arg == "-F" || arg == "--file" {
+            supplied_message = true
             if at == args.len { return Unsupported("merge missing message") }
             if arg == "-m" {
                 if message != "" { message += "\n\n" }
@@ -349,13 +351,13 @@ fn merge_command(args: List[str]) -> int ! commit.CommitErrors {
     worktree.transition(ctx, mut tx.value, flat, "merge")?
     conflict_index(mut tx.value, plan.stages)?
     index.commit(mut tx)?
-    if !quiet { for line in plan.messages { print(line) } }
+    for line in plan.messages { print(line) }
     if fast && !quiet { print("Fast-forward") }
     if squash {
         state_file(ctx, "SQUASH_MSG", squash_message(ctx, head.commits[0], target)?)?
-        if !quiet { print("Squash commit -- not updating HEAD") }
+        print("Squash commit -- not updating HEAD")
     }
-    if message == "" {
+    if !supplied_message {
         message = "Merge commit '{name}'"
         if name.starts_with("refs/heads/") {
             message = "Merge branch '{name}'"
@@ -374,6 +376,9 @@ fn merge_command(args: List[str]) -> int ! commit.CommitErrors {
             message += " into {head.branch}"
         }
     }
+    let cleaned = commit_format.cleanup(message.bytes(), "whitespace", "#", false)?
+    message = str_from_utf8(cleaned)?
+    if message.ends_with("\n") { message = message[0..message.len - 1] }
     var conflict_text = ""
     if plan.conflicts.len > 0 {
         conflict_text = "\n# Conflicts:\n"
@@ -391,7 +396,7 @@ fn merge_command(args: List[str]) -> int ! commit.CommitErrors {
         }
     }
     if plan.conflicts.len > 0 {
-        if !quiet { print("Automatic merge failed; fix conflicts and then commit the result.") }
+        print("Automatic merge failed; fix conflicts and then commit the result.")
         return 1
     }
     if !fast && (stop || squash) {
@@ -402,6 +407,11 @@ fn merge_command(args: List[str]) -> int ! commit.CommitErrors {
         if fast {
             merge_publish(ctx, head, target, name, "Fast-forward")?
         } else {
+            if message == "" {
+                return Failure(
+                    "Empty commit message.\nNot committing merge; use 'git commit' to complete the merge.",
+                )
+            }
             let who = commit_format.identity_text(
                 commit.environment_identity(ctx, "COMMITTER", "")?,
             )?

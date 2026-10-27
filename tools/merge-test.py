@@ -60,6 +60,12 @@ for kind in ('ff','clean'):
     for setup in ('add-file','delete-file','mode-file'):
         cases.append((kind,['merge','--no-edit','topic'],setup))
 cases.append(('conflict',['add','-u'],'resolve-delete'))
+for args in (['merge','--no-edit','-m','custom\n','topic'],['merge','--no-edit','-m','  message  \n\n','topic'],['merge','--no-edit','-F','message','topic']):
+    cases.append(('clean',args,'message-file' if '-F' in args else ''))
+for kind in ('ff','clean','conflict'):
+    for flags in ([],['--squash'],['--no-commit']):
+        cases.append((kind,['merge','--no-edit','-q',*flags,'topic'],''))
+cases.append(('clean',['merge','--no-edit','-m','','topic'],''))
 rows=[]
 for n,(kind,args,setup) in enumerate(cases):
     root=base/str(n); root.mkdir(); fixture=root/'fixture'; first,ours,theirs=seed(kind,fixture)
@@ -84,6 +90,7 @@ for n,(kind,args,setup) in enumerate(cases):
         elif setup=='delete-file': run(fixture,'rm','keep')
         else: (fixture/'keep').chmod(0o755);run(fixture,'add','keep')
         run(fixture,'commit','-qm',setup);run(fixture,'switch','-q','main')
+    elif setup=='message-file': (fixture/'message').write_bytes(b'  file message  \n\n')
     elif setup=='packed': run(fixture,'pack-refs','--all')
     elif setup=='detached': run(fixture,'switch','--detach','-q',ours)
     elif setup in ('dirty','staged','dirty-keep'):
