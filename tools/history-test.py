@@ -1,8 +1,10 @@
 """Exact pinned-Git history commands, raw objects, and read-only state witnesses."""
-import argparse,hashlib,json,os,pathlib,random,shutil,subprocess
+import argparse,hashlib,json,os,pathlib,random,shutil,subprocess,runpy
 R=pathlib.Path(__file__).resolve().parent.parent
 p=argparse.ArgumentParser();p.add_argument('--tier',default='native');a=p.parse_args()
-G=os.environ['DEN_GIT']; DEN=R/f'target/{a.tier}/den'; root=R/f'target/history-{a.tier}'
+mode=a.tier+('-packed' if os.environ.get('DEN_PACKED_FIXTURES')=='1' else '')
+pack_fixture=runpy.run_path(str(R/'tools/packed-fixture.py'))['pack_fixture']
+G=os.environ['DEN_GIT']; DEN=R/f'target/{a.tier}/den'; root=R/f'target/history-{mode}'
 if root.exists(): shutil.rmtree(root)
 root.mkdir(parents=True)
 rows=[]; failures=[]
@@ -14,6 +16,7 @@ def g(*args,data=None):
 def state():
  return {str(f.relative_to(root)):[f.lstat().st_mode,hashlib.sha256(f.read_bytes()).hexdigest()] for f in sorted(root.rglob('*')) if f.is_file()}
 def check(name,args):
+ if mode.endswith('-packed') and list((root/'.git/objects').glob('[0-9a-f][0-9a-f]/*')): pack_fixture(G,root)
  before=state(); expected=run(G,args); after_git=state(); actual=run(DEN,args); after=state()
  row={'name':name,'args':args,'expected':expected,'actual':actual,'unchanged':before==after_git==after}
  rows.append(row)
@@ -99,6 +102,6 @@ for args,feature in [(['log','--graph'],'log option --graph'),(['log','main..HEA
 (root/'.git/HEAD').write_text('ref: refs/heads/unborn\n')
 check('unborn-log',['log']);check('unborn-show',['show'])
 summary={'tier':a.tier,'total':len(rows),'exact':len(rows)-len(failures),'failures':failures,'zero_skips':True,'rows':rows,'named_refusals':refusals,'external_clients':3}
-(R/f'target/history-{a.tier}.json').write_text(json.dumps(summary,indent=2)+'\n')
+(R/f'target/history-{mode}.json').write_text(json.dumps(summary,indent=2)+'\n')
 print(f'history: {len(rows)-len(failures)}/{len(rows)} exact stdout/stderr/status and state; zero skips',flush=True)
 raise SystemExit(bool(failures))

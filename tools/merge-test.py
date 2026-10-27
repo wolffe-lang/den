@@ -4,7 +4,9 @@ R = pathlib.Path(__file__).resolve().parent.parent
 ap = argparse.ArgumentParser(); ap.add_argument('--tier', default='native'); ap.add_argument('--measure', action='store_true'); a = ap.parse_args()
 G = os.environ['DEN_GIT']; D = str(R / f'target/{a.tier}/den')
 O = runpy.run_path(str(R / 'tools/oracle.py'))
-base = R / f'target/merge-{a.tier}'
+mode = a.tier + ('-packed' if os.environ.get('DEN_PACKED_FIXTURES') == '1' else '')
+pack_fixture = runpy.run_path(str(R / 'tools/packed-fixture.py'))['pack_fixture']
+base = R / f'target/merge-{mode}'
 if base.exists(): shutil.rmtree(base)
 base.mkdir(parents=True)
 def run(repo, *args):
@@ -106,6 +108,7 @@ for n,(kind,args,setup) in enumerate(cases):
             if args[0]=='commit': run(fixture,'add','a')
     elif setup in ('diff3','zdiff3'): run(fixture,'config','merge.conflictStyle',setup)
     elif setup: (fixture/'.git'/setup).write_bytes(b'foreign lock\n')
+    if mode.endswith('-packed'): pack_fixture(G, fixture)
     repo=root/'repo'
     def restore():
         if repo.exists(): shutil.rmtree(repo)
@@ -141,7 +144,7 @@ for n,(kind,args,setup) in enumerate(cases):
             print('den',actual['status'],bytes.fromhex(actual['stdout']),bytes.fromhex(actual['stderr']))
             print('state', [k for k in expected['repository'].keys()|actual['repository'].keys() if expected['repository'].get(k)!=actual['repository'].get(k)])
     rows.append(row)
-output=R/f'target/merge-{"measure" if a.measure else a.tier}.json'; output.write_text(json.dumps(rows,indent=2)+'\n')
+output=R/f'target/merge-{"measure" if a.measure else mode}.json'; output.write_text(json.dumps(rows,indent=2)+'\n')
 if not a.measure:
     exact=[x for x in rows if 'equal' in x]
     failed=sum(not x['equal'] for x in exact); print(f'merge: {len(exact)-failed}/{len(exact)} exact; {len(rows)-len(exact)} named not-yet; {failed} mismatches')

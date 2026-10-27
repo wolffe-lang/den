@@ -11,7 +11,9 @@ ap.add_argument('--filter', default='')
 a = ap.parse_args()
 G = os.environ['DEN_GIT']; D = str(R / f'target/{a.tier}/den')
 O = runpy.run_path(str(R / 'tools/oracle.py'))
-base = R / f'target/replay-{a.tier}'
+mode = a.tier + ('-packed' if os.environ.get('DEN_PACKED_FIXTURES') == '1' else '')
+pack_fixture = runpy.run_path(str(R / 'tools/packed-fixture.py'))['pack_fixture']
+base = R / f'target/replay-{mode}'
 base.mkdir(parents=True, exist_ok=True)
 def git(repo, *args, **kw):
     p = subprocess.run([G, *args], cwd=repo, capture_output=True, **kw)
@@ -161,6 +163,7 @@ for n,(name,kind,setup,steps) in enumerate(CASES):
     elif setup in ('diff3','zdiff3'): git(fixture,'config','merge.conflictStyle',setup)
     elif setup: (fixture/'.git'/setup).write_bytes(b'foreign lock\n')
     steps=[[ids[x[1:]] if x.startswith('@') and x[1:] in ids else x for x in step] for step in steps]
+    if mode.endswith('-packed'): pack_fixture(G, fixture)
     repo=root/'repo'
     def execute(exe):
         if repo.exists(): shutil.rmtree(repo)
@@ -212,7 +215,7 @@ for n,(name,kind,setup,steps) in enumerate(CASES):
                     print(key,value,flush=True)
     rows.append(row)
 assert rows, 'empty selection'
-path=R/f'target/replay-{"measure" if a.measure else a.tier}.json'
+path=R/f'target/replay-{"measure" if a.measure else mode}.json'
 path.write_text(json.dumps(rows,indent=2)+'\n')
 if not a.measure:
     failures=sum(not r['verified'] for r in rows)

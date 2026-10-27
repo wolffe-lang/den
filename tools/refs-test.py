@@ -4,7 +4,9 @@ R = pathlib.Path(__file__).resolve().parent.parent
 ap = argparse.ArgumentParser(); ap.add_argument('--tier', default='native'); a = ap.parse_args()
 G = os.environ['DEN_GIT']; D = str(R / f'target/{a.tier}/den')
 O = runpy.run_path(str(R / 'tools/oracle.py'))
-base = R / f'target/refs-oracle-{a.tier}'
+mode = a.tier + ('-packed' if os.environ.get('DEN_PACKED_FIXTURES') == '1' else '')
+pack_fixture = runpy.run_path(str(R / 'tools/packed-fixture.py'))['pack_fixture']
+base = R / f'target/refs-oracle-{mode}'
 if base.exists(): shutil.rmtree(base)
 base.mkdir(parents=True)
 seed = base / 'seed'; seed.mkdir()
@@ -22,6 +24,7 @@ git('tag', 'light', first); git('tag', '-am', 'annotation', 'annotated', first)
 tree = git('rev-parse', 'HEAD^{tree}'); blob = git('rev-parse', 'HEAD:a')
 dated = subprocess.check_output([G, 'commit-tree', tree, '-m', 'first line\nsecond line'], cwd=seed,
     env=dict(os.environ, GIT_AUTHOR_DATE='946684800 +1400', GIT_COMMITTER_DATE='978307200 -1200')).decode().strip()
+if mode.endswith('-packed'): pack_fixture(G, seed)
 cases = []
 commands = [
  ['branch'], ['branch', '--show-current'], ['branch', '--list', 'topic'],
@@ -104,6 +107,7 @@ for case in cases:
         p = fixture / '.git' / setup
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_bytes(b'foreign lock\n')
+    if mode.endswith('-packed'): pack_fixture(G, fixture)
     def restore():
         if repo.exists(): shutil.rmtree(repo)
         shutil.copytree(fixture, repo, symlinks=True)
@@ -115,7 +119,7 @@ for case in cases:
     if not good:
         print(' git', expected['status'], bytes.fromhex(expected['stdout']), bytes.fromhex(expected['stderr']))
         print(' den', actual['status'], bytes.fromhex(actual['stdout']), bytes.fromhex(actual['stderr']))
-(R / f'target/refs-oracle-{a.tier}.json').write_text(json.dumps(rows, indent=2) + '\n')
+(R / f'target/refs-oracle-{mode}.json').write_text(json.dumps(rows, indent=2) + '\n')
 failed = sum(not row['equal'] for row in rows)
 print(f'refs: {len(rows)-failed}/{len(rows)} exact; {failed} mismatches', flush=True)
 unsupported = []
@@ -138,6 +142,6 @@ for i, (args, feature) in enumerate([
     assert actual['status'] == 2 and actual['stdout'] == '' and bytes.fromhex(actual['stderr']) == f'den: not yet implemented: {feature}\n'.encode(), (args, actual)
     assert actual['repository'] == before and actual['worktree'] == work, args
     unsupported.append(dict(args=args, feature=feature, git=expected, den=actual))
-(R / f'target/refs-unsupported-{a.tier}.json').write_text(json.dumps(unsupported, indent=2) + '\n')
+(R / f'target/refs-unsupported-{mode}.json').write_text(json.dumps(unsupported, indent=2) + '\n')
 print(f'refs named unsupported: {len(unsupported)}; not parity', flush=True)
 raise SystemExit(bool(failed))

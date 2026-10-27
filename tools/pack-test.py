@@ -92,7 +92,7 @@ p,i,_ = make([(3,big,big,b'')]); check('window-crossing',repo('windows',p,i),big
 for name,p,i,reason in [('short-pack',pack[:11],idx,'pack truncated'),('bad-pack-trailer',pack[:-1]+bytes([pack[-1]^1]),idx,'pack checksum'),('bad-idx-trailer',pack,idx[:-1]+bytes([idx[-1]^1]),'pack index checksum'),('short-idx',pack,idx[:1020],'pack index truncated')]:
     rr=repo(name,p,i); check(name,rr,last,expected=reason); check(name+'-prefix',rr,last,expected=reason,name_id=oid('blob',last).hex()[:7])
 # Re-sign malformed indexes so structure/CRC guards, not just SHA, must fire.
-for name,offset,value,reason in [('fanout',8,u32(999),'pack index fanout'),('crc',1032+20*3,b'\0'*4,'pack entry CRC'),('offset',1032+24*3,u32(13),'pack index offsets'),('pack-binding',len(idx)-40,b'\0'*20,'pack index binding')]:
+for name,offset,value,reason in [('fanout',8,u32(999),'pack index fanout'),('crc',1032+20*3,b'\0'*4,'pack entry CRC'),('offset',1032+24*3+4*next(n for n,x in enumerate(records) if x[2]==12),u32(13),'pack index offsets'),('pack-binding',len(idx)-40,b'\0'*20,'pack index binding')]:
     bad=idx[:offset]+value+idx[offset+len(value):]; rr=repo(name,pack,resign_idx(bad))
     target = next(b for b in (base,middle,last) if oid('blob',b)==records[0][0]) if name=='crc' else last
     check(name,rr,target,expected=reason)
