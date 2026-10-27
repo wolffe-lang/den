@@ -18,6 +18,9 @@ def pack_fixture(git, repo):
         run('pack-objects', '--delta-base-offset', '.git/objects/pack/pack', data=names)
         run('prune-packed')
     packs = list((repo/'.git/objects/pack').glob('*.pack'))
+    if not packs and not before:
+        run('pack-objects', '.git/objects/pack/pack', data=b'')
+        packs = list((repo/'.git/objects/pack').glob('*.pack'))
     assert packs, 'packed fixture has no pack'
     assert not list((repo/'.git/objects').glob('[0-9a-f][0-9a-f]/*')), 'loose fixture object remained'
     after = set(run('cat-file', '--batch-all-objects', '--batch-check=%(objectname)').splitlines())

@@ -1,0 +1,25 @@
+#!/bin/sh
+# Packed storage gate: independent encoders, oracle interop and inherited state.
+set -eu
+DEN_ROOT=$(cd "$(dirname "$0")/.." && pwd)
+export DEN_ROOT
+cd "$DEN_ROOT"
+. tools/lib-toolchain.sh
+mkdir -p target/runs/vc09-evidence
+trap 'status=$?; python3 -I tools/collect-pack-evidence.py; exit "$status"' EXIT
+for tier in native release; do
+    flag=
+    [ "$tier" != release ] || flag=--release
+    "$WOLF" build $flag --deny-warnings src/pack_test.lu -o "target/$tier/pack-test"
+    "target/$tier/pack-test"
+    "$WOLF" build $flag --deny-warnings probes/pack-client/main.lu -o "target/$tier/pack-client"
+    tools/env python3 -I tools/pack-test.py --tier "$tier"
+    tools/env python3 -I tools/pack-interop.py --tier "$tier"
+    for name in history refs merge replay; do
+        DEN_PACKED_FIXTURES=1 tools/env python3 -I "tools/$name-test.py" --tier "$tier"
+    done
+done
+"$WOLF" conform-run src/pack_test.lu --checked --json > target/pack-checked.json
+cat target/pack-checked.json
+python3 -I -c 'import json; rows=[json.loads(x) for x in open("target/pack-checked.json") if x.startswith("{")]; assert len(rows)==1 and rows[0]["verdict"]=="exit(0)", rows'
+echo 'pack: native/release interop, corruption, packed history/refs/merge/replay and actual checked; zero skips'

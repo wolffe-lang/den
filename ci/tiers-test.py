@@ -103,6 +103,10 @@ say("--filter blame --strict" in gate, "T2 strict witness remains unimplemented"
 say("tools/check-refs" in gate, "T2 refs integration gate is mandatory")
 say("tools/check-merge" in gate, "T2 merge integration gate is mandatory")
 say("tools/check-replay" in gate, "T2 replay integration gate is mandatory")
+say("tools/check-pack" in gate, "T2 packed storage and packed regression gate is mandatory")
+for path in ("src/pack/read.lu", "tools/check-pack", "tools/pack-interop.py", "tools/packed-fixture.py", "probes/pack-client/main.lu"):
+    p = plan([path], event="pull_request", action="synchronize")
+    say(p["tier"] == "pr" and p["jobs"] == PR, "T2 pack gate path " + path)
 for command in ("tools/check-diff --units-only", "tools/check-delta", "tools/check-rename", "tools/check-diff --corpus-only", "tools/check-diffbinary --reviewed-body --with-cli"):
     say(command in gate, "T2 diff integration gate is mandatory: " + command)
 cases = json.load(open(os.path.join(ROOT, "tests", "cases.json")))

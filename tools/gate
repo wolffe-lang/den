@@ -27,6 +27,7 @@ tools/check-diff --units-only
 tools/check-test
 TLS_PROBE_LOCAL_ONLY=1 tools/probe-tls
 tools/corpus target/corpus --prove-twice
+tools/check-pack
 tools/check-codec
 tools/check-objects
 tools/check-config

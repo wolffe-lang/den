@@ -85,6 +85,9 @@ for n in range(1,66):
     b = str(n).encode(); prev = str(n-1).encode(); chain.append((6,b,insert(prev,b),n-1))
 p,i,_ = make(chain)
 check('depth-limit',repo('depth',p,i),b'65',expected='pack delta depth limit')
+check('depth-boundary',OUT/'depth',b'64')
+flipped=bytearray(pack); flipped[-25]^=1
+check('flipped-delta',repo('flipped-delta',bytes(flipped),idx),last,expected='pack checksum')
 # An incompressible object crosses many 64-KiB windows, not a full-pack allocation.
 big = random.Random(901).randbytes(300000)
 p,i,_ = make([(3,big,big,b'')]); check('window-crossing',repo('windows',p,i),big)
@@ -109,6 +112,18 @@ check('loose-prefix-dedup',r,last,name_id=oid('blob',last).hex()[:7]); check('lo
 for marker,reason in [('multi-pack-index','multi-pack-index'),('pack-fixture.bitmap','pack bitmap')]:
     rr=repo('unsupported-'+marker,pack,idx); (rr/'objects'/'pack'/marker).write_bytes(b'unsupported')
     check(marker,rr,last,expected=reason)
+# Independent copy/insert reconstruction with every optional copy field exercised.
+rng=random.Random(909)
+for case in range(96):
+    source=rng.randbytes(90000)
+    off=rng.randrange(0,70000); length=rng.randrange(1,min(18000,len(source)-off))
+    target=source[off:off+length]+b'end'
+    mask=128; operands=bytearray()
+    for bit,n in enumerate([*(off.to_bytes(4,'little')),*(length.to_bytes(3,'little'))]):
+        if n or (case+bit)%3==0: mask|=1<<bit; operands.append(n)
+    delta=size(len(source))+size(len(target))+bytes([mask])+operands+b'\x03end'
+    pp,ii,_=make([(3,source,source,b''),(6,target,delta,0)])
+    check('copy-fields-'+str(case),repo('copy-fields-'+str(case),pp,ii),target)
 (OUT/'results.json').write_text(json.dumps(rows,indent=2)+'\n')
 print(f'pack structural: {sum(x["ok"] for x in rows)}/{len(rows)}; zero skips',flush=True)
 raise SystemExit(not all(x['ok'] for x in rows))
