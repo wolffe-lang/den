@@ -1,0 +1,258 @@
+[
+  {
+    "command": [
+      "switch",
+      "main"
+    ],
+    "name": "AUTO_MERGE",
+    "remaining": false,
+    "status": 0,
+    "stderr": "416c7265616479206f6e20276d61696e270a"
+  },
+  {
+    "command": [
+      "switch",
+      "main"
+    ],
+    "name": "REBASE_HEAD",
+    "remaining": true,
+    "status": 0,
+    "stderr": "416c7265616479206f6e20276d61696e270a"
+  },
+  {
+    "command": [
+      "switch",
+      "main"
+    ],
+    "name": "MERGE_HEAD",
+    "remaining": true,
+    "status": 128,
+    "stderr": "666174616c3a2063616e6e6f7420737769746368206272616e6368207768696c65206d657267696e670a436f6e73696465722022676974206d65726765202d2d7175697422206f72202267697420776f726b7472656520616464222e0a"
+  },
+  {
+    "command": [
+      "switch",
+      "main"
+    ],
+    "name": "MERGE_MSG",
+    "remaining": false,
+    "status": 0,
+    "stderr": "416c7265616479206f6e20276d61696e270a"
+  },
+  {
+    "command": [
+      "switch",
+      "main"
+    ],
+    "name": "MERGE_MODE",
+    "remaining": false,
+    "status": 0,
+    "stderr": "416c7265616479206f6e20276d61696e270a"
+  },
+  {
+    "command": [
+      "switch",
+      "main"
+    ],
+    "name": "SQUASH_MSG",
+    "remaining": false,
+    "status": 0,
+    "stderr": "416c7265616479206f6e20276d61696e270a"
+  },
+  {
+    "command": [
+      "switch",
+      "main"
+    ],
+    "name": "CHERRY_PICK_HEAD",
+    "remaining": true,
+    "status": 128,
+    "stderr": "666174616c3a2063616e6e6f7420737769746368206272616e6368207768696c65206368657272792d7069636b696e670a436f6e73696465722022676974206368657272792d7069636b202d2d7175697422206f72202267697420776f726b7472656520616464222e0a"
+  },
+  {
+    "command": [
+      "switch",
+      "main"
+    ],
+    "name": "REVERT_HEAD",
+    "remaining": true,
+    "status": 128,
+    "stderr": "666174616c3a2063616e6e6f7420737769746368206272616e6368207768696c6520726576657274696e670a436f6e7369646572202267697420726576657274202d2d7175697422206f72202267697420776f726b7472656520616464222e0a"
+  },
+  {
+    "command": [
+      "reset",
+      "--soft",
+      "HEAD"
+    ],
+    "name": "AUTO_MERGE",
+    "remaining": false,
+    "status": 0,
+    "stderr": ""
+  },
+  {
+    "command": [
+      "reset",
+      "--soft",
+      "HEAD"
+    ],
+    "name": "REBASE_HEAD",
+    "remaining": true,
+    "status": 0,
+    "stderr": ""
+  },
+  {
+    "command": [
+      "reset",
+      "--soft",
+      "HEAD"
+    ],
+    "name": "MERGE_HEAD",
+    "remaining": true,
+    "status": 128,
+    "stderr": "666174616c3a2043616e6e6f7420646f206120736f667420726573657420696e20746865206d6964646c65206f662061206d657267652e0a"
+  },
+  {
+    "command": [
+      "reset",
+      "--soft",
+      "HEAD"
+    ],
+    "name": "MERGE_MSG",
+    "remaining": false,
+    "status": 0,
+    "stderr": ""
+  },
+  {
+    "command": [
+      "reset",
+      "--soft",
+      "HEAD"
+    ],
+    "name": "MERGE_MODE",
+    "remaining": false,
+    "status": 0,
+    "stderr": ""
+  },
+  {
+    "command": [
+      "reset",
+      "--soft",
+      "HEAD"
+    ],
+    "name": "SQUASH_MSG",
+    "remaining": false,
+    "status": 0,
+    "stderr": ""
+  },
+  {
+    "command": [
+      "reset",
+      "--soft",
+      "HEAD"
+    ],
+    "name": "CHERRY_PICK_HEAD",
+    "remaining": false,
+    "status": 0,
+    "stderr": ""
+  },
+  {
+    "command": [
+      "reset",
+      "--soft",
+      "HEAD"
+    ],
+    "name": "REVERT_HEAD",
+    "remaining": false,
+    "status": 0,
+    "stderr": ""
+  },
+  {
+    "command": [
+      "reset",
+      "--hard",
+      "HEAD"
+    ],
+    "name": "AUTO_MERGE",
+    "remaining": false,
+    "status": 0,
+    "stderr": ""
+  },
+  {
+    "command": [
+      "reset",
+      "--hard",
+      "HEAD"
+    ],
+    "name": "REBASE_HEAD",
+    "remaining": true,
+    "status": 0,
+    "stderr": ""
+  },
+  {
+    "command": [
+      "reset",
+      "--hard",
+      "HEAD"
+    ],
+    "name": "MERGE_HEAD",
+    "remaining": false,
+    "status": 0,
+    "stderr": ""
+  },
+  {
+    "command": [
+      "reset",
+      "--hard",
+      "HEAD"
+    ],
+    "name": "MERGE_MSG",
+    "remaining": false,
+    "status": 0,
+    "stderr": ""
+  },
+  {
+    "command": [
+      "reset",
+      "--hard",
+      "HEAD"
+    ],
+    "name": "MERGE_MODE",
+    "remaining": false,
+    "status": 0,
+    "stderr": ""
+  },
+  {
+    "command": [
+      "reset",
+      "--hard",
+      "HEAD"
+    ],
+    "name": "SQUASH_MSG",
+    "remaining": false,
+    "status": 0,
+    "stderr": ""
+  },
+  {
+    "command": [
+      "reset",
+      "--hard",
+      "HEAD"
+    ],
+    "name": "CHERRY_PICK_HEAD",
+    "remaining": false,
+    "status": 0,
+    "stderr": ""
+  },
+  {
+    "command": [
+      "reset",
+      "--hard",
+      "HEAD"
+    ],
+    "name": "REVERT_HEAD",
+    "remaining": false,
+    "status": 0,
+    "stderr": ""
+  }
+]

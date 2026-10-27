@@ -1,0 +1,2 @@
+wolf-trap: assert
+  at src/reflog_test.lu:9:5

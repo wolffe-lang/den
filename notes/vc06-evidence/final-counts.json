@@ -1,0 +1,30 @@
+{
+  "native": {
+    "command_state_exact": 434,
+    "independent_client_checks": 14,
+    "named_unsupported_not_parity": 8
+  },
+  "release": {
+    "command_state_exact": 434,
+    "independent_client_checks": 14,
+    "named_unsupported_not_parity": 8
+  },
+  "checked": {
+    "refs": "exit(0)",
+    "reflog": "exit(0)"
+  },
+  "main_matrix": {
+    "not-yet": 14,
+    "parity": 173,
+    "shape-pass": 1
+  },
+  "static": {
+    "stripped_bytes": 2136536,
+    "sha256": "03150adcfb9cd472492497e3ff432f7dfb9eb224193a71e2f64856b8ae833972",
+    "reproduced": true
+  },
+  "functional_inputs": {
+    "files": 269,
+    "manifest_sha256": "472e034645d950c53d380ed131a3297342a4cce20d93636fb9c988d6205d3dce"
+  }
+}

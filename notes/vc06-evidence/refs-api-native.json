@@ -1,0 +1,70 @@
+[
+  {
+    "read": "HEAD",
+    "oid": "9cfe85ab35514fbb651ddcef9977163659263b33"
+  },
+  {
+    "read": "refs/heads/main",
+    "oid": "9cfe85ab35514fbb651ddcef9977163659263b33"
+  },
+  {
+    "read": "refs/heads/topic",
+    "oid": "a063df52259f6cc0c631bd9ea75e90f9c1e2e9e4"
+  },
+  {
+    "read": "refs/tags/annotated",
+    "oid": "6b3d52a30937305bbafaa298dbddd05bbe38bc45"
+  },
+  {
+    "listing": 1002
+  },
+  {
+    "listing-limit": 4097,
+    "explicit": true
+  },
+  {
+    "write": "refs/heads/new",
+    "before": "-",
+    "after": "a063df52259f6cc0c631bd9ea75e90f9c1e2e9e4",
+    "exact": true
+  },
+  {
+    "write": "refs/heads/topic",
+    "before": "a063df52259f6cc0c631bd9ea75e90f9c1e2e9e4",
+    "after": "9cfe85ab35514fbb651ddcef9977163659263b33",
+    "exact": true
+  },
+  {
+    "write": "refs/heads/topic",
+    "before": "a063df52259f6cc0c631bd9ea75e90f9c1e2e9e4",
+    "after": "a063df52259f6cc0c631bd9ea75e90f9c1e2e9e4",
+    "exact": true
+  },
+  {
+    "write": "refs/heads/topic",
+    "before": "a063df52259f6cc0c631bd9ea75e90f9c1e2e9e4",
+    "after": "-",
+    "exact": true
+  },
+  {
+    "write": "refs/tags/new",
+    "before": "-",
+    "after": "a063df52259f6cc0c631bd9ea75e90f9c1e2e9e4",
+    "exact": true
+  },
+  {
+    "failure": "stale",
+    "immutable": true,
+    "stderr": "696e76616c69640a"
+  },
+  {
+    "failure": "ref-lock",
+    "immutable": true,
+    "stderr": "6578697374730a"
+  },
+  {
+    "failure": "packed-lock",
+    "immutable": true,
+    "stderr": "6578697374730a"
+  }
+]

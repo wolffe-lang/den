@@ -1,0 +1,258 @@
+[
+  {
+    "command": [
+      "switch",
+      "main"
+    ],
+    "name": "AUTO_MERGE.lock",
+    "remaining": true,
+    "status": 0,
+    "stderr": "416c7265616479206f6e20276d61696e270a6572726f723a2063616e6e6f74206c6f636b2072656620274155544f5f4d45524745273a20556e61626c6520746f2063726561746520272f776f726b2f64656e2f7461726765742f726566732d636c65616e75702d6d6561737572652f7377697463682d6d61696e2d4155544f5f4d455247452e6c6f636b2f2e6769742f4155544f5f4d455247452e6c6f636b273a2046696c65206578697374732e0a0a416e6f74686572206769742070726f63657373207365656d7320746f2062652072756e6e696e6720696e2074686973207265706f7369746f72792c206f7220746865206c6f636b2066696c65206d6179206265207374616c650a6572726f723a2063616e6e6f74206c6f636b2072656620274155544f5f4d45524745273a20556e61626c6520746f2063726561746520272f776f726b2f64656e2f7461726765742f726566732d636c65616e75702d6d6561737572652f7377697463682d6d61696e2d4155544f5f4d455247452e6c6f636b2f2e6769742f4155544f5f4d455247452e6c6f636b273a2046696c65206578697374732e0a0a416e6f74686572206769742070726f63657373207365656d7320746f2062652072756e6e696e6720696e2074686973207265706f7369746f72792c206f7220746865206c6f636b2066696c65206d6179206265207374616c650a"
+  },
+  {
+    "command": [
+      "switch",
+      "main"
+    ],
+    "name": "REBASE_HEAD.lock",
+    "remaining": true,
+    "status": 0,
+    "stderr": "416c7265616479206f6e20276d61696e270a"
+  },
+  {
+    "command": [
+      "switch",
+      "main"
+    ],
+    "name": "MERGE_HEAD.lock",
+    "remaining": true,
+    "status": 0,
+    "stderr": "416c7265616479206f6e20276d61696e270a"
+  },
+  {
+    "command": [
+      "switch",
+      "main"
+    ],
+    "name": "MERGE_MSG.lock",
+    "remaining": true,
+    "status": 0,
+    "stderr": "416c7265616479206f6e20276d61696e270a"
+  },
+  {
+    "command": [
+      "switch",
+      "main"
+    ],
+    "name": "MERGE_MODE.lock",
+    "remaining": true,
+    "status": 0,
+    "stderr": "416c7265616479206f6e20276d61696e270a"
+  },
+  {
+    "command": [
+      "switch",
+      "main"
+    ],
+    "name": "SQUASH_MSG.lock",
+    "remaining": true,
+    "status": 0,
+    "stderr": "416c7265616479206f6e20276d61696e270a"
+  },
+  {
+    "command": [
+      "switch",
+      "main"
+    ],
+    "name": "CHERRY_PICK_HEAD.lock",
+    "remaining": true,
+    "status": 0,
+    "stderr": "416c7265616479206f6e20276d61696e270a"
+  },
+  {
+    "command": [
+      "switch",
+      "main"
+    ],
+    "name": "REVERT_HEAD.lock",
+    "remaining": true,
+    "status": 0,
+    "stderr": "416c7265616479206f6e20276d61696e270a"
+  },
+  {
+    "command": [
+      "reset",
+      "--soft",
+      "HEAD"
+    ],
+    "name": "AUTO_MERGE.lock",
+    "remaining": true,
+    "status": 0,
+    "stderr": "6572726f723a2063616e6e6f74206c6f636b2072656620274155544f5f4d45524745273a20556e61626c6520746f2063726561746520272f776f726b2f64656e2f7461726765742f726566732d636c65616e75702d6d6561737572652f72657365742d2d2d736f66742d484541442d4155544f5f4d455247452e6c6f636b2f2e6769742f4155544f5f4d455247452e6c6f636b273a2046696c65206578697374732e0a0a416e6f74686572206769742070726f63657373207365656d7320746f2062652072756e6e696e6720696e2074686973207265706f7369746f72792c206f7220746865206c6f636b2066696c65206d6179206265207374616c650a6572726f723a2063616e6e6f74206c6f636b2072656620274155544f5f4d45524745273a20556e61626c6520746f2063726561746520272f776f726b2f64656e2f7461726765742f726566732d636c65616e75702d6d6561737572652f72657365742d2d2d736f66742d484541442d4155544f5f4d455247452e6c6f636b2f2e6769742f4155544f5f4d455247452e6c6f636b273a2046696c65206578697374732e0a0a416e6f74686572206769742070726f63657373207365656d7320746f2062652072756e6e696e6720696e2074686973207265706f7369746f72792c206f7220746865206c6f636b2066696c65206d6179206265207374616c650a"
+  },
+  {
+    "command": [
+      "reset",
+      "--soft",
+      "HEAD"
+    ],
+    "name": "REBASE_HEAD.lock",
+    "remaining": true,
+    "status": 0,
+    "stderr": ""
+  },
+  {
+    "command": [
+      "reset",
+      "--soft",
+      "HEAD"
+    ],
+    "name": "MERGE_HEAD.lock",
+    "remaining": true,
+    "status": 0,
+    "stderr": ""
+  },
+  {
+    "command": [
+      "reset",
+      "--soft",
+      "HEAD"
+    ],
+    "name": "MERGE_MSG.lock",
+    "remaining": true,
+    "status": 0,
+    "stderr": ""
+  },
+  {
+    "command": [
+      "reset",
+      "--soft",
+      "HEAD"
+    ],
+    "name": "MERGE_MODE.lock",
+    "remaining": true,
+    "status": 0,
+    "stderr": ""
+  },
+  {
+    "command": [
+      "reset",
+      "--soft",
+      "HEAD"
+    ],
+    "name": "SQUASH_MSG.lock",
+    "remaining": true,
+    "status": 0,
+    "stderr": ""
+  },
+  {
+    "command": [
+      "reset",
+      "--soft",
+      "HEAD"
+    ],
+    "name": "CHERRY_PICK_HEAD.lock",
+    "remaining": true,
+    "status": 0,
+    "stderr": ""
+  },
+  {
+    "command": [
+      "reset",
+      "--soft",
+      "HEAD"
+    ],
+    "name": "REVERT_HEAD.lock",
+    "remaining": true,
+    "status": 0,
+    "stderr": ""
+  },
+  {
+    "command": [
+      "reset",
+      "--hard",
+      "HEAD"
+    ],
+    "name": "AUTO_MERGE.lock",
+    "remaining": true,
+    "status": 0,
+    "stderr": "6572726f723a2063616e6e6f74206c6f636b2072656620274155544f5f4d45524745273a20556e61626c6520746f2063726561746520272f776f726b2f64656e2f7461726765742f726566732d636c65616e75702d6d6561737572652f72657365742d2d2d686172642d484541442d4155544f5f4d455247452e6c6f636b2f2e6769742f4155544f5f4d455247452e6c6f636b273a2046696c65206578697374732e0a0a416e6f74686572206769742070726f63657373207365656d7320746f2062652072756e6e696e6720696e2074686973207265706f7369746f72792c206f7220746865206c6f636b2066696c65206d6179206265207374616c650a6572726f723a2063616e6e6f74206c6f636b2072656620274155544f5f4d45524745273a20556e61626c6520746f2063726561746520272f776f726b2f64656e2f7461726765742f726566732d636c65616e75702d6d6561737572652f72657365742d2d2d686172642d484541442d4155544f5f4d455247452e6c6f636b2f2e6769742f4155544f5f4d455247452e6c6f636b273a2046696c65206578697374732e0a0a416e6f74686572206769742070726f63657373207365656d7320746f2062652072756e6e696e6720696e2074686973207265706f7369746f72792c206f7220746865206c6f636b2066696c65206d6179206265207374616c650a"
+  },
+  {
+    "command": [
+      "reset",
+      "--hard",
+      "HEAD"
+    ],
+    "name": "REBASE_HEAD.lock",
+    "remaining": true,
+    "status": 0,
+    "stderr": ""
+  },
+  {
+    "command": [
+      "reset",
+      "--hard",
+      "HEAD"
+    ],
+    "name": "MERGE_HEAD.lock",
+    "remaining": true,
+    "status": 0,
+    "stderr": ""
+  },
+  {
+    "command": [
+      "reset",
+      "--hard",
+      "HEAD"
+    ],
+    "name": "MERGE_MSG.lock",
+    "remaining": true,
+    "status": 0,
+    "stderr": ""
+  },
+  {
+    "command": [
+      "reset",
+      "--hard",
+      "HEAD"
+    ],
+    "name": "MERGE_MODE.lock",
+    "remaining": true,
+    "status": 0,
+    "stderr": ""
+  },
+  {
+    "command": [
+      "reset",
+      "--hard",
+      "HEAD"
+    ],
+    "name": "SQUASH_MSG.lock",
+    "remaining": true,
+    "status": 0,
+    "stderr": ""
+  },
+  {
+    "command": [
+      "reset",
+      "--hard",
+      "HEAD"
+    ],
+    "name": "CHERRY_PICK_HEAD.lock",
+    "remaining": true,
+    "status": 0,
+    "stderr": ""
+  },
+  {
+    "command": [
+      "reset",
+      "--hard",
+      "HEAD"
+    ],
+    "name": "REVERT_HEAD.lock",
+    "remaining": true,
+    "status": 0,
+    "stderr": ""
+  }
+]
