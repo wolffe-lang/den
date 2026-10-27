@@ -221,6 +221,8 @@ fn branch(args: List[str]) -> int ! commit.CommitErrors {
 }
 
 fn dispatch(args: List[str]) -> int ! commit.CommitErrors {
+    if args[0] == "rebase" { return rebase_command(args)? }
+    if args[0] == "cherry-pick" { return pick_command(args)? }
     if args[0] == "merge" { return merge_command(args)? }
     if args[0] == "revert" { return revert_command(args)? }
     if args[0] == "tag" { return tag(args)? }

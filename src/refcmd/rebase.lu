@@ -1,0 +1,370 @@
+// Original noninteractive linear replay. Metadata bytes measured against the
+// pinned executable; git-rebase(1), Description, Mode Options and --onto.
+use std.fs
+use commit
+use commit_format
+use diff
+use index
+use mergetree
+use oid
+use refs
+use sequencer
+use walk
+use worktree
+
+fn rebase_help() -> str {
+    "#\n# Commands:\n# p, pick <commit> = use commit\n# r, reword <commit> = use commit, but edit the commit message\n# e, edit <commit> = use commit, but stop for amending\n# s, squash <commit> = use commit, but meld into previous commit\n# f, fixup [-C | -c] <commit> = like \"squash\" but keep only the previous\n#                    commit's log message, unless -C is used, in which case\n#                    keep only this commit's message; -c is same as -C but\n#                    opens the editor\n# x, exec <command> = run command (the rest of the line) using shell\n# b, break = stop here (continue rebase later with 'git rebase --continue')\n# d, drop <commit> = remove commit\n# l, label <label> = label current HEAD with a name\n# t, reset <label> = reset HEAD to a label\n# m, merge [-C <commit> | -c <commit>] <label> [# <oneline>]\n#         create a merge commit using the original merge commit's\n#         message (or the oneline, if no original merge commit was\n#         specified); use -c <commit> to reword the commit message\n# u, update-ref <ref> = track a placeholder for the <ref> to be updated\n#                       to this position in the new commits. The <ref> is\n#                       updated at the end of the rebase\n#\n# These lines can be re-ordered; they are executed from top to bottom.\n#\n# If you remove a line here THAT COMMIT WILL BE LOST.\n#\n# However, if you remove everything, the rebase will be aborted.\n#\n"
+}
+
+fn rebase_author(ctx: worktree.Context, item: walk.Commit) -> () ! commit.CommitErrors {
+    var author = ""
+    for field in item.headers.fields {
+        if field.key == "author" { author = str_from_utf8(field.value)? }
+    }
+    let who = commit_format.parse_identity(author)?
+    let name = who.name.replace("'", "'\\''"), email = who.email.replace("'", "'\\''")
+    replay_write(
+        ctx,
+        "rebase-merge/author-script",
+        "GIT_AUTHOR_NAME='{name}'\nGIT_AUTHOR_EMAIL='{email}'\nGIT_AUTHOR_DATE='@{commit_format.date_text(who.date)?}'\n".
+            bytes(),
+    )?
+}
+
+fn rebase_conflict(ctx: worktree.Context, item: walk.Commit) -> int ! commit.CommitErrors {
+    let short = abbrev(ctx.repo, item.id)?,
+        subject = str_from_utf8(commit.subject(item.headers.message)?)?
+    replay_write(ctx, "rebase-merge/stopped-sha", "{oid.hex(item.id)?}\n".bytes())?
+    replay_write(ctx, "rebase-merge/message", replay_read(ctx, "MERGE_MSG")?.bytes())?
+    var options = diff.configured(ctx)?
+    let before = if item.parents.len == 0 {
+        List[diff.File]()
+    } else {
+        mergetree.files(ctx.repo, item.parents[0])?
+    }
+    let patch = diff.render(
+        ctx,
+        diff.changes(before, mergetree.files(ctx.repo, item.id)?, options)?,
+        options,
+    )?
+    replay_write(ctx, "rebase-merge/patch", patch)?
+    eprint(
+        "error: could not apply {short}... {subject}\nhint: Resolve all conflicts manually, mark them as resolved with\nhint: \"git add/rm <conflicted_files>\", then run \"git rebase --continue\".\nhint: You can instead skip this commit: run \"git rebase --skip\".\nhint: To abort and get back to the state before \"git rebase\", run \"git rebase --abort\".\nhint: Disable this message with \"git config set advice.mergeConflict false\"\nCould not apply {short}... # {subject}",
+    )
+    1
+}
+
+fn rebase_remove(ctx: worktree.Context) -> () ! commit.CommitErrors {
+    // Do not recursively remove unknown state or a foreign lock.
+    for name in [
+        "author-script",
+        "done",
+        "drop_redundant_commits",
+        "end",
+        "git-rebase-todo",
+        "git-rebase-todo.backup",
+        "head-name",
+        "interactive",
+        "message",
+        "msgnum",
+        "no-reschedule-failed-exec",
+        "onto",
+        "orig-head",
+        "patch",
+        "stopped-sha",
+        "rewritten-list",
+        "rewritten-pending",
+    ] {
+        replay_remove(ctx, "rebase-merge/{name}")?
+    }
+    fs.remove_dir("{ctx.repo.gitdir}/rebase-merge")?
+    replay_remove(ctx, "REBASE_HEAD")?
+}
+
+fn rebase_finish(ctx: worktree.Context) -> int ! commit.CommitErrors {
+    let branch = replay_read(ctx, "rebase-merge/head-name")?.trim()
+    let orig = oid.parse("sha1", replay_read(ctx, "rebase-merge/orig-head")?.trim())?
+    let onto = replay_read(ctx, "rebase-merge/onto")?.trim()
+    let head = worktree.head(ctx)?
+    if branch != "detached HEAD" {
+        refs.update(
+            ctx.repo,
+            branch,
+            [orig],
+            head.commits,
+            identity(ctx)?,
+            "rebase (finish): {branch} onto {onto}",
+            false,
+        ) else |e| match e {
+            exists => {
+                eprint(
+                    "error: update_ref failed for ref '{branch}': cannot lock ref '{branch}': {lock_text("{ctx.repo.gitdir}/{branch}.lock")}\nerror: could not update {branch}",
+                )
+                return 1
+            },
+            _ => { return Failure("could not update {branch}: {e}") },
+        }
+        refs.set_head(
+            ctx.repo,
+            replay_read(ctx, "HEAD")?,
+            "ref: {branch}\n",
+            head.commits,
+            head.commits,
+            identity(ctx)?,
+            "rebase (finish): returning to {branch}",
+        )?
+    }
+    rebase_remove(ctx)?
+    eprint("Successfully rebased and updated {branch}.")
+    0
+}
+
+fn rebase_steps(ctx: worktree.Context) -> int ! commit.CommitErrors {
+    let steps = sequencer.parse(replay_read(ctx, "rebase-merge/git-rebase-todo")?.bytes())?
+    let total = replay_read(ctx, "rebase-merge/end")?.trim().to_int() else |_| { return invalid }
+    var done = if fs.exists("{ctx.repo.gitdir}/rebase-merge/done") {
+        replay_read(ctx, "rebase-merge/done")?
+    } else {
+        ""
+    }
+    var number = sequencer.parse(done.bytes())?.len
+    for at in 0..steps.len {
+        let item = walk.read(ctx.repo, replay_target(ctx, steps[at].name)?)?
+        // Fail before advancing progress for an unsupported tree operation.
+        let _ = replay_plan(ctx, worktree.head(ctx)?.commits[0], item)?
+        number += 1
+        done += str_from_utf8(sequencer.render([copy steps[at]])?)?
+        replay_write(ctx, "rebase-merge/done", done.bytes())?
+        replay_write(ctx, "rebase-merge/git-rebase-todo", sequencer.render(steps[at + 1..])?)?
+        replay_write(ctx, "rebase-merge/msgnum", "{number}\n".bytes())?
+        rebase_author(ctx, item)?
+        eprint_raw("Rebasing ({number}/{total})\r")
+        let result = pick_one(ctx, item, PickOptions { allow_empty: true, empty: "drop" }, true)?
+        if result != 0 { return result }
+        replay_remove(ctx, "REBASE_HEAD")?
+        var rewritten = if fs.exists("{ctx.repo.gitdir}/rebase-merge/rewritten-list") {
+            replay_read(ctx, "rebase-merge/rewritten-list")?
+        } else {
+            ""
+        }
+        rewritten += "{oid.hex(item.id)?} {oid.hex(worktree.head(ctx)?.commits[0])?}\n"
+        replay_write(ctx, "rebase-merge/rewritten-list", rewritten.bytes())?
+    }
+    rebase_finish(ctx)?
+}
+
+fn rebase_resume(ctx: worktree.Context, action: str) -> int ! commit.CommitErrors {
+    if fs.exists("{ctx.repo.gitdir}/rebase-apply") { return Unsupported("rebase apply backend") }
+    if !fs.exists("{ctx.repo.gitdir}/rebase-merge") { return Fatal("no rebase in progress") }
+    let branch = replay_read(ctx, "rebase-merge/head-name")?.trim()
+    let head = worktree.head(ctx)?
+    if action == "--abort" || action == "--skip" {
+        let target = if action == "--abort" {
+            oid.parse("sha1", replay_read(ctx, "rebase-merge/orig-head")?.trim())?
+        } else {
+            copy head.commits[0]
+        }
+        var tx = index_start(ctx)?
+        defer index.abort(mut tx)
+        // A hard restoration deliberately replaces conflicted entries; remove
+        // stages only after worktree safety has been checked by abort_merge.
+        let target_files = worktree.flatten_tree(ctx.repo, target)?
+        worktree.abort_merge(ctx, mut tx.value, target_files)?
+        index.commit(mut tx)?
+        cleanup_state(ctx)
+        replay_remove(ctx, "REBASE_HEAD")?
+        if action == "--abort" {
+            refs.set_head(
+                ctx.repo,
+                replay_read(ctx, "HEAD")?,
+                if branch == "detached HEAD" then "{oid.hex(target)?}\n" else "ref: {branch}\n",
+                head.commits,
+                [target],
+                identity(ctx)?,
+                "rebase (abort): returning to {branch}",
+            )?
+            rebase_remove(ctx)?
+            return 0
+        }
+    } else {
+        let value = worktree.read_index(ctx)?
+        for entry in value.entries {
+            if index.stage(entry) != 0 {
+                return Failure(
+                    "you must edit all merge conflicts and then\nmark them as resolved using git add",
+                )
+            }
+        }
+        let tree = index.build_trees(value)?
+        if !oid.equal(tree.root, walk.read(ctx.repo, head.commits[0])?.tree) {
+            // M2's actual editor execution remains a named boundary. A user can
+            // explicitly commit the resolution first, then --continue.
+            return Unsupported("rebase continuation editor execution")
+        }
+        if fs.exists("{ctx.repo.gitdir}/rebase-merge/stopped-sha") {
+            let old = replay_read(ctx, "rebase-merge/stopped-sha")?.trim()
+            var rewritten = if fs.exists("{ctx.repo.gitdir}/rebase-merge/rewritten-list") {
+                replay_read(ctx, "rebase-merge/rewritten-list")?
+            } else {
+                ""
+            }
+            rewritten += "{old} {oid.hex(head.commits[0])?}\n"
+            replay_write(ctx, "rebase-merge/rewritten-list", rewritten.bytes())?
+        }
+    }
+    for name in ["message", "patch", "stopped-sha"] { replay_remove(ctx, "rebase-merge/{name}")? }
+    rebase_steps(ctx)?
+}
+
+fn rebase_command(args: List[str]) -> int ! commit.CommitErrors {
+    let ctx = worktree.discover(".")?
+    controls(ctx, "rebase")?
+    replay_lock_scope(ctx)?
+    if worktree.config_bool(ctx, "commit.gpgsign", false)? { return Unsupported("rebase signing") }
+    if args.len == 2 && (args[1] == "--continue" || args[1] == "--skip" || args[1] == "--abort") {
+        return rebase_resume(ctx, args[1])?
+    }
+    var names = List[str](), onto_name = "", at = 1
+    while at < args.len {
+        let arg = args[at]
+        at += 1
+        if arg == "--onto" {
+            if at == args.len { return Unsupported("rebase missing onto") }
+            onto_name = args[at]
+            at += 1
+        } else if arg == "--merge" || arg == "--no-fork-point" {} else if arg.starts_with("-") {
+            return Unsupported("rebase {arg}")
+        } else {
+            (mut names).push(arg)
+        }
+    }
+    if names.len != 1 { return Unsupported("rebase upstream/branch selection") }
+    for name in [
+        "MERGE_HEAD",
+        "CHERRY_PICK_HEAD",
+        "REVERT_HEAD",
+        "sequencer",
+        "rebase-merge",
+        "rebase-apply",
+    ] {
+        if fs.exists("{ctx.repo.gitdir}/{name}") { return Unsupported("rebase in-progress {name}") }
+    }
+    let head = worktree.head(ctx)?
+    if head.commits.len == 0 { return Unsupported("rebase unborn HEAD") }
+    let upstream = replay_target(ctx, names[0])?
+    if onto_name == "" { onto_name = names[0] }
+    let onto = replay_target(ctx, onto_name)?
+    var excluded = Map[str, bool]()
+    for item in walk.collect(ctx.repo, [copy upstream], 100001, 0, 100000, false)? {
+        excluded[oid.hex(item.id)?] = true
+    }
+    var reverse = List[walk.Commit](), current = copy head.commits[0]
+    while !(excluded[oid.hex(current)?] else false) {
+        let item = walk.read(ctx.repo, current)?
+        if item.parents.len != 1 { return Unsupported("rebase nonlinear or unrelated history") }
+        if reverse.len == 100000 { return limit }
+        current = copy item.parents[0]
+        (mut reverse).push(item)
+    }
+    let snapshot = worktree.scan(ctx)?
+    var unstaged = false, staged = false
+    for row in snapshot.rows {
+        if row.untracked || row.ignored { continue }
+        if row.x != " " { staged = true }
+        if row.y != " " { unstaged = true }
+    }
+    if unstaged || staged {
+        replay_refresh(ctx)?
+        if unstaged { eprint("error: cannot rebase: You have unstaged changes.") }
+        if staged { eprint("error: cannot rebase: Your index contains uncommitted changes.") }
+        eprint("error: Please commit or stash them.")
+        return 1
+    }
+    if oid.equal(current, onto) && reverse.len > 0 {
+        replay_refresh(ctx)?
+        print("Current branch {if head.detached then "HEAD" else head.branch} is up to date.")
+        return 0
+    }
+    var steps = List[sequencer.Step]()
+    var files = mergetree.files(ctx.repo, onto)?
+    for pos in 0..reverse.len {
+        let item = copy reverse[reverse.len - pos - 1]
+        let parent = walk.read(ctx.repo, item.parents[0])?
+        let empty = oid.equal(parent.tree, item.tree)
+        let subject = str_from_utf8(commit.subject(item.headers.message)?)?
+        (mut steps).push(sequencer.Step {
+            name: oid.hex(item.id)?,
+            subject: "# {subject}{if empty then " # empty" else ""}",
+        })
+        // Retain vc07's refused topology/alignment before detaching any refs.
+        let plan = mergetree.plan(
+            mergetree.files(ctx.repo, item.parents[0])?,
+            files,
+            mergetree.files(ctx.repo, item.id)?,
+            "HEAD",
+            "base",
+            "topic",
+            ctx.repo.config["merge.conflictstyle"] else "merge",
+        )?
+        files = copy plan.files
+        if plan.conflicts.len > 0 { break }
+    }
+    // Selection continues beyond a conflicted first step without pre-merging
+    // unknown resolutions. Its topology is nevertheless validated above.
+    if steps.len < reverse.len {
+        for pos in steps.len..reverse.len {
+            let item = copy reverse[reverse.len - pos - 1]
+            let empty = oid.equal(walk.read(ctx.repo, item.parents[0])?.tree, item.tree)
+            (mut steps).push(sequencer.Step {
+                name: oid.hex(item.id)?,
+                subject: "# {str_from_utf8(commit.subject(item.headers.message)?)?}{if empty then " # empty" else ""}",
+            })
+        }
+    }
+    var tx = index_start(ctx) else |e| match e {
+        Fatal(text) => { eprint("error: {text}\nerror: could not detach HEAD"); return 1 },
+        _ => { return Failure("could not detach HEAD: {e}") },
+    }
+    defer index.abort(mut tx)
+    let onto_files = worktree.flatten_tree(ctx.repo, onto)?
+    worktree.transition(ctx, mut tx.value, onto_files, "switch")?
+    index.commit(mut tx)?
+    merge_orig(ctx, head.commits) else |e| match e {
+        Fatal(text) => { eprint("error: {text}") },
+        _ => { return Failure("ORIG_HEAD: {e}") },
+    }
+    refs.set_head(
+        ctx.repo,
+        replay_read(ctx, "HEAD")?,
+        "{oid.hex(onto)?}\n",
+        head.commits,
+        [copy onto],
+        identity(ctx)?,
+        "rebase (start): checkout {onto_name}",
+    ) else |e| match e {
+        exists => {
+            eprint(
+                "error: update_ref failed for ref 'HEAD': cannot lock ref 'HEAD': {lock_text("{ctx.repo.gitdir}/HEAD.lock")}\nerror: could not detach HEAD",
+            )
+            return 1
+        },
+        _ => { return Failure("could not detach HEAD: {e}") },
+    }
+    let branch = if head.detached then "detached HEAD" else head.reference
+    replay_write(ctx, "rebase-merge/head-name", "{branch}\n".bytes())?
+    replay_write(ctx, "rebase-merge/onto", "{oid.hex(onto)?}\n".bytes())?
+    replay_write(ctx, "rebase-merge/orig-head", "{oid.hex(head.commits[0])?}\n".bytes())?
+    replay_write(ctx, "rebase-merge/end", "{steps.len}\n".bytes())?
+    for name in ["interactive", "drop_redundant_commits", "no-reschedule-failed-exec"] {
+        replay_write(ctx, "rebase-merge/{name}", [])?
+    }
+    let todo = sequencer.render(steps)?
+    replay_write(ctx, "rebase-merge/git-rebase-todo", todo)?
+    let header = "\n# Rebase {abbrev(ctx.repo, upstream)?}..{abbrev(ctx.repo, head.commits[0])?} onto {abbrev(ctx.repo, onto)?} ({steps.len} {if steps.len == 1 then "command" else "commands"})\n"
+    replay_write(
+        ctx,
+        "rebase-merge/git-rebase-todo.backup",
+        "{str_from_utf8(todo)?}{header}{rebase_help()}".bytes(),
+    )?
+    rebase_steps(ctx)?
+}

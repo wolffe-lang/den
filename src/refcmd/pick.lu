@@ -1,0 +1,392 @@
+// Original replay transaction, from git-cherry-pick(1) Description/Options
+// and pinned full-state observations. Reuses the vc07 tree/file engine.
+use std.fs
+use commit
+use diff
+use index
+use mergetree
+use oid
+use refs
+use repository
+use sequencer
+use walk
+use worktree
+
+struct PickOptions { allow_empty: bool, empty: str }
+
+fn replay_read(ctx: worktree.Context, name: str) -> str ! commit.CommitErrors {
+    str_from_utf8(repository.read_bytes(refs.administrative(ctx.repo, name, false)?, 16777216)?)?
+}
+
+fn replay_write(ctx: worktree.Context, name: str, data: List[byte]) -> () ! commit.CommitErrors {
+    let path = refs.administrative(ctx.repo, name, true)?
+    let lock = "{path}.lock"
+    let file = fs.create_new_with_mode(lock, 0o666)?
+    var fd = file.fd, active = true
+    defer { if fd >= 0 { fs_close(fd) else |_| {} }; if active { fs.remove(lock) else |_| {} } }
+    fs_write_chunk(fd, data)?
+    fs_sync(fd)?
+    fs_close(fd)?
+    fd = -1
+    fs_rename(lock, path)?
+    active = false
+    let slash = path.rfind("/") else { return invalid }
+    fs.sync_dir(path[0..slash])?
+}
+
+fn replay_remove(ctx: worktree.Context, name: str) -> () ! commit.CommitErrors {
+    let path = refs.administrative(ctx.repo, name, false)?
+    if fs.exists(path) { fs.remove(path)? }
+}
+
+fn sequence_remove(ctx: worktree.Context) -> () ! commit.CommitErrors {
+    if !fs.exists("{ctx.repo.gitdir}/sequencer") { return }
+    for name in ["head", "todo", "abort-safety", "opts"] {
+        replay_remove(ctx, "sequencer/{name}")?
+    }
+    fs.remove_dir("{ctx.repo.gitdir}/sequencer")?
+}
+
+fn replay_target(ctx: worktree.Context, name: str) -> oid.Oid ! commit.CommitErrors {
+    if name.contains("~") || name.contains("^") || name.contains("..") || name.contains("@{{") {
+        return Unsupported("replay revision grammar")
+    }
+    if name == "ORIG_HEAD" || name == "CHERRY_PICK_HEAD" || name == "REBASE_HEAD" {
+        return oid.parse("sha1", replay_read(ctx, name)?.trim())?
+    }
+    resolve_commit(ctx.repo, name)?
+}
+
+fn replay_plan(
+    ctx: worktree.Context,
+    head: oid.Oid,
+    item: walk.Commit,
+) -> mergetree.Plan ! commit.CommitErrors {
+    if item.parents.len > 1 { return Unsupported("cherry-pick merge mainline") }
+    var base = List[diff.File]()
+    if item.parents.len == 1 { base = mergetree.files(ctx.repo, item.parents[0])? }
+    let short = abbrev(ctx.repo, item.id)?,
+        subject = str_from_utf8(commit.subject(item.headers.message)?)?
+    mergetree.plan(
+        base,
+        mergetree.files(ctx.repo, head)?,
+        mergetree.files(ctx.repo, item.id)?,
+        "HEAD",
+        "parent of {short} ({subject})",
+        "{short} ({subject})",
+        ctx.repo.config["merge.conflictstyle"] else "merge",
+    )?
+}
+
+fn pick_empty(ctx: worktree.Context, item: walk.Commit) -> int ! commit.CommitErrors {
+    let message = replay_read(ctx, "MERGE_MSG")?
+    state_file(ctx, "COMMIT_EDITMSG", message.bytes())?
+    let head = worktree.head(ctx)?
+    let short = abbrev(ctx.repo, item.id)?
+    if head.detached { return Unsupported("cherry-pick empty detached status") }
+    let snapshot = worktree.scan(ctx)?
+    for row in snapshot.rows {
+        if row.x != " " || row.y != " " || row.untracked {
+            return Unsupported("cherry-pick empty dirty status")
+        }
+    }
+    print(
+        "On branch {head.branch}\nYou are currently cherry-picking commit {short}.\n  (all conflicts fixed: run \"git cherry-pick --continue\")\n  (use \"git cherry-pick --skip\" to skip this patch)\n  (use \"git cherry-pick --abort\" to cancel the cherry-pick operation)\n\nnothing to commit, working tree clean",
+    )
+    eprint(
+        "The previous cherry-pick is now empty, possibly due to conflict resolution.\nIf you wish to commit it anyway, use:\n\n    git commit --allow-empty\n\nOtherwise, please use 'git cherry-pick --skip'",
+    )
+    1
+}
+
+fn pick_commit(
+    ctx: worktree.Context,
+    item: walk.Commit,
+    allow: bool,
+    direct: bool,
+) -> int ! commit.CommitErrors {
+    var args = ["commit", "--no-edit", "--cleanup=strip", "-F", "{ctx.repo.gitdir}/MERGE_MSG"]
+    if allow { (mut args).push("--allow-empty") }
+    let value = worktree.read_index(ctx)?
+    let tree = index.build_trees(value)?
+    let head = worktree.head(ctx)?
+    if !allow && oid.equal(tree.root, walk.read(ctx.repo, head.commits[0])?.tree) {
+        return pick_empty(ctx, item)?
+    }
+    if direct then commit.run_pick(args) else commit.run(args)
+}
+
+fn pick_one(
+    ctx: worktree.Context,
+    item: walk.Commit,
+    options: PickOptions,
+    rebasing: bool,
+) -> int ! commit.CommitErrors {
+    let head = worktree.head(ctx)?
+    let plan = replay_plan(ctx, head.commits[0], item)?
+    var tx = index_start(ctx) else |e| match e {
+        Fatal(text) => { eprint("error: {text}"); return Fatal("cherry-pick failed") },
+        _ => { return Fatal("cherry-pick failed: {e}") },
+    }
+    defer index.abort(mut tx)
+    let snapshot = worktree.scan_index(ctx, tx.value)?
+    commit.refresh_index(mut tx.value, snapshot.files)?
+    let entries = copy tx.value.entries
+    for entry in entries {
+        if index.stage(entry) != 0 { return Unsupported("cherry-pick unmerged index") }
+    }
+    for row in snapshot.rows {
+        if !row.untracked && row.x != " " {
+            index.commit(mut tx)?
+            eprint(
+                "error: your local changes would be overwritten by cherry-pick.\nhint: commit your changes or stash them to proceed.",
+            )
+            return Fatal("cherry-pick failed")
+        }
+    }
+    let flat = flat_files(plan.files)
+    // Merge objects are observable even when dirty/untracked safety then fails.
+    let tree = tree_objects(ctx, plan.files)?
+    worktree.merge_check(ctx, tx.value, flat) else |e| match e {
+        Failure(text) => {
+            index.commit(mut tx)?
+            eprint("error: {text}")
+            return Fatal("cherry-pick failed")
+        },
+        _ => { return Unsupported("cherry-pick safety: {e}") },
+    }
+    replay_write(ctx, "AUTO_MERGE", "{oid.hex(tree.root)?}\n".bytes()) else |e| match e {
+        exists => {
+            index.commit(mut tx)?
+            eprint(
+                "error: update_ref failed for ref 'AUTO_MERGE': cannot lock ref 'AUTO_MERGE': {lock_text("{ctx.repo.gitdir}/AUTO_MERGE.lock")}",
+            )
+            return Fatal("cherry-pick failed")
+        },
+        _ => { return Fatal("AUTO_MERGE: {e}") },
+    }
+    worktree.transition(ctx, mut tx.value, flat, "merge")?
+    conflict_index(mut tx.value, plan.stages)?
+    index.commit(mut tx)?
+    var message = str_from_utf8(item.headers.message)?
+    if !message.ends_with("\n") { message += "\n" }
+    if plan.conflicts.len > 0 {
+        message += "\n# Conflicts:\n"
+        for path in plan.conflicts { message += "#\t{path}\n" }
+    }
+    state_file(ctx, "MERGE_MSG", message.bytes())?
+    if !rebasing || plan.conflicts.len > 0 { for line in plan.messages { print(line) } }
+    let short = abbrev(ctx.repo, item.id)?,
+        subject = str_from_utf8(commit.subject(item.headers.message)?)?
+    let marker = if rebasing then "REBASE_HEAD" else "CHERRY_PICK_HEAD"
+    replay_write(ctx, marker, "{oid.hex(item.id)?}\n".bytes()) else |e| match e {
+        exists => {
+            eprint(
+                "error: update_ref failed for ref 'CHERRY_PICK_HEAD': cannot lock ref 'CHERRY_PICK_HEAD': {lock_text("{ctx.repo.gitdir}/CHERRY_PICK_HEAD.lock")}\nerror: could not apply {short}... {subject}",
+            )
+            return Fatal("cherry-pick failed")
+        },
+        _ => { return Fatal("CHERRY_PICK_HEAD: {e}") },
+    }
+    if plan.conflicts.len > 0 {
+        if rebasing { return rebase_conflict(ctx, item)? }
+        eprint(
+            "error: could not apply {short}... {subject}\nhint: After resolving the conflicts, mark them with\nhint: \"git add/rm <pathspec>\", then run\nhint: \"git cherry-pick --continue\".\nhint: You can instead skip this commit with \"git cherry-pick --skip\".\nhint: To abort and get back to the state before \"git cherry-pick\",\nhint: run \"git cherry-pick --abort\".\nhint: Disable this message with \"git config set advice.mergeConflict false\"",
+        )
+        return 1
+    }
+    var originally_empty = item.parents.len == 0 && mergetree.files(ctx.repo, item.id)?.len == 0
+    if item.parents.len == 1 {
+        originally_empty = oid.equal(item.tree, walk.read(ctx.repo, item.parents[0])?.tree)
+    }
+    let empty = oid.equal(tree.root, walk.read(ctx.repo, head.commits[0])?.tree)
+    let action = sequencer.empty_action(originally_empty, options.allow_empty, options.empty)?
+    if empty && action == "drop" {
+        eprint("dropping {oid.hex(item.id)?} {subject} -- patch contents already upstream")
+        replay_remove(ctx, marker)?
+        replay_remove(ctx, "MERGE_MSG")?
+        refs.remove_auto_merge(ctx.repo)?
+        return 0
+    }
+    if rebasing {
+        return commit.run_rebase(
+            [
+                "commit",
+                "--no-edit",
+                "--cleanup=strip",
+                "--allow-empty",
+                "--allow-empty-message",
+                "-q",
+                "-F",
+                "{ctx.repo.gitdir}/MERGE_MSG",
+            ],
+            false,
+        )
+    }
+    pick_commit(ctx, item, action == "keep", true)?
+}
+
+fn pick_reset(ctx: worktree.Context, target: oid.Oid) -> () ! commit.CommitErrors {
+    let head = worktree.head(ctx)?
+    var tx = index_start(ctx)?
+    defer index.abort(mut tx)
+    let target_files = worktree.flatten_tree(ctx.repo, target)?
+    worktree.abort_merge(ctx, mut tx.value, target_files)?
+    index.commit(mut tx)?
+    merge_orig(ctx, head.commits)?
+    commit.publish_ref(
+        ctx,
+        head,
+        target,
+        commit.environment_identity(ctx, "COMMITTER", "")?,
+        "reset",
+        "moving to {oid.hex(target)?}".bytes(),
+    )?
+    cleanup_state(ctx)
+}
+
+fn pick_steps(
+    ctx: worktree.Context,
+    steps: List[sequencer.Step],
+    options: PickOptions,
+    persistent: bool,
+) -> int ! commit.CommitErrors {
+    for at in 0..steps.len {
+        if persistent { replay_write(ctx, "sequencer/todo", sequencer.render(steps[at..])?)? }
+        let item = walk.read(ctx.repo, replay_target(ctx, steps[at].name)?)?
+        let result = pick_one(ctx, item, options, false)?
+        if persistent {
+            replay_write(
+                ctx,
+                "sequencer/abort-safety",
+                "{oid.hex(worktree.head(ctx)?.commits[0])?}\n".bytes(),
+            )?
+        }
+        if result != 0 { return result }
+    }
+    if persistent { sequence_remove(ctx)? }
+    0
+}
+
+fn replay_refresh(ctx: worktree.Context) -> () ! commit.CommitErrors {
+    var tx = index.begin(ctx.repo, 1000000000, worktree.index_version(ctx)?) else |e| match e {
+        exists => { return },
+        _ => { return Unsupported("replay refresh: {e}") },
+    }
+    defer index.abort(mut tx)
+    let snapshot = worktree.scan_index(ctx, tx.value)?
+    commit.refresh_index(mut tx.value, snapshot.files)?
+    index.commit(mut tx)?
+}
+
+fn replay_lock_scope(ctx: worktree.Context) -> () ! commit.CommitErrors {
+    if fs.exists("{ctx.repo.gitdir}/AUTO_MERGE.lock") {
+        return Unsupported("replay AUTO_MERGE lock transient stat")
+    }
+}
+
+fn pick_resume(ctx: worktree.Context, action: str) -> int ! commit.CommitErrors {
+    let persistent = fs.exists("{ctx.repo.gitdir}/sequencer/todo")
+    let stopped = fs.exists("{ctx.repo.gitdir}/CHERRY_PICK_HEAD")
+    if !persistent && !stopped {
+        if action == "--continue" { replay_refresh(ctx)? }
+        if action == "--skip" { eprint("error: no cherry-pick in progress") }
+        else { eprint("error: no cherry-pick or revert in progress") }
+        return Fatal("cherry-pick failed")
+    }
+    replay_lock_scope(ctx)?
+    var steps = List[sequencer.Step]()
+    if persistent { steps = sequencer.parse(replay_read(ctx, "sequencer/todo")?.bytes())? }
+    var options = PickOptions { allow_empty: false, empty: "stop" }
+    if fs.exists("{ctx.repo.gitdir}/sequencer/opts") {
+        let saved = repository.parse_config(replay_read(ctx, "sequencer/opts")?) else |_| { return Unsupported("cherry-pick invalid persisted options") }
+        for option in saved {
+            if option.value != "true" { return Unsupported("cherry-pick persisted option value") }
+            if option.key == "options.allow-empty" { options.allow_empty = true }
+            else if option.key == "options.keep-redundant-commits" { options.empty = "keep" }
+            else if option.key == "options.drop-redundant-commits" { options.empty = "drop" }
+            else { return Unsupported("cherry-pick persisted option {option.key}") }
+        }
+    }
+    if action == "--abort" || action == "--skip" {
+        var target = worktree.head(ctx)?.commits[0]
+        if persistent && action == "--abort" {
+            target = oid.parse("sha1", replay_read(ctx, "sequencer/head")?.trim())?
+        }
+        pick_reset(ctx, target)?
+        if action == "--abort" { if persistent { sequence_remove(ctx)? }; return 0 }
+    } else if stopped {
+        let item = walk.read(ctx.repo, replay_target(ctx, "CHERRY_PICK_HEAD")?)?
+        let result = pick_commit(ctx, item, false, false)?
+        if result != 0 { return result }
+    }
+    if persistent && steps.len > 0 { return pick_steps(ctx, steps[1..], options, true)? }
+    if persistent { sequence_remove(ctx)? }
+    0
+}
+
+fn pick_command(args: List[str]) -> int ! commit.CommitErrors {
+    let ctx = worktree.discover(".")?
+    controls(ctx, "cherry-pick")?
+    if worktree.config_bool(ctx, "commit.gpgsign", false)? {
+        return Unsupported("cherry-pick signing")
+    }
+    if args.len == 2 && (args[1] == "--continue" || args[1] == "--skip" || args[1] == "--abort") {
+        return pick_resume(ctx, args[1])?
+    }
+    var names = List[str](), options = PickOptions { allow_empty: false, empty: "stop" }
+    for arg in args[1..] {
+        if arg == "--allow-empty" {
+            options.allow_empty = true
+        } else if arg == "--keep-redundant-commits" || arg == "--empty=keep" {
+            options.empty = "keep"
+        } else if arg == "--empty=drop" {
+            options.empty = "drop"
+        } else if arg == "--empty=stop" || arg == "--no-edit" {} else if arg.starts_with("-") {
+            return Unsupported("cherry-pick {arg}")
+        } else {
+            (mut names).push(arg)
+        }
+    }
+    if names.len == 0 { return Unsupported("cherry-pick missing commit") }
+    if names.len > 100000 { return limit }
+    replay_lock_scope(ctx)?
+    for name in [
+        "MERGE_HEAD",
+        "CHERRY_PICK_HEAD",
+        "REVERT_HEAD",
+        "sequencer",
+        "rebase-merge",
+        "rebase-apply",
+    ] {
+        if fs.exists("{ctx.repo.gitdir}/{name}") {
+            return Unsupported("cherry-pick in-progress {name}")
+        }
+    }
+    let head = worktree.head(ctx)?
+    if head.commits.len == 0 { return Unsupported("cherry-pick unborn HEAD") }
+    var steps = List[sequencer.Step]()
+    for name in names {
+        let item = walk.read(ctx.repo, replay_target(ctx, name)?)?
+        if item.parents.len > 1 { return Unsupported("cherry-pick merge mainline") }
+        (mut steps).push(sequencer.Step {
+            name: abbrev(ctx.repo, item.id)?,
+            subject: str_from_utf8(commit.subject(item.headers.message)?)?,
+        })
+    }
+    let _ = replay_plan(
+        ctx,
+        head.commits[0],
+        walk.read(ctx.repo, replay_target(ctx, steps[0].name)?)?,
+    )?
+    let persistent = steps.len > 1
+    if persistent {
+        replay_write(ctx, "sequencer/head", "{oid.hex(head.commits[0])?}\n".bytes())?
+        var saved = ""
+        if options.allow_empty || options.empty == "keep" { saved += "\tallow-empty = true\n" }
+        if options.empty == "keep" { saved += "\tkeep-redundant-commits = true\n" }
+        if options.empty == "drop" { saved += "\tdrop-redundant-commits = true\n" }
+        if saved != "" { replay_write(ctx, "sequencer/opts", "[options]\n{saved}".bytes())? }
+    }
+    pick_steps(ctx, steps, options, persistent)?
+}

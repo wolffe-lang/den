@@ -3,6 +3,7 @@ pkg {
     edition: "1",
     capabilities: [env, fs],
     deps: {
+        sequencer: {path: "../sequencer"},
         commit: {path: "../commit"},
         diff: {path: "../diff"},
         mergetree: {path: "../mergetree"},

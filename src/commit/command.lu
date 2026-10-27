@@ -149,14 +149,21 @@ fn commit_summary(
     if author.name != committer.name || author.email != committer.email {
         add_bytes(mut out, " Author: {author.name} <{author.email}>\n".bytes())
     }
-    if value.date != "" || value.amend && !value.reset_author {
+    if value.date != "" ||
+        value.amend && !value.reset_author ||
+        fs.exists("{ctx.repo.gitdir}/CHERRY_PICK_HEAD") {
         add_bytes(mut out, " Date: {summary_date(author.date)?}\n".bytes())
     }
     add_bytes(mut out, changes)
     out
 }
 
-fn dispatch(args: List[str], fail: str, fast_revert: bool) -> int ! CommitErrors {
+fn dispatch(
+    args: List[str],
+    fail: str,
+    fast_revert: bool,
+    replay_action: str,
+) -> int ! CommitErrors {
     if fail != "" && fail != "index-write" && fail != "index-sync" { return invalid }
     let value = options(args)?
     let ctx = worktree.discover(".")?
@@ -188,6 +195,7 @@ fn dispatch(args: List[str], fail: str, fast_revert: bool) -> int ! CommitErrors
     }
     let merging = fs.exists("{ctx.repo.gitdir}/MERGE_HEAD")
     let reverting = fs.exists("{ctx.repo.gitdir}/REVERT_HEAD")
+    let picking = fs.exists("{ctx.repo.gitdir}/CHERRY_PICK_HEAD")
     if merging && value.amend { return Fatal("You are in the middle of a merge -- cannot amend.") }
     if merging {
         let data = str_from_utf8(repository.read_bytes("{ctx.repo.gitdir}/MERGE_HEAD", 4096)?)?
@@ -247,14 +255,17 @@ fn dispatch(args: List[str], fail: str, fast_revert: bool) -> int ! CommitErrors
         raw = commit_format.paragraphs(value.messages)?
     } else if value.amend {
         raw = owned(previous[0].message)
-    } else if merging || reverting {
+    } else if merging || reverting || picking {
         raw = repository.read_bytes("{ctx.repo.gitdir}/MERGE_MSG", 16777216)?
     }
     let file_mode = if cleanup_setting == "verbatim" then "verbatim" else "whitespace"
     let file_body = commit_format.cleanup(raw, file_mode, comment, false)?
     let direct_revert = fast_revert &&
         previous.len == 1 &&
-        !oid.equal(trees.root, oid.parse("sha1", header(previous[0], "tree")?)?)
+        (
+            replay_action != "" ||
+                !oid.equal(trees.root, oid.parse("sha1", header(previous[0], "tree")?)?)
+        )
     if direct_revert {} else if edited {
         let marker = commit_format.comment_marker(file_body, comment)?
         save_edit_message(ctx, editor_message(file_body, snapshot, marker, mut warnings)?)?
@@ -278,7 +289,16 @@ fn dispatch(args: List[str], fail: str, fast_revert: bool) -> int ! CommitErrors
     } else if !merging && !value.allow_empty && oid.equal(trees.root, old_tree) {
         return nothing(snapshot, mut warnings)?
     }
-    let author = commit_author(ctx, value, previous)?
+    var author = commit_author(ctx, value, previous)?
+    if (picking || replay_action != "") && !value.reset_author && value.author == "" {
+        let marker = if picking then "CHERRY_PICK_HEAD" else "REBASE_HEAD"
+        let pick_id = oid.parse(
+            "sha1",
+            str_from_utf8(repository.read_bytes("{ctx.repo.gitdir}/{marker}", 128)?)?.trim(),
+        )?
+        author = commit_format.parse_identity(header(read_commit(ctx.repo, pick_id)?, "author")?)?
+        if value.date != "" { author.date = selected_date(value.date)? }
+    }
     let committer = environment_identity(ctx, "COMMITTER", "")?
     if edited {
         emit_warnings(warnings)
@@ -337,8 +357,12 @@ fn dispatch(args: List[str], fail: str, fast_revert: bool) -> int ! CommitErrors
         summary = commit_summary(ctx, value, parents, id, message, author, committer, change_text)?
     }
     if !oid.equal(object.write_object(ctx.repo, "commit", bytes)?, id) { return bad_oid }
-    let action = if merging {
+    let action = if replay_action != "" {
+        replay_action
+    } else if merging {
         "commit (merge)"
+    } else if picking {
+        if fast_revert then "cherry-pick" else "commit (cherry-pick)"
     } else if reverting {
         "revert"
     } else if value.amend {
@@ -349,12 +373,15 @@ fn dispatch(args: List[str], fail: str, fast_revert: bool) -> int ! CommitErrors
         "commit"
     }
     publish_ref(ctx, expected, id, committer, action, log_message) else |e| match e {
-        Fatal(text) => { if reverting { return Failure("error: {text}") }; return Fatal(text) },
+        Fatal(text) => {
+            if reverting || picking { return Failure("error: {text}") }
+            return Fatal(text)
+        },
         _ => { return Fatal("cannot publish commit: {e}") },
     }
     if value.all { index.install(mut tx)? }
-    if merging || reverting {
-        for name in ["MERGE_HEAD", "MERGE_MSG", "MERGE_MODE", "REVERT_HEAD"] {
+    if merging || reverting || picking || replay_action != "" {
+        for name in ["MERGE_HEAD", "MERGE_MSG", "MERGE_MODE", "REVERT_HEAD", "CHERRY_PICK_HEAD"] {
             let path = refs.administrative(ctx.repo, name, false)?
             if fs.exists(path) { fs.remove(path)? }
         }
@@ -367,27 +394,38 @@ fn dispatch(args: List[str], fail: str, fast_revert: bool) -> int ! CommitErrors
 /// Run the commit porcelain; args[0] is commit. No editor, hook, signing or Git
 /// subprocess is ever run. Summary/failure strings await parent oracle proof.
 pub fn run(args: List[str]) -> int {
-    command_run(args, "", false)
+    command_run(args, "", false, "")
 }
 
 /// Complete an automatic no-editor revert, preserving COMMIT_EDITMSG on the
 /// nonempty direct path and AUTO_MERGE as measured for git-revert(1).
 pub fn run_revert(args: List[str]) -> int {
-    command_run(args, "", true)
+    command_run(args, "", true, "")
+}
+
+/// Automatic replay shares the measured direct commit boundary with revert.
+/// CHERRY_PICK_HEAD supplies author provenance; no subprocess is invoked.
+pub fn run_pick(args: List[str]) -> int {
+    command_run(args, "", true, "")
 }
 
 /// Explicit index-write/index-sync preparation failure seam for fixture tests.
 /// No environment variable selects it; the production dispatcher calls run.
 pub fn run_injected(args: List[str], fail: str) -> int {
-    command_run(args, fail, false)
+    command_run(args, fail, false, "")
 }
 
-fn command_run(args: List[str], fail: str, fast_revert: bool) -> int {
+/// Complete a rebase step without executing an editor or a subprocess.
+pub fn run_rebase(args: List[str], continuing: bool) -> int {
+    command_run(args, "", !continuing, if continuing then "rebase (continue)" else "rebase (pick)")
+}
+
+fn command_run(args: List[str], fail: str, fast_revert: bool, replay_action: str) -> int {
     repository.check_config(".") else |e| match e {
         ConfigDiagnostic(message) => { eprint(message); return 128 },
         _ => {},
     }
-    dispatch(args, fail, fast_revert) else |e| match e {
+    dispatch(args, fail, fast_revert, replay_action) else |e| match e {
         Unsupported(feature) => { eprint("den: not yet implemented: {feature}"); 2 },
         Fatal(message) => { eprint("fatal: {message}"); 128 },
         Failure(message) => { eprint(message); 1 },
