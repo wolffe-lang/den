@@ -18,5 +18,12 @@ fn main() -> int ! {invalid, limit, utf8} {
     assert(sequencer.empty_action(false, true, "stop")? == "stop")
     assert(sequencer.empty_action(false, false, "drop")? == "drop")
     assert(sequencer.empty_action(true, false, "keep")? == "keep")
+    let a = sequencer.line_sum("old\ncontext\n".bytes())?
+    let b = sequencer.line_sum("new\ncontext\n".bytes())?
+    let c = sequencer.line_sum("different\nold\n".bytes())?
+    let d = sequencer.line_sum("different\nnew\n".bytes())?
+    assert(b - a == d - c)
+    assert(sequencer.line_sum(" n e w \t\n".bytes())? == sequencer.line_sum("new\n".bytes())?)
+    assert(a != b)
     0
 }

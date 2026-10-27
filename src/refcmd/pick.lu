@@ -254,6 +254,7 @@ fn pick_steps(
     persistent: bool,
 ) -> int ! commit.CommitErrors {
     for at in 0..steps.len {
+        region replay_step {
         if persistent { replay_write(ctx, "sequencer/todo", sequencer.render(steps[at..])?)? }
         let item = walk.read(ctx.repo, replay_target(ctx, steps[at].name)?)?
         let result = pick_one(ctx, item, options, false)?
@@ -265,6 +266,7 @@ fn pick_steps(
             )?
         }
         if result != 0 { return result }
+        }
     }
     if persistent { sequence_remove(ctx)? }
     0
@@ -368,8 +370,11 @@ fn pick_command(args: List[str]) -> int ! commit.CommitErrors {
     let head = worktree.head(ctx)?
     if head.commits.len == 0 { return Unsupported("cherry-pick unborn HEAD") }
     var steps = List[sequencer.Step]()
+    var selected_bytes: int = 0
     for name in names {
         let item = walk.read(ctx.repo, replay_target(ctx, name)?)?
+        if item.encoded_size > 134217728 - selected_bytes { return limit }
+        selected_bytes += item.encoded_size
         if item.parents.len > 1 { return Unsupported("cherry-pick merge mainline") }
         (mut steps).push(sequencer.Step {
             name: abbrev(ctx.repo, item.id)?,

@@ -83,6 +83,8 @@ for action in ('continue','skip','abort'):
     case('sequence-second-'+action,'second-conflict','',steps)
 for action in ('skip','abort'):
     case('rebase-second-'+action,'second-conflict','topic',[['rebase','main'],['rebase','--'+action]])
+case('rebase-equivalent','clean','topic:equivalent',[['rebase','main']])
+case('rebase-reapply','clean','topic:equivalent',[['rebase','--reapply-cherry-picks','main']])
 for cmd in ('cherry-pick','rebase'):
     for action in ('continue','skip','abort'):
         case(cmd+'-absent-'+action,'ff','',[[cmd,'--'+action]])
@@ -94,7 +96,9 @@ for n,(name,kind,setup,steps) in enumerate(CASES):
     root.mkdir(); fixture=root/'fixture'; ids=seed(fixture,kind)
     if setup.startswith('topic'):
         git(fixture,'switch','-q','topic'); setup=setup.removeprefix('topic').removeprefix(':')
-    if setup=='packed': git(fixture,'pack-refs','--all')
+    if setup=='equivalent':
+        git(fixture,'switch','-q','main'); git(fixture,'cherry-pick','first'); git(fixture,'switch','-q','topic')
+    elif setup=='packed': git(fixture,'pack-refs','--all')
     elif setup=='detached': git(fixture,'switch','--detach','-q','HEAD')
     elif setup in ('dirty','dirty-keep','staged'):
         path='keep' if setup=='dirty-keep' else 'a'; (fixture/path).write_text('local\n')
@@ -119,6 +123,7 @@ for n,(name,kind,setup,steps) in enumerate(CASES):
         actual,before=execute(D); row['den']=actual
         refusal=None
         if name=='pick-setup-AUTO_MERGE.lock': refusal=(0,'replay AUTO_MERGE lock transient stat')
+        if name=='rebase-equivalent': refusal=(0,'rebase possible upstream patch equivalence; use --reapply-cherry-picks')
         if name=='rebase-continue': refusal=(len(actual)-1,'rebase continuation editor execution')
         checks=[]
         for i,(e,d) in enumerate(zip(expected,actual)):

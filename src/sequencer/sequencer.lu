@@ -45,6 +45,29 @@ pub fn render(steps: List[Step]) -> List[byte] ! SequenceErrors {
     out
 }
 
+/// Conservative order-independent checksum of whitespace-normalized lines.
+/// A matching net change is only a POSSIBLE patch-equivalence match: callers
+/// refuse it, never drop a commit on this checksum. Collisions only refuse more.
+/// Inputs above 16 MiB return limit; all intentional arithmetic wraps.
+pub fn line_sum(data: List[byte]) -> wrapping[u64] ! {limit} {
+    if data.len > 16777216 { return limit }
+    var total: wrapping[u64] = 0
+    var line: wrapping[u64] = 14695981039346656037
+    var start = 0
+    for at in 0..data.len {
+        let b = data[at]
+        if b == 10 as byte {
+            total += line
+            line = 14695981039346656037
+            start = at + 1
+        } else if b != 32 as byte && !(b >= 9 as byte && b <= 13 as byte) {
+            line = (line ^ (b as wrapping[u64])) * 1099511628211
+        }
+    }
+    if start < data.len { total += line }
+    total
+}
+
 /// Return keep/drop/stop for an empty result, distinguishing originally empty
 /// commits from redundant changes. Unknown policies return invalid, never trap.
 pub fn empty_action(originally_empty: bool, allow_empty: bool, policy: str) -> str ! {invalid} {
