@@ -1,0 +1,25 @@
+vc06 prediction, before implementation
+
+Loose refs override packed refs. Packed annotated-tag peeled records are lookup
+metadata, not the tag's own oid; replacing one loose ref must not rewrite an
+unrelated packed record. Branch creation logs `branch: Created from <operand>`;
+switch/checkout log `checkout: moving from <old spelling> to <new spelling>`;
+reset logs `reset: moving to <operand>`. Annotated tag creation writes one tag
+object; lightweight tags do not. Ordinary tags have no reflog by default.
+
+A hard reset updates the worktree/index before ref publication; a foreign ref
+lock can therefore expose a partial multi-file result. Soft reset leaves the
+index and worktree unchanged. Mixed reset keeps worktree bytes but refreshes
+index metadata for matching paths. Unborn and detached states need separate
+output and safety rows, not substitution of an empty branch name.
+
+Predicted bounded differential matrix: at least 150 command/state rows on each
+native and release tier, plus independent importing clients and at least two
+actual checked programs. Revision resolution is limited to HEAD, full ref names,
+short branch/tag names, full oids and unique loose-object prefixes; no ranges,
+ancestry, previous-checkout or reflog selector grammar is added by this lane.
+
+M2's existing combined-show, editor, history refusal, hunk and binary rows remain
+explicitly open or independently counted. No parity expectation is edited to
+accept a disagreement. Ref transactions promise ordered operations and owned
+lock cleanup, not multi-file atomicity.
