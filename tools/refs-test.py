@@ -75,6 +75,9 @@ for setup in ('dirty', 'staged', 'unborn', 'index.lock', 'HEAD.lock', 'refs/head
         ['reset', '--soft', first], ['reset', '--mixed', first], ['reset', '--hard', first],
     ]):
         cases.append(dict(name=f'extra-{setup.replace("/", "-")}-{i}', args=command, packed=False, detached=False, setup=setup))
+for packed in (False, True):
+    for force_delete in (False, True):
+        cases.append(dict(name=f'divergent-{int(packed)}-{int(force_delete)}', args=['branch', '-D' if force_delete else '-d', 'topic'], packed=packed, detached=False, setup='diverged'))
 for case in cases:
     root = base / case['name']; root.mkdir(); repo = root / 'repo'
     fixture = root / 'fixture'
@@ -84,7 +87,9 @@ for case in cases:
     if case['detached']:
         subprocess.run([G, 'switch', '--detach', '-q', second], cwd=fixture, check=True, capture_output=True)
     setup = case.get('setup', '')
-    if setup == 'dirty' or setup == 'staged':
+    if setup == 'diverged':
+        subprocess.run([G, 'update-ref', 'refs/heads/topic', dated], cwd=fixture, check=True, capture_output=True)
+    elif setup == 'dirty' or setup == 'staged':
         (fixture / 'a').write_bytes(b'local change\n')
         if setup == 'staged':
             subprocess.run([G, 'add', 'a'], cwd=fixture, check=True, capture_output=True)
