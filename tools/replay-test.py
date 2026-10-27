@@ -47,6 +47,8 @@ for flag in ('','--allow-empty','--keep-redundant-commits','--empty=drop','--emp
         case('empty-'+kind+'-'+flag,kind,'',[['cherry-pick',*([flag] if flag else []),target]])
 for setup in ('packed','detached','dirty','dirty-keep','staged','untracked','index.lock','HEAD.lock','refs/heads/main.lock','CHERRY_PICK_HEAD.lock','AUTO_MERGE.lock'):
     case('pick-setup-'+setup,'clean',setup,[['cherry-pick','first']])
+for flag in ('--allow-empty','--keep-redundant-commits','--empty=drop'):
+    case('sequence-options-'+flag,'conflict','',[['cherry-pick',flag,'@first','@second'],['cherry-pick','--skip']])
 for style in ('diff3','zdiff3'):
     case('pick-style-'+style,'conflict',style,[['cherry-pick','first']])
 for sequence in (False,True):
@@ -64,6 +66,10 @@ for action in ('continue','skip','abort'):
     if action=='continue': steps += [['@write','a','resolved\n'],['add','a']]
     steps += [['rebase','--'+action]]
     case('rebase-'+action,'conflict','topic',steps)
+case('rebase-continue-committed','conflict','topic',[
+    ['rebase','main'],['@write','a','resolved\n'],['add','a'],
+    ['commit','--no-edit','--cleanup=strip','--author','Original Author <original@example.invalid>','--date','1600000000 +0530','-F','.git/MERGE_MSG'],
+    ['rebase','--continue']])
 for setup in ('packed','dirty','staged','index.lock','HEAD.lock','ORIG_HEAD.lock','refs/heads/topic.lock'):
     case('rebase-setup-'+setup,'clean','topic:'+setup,[['rebase','main']])
 for cmd in ('cherry-pick','rebase'):
