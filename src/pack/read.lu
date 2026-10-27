@@ -17,7 +17,9 @@ fn read_window(fd: int, start: int, count: int) -> List[byte] ! PackErrors {
 }
 
 fn range_bytes(fd: int, start: int, count: int) -> List[byte] ! PackErrors {
-    if start < 0 || count < 0 || start > 9223372036854775807 - count { return Unsupported("pack offset range") }
+    if start < 0 || count < 0 || start > 9223372036854775807 - count {
+        return Unsupported("pack offset range")
+    }
     var out = List[byte](), pos: int = 0
     while pos < count {
         region window {
@@ -36,6 +38,14 @@ fn file_size(fd: int) -> int ! PackErrors {
     info[1]
 }
 
+fn open_pack(path: str) -> int ! PackErrors {
+    fs_open(path) else |e| match e {
+        not_found => { return Unsupported("pack missing companion") },
+        denied => { return denied },
+        io => { return io },
+    }
+}
+
 fn load_index(path: str) -> Index ! PackErrors {
     let fd = fs_open(path)?
     defer fs_close(fd) else |_| {}
@@ -50,9 +60,13 @@ fn verify(fd: int, index: Index) -> int ! PackErrors {
     let size = file_size(fd)?
     if size < 32 { return Unsupported("pack truncated") }
     let header = range_bytes(fd, 0, 12)?
-    if !same(header[0..4], "PACK".bytes()) || be32(header, 4) != 2 { return Unsupported("pack version (requires v2)") }
+    if !same(header[0..4], "PACK".bytes()) || be32(header, 4) != 2 {
+        return Unsupported("pack version (requires v2)")
+    }
     if be32(header, 8) != index.entries.len { return Unsupported("pack object count") }
-    if index.entries.len > 0 && (index.by_offset[12] else -1) == -1 { return Unsupported("pack index offsets") }
+    if index.entries.len > 0 && (index.by_offset[12] else -1) == -1 {
+        return Unsupported("pack index offsets")
+    }
     if index.entries.len == 0 && size != 32 { return Unsupported("pack index offsets") }
     for entry in index.entries {
         if entry.offset >= size - 20 { return Unsupported("pack index offsets") }
@@ -74,17 +88,29 @@ fn verify(fd: int, index: Index) -> int ! PackErrors {
 }
 
 fn charge(mut total: int, count: int) -> () ! PackErrors {
-    if count < 0 || count > 134217728 - total { return Unsupported("pack reconstruction memory limit") }
+    if count < 0 || count > 134217728 - total {
+        return Unsupported("pack reconstruction memory limit")
+    }
     total += count
 }
 
-fn unpack(fd: int, end: int, index: Index, slot: int, mut seen: Map[int, bool], mut total: int, depth: int) -> Body ! PackErrors {
+fn unpack(
+    fd: int,
+    end: int,
+    index: Index,
+    slot: int,
+    mut seen: Map[int, bool],
+    mut total: int,
+    depth: int,
+) -> Body ! PackErrors {
     if depth > 64 { return Unsupported("pack delta depth limit") }
     let offset = index.entries[slot].offset
     if seen[offset] else false { return Unsupported("pack delta cycle") }
     seen[offset] = true
     var next = end
-    for entry in index.entries { if entry.offset > offset && entry.offset < next { next = entry.offset } }
+    for entry in index.entries {
+        if entry.offset > offset && entry.offset < next { next = entry.offset }
+    }
     let length = next - offset
     if length > 17000000 { return Unsupported("pack compressed entry size limit") }
     charge(mut total, length)?
@@ -92,12 +118,12 @@ fn unpack(fd: int, end: int, index: Index, slot: int, mut seen: Map[int, bool], 
     if crc32(bytes) != index.entries[slot].crc { return Unsupported("pack entry CRC") }
     if bytes.len == 0 { return Unsupported("pack entry header") }
     var byte0 = bytes[0] as int, pos: int = 1, size: int = byte0 & 15, scale: int = 16
-    let kind = (byte0 >> 4) & 7
+    let kind = byte0 >> 4 & 7
     while byte0 >= 128 {
         if pos == bytes.len { return Unsupported("pack entry header") }
         byte0 = bytes[pos] as int
         pos += 1
-        if (byte0 & 127) > (16777216 - size) / scale { return Unsupported("pack object size limit") }
+        if byte0 & 127 > (16777216 - size) / scale { return Unsupported("pack object size limit") }
         size += (byte0 & 127) * scale
         if byte0 >= 128 {
             if scale > 16777216 / 128 { return Unsupported("pack object size limit") }
@@ -111,7 +137,9 @@ fn unpack(fd: int, end: int, index: Index, slot: int, mut seen: Map[int, bool], 
         var b = bytes[pos] as int, distance: int = b & 127
         pos += 1
         while b >= 128 {
-            if pos == bytes.len || distance >= offset / 128 { return Unsupported("pack OFS_DELTA offset") }
+            if pos == bytes.len || distance >= offset / 128 {
+                return Unsupported("pack OFS_DELTA offset")
+            }
             b = bytes[pos] as int
             pos += 1
             distance = (distance + 1) * 128 + (b & 127)
@@ -121,34 +149,55 @@ fn unpack(fd: int, end: int, index: Index, slot: int, mut seen: Map[int, bool], 
         if base_slot < 0 { return Unsupported("pack OFS_DELTA base boundary") }
     } else if kind == 7 {
         if bytes.len - pos < 20 { return Unsupported("pack REF_DELTA name") }
-        let id = oid.from_bytes("sha1", bytes[pos..pos + 20]) else |_| { return Unsupported("pack REF_DELTA name") }
+        let id = oid.from_bytes("sha1", bytes[pos..pos + 20]) else |_| {
+            return Unsupported("pack REF_DELTA name")
+        }
         let name = oid.hex(id) else |_| { return Unsupported("pack REF_DELTA name") }
         base_slot = index.by_name[name] else -1
         if base_slot < 0 { return Unsupported("thin pack REF_DELTA base") }
         pos += 20
-    } else if kind < 1 || kind > 4 { return Unsupported("pack object type") }
+    } else if kind < 1 || kind > 4 {
+        return Unsupported("pack object type")
+    }
     charge(mut total, size)?
     let inflated = zlib.inflate(bytes[pos..], size) else |e| { return Unsupported("pack zlib {e}") }
-    if inflated.consumed != bytes.len - pos || inflated.data.len != size { return Unsupported("pack entry size or trailing bytes") }
-    var result = Body {kind: "", data: List[byte]()}
+    if inflated.consumed != bytes.len - pos || inflated.data.len != size {
+        return Unsupported("pack entry size or trailing bytes")
+    }
+    var result = Body { kind: "", data: List[byte]() }
     if base_slot >= 0 {
         let base = unpack(fd, end, index, base_slot, mut seen, mut total, depth + 1)?
         var delta_pos: int = 0
-        let _ = variable(inflated.data, mut delta_pos) else |_| { return Unsupported("pack delta invalid") }
-        let target_size = variable(inflated.data, mut delta_pos) else |_| { return Unsupported("pack delta invalid") }
+        let _ = variable(inflated.data, mut delta_pos) else |_| {
+            return Unsupported("pack delta invalid")
+        }
+        let target_size = variable(inflated.data, mut delta_pos) else |_| {
+            return Unsupported("pack delta invalid")
+        }
         if target_size > 16777216 { return Unsupported("pack object size limit") }
         charge(mut total, target_size)?
-        let data = apply_delta(base.data, inflated.data, 16777216) else |e| { return Unsupported("pack delta {e}") }
-        result = Body {kind: base.kind, data: data}
+        let data = apply_delta(base.data, inflated.data, 16777216) else |e| {
+            return Unsupported("pack delta {e}")
+        }
+        result = Body { kind: base.kind, data: data }
     } else {
-        let name = match kind { 1 => "commit", 2 => "tree", 3 => "blob", _ => "tag" }
-        result = Body {kind: name, data: copy inflated.data}
+        let name = match kind {
+            1 => "commit",
+            2 => "tree",
+            3 => "blob",
+            _ => "tag",
+        }
+        result = Body { kind: name, data: copy inflated.data }
     }
     var digest = hash.new1()
     hash.update1(mut digest, "{result.kind} {result.data.len}\0".bytes())
     hash.update1(mut digest, result.data)
-    let id = oid.from_bytes("sha1", hash.final1(take digest)) else |_| { return Unsupported("pack object identity") }
-    if (oid.hex(id) else "") != index.entries[slot].name { return Unsupported("pack object identity") }
+    let id = oid.from_bytes("sha1", hash.final1(take digest)) else |_| {
+        return Unsupported("pack object identity")
+    }
+    if (oid.hex(id) else "") != index.entries[slot].name {
+        return Unsupported("pack object identity")
+    }
     result
 }
 
@@ -163,8 +212,15 @@ fn indexes(gitdir: str) -> List[str] ! PackErrors {
     if entries.len > 8192 { return Unsupported("pack directory entry limit") }
     for entry in entries {
         let name = str_from_utf8(entry.name) else |_| { return Unsupported("non-UTF-8 pack path") }
-        if name == "multi-pack-index" || name == "multi-pack-index.d" { return Unsupported("multi-pack-index") }
+        if name == "multi-pack-index" || name == "multi-pack-index.d" {
+            return Unsupported("multi-pack-index")
+        }
         if name.ends_with(".bitmap") { return Unsupported("pack bitmap") }
+        if name.starts_with("pack-") &&
+            name.ends_with(".pack") &&
+            !fs.exists("{dir}/{name[0..name.len - 5]}.idx") {
+            return Unsupported("pack missing index")
+        }
         if name.starts_with("pack-") && name.ends_with(".idx") {
             if entry.kind != 0 { return Unsupported("pack index file type") }
             if out.len >= 256 { return Unsupported("pack count limit") }
@@ -178,10 +234,10 @@ fn indexes(gitdir: str) -> List[str] ! PackErrors {
 pub fn read_object(gitdir: str, name: str, cap: int) -> Body ! PackErrors {
     for path in indexes(gitdir)? {
         // Per-pack scratch is reclaimed; the returned body is explicitly owned.
-        var result = Body {kind: "", data: List[byte]()}, found = false
+        var result = Body { kind: "", data: List[byte]() }, found = false
         region candidate {
             let index = load_index(path)?
-            let fd = fs_open("{path[0..path.len - 4]}.pack")?
+            let fd = open_pack("{path[0..path.len - 4]}.pack")?
             defer fs_close(fd) else |_| {}
             let end = verify(fd, index)?
             let slot = index.by_name[name] else -1
@@ -207,7 +263,7 @@ pub fn prefix(gitdir: str, prefix: str) -> List[str] ! PackErrors {
     for path in indexes(gitdir)? {
         region candidate {
             let index = load_index(path)?
-            let fd = fs_open("{path[0..path.len - 4]}.pack")?
+            let fd = open_pack("{path[0..path.len - 4]}.pack")?
             defer fs_close(fd) else |_| {}
             let _ = verify(fd, index)?
             for entry in index.entries {

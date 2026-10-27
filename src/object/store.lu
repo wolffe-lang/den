@@ -4,7 +4,7 @@ use pack
 use refs
 use repository
 
-/// Loose storage errors include repository configuration and filesystem outcomes.
+/// Storage errors include repository configuration and filesystem outcomes.
 pub error StoreErrors = {
     invalid,
     invalid_oid,
@@ -38,10 +38,13 @@ pub fn path(repo: repository.Repo, id: oid.Oid) -> str ! StoreErrors {
 /// Read a bounded loose object first; only absence falls back to validated packs.
 pub fn read_object(repo: repository.Repo, id: oid.Oid, max_output: int) -> Object ! StoreErrors {
     if max_output < 0 || max_output > 1000000000 { return limit }
-    let input = repository.read_bytes(path(repo, id)?, max_output + max_output / 100 + 65536) else |e| match e {
+    let input = repository.read_bytes(
+        path(repo, id)?,
+        max_output + max_output / 100 + 65536,
+    ) else |e| match e {
         not_found => {
             let value = pack.read_object(repo.gitdir, oid.hex(id)?, max_output)?
-            return Object {kind: value.kind, data: copy value.data}
+            return Object { kind: value.kind, data: copy value.data }
         },
         denied => { return denied },
         io => { return io },
@@ -54,7 +57,7 @@ pub fn read_object(repo: repository.Repo, id: oid.Oid, max_output: int) -> Objec
     decode(input, id, max_output)?
 }
 
-/// Resolve a loose oid/prefix; missing and ambiguous are distinct rows.
+/// Resolve a loose/packed oid prefix; duplicates share one identity.
 /// Full-width ids are returned even when missing (read_object tests presence).
 pub fn lookup(repo: repository.Repo, name: str) -> oid.Oid ! StoreErrors {
     let prefix = oid.prefix("sha1", name)?
@@ -85,7 +88,7 @@ pub fn lookup(repo: repository.Repo, name: str) -> oid.Oid ! StoreErrors {
     oid.parse("sha1", found)?
 }
 
-/// Resolve HEAD, loose/packed full refs, short branches/tags and loose OIDs.
+/// Resolve HEAD, loose/packed full refs, short branches/tags and object IDs.
 /// General revision grammar is a caller layer, not part of the object store.
 pub fn resolve(repo: repository.Repo, name: str) -> oid.Oid ! StoreErrors {
     let normalized = oid.prefix("sha1", name) else ""
@@ -122,7 +125,7 @@ pub fn write_injected(
     let destination = path(checked, id)?
     var present = true
     let existing = read_object(checked, id, data.len) else |e| match e {
-        not_found => { present = false; Object {kind: "", data: List[byte]()} },
+        not_found => { present = false; Object { kind: "", data: List[byte]() } },
         invalid => { return invalid },
         invalid_oid => { return invalid_oid },
         unsupported_format => { return unsupported_format },

@@ -2,6 +2,7 @@
 // CRC polynomial is the zlib/IEEE reflected CRC-32; no library source consulted.
 /// Explicit filesystem and named format/limit failures, never unchecked offsets.
 pub error PackErrors = {not_found, denied, io, Unsupported(str)}
+
 /// Malformed delta instructions versus the caller's inclusive output bound.
 pub error DeltaErrors = {invalid, limit}
 
@@ -11,7 +12,7 @@ pub fn crc32(data: List[byte]) -> int {
     for b in data {
         crc ^= b as int
         for _ in 0..8 {
-            crc = if (crc & 1) != 0 then (crc >> 1) ^ 3988292384 else crc >> 1
+            crc = if crc & 1 != 0 then crc >> 1 ^ 3988292384 else crc >> 1
         }
     }
     crc ^ 4294967295
@@ -55,16 +56,21 @@ pub fn apply_delta(base: List[byte], src: List[byte], cap: int) -> List[byte] ! 
             var offset: int = 0, length: int = 0, scale: int = 1
             for bit in 0..7 {
                 if bit == 4 { scale = 1 }
-                if (op & (1 << bit)) != 0 {
+                if op & 1 << bit != 0 {
                     if pos == src.len { return invalid }
-                    if bit < 4 { offset += (src[pos] as int) * scale }
-                    else { length += (src[pos] as int) * scale }
+                    if bit < 4 {
+                        offset += src[pos] as int * scale
+                    } else {
+                        length += src[pos] as int * scale
+                    }
                     pos += 1
                 }
                 scale *= 256
             }
             if length == 0 { length = 65536 }
-            if offset > base.len || length > base.len - offset || length > after - out.len { return invalid }
+            if offset > base.len || length > base.len - offset || length > after - out.len {
+                return invalid
+            }
             for i in 0..length { (mut out).push(base[offset + i]) }
         }
     }
