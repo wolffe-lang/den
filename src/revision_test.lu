@@ -1,0 +1,44 @@
+use revsyntax
+
+fn main() {
+    let one = revsyntax.parse("topic~2^3^{{tree}}:dir/a:b") else { assert(false); return }
+    assert(one.kind == "single")
+    assert(one.left.base == "topic")
+    assert(one.left.steps.len == 3)
+    assert(one.left.steps[0].kind == "~" && one.left.steps[0].count == 2)
+    assert(one.left.steps[1].kind == "^" && one.left.steps[1].count == 3)
+    assert(one.left.steps[2].kind == "tree")
+    assert(one.left.has_path && one.left.path.len == 7)
+    let range = revsyntax.parse("..topic^0") else { assert(false); return }
+    assert(range.kind == "two" && range.left.base == "HEAD")
+    assert(range.right.base == "topic" && range.right.steps[0].count == 0)
+    let symmetric = revsyntax.parse("main...topic") else { assert(false); return }
+    assert(symmetric.kind == "three")
+    let excluded = revsyntax.parse("^main") else { assert(false); return }
+    assert(excluded.kind == "exclude")
+    let log = revsyntax.parse("@{{2}}~") else { assert(false); return }
+    assert(log.left.base == "" && log.left.selector == "2")
+    let previous = revsyntax.parse("@{{-1}}") else { assert(false); return }
+    assert(previous.left.selector == "-1")
+    let raw = revsyntax.parse_bytes([72 as byte,69 as byte,65 as byte,68 as byte,58 as byte,255 as byte]) else { assert(false); return }
+    assert(raw.left.path[0] == 255 as byte)
+    for bad in ["", "main^{{", "main^{{bad}}", "main@{{}}", "main^2x", "a....b", "^", "main..topic..other"] {
+        var failed = false
+        let _ = revsyntax.parse(bad) else { failed = true }
+        assert(failed)
+    }
+    for unsupported in ["@{{yesterday}}", ":/text", "HEAD^@", "HEAD^!", "HEAD^-2", ":0:file"] {
+        var refused = false
+        let _ = revsyntax.parse(unsupported) else |e| match e {
+            Unsupported(_) => { refused = true },
+            _ => { assert(false) },
+        }
+        assert(refused)
+    }
+    var capped = false
+    let _ = revsyntax.parse("HEAD~10001") else |e| match e {
+        limit => { capped = true },
+        _ => { assert(false) },
+    }
+    assert(capped)
+}
