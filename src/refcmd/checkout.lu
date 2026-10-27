@@ -59,6 +59,20 @@ fn switch_branch(args: List[str]) -> int ! commit.CommitErrors {
             (mut names).push(arg)
         }
     }
+    if !force {
+        for (marker, operation, verb) in [
+            ("MERGE_HEAD", "merging", "merge"),
+            ("CHERRY_PICK_HEAD", "cherry-picking", "cherry-pick"),
+            ("REVERT_HEAD", "reverting", "revert"),
+        ] {
+            if fs.exists("{ctx.repo.gitdir}/{marker}") {
+                if args[0] == "checkout" { return Unsupported("checkout in-progress {marker}") }
+                return Fatal(
+                    "cannot switch branch while {operation}\nConsider \"git {verb} --quit\" or \"git worktree add\".",
+                )
+            }
+        }
+    }
     if names.len > 1 { return Unsupported("{args[0]} multiple targets") }
     let operand = if names.len == 1 then names[0] else "HEAD"
     var branch = if create != "" then create else operand
@@ -108,23 +122,50 @@ fn switch_branch(args: List[str]) -> int ! commit.CommitErrors {
     }
     if creating && target.len > 0 {
         let start = if names.len == 0 then "HEAD" else operand
-        write_ref(
-            ctx,
-            "refs/heads/{branch}",
-            previous,
-            target,
-            "branch: Created from {start}",
-            false,
-        )?
+        if old.reference == "refs/heads/{branch}" {
+            if old.commits.len == 0 || !oid.equal(old.commits[0], target[0]) {
+                let message = if previous.len == 0 {
+                    "Created from {start}"
+                } else {
+                    "Reset to {start}"
+                }
+                commit.publish_ref(
+                    ctx,
+                    old,
+                    target[0],
+                    commit.environment_identity(ctx, "COMMITTER", "")?,
+                    "branch",
+                    message.bytes(),
+                )?
+            }
+        } else {
+            write_ref(
+                ctx,
+                "refs/heads/{branch}",
+                previous,
+                target,
+                if previous.len == 0 {
+                    "branch: Created from {start}"
+                } else {
+                    "branch: Reset to {start}"
+                },
+                false,
+            )?
+        }
     }
     let from = if old.detached then oid.hex(old.commits[0])? else old.branch
     let destination = if creating then branch else operand
     let next = if detach then "{oid.hex(target[0])?}\n" else "ref: refs/heads/{branch}\n"
+    let before_checkout = if creating && old.reference == "refs/heads/{branch}" && target.len > 0 {
+        copy target
+    } else {
+        copy old.commits
+    }
     refs.set_head(
         ctx.repo,
         expected,
         next,
-        old.commits,
+        before_checkout,
         target,
         identity(ctx)?,
         "checkout: moving from {from} to {destination}",
@@ -151,7 +192,13 @@ fn switch_branch(args: List[str]) -> int ! commit.CommitErrors {
         if detach {
             eprint("HEAD is now at {abbrev(ctx.repo, target[0])?} {title(ctx, target[0])?}")
         } else if creating {
-            eprint("Switched to a new branch '{branch}'")
+            if previous.len == 0 {
+                eprint("Switched to a new branch '{branch}'")
+            } else if old.reference == "refs/heads/{branch}" {
+                eprint("Reset branch '{branch}'")
+            } else {
+                eprint("Switched to and reset branch '{branch}'")
+            }
         } else if old.reference == "refs/heads/{branch}" {
             eprint("Already on '{branch}'")
         } else {
@@ -199,6 +246,12 @@ fn reset(args: List[str]) -> int ! commit.CommitErrors {
     }
     if name.contains("~") || name.contains("^") || name.contains("..") || name.contains("@{{") {
         return Unsupported("reset (M3, vc06)")
+    }
+    if mode == "soft" {
+        var merging = fs.exists("{ctx.repo.gitdir}/MERGE_HEAD")
+        let value = worktree.read_index(ctx)?
+        for entry in value.entries { if index.stage(entry) != 0 { merging = true } }
+        if merging { return Fatal("Cannot do a soft reset in the middle of a merge.") }
     }
     let old = worktree.head(ctx)?
     var target = List[oid.Oid]()

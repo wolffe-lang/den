@@ -63,13 +63,15 @@ fn tag(args: List[str]) -> int ! commit.CommitErrors {
         }
     }
     if listing || names.len == 0 {
+        for pattern in names {
+            if pattern.contains("*") || pattern.contains("?") || pattern.contains("[") {
+                return Unsupported("tag list patterns")
+            }
+        }
         for item in refs.list(ctx.repo, "refs/tags/")? {
             let name = item.name[10..]
             var selected = names.len == 0
             for pattern in names {
-                if pattern.contains("*") || pattern.contains("?") || pattern.contains("[") {
-                    return Unsupported("tag list patterns")
-                }
                 if name == pattern { selected = true }
             }
             if selected { print(name) }

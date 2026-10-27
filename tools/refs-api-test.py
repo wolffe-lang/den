@@ -25,6 +25,10 @@ p=subprocess.run([C,'list',str(seed/'.git'),'refs/heads/'],capture_output=True,t
 expected=b''.join(f'{one} refs/heads/bulk-{i:04}\n'.encode() for i in range(1000))+f'{two} refs/heads/main\n{one} refs/heads/topic\n'.encode()
 assert (p.returncode,p.stdout,p.stderr)==(0,expected,b''),(p.returncode,p.stderr)
 rows.append({'listing':1002})
+packed.write_bytes(original+b''.join(f'{one} refs/heads/bulk-{i:04}\n'.encode() for i in range(4095)))
+p=subprocess.run([C,'list',str(seed/'.git'),'refs/heads/'],capture_output=True,timeout=30)
+assert (p.returncode,p.stdout,p.stderr)==(1,b'',b'limit\n'),(p.returncode,p.stderr)
+rows.append({'listing-limit':4097,'explicit':True})
 packed.write_bytes(original)
 for i,(name,old,new,message) in enumerate([
  ('refs/heads/new','-',one,'branch: Created from main'),

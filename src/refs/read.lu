@@ -98,6 +98,7 @@ pub fn list(repo: repository.Repo, prefix: str) -> List[Packed] ! RefErrors {
             } else if entry.kind == 0 {
                 if !valid(name) { return invalid_oid }
                 names[name] = read(repo, name)?
+                if names.len > 4096 { return limit }
             } else {
                 return Unsupported("ref filesystem kind {name}")
             }

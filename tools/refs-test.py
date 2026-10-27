@@ -59,13 +59,15 @@ commands = [
  ['checkout', '--detach', first], ['checkout', first],
  ['commit', '--allow-empty', '-m', 'third'], ['commit', '--amend', '-m', 'amended'],
  ['commit', '--amend', '--no-edit'],
+ ['switch', '-C', 'topic', first], ['switch', '-C', 'main', first],
+ ['checkout', '-B', 'topic', first], ['switch', '-f', 'topic'],
 ]
 for packed in (False, True):
     for detached in (False, True):
         for i, command in enumerate(commands):
             cases.append(dict(name=f'{int(packed)}-{int(detached)}-{i}', args=command, packed=packed, detached=detached))
 rows = []
-for setup in ('dirty', 'staged', 'unborn', 'index.lock', 'HEAD.lock', 'refs/heads/main.lock', 'packed-refs.lock'):
+for setup in ('dirty', 'staged', 'unborn', 'index.lock', 'HEAD.lock', 'refs/heads/main.lock', 'packed-refs.lock', 'MERGE_HEAD', 'CHERRY_PICK_HEAD', 'REVERT_HEAD'):
     for i, command in enumerate([
         ['branch'], ['branch', '--show-current'], ['branch', 'new'], ['branch', '-m', 'new'],
         ['tag', 'new'], ['tag', '-m', 'annotation', 'new'],
@@ -91,6 +93,8 @@ for case in cases:
         (fixture / '.git/refs/heads/main').unlink()
         (fixture / '.git/index').unlink()
         shutil.rmtree(fixture / '.git/logs')
+    elif setup in ('MERGE_HEAD', 'CHERRY_PICK_HEAD', 'REVERT_HEAD'):
+        (fixture / '.git' / setup).write_bytes((first + '\n').encode())
     elif setup:
         p = fixture / '.git' / setup
         p.parent.mkdir(parents=True, exist_ok=True)
@@ -109,4 +113,26 @@ for case in cases:
 (R / f'target/refs-oracle-{a.tier}.json').write_text(json.dumps(rows, indent=2) + '\n')
 failed = sum(not row['equal'] for row in rows)
 print(f'refs: {len(rows)-failed}/{len(rows)} exact; {failed} mismatches', flush=True)
+unsupported = []
+for i, (args, feature) in enumerate([
+    (['branch', '--list', '*'], 'branch list patterns'),
+    (['tag', '--list', '*'], 'tag list patterns'),
+    (['branch', '--track', 'new'], 'branch --track'),
+    (['tag', '--sort=version:refname'], 'tag --sort=version:refname'),
+    (['switch', '--orphan', 'new'], 'switch --orphan'),
+    (['checkout', '-m', 'topic'], 'checkout -m'),
+    (['reset', '--merge', 'HEAD'], 'reset --merge'),
+    (['reset', '--soft', 'HEAD~1'], 'reset (M3, vc06)'),
+]):
+    repo = base / f'unsupported-{i}'
+    shutil.copytree(seed, repo)
+    expected = O['capture']([G, *args], repo)
+    shutil.rmtree(repo); shutil.copytree(seed, repo)
+    before = O['snapshot'](repo); work = O['worktree_snapshot'](repo)
+    actual = O['capture']([D, *args], repo)
+    assert actual['status'] == 2 and actual['stdout'] == '' and bytes.fromhex(actual['stderr']) == f'den: not yet implemented: {feature}\n'.encode(), (args, actual)
+    assert actual['repository'] == before and actual['worktree'] == work, args
+    unsupported.append(dict(args=args, feature=feature, git=expected, den=actual))
+(R / f'target/refs-unsupported-{a.tier}.json').write_text(json.dumps(unsupported, indent=2) + '\n')
+print(f'refs named unsupported: {len(unsupported)}; not parity', flush=True)
 raise SystemExit(bool(failed))

@@ -129,6 +129,11 @@ fn branch(args: List[str]) -> int ! commit.CommitErrors {
     if moving { return move_branch(ctx, head, names, force)? }
     if current { if !head.detached { print(head.branch) }; return 0 }
     if list || names.len == 0 {
+        for pattern in names {
+            if pattern.contains("*") || pattern.contains("?") || pattern.contains("[") {
+                return Unsupported("branch list patterns")
+            }
+        }
         if head.detached && names.len == 0 {
             let short = abbrev(ctx.repo, head.commits[0])?
             if head.checkout.len == 0 {
