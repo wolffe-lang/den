@@ -10,6 +10,7 @@ pkg {
         object: {path: "../object"},
         oid: {path: "../oid"},
         repository: {path: "../repository"},
+        refs: {path: "../refs"},
         ignore: {path: "../ignore"},
         hash: {path: "../hash"},
         zlib: {path: "../zlib"},

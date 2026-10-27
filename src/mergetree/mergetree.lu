@@ -1,0 +1,180 @@
+// Original three-tree planner; no state publication during collection.
+use diff
+use difftext
+use index
+use mergebase
+use mergefile
+use object
+use oid
+use repository
+use walk
+use worktree
+
+/// Owned tree result, unresolved higher stages, and ordered human diagnostics.
+pub struct Plan {
+    files: List[diff.File],
+    stages: List[index.Entry],
+    messages: List[str],
+    conflicts: List[str],
+}
+
+/// Compute all best bases through the owned walker; never consult/write index.
+pub fn bases(
+    repo: repository.Repo,
+    left: oid.Oid,
+    right: oid.Oid,
+) -> List[oid.Oid] ! worktree.WorkErrors {
+    let commits = walk.collect(repo, [copy left, copy right], 100001, 0, 100000, false)?
+    var nodes = List[mergebase.Node]()
+    for item in commits {
+        var parents = List[str]()
+        for parent in item.parents { (mut parents).push(oid.hex(parent)?) }
+        (mut nodes).push(mergebase.Node { id: oid.hex(item.id)?, parents: parents })
+    }
+    let names = mergebase.bases(nodes, oid.hex(left)?, oid.hex(right)?, 100000) else |e| match e {
+        missing => { return not_found },
+        invalid => { return invalid },
+        limit => { return limit },
+    }
+    var out = List[oid.Oid]()
+    for name in names { (mut out).push(oid.parse("sha1", name)?) }
+    out
+}
+
+/// Collect bounded regular-file tree input, preserving byte paths and objects.
+pub fn files(repo: repository.Repo, id: oid.Oid) -> List[diff.File] ! worktree.WorkErrors {
+    var out = List[diff.File](), total = 0
+    for entry in worktree.flatten_tree(repo, id)? {
+        if entry.mode != 0o100644 && entry.mode != 0o100755 {
+            return Unsupported("merge nonregular tree entry")
+        }
+        let blob = object.read_object(repo, entry.id, 16777216)?
+        if blob.kind != "blob" { return bad_oid }
+        total += blob.data.len
+        if total > 134217728 { return limit }
+        (mut out).push(diff.File {
+            path: copy entry.path,
+            mode: entry.mode,
+            id: copy entry.id,
+            data: copy blob.data,
+        })
+    }
+    out
+}
+
+fn compare(a: List[byte], b: List[byte]) -> int {
+    var i = 0
+    while i < a.len && i < b.len { if a[i] != b[i] { return a[i] as int - b[i] as int }; i += 1 }
+    a.len - b.len
+}
+
+fn at(files: List[diff.File], path: List[byte]) -> int {
+    for i in 0..files.len { if compare(files[i].path, path) == 0 { return i } }
+    -1
+}
+
+fn same(a: List[diff.File], ai: int, b: List[diff.File], bi: int) -> bool {
+    if ai < 0 || bi < 0 { return ai < 0 && bi < 0 }
+    a[ai].mode == b[bi].mode && oid.equal(a[ai].id, b[bi].id)
+}
+
+/// Three-way regular-file merge. Renames are detected by the existing shared
+/// scorer and refused by name until rename conflict topology has oracle rows.
+pub fn plan(
+    base: List[diff.File],
+    ours: List[diff.File],
+    theirs: List[diff.File],
+    ours_label: str,
+    base_label: str,
+    theirs_label: str,
+    style: str,
+) -> Plan ! worktree.WorkErrors {
+    for endpoint in [copy ours, copy theirs] {
+        for change in diff.changes(base, endpoint, diff.defaults())? {
+            if change.status == "R" { return Unsupported("merge rename topology") }
+        }
+    }
+    var paths = List[List[byte]]()
+    for entry in base { (mut paths).push(copy entry.path) }
+    for entry in ours { if at(base, entry.path) < 0 { (mut paths).push(copy entry.path) } }
+    for entry in theirs {
+        if at(base, entry.path) < 0 && at(ours, entry.path) < 0 {
+            (mut paths).push(copy entry.path)
+        }
+    }
+    for i in 1..paths.len {
+        var j = i
+        while j > 0 && compare(paths[j - 1], paths[j]) > 0 {
+            let temp = copy paths[j - 1]
+            paths[j - 1] = copy paths[j]
+            paths[j] = temp
+            j -= 1
+        }
+    }
+    var result = Plan { files: [], stages: [], messages: [], conflicts: [] }
+    for path in paths {
+        let b = at(base, path), o = at(ours, path), t = at(theirs, path)
+        if same(ours, o, theirs, t) || same(base, b, theirs, t) {
+            if o >= 0 { (mut result.files).push(copy ours[o]) }
+            continue
+        }
+        if same(base, b, ours, o) {
+            if t >= 0 { (mut result.files).push(copy theirs[t]) }
+            continue
+        }
+        if o < 0 || t < 0 { return Unsupported("merge modify/delete conflict") }
+        if ours[o].mode != theirs[t].mode &&
+            (b < 0 || base[b].mode != ours[o].mode && base[b].mode != theirs[t].mode) {
+            return Unsupported("merge mode conflict")
+        }
+        let mode = if b >= 0 && base[b].mode == ours[o].mode then theirs[t].mode else ours[o].mode
+        let name = str_from_utf8(path)?
+        let data = if b < 0 then List[byte]() else copy base[b].data
+        // ort defaults to histogram, whereas the file API is measured against
+        // merge-file's Myers default. Do not silently substitute algorithms for
+        // repeated anchors or multi-hunk inputs; those need their own engine.
+        var line_hashes = Map[int, bool]()
+        for line in difftext.lines(data)? {
+            if line_hashes[line.hash] else false {
+                return Unsupported("merge repeated-line alignment")
+            }
+            line_hashes[line.hash] = true
+        }
+        if difftext.edits(data, ours[o].data)?.len > 1 ||
+            difftext.edits(data, theirs[t].data)?.len > 1 {
+            return Unsupported("merge multi-hunk alignment")
+        }
+        let merged = mergefile.merge(
+            data,
+            ours[o].data,
+            theirs[t].data,
+            ours_label,
+            base_label,
+            theirs_label,
+            style,
+        ) else |e| match e {
+            binary => { return Unsupported("merge binary conflict") },
+            invalid => { return invalid },
+            limit => { return limit },
+        }
+        (mut result.messages).push("Auto-merging {name}")
+        if merged.conflicts > 0 {
+            (mut result.conflicts).push(name)
+            (mut result.messages).push(
+                "CONFLICT ({if b < 0 then "add/add" else "content"}): Merge conflict in {name}",
+            )
+            if b >= 0 {
+                (mut result.stages).push(index.conflict_entry(path, base[b].mode, base[b].id, 1)?)
+            }
+            (mut result.stages).push(index.conflict_entry(path, ours[o].mode, ours[o].id, 2)?)
+            (mut result.stages).push(index.conflict_entry(path, theirs[t].mode, theirs[t].id, 3)?)
+        }
+        (mut result.files).push(diff.File {
+            path: copy path,
+            mode: mode,
+            id: object.identify("blob", merged.data)?,
+            data: copy merged.data,
+        })
+    }
+    result
+}

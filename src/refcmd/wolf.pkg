@@ -4,6 +4,8 @@ pkg {
     capabilities: [env, fs],
     deps: {
         commit: {path: "../commit"},
+        diff: {path: "../diff"},
+        mergetree: {path: "../mergetree"},
         commit_format: {path: "../commit_format"},
         index: {path: "../index"},
         history: {path: "../history"},

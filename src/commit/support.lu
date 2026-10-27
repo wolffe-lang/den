@@ -298,7 +298,7 @@ fn hooks_empty(ctx: worktree.Context) -> () ! CommitErrors {
     if zone != "" && zone != "UTC" && zone != "UTC0" && zone != "Etc/UTC" && zone != "GMT" {
         return Unsupported("commit implicit local timezone {zone}")
     }
-    for name in ["MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD"] {
+    for name in ["CHERRY_PICK_HEAD"] {
         if fs.exists("{ctx.repo.gitdir}/{name}") { return Unsupported("commit {name}") }
     }
 }

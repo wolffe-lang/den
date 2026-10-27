@@ -1,7 +1,9 @@
+use std.fs
 use commit_format
 use index
 use object
 use oid
+use refs
 use repository
 use worktree
 
@@ -154,7 +156,7 @@ fn commit_summary(
     out
 }
 
-fn dispatch(args: List[str], fail: str) -> int ! CommitErrors {
+fn dispatch(args: List[str], fail: str, fast_revert: bool) -> int ! CommitErrors {
     if fail != "" && fail != "index-write" && fail != "index-sync" { return invalid }
     let value = options(args)?
     let ctx = worktree.discover(".")?
@@ -183,6 +185,17 @@ fn dispatch(args: List[str], fail: str) -> int ! CommitErrors {
         }
     } else if expected.commits.len == 1 {
         (mut parents).push(owned_id(expected.commits[0]))
+    }
+    let merging = fs.exists("{ctx.repo.gitdir}/MERGE_HEAD")
+    let reverting = fs.exists("{ctx.repo.gitdir}/REVERT_HEAD")
+    if merging && value.amend { return Fatal("You are in the middle of a merge -- cannot amend.") }
+    if merging {
+        let data = str_from_utf8(repository.read_bytes("{ctx.repo.gitdir}/MERGE_HEAD", 4096)?)?
+        for name in data.lines() {
+            let id = oid.parse("sha1", name)?
+            let _ = read_commit(ctx.repo, id)?
+            (mut parents).push(id)
+        }
     }
     let cleanup_setting = if value.cleanup != "" {
         value.cleanup
@@ -234,10 +247,15 @@ fn dispatch(args: List[str], fail: str) -> int ! CommitErrors {
         raw = commit_format.paragraphs(value.messages)?
     } else if value.amend {
         raw = owned(previous[0].message)
+    } else if merging || reverting {
+        raw = repository.read_bytes("{ctx.repo.gitdir}/MERGE_MSG", 16777216)?
     }
     let file_mode = if cleanup_setting == "verbatim" then "verbatim" else "whitespace"
     let file_body = commit_format.cleanup(raw, file_mode, comment, false)?
-    if edited {
+    let direct_revert = fast_revert &&
+        previous.len == 1 &&
+        !oid.equal(trees.root, oid.parse("sha1", header(previous[0], "tree")?)?)
+    if direct_revert {} else if edited {
         let marker = commit_format.comment_marker(file_body, comment)?
         save_edit_message(ctx, editor_message(file_body, snapshot, marker, mut warnings)?)?
     } else {
@@ -257,7 +275,7 @@ fn dispatch(args: List[str], fail: str) -> int ! CommitErrors {
                 "You asked to amend the most recent commit, but doing so would make\nit empty. You can repeat your command with --allow-empty, or you can\nremove the commit entirely with \"git reset HEAD^\".",
             )
         }
-    } else if !value.allow_empty && oid.equal(trees.root, old_tree) {
+    } else if !merging && !value.allow_empty && oid.equal(trees.root, old_tree) {
         return nothing(snapshot, mut warnings)?
     }
     let author = commit_author(ctx, value, previous)?
@@ -319,15 +337,29 @@ fn dispatch(args: List[str], fail: str) -> int ! CommitErrors {
         summary = commit_summary(ctx, value, parents, id, message, author, committer, change_text)?
     }
     if !oid.equal(object.write_object(ctx.repo, "commit", bytes)?, id) { return bad_oid }
-    let action = if value.amend {
+    let action = if merging {
+        "commit (merge)"
+    } else if reverting {
+        "revert"
+    } else if value.amend {
         "commit (amend)"
     } else if expected.commits.len == 0 {
         "commit (initial)"
     } else {
         "commit"
     }
-    publish_ref(ctx, expected, id, committer, action, log_message)?
+    publish_ref(ctx, expected, id, committer, action, log_message) else |e| match e {
+        Fatal(text) => { if reverting { return Failure("error: {text}") }; return Fatal(text) },
+        _ => { return Fatal("cannot publish commit: {e}") },
+    }
     if value.all { index.install(mut tx)? }
+    if merging || reverting {
+        for name in ["MERGE_HEAD", "MERGE_MSG", "MERGE_MODE", "REVERT_HEAD"] {
+            let path = refs.administrative(ctx.repo, name, false)?
+            if fs.exists(path) { fs.remove(path)? }
+        }
+        if !fast_revert { refs.remove_auto_merge(ctx.repo)? }
+    }
     if !value.quiet { output(summary)? }
     0
 }
@@ -335,21 +367,27 @@ fn dispatch(args: List[str], fail: str) -> int ! CommitErrors {
 /// Run the commit porcelain; args[0] is commit. No editor, hook, signing or Git
 /// subprocess is ever run. Summary/failure strings await parent oracle proof.
 pub fn run(args: List[str]) -> int {
-    command_run(args, "")
+    command_run(args, "", false)
+}
+
+/// Complete an automatic no-editor revert, preserving COMMIT_EDITMSG on the
+/// nonempty direct path and AUTO_MERGE as measured for git-revert(1).
+pub fn run_revert(args: List[str]) -> int {
+    command_run(args, "", true)
 }
 
 /// Explicit index-write/index-sync preparation failure seam for fixture tests.
 /// No environment variable selects it; the production dispatcher calls run.
 pub fn run_injected(args: List[str], fail: str) -> int {
-    command_run(args, fail)
+    command_run(args, fail, false)
 }
 
-fn command_run(args: List[str], fail: str) -> int {
+fn command_run(args: List[str], fail: str, fast_revert: bool) -> int {
     repository.check_config(".") else |e| match e {
         ConfigDiagnostic(message) => { eprint(message); return 128 },
         _ => {},
     }
-    dispatch(args, fail) else |e| match e {
+    dispatch(args, fail, fast_revert) else |e| match e {
         Unsupported(feature) => { eprint("den: not yet implemented: {feature}"); 2 },
         Fatal(message) => { eprint("fatal: {message}"); 128 },
         Failure(message) => { eprint(message); 1 },

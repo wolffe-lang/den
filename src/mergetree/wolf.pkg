@@ -1,0 +1,17 @@
+pkg {
+    name: "mergetree",
+    edition: "1",
+    capabilities: [env, fs],
+    deps: {
+        diff: {path: "../diff"},
+        difftext: {path: "../difftext"},
+        index: {path: "../index"},
+        mergebase: {path: "../mergebase"},
+        mergefile: {path: "../mergefile"},
+        object: {path: "../object"},
+        oid: {path: "../oid"},
+        repository: {path: "../repository"},
+        walk: {path: "../walk"},
+        worktree: {path: "../worktree"},
+    },
+}

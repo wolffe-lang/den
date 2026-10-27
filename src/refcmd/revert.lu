@@ -1,0 +1,119 @@
+use std.fs
+use commit
+use commit_format
+use diff
+use index
+use mergetree
+use oid
+use walk
+use worktree
+
+fn revert_command(args: List[str]) -> int ! commit.CommitErrors {
+    let ctx = worktree.discover(".")?
+    controls(ctx, "revert")?
+    var name = "", no_commit = false
+    for arg in args[1..] {
+        if arg == "--no-edit" {} else if arg == "-n" || arg == "--no-commit" {
+            no_commit = true
+        } else if arg.starts_with("-") {
+            return Unsupported("revert {arg}")
+        } else {
+            if name != "" { return Unsupported("revert sequence") }
+            name = arg
+        }
+    }
+    if name == "" { return Unsupported("revert missing commit") }
+    if name.contains("~") || name.contains("^") || name.contains("..") {
+        return Unsupported("revert revision grammar")
+    }
+    for marker in ["MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD"] {
+        if fs.exists("{ctx.repo.gitdir}/{marker}") {
+            return Unsupported("revert in-progress {marker}")
+        }
+    }
+    let head = worktree.head(ctx)?
+    if head.commits.len == 0 { return Unsupported("revert unborn HEAD") }
+    let target = resolve_commit(ctx.repo, name)?
+    let item = walk.read(ctx.repo, target)?
+    var tx = index_start(ctx) else |e| match e {
+        Fatal(text) => { eprint("error: {text}"); return Fatal("revert failed") },
+        _ => { return Fatal("revert failed: {e}") },
+    }
+    defer index.abort(mut tx)
+    let snapshot = worktree.scan_index(ctx, tx.value)?
+    commit.refresh_index(mut tx.value, snapshot.files)?
+    if item.parents.len > 1 {
+        index.commit(mut tx)?
+        eprint("error: commit {oid.hex(target)?} is a merge but no -m option was given.")
+        return Fatal("revert failed")
+    }
+    let entries = copy tx.value.entries
+    for entry in entries {
+        if index.stage(entry) != 0 { return Unsupported("revert unmerged index") }
+    }
+    for row in snapshot.rows {
+        if !row.untracked && row.x != " " {
+            eprint(
+                "error: your local changes would be overwritten by revert.\nhint: commit your changes or stash them to proceed.",
+            )
+            index.commit(mut tx)?
+            return Fatal("revert failed")
+        }
+    }
+    let ours = mergetree.files(ctx.repo, head.commits[0])?
+    var theirs = List[diff.File]()
+    if item.parents.len == 1 { theirs = mergetree.files(ctx.repo, item.parents[0])? }
+    let short = abbrev(ctx.repo, target)?,
+        subject = str_from_utf8(commit.subject(item.headers.message)?)?
+    let plan = mergetree.plan(
+        mergetree.files(ctx.repo, target)?,
+        ours,
+        theirs,
+        "HEAD",
+        "{short} ({subject})",
+        "parent of {short} ({subject})",
+        ctx.repo.config["merge.conflictstyle"] else "merge",
+    )?
+    let flat = flat_files(plan.files)
+    worktree.merge_check(ctx, tx.value, flat) else |e| match e {
+        Failure(text) => {
+            index.commit(mut tx)?
+            eprint("error: {text}")
+            return Fatal("revert failed")
+        },
+        _ => { return Unsupported("revert safety: {e}") },
+    }
+    let tree = tree_objects(ctx, plan.files)?
+    state_file(ctx, "AUTO_MERGE", "{oid.hex(tree.root)?}\n".bytes())?
+    worktree.transition(ctx, mut tx.value, flat, "merge")?
+    conflict_index(mut tx.value, plan.stages)?
+    index.commit(mut tx)?
+    var message = "Revert \"{subject}\"\n\nThis reverts commit {oid.hex(target)?}.\n"
+    if plan.conflicts.len > 0 {
+        message += "\n# Conflicts:\n"
+        for path in plan.conflicts { message += "#\t{path}\n" }
+    }
+    state_file(ctx, "MERGE_MSG", message.bytes())?
+    for line in plan.messages { print(line) }
+    state_file(ctx, "REVERT_HEAD", "{oid.hex(target)?}\n".bytes())?
+    if plan.conflicts.len > 0 {
+        eprint(
+            "error: could not revert {short}... {subject}\nhint: After resolving the conflicts, mark them with\nhint: \"git add/rm <pathspec>\", then run\nhint: \"git revert --continue\".\nhint: You can instead skip this commit with \"git revert --skip\".\nhint: To abort and get back to the state before \"git revert\",\nhint: run \"git revert --abort\".\nhint: Disable this message with \"git config set advice.mergeConflict false\"",
+        )
+        return 1
+    }
+    if no_commit { return 0 }
+    let who = commit.environment_identity(ctx, "AUTHOR", "")?
+    let result = commit.run_revert(
+        [
+            "commit",
+            "--no-edit",
+            "--date",
+            commit_format.date_text(who.date)?,
+            "-F",
+            "{ctx.repo.gitdir}/MERGE_MSG",
+        ],
+    )
+    if result != 0 { fs.remove("{ctx.repo.gitdir}/REVERT_HEAD") else |_| {} }
+    result
+}

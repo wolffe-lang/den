@@ -55,7 +55,10 @@ pub fn abort_merge(
         if at >= 0 && index.stage(value.entries[at]) == 0 {
             (mut prior).push(copy value.entries[at])
         }
-        if at >= 0 && index.stage(value.entries[at]) == 0 && value.entries[at].stat[6] == desired.mode && oid.equal(value.entries[at].id,desired.id) {
+        if at >= 0 &&
+            index.stage(value.entries[at]) == 0 &&
+            value.entries[at].stat[6] == desired.mode &&
+            oid.equal(value.entries[at].id, desired.id) {
             (mut entries).push(copy value.entries[at])
             continue
         }

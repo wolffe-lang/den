@@ -180,12 +180,11 @@ fn main() -> int ! index.IndexErrors {
         empty_assembly()?
     }
     assert(unmerged)
-    var remove_unmerged = false
-    let _ = index.remove_path(merged_read, "conflict".bytes()) else |e| {
-        remove_unmerged = "{e}" == "unmerged"
-        index.empty(2)?
-    }
-    assert(remove_unmerged)
+    let removed_conflict = index.remove_path(merged_read, "conflict".bytes())?
+    assert(removed_conflict.entries.len == 0)
+    assert(
+        removed_conflict.extensions.len == 1 && removed_conflict.extensions[0].signature == "REUC",
+    )
     (mut stages.entries).push(fixture("conflict".bytes(), 3)?)
     assert(refused_value(stages))
     var order = index.empty(2)?

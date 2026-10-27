@@ -1,0 +1,462 @@
+// Original command transactions from git-merge(1), measured Git 2.56.0.
+use std.fs
+use commit
+use commit_format
+use diff
+use index
+use mergetree
+use object
+use oid
+use pretty
+use refs
+use repository
+use walk
+use worktree
+
+fn state_file(ctx: worktree.Context, name: str, data: List[byte]) -> () ! commit.CommitErrors {
+    let path = refs.administrative(ctx.repo, name, false)?
+    let fd = fs_open_mode(path, 1)?
+    defer fs_close(fd) else |_| {}
+    fs_write_chunk(fd, data)?
+}
+
+fn merge_cleanup(ctx: worktree.Context) {
+    for name in ["MERGE_HEAD", "MERGE_MSG", "MERGE_MODE"] {
+        let path = refs.administrative(ctx.repo, name, false) else |_| { continue }
+        if fs.exists(path) { fs.remove(path) else |_| {} }
+    }
+    refs.remove_auto_merge(ctx.repo) else |e| match e {
+        exists => {
+            eprint(
+                "error: cannot lock ref 'AUTO_MERGE': {lock_text("{ctx.repo.gitdir}/AUTO_MERGE.lock")}",
+            )
+        },
+        _ => { eprint("error: cannot remove AUTO_MERGE: {e}") },
+    }
+}
+
+fn merge_orig(ctx: worktree.Context, old: List[oid.Oid]) -> () ! commit.CommitErrors {
+    orig_head(ctx, old) else |e| match e {
+        exists => {
+            return Fatal(
+                "update_ref failed for ref 'ORIG_HEAD': cannot lock ref 'ORIG_HEAD': {lock_text("{ctx.repo.gitdir}/ORIG_HEAD.lock")}",
+            )
+        },
+        _ => { return Fatal("cannot update ORIG_HEAD: {e}") },
+    }
+}
+
+fn merge_publish(
+    ctx: worktree.Context,
+    head: worktree.Head,
+    id: oid.Oid,
+    name: str,
+    text: str,
+) -> () ! commit.CommitErrors {
+    commit.publish_ref(
+        ctx,
+        head,
+        id,
+        commit.environment_identity(ctx, "COMMITTER", "")?,
+        "merge {name}",
+        text.bytes(),
+    ) else |e| match e {
+        Fatal(message) => { return Fatal("update_ref failed for ref 'HEAD': {message}") },
+        _ => { return Fatal("update_ref failed for ref 'HEAD': {e}") },
+    }
+}
+
+fn flat_files(files: List[diff.File]) -> List[worktree.FlatEntry] {
+    var out = List[worktree.FlatEntry]()
+    for file in files { (mut out).push(worktree.FlatEntry { path: copy file.path, mode: file.mode, id: copy file.id }) }
+    out
+}
+
+fn tree_objects(
+    ctx: worktree.Context,
+    files: List[diff.File],
+) -> index.TreeAssembly ! commit.CommitErrors {
+    var value = index.empty(2)?
+    for file in files {
+        let _ = object.write_object(ctx.repo, "blob", file.data)?
+        var entry = index.conflict_entry(file.path, file.mode, file.id, 1)?
+        entry.flags -= 4096
+        (mut value.entries).push(entry)
+    }
+    let tree = index.build_trees(value)?
+    for obj in tree.objects { let _ = object.write_object(ctx.repo, "tree", obj.data)? }
+    tree
+}
+
+fn conflict_index(mut value: index.Index, stages: List[index.Entry]) -> () ! commit.CommitErrors {
+    for stage in stages {
+        value = index.invalidate_tree(value, stage.path)?
+        var entries = List[index.Entry](), inserted = false
+        for entry in value.entries {
+            let p = str_from_utf8(entry.path)?, s = str_from_utf8(stage.path)?
+            if p == s && index.stage(entry) == 0 { continue }
+            if !inserted && (p > s || p == s && index.stage(entry) > index.stage(stage)) {
+                (mut entries).push(copy stage)
+                inserted = true
+            }
+            (mut entries).push(copy entry)
+        }
+        if !inserted { (mut entries).push(copy stage) }
+        value.entries = entries
+    }
+}
+
+fn squash_message(
+    ctx: worktree.Context,
+    ours: oid.Oid,
+    theirs: oid.Oid,
+) -> List[byte] ! commit.CommitErrors {
+    var excluded = Map[str, bool]()
+    for item in walk.collect(ctx.repo, [copy ours], 100001, 0, 100000, false)? {
+        excluded[oid.hex(item.id)?] = true
+    }
+    var out = "Squashed commit of the following:\n".bytes()
+    for item in walk.collect(ctx.repo, [copy theirs], 100001, 0, 100000, false)? {
+        if excluded[oid.hex(item.id)?] else false { continue }
+        var ids = [oid.hex(item.id)?]
+        for parent in item.parents { (mut ids).push(oid.hex(parent)?) }
+        (mut out).push(10 as byte)
+        for b in pretty.render(item, "medium", "default", ids, false)? { (mut out).push(b) }
+    }
+    out
+}
+
+fn merge_stat(
+    ctx: worktree.Context,
+    before: List[diff.File],
+    after: List[diff.File],
+) -> () ! commit.CommitErrors {
+    var options = diff.configured(ctx)?
+    options.patch = false
+    options.stat = true
+    var stdout = fs.stdout()
+    fs.write_chunk(mut stdout, diff.render(ctx, diff.changes(before, after, options)?, options)?)?
+    let summary = commit.change_summary(ctx, flat_files(before), flat_files(after))?
+    var start = 0
+    while start < summary.len && summary[start] != 10 as byte { start += 1 }
+    if start < summary.len { fs.write_chunk(mut stdout, summary[start + 1..])? }
+}
+
+fn merge_command(args: List[str]) -> int ! commit.CommitErrors {
+    let ctx = worktree.discover(".")?
+    controls(ctx, "merge")?
+    if worktree.config_bool(ctx, "commit.gpgsign", false)? { return Unsupported("merge signing") }
+    for (key, _) in ctx.repo.config.pairs() {
+        if key.starts_with("merge.") &&
+            key != "merge.conflictstyle" &&
+            key != "merge.stat" &&
+            key != "merge.ff" {
+            return Unsupported("merge configuration {key}")
+        }
+    }
+    let configured_ff = ctx.repo.config["merge.ff"] else "true"
+    if configured_ff != "true" && configured_ff != "false" && configured_ff != "only" {
+        return Unsupported("merge.ff={configured_ff}")
+    }
+    var name = "",
+        message = "",
+        no_ff = configured_ff == "false",
+        ff_only = configured_ff == "only",
+        squash = false,
+        stop = false,
+        quiet = false,
+        stat = worktree.config_bool(ctx, "merge.stat", true)?,
+        noedit = (env_get("GIT_MERGE_AUTOEDIT") else "") == "no" ||
+            !(os_isatty(fs.stdin().fd) else false) ||
+            !(os_isatty(fs.stdout().fd) else false)
+    var at = 1
+    while at < args.len {
+        let arg = args[at]
+        at += 1
+        if arg == "--no-edit" {
+            noedit = true
+        } else if arg == "--no-ff" {
+            no_ff = true
+            ff_only = false
+        } else if arg == "--ff-only" {
+            ff_only = true
+            no_ff = false
+        } else if arg == "--ff" {
+            no_ff = false
+            ff_only = false
+        } else if arg == "--squash" {
+            squash = true
+        } else if arg == "--no-commit" {
+            stop = true
+        } else if arg == "--no-stat" || arg == "-n" {
+            stat = false
+        } else if arg == "--stat" {
+            stat = true
+        } else if arg == "--quiet" || arg == "-q" {
+            quiet = true
+        } else if arg == "-m" || arg == "-F" || arg == "--file" {
+            if at == args.len { return Unsupported("merge missing message") }
+            if arg == "-m" {
+                if message != "" { message += "\n\n" }
+                message += args[at]
+            } else {
+                message = str_from_utf8(repository.read_bytes(args[at], 16777216)?)?
+            }
+            at += 1
+            noedit = true
+        } else if arg == "--abort" {
+            return merge_abort(ctx)?
+        } else if arg.starts_with("-") {
+            return Unsupported("merge {arg}")
+        } else {
+            if name != "" { return Unsupported("merge octopus") }
+            name = arg
+        }
+    }
+    if name == "" { return Unsupported("merge upstream selection") }
+    if name.contains("~") || name.contains("^") || name.contains("..") || name.contains("@{{") {
+        return Unsupported("merge revision grammar")
+    }
+    if fs.exists("{ctx.repo.gitdir}/MERGE_HEAD") {
+        return Fatal(
+            "You have not concluded your merge (MERGE_HEAD exists).\nPlease, commit your changes before you merge.",
+        )
+    }
+    for marker in ["CHERRY_PICK_HEAD", "REVERT_HEAD", "MERGE_AUTOSTASH"] {
+        if fs.exists("{ctx.repo.gitdir}/{marker}") {
+            return Unsupported("merge in-progress {marker}")
+        }
+    }
+    let head = worktree.head(ctx)?
+    if head.commits.len == 0 { return Unsupported("merge unborn HEAD") }
+    let raw_target = object.resolve(ctx.repo, name) else |_| {
+        return Failure("{name} - not something we can merge")
+    }
+    if object.read_object(ctx.repo, raw_target, 16777216)?.kind == "tag" {
+        return Unsupported("merge annotated tag message")
+    }
+    let target = resolve_commit(ctx.repo, name) else |_| {
+        return Failure("{name} - not something we can merge")
+    }
+    let bases = mergetree.bases(ctx.repo, head.commits[0], target)?
+    if bases.len > 1 { return Unsupported("merge recursive criss-cross bases") }
+    if bases.len == 0 { return Fatal("refusing to merge unrelated histories") }
+    let ours = mergetree.files(ctx.repo, head.commits[0])?,
+        theirs = mergetree.files(ctx.repo, target)?
+    let value = worktree.read_index(ctx)?
+    for entry in value.entries {
+        if index.stage(entry) != 0 { return Unsupported("merge unmerged index") }
+    }
+    let fast = oid.equal(bases[0], head.commits[0]) && !no_ff
+    let upto = oid.equal(bases[0], target)
+    if !fast && !upto && !stop && !squash && !noedit {
+        return Unsupported("merge editor execution")
+    }
+    var plan = mergetree.Plan { files: copy theirs, stages: [], messages: [], conflicts: [] }
+    if !fast && !upto {
+        let snapshot = worktree.scan_index(ctx, value)?
+        for row in snapshot.rows {
+            if !row.untracked && (row.x != " " || row.y != " ") {
+                return Unsupported("merge dirty recursive recovery")
+            }
+        }
+        let style = ctx.repo.config["merge.conflictstyle"] else "merge"
+        plan = mergetree.plan(
+            mergetree.files(ctx.repo, bases[0])?,
+            ours,
+            theirs,
+            "HEAD",
+            abbrev(ctx.repo, bases[0])?,
+            name,
+            style,
+        )?
+    }
+    merge_orig(ctx, head.commits)?
+    if upto {
+        if !quiet {
+            print(
+                if squash then "Already up to date. (nothing to squash)" else "Already up to date.",
+            )
+        }
+        merge_cleanup(ctx)
+        return 0
+    }
+    if !fast && ff_only {
+        if worktree.config_bool(ctx, "advice.diverging", true)? {
+            eprint(
+                "hint: Diverging branches can't be fast-forwarded, you need to either:\nhint:\nhint: \tgit merge --no-ff\nhint:\nhint: or:\nhint:\nhint: \tgit rebase\nhint:\nhint: Disable this message with \"git config set advice.diverging false\"",
+            )
+        }
+        return Fatal("Not possible to fast-forward, aborting.")
+    }
+    if fast && !quiet {
+        print("Updating {abbrev(ctx.repo,head.commits[0])?}..{abbrev(ctx.repo,target)?}")
+    }
+    if !fast {
+        let snap = worktree.scan_index(ctx, value)?
+        var staged = ""
+        for row in snap.rows {
+            if !row.untracked && row.x != " " { staged += "  {str_from_utf8(row.path)?}\n" }
+        }
+        if staged != "" {
+            eprint(
+                "error: Your local changes to the following files would be overwritten by merge:\n{staged}Merge with strategy ort failed.",
+            )
+            return 2
+        }
+    }
+    var tx = index_start(ctx) else |e| match e {
+        Fatal(text) => {
+            eprint("error: {text}")
+            if fast { return 1 }
+            eprint("error: could not write index")
+            return Fatal("stash failed")
+        },
+        _ => { return Fatal("cannot lock index: {e}") },
+    }
+    defer index.abort(mut tx)
+    let flat = flat_files(plan.files)
+    if !fast { worktree.transition(ctx, mut tx.value, flat_files(ours), "merge")? }
+    var assembled = List[index.TreeAssembly]()
+    if !fast { (mut assembled).push(tree_objects(ctx, plan.files)?) }
+    worktree.merge_check(ctx, tx.value, flat) else |e| match e {
+        Failure(text) => {
+            eprint("error: {text}")
+            if fast { return 1 }
+            index.commit(mut tx)?
+            eprint("Merge with strategy ort failed.")
+            return 2
+        },
+        _ => { return Unsupported("merge safety: {e}") },
+    }
+    let tree = if fast then tree_objects(ctx, plan.files)? else copy assembled[0]
+    if !fast {
+        let path = "{ctx.repo.gitdir}/AUTO_MERGE.lock"
+        let file = fs.create_new_with_mode(path, 0o666) else |e| match e {
+            exists => {
+                index.commit(mut tx)?
+                eprint(
+                    "error: update_ref failed for ref 'AUTO_MERGE': cannot lock ref 'AUTO_MERGE': {lock_text(path)}\nMerge with strategy ort failed.",
+                )
+                return 2
+            },
+            _ => { return Fatal("AUTO_MERGE: {e}") },
+        }
+        fs_write_chunk(file.fd, "{oid.hex(tree.root)?}\n".bytes())?
+        fs_close(file.fd)?
+        fs_rename(path, "{ctx.repo.gitdir}/AUTO_MERGE")?
+    }
+    worktree.transition(ctx, mut tx.value, flat, "merge")?
+    conflict_index(mut tx.value, plan.stages)?
+    index.commit(mut tx)?
+    if !quiet { for line in plan.messages { print(line) } }
+    if fast && !quiet { print("Fast-forward") }
+    if squash {
+        state_file(ctx, "SQUASH_MSG", squash_message(ctx, head.commits[0], target)?)?
+        if !quiet { print("Squash commit -- not updating HEAD") }
+    }
+    if message == "" {
+        message = "Merge commit '{name}'"
+        if name.starts_with("refs/heads/") {
+            message = "Merge branch '{name}'"
+        } else if name.starts_with("refs/tags/") {
+            message = "Merge tag '{name}'"
+        } else if refs.valid("refs/heads/{name}") &&
+            refs.optional(ctx.repo, "refs/heads/{name}")?.len > 0 {
+            message = "Merge branch '{name}'"
+        } else if refs.valid("refs/tags/{name}") &&
+            refs.optional(ctx.repo, "refs/tags/{name}")?.len > 0 {
+            message = "Merge tag '{name}'"
+        }
+        if head.detached {
+            message += " into HEAD"
+        } else if head.branch != "main" && head.branch != "master" {
+            message += " into {head.branch}"
+        }
+    }
+    var conflict_text = ""
+    if plan.conflicts.len > 0 {
+        conflict_text = "\n# Conflicts:\n"
+        for path in plan.conflicts { conflict_text += "#\t{path}\n" }
+    }
+    if !fast && (!squash || plan.conflicts.len > 0) {
+        state_file(
+            ctx,
+            "MERGE_MSG",
+            "{if squash then "" else "{message}\n"}{conflict_text}".bytes(),
+        )?
+        if !squash {
+            state_file(ctx, "MERGE_HEAD", "{oid.hex(target)?}\n".bytes())?
+            state_file(ctx, "MERGE_MODE", if no_ff then "no-ff".bytes() else "".bytes())?
+        }
+    }
+    if plan.conflicts.len > 0 {
+        if !quiet { print("Automatic merge failed; fix conflicts and then commit the result.") }
+        return 1
+    }
+    if !fast && (stop || squash) {
+        eprint("Automatic merge went well; stopped before committing as requested")
+        return 0
+    }
+    if !squash {
+        if fast {
+            merge_publish(ctx, head, target, name, "Fast-forward")?
+        } else {
+            let who = commit_format.identity_text(
+                commit.environment_identity(ctx, "COMMITTER", "")?,
+            )?
+            let author = commit_format.identity_text(
+                commit.environment_identity(ctx, "AUTHOR", "")?,
+            )?
+            let message_bytes = "{message}\n".bytes()
+            let body = object.build_commit(
+                tree.root,
+                [copy head.commits[0], copy target],
+                author,
+                who,
+                "",
+                message_bytes,
+            )?
+            let id = object.write_object(ctx.repo, "commit", body)?
+            state_file(ctx, "MERGE_MSG", message.bytes())?
+            if !quiet { print("Merge made by the 'ort' strategy.") }
+            merge_publish(ctx, head, id, name, "Merge made by the 'ort' strategy.")?
+        }
+    }
+    if stat && !quiet { merge_stat(ctx, ours, plan.files)? }
+    merge_cleanup(ctx)
+    0
+}
+
+fn merge_abort(ctx: worktree.Context) -> int ! commit.CommitErrors {
+    if !fs.exists("{ctx.repo.gitdir}/MERGE_HEAD") {
+        return Fatal("There is no merge to abort (MERGE_HEAD missing).")
+    }
+    if fs.exists("{ctx.repo.gitdir}/MERGE_AUTOSTASH") {
+        return Unsupported("merge abort autostash")
+    }
+    let head = worktree.head(ctx)?
+    if head.commits.len == 0 { return Unsupported("merge abort unborn HEAD") }
+    var tx = index_start(ctx)?
+    defer index.abort(mut tx)
+    let target_tree = worktree.flatten_tree(ctx.repo, head.commits[0])?
+    worktree.abort_merge(ctx, mut tx.value, target_tree) else |e| match e {
+        Failure(text) => {
+            eprint("error: {text}")
+            return Fatal("Could not reset index file to revision 'HEAD'.")
+        },
+        _ => { return Fatal("merge abort: {e}") },
+    }
+    index.commit(mut tx)?
+    merge_orig(ctx, head.commits)?
+    commit.publish_ref(
+        ctx,
+        head,
+        head.commits[0],
+        commit.environment_identity(ctx, "COMMITTER", "")?,
+        "reset",
+        "moving to HEAD".bytes(),
+    )?
+    cleanup_state(ctx)
+    0
+}

@@ -17,7 +17,9 @@ fn owned_index(value: index.Index) -> index.Index {
     }
 }
 
-fn refresh_index(mut value: index.Index, files: List[worktree.FileState]) -> () ! CommitErrors {
+/// Refresh only content-equal entries from caller-owned filesystem observations.
+/// Preserves extensions and dirty/flagged entries; caller owns index publication.
+pub fn refresh_index(mut value: index.Index, files: List[worktree.FileState]) -> () ! CommitErrors {
     let entries = owned_entries(value.entries)
     var disk = 0
     for pos in 0..entries.len {
