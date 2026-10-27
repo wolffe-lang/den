@@ -1,0 +1,173 @@
+index-stat-proof: 0 tool-side entry rows canonicalized
+0 parity uptodate  ['merge', '--no-edit', 'topic']
+index-stat-proof: 0 tool-side entry rows canonicalized
+1 parity uptodate  ['merge', '--no-edit', '--no-ff', 'topic']
+index-stat-proof: 0 tool-side entry rows canonicalized
+2 parity uptodate  ['merge', '--no-edit', '--squash', 'topic']
+index-stat-proof: 0 tool-side entry rows canonicalized
+3 parity uptodate  ['merge', '--no-edit', '--no-commit', 'topic']
+index-stat-proof: 0 tool-side entry rows canonicalized
+4 parity uptodate  ['merge', '--no-edit', '--ff-only', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+5 parity ff  ['merge', '--no-edit', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+6 parity ff  ['merge', '--no-edit', '--no-ff', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+7 parity ff  ['merge', '--no-edit', '--squash', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+8 parity ff  ['merge', '--no-edit', '--no-commit', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+9 parity ff  ['merge', '--no-edit', '--ff-only', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+10 parity clean  ['merge', '--no-edit', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+11 parity clean  ['merge', '--no-edit', '--no-ff', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+12 parity clean  ['merge', '--no-edit', '--squash', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+13 parity clean  ['merge', '--no-edit', '--no-commit', 'topic']
+index-stat-proof: 0 tool-side entry rows canonicalized
+14 parity clean  ['merge', '--no-edit', '--ff-only', 'topic']
+index-stat-proof: 2 tool-side entry rows canonicalized
+15 parity conflict  ['merge', '--no-edit', 'topic']
+index-stat-proof: 2 tool-side entry rows canonicalized
+16 parity conflict  ['merge', '--no-edit', '--no-ff', 'topic']
+index-stat-proof: 2 tool-side entry rows canonicalized
+17 parity conflict  ['merge', '--no-edit', '--squash', 'topic']
+index-stat-proof: 2 tool-side entry rows canonicalized
+18 parity conflict  ['merge', '--no-edit', '--no-commit', 'topic']
+index-stat-proof: 0 tool-side entry rows canonicalized
+19 parity conflict  ['merge', '--no-edit', '--ff-only', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+20 parity ff packed ['merge', '--no-edit', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+21 parity ff detached ['merge', '--no-edit', 'topic']
+index-stat-proof: 0 tool-side entry rows canonicalized
+22 parity ff dirty ['merge', '--no-edit', 'topic']
+index-stat-proof: 2 tool-side entry rows canonicalized
+23 parity ff dirty-keep ['merge', '--no-edit', 'topic']
+index-stat-proof: 0 tool-side entry rows canonicalized
+24 parity ff staged ['merge', '--no-edit', 'topic']
+index-stat-proof: 0 tool-side entry rows canonicalized
+25 parity ff untracked ['merge', '--no-edit', 'topic']
+index-stat-proof: 0 tool-side entry rows canonicalized
+26 parity ff index.lock ['merge', '--no-edit', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+27 parity ff HEAD.lock ['merge', '--no-edit', 'topic']
+index-stat-proof: 0 tool-side entry rows canonicalized
+28 parity ff ORIG_HEAD.lock ['merge', '--no-edit', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+29 parity ff AUTO_MERGE.lock ['merge', '--no-edit', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+30 parity ff refs/heads/main.lock ['merge', '--no-edit', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+31 parity clean packed ['merge', '--no-edit', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+32 parity clean detached ['merge', '--no-edit', 'topic']
+33 FAIL clean dirty ['merge', '--no-edit', 'topic']
+git 2 b'' b'error: Your local changes to the following files would be overwritten by merge:\n\ta\nPlease commit your changes or stash them before you merge.\nAborting\nMerge with strategy ort failed.\n'
+den 2 b'' b'error: Your local changes to the following files would be overwritten by merge:\n\ta\nPlease commit your changes or stash them before you merge.\nAborting\nMerge with strategy ort failed.\n'
+state ['.git/objects/a3/96fd9576e7ecc62c74e82de7d02b9fbfb431fe', '.git/objects/62/c55c6f942a94b4c3e10b78cd5837103ca0c947', '.git/objects/40/830374235df1c19661a2901b7ca73cc9499f3d', '.git/AUTO_MERGE', '.git/objects/ae/e98a8b373c9494b8fe891414244bf9d665d607', '.git/objects/22/db173cab6bf6588ddb2ff980a85da2c884c295', '.git/objects/c0/0cf9d2270b0fb3f1de6e522e8a1ef4c7b62ea0', '.git/index']
+index-stat-proof: 2 tool-side entry rows canonicalized
+34 FAIL clean dirty-keep ['merge', '--no-edit', 'topic']
+git 0 b"Auto-merging a\nMerge made by the 'ort' strategy.\n a | 2 +-\n 1 file changed, 1 insertion(+), 1 deletion(-)\n" b''
+den 0 b"Auto-merging a\nMerge made by the 'ort' strategy.\n a | 2 +-\n 1 file changed, 1 insertion(+), 1 deletion(-)\n" b''
+state ['.git/objects/62/c55c6f942a94b4c3e10b78cd5837103ca0c947', '.git/objects/1a/297b0d28aeefc85c87e4b5b2a2a651dea20d09', '.git/objects/5b/e7be0cd0ceb8cd66e231c40de882d491c2ad50', '.git/objects/be/951f6fc35ff2fefa89cc7f5169cc988afeddeb', '.git/objects/40/830374235df1c19661a2901b7ca73cc9499f3d', '.git/index']
+35 FAIL clean staged ['merge', '--no-edit', 'topic']
+git 2 b'' b'error: Your local changes to the following files would be overwritten by merge:\n  a\nMerge with strategy ort failed.\n'
+den 2 b'' b'error: Your local changes to the following files would be overwritten by merge:\n  a\nMerge with strategy ort failed.\n'
+state ['.git/objects/06/13dc8e9eab6d2c9445bc2f2a9fa72fd23e6403', '.git/AUTO_MERGE', '.git/objects/e6/2e9b0ae69b7aeca07532212609fae56e610132', '.git/objects/ae/e98a8b373c9494b8fe891414244bf9d665d607', '.git/logs/HEAD', '.git/index']
+36 FAIL clean untracked ['merge', '--no-edit', 'topic']
+git 2 b'' b'error: The following untracked working tree files would be overwritten by merge:\n\tnew\nPlease move or remove them before you merge.\nAborting\nMerge with strategy ort failed.\n'
+den 2 b'' b'error: The following untracked working tree files would be overwritten by merge:\n\tnew\nPlease move or remove them before you merge.\nAborting\nMerge with strategy ort failed.\n'
+state ['.git/objects/99/7881ce52a22ebf440d3d1a078f621d2a7c5dcd', '.git/objects/22/db173cab6bf6588ddb2ff980a85da2c884c295', '.git/index']
+index-stat-proof: 0 tool-side entry rows canonicalized
+37 parity clean index.lock ['merge', '--no-edit', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+38 parity clean HEAD.lock ['merge', '--no-edit', 'topic']
+index-stat-proof: 0 tool-side entry rows canonicalized
+39 parity clean ORIG_HEAD.lock ['merge', '--no-edit', 'topic']
+40 FAIL clean AUTO_MERGE.lock ['merge', '--no-edit', 'topic']
+git 2 b'' b"error: update_ref failed for ref 'AUTO_MERGE': cannot lock ref 'AUTO_MERGE': Unable to create '/work/den/target/merge-native/40/repo/.git/AUTO_MERGE.lock': File exists.\n\nAnother git process seems to be running in this repository, or the lock file may be stale\nMerge with strategy ort failed.\n"
+den 2 b'' b"error: update_ref failed for ref 'AUTO_MERGE': cannot lock ref 'AUTO_MERGE': Unable to create '/work/den/target/merge-native/40/repo/.git/AUTO_MERGE.lock': File exists.\n\nAnother git process seems to be running in this repository, or the lock file may be stale\nMerge with strategy ort failed.\n"
+state ['.git/index']
+index-stat-proof: 4 tool-side entry rows canonicalized
+41 parity clean refs/heads/main.lock ['merge', '--no-edit', 'topic']
+index-stat-proof: 2 tool-side entry rows canonicalized
+42 parity conflict packed ['merge', '--no-edit', 'topic']
+index-stat-proof: 2 tool-side entry rows canonicalized
+43 parity conflict detached ['merge', '--no-edit', 'topic']
+44 FAIL conflict dirty ['merge', '--no-edit', 'topic']
+git 2 b'' b'error: Your local changes to the following files would be overwritten by merge:\n\ta\nPlease commit your changes or stash them before you merge.\nAborting\nMerge with strategy ort failed.\n'
+den 2 b'' b'error: Your local changes to the following files would be overwritten by merge:\n\ta\nPlease commit your changes or stash them before you merge.\nAborting\nMerge with strategy ort failed.\n'
+state ['.git/objects/ee/5a20fdbfdadc25ed734e9e5861e26be0d95519', '.git/objects/62/c55c6f942a94b4c3e10b78cd5837103ca0c947', '.git/objects/40/830374235df1c19661a2901b7ca73cc9499f3d', '.git/AUTO_MERGE', '.git/objects/ae/e98a8b373c9494b8fe891414244bf9d665d607', '.git/objects/c0/0cf9d2270b0fb3f1de6e522e8a1ef4c7b62ea0', '.git/index', '.git/objects/06/9274d5864dd99e3a351bb63b816e56da5c8716']
+index-stat-proof: 0 tool-side entry rows canonicalized
+45 FAIL conflict dirty-keep ['merge', '--no-edit', 'topic']
+git 1 b'Auto-merging a\nCONFLICT (content): Merge conflict in a\nAutomatic merge failed; fix conflicts and then commit the result.\n' b''
+den 1 b'Auto-merging a\nCONFLICT (content): Merge conflict in a\nAutomatic merge failed; fix conflicts and then commit the result.\n' b''
+state ['.git/objects/62/c55c6f942a94b4c3e10b78cd5837103ca0c947', '.git/objects/1a/297b0d28aeefc85c87e4b5b2a2a651dea20d09', '.git/objects/5b/e7be0cd0ceb8cd66e231c40de882d491c2ad50', '.git/objects/40/830374235df1c19661a2901b7ca73cc9499f3d']
+46 FAIL conflict staged ['merge', '--no-edit', 'topic']
+git 2 b'' b'error: Your local changes to the following files would be overwritten by merge:\n  a\nMerge with strategy ort failed.\n'
+den 2 b'' b'error: Your local changes to the following files would be overwritten by merge:\n  a\nMerge with strategy ort failed.\n'
+state ['.git/objects/06/13dc8e9eab6d2c9445bc2f2a9fa72fd23e6403', '.git/AUTO_MERGE', '.git/objects/e6/2e9b0ae69b7aeca07532212609fae56e610132', '.git/objects/ae/e98a8b373c9494b8fe891414244bf9d665d607', '.git/logs/HEAD', '.git/index']
+47 FAIL conflict untracked ['merge', '--no-edit', 'topic']
+git 2 b'' b'error: The following untracked working tree files would be overwritten by merge:\n\tnew\nPlease move or remove them before you merge.\nAborting\nMerge with strategy ort failed.\n'
+den 2 b'' b'error: The following untracked working tree files would be overwritten by merge:\n\tnew\nPlease move or remove them before you merge.\nAborting\nMerge with strategy ort failed.\n'
+state ['.git/objects/c4/fbe4cc36f386f29ecb516cbc823fdfaab5b0fc', '.git/index', '.git/objects/06/9274d5864dd99e3a351bb63b816e56da5c8716']
+index-stat-proof: 0 tool-side entry rows canonicalized
+48 parity conflict index.lock ['merge', '--no-edit', 'topic']
+index-stat-proof: 2 tool-side entry rows canonicalized
+49 parity conflict HEAD.lock ['merge', '--no-edit', 'topic']
+index-stat-proof: 0 tool-side entry rows canonicalized
+50 parity conflict ORIG_HEAD.lock ['merge', '--no-edit', 'topic']
+51 FAIL conflict AUTO_MERGE.lock ['merge', '--no-edit', 'topic']
+git 2 b'' b"error: update_ref failed for ref 'AUTO_MERGE': cannot lock ref 'AUTO_MERGE': Unable to create '/work/den/target/merge-native/51/repo/.git/AUTO_MERGE.lock': File exists.\n\nAnother git process seems to be running in this repository, or the lock file may be stale\nMerge with strategy ort failed.\n"
+den 2 b'' b"error: update_ref failed for ref 'AUTO_MERGE': cannot lock ref 'AUTO_MERGE': Unable to create '/work/den/target/merge-native/51/repo/.git/AUTO_MERGE.lock': File exists.\n\nAnother git process seems to be running in this repository, or the lock file may be stale\nMerge with strategy ort failed.\n"
+state ['.git/index']
+index-stat-proof: 2 tool-side entry rows canonicalized
+52 parity conflict refs/heads/main.lock ['merge', '--no-edit', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+53 parity clean  ['merge', '--no-edit', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+54 parity clean  ['merge', '--no-edit', '--no-commit', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+55 parity clean  ['merge', '--no-edit', '--no-ff', '-m', 'custom message', 'topic']
+56 FAIL ff  ['revert', '--no-edit', 'topic']
+git 1 b'On branch main\nnothing to commit, working tree clean\n' b''
+den 2 b'' b'den: not yet implemented: revert (M3, vc07)\n'
+state ['.git/MERGE_MSG', '.git/AUTO_MERGE', '.git/index', '.git/COMMIT_EDITMSG']
+57 FAIL ff packed ['revert', '--no-edit', 'topic']
+git 1 b'On branch main\nnothing to commit, working tree clean\n' b''
+den 2 b'' b'den: not yet implemented: revert (M3, vc07)\n'
+state ['.git/MERGE_MSG', '.git/AUTO_MERGE', '.git/index', '.git/COMMIT_EDITMSG']
+58 FAIL ff detached ['revert', '--no-edit', 'topic']
+git 1 b'HEAD detached at 33d328b\nnothing to commit, working tree clean\n' b''
+den 2 b'' b'den: not yet implemented: revert (M3, vc07)\n'
+state ['.git/MERGE_MSG', '.git/AUTO_MERGE', '.git/index', '.git/COMMIT_EDITMSG']
+index-stat-proof: 0 tool-side entry rows canonicalized
+59 FAIL ff index.lock ['revert', '--no-edit', 'topic']
+git 128 b'' b"error: Unable to create '/work/den/target/merge-native/59/repo/.git/index.lock': File exists.\n\nAnother git process seems to be running in this repository, or the lock file may be stale\nfatal: revert failed\n"
+den 2 b'' b'den: not yet implemented: revert (M3, vc07)\n'
+state []
+60 FAIL ff HEAD.lock ['revert', '--no-edit', 'topic']
+git 1 b'On branch main\nnothing to commit, working tree clean\n' b''
+den 2 b'' b'den: not yet implemented: revert (M3, vc07)\n'
+state ['.git/MERGE_MSG', '.git/AUTO_MERGE', '.git/index', '.git/COMMIT_EDITMSG']
+61 FAIL ff dirty ['revert', '--no-edit', 'topic']
+git 1 b'On branch main\nChanges not staged for commit:\n  (use "git add <file>..." to update what will be committed)\n  (use "git restore <file>..." to discard changes in working directory)\n\tmodified:   a\n\nno changes added to commit (use "git add" and/or "git commit -a")\n' b''
+den 2 b'' b'den: not yet implemented: revert (M3, vc07)\n'
+state ['.git/MERGE_MSG', '.git/AUTO_MERGE', '.git/index', '.git/COMMIT_EDITMSG']
+62 FAIL ff staged ['revert', '--no-edit', 'topic']
+git 128 b'' b'error: your local changes would be overwritten by revert.\nhint: commit your changes or stash them to proceed.\nfatal: revert failed\n'
+den 2 b'' b'den: not yet implemented: revert (M3, vc07)\n'
+state ['.git/index']
+index-stat-proof: 0 tool-side entry rows canonicalized
+63 FAIL clean abort ['merge', '--abort']
+git 128 b'' b"error: Entry 'a' not uptodate. Cannot merge.\nfatal: Could not reset index file to revision 'HEAD'.\n"
+den 2 b'' b'den: not yet implemented: merge abort reset-merge transaction\n'
+state []
+64 FAIL conflict abort ['merge', '--abort']
+git 0 b'' b''
+den 2 b'' b'den: not yet implemented: merge abort reset-merge transaction\n'
+state ['.git/MERGE_MSG', '.git/AUTO_MERGE', '.git/MERGE_MODE', '.git/MERGE_HEAD', '.git/logs/HEAD', '.git/index']
+merge: 46/65 exact; 19 mismatches

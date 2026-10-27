@@ -1,0 +1,57 @@
+{
+  "tiers": {
+    "native": {
+      "command_total": 129,
+      "command_exact": 117,
+      "named_not_yet": 12,
+      "named_features": [
+        "merge annotated tag message",
+        "merge dirty recursive recovery",
+        "merge multi-hunk alignment",
+        "merge recursive criss-cross bases",
+        "merge rename topology",
+        "merge unborn HEAD",
+        "revert -m"
+      ],
+      "file_exact": 1521,
+      "all_base_sets": 84
+    },
+    "release": {
+      "command_total": 129,
+      "command_exact": 117,
+      "named_not_yet": 12,
+      "named_features": [
+        "merge annotated tag message",
+        "merge dirty recursive recovery",
+        "merge multi-hunk alignment",
+        "merge recursive criss-cross bases",
+        "merge rename topology",
+        "merge unborn HEAD",
+        "revert -m"
+      ],
+      "file_exact": 1521,
+      "all_base_sets": 84
+    }
+  },
+  "checked": {
+    "mergebase": "exit(0)",
+    "mergefile": "exit(0)",
+    "mergeundo": "exit(0)"
+  },
+  "main": {
+    "not-yet": 13,
+    "parity": 174,
+    "shape-pass": 1
+  },
+  "functional_input_count": 289,
+  "capture_sha256": {
+    "final-inputs.json": "b63a5011622cc4cc34795f43411dcc40d1c7c11f3615e947b5de2b604998bf69",
+    "final-gate.log": "b83bb1005c7cbfc956bbf0af459ade1734d1190db733267e059d7747d4d4ccb1",
+    "merge-native.json": "128120d7b0b6f81a337396f941683190cb606c41267dd273c37c246ebde5ca7c",
+    "merge-file-native.json": "0cceed65e97b5bd5418b63e51c0ee9c0ff435a626cfa4d5db75b74d766d3044e",
+    "merge-bases-native.json": "b379c4c84e4b7f54556a2713f211db21b22db71953276dba26ba00ea44d406a2",
+    "merge-release.json": "6fe2f05d56aee374aafc80e32aa13d09d325cb27b14db9b70f42f264071e8323",
+    "merge-file-release.json": "0cceed65e97b5bd5418b63e51c0ee9c0ff435a626cfa4d5db75b74d766d3044e",
+    "merge-bases-release.json": "b379c4c84e4b7f54556a2713f211db21b22db71953276dba26ba00ea44d406a2"
+  }
+}

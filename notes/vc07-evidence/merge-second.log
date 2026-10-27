@@ -1,0 +1,184 @@
+index-stat-proof: 0 tool-side entry rows canonicalized
+0 parity uptodate  ['merge', '--no-edit', 'topic']
+index-stat-proof: 0 tool-side entry rows canonicalized
+1 parity uptodate  ['merge', '--no-edit', '--no-ff', 'topic']
+index-stat-proof: 0 tool-side entry rows canonicalized
+2 parity uptodate  ['merge', '--no-edit', '--squash', 'topic']
+index-stat-proof: 0 tool-side entry rows canonicalized
+3 parity uptodate  ['merge', '--no-edit', '--no-commit', 'topic']
+index-stat-proof: 0 tool-side entry rows canonicalized
+4 parity uptodate  ['merge', '--no-edit', '--ff-only', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+5 parity ff  ['merge', '--no-edit', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+6 parity ff  ['merge', '--no-edit', '--no-ff', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+7 parity ff  ['merge', '--no-edit', '--squash', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+8 parity ff  ['merge', '--no-edit', '--no-commit', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+9 parity ff  ['merge', '--no-edit', '--ff-only', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+10 parity clean  ['merge', '--no-edit', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+11 parity clean  ['merge', '--no-edit', '--no-ff', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+12 parity clean  ['merge', '--no-edit', '--squash', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+13 parity clean  ['merge', '--no-edit', '--no-commit', 'topic']
+index-stat-proof: 0 tool-side entry rows canonicalized
+14 parity clean  ['merge', '--no-edit', '--ff-only', 'topic']
+index-stat-proof: 2 tool-side entry rows canonicalized
+15 parity conflict  ['merge', '--no-edit', 'topic']
+index-stat-proof: 2 tool-side entry rows canonicalized
+16 parity conflict  ['merge', '--no-edit', '--no-ff', 'topic']
+index-stat-proof: 2 tool-side entry rows canonicalized
+17 parity conflict  ['merge', '--no-edit', '--squash', 'topic']
+index-stat-proof: 2 tool-side entry rows canonicalized
+18 parity conflict  ['merge', '--no-edit', '--no-commit', 'topic']
+index-stat-proof: 0 tool-side entry rows canonicalized
+19 parity conflict  ['merge', '--no-edit', '--ff-only', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+20 parity ff packed ['merge', '--no-edit', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+21 parity ff detached ['merge', '--no-edit', 'topic']
+index-stat-proof: 0 tool-side entry rows canonicalized
+22 parity ff dirty ['merge', '--no-edit', 'topic']
+index-stat-proof: 2 tool-side entry rows canonicalized
+23 parity ff dirty-keep ['merge', '--no-edit', 'topic']
+index-stat-proof: 0 tool-side entry rows canonicalized
+24 parity ff staged ['merge', '--no-edit', 'topic']
+index-stat-proof: 0 tool-side entry rows canonicalized
+25 parity ff untracked ['merge', '--no-edit', 'topic']
+index-stat-proof: 0 tool-side entry rows canonicalized
+26 parity ff index.lock ['merge', '--no-edit', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+27 parity ff HEAD.lock ['merge', '--no-edit', 'topic']
+index-stat-proof: 0 tool-side entry rows canonicalized
+28 parity ff ORIG_HEAD.lock ['merge', '--no-edit', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+29 parity ff AUTO_MERGE.lock ['merge', '--no-edit', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+30 parity ff refs/heads/main.lock ['merge', '--no-edit', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+31 parity clean packed ['merge', '--no-edit', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+32 parity clean detached ['merge', '--no-edit', 'topic']
+33 named-not-yet clean dirty
+34 named-not-yet clean dirty-keep
+35 named-not-yet clean staged
+index-stat-proof: 4 tool-side entry rows canonicalized
+36 parity clean untracked ['merge', '--no-edit', 'topic']
+index-stat-proof: 0 tool-side entry rows canonicalized
+37 parity clean index.lock ['merge', '--no-edit', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+38 parity clean HEAD.lock ['merge', '--no-edit', 'topic']
+index-stat-proof: 0 tool-side entry rows canonicalized
+39 parity clean ORIG_HEAD.lock ['merge', '--no-edit', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+40 parity clean AUTO_MERGE.lock ['merge', '--no-edit', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+41 parity clean refs/heads/main.lock ['merge', '--no-edit', 'topic']
+index-stat-proof: 2 tool-side entry rows canonicalized
+42 parity conflict packed ['merge', '--no-edit', 'topic']
+index-stat-proof: 2 tool-side entry rows canonicalized
+43 parity conflict detached ['merge', '--no-edit', 'topic']
+44 named-not-yet conflict dirty
+45 named-not-yet conflict dirty-keep
+46 named-not-yet conflict staged
+index-stat-proof: 4 tool-side entry rows canonicalized
+47 parity conflict untracked ['merge', '--no-edit', 'topic']
+index-stat-proof: 0 tool-side entry rows canonicalized
+48 parity conflict index.lock ['merge', '--no-edit', 'topic']
+index-stat-proof: 2 tool-side entry rows canonicalized
+49 parity conflict HEAD.lock ['merge', '--no-edit', 'topic']
+index-stat-proof: 0 tool-side entry rows canonicalized
+50 parity conflict ORIG_HEAD.lock ['merge', '--no-edit', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+51 parity conflict AUTO_MERGE.lock ['merge', '--no-edit', 'topic']
+index-stat-proof: 2 tool-side entry rows canonicalized
+52 parity conflict refs/heads/main.lock ['merge', '--no-edit', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+53 parity clean  ['merge', '--no-edit', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+54 parity clean  ['merge', '--no-edit', '--no-commit', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+55 parity clean  ['merge', '--no-edit', '--no-ff', '-m', 'custom message', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+56 FAIL ff  ['revert', '--no-edit', 'topic']
+git 1 b'On branch main\nnothing to commit, working tree clean\n' b''
+den 2 b'' b'den: not yet implemented: commit REVERT_HEAD\n'
+state ['.git/COMMIT_EDITMSG', '.git/index']
+index-stat-proof: 4 tool-side entry rows canonicalized
+57 FAIL ff packed ['revert', '--no-edit', 'topic']
+git 1 b'On branch main\nnothing to commit, working tree clean\n' b''
+den 2 b'' b'den: not yet implemented: commit REVERT_HEAD\n'
+state ['.git/COMMIT_EDITMSG', '.git/index']
+index-stat-proof: 4 tool-side entry rows canonicalized
+58 FAIL ff detached ['revert', '--no-edit', 'topic']
+git 1 b'HEAD detached at 33d328b\nnothing to commit, working tree clean\n' b''
+den 2 b'' b'den: not yet implemented: commit REVERT_HEAD\n'
+state ['.git/COMMIT_EDITMSG', '.git/index']
+index-stat-proof: 0 tool-side entry rows canonicalized
+59 parity ff index.lock ['revert', '--no-edit', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+60 FAIL ff HEAD.lock ['revert', '--no-edit', 'topic']
+git 1 b'On branch main\nnothing to commit, working tree clean\n' b''
+den 2 b'' b'den: not yet implemented: commit REVERT_HEAD\n'
+state ['.git/COMMIT_EDITMSG', '.git/index']
+index-stat-proof: 2 tool-side entry rows canonicalized
+61 FAIL ff dirty ['revert', '--no-edit', 'topic']
+git 1 b'On branch main\nChanges not staged for commit:\n  (use "git add <file>..." to update what will be committed)\n  (use "git restore <file>..." to discard changes in working directory)\n\tmodified:   a\n\nno changes added to commit (use "git add" and/or "git commit -a")\n' b''
+den 2 b'' b'den: not yet implemented: commit REVERT_HEAD\n'
+state ['.git/COMMIT_EDITMSG', '.git/index']
+62 FAIL ff staged ['revert', '--no-edit', 'topic']
+git 128 b'' b'error: your local changes would be overwritten by revert.\nhint: commit your changes or stash them to proceed.\nfatal: revert failed\n'
+den 128 b'' b'error: your local changes would be overwritten by revert.\nhint: commit your changes or stash them to proceed.\nfatal: revert failed\n'
+state ['.git/index']
+index-stat-proof: 0 tool-side entry rows canonicalized
+63 parity clean abort ['merge', '--abort']
+64 FAIL conflict abort ['merge', '--abort']
+git 0 b'' b''
+den 0 b'' b''
+state ['.git/index']
+index-stat-proof: 4 tool-side entry rows canonicalized
+65 FAIL clean  ['revert', '--no-edit', 'HEAD']
+git 0 b'[main d7f7f0a] Revert "ours"\n Date: Tue Nov 14 22:13:20 2023 +0000\n 1 file changed, 1 insertion(+), 1 deletion(-)\n' b''
+den 2 b'' b'den: not yet implemented: commit REVERT_HEAD\n'
+state ['.git/refs/heads/main', '.git/MERGE_MSG', '.git/logs/refs/heads/main', '.git/logs/HEAD', '.git/index', '.git/objects/d7/f7f0ab5a50f946b7b24a0563b2c9be52677aa7']
+index-stat-proof: 4 tool-side entry rows canonicalized
+66 FAIL clean packed ['revert', '--no-edit', 'HEAD']
+git 0 b'[main d7f7f0a] Revert "ours"\n Date: Tue Nov 14 22:13:20 2023 +0000\n 1 file changed, 1 insertion(+), 1 deletion(-)\n' b''
+den 2 b'' b'den: not yet implemented: commit REVERT_HEAD\n'
+state ['.git/refs/heads/main', '.git/MERGE_MSG', '.git/logs/refs/heads/main', '.git/logs/HEAD', '.git/index', '.git/objects/d7/f7f0ab5a50f946b7b24a0563b2c9be52677aa7']
+index-stat-proof: 4 tool-side entry rows canonicalized
+67 FAIL clean detached ['revert', '--no-edit', 'HEAD']
+git 0 b'[detached HEAD d7f7f0a] Revert "ours"\n Date: Tue Nov 14 22:13:20 2023 +0000\n 1 file changed, 1 insertion(+), 1 deletion(-)\n' b''
+den 2 b'' b'den: not yet implemented: commit REVERT_HEAD\n'
+state ['.git/HEAD', '.git/MERGE_MSG', '.git/logs/HEAD', '.git/index', '.git/objects/d7/f7f0ab5a50f946b7b24a0563b2c9be52677aa7']
+index-stat-proof: 0 tool-side entry rows canonicalized
+68 parity clean index.lock ['revert', '--no-edit', 'HEAD']
+index-stat-proof: 4 tool-side entry rows canonicalized
+69 FAIL clean HEAD.lock ['revert', '--no-edit', 'HEAD']
+git 1 b'' b"error: cannot lock ref 'HEAD': Unable to create '/work/den/target/merge-native/69/repo/.git/HEAD.lock': File exists.\n\nAnother git process seems to be running in this repository, or the lock file may be stale\n"
+den 2 b'' b'den: not yet implemented: commit REVERT_HEAD\n'
+state ['.git/index', '.git/objects/d7/f7f0ab5a50f946b7b24a0563b2c9be52677aa7']
+70 FAIL clean dirty ['revert', '--no-edit', 'HEAD']
+git 128 b'' b'error: Your local changes to the following files would be overwritten by merge:\n\ta\nPlease commit your changes or stash them before you merge.\nAborting\nfatal: revert failed\n'
+den 128 b'' b'error: Your local changes to the following files would be overwritten by merge:\n\ta\nPlease commit your changes or stash them before you merge.\nAborting\nfatal: revert failed\n'
+state ['.git/index']
+71 FAIL clean staged ['revert', '--no-edit', 'HEAD']
+git 128 b'' b'error: your local changes would be overwritten by revert.\nhint: commit your changes or stash them to proceed.\nfatal: revert failed\n'
+den 128 b'' b'error: your local changes would be overwritten by revert.\nhint: commit your changes or stash them to proceed.\nfatal: revert failed\n'
+state ['.git/index']
+index-stat-proof: 2 tool-side entry rows canonicalized
+72 parity conflict resolve ['add', 'a']
+73 FAIL conflict resolve ['commit', '--no-edit', '-m', 'resolved']
+git 0 b'[main d8a6499] resolved\n' b''
+den 2 b'' b'den: not yet implemented: commit MERGE_HEAD\n'
+state ['.git/refs/heads/main', '.git/MERGE_MSG', '.git/objects/d8/a6499cd1cff2490f0c5b15df2b748b3d11686a', '.git/MERGE_MODE', '.git/logs/refs/heads/main', '.git/logs/HEAD', '.git/objects/7c/c7c6260c63d51a75095084783072f049fe7e7c', '.git/MERGE_HEAD', '.git/COMMIT_EDITMSG', '.git/index', '.git/AUTO_MERGE']
+index-stat-proof: 2 tool-side entry rows canonicalized
+74 parity conflict diff3 ['merge', '--no-edit', 'topic']
+index-stat-proof: 2 tool-side entry rows canonicalized
+75 parity conflict zdiff3 ['merge', '--no-edit', 'topic']
+merge: 56/70 exact; 6 named not-yet; 14 mismatches

@@ -1,0 +1,450 @@
+merge-bases: 84/84 independent all-base sets; repository immutable
+merge-file: 1521/1521 exact; 0 failures
+index-stat-proof: 0 tool-side entry rows canonicalized
+0 parity uptodate  ['merge', '--no-edit', 'topic']
+index-stat-proof: 0 tool-side entry rows canonicalized
+1 parity uptodate  ['merge', '--no-edit', '--no-ff', 'topic']
+index-stat-proof: 0 tool-side entry rows canonicalized
+2 parity uptodate  ['merge', '--no-edit', '--squash', 'topic']
+index-stat-proof: 0 tool-side entry rows canonicalized
+3 parity uptodate  ['merge', '--no-edit', '--no-commit', 'topic']
+index-stat-proof: 0 tool-side entry rows canonicalized
+4 parity uptodate  ['merge', '--no-edit', '--ff-only', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+5 parity ff  ['merge', '--no-edit', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+6 parity ff  ['merge', '--no-edit', '--no-ff', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+7 parity ff  ['merge', '--no-edit', '--squash', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+8 parity ff  ['merge', '--no-edit', '--no-commit', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+9 parity ff  ['merge', '--no-edit', '--ff-only', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+10 parity clean  ['merge', '--no-edit', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+11 parity clean  ['merge', '--no-edit', '--no-ff', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+12 parity clean  ['merge', '--no-edit', '--squash', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+13 parity clean  ['merge', '--no-edit', '--no-commit', 'topic']
+index-stat-proof: 0 tool-side entry rows canonicalized
+14 parity clean  ['merge', '--no-edit', '--ff-only', 'topic']
+index-stat-proof: 2 tool-side entry rows canonicalized
+15 parity conflict  ['merge', '--no-edit', 'topic']
+index-stat-proof: 2 tool-side entry rows canonicalized
+16 parity conflict  ['merge', '--no-edit', '--no-ff', 'topic']
+index-stat-proof: 2 tool-side entry rows canonicalized
+17 parity conflict  ['merge', '--no-edit', '--squash', 'topic']
+index-stat-proof: 2 tool-side entry rows canonicalized
+18 parity conflict  ['merge', '--no-edit', '--no-commit', 'topic']
+index-stat-proof: 0 tool-side entry rows canonicalized
+19 parity conflict  ['merge', '--no-edit', '--ff-only', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+20 parity ff packed ['merge', '--no-edit', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+21 parity ff detached ['merge', '--no-edit', 'topic']
+index-stat-proof: 0 tool-side entry rows canonicalized
+22 parity ff dirty ['merge', '--no-edit', 'topic']
+index-stat-proof: 2 tool-side entry rows canonicalized
+23 parity ff dirty-keep ['merge', '--no-edit', 'topic']
+index-stat-proof: 0 tool-side entry rows canonicalized
+24 parity ff staged ['merge', '--no-edit', 'topic']
+index-stat-proof: 0 tool-side entry rows canonicalized
+25 parity ff untracked ['merge', '--no-edit', 'topic']
+index-stat-proof: 0 tool-side entry rows canonicalized
+26 parity ff index.lock ['merge', '--no-edit', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+27 parity ff HEAD.lock ['merge', '--no-edit', 'topic']
+index-stat-proof: 0 tool-side entry rows canonicalized
+28 parity ff ORIG_HEAD.lock ['merge', '--no-edit', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+29 parity ff AUTO_MERGE.lock ['merge', '--no-edit', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+30 parity ff refs/heads/main.lock ['merge', '--no-edit', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+31 parity clean packed ['merge', '--no-edit', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+32 parity clean detached ['merge', '--no-edit', 'topic']
+33 named-not-yet clean dirty
+34 named-not-yet clean dirty-keep
+35 named-not-yet clean staged
+index-stat-proof: 4 tool-side entry rows canonicalized
+36 parity clean untracked ['merge', '--no-edit', 'topic']
+index-stat-proof: 0 tool-side entry rows canonicalized
+37 parity clean index.lock ['merge', '--no-edit', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+38 parity clean HEAD.lock ['merge', '--no-edit', 'topic']
+index-stat-proof: 0 tool-side entry rows canonicalized
+39 parity clean ORIG_HEAD.lock ['merge', '--no-edit', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+40 parity clean AUTO_MERGE.lock ['merge', '--no-edit', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+41 parity clean refs/heads/main.lock ['merge', '--no-edit', 'topic']
+index-stat-proof: 2 tool-side entry rows canonicalized
+42 parity conflict packed ['merge', '--no-edit', 'topic']
+index-stat-proof: 2 tool-side entry rows canonicalized
+43 parity conflict detached ['merge', '--no-edit', 'topic']
+44 named-not-yet conflict dirty
+45 named-not-yet conflict dirty-keep
+46 named-not-yet conflict staged
+index-stat-proof: 4 tool-side entry rows canonicalized
+47 parity conflict untracked ['merge', '--no-edit', 'topic']
+index-stat-proof: 0 tool-side entry rows canonicalized
+48 parity conflict index.lock ['merge', '--no-edit', 'topic']
+index-stat-proof: 2 tool-side entry rows canonicalized
+49 parity conflict HEAD.lock ['merge', '--no-edit', 'topic']
+index-stat-proof: 0 tool-side entry rows canonicalized
+50 parity conflict ORIG_HEAD.lock ['merge', '--no-edit', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+51 parity conflict AUTO_MERGE.lock ['merge', '--no-edit', 'topic']
+index-stat-proof: 2 tool-side entry rows canonicalized
+52 parity conflict refs/heads/main.lock ['merge', '--no-edit', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+53 parity clean  ['merge', '--no-edit', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+54 parity clean  ['merge', '--no-edit', '--no-commit', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+55 parity clean  ['merge', '--no-edit', '--no-ff', '-m', 'custom message', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+56 parity ff  ['revert', '--no-edit', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+57 parity ff packed ['revert', '--no-edit', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+58 parity ff detached ['revert', '--no-edit', 'topic']
+index-stat-proof: 0 tool-side entry rows canonicalized
+59 parity ff index.lock ['revert', '--no-edit', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+60 parity ff HEAD.lock ['revert', '--no-edit', 'topic']
+index-stat-proof: 2 tool-side entry rows canonicalized
+61 parity ff dirty ['revert', '--no-edit', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+62 parity ff staged ['revert', '--no-edit', 'topic']
+index-stat-proof: 0 tool-side entry rows canonicalized
+63 parity clean abort ['merge', '--abort']
+index-stat-proof: 2 tool-side entry rows canonicalized
+64 parity conflict abort ['merge', '--abort']
+index-stat-proof: 4 tool-side entry rows canonicalized
+65 parity clean  ['revert', '--no-edit', 'HEAD']
+index-stat-proof: 4 tool-side entry rows canonicalized
+66 parity clean packed ['revert', '--no-edit', 'HEAD']
+index-stat-proof: 4 tool-side entry rows canonicalized
+67 parity clean detached ['revert', '--no-edit', 'HEAD']
+index-stat-proof: 0 tool-side entry rows canonicalized
+68 parity clean index.lock ['revert', '--no-edit', 'HEAD']
+index-stat-proof: 4 tool-side entry rows canonicalized
+69 parity clean HEAD.lock ['revert', '--no-edit', 'HEAD']
+index-stat-proof: 2 tool-side entry rows canonicalized
+70 parity clean dirty ['revert', '--no-edit', 'HEAD']
+index-stat-proof: 4 tool-side entry rows canonicalized
+71 parity clean staged ['revert', '--no-edit', 'HEAD']
+index-stat-proof: 2 tool-side entry rows canonicalized
+72 parity conflict resolve ['add', 'a']
+index-stat-proof: 4 tool-side entry rows canonicalized
+73 parity conflict resolve ['commit', '--no-edit', '-m', 'resolved']
+index-stat-proof: 2 tool-side entry rows canonicalized
+74 parity conflict diff3 ['merge', '--no-edit', 'topic']
+index-stat-proof: 2 tool-side entry rows canonicalized
+75 parity conflict zdiff3 ['merge', '--no-edit', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+76 parity ff  ['merge', '--no-edit', 'refs/heads/topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+77 parity ff  ['merge', '--no-edit', 'light']
+index-stat-proof: 4 tool-side entry rows canonicalized
+78 parity ff  ['merge', '--no-edit', 'refs/tags/light']
+index-stat-proof: 4 tool-side entry rows canonicalized
+79 parity ff  ['merge', '--no-edit', 'b49335a1ef659268962a7d6130456e15651f156d']
+index-stat-proof: 4 tool-side entry rows canonicalized
+80 parity ff  ['merge', '--no-edit', 'b49335a1e']
+index-stat-proof: 4 tool-side entry rows canonicalized
+81 parity ff  ['merge', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+82 parity clean  ['merge', '--no-edit', 'refs/heads/topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+83 parity clean  ['merge', '--no-edit', 'light']
+index-stat-proof: 4 tool-side entry rows canonicalized
+84 parity clean  ['merge', '--no-edit', 'refs/tags/light']
+index-stat-proof: 4 tool-side entry rows canonicalized
+85 parity clean  ['merge', '--no-edit', 'b49335a1ef659268962a7d6130456e15651f156d']
+index-stat-proof: 4 tool-side entry rows canonicalized
+86 parity clean  ['merge', '--no-edit', 'b49335a1e']
+index-stat-proof: 4 tool-side entry rows canonicalized
+87 parity clean  ['merge', 'topic']
+index-stat-proof: 2 tool-side entry rows canonicalized
+88 parity conflict  ['merge', '--no-edit', 'refs/heads/topic']
+index-stat-proof: 2 tool-side entry rows canonicalized
+89 parity conflict  ['merge', '--no-edit', 'light']
+index-stat-proof: 2 tool-side entry rows canonicalized
+90 parity conflict  ['merge', '--no-edit', 'refs/tags/light']
+index-stat-proof: 2 tool-side entry rows canonicalized
+91 parity conflict  ['merge', '--no-edit', '4401421c7a0ec05227b56139e5e68dcbb46cb979']
+index-stat-proof: 2 tool-side entry rows canonicalized
+92 parity conflict  ['merge', '--no-edit', '4401421c7']
+index-stat-proof: 2 tool-side entry rows canonicalized
+93 parity conflict  ['merge', 'topic']
+94 named-not-yet clean unborn
+95 named-not-yet clean annotated
+96 named-not-yet clean rename
+97 named-not-yet clean crisscross
+index-stat-proof: 4 tool-side entry rows canonicalized
+98 parity clean merge-head ['revert', '--no-edit', 'HEAD']
+99 named-not-yet clean merge-head
+index-stat-proof: 0 tool-side entry rows canonicalized
+100 parity uptodate  ['revert', '--no-edit', 'HEAD']
+index-stat-proof: 0 tool-side entry rows canonicalized
+101 parity uptodate  ['revert', '--no-edit', 'topic']
+index-stat-proof: 0 tool-side entry rows canonicalized
+102 parity uptodate  ['revert', '--no-commit', 'HEAD']
+index-stat-proof: 4 tool-side entry rows canonicalized
+103 parity clean  ['revert', '--no-edit', 'HEAD']
+104 named-not-yet clean 
+index-stat-proof: 4 tool-side entry rows canonicalized
+105 parity clean  ['revert', '--no-commit', 'HEAD']
+index-stat-proof: 4 tool-side entry rows canonicalized
+106 parity conflict  ['revert', '--no-edit', 'HEAD']
+index-stat-proof: 2 tool-side entry rows canonicalized
+107 parity conflict  ['revert', '--no-edit', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+108 parity conflict  ['revert', '--no-commit', 'HEAD']
+index-stat-proof: 6 tool-side entry rows canonicalized
+109 parity ff add-file ['merge', '--no-edit', 'topic']
+index-stat-proof: 2 tool-side entry rows canonicalized
+110 parity ff delete-file ['merge', '--no-edit', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+111 parity ff mode-file ['merge', '--no-edit', 'topic']
+index-stat-proof: 6 tool-side entry rows canonicalized
+112 parity clean add-file ['merge', '--no-edit', 'topic']
+index-stat-proof: 2 tool-side entry rows canonicalized
+113 parity clean delete-file ['merge', '--no-edit', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+114 parity clean mode-file ['merge', '--no-edit', 'topic']
+index-stat-proof: 2 tool-side entry rows canonicalized
+115 parity conflict resolve-delete ['add', '-u']
+merge: 104/104 exact; 12 named not-yet; 0 mismatches
+merge-bases: 84/84 independent all-base sets; repository immutable
+merge-file: 1521/1521 exact; 0 failures
+index-stat-proof: 0 tool-side entry rows canonicalized
+0 parity uptodate  ['merge', '--no-edit', 'topic']
+index-stat-proof: 0 tool-side entry rows canonicalized
+1 parity uptodate  ['merge', '--no-edit', '--no-ff', 'topic']
+index-stat-proof: 0 tool-side entry rows canonicalized
+2 parity uptodate  ['merge', '--no-edit', '--squash', 'topic']
+index-stat-proof: 0 tool-side entry rows canonicalized
+3 parity uptodate  ['merge', '--no-edit', '--no-commit', 'topic']
+index-stat-proof: 0 tool-side entry rows canonicalized
+4 parity uptodate  ['merge', '--no-edit', '--ff-only', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+5 parity ff  ['merge', '--no-edit', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+6 parity ff  ['merge', '--no-edit', '--no-ff', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+7 parity ff  ['merge', '--no-edit', '--squash', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+8 parity ff  ['merge', '--no-edit', '--no-commit', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+9 parity ff  ['merge', '--no-edit', '--ff-only', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+10 parity clean  ['merge', '--no-edit', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+11 parity clean  ['merge', '--no-edit', '--no-ff', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+12 parity clean  ['merge', '--no-edit', '--squash', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+13 parity clean  ['merge', '--no-edit', '--no-commit', 'topic']
+index-stat-proof: 0 tool-side entry rows canonicalized
+14 parity clean  ['merge', '--no-edit', '--ff-only', 'topic']
+index-stat-proof: 2 tool-side entry rows canonicalized
+15 parity conflict  ['merge', '--no-edit', 'topic']
+index-stat-proof: 2 tool-side entry rows canonicalized
+16 parity conflict  ['merge', '--no-edit', '--no-ff', 'topic']
+index-stat-proof: 2 tool-side entry rows canonicalized
+17 parity conflict  ['merge', '--no-edit', '--squash', 'topic']
+index-stat-proof: 2 tool-side entry rows canonicalized
+18 parity conflict  ['merge', '--no-edit', '--no-commit', 'topic']
+index-stat-proof: 0 tool-side entry rows canonicalized
+19 parity conflict  ['merge', '--no-edit', '--ff-only', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+20 parity ff packed ['merge', '--no-edit', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+21 parity ff detached ['merge', '--no-edit', 'topic']
+index-stat-proof: 0 tool-side entry rows canonicalized
+22 parity ff dirty ['merge', '--no-edit', 'topic']
+index-stat-proof: 2 tool-side entry rows canonicalized
+23 parity ff dirty-keep ['merge', '--no-edit', 'topic']
+index-stat-proof: 0 tool-side entry rows canonicalized
+24 parity ff staged ['merge', '--no-edit', 'topic']
+index-stat-proof: 0 tool-side entry rows canonicalized
+25 parity ff untracked ['merge', '--no-edit', 'topic']
+index-stat-proof: 0 tool-side entry rows canonicalized
+26 parity ff index.lock ['merge', '--no-edit', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+27 parity ff HEAD.lock ['merge', '--no-edit', 'topic']
+index-stat-proof: 0 tool-side entry rows canonicalized
+28 parity ff ORIG_HEAD.lock ['merge', '--no-edit', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+29 parity ff AUTO_MERGE.lock ['merge', '--no-edit', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+30 parity ff refs/heads/main.lock ['merge', '--no-edit', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+31 parity clean packed ['merge', '--no-edit', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+32 parity clean detached ['merge', '--no-edit', 'topic']
+33 named-not-yet clean dirty
+34 named-not-yet clean dirty-keep
+35 named-not-yet clean staged
+index-stat-proof: 4 tool-side entry rows canonicalized
+36 parity clean untracked ['merge', '--no-edit', 'topic']
+index-stat-proof: 0 tool-side entry rows canonicalized
+37 parity clean index.lock ['merge', '--no-edit', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+38 parity clean HEAD.lock ['merge', '--no-edit', 'topic']
+index-stat-proof: 0 tool-side entry rows canonicalized
+39 parity clean ORIG_HEAD.lock ['merge', '--no-edit', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+40 parity clean AUTO_MERGE.lock ['merge', '--no-edit', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+41 parity clean refs/heads/main.lock ['merge', '--no-edit', 'topic']
+index-stat-proof: 2 tool-side entry rows canonicalized
+42 parity conflict packed ['merge', '--no-edit', 'topic']
+index-stat-proof: 2 tool-side entry rows canonicalized
+43 parity conflict detached ['merge', '--no-edit', 'topic']
+44 named-not-yet conflict dirty
+45 named-not-yet conflict dirty-keep
+46 named-not-yet conflict staged
+index-stat-proof: 4 tool-side entry rows canonicalized
+47 parity conflict untracked ['merge', '--no-edit', 'topic']
+index-stat-proof: 0 tool-side entry rows canonicalized
+48 parity conflict index.lock ['merge', '--no-edit', 'topic']
+index-stat-proof: 2 tool-side entry rows canonicalized
+49 parity conflict HEAD.lock ['merge', '--no-edit', 'topic']
+index-stat-proof: 0 tool-side entry rows canonicalized
+50 parity conflict ORIG_HEAD.lock ['merge', '--no-edit', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+51 parity conflict AUTO_MERGE.lock ['merge', '--no-edit', 'topic']
+index-stat-proof: 2 tool-side entry rows canonicalized
+52 parity conflict refs/heads/main.lock ['merge', '--no-edit', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+53 parity clean  ['merge', '--no-edit', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+54 parity clean  ['merge', '--no-edit', '--no-commit', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+55 parity clean  ['merge', '--no-edit', '--no-ff', '-m', 'custom message', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+56 parity ff  ['revert', '--no-edit', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+57 parity ff packed ['revert', '--no-edit', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+58 parity ff detached ['revert', '--no-edit', 'topic']
+index-stat-proof: 0 tool-side entry rows canonicalized
+59 parity ff index.lock ['revert', '--no-edit', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+60 parity ff HEAD.lock ['revert', '--no-edit', 'topic']
+index-stat-proof: 2 tool-side entry rows canonicalized
+61 parity ff dirty ['revert', '--no-edit', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+62 parity ff staged ['revert', '--no-edit', 'topic']
+index-stat-proof: 0 tool-side entry rows canonicalized
+63 parity clean abort ['merge', '--abort']
+index-stat-proof: 2 tool-side entry rows canonicalized
+64 parity conflict abort ['merge', '--abort']
+index-stat-proof: 4 tool-side entry rows canonicalized
+65 parity clean  ['revert', '--no-edit', 'HEAD']
+index-stat-proof: 4 tool-side entry rows canonicalized
+66 parity clean packed ['revert', '--no-edit', 'HEAD']
+index-stat-proof: 4 tool-side entry rows canonicalized
+67 parity clean detached ['revert', '--no-edit', 'HEAD']
+index-stat-proof: 0 tool-side entry rows canonicalized
+68 parity clean index.lock ['revert', '--no-edit', 'HEAD']
+index-stat-proof: 4 tool-side entry rows canonicalized
+69 parity clean HEAD.lock ['revert', '--no-edit', 'HEAD']
+index-stat-proof: 2 tool-side entry rows canonicalized
+70 parity clean dirty ['revert', '--no-edit', 'HEAD']
+index-stat-proof: 4 tool-side entry rows canonicalized
+71 parity clean staged ['revert', '--no-edit', 'HEAD']
+index-stat-proof: 2 tool-side entry rows canonicalized
+72 parity conflict resolve ['add', 'a']
+index-stat-proof: 4 tool-side entry rows canonicalized
+73 parity conflict resolve ['commit', '--no-edit', '-m', 'resolved']
+index-stat-proof: 2 tool-side entry rows canonicalized
+74 parity conflict diff3 ['merge', '--no-edit', 'topic']
+index-stat-proof: 2 tool-side entry rows canonicalized
+75 parity conflict zdiff3 ['merge', '--no-edit', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+76 parity ff  ['merge', '--no-edit', 'refs/heads/topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+77 parity ff  ['merge', '--no-edit', 'light']
+index-stat-proof: 4 tool-side entry rows canonicalized
+78 parity ff  ['merge', '--no-edit', 'refs/tags/light']
+index-stat-proof: 4 tool-side entry rows canonicalized
+79 parity ff  ['merge', '--no-edit', 'b49335a1ef659268962a7d6130456e15651f156d']
+index-stat-proof: 4 tool-side entry rows canonicalized
+80 parity ff  ['merge', '--no-edit', 'b49335a1e']
+index-stat-proof: 4 tool-side entry rows canonicalized
+81 parity ff  ['merge', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+82 parity clean  ['merge', '--no-edit', 'refs/heads/topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+83 parity clean  ['merge', '--no-edit', 'light']
+index-stat-proof: 4 tool-side entry rows canonicalized
+84 parity clean  ['merge', '--no-edit', 'refs/tags/light']
+index-stat-proof: 4 tool-side entry rows canonicalized
+85 parity clean  ['merge', '--no-edit', 'b49335a1ef659268962a7d6130456e15651f156d']
+index-stat-proof: 4 tool-side entry rows canonicalized
+86 parity clean  ['merge', '--no-edit', 'b49335a1e']
+index-stat-proof: 4 tool-side entry rows canonicalized
+87 parity clean  ['merge', 'topic']
+index-stat-proof: 2 tool-side entry rows canonicalized
+88 parity conflict  ['merge', '--no-edit', 'refs/heads/topic']
+index-stat-proof: 2 tool-side entry rows canonicalized
+89 parity conflict  ['merge', '--no-edit', 'light']
+index-stat-proof: 2 tool-side entry rows canonicalized
+90 parity conflict  ['merge', '--no-edit', 'refs/tags/light']
+index-stat-proof: 2 tool-side entry rows canonicalized
+91 parity conflict  ['merge', '--no-edit', '4401421c7a0ec05227b56139e5e68dcbb46cb979']
+index-stat-proof: 2 tool-side entry rows canonicalized
+92 parity conflict  ['merge', '--no-edit', '4401421c7']
+index-stat-proof: 2 tool-side entry rows canonicalized
+93 parity conflict  ['merge', 'topic']
+94 named-not-yet clean unborn
+95 named-not-yet clean annotated
+96 named-not-yet clean rename
+97 named-not-yet clean crisscross
+index-stat-proof: 4 tool-side entry rows canonicalized
+98 parity clean merge-head ['revert', '--no-edit', 'HEAD']
+99 named-not-yet clean merge-head
+index-stat-proof: 0 tool-side entry rows canonicalized
+100 parity uptodate  ['revert', '--no-edit', 'HEAD']
+index-stat-proof: 0 tool-side entry rows canonicalized
+101 parity uptodate  ['revert', '--no-edit', 'topic']
+index-stat-proof: 0 tool-side entry rows canonicalized
+102 parity uptodate  ['revert', '--no-commit', 'HEAD']
+index-stat-proof: 4 tool-side entry rows canonicalized
+103 parity clean  ['revert', '--no-edit', 'HEAD']
+104 named-not-yet clean 
+index-stat-proof: 4 tool-side entry rows canonicalized
+105 parity clean  ['revert', '--no-commit', 'HEAD']
+index-stat-proof: 4 tool-side entry rows canonicalized
+106 parity conflict  ['revert', '--no-edit', 'HEAD']
+index-stat-proof: 2 tool-side entry rows canonicalized
+107 parity conflict  ['revert', '--no-edit', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+108 parity conflict  ['revert', '--no-commit', 'HEAD']
+index-stat-proof: 6 tool-side entry rows canonicalized
+109 parity ff add-file ['merge', '--no-edit', 'topic']
+index-stat-proof: 2 tool-side entry rows canonicalized
+110 parity ff delete-file ['merge', '--no-edit', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+111 parity ff mode-file ['merge', '--no-edit', 'topic']
+index-stat-proof: 6 tool-side entry rows canonicalized
+112 parity clean add-file ['merge', '--no-edit', 'topic']
+index-stat-proof: 2 tool-side entry rows canonicalized
+113 parity clean delete-file ['merge', '--no-edit', 'topic']
+index-stat-proof: 4 tool-side entry rows canonicalized
+114 parity clean mode-file ['merge', '--no-edit', 'topic']
+index-stat-proof: 2 tool-side entry rows canonicalized
+115 parity conflict resolve-delete ['add', '-u']
+merge: 104/104 exact; 12 named not-yet; 0 mismatches
+{"commit":"cf0c13d","diagnostics":[],"file":"src/mergebase_test.lu","impl":"wolfgang","impl_version":"0.2.35","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":null,"stdout_sha256":null,"verdict":"exit(0)","warnings":[]}
+{"commit":"cf0c13d","diagnostics":[],"file":"src/mergefile_test.lu","impl":"wolfgang","impl_version":"0.2.35","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":null,"stdout_sha256":null,"verdict":"exit(0)","warnings":[]}
+{"commit":"cf0c13d","diagnostics":[],"file":"src/mergeundo_test.lu","impl":"wolfgang","impl_version":"0.2.35","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":null,"stdout_sha256":null,"verdict":"exit(0)","warnings":[]}
+merge: native/release exact matrices, named refusals separate, independent client, three actual checked exits; zero skips

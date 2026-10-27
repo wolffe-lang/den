@@ -1,0 +1,3 @@
+wolf-trap: assert
+  at src/mergefile_test.lu:25:5
+plant exit 134

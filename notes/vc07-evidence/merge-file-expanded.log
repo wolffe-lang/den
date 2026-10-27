@@ -1,0 +1,2 @@
+FAIL 354 merge 2 1 b'l0\ny\nl1\nl2\nl3\n<<<<<<< ours\n=======\nl4\n>>>>>>> theirs\ny\nl6\nl7\nl8\n<<<<<<< ours\n=======\nl9\nz\n>>>>>>> theirs\nx\n' b'l0\ny\nl1\nl2\nl3\n<<<<<<< ours\ny\nl6\nl7\nl8\n=======\nl4\ny\nl6\nl7\nl8\nl9\nz\n>>>>>>> theirs\nx\n'
+merge-file: 1520/1521 exact; 1 failures
