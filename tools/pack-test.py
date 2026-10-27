@@ -112,6 +112,15 @@ check('loose-prefix-dedup',r,last,name_id=oid('blob',last).hex()[:7]); check('lo
 for marker,reason in [('multi-pack-index','multi-pack-index'),('pack-fixture.bitmap','pack bitmap')]:
     rr=repo('unsupported-'+marker,pack,idx); (rr/'objects'/'pack'/marker).write_bytes(b'unsupported')
     check(marker,rr,last,expected=reason)
+for suffix,reason in [('pack','pack missing companion'),('idx','pack missing index')]:
+ rr=repo('missing-'+suffix,pack,idx); (rr/'objects/pack'/('pack-fixture.'+suffix)).unlink()
+ check('missing-'+suffix,rr,last,expected=reason)
+# Signed idx structure mutations isolate sorted-name and large-offset validation.
+for name,bad,reason in [
+ ('idx-order',idx[:1052]+idx[1032:1052]+idx[1072:],'pack index name order'),
+ ('idx-large-slot',idx[:1032+24*3]+u32(0x80000000)+idx[1032+24*3+4:],'pack index large offsets'),
+ ('idx-v1',idx[:4]+u32(1)+idx[8:],'pack index version')]:
+ check(name,repo(name,pack,resign_idx(bad)),last,expected=reason)
 # Independent copy/insert reconstruction with every optional copy field exercised.
 rng=random.Random(909)
 for case in range(96):
