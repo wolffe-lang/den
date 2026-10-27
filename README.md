@@ -184,7 +184,7 @@ mailmaps and tabs after non-ASCII text remain named unsupported surfaces.
 Fixed dates include default, short, raw, unix, ISO, strict ISO and RFC forms;
 UTC-local variants are measured. None of these limitations is a parity pass.
 
-The refs gate separately compares 430 command/state rows per native tier,
+The refs gate separately compares 434 command/state rows per native tier,
 with eight named unsupported cases kept outside that count, fourteen independent
 client checks, and two bounded actual-checked programs. It compares command
 output, exit status, objects, HEAD, loose/packed refs, reflogs, index and worktree
