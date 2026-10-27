@@ -1,0 +1,22 @@
+{
+  "functional_files": 298,
+  "tiers": {
+    "native": {
+      "exact_scenarios": 89,
+      "named_scenarios": 20,
+      "exact_process_comparisons": 130,
+      "independent_client_checks": 136,
+      "new_skips": 0
+    },
+    "release": {
+      "exact_scenarios": 89,
+      "named_scenarios": 20,
+      "exact_process_comparisons": 130,
+      "independent_client_checks": 136,
+      "new_skips": 0
+    }
+  },
+  "actual_checked": {
+    "src/sequencer_test.lu": "exit(0)"
+  }
+}

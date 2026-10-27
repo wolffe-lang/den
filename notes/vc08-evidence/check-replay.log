@@ -1,0 +1,493 @@
+build: target/native/den
+build: target/release/den
+sequencer API: 136/136 exact; input immutable
+index-stat-proof: 4 tool-side entry rows canonicalized
+pick-ff PASS
+index-stat-proof: 6 tool-side entry rows canonicalized
+sequence-ff PASS
+index-stat-proof: 4 tool-side entry rows canonicalized
+pick-clean PASS
+index-stat-proof: 6 tool-side entry rows canonicalized
+sequence-clean PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+pick-conflict PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+sequence-conflict PASS
+index-stat-proof: 4 tool-side entry rows canonicalized
+pick-redundant PASS
+index-stat-proof: 4 tool-side entry rows canonicalized
+sequence-redundant PASS
+index-stat-proof: 4 tool-side entry rows canonicalized
+empty-ff- PASS
+index-stat-proof: 4 tool-side entry rows canonicalized
+empty-redundant- PASS
+index-stat-proof: 4 tool-side entry rows canonicalized
+empty-ff---allow-empty PASS
+index-stat-proof: 4 tool-side entry rows canonicalized
+empty-redundant---allow-empty PASS
+index-stat-proof: 4 tool-side entry rows canonicalized
+empty-ff---keep-redundant-commits PASS
+index-stat-proof: 4 tool-side entry rows canonicalized
+empty-redundant---keep-redundant-commits PASS
+index-stat-proof: 4 tool-side entry rows canonicalized
+empty-ff---empty=drop PASS
+index-stat-proof: 4 tool-side entry rows canonicalized
+empty-redundant---empty=drop PASS
+index-stat-proof: 4 tool-side entry rows canonicalized
+empty-ff---empty=keep PASS
+index-stat-proof: 4 tool-side entry rows canonicalized
+empty-redundant---empty=keep PASS
+index-stat-proof: 4 tool-side entry rows canonicalized
+pick-setup-packed PASS
+index-stat-proof: 4 tool-side entry rows canonicalized
+pick-setup-detached PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+pick-setup-dirty PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+pick-setup-dirty-keep PASS
+index-stat-proof: 4 tool-side entry rows canonicalized
+pick-setup-staged PASS
+index-stat-proof: 4 tool-side entry rows canonicalized
+pick-setup-untracked PASS
+index-stat-proof: 0 tool-side entry rows canonicalized
+pick-setup-index.lock PASS
+index-stat-proof: 4 tool-side entry rows canonicalized
+pick-setup-HEAD.lock PASS
+index-stat-proof: 4 tool-side entry rows canonicalized
+pick-setup-refs/heads/main.lock PASS
+index-stat-proof: 4 tool-side entry rows canonicalized
+pick-setup-CHERRY_PICK_HEAD.lock PASS
+pick-setup-AUTO_MERGE.lock NAMED
+index-stat-proof: 2 tool-side entry rows canonicalized
+index-stat-proof: 6 tool-side entry rows canonicalized
+sequence-options---allow-empty PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+index-stat-proof: 6 tool-side entry rows canonicalized
+sequence-options---keep-redundant-commits PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+index-stat-proof: 6 tool-side entry rows canonicalized
+sequence-options---empty=drop PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+pick-style-diff3 PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+pick-style-zdiff3 PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+index-stat-proof: 4 tool-side entry rows canonicalized
+index-stat-proof: 4 tool-side entry rows canonicalized
+pick-continue PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+index-stat-proof: 4 tool-side entry rows canonicalized
+pick-skip PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+index-stat-proof: 4 tool-side entry rows canonicalized
+pick-abort PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+index-stat-proof: 4 tool-side entry rows canonicalized
+index-stat-proof: 6 tool-side entry rows canonicalized
+pick-sequence-continue PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+index-stat-proof: 6 tool-side entry rows canonicalized
+pick-sequence-skip PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+index-stat-proof: 4 tool-side entry rows canonicalized
+pick-sequence-abort PASS
+index-stat-proof: 6 tool-side entry rows canonicalized
+rebase-ff PASS
+index-stat-proof: 6 tool-side entry rows canonicalized
+rebase-ff-onto PASS
+index-stat-proof: 6 tool-side entry rows canonicalized
+rebase-clean PASS
+index-stat-proof: 6 tool-side entry rows canonicalized
+rebase-clean-onto PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+rebase-conflict PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+rebase-conflict-onto PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+index-stat-proof: 4 tool-side entry rows canonicalized
+rebase-continue NAMED
+index-stat-proof: 2 tool-side entry rows canonicalized
+index-stat-proof: 6 tool-side entry rows canonicalized
+rebase-skip PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+index-stat-proof: 6 tool-side entry rows canonicalized
+rebase-abort PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+index-stat-proof: 4 tool-side entry rows canonicalized
+index-stat-proof: 4 tool-side entry rows canonicalized
+index-stat-proof: 6 tool-side entry rows canonicalized
+rebase-continue-committed PASS
+index-stat-proof: 6 tool-side entry rows canonicalized
+rebase-setup-packed PASS
+index-stat-proof: 4 tool-side entry rows canonicalized
+rebase-setup-dirty PASS
+index-stat-proof: 6 tool-side entry rows canonicalized
+rebase-setup-staged PASS
+index-stat-proof: 0 tool-side entry rows canonicalized
+rebase-setup-index.lock PASS
+index-stat-proof: 4 tool-side entry rows canonicalized
+rebase-setup-HEAD.lock PASS
+index-stat-proof: 6 tool-side entry rows canonicalized
+rebase-setup-ORIG_HEAD.lock PASS
+index-stat-proof: 6 tool-side entry rows canonicalized
+rebase-setup-refs/heads/topic.lock PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+index-stat-proof: 4 tool-side entry rows canonicalized
+index-stat-proof: 4 tool-side entry rows canonicalized
+sequence-second-continue PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+index-stat-proof: 4 tool-side entry rows canonicalized
+sequence-second-skip PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+index-stat-proof: 4 tool-side entry rows canonicalized
+sequence-second-abort PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+index-stat-proof: 4 tool-side entry rows canonicalized
+rebase-second-skip PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+index-stat-proof: 4 tool-side entry rows canonicalized
+rebase-second-abort PASS
+rebase-equivalent NAMED
+rebase-reapply NAMED
+index-stat-proof: 6 tool-side entry rows canonicalized
+rebase-reapply-simple PASS
+scope-repeat NAMED
+scope-binary NAMED
+scope-delete NAMED
+scope-symlink NAMED
+scope-rename NAMED
+index-stat-proof: 6 tool-side entry rows canonicalized
+rebase-detached PASS
+index-stat-proof: 6 tool-side entry rows canonicalized
+rebase-noop PASS
+index-stat-proof: 4 tool-side entry rows canonicalized
+pick-name-source PASS
+index-stat-proof: 4 tool-side entry rows canonicalized
+pick-name-refs/heads/source PASS
+index-stat-proof: 4 tool-side entry rows canonicalized
+pick-name-refs/tags/first PASS
+index-stat-proof: 4 tool-side entry rows canonicalized
+pick-name-@first PASS
+index-stat-proof: 4 tool-side entry rows canonicalized
+pick-name-@prefix PASS
+index-stat-proof: 6 tool-side entry rows canonicalized
+rebase-name-refs/heads/main PASS
+index-stat-proof: 6 tool-side entry rows canonicalized
+rebase-name-@ours PASS
+index-stat-proof: 4 tool-side entry rows canonicalized
+pick-orig-head PASS
+scope-config-rebase NAMED
+scope-config-pick NAMED
+index-stat-proof: 2 tool-side entry rows canonicalized
+scope-moved-pick NAMED
+index-stat-proof: 2 tool-side entry rows canonicalized
+scope-moved-branch NAMED
+index-stat-proof: 2 tool-side entry rows canonicalized
+scope-foreign-state NAMED
+index-stat-proof: 2 tool-side entry rows canonicalized
+cherry-pick-dirty-skip NAMED
+index-stat-proof: 2 tool-side entry rows canonicalized
+cherry-pick-dirty-abort NAMED
+index-stat-proof: 2 tool-side entry rows canonicalized
+index-stat-proof: 6 tool-side entry rows canonicalized
+rebase-dirty-skip PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+index-stat-proof: 6 tool-side entry rows canonicalized
+rebase-dirty-abort PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+index-stat-proof: 2 tool-side entry rows canonicalized
+cherry-pick-unresolved-continue PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+index-stat-proof: 2 tool-side entry rows canonicalized
+cherry-pick-skip-index.lock PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+index-stat-proof: 4 tool-side entry rows canonicalized
+cherry-pick-skip-HEAD.lock PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+index-stat-proof: 2 tool-side entry rows canonicalized
+cherry-pick-abort-index.lock PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+index-stat-proof: 4 tool-side entry rows canonicalized
+cherry-pick-abort-HEAD.lock PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+index-stat-proof: 2 tool-side entry rows canonicalized
+rebase-unresolved-continue PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+index-stat-proof: 2 tool-side entry rows canonicalized
+rebase-skip-index.lock PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+index-stat-proof: 6 tool-side entry rows canonicalized
+rebase-skip-HEAD.lock PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+index-stat-proof: 2 tool-side entry rows canonicalized
+rebase-abort-index.lock PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+index-stat-proof: 6 tool-side entry rows canonicalized
+rebase-abort-HEAD.lock PASS
+scope-rebase--i NAMED
+scope-rebase---apply NAMED
+scope-rebase---rebase-merges NAMED
+scope-cherry-pick--n NAMED
+index-stat-proof: 4 tool-side entry rows canonicalized
+cherry-pick-absent-continue PASS
+index-stat-proof: 0 tool-side entry rows canonicalized
+cherry-pick-absent-skip PASS
+index-stat-proof: 0 tool-side entry rows canonicalized
+cherry-pick-absent-abort PASS
+index-stat-proof: 0 tool-side entry rows canonicalized
+rebase-absent-continue PASS
+index-stat-proof: 0 tool-side entry rows canonicalized
+rebase-absent-skip PASS
+index-stat-proof: 0 tool-side entry rows canonicalized
+rebase-absent-abort PASS
+replay: 89/89 exact; 20 named; 0 failures
+sequencer API: 136/136 exact; input immutable
+index-stat-proof: 4 tool-side entry rows canonicalized
+pick-ff PASS
+index-stat-proof: 6 tool-side entry rows canonicalized
+sequence-ff PASS
+index-stat-proof: 4 tool-side entry rows canonicalized
+pick-clean PASS
+index-stat-proof: 6 tool-side entry rows canonicalized
+sequence-clean PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+pick-conflict PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+sequence-conflict PASS
+index-stat-proof: 4 tool-side entry rows canonicalized
+pick-redundant PASS
+index-stat-proof: 4 tool-side entry rows canonicalized
+sequence-redundant PASS
+index-stat-proof: 4 tool-side entry rows canonicalized
+empty-ff- PASS
+index-stat-proof: 4 tool-side entry rows canonicalized
+empty-redundant- PASS
+index-stat-proof: 4 tool-side entry rows canonicalized
+empty-ff---allow-empty PASS
+index-stat-proof: 4 tool-side entry rows canonicalized
+empty-redundant---allow-empty PASS
+index-stat-proof: 4 tool-side entry rows canonicalized
+empty-ff---keep-redundant-commits PASS
+index-stat-proof: 4 tool-side entry rows canonicalized
+empty-redundant---keep-redundant-commits PASS
+index-stat-proof: 4 tool-side entry rows canonicalized
+empty-ff---empty=drop PASS
+index-stat-proof: 4 tool-side entry rows canonicalized
+empty-redundant---empty=drop PASS
+index-stat-proof: 4 tool-side entry rows canonicalized
+empty-ff---empty=keep PASS
+index-stat-proof: 4 tool-side entry rows canonicalized
+empty-redundant---empty=keep PASS
+index-stat-proof: 4 tool-side entry rows canonicalized
+pick-setup-packed PASS
+index-stat-proof: 4 tool-side entry rows canonicalized
+pick-setup-detached PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+pick-setup-dirty PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+pick-setup-dirty-keep PASS
+index-stat-proof: 4 tool-side entry rows canonicalized
+pick-setup-staged PASS
+index-stat-proof: 4 tool-side entry rows canonicalized
+pick-setup-untracked PASS
+index-stat-proof: 0 tool-side entry rows canonicalized
+pick-setup-index.lock PASS
+index-stat-proof: 4 tool-side entry rows canonicalized
+pick-setup-HEAD.lock PASS
+index-stat-proof: 4 tool-side entry rows canonicalized
+pick-setup-refs/heads/main.lock PASS
+index-stat-proof: 4 tool-side entry rows canonicalized
+pick-setup-CHERRY_PICK_HEAD.lock PASS
+pick-setup-AUTO_MERGE.lock NAMED
+index-stat-proof: 2 tool-side entry rows canonicalized
+index-stat-proof: 6 tool-side entry rows canonicalized
+sequence-options---allow-empty PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+index-stat-proof: 6 tool-side entry rows canonicalized
+sequence-options---keep-redundant-commits PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+index-stat-proof: 6 tool-side entry rows canonicalized
+sequence-options---empty=drop PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+pick-style-diff3 PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+pick-style-zdiff3 PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+index-stat-proof: 4 tool-side entry rows canonicalized
+index-stat-proof: 4 tool-side entry rows canonicalized
+pick-continue PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+index-stat-proof: 4 tool-side entry rows canonicalized
+pick-skip PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+index-stat-proof: 4 tool-side entry rows canonicalized
+pick-abort PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+index-stat-proof: 4 tool-side entry rows canonicalized
+index-stat-proof: 6 tool-side entry rows canonicalized
+pick-sequence-continue PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+index-stat-proof: 6 tool-side entry rows canonicalized
+pick-sequence-skip PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+index-stat-proof: 4 tool-side entry rows canonicalized
+pick-sequence-abort PASS
+index-stat-proof: 6 tool-side entry rows canonicalized
+rebase-ff PASS
+index-stat-proof: 6 tool-side entry rows canonicalized
+rebase-ff-onto PASS
+index-stat-proof: 6 tool-side entry rows canonicalized
+rebase-clean PASS
+index-stat-proof: 6 tool-side entry rows canonicalized
+rebase-clean-onto PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+rebase-conflict PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+rebase-conflict-onto PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+index-stat-proof: 4 tool-side entry rows canonicalized
+rebase-continue NAMED
+index-stat-proof: 2 tool-side entry rows canonicalized
+index-stat-proof: 6 tool-side entry rows canonicalized
+rebase-skip PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+index-stat-proof: 6 tool-side entry rows canonicalized
+rebase-abort PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+index-stat-proof: 4 tool-side entry rows canonicalized
+index-stat-proof: 4 tool-side entry rows canonicalized
+index-stat-proof: 6 tool-side entry rows canonicalized
+rebase-continue-committed PASS
+index-stat-proof: 6 tool-side entry rows canonicalized
+rebase-setup-packed PASS
+index-stat-proof: 4 tool-side entry rows canonicalized
+rebase-setup-dirty PASS
+index-stat-proof: 6 tool-side entry rows canonicalized
+rebase-setup-staged PASS
+index-stat-proof: 0 tool-side entry rows canonicalized
+rebase-setup-index.lock PASS
+index-stat-proof: 4 tool-side entry rows canonicalized
+rebase-setup-HEAD.lock PASS
+index-stat-proof: 6 tool-side entry rows canonicalized
+rebase-setup-ORIG_HEAD.lock PASS
+index-stat-proof: 6 tool-side entry rows canonicalized
+rebase-setup-refs/heads/topic.lock PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+index-stat-proof: 4 tool-side entry rows canonicalized
+index-stat-proof: 4 tool-side entry rows canonicalized
+sequence-second-continue PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+index-stat-proof: 4 tool-side entry rows canonicalized
+sequence-second-skip PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+index-stat-proof: 4 tool-side entry rows canonicalized
+sequence-second-abort PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+index-stat-proof: 4 tool-side entry rows canonicalized
+rebase-second-skip PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+index-stat-proof: 4 tool-side entry rows canonicalized
+rebase-second-abort PASS
+rebase-equivalent NAMED
+rebase-reapply NAMED
+index-stat-proof: 6 tool-side entry rows canonicalized
+rebase-reapply-simple PASS
+scope-repeat NAMED
+scope-binary NAMED
+scope-delete NAMED
+scope-symlink NAMED
+scope-rename NAMED
+index-stat-proof: 6 tool-side entry rows canonicalized
+rebase-detached PASS
+index-stat-proof: 6 tool-side entry rows canonicalized
+rebase-noop PASS
+index-stat-proof: 4 tool-side entry rows canonicalized
+pick-name-source PASS
+index-stat-proof: 4 tool-side entry rows canonicalized
+pick-name-refs/heads/source PASS
+index-stat-proof: 4 tool-side entry rows canonicalized
+pick-name-refs/tags/first PASS
+index-stat-proof: 4 tool-side entry rows canonicalized
+pick-name-@first PASS
+index-stat-proof: 4 tool-side entry rows canonicalized
+pick-name-@prefix PASS
+index-stat-proof: 6 tool-side entry rows canonicalized
+rebase-name-refs/heads/main PASS
+index-stat-proof: 6 tool-side entry rows canonicalized
+rebase-name-@ours PASS
+index-stat-proof: 4 tool-side entry rows canonicalized
+pick-orig-head PASS
+scope-config-rebase NAMED
+scope-config-pick NAMED
+index-stat-proof: 2 tool-side entry rows canonicalized
+scope-moved-pick NAMED
+index-stat-proof: 2 tool-side entry rows canonicalized
+scope-moved-branch NAMED
+index-stat-proof: 2 tool-side entry rows canonicalized
+scope-foreign-state NAMED
+index-stat-proof: 2 tool-side entry rows canonicalized
+cherry-pick-dirty-skip NAMED
+index-stat-proof: 2 tool-side entry rows canonicalized
+cherry-pick-dirty-abort NAMED
+index-stat-proof: 2 tool-side entry rows canonicalized
+index-stat-proof: 6 tool-side entry rows canonicalized
+rebase-dirty-skip PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+index-stat-proof: 6 tool-side entry rows canonicalized
+rebase-dirty-abort PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+index-stat-proof: 2 tool-side entry rows canonicalized
+cherry-pick-unresolved-continue PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+index-stat-proof: 2 tool-side entry rows canonicalized
+cherry-pick-skip-index.lock PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+index-stat-proof: 4 tool-side entry rows canonicalized
+cherry-pick-skip-HEAD.lock PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+index-stat-proof: 2 tool-side entry rows canonicalized
+cherry-pick-abort-index.lock PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+index-stat-proof: 4 tool-side entry rows canonicalized
+cherry-pick-abort-HEAD.lock PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+index-stat-proof: 2 tool-side entry rows canonicalized
+rebase-unresolved-continue PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+index-stat-proof: 2 tool-side entry rows canonicalized
+rebase-skip-index.lock PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+index-stat-proof: 6 tool-side entry rows canonicalized
+rebase-skip-HEAD.lock PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+index-stat-proof: 2 tool-side entry rows canonicalized
+rebase-abort-index.lock PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+index-stat-proof: 6 tool-side entry rows canonicalized
+rebase-abort-HEAD.lock PASS
+scope-rebase--i NAMED
+scope-rebase---apply NAMED
+scope-rebase---rebase-merges NAMED
+scope-cherry-pick--n NAMED
+index-stat-proof: 4 tool-side entry rows canonicalized
+cherry-pick-absent-continue PASS
+index-stat-proof: 0 tool-side entry rows canonicalized
+cherry-pick-absent-skip PASS
+index-stat-proof: 0 tool-side entry rows canonicalized
+cherry-pick-absent-abort PASS
+index-stat-proof: 0 tool-side entry rows canonicalized
+rebase-absent-continue PASS
+index-stat-proof: 0 tool-side entry rows canonicalized
+rebase-absent-skip PASS
+index-stat-proof: 0 tool-side entry rows canonicalized
+rebase-absent-abort PASS
+replay: 89/89 exact; 20 named; 0 failures
+{"commit":"cf0c13d","diagnostics":[],"file":"src/sequencer_test.lu","impl":"wolfgang","impl_version":"0.2.35","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":null,"stdout_sha256":null,"verdict":"exit(0)","warnings":[]}
+replay: native/release complete-state matrices, independent importing client, actual checked exit; zero skips
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: rebase-up-to-date
+{"parity": 1}
+index-stat-proof: 4 tool-side entry rows canonicalized
+parity: cherry-pick-redundant
+{"parity": 1}
+vc08 replay gate finished rc=0 2026-10-27T16:10:13Z

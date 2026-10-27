@@ -1,0 +1,129 @@
+index-stat-proof: 4 tool-side entry rows canonicalized
+pick-ff FAIL
+sequence-ff FAIL
+index-stat-proof: 4 tool-side entry rows canonicalized
+pick-clean FAIL
+sequence-clean FAIL
+index-stat-proof: 2 tool-side entry rows canonicalized
+pick-conflict PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+sequence-conflict PASS
+index-stat-proof: 4 tool-side entry rows canonicalized
+pick-redundant PASS
+index-stat-proof: 4 tool-side entry rows canonicalized
+sequence-redundant PASS
+index-stat-proof: 4 tool-side entry rows canonicalized
+empty-ff- PASS
+index-stat-proof: 4 tool-side entry rows canonicalized
+empty-redundant- PASS
+index-stat-proof: 4 tool-side entry rows canonicalized
+empty-ff---allow-empty FAIL
+index-stat-proof: 4 tool-side entry rows canonicalized
+empty-redundant---allow-empty PASS
+index-stat-proof: 4 tool-side entry rows canonicalized
+empty-ff---keep-redundant-commits FAIL
+index-stat-proof: 4 tool-side entry rows canonicalized
+empty-redundant---keep-redundant-commits FAIL
+index-stat-proof: 4 tool-side entry rows canonicalized
+empty-ff---empty=drop PASS
+index-stat-proof: 4 tool-side entry rows canonicalized
+empty-redundant---empty=drop FAIL
+index-stat-proof: 4 tool-side entry rows canonicalized
+empty-ff---empty=keep FAIL
+index-stat-proof: 4 tool-side entry rows canonicalized
+empty-redundant---empty=keep FAIL
+index-stat-proof: 4 tool-side entry rows canonicalized
+pick-setup-packed FAIL
+index-stat-proof: 4 tool-side entry rows canonicalized
+pick-setup-detached FAIL
+index-stat-proof: 2 tool-side entry rows canonicalized
+pick-setup-dirty FAIL
+index-stat-proof: 2 tool-side entry rows canonicalized
+pick-setup-dirty-keep FAIL
+index-stat-proof: 4 tool-side entry rows canonicalized
+pick-setup-staged PASS
+index-stat-proof: 4 tool-side entry rows canonicalized
+pick-setup-untracked FAIL
+index-stat-proof: 0 tool-side entry rows canonicalized
+pick-setup-index.lock PASS
+index-stat-proof: 4 tool-side entry rows canonicalized
+pick-setup-HEAD.lock FAIL
+index-stat-proof: 4 tool-side entry rows canonicalized
+pick-setup-refs/heads/main.lock FAIL
+index-stat-proof: 4 tool-side entry rows canonicalized
+pick-setup-CHERRY_PICK_HEAD.lock PASS
+pick-setup-AUTO_MERGE.lock FAIL
+sequence-options---allow-empty FAIL
+sequence-options---keep-redundant-commits FAIL
+sequence-options---empty=drop FAIL
+index-stat-proof: 2 tool-side entry rows canonicalized
+pick-style-diff3 PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+pick-style-zdiff3 PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+index-stat-proof: 4 tool-side entry rows canonicalized
+index-stat-proof: 4 tool-side entry rows canonicalized
+pick-continue FAIL
+index-stat-proof: 2 tool-side entry rows canonicalized
+index-stat-proof: 4 tool-side entry rows canonicalized
+pick-skip PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+index-stat-proof: 4 tool-side entry rows canonicalized
+pick-abort PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+index-stat-proof: 4 tool-side entry rows canonicalized
+pick-sequence-continue FAIL
+index-stat-proof: 2 tool-side entry rows canonicalized
+index-stat-proof: 6 tool-side entry rows canonicalized
+pick-sequence-skip FAIL
+index-stat-proof: 2 tool-side entry rows canonicalized
+index-stat-proof: 4 tool-side entry rows canonicalized
+pick-sequence-abort PASS
+rebase-ff FAIL
+rebase-ff-onto FAIL
+index-stat-proof: 6 tool-side entry rows canonicalized
+rebase-clean PASS
+index-stat-proof: 6 tool-side entry rows canonicalized
+rebase-clean-onto PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+rebase-conflict PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+rebase-conflict-onto PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+index-stat-proof: 4 tool-side entry rows canonicalized
+index-stat-proof: 4 tool-side entry rows canonicalized
+rebase-continue FAIL
+index-stat-proof: 2 tool-side entry rows canonicalized
+index-stat-proof: 6 tool-side entry rows canonicalized
+rebase-skip PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+index-stat-proof: 6 tool-side entry rows canonicalized
+rebase-abort PASS
+index-stat-proof: 2 tool-side entry rows canonicalized
+index-stat-proof: 4 tool-side entry rows canonicalized
+index-stat-proof: 4 tool-side entry rows canonicalized
+rebase-continue-committed FAIL
+index-stat-proof: 6 tool-side entry rows canonicalized
+rebase-setup-packed PASS
+rebase-setup-dirty FAIL
+rebase-setup-staged FAIL
+index-stat-proof: 0 tool-side entry rows canonicalized
+rebase-setup-index.lock PASS
+index-stat-proof: 4 tool-side entry rows canonicalized
+rebase-setup-HEAD.lock PASS
+index-stat-proof: 6 tool-side entry rows canonicalized
+rebase-setup-ORIG_HEAD.lock PASS
+index-stat-proof: 6 tool-side entry rows canonicalized
+rebase-setup-refs/heads/topic.lock PASS
+cherry-pick-absent-continue FAIL
+index-stat-proof: 0 tool-side entry rows canonicalized
+cherry-pick-absent-skip FAIL
+index-stat-proof: 0 tool-side entry rows canonicalized
+cherry-pick-absent-abort PASS
+index-stat-proof: 0 tool-side entry rows canonicalized
+rebase-absent-continue PASS
+index-stat-proof: 0 tool-side entry rows canonicalized
+rebase-absent-skip PASS
+index-stat-proof: 0 tool-side entry rows canonicalized
+rebase-absent-abort PASS
+replay: 31/63 exact; 32 failures

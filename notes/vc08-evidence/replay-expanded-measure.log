@@ -1,0 +1,207 @@
+
+CASE pick-ff
+['cherry-pick', 'first'] status 0 stdout b'[main b9e8df9] first pick\n Author: Original Author <original@example.invalid>\n Date: Sun Sep 13 17:56:40 2020 +0530\n 1 file changed, 1 insertion(+), 1 deletion(-)\n' stderr b''
+
+CASE sequence-ff
+['cherry-pick', 'b9e8df9d4a17e4a2089494f16604d20d52ebd334', '74e67790017fdcd47ab443c1b275a2d607460ae3'] status 0 stdout b'[main b9e8df9] first pick\n Author: Original Author <original@example.invalid>\n Date: Sun Sep 13 17:56:40 2020 +0530\n 1 file changed, 1 insertion(+), 1 deletion(-)\n[main 74e6779] second pick\n Author: Original Author <original@example.invalid>\n Date: Sun Sep 13 17:56:40 2020 +0530\n 1 file changed, 1 insertion(+)\n create mode 100644 second\n' stderr b''
+
+CASE pick-clean
+['cherry-pick', 'first'] status 0 stdout b'Auto-merging a\n[main 31a65fb] first pick\n Author: Original Author <original@example.invalid>\n Date: Sun Sep 13 17:56:40 2020 +0530\n 1 file changed, 1 insertion(+), 1 deletion(-)\n' stderr b''
+
+CASE sequence-clean
+['cherry-pick', 'b9e8df9d4a17e4a2089494f16604d20d52ebd334', '74e67790017fdcd47ab443c1b275a2d607460ae3'] status 0 stdout b'Auto-merging a\n[main 31a65fb] first pick\n Author: Original Author <original@example.invalid>\n Date: Sun Sep 13 17:56:40 2020 +0530\n 1 file changed, 1 insertion(+), 1 deletion(-)\n[main 85bbec7] second pick\n Author: Original Author <original@example.invalid>\n Date: Sun Sep 13 17:56:40 2020 +0530\n 1 file changed, 1 insertion(+)\n create mode 100644 second\n' stderr b''
+
+CASE pick-conflict
+['cherry-pick', 'first'] status 1 stdout b'Auto-merging a\nCONFLICT (content): Merge conflict in a\n' stderr b'error: could not apply b9e8df9... first pick\nhint: After resolving the conflicts, mark them with\nhint: "git add/rm <pathspec>", then run\nhint: "git cherry-pick --continue".\nhint: You can instead skip this commit with "git cherry-pick --skip".\nhint: To abort and get back to the state before "git cherry-pick",\nhint: run "git cherry-pick --abort".\nhint: Disable this message with "git config set advice.mergeConflict false"\n'
+
+CASE sequence-conflict
+['cherry-pick', 'b9e8df9d4a17e4a2089494f16604d20d52ebd334', '74e67790017fdcd47ab443c1b275a2d607460ae3'] status 1 stdout b'Auto-merging a\nCONFLICT (content): Merge conflict in a\n' stderr b'error: could not apply b9e8df9... first pick\nhint: After resolving the conflicts, mark them with\nhint: "git add/rm <pathspec>", then run\nhint: "git cherry-pick --continue".\nhint: You can instead skip this commit with "git cherry-pick --skip".\nhint: To abort and get back to the state before "git cherry-pick",\nhint: run "git cherry-pick --abort".\nhint: Disable this message with "git config set advice.mergeConflict false"\n'
+
+CASE pick-redundant
+['cherry-pick', 'first'] status 1 stdout b'On branch main\nYou are currently cherry-picking commit b9e8df9.\n  (all conflicts fixed: run "git cherry-pick --continue")\n  (use "git cherry-pick --skip" to skip this patch)\n  (use "git cherry-pick --abort" to cancel the cherry-pick operation)\n\nnothing to commit, working tree clean\n' stderr b"The previous cherry-pick is now empty, possibly due to conflict resolution.\nIf you wish to commit it anyway, use:\n\n    git commit --allow-empty\n\nOtherwise, please use 'git cherry-pick --skip'\n"
+
+CASE sequence-redundant
+['cherry-pick', 'b9e8df9d4a17e4a2089494f16604d20d52ebd334', '74e67790017fdcd47ab443c1b275a2d607460ae3'] status 1 stdout b'On branch main\nYou are currently cherry-picking commit b9e8df9.\n  (all conflicts fixed: run "git cherry-pick --continue")\n  (use "git cherry-pick --skip" to skip this patch)\n  (use "git cherry-pick --abort" to cancel the cherry-pick operation)\n\nnothing to commit, working tree clean\n' stderr b"The previous cherry-pick is now empty, possibly due to conflict resolution.\nIf you wish to commit it anyway, use:\n\n    git commit --allow-empty\n\nOtherwise, please use 'git cherry-pick --skip'\n"
+
+CASE empty-ff-
+['cherry-pick', 'empty'] status 1 stdout b'On branch main\nYou are currently cherry-picking commit 115c147.\n  (all conflicts fixed: run "git cherry-pick --continue")\n  (use "git cherry-pick --skip" to skip this patch)\n  (use "git cherry-pick --abort" to cancel the cherry-pick operation)\n\nnothing to commit, working tree clean\n' stderr b"The previous cherry-pick is now empty, possibly due to conflict resolution.\nIf you wish to commit it anyway, use:\n\n    git commit --allow-empty\n\nOtherwise, please use 'git cherry-pick --skip'\n"
+
+CASE empty-redundant-
+['cherry-pick', 'first'] status 1 stdout b'On branch main\nYou are currently cherry-picking commit b9e8df9.\n  (all conflicts fixed: run "git cherry-pick --continue")\n  (use "git cherry-pick --skip" to skip this patch)\n  (use "git cherry-pick --abort" to cancel the cherry-pick operation)\n\nnothing to commit, working tree clean\n' stderr b"The previous cherry-pick is now empty, possibly due to conflict resolution.\nIf you wish to commit it anyway, use:\n\n    git commit --allow-empty\n\nOtherwise, please use 'git cherry-pick --skip'\n"
+
+CASE empty-ff---allow-empty
+['cherry-pick', '--allow-empty', 'empty'] status 0 stdout b'[main 69c1891] empty pick\n Author: Original Author <original@example.invalid>\n Date: Sun Sep 13 17:56:40 2020 +0530\n' stderr b''
+
+CASE empty-redundant---allow-empty
+['cherry-pick', '--allow-empty', 'first'] status 1 stdout b'On branch main\nYou are currently cherry-picking commit b9e8df9.\n  (all conflicts fixed: run "git cherry-pick --continue")\n  (use "git cherry-pick --skip" to skip this patch)\n  (use "git cherry-pick --abort" to cancel the cherry-pick operation)\n\nnothing to commit, working tree clean\n' stderr b"The previous cherry-pick is now empty, possibly due to conflict resolution.\nIf you wish to commit it anyway, use:\n\n    git commit --allow-empty\n\nOtherwise, please use 'git cherry-pick --skip'\n"
+
+CASE empty-ff---keep-redundant-commits
+['cherry-pick', '--keep-redundant-commits', 'empty'] status 0 stdout b'[main 69c1891] empty pick\n Author: Original Author <original@example.invalid>\n Date: Sun Sep 13 17:56:40 2020 +0530\n' stderr b''
+
+CASE empty-redundant---keep-redundant-commits
+['cherry-pick', '--keep-redundant-commits', 'first'] status 0 stdout b'[main aacdc04] first pick\n Author: Original Author <original@example.invalid>\n Date: Sun Sep 13 17:56:40 2020 +0530\n' stderr b''
+
+CASE empty-ff---empty=drop
+['cherry-pick', '--empty=drop', 'empty'] status 1 stdout b'On branch main\nYou are currently cherry-picking commit 115c147.\n  (all conflicts fixed: run "git cherry-pick --continue")\n  (use "git cherry-pick --skip" to skip this patch)\n  (use "git cherry-pick --abort" to cancel the cherry-pick operation)\n\nnothing to commit, working tree clean\n' stderr b"The previous cherry-pick is now empty, possibly due to conflict resolution.\nIf you wish to commit it anyway, use:\n\n    git commit --allow-empty\n\nOtherwise, please use 'git cherry-pick --skip'\n"
+
+CASE empty-redundant---empty=drop
+['cherry-pick', '--empty=drop', 'first'] status 0 stdout b'' stderr b'dropping b9e8df9d4a17e4a2089494f16604d20d52ebd334 first pick -- patch contents already upstream\n'
+
+CASE empty-ff---empty=keep
+['cherry-pick', '--empty=keep', 'empty'] status 0 stdout b'[main 69c1891] empty pick\n Author: Original Author <original@example.invalid>\n Date: Sun Sep 13 17:56:40 2020 +0530\n' stderr b''
+
+CASE empty-redundant---empty=keep
+['cherry-pick', '--empty=keep', 'first'] status 0 stdout b'[main aacdc04] first pick\n Author: Original Author <original@example.invalid>\n Date: Sun Sep 13 17:56:40 2020 +0530\n' stderr b''
+
+CASE pick-setup-packed
+['cherry-pick', 'first'] status 0 stdout b'Auto-merging a\n[main 31a65fb] first pick\n Author: Original Author <original@example.invalid>\n Date: Sun Sep 13 17:56:40 2020 +0530\n 1 file changed, 1 insertion(+), 1 deletion(-)\n' stderr b''
+
+CASE pick-setup-detached
+['cherry-pick', 'first'] status 0 stdout b'Auto-merging a\n[detached HEAD 31a65fb] first pick\n Author: Original Author <original@example.invalid>\n Date: Sun Sep 13 17:56:40 2020 +0530\n 1 file changed, 1 insertion(+), 1 deletion(-)\n' stderr b''
+
+CASE pick-setup-dirty
+['cherry-pick', 'first'] status 128 stdout b'' stderr b'error: Your local changes to the following files would be overwritten by merge:\n\ta\nPlease commit your changes or stash them before you merge.\nAborting\nfatal: cherry-pick failed\n'
+
+CASE pick-setup-dirty-keep
+['cherry-pick', 'first'] status 0 stdout b'Auto-merging a\n[main 31a65fb] first pick\n Author: Original Author <original@example.invalid>\n Date: Sun Sep 13 17:56:40 2020 +0530\n 1 file changed, 1 insertion(+), 1 deletion(-)\n' stderr b''
+
+CASE pick-setup-staged
+['cherry-pick', 'first'] status 128 stdout b'' stderr b'error: your local changes would be overwritten by cherry-pick.\nhint: commit your changes or stash them to proceed.\nfatal: cherry-pick failed\n'
+
+CASE pick-setup-untracked
+['cherry-pick', '74e67790017fdcd47ab443c1b275a2d607460ae3'] status 128 stdout b'' stderr b'error: The following untracked working tree files would be overwritten by merge:\n\tsecond\nPlease move or remove them before you merge.\nAborting\nfatal: cherry-pick failed\n'
+
+CASE pick-setup-index.lock
+['cherry-pick', 'first'] status 128 stdout b'' stderr b"error: Unable to create '/work/den/target/replay-native/24/repo/.git/index.lock': File exists.\n\nAnother git process seems to be running in this repository, or the lock file may be stale\nfatal: cherry-pick failed\n"
+
+CASE pick-setup-HEAD.lock
+['cherry-pick', 'first'] status 1 stdout b'Auto-merging a\n' stderr b"error: cannot lock ref 'HEAD': Unable to create '/work/den/target/replay-native/25/repo/.git/HEAD.lock': File exists.\n\nAnother git process seems to be running in this repository, or the lock file may be stale\n"
+
+CASE pick-setup-refs/heads/main.lock
+['cherry-pick', 'first'] status 1 stdout b'Auto-merging a\n' stderr b"error: cannot lock ref 'HEAD': Unable to create '/work/den/target/replay-native/26/repo/.git/refs/heads/main.lock': File exists.\n\nAnother git process seems to be running in this repository, or the lock file may be stale\n"
+
+CASE pick-setup-CHERRY_PICK_HEAD.lock
+['cherry-pick', 'first'] status 128 stdout b'Auto-merging a\n' stderr b"error: update_ref failed for ref 'CHERRY_PICK_HEAD': cannot lock ref 'CHERRY_PICK_HEAD': Unable to create '/work/den/target/replay-native/27/repo/.git/CHERRY_PICK_HEAD.lock': File exists.\n\nAnother git process seems to be running in this repository, or the lock file may be stale\nerror: could not apply b9e8df9... first pick\nfatal: cherry-pick failed\n"
+
+CASE pick-setup-AUTO_MERGE.lock
+['cherry-pick', 'first'] status 128 stdout b'' stderr b"error: update_ref failed for ref 'AUTO_MERGE': cannot lock ref 'AUTO_MERGE': Unable to create '/work/den/target/replay-native/28/repo/.git/AUTO_MERGE.lock': File exists.\n\nAnother git process seems to be running in this repository, or the lock file may be stale\nfatal: cherry-pick failed\n"
+
+CASE sequence-options---allow-empty
+['cherry-pick', '--allow-empty', 'b9e8df9d4a17e4a2089494f16604d20d52ebd334', '74e67790017fdcd47ab443c1b275a2d607460ae3'] status 1 stdout b'Auto-merging a\nCONFLICT (content): Merge conflict in a\n' stderr b'error: could not apply b9e8df9... first pick\nhint: After resolving the conflicts, mark them with\nhint: "git add/rm <pathspec>", then run\nhint: "git cherry-pick --continue".\nhint: You can instead skip this commit with "git cherry-pick --skip".\nhint: To abort and get back to the state before "git cherry-pick",\nhint: run "git cherry-pick --abort".\nhint: Disable this message with "git config set advice.mergeConflict false"\n'
+['cherry-pick', '--skip'] status 0 stdout b'[main 91013cc] second pick\n Author: Original Author <original@example.invalid>\n Date: Sun Sep 13 17:56:40 2020 +0530\n 1 file changed, 1 insertion(+)\n create mode 100644 second\n' stderr b''
+
+CASE sequence-options---keep-redundant-commits
+['cherry-pick', '--keep-redundant-commits', 'b9e8df9d4a17e4a2089494f16604d20d52ebd334', '74e67790017fdcd47ab443c1b275a2d607460ae3'] status 1 stdout b'Auto-merging a\nCONFLICT (content): Merge conflict in a\n' stderr b'error: could not apply b9e8df9... first pick\nhint: After resolving the conflicts, mark them with\nhint: "git add/rm <pathspec>", then run\nhint: "git cherry-pick --continue".\nhint: You can instead skip this commit with "git cherry-pick --skip".\nhint: To abort and get back to the state before "git cherry-pick",\nhint: run "git cherry-pick --abort".\nhint: Disable this message with "git config set advice.mergeConflict false"\n'
+['cherry-pick', '--skip'] status 0 stdout b'[main 91013cc] second pick\n Author: Original Author <original@example.invalid>\n Date: Sun Sep 13 17:56:40 2020 +0530\n 1 file changed, 1 insertion(+)\n create mode 100644 second\n' stderr b''
+
+CASE sequence-options---empty=drop
+['cherry-pick', '--empty=drop', 'b9e8df9d4a17e4a2089494f16604d20d52ebd334', '74e67790017fdcd47ab443c1b275a2d607460ae3'] status 1 stdout b'Auto-merging a\nCONFLICT (content): Merge conflict in a\n' stderr b'error: could not apply b9e8df9... first pick\nhint: After resolving the conflicts, mark them with\nhint: "git add/rm <pathspec>", then run\nhint: "git cherry-pick --continue".\nhint: You can instead skip this commit with "git cherry-pick --skip".\nhint: To abort and get back to the state before "git cherry-pick",\nhint: run "git cherry-pick --abort".\nhint: Disable this message with "git config set advice.mergeConflict false"\n'
+['cherry-pick', '--skip'] status 0 stdout b'[main 91013cc] second pick\n Author: Original Author <original@example.invalid>\n Date: Sun Sep 13 17:56:40 2020 +0530\n 1 file changed, 1 insertion(+)\n create mode 100644 second\n' stderr b''
+
+CASE pick-style-diff3
+['cherry-pick', 'first'] status 1 stdout b'Auto-merging a\nCONFLICT (content): Merge conflict in a\n' stderr b'error: could not apply b9e8df9... first pick\nhint: After resolving the conflicts, mark them with\nhint: "git add/rm <pathspec>", then run\nhint: "git cherry-pick --continue".\nhint: You can instead skip this commit with "git cherry-pick --skip".\nhint: To abort and get back to the state before "git cherry-pick",\nhint: run "git cherry-pick --abort".\nhint: Disable this message with "git config set advice.mergeConflict false"\n'
+
+CASE pick-style-zdiff3
+['cherry-pick', 'first'] status 1 stdout b'Auto-merging a\nCONFLICT (content): Merge conflict in a\n' stderr b'error: could not apply b9e8df9... first pick\nhint: After resolving the conflicts, mark them with\nhint: "git add/rm <pathspec>", then run\nhint: "git cherry-pick --continue".\nhint: You can instead skip this commit with "git cherry-pick --skip".\nhint: To abort and get back to the state before "git cherry-pick",\nhint: run "git cherry-pick --abort".\nhint: Disable this message with "git config set advice.mergeConflict false"\n'
+
+CASE pick-continue
+['cherry-pick', 'b9e8df9d4a17e4a2089494f16604d20d52ebd334'] status 1 stdout b'Auto-merging a\nCONFLICT (content): Merge conflict in a\n' stderr b'error: could not apply b9e8df9... first pick\nhint: After resolving the conflicts, mark them with\nhint: "git add/rm <pathspec>", then run\nhint: "git cherry-pick --continue".\nhint: You can instead skip this commit with "git cherry-pick --skip".\nhint: To abort and get back to the state before "git cherry-pick",\nhint: run "git cherry-pick --abort".\nhint: Disable this message with "git config set advice.mergeConflict false"\n'
+['add', 'a'] status 0 stdout b'' stderr b''
+['cherry-pick', '--continue'] status 0 stdout b'[main a412b75] first pick\n Author: Original Author <original@example.invalid>\n Date: Sun Sep 13 17:56:40 2020 +0530\n 1 file changed, 1 insertion(+), 3 deletions(-)\n' stderr b''
+
+CASE pick-skip
+['cherry-pick', 'b9e8df9d4a17e4a2089494f16604d20d52ebd334'] status 1 stdout b'Auto-merging a\nCONFLICT (content): Merge conflict in a\n' stderr b'error: could not apply b9e8df9... first pick\nhint: After resolving the conflicts, mark them with\nhint: "git add/rm <pathspec>", then run\nhint: "git cherry-pick --continue".\nhint: You can instead skip this commit with "git cherry-pick --skip".\nhint: To abort and get back to the state before "git cherry-pick",\nhint: run "git cherry-pick --abort".\nhint: Disable this message with "git config set advice.mergeConflict false"\n'
+['cherry-pick', '--skip'] status 0 stdout b'' stderr b''
+
+CASE pick-abort
+['cherry-pick', 'b9e8df9d4a17e4a2089494f16604d20d52ebd334'] status 1 stdout b'Auto-merging a\nCONFLICT (content): Merge conflict in a\n' stderr b'error: could not apply b9e8df9... first pick\nhint: After resolving the conflicts, mark them with\nhint: "git add/rm <pathspec>", then run\nhint: "git cherry-pick --continue".\nhint: You can instead skip this commit with "git cherry-pick --skip".\nhint: To abort and get back to the state before "git cherry-pick",\nhint: run "git cherry-pick --abort".\nhint: Disable this message with "git config set advice.mergeConflict false"\n'
+['cherry-pick', '--abort'] status 0 stdout b'' stderr b''
+
+CASE pick-sequence-continue
+['cherry-pick', 'b9e8df9d4a17e4a2089494f16604d20d52ebd334', '74e67790017fdcd47ab443c1b275a2d607460ae3'] status 1 stdout b'Auto-merging a\nCONFLICT (content): Merge conflict in a\n' stderr b'error: could not apply b9e8df9... first pick\nhint: After resolving the conflicts, mark them with\nhint: "git add/rm <pathspec>", then run\nhint: "git cherry-pick --continue".\nhint: You can instead skip this commit with "git cherry-pick --skip".\nhint: To abort and get back to the state before "git cherry-pick",\nhint: run "git cherry-pick --abort".\nhint: Disable this message with "git config set advice.mergeConflict false"\n'
+['add', 'a'] status 0 stdout b'' stderr b''
+['cherry-pick', '--continue'] status 0 stdout b'[main a412b75] first pick\n Author: Original Author <original@example.invalid>\n Date: Sun Sep 13 17:56:40 2020 +0530\n 1 file changed, 1 insertion(+), 3 deletions(-)\n[main bdd2227] second pick\n Author: Original Author <original@example.invalid>\n Date: Sun Sep 13 17:56:40 2020 +0530\n 1 file changed, 1 insertion(+)\n create mode 100644 second\n' stderr b''
+
+CASE pick-sequence-skip
+['cherry-pick', 'b9e8df9d4a17e4a2089494f16604d20d52ebd334', '74e67790017fdcd47ab443c1b275a2d607460ae3'] status 1 stdout b'Auto-merging a\nCONFLICT (content): Merge conflict in a\n' stderr b'error: could not apply b9e8df9... first pick\nhint: After resolving the conflicts, mark them with\nhint: "git add/rm <pathspec>", then run\nhint: "git cherry-pick --continue".\nhint: You can instead skip this commit with "git cherry-pick --skip".\nhint: To abort and get back to the state before "git cherry-pick",\nhint: run "git cherry-pick --abort".\nhint: Disable this message with "git config set advice.mergeConflict false"\n'
+['cherry-pick', '--skip'] status 0 stdout b'[main 91013cc] second pick\n Author: Original Author <original@example.invalid>\n Date: Sun Sep 13 17:56:40 2020 +0530\n 1 file changed, 1 insertion(+)\n create mode 100644 second\n' stderr b''
+
+CASE pick-sequence-abort
+['cherry-pick', 'b9e8df9d4a17e4a2089494f16604d20d52ebd334', '74e67790017fdcd47ab443c1b275a2d607460ae3'] status 1 stdout b'Auto-merging a\nCONFLICT (content): Merge conflict in a\n' stderr b'error: could not apply b9e8df9... first pick\nhint: After resolving the conflicts, mark them with\nhint: "git add/rm <pathspec>", then run\nhint: "git cherry-pick --continue".\nhint: You can instead skip this commit with "git cherry-pick --skip".\nhint: To abort and get back to the state before "git cherry-pick",\nhint: run "git cherry-pick --abort".\nhint: Disable this message with "git config set advice.mergeConflict false"\n'
+['cherry-pick', '--abort'] status 0 stdout b'' stderr b''
+
+CASE rebase-ff
+['rebase', 'main'] status 0 stdout b'Current branch topic is up to date.\n' stderr b''
+
+CASE rebase-ff-onto
+['rebase', '--onto', 'main', 'base'] status 0 stdout b'Current branch topic is up to date.\n' stderr b''
+
+CASE rebase-clean
+['rebase', 'main'] status 0 stdout b'' stderr b'Rebasing (1/3)\rRebasing (2/3)\rRebasing (3/3)\rSuccessfully rebased and updated refs/heads/topic.\n'
+
+CASE rebase-clean-onto
+['rebase', '--onto', 'main', 'base'] status 0 stdout b'' stderr b'Rebasing (1/3)\rRebasing (2/3)\rRebasing (3/3)\rSuccessfully rebased and updated refs/heads/topic.\n'
+
+CASE rebase-conflict
+['rebase', 'main'] status 1 stdout b'Auto-merging a\nCONFLICT (content): Merge conflict in a\n' stderr b'Rebasing (1/3)\rerror: could not apply b9e8df9... first pick\nhint: Resolve all conflicts manually, mark them as resolved with\nhint: "git add/rm <conflicted_files>", then run "git rebase --continue".\nhint: You can instead skip this commit: run "git rebase --skip".\nhint: To abort and get back to the state before "git rebase", run "git rebase --abort".\nhint: Disable this message with "git config set advice.mergeConflict false"\nCould not apply b9e8df9... # first pick\n'
+
+CASE rebase-conflict-onto
+['rebase', '--onto', 'main', 'base'] status 1 stdout b'Auto-merging a\nCONFLICT (content): Merge conflict in a\n' stderr b'Rebasing (1/3)\rerror: could not apply b9e8df9... first pick\nhint: Resolve all conflicts manually, mark them as resolved with\nhint: "git add/rm <conflicted_files>", then run "git rebase --continue".\nhint: You can instead skip this commit: run "git rebase --skip".\nhint: To abort and get back to the state before "git rebase", run "git rebase --abort".\nhint: Disable this message with "git config set advice.mergeConflict false"\nCould not apply b9e8df9... # first pick\n'
+
+CASE rebase-continue
+['rebase', 'main'] status 1 stdout b'Auto-merging a\nCONFLICT (content): Merge conflict in a\n' stderr b'Rebasing (1/3)\rerror: could not apply b9e8df9... first pick\nhint: Resolve all conflicts manually, mark them as resolved with\nhint: "git add/rm <conflicted_files>", then run "git rebase --continue".\nhint: You can instead skip this commit: run "git rebase --skip".\nhint: To abort and get back to the state before "git rebase", run "git rebase --abort".\nhint: Disable this message with "git config set advice.mergeConflict false"\nCould not apply b9e8df9... # first pick\n'
+['add', 'a'] status 0 stdout b'' stderr b''
+['rebase', '--continue'] status 1 stdout b'' stderr b"error: there was a problem with the editor 'false'\nPlease supply the message using either -m or -F option.\nerror: could not commit staged changes.\n"
+
+CASE rebase-skip
+['rebase', 'main'] status 1 stdout b'Auto-merging a\nCONFLICT (content): Merge conflict in a\n' stderr b'Rebasing (1/3)\rerror: could not apply b9e8df9... first pick\nhint: Resolve all conflicts manually, mark them as resolved with\nhint: "git add/rm <conflicted_files>", then run "git rebase --continue".\nhint: You can instead skip this commit: run "git rebase --skip".\nhint: To abort and get back to the state before "git rebase", run "git rebase --abort".\nhint: Disable this message with "git config set advice.mergeConflict false"\nCould not apply b9e8df9... # first pick\n'
+['rebase', '--skip'] status 0 stdout b'' stderr b'Rebasing (2/3)\rRebasing (3/3)\rSuccessfully rebased and updated refs/heads/topic.\n'
+
+CASE rebase-abort
+['rebase', 'main'] status 1 stdout b'Auto-merging a\nCONFLICT (content): Merge conflict in a\n' stderr b'Rebasing (1/3)\rerror: could not apply b9e8df9... first pick\nhint: Resolve all conflicts manually, mark them as resolved with\nhint: "git add/rm <conflicted_files>", then run "git rebase --continue".\nhint: You can instead skip this commit: run "git rebase --skip".\nhint: To abort and get back to the state before "git rebase", run "git rebase --abort".\nhint: Disable this message with "git config set advice.mergeConflict false"\nCould not apply b9e8df9... # first pick\n'
+['rebase', '--abort'] status 0 stdout b'' stderr b''
+
+CASE rebase-continue-committed
+['rebase', 'main'] status 1 stdout b'Auto-merging a\nCONFLICT (content): Merge conflict in a\n' stderr b'Rebasing (1/3)\rerror: could not apply b9e8df9... first pick\nhint: Resolve all conflicts manually, mark them as resolved with\nhint: "git add/rm <conflicted_files>", then run "git rebase --continue".\nhint: You can instead skip this commit: run "git rebase --skip".\nhint: To abort and get back to the state before "git rebase", run "git rebase --abort".\nhint: Disable this message with "git config set advice.mergeConflict false"\nCould not apply b9e8df9... # first pick\n'
+['add', 'a'] status 0 stdout b'' stderr b''
+['commit', '--no-edit', '--cleanup=strip', '--author', 'Original Author <original@example.invalid>', '--date', '1600000000 +0530', '-F', '.git/MERGE_MSG'] status 0 stdout b'[detached HEAD a412b75] first pick\n Author: Original Author <original@example.invalid>\n Date: Sun Sep 13 17:56:40 2020 +0530\n 1 file changed, 1 insertion(+), 3 deletions(-)\n' stderr b''
+['rebase', '--continue'] status 0 stdout b'' stderr b'Rebasing (2/3)\rRebasing (3/3)\rSuccessfully rebased and updated refs/heads/topic.\n'
+
+CASE rebase-setup-packed
+['rebase', 'main'] status 0 stdout b'' stderr b'Rebasing (1/3)\rRebasing (2/3)\rRebasing (3/3)\rSuccessfully rebased and updated refs/heads/topic.\n'
+
+CASE rebase-setup-dirty
+['rebase', 'main'] status 1 stdout b'' stderr b'error: cannot rebase: You have unstaged changes.\nerror: Please commit or stash them.\n'
+
+CASE rebase-setup-staged
+['rebase', 'main'] status 1 stdout b'' stderr b'error: cannot rebase: Your index contains uncommitted changes.\nerror: Please commit or stash them.\n'
+
+CASE rebase-setup-index.lock
+['rebase', 'main'] status 1 stdout b'' stderr b"error: Unable to create '/work/den/target/replay-native/53/repo/.git/index.lock': File exists.\n\nAnother git process seems to be running in this repository, or the lock file may be stale\nerror: could not detach HEAD\n"
+
+CASE rebase-setup-HEAD.lock
+['rebase', 'main'] status 1 stdout b'' stderr b"error: update_ref failed for ref 'HEAD': cannot lock ref 'HEAD': Unable to create '/work/den/target/replay-native/54/repo/.git/HEAD.lock': File exists.\n\nAnother git process seems to be running in this repository, or the lock file may be stale\nerror: could not detach HEAD\n"
+
+CASE rebase-setup-ORIG_HEAD.lock
+['rebase', 'main'] status 0 stdout b'' stderr b"error: update_ref failed for ref 'ORIG_HEAD': cannot lock ref 'ORIG_HEAD': Unable to create '/work/den/target/replay-native/55/repo/.git/ORIG_HEAD.lock': File exists.\n\nAnother git process seems to be running in this repository, or the lock file may be stale\nRebasing (1/3)\rRebasing (2/3)\rRebasing (3/3)\rSuccessfully rebased and updated refs/heads/topic.\n"
+
+CASE rebase-setup-refs/heads/topic.lock
+['rebase', 'main'] status 1 stdout b'' stderr b"Rebasing (1/3)\rRebasing (2/3)\rRebasing (3/3)\rerror: update_ref failed for ref 'refs/heads/topic': cannot lock ref 'refs/heads/topic': Unable to create '/work/den/target/replay-native/56/repo/.git/refs/heads/topic.lock': File exists.\n\nAnother git process seems to be running in this repository, or the lock file may be stale\nerror: could not update refs/heads/topic\n"
+
+CASE cherry-pick-absent-continue
+['cherry-pick', '--continue'] status 128 stdout b'' stderr b'error: no cherry-pick or revert in progress\nfatal: cherry-pick failed\n'
+
+CASE cherry-pick-absent-skip
+['cherry-pick', '--skip'] status 128 stdout b'' stderr b'error: no cherry-pick in progress\nfatal: cherry-pick failed\n'
+
+CASE cherry-pick-absent-abort
+['cherry-pick', '--abort'] status 128 stdout b'' stderr b'error: no cherry-pick or revert in progress\nfatal: cherry-pick failed\n'
+
+CASE rebase-absent-continue
+['rebase', '--continue'] status 128 stdout b'' stderr b'fatal: no rebase in progress\n'
+
+CASE rebase-absent-skip
+['rebase', '--skip'] status 128 stdout b'' stderr b'fatal: no rebase in progress\n'
+
+CASE rebase-absent-abort
+['rebase', '--abort'] status 128 stdout b'' stderr b'fatal: no rebase in progress\n'

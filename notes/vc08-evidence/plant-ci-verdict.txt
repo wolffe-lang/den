@@ -1,0 +1,9 @@
+CI plant verdict relayed by the coordinator (not a second lane CI read).
+PR: https://github.com/wolffe-lang/den/pull/23
+Head: 48dfbf3be51d70182416fe7854e13dab4e4a2876
+Run: https://github.com/wolffe-lang/den/actions/runs/40541318283
+Confirmed intended failure: wolf-trap: assert at src/sequencer_test.lu:16:5
+The coordinator closed PR #23 unmerged after verifying that row.
+The lane's single immediate CI read saw queued. Its redundant local plant job
+was cancelled while waiting on block A, before compilation; no local plant red
+is claimed. Only the recorded wrapper and its flock child were cancelled.
