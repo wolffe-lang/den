@@ -1,9 +1,9 @@
 # Map
 
-The codec, owned OIDs, bounded loose store and binary parsers underpin the
+The codec, owned OIDs, bounded loose/packed store and binary parsers underpin the
 index/worktree/commit interface and diff. The dispatcher routes the implemented
 porcelain, plumbing, diff, bounded log/show, ref commands, merge/revert and replay.
-Combined merge show, recursive/complex merges, full replay semantics, packs and transports
+Combined merge show, recursive/complex merges, full replay semantics, pack writing and transports
 remain separate work; M2 and M3 are not complete. Diff's known hunk
 alignment differences and binary representation exceptions are explicit below,
 not a blanket byte-parity claim.
@@ -15,14 +15,14 @@ not a blanket byte-parity claim.
 | M0 | CLI refusal scaffold, `hash`, probes, oracle/corpus/review harness (vc00) |
 | M1 | `zlib`: inflate then deflate, Adler-32 (vc01); `oid`, `object`, `repository`, init/hash-object/cat-file/tree/commit/tag plumbing (vc02) |
 | M2 (partial) | `index`, `worktree`, `ignore`, `commit_format`, `commit`: implemented subset (vc03); `delta`, `rename`, `difftext`, `diffbinary`, `diff` (vc04); `walk`, `pretty`, log/show (vc05) |
-| M3 (partial) | `refs`, `refcmd`, `worktree.transition`: refs/reflogs, branch/tag/switch/checkout/reset (vc06); three-way merge/revert (vc07); rebase/cherry-pick/sequencer (vc08); blame (vc09); stash/notes/revision grammar (vc10) |
-| M4 | `pack`, `pack_index`, delta decoding (vc11); pack writing, gc/repack/fsck/count-objects (vc12) |
+| M3 (partial) | `refs`, `refcmd`, `worktree.transition`: refs/reflogs, branch/tag/switch/checkout/reset (vc06); three-way merge/revert (vc07); rebase/cherry-pick/sequencer (vc08); blame (later); stash/notes/revision grammar (vc10) |
+| M4 (partial) | `pack`: pack-v2/idx-v2 reads and delta decoding (vc09); pack writing, gc/repack/fsck/count-objects (later) |
 | M5 | `pktline`, protocol v2 fetch (vc13); receive-pack push/remotes (vc14); clone/pull porcelain (vc15) |
 | M6 | static build and PAX handoff (vc16, then px lane); optional `git` alias |
 | Later | HTTPS beyond measured TLS profile, hooks, worktrees, sparse index, submodules, SHA-256 repositories, interactive rebase, bundles and protocol v0/v1 fetch |
 
-The MVP is M0–M3, file/git transports from M5, and M6. Pack support is
-separately staged; transports must not pretend a pack reader already exists.
+The MVP is M0–M3, file/git transports from M5, and M6. Pack reading is available
+beneath object lookup; pack writing and transports remain separately staged.
 OID design keeps an algorithm and a byte list from the start, never a fixed
 20-byte public type. SHA-256 is available in the hash adapter already.
 
@@ -265,6 +265,57 @@ under index.lock. Generic headers/messages remain byte-lossless; UTF-8 repair
 belongs only at commit creation command edges. Configuration and deterministic
 date/message parsing have their own APIs below; no general revision grammar or
 production Git/shell dependency has been introduced.
+
+## Packed storage boundary (vc09)
+
+`pack.Body {kind, data}` is owned. `read_object(gitdir, full_name, cap)` and
+`prefix(gitdir, prefix)` are the adapter's pack-side operations; callers should
+normally use `object.read_object` and `object.lookup`. `prefix` returns at most
+two distinct matching names, sufficient to determine ambiguity. No zero or
+negative offset is an absence sentinel in the file format. Internal map misses
+are checked before addressing entries.
+
+The idx-v2 parser validates SHA-1, exact length, fan-out counts against sorted
+unique names, 32-bit offsets and referenced 64-bit slots. Packs require version
+2, matching counts, distinct in-range offsets and first entry at byte 12. A
+streaming SHA-1 validates the complete pack and its binding to the index. Entry
+reads validate CRC-32 over header/reference/zlib bytes, exact inflated size and
+consumption, then the reconstructed canonical object OID. OFS references must
+land on an indexed earlier boundary; REF references stay inside the same pack,
+including forward bases. Thin references and cycles fail by name.
+
+`pack.apply_delta(base, instructions, cap)` is a pure owned-output API with
+`DeltaErrors = {invalid, limit}`. It validates both variable-length sizes,
+optional little-endian copy fields, zero copy-size meaning 65,536, nonzero insert
+opcodes, base ranges and exact target size. `pack.crc32(bytes)` implements the
+reflected IEEE/zlib polynomial. These small boundaries have an actual-checked
+program; full filesystem pack scans are native/release witnesses, not checked
+memory measurements.
+
+File reads and pack hashing use reclaimed 64-KiB offset windows. Index bytes are
+bounded at 16 MiB/400,000 entries; compressed entries at 17,000,000 bytes;
+inflated entries and bodies at 16 MiB. Reconstruction charges cumulative encoded,
+inflated and target sizes against 128 MiB and allows 64 delta links. These are
+payload accounting bounds, not peak-RSS guarantees: owned copies and codec
+scratch add memory. Directory scanning caps 8,192 entries and 256 pack indexes.
+There is no persistent verification cache: candidate pack checksums are scanned
+again on each lookup. A missing companion, unsupported format, corrupt data or
+limit is a named `Unsupported` error; only a genuine object miss is `not_found`.
+
+Loose objects retain precedence. Prefixes merge loose and packed identities,
+including duplicates across packs. Writers verify and reuse an already-packed
+object instead of adding a duplicate loose file. `.keep` files do not hide packs;
+`.rev` and `.mtimes` sidecars are unnecessary for these reads. Multi-pack-index
+and bitmaps refuse by name. No pack writer, protocol/thin-pack support or new
+revision grammar is exposed.
+
+The mandatory `tools/check-pack` independently writes valid/corrupt structures,
+reads every oracle-listed object from 34 fixtures (2,442 object comparisons per
+native tier), requires all six packed entry types, and checks Git fsck/verify-pack.
+The history/refs/merge/replay matrices also run against packed clones, retaining
+every file and each inherited refusal. Packing checks the object namespace in
+both directions, including unreachable objects. Large-offset table decoding is
+exercised with small synthetic packs; no multi-gigabyte IO benchmark is claimed.
 
 ## Index and ignore consumer API
 
@@ -599,7 +650,7 @@ record in `src/diff/model.lu`, not `rename.Options`. `configured` reads config,
 COLUMNS and terminal size without publishing state; plain `defaults` is pure.
 Endpoints must be sorted by
 unsigned path for `changes`; each Change side is an owned zero/one file list.
-`collect` handles worktree/index, cached HEAD or a named endpoint, two loose
+`collect` handles worktree/index, cached HEAD or a named endpoint, two loose/packed
 commits/trees and two blobs. Aggregate body input is limited to 128 MiB per
 endpoint. Simple bounded `^n`/`~n` ancestry is not a general revision parser.
 
@@ -630,7 +681,7 @@ bounded whole-file implementation, not a streaming-memory benchmark claim.
 `walk.Commit` owns its OID, tree OID, ordered parent OIDs, lossless
 `object.Headers`, committer timestamp and encoded input size. `walk.parse`
 validates a bounded SHA-1 commit without changing its raw message or unknown
-header continuations. `walk.read` reads one loose commit. `walk.collect(repo,
+header continuations. `walk.read` reads one loose or packed commit. `walk.collect(repo,
 starts, max_count, skip, max_nodes, first_parent)` visits each reachable commit
 once, selecting the greatest committer timestamp from the active frontier and
 retaining enqueue order on ties. Its node budget is explicit; commit data is
@@ -646,12 +697,12 @@ whitespace, expands ASCII tabs, and distinguishes empty messages from a blank
 paragraph. NUL terminates presentation only. Non-UTF-8 bytes without tab-width
 ambiguity remain bytes; message transcoding is an explicit refusal.
 
-`history.abbreviate` checks the loose object namespace for collisions.
+`history.abbreviate` checks the loose/packed object namespace for collisions.
 `history.patch` compares a root against an in-memory empty endpoint with
 `diff.changes`; nonroots use `diff.collect`. Both paths call `diff.render` with
 `diff.configured` defaults. They never invoke `diff.run` or `index.write_tree`.
 `diff.resolve` is now public: its bounded caret/tilde adapter is unchanged.
-Show handles loose commits, blobs, tree entries, annotated tags and a literal
+Show handles loose/packed commits, blobs, tree entries, annotated tags and a literal
 `REV:path` traversal; these are not a general revision grammar.
 
 `tools/check-history` is mandatory: native/release command stdout, stderr,
@@ -715,7 +766,7 @@ ORIG_HEAD is reset's responsibility, never commit's. AUTO_MERGE cleanup has two
 measured attempts, and its failures can be diagnostics on a successful command.
 
 Supported revision inputs are HEAD, a full ref, a short branch/tag, a full OID
-or an unambiguous loose-object prefix. Ambiguous short names are rejected.
+or an unambiguous loose/packed object prefix. Ambiguous short names are rejected.
 General ancestry/ranges/reflog selectors and previous-checkout syntax remain
 vc10's work. Tracking configuration, list glob patterns, orphan branches,
 overlapping rename paths, merge-mode checkout, tag editors/signing/stdin and
@@ -740,7 +791,7 @@ right, cap)` returns every best common ancestor in input-node order. Both tips
 are traversed without timestamp pruning. Since common ancestry is parent-closed,
 a single edge sweep removes dominated common nodes. Missing nodes, duplicate
 IDs and the explicit cap are errors. The cap is at most 100,000 nodes.
-`mergetree.bases(repo, left, right)` adapts the owned loose-object walker; it
+`mergetree.bases(repo, left, right)` adapts the owned object walker; it
 never reads or writes the index. The command refuses multiple criss-cross bases
 rather than choosing one: recursive virtual-base merging is still open.
 

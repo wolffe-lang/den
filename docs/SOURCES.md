@@ -372,3 +372,36 @@ never discard commits. Explicit reapplication is measured separately. Actual
 editor-dependent continuation remains named; the resolution-commit-then-continue
 workflow is compared exactly. No oracle expectation was rewritten to fit a
 byte discrepancy.
+
+## Packed object reading (vc09)
+
+Read the Git v2.56.0 documentation URLs, never implementation sources:
+
+- `Documentation/gitformat-pack.adoc`: Checksums and object IDs; pack header,
+  entries and trailer; Object types, Object encoding, Size encoding; Deltified
+  representation, copy/insert/reserved instructions and OFS offset encoding;
+  version-1 trailer definition and complete version-2 index layout. The rev,
+  mtimes, multi-pack-index and cruft descriptions were also read; those formats
+  are not implemented by this reader.
+- `Documentation/gitformat-index.adoc`: File header, Index entry and Extensions;
+  especially the v4 reference to OFS_DELTA offset encoding. This is the worktree
+  index document, not the source of the pack `.idx` layout.
+- Existing den hash/zlib/object and history/refs/merge/replay APIs, vc04 and vc08
+  notes, MAP/SOURCES and the tracked Wolf language guide. No Git, libgit2 or
+  other VCS/codec implementation source was opened.
+
+The pack reader and test encoder are original implementations of the format.
+Python zlib/CRC32 and the pinned Git executable are independent test oracles,
+not runtime dependencies. Git `gc`, `repack`, `pack-objects`, `index-pack`,
+`cat-file`, `verify-pack` and `fsck` generate and inspect the fixtures. Synthetic
+small packs exercise large-offset slots without claiming a multi-gigabyte test.
+A probe of `index-pack --index-version=2,1` produced a tiny index the same Git
+binary rejected as `wrong index v2 file size`; normal interoperability uses
+`--index-version=2`, with the nondefault threshold behavior kept separate.
+
+The first packed matrix exposed a harness error: repacking an already-packed
+fixture without `--keep-unreachable` dropped its unreferenced commit. The fixture
+builder now preserves and compares the entire before/after OID sets; command
+expectations were not weakened. A structural offset witness was corrected to
+mutate the first physical offset, not the first lexicographic name's offset,
+so it isolates the intended first-entry invariant.
