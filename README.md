@@ -206,7 +206,7 @@ higher-stage or flagged index entries and submodules rather than losing their
 metadata. `switch` protects in-progress operations; `reset --soft` refuses an
 in-progress merge. Reflog management/expiry commands remain future work.
 
-The merge gate separately measures **104 exact command/state cases**, **12
+The merge gate separately measures **117 exact command/state cases**, **12
 named not-yet captures**, **1,521 exact three-way file merges** and **84 complete
 merge-base sets** on each native/release tier. Independent packages import the
 file and graph boundaries; three bounded actual-checked programs cover graph,
