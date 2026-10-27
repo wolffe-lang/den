@@ -1,0 +1,8 @@
+vc09 prediction, before implementation
+Base c0e4c17845efc629b53cbec81683f0264ccc1b5a.
+A validated idx-v2 namespace plus pack-v2 reader beneath object.read_object will preserve existing callers and loose precedence. Prefix lookup must merge and deduplicate loose/packed IDs or history abbreviations fail.
+Pack offsets and delta sizes use different variable-length encodings. CRC covers header/base reference/compressed bytes; SHA-1 covers complete pack/index before trailers. A valid zlib stream alone cannot establish object identity.
+REF deltas must resolve inside the same pack, including forward references; OFS bases must land exactly on indexed entry boundaries. A visited/depth bound prevents cycles. Copy size zero means 65536; opcode zero is invalid.
+Offset-window reads can keep whole-pack memory bounded without mmap, while bounded compressed entries and reconstructed bodies remain owned. Checksums must stream in reclaimed windows. No verification cache is trusted across filesystem changes.
+Tests precede implementation: independent generated valid and corrupt pack/idx inputs, pinned oracle interop, packed clones of history/refs/merge/replay fixtures, external importing client and small actual-checked units. Named negative-control plants follow the correct implementation commit.
+Existing M2/M3 and hunk/binary representation refusals remain. Pack writing, thin packs, protocol, multi-pack-index and bitmap support are not claimed.
