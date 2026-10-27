@@ -4,10 +4,11 @@ A version control system in [wolf](https://github.com/wolffe-lang/wolf-lang),
 working toward Git-compatible repositories and wire protocols. Where a wolf
 keeps what it has.
 
-**State: loose objects, a writable index, worktree/commit commands, bounded diff, history and refs.**
-This is not a replacement for Git, and M2 is not complete. Log/show support
-bounded loose history; branches, tags, branch switching and resets now share
-loose/packed ref storage. Combined merge display, merge/rebase, packs
+**State: loose objects, a writable index, worktree/commit commands, bounded diff, history, refs and merges.**
+This is not a replacement for Git; M2 and M3 remain incomplete. Log/show support
+bounded loose history; branches, tags, branch switching and resets share
+loose/packed ref storage. Merge and single-commit revert now cover the measured
+regular-file subset below. Combined merge display, rebase, packs
 and transports remain unfinished. Text diff has
 two recorded equal-cost alignment differences; binary patches reconstruct the
 exact blobs but do not always use Git's byte representation. `den --version`
@@ -27,7 +28,7 @@ measured bytes and documentation discrepancies.
 
 Archive and oracle pins are in `wolf-toolchain.toml` and `den-oracle.toml`.
 Downloads fail on a digest mismatch. Both release-metadata reads are retained
-in `notes/vc06-evidence/pins/` (earlier reads in `notes/vc05-evidence/pins/`); the original signature verification and two matching
+in `notes/vc07-evidence/pins/` (earlier reads in `notes/vc06-evidence/pins/`); the original signature verification and two matching
 oracle builds are in `notes/vc00-evidence/`.
 
 ## Commands implemented so far
@@ -45,6 +46,8 @@ oracle builds are in `notes/vc00-evidence/`.
 | Restore | Index-to-worktree `restore`, `--staged`, `--worktree`, `--source`; `checkout -- <paths>` |
 | Refs | Loose and packed refs with peeled tag records; branch list/create/force/delete/rename, lightweight and message-supplied annotated tags, command reflogs |
 | Branch worktree | `switch` and branch `checkout`, `-c`/`-b` creation, explicit and implicit detached HEAD, dirty-worktree protection; `reset --soft/--mixed/--hard` |
+| Merge | Fast-forward, already-up-to-date, bounded regular-file three-way merges, conflict stages and merge/diff3/zdiff3 markers; `--no-ff`, `--ff-only`, `--squash`, `--no-commit`, `--no-edit`, `-m`, `-F`, `--abort` |
+| Revert / resolution | Single ordinary or root commit, `--no-edit`, `--no-commit`; merge-parent refusal; `add` saves REUC when resolving/deleting higher stages, and `commit` completes a resolved merge |
 
 Status, commit summaries and diff share one rename/copy pairer. Exact OIDs are
 matched first; edited regular files use measured chunk-hash similarity, with
@@ -85,6 +88,7 @@ tools/check-worktree
 tools/check-commit
 tools/check-history
 tools/check-refs
+tools/check-merge
 tools/check-delta
 tools/check-rename
 tools/check-diff
@@ -101,7 +105,7 @@ full repository-byte comparisons. Formatting/date API comparisons are not a
 claim of CLI stderr/exit-status parity. A checked result means the JSON verdict
 from `wolf conform-run --checked`, not merely a successful process exit.
 
-The expanded main matrix contains 188 cases: 173 parity, 14 named not-yet and
+The expanded main matrix contains 188 cases: 174 parity, 13 named not-yet and
 one version-shape check. Generated diff, similarity, pairing and application
 matrices are reported separately in `notes/vc04-evidence/`; their explicit
 representation/alignment differences are never added to the parity count.
@@ -145,8 +149,9 @@ stable parent-order ties, duplicate suppression and a first-parent option.
 
 TREE and REUC index extensions are validated and preserved. UNTR, FSMN, IEOT,
 EOIE, split-index `link`, sparse-index `sdir` and unknown extensions are refused
-by name. Higher merge-stage entries can be read, but operations that would
-resolve or remove them refuse until resolve-undo generation is implemented.
+by name. Higher merge-stage entries can be read and written. Resolving or deleting
+them through `add` records the original stages in REUC; unrelated higher-stage
+`rm`/`mv`/restore operations remain refused.
 
 Config parsing handles quoting, escapes, continuation and precedence, but
 `include`/`includeIf` are named refusals. There is no config writer; the command is
@@ -200,6 +205,23 @@ selectors or previous-checkout syntax. Packed files are bounded at 16 MiB and
 higher-stage or flagged index entries and submodules rather than losing their
 metadata. `switch` protects in-progress operations; `reset --soft` refuses an
 in-progress merge. Reflog management/expiry commands remain future work.
+
+The merge gate separately measures **104 exact command/state cases**, **12
+named not-yet captures**, **1,521 exact three-way file merges** and **84 complete
+merge-base sets** on each native/release tier. Independent packages import the
+file and graph boundaries; three bounded actual-checked programs cover graph,
+markers and resolve undo. The state comparisons include merge files, objects,
+reflogs, packed refs, locks, index stages and the inherited per-file stat proof.
+
+The file API follows `git merge-file`'s Myers default. The tree merger does not
+silently substitute Myers for `ort`'s histogram policy: when both sides change a
+file, repeated base-line hashes and multiple edit hunks on either side are named
+refusals. Recursive virtual bases for criss-cross histories, rename topology,
+modify/delete and binary conflicts, nonregular tree entries, unborn merges,
+annotated-tag messages and dirty/staged true-merge recovery are also refused.
+Fast-forward dirty/untracked safety remains measured. `revert -m`, sequences,
+`--continue`/`--skip` and revert abort are not implemented. Merge editor execution,
+combined merge show and the previously named history limits remain open.
 
 Commit writes support attached and detached HEAD. Loose refs override packed
 records; an unchanged packed tip is not needlessly unpacked. Amend retains
