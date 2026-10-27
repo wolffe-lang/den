@@ -773,7 +773,7 @@ dirty paths, and checks stage-zero stat identity before replacing such a path.
 a nonempty revert preserves COMMIT_EDITMSG, and AUTO_MERGE remains after success.
 Ordinary `commit` now consumes MERGE_HEAD parents and resolved REVERT_HEAD state.
 
-The command matrix contains 104 exact complete-state rows and 12 separate named
+The command matrix contains 117 exact complete-state rows and 12 separate named
 not-yet captures per native tier. It measures ORIG_HEAD before fast-forward
 publication, MERGE_HEAD/MERGE_MSG/MERGE_MODE, AUTO_MERGE, SQUASH_MSG, REVERT_HEAD,
 ref-lock failure after index publication, packed/detached inputs, root revert,
