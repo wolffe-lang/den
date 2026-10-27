@@ -73,6 +73,6 @@ pub fn line_sum(data: List[byte]) -> wrapping[u64] ! {limit} {
 pub fn empty_action(originally_empty: bool, allow_empty: bool, policy: str) -> str ! {invalid} {
     if policy != "stop" && policy != "keep" && policy != "drop" { return invalid }
     if policy == "keep" || originally_empty && allow_empty { return "keep" }
-    if originally_empty { return "stop" }
+    if originally_empty { return "keep" }
     policy
 }
