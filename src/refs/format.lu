@@ -85,6 +85,7 @@ pub fn parse_packed(data: List[byte]) -> List[Packed] ! RefErrors {
 /// or deleting caller carries the source header's traits, never invents them.
 /// No object is read here, so absent peeled ids cannot prove non-tag objects.
 pub fn packed_bytes(records: List[Packed], traits: str) -> List[byte] ! RefErrors {
+    if records.len > 100000 { return limit }
     if traits != "" && traits != "peeled" && traits != "peeled fully-peeled" {
         return invalid
     }
@@ -102,6 +103,7 @@ pub fn packed_bytes(records: List[Packed], traits: str) -> List[byte] ! RefError
             record.peeled.len > 1 {
             return invalid_oid
         }
+        if record.name.len + 42 + record.peeled.len * 42 > 16777216 - out.len { return limit }
         previous = record.name
         for b in "{oid.hex(record.id)?} {record.name}\n".bytes() { (mut out).push(b) }
         if record.peeled.len == 1 {

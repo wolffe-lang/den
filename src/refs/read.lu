@@ -71,10 +71,11 @@ pub fn optional(repo: repository.Repo, name: str) -> List[oid.Oid] ! RefErrors {
 /// Filesystem paths remain UTF-8-limited; no opaque filename is silently dropped.
 pub fn list(repo: repository.Repo, prefix: str) -> List[Packed] ! RefErrors {
     if !valid("{prefix}placeholder") || !prefix.ends_with("/") { return invalid }
-    var names = Map[str, bool]()
+    var names = Map[str, oid.Oid]()
     for record in packed(repo)? {
-        if record.name.starts_with(prefix) { names[record.name] = true }
+        if record.name.starts_with(prefix) { names[record.name] = copy record.id }
     }
+    if names.len > 4096 { return limit }
     var pending = [prefix[0..prefix.len - 1]]
     var visited = 0
     while pending.len > 0 {
@@ -90,21 +91,21 @@ pub fn list(repo: repository.Repo, prefix: str) -> List[Packed] ! RefErrors {
             }
             let name = "{dir}/{leaf}"
             visited += 1
-            if visited > 100000 { return limit }
+            if visited > 4096 { return limit }
             if leaf.ends_with(".lock") { continue }
             if entry.kind == 1 {
                 (mut pending).push(name)
             } else if entry.kind == 0 {
                 if !valid(name) { return invalid_oid }
-                names[name] = true
+                names[name] = read(repo, name)?
             } else {
                 return Unsupported("ref filesystem kind {name}")
             }
         }
     }
     var out = List[Packed]()
-    for name in names.keys() {
-        let record = Packed { name: name, id: read(repo, name)?, peeled: List[oid.Oid]() }
+    for (name, id) in names.pairs() {
+        let record = Packed { name: name, id: copy id, peeled: List[oid.Oid]() }
         (mut out).push(copy record)
         var n = out.len - 1
         while n > 0 && out[n - 1].name > name {

@@ -16,7 +16,17 @@ fn main() -> int {
         var before = List[oid.Oid](), after = List[oid.Oid]()
         if args[3] != "-" { (mut before).push(oid.parse("sha1", args[3]) else |_| { return 2 }) }
         if args[4] != "-" { (mut after).push(oid.parse("sha1", args[4]) else |_| { return 2 }) }
-        refs.update(repo, args[2], before, after, "Den Tester <den@example.invalid> 1700000000 +0000", args[5], false) else |e| { eprint("{e}"); return 1 }
-    } else { return 2 }
+        refs.update(
+            repo,
+            args[2],
+            before,
+            after,
+            "Den Tester <den@example.invalid> 1700000000 +0000",
+            args[5],
+            false,
+        ) else |e| { eprint("{e}"); return 1 }
+    } else {
+        return 2
+    }
     0
 }

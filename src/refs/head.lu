@@ -1,0 +1,167 @@
+use std.fs
+use oid
+use repository
+
+/// Atomically replace HEAD after a textual CAS. The caller supplies exact prior
+/// HEAD bytes, optional old/new IDs and the complete command reflog message.
+/// A symbolic target need not exist (unborn); callers validate target objects.
+pub fn set_head(
+    repo: repository.Repo,
+    expected: str,
+    next: str,
+    before: List[oid.Oid],
+    after: List[oid.Oid],
+    identity: str,
+    message: str,
+) -> () ! RefErrors {
+    let _ = administrative(repo, "HEAD", false)?
+    if next.starts_with("ref: ") {
+        if !valid(next[5..].trim()) { return invalid_oid }
+    } else {
+        let _ = oid.parse("sha1", next.trim())?
+    }
+    let lock_path = "{repo.gitdir}/HEAD.lock"
+    let file = fs.create_new_with_mode(lock_path, 0o666)?
+    var fd = file.fd
+    var active = true
+    defer {
+        if fd >= 0 { fs_close(fd) else |_| {} }
+        if active { fs.remove(lock_path) else |_| {} }
+    }
+    let actual = repository.read_bytes("{repo.gitdir}/HEAD", 4096)?
+    if (str_from_utf8(actual) else "") != expected { return invalid }
+    fs_write_chunk(fd, next.bytes())?
+    fs_sync(fd)?
+    fs_close(fd)?
+    fd = -1
+    if after.len > 0 && logging(repo, "HEAD", false)? {
+        append(repo, "HEAD", log_line(before, after, identity, message)?)?
+    }
+    fs_rename(lock_path, "{repo.gitdir}/HEAD")?
+    active = false
+    fs.sync_dir(repo.gitdir)?
+}
+
+/// Rename a direct ref, preserving its existing reflog and adding one rename
+/// record. Both leaf locks are acquired before mutation and old/new OIDs are
+/// rechecked under them. A later IO failure may leave a completed earlier step.
+pub fn rename_ref(
+    repo: repository.Repo,
+    from: str,
+    to: str,
+    expected: oid.Oid,
+    replaced: List[oid.Oid],
+    identity: str,
+) -> () ! RefErrors {
+    if !valid(from) || !valid(to) { return invalid_oid }
+    if from == to {
+        let lock_path = "{repo.gitdir}/{from}.lock"
+        let file = fs.create_new_with_mode(lock_path, 0o666)?
+        var active = true
+        defer { fs_close(file.fd) else |_| {}; if active { fs.remove(lock_path) else |_| {} } }
+        if !oid.equal(read(repo, from)?, expected) { return invalid }
+        fs_write_chunk(file.fd, "{oid.hex(expected)?}\n".bytes())?
+        fs_sync(file.fd)?
+        if logging(repo, from, false)? {
+            append(
+                repo,
+                from,
+                log_line(
+                    [copy expected],
+                    [copy expected],
+                    identity,
+                    "Branch: renamed {from} to {to}",
+                )?,
+            )?
+        }
+        remove_packed(repo, from)?
+        fs_rename(lock_path, "{repo.gitdir}/{from}")?
+        active = false
+        return
+    }
+    if from.starts_with("{to}/") || to.starts_with("{from}/") {
+        return Unsupported("overlapping branch rename")
+    }
+    let old_path = administrative(repo, from, true)?
+    let new_path = administrative(repo, to, true)?
+    let old_lock = "{old_path}.lock"
+    let old_file = fs.create_new_with_mode(old_lock, 0o666)?
+    defer { fs_close(old_file.fd) else |_| {}; fs.remove(old_lock) else |_| {} }
+    let original_head = str_from_utf8(repository.read_bytes("{repo.gitdir}/HEAD", 4096)?) else ""
+    let current = original_head.trim() == "ref: {from}"
+    var head_fd = -1, head_active = false
+    defer {
+        if head_fd >= 0 { fs_close(head_fd) else |_| {} }
+        if head_active { fs.remove("{repo.gitdir}/HEAD.lock") else |_| {} }
+    }
+    if current {
+        let held = fs.create_new_with_mode("{repo.gitdir}/HEAD.lock", 0o666)?
+        head_fd = held.fd
+        head_active = true
+        let actual = str_from_utf8(repository.read_bytes("{repo.gitdir}/HEAD", 4096)?) else ""
+        if actual != original_head { return invalid }
+    }
+    let new_lock = "{new_path}.lock"
+    let new_file = fs.create_new_with_mode(new_lock, 0o666)?
+    var fd = new_file.fd
+    var active = true
+    defer {
+        if fd >= 0 { fs_close(fd) else |_| {} }
+        if active { fs.remove(new_lock) else |_| {} }
+    }
+    if !oid.equal(read(repo, from)?, expected) || !equal_optional(optional(repo, to)?, replaced) {
+        return invalid
+    }
+    let old_log = "{repo.gitdir}/logs/{from}"
+    var prior = List[byte]()
+    let had_log = fs.exists(old_log)
+    if had_log {
+        let _ = administrative(repo, "logs/{from}", false)?
+        prior = repository.read_bytes(old_log, 16777216)?
+    }
+    fs_write_chunk(fd, "{oid.hex(expected)?}\n".bytes())?
+    fs_sync(fd)?
+    fs_close(fd)?
+    fd = -1
+    remove_packed(repo, from)?
+    if replaced.len > 0 { remove_packed(repo, to)? }
+    if fs.exists(old_path) { fs.remove(old_path)? }
+    let head = str_from_utf8(repository.read_bytes("{repo.gitdir}/HEAD", 4096)?) else ""
+    if head.trim() == "ref: {from}" && logging(repo, "HEAD", false)? {
+        append(
+            repo,
+            "HEAD",
+            log_line([copy expected], [], identity, "Branch: renamed {from} to {to}")?,
+        )?
+    }
+    if had_log {
+        let log = administrative(repo, "logs/{to}", true)?
+        let logfd = fs_open_mode(log, 17)?
+        defer fs_close(logfd) else |_| {}
+        fs_write_chunk(logfd, prior)?
+        fs_write_chunk(
+            logfd,
+            log_line([copy expected], [copy expected], identity, "Branch: renamed {from} to {to}")?,
+        )?
+        fs_sync(logfd)?
+        fs.remove(old_log)?
+    }
+    fs_rename(new_lock, new_path)?
+    active = false
+    if current {
+        if logging(repo, "HEAD", false)? {
+            append(
+                repo,
+                "HEAD",
+                log_line([], [copy expected], identity, "Branch: renamed {from} to {to}")?,
+            )?
+        }
+        fs_write_chunk(head_fd, "ref: {to}\n".bytes())?
+        fs_sync(head_fd)?
+        fs_close(head_fd)?
+        head_fd = -1
+        fs_rename("{repo.gitdir}/HEAD.lock", "{repo.gitdir}/HEAD")?
+        head_active = false
+    }
+    fs.sync_dir(repo.gitdir)?
+}

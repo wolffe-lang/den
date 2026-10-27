@@ -55,6 +55,7 @@ pub fn log_line(
     identity: str,
     message: str,
 ) -> List[byte] ! RefErrors {
+    if message.len > 16777216 || identity.len > 4096 { return limit }
     if identity == "" ||
         identity.contains("\n") ||
         identity.contains("\r") ||
@@ -130,6 +131,14 @@ pub fn update(
     if name != "HEAD" && !valid(name) { return invalid_oid }
     let _ = zero_or_hex(expected)?
     let encoded = zero_or_hex(after)?
+    if after.len > 0 {
+        for record in packed(repo)? {
+            if record.name != name &&
+                (record.name.starts_with("{name}/") || name.starts_with("{record.name}/")) {
+                return invalid
+            }
+        }
+    }
     let path = administrative(repo, name, true)?
     let lock_path = "{path}.lock"
     let lock = fs.create_new_with_mode(lock_path, 0o666)?
@@ -169,7 +178,6 @@ pub fn update(
 
 fn remove_packed(repo: repository.Repo, name: str) -> () ! RefErrors {
     let path = "{repo.gitdir}/packed-refs"
-    if !fs.exists(path) { return }
     let _ = administrative(repo, "packed-refs", false)?
     let lock_path = "{path}.lock"
     let file = fs.create_new_with_mode(lock_path, 0o666)?
@@ -179,6 +187,7 @@ fn remove_packed(repo: repository.Repo, name: str) -> () ! RefErrors {
         if fd >= 0 { fs_close(fd) else |_| {} }
         if active { fs.remove(lock_path) else |_| {} }
     }
+    if !fs.exists(path) { return }
     let raw = repository.read_bytes(path, 16777216)?
     let records = parse_packed(raw)?
     var kept = List[Packed]()

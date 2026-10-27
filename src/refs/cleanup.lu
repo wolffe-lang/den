@@ -1,0 +1,13 @@
+use std.fs
+use repository
+
+/// Drop AUTO_MERGE through the ref lock protocol, even when absent. This is
+/// called in each command cleanup phase; errors are reported by the command.
+pub fn remove_auto_merge(repo: repository.Repo) -> () ! RefErrors {
+    let path = administrative(repo, "AUTO_MERGE", false)?
+    let lock = "{path}.lock"
+    let file = fs.create_new_with_mode(lock, 0o666)?
+    defer { fs_close(file.fd) else |_| {}; fs.remove(lock) else |_| {} }
+    remove_packed(repo, "AUTO_MERGE")?
+    if fs.exists(path) { fs.remove(path)? }
+}
