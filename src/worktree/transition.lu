@@ -17,7 +17,23 @@ pub fn transition(
     target: List[FlatEntry],
     mode: str,
 ) -> () ! WorkErrors {
-    if mode != "switch" && mode != "hard" && mode != "mixed" { return invalid }
+    transition_mode(ctx, mut value, target, mode, false)?
+}
+
+/// Validate merge worktree/index safety without publishing blobs or entries.
+pub fn merge_check(ctx: Context, value: index.Index, target: List[FlatEntry]) -> () ! WorkErrors {
+    var scratch = copy value
+    transition_mode(ctx, mut scratch, target, "merge", true)?
+}
+
+fn transition_mode(
+    ctx: Context,
+    mut value: index.Index,
+    target: List[FlatEntry],
+    mode: str,
+    dry: bool,
+) -> () ! WorkErrors {
+    if mode != "switch" && mode != "merge" && mode != "hard" && mode != "mixed" { return invalid }
     let snapshot = scan_index(ctx, value)?
     var indexed = List[FlatEntry]()
     for entry in value.entries {
@@ -33,8 +49,10 @@ pub fn transition(
     }
     for entry in target {
         if entry.mode == 0o160000 { return Unsupported("submodule tree transition") }
-        let data = object.read_object(ctx.repo, entry.id, 1000000000)?
-        if data.kind != "blob" { return bad_oid }
+        if !dry {
+            let data = object.read_object(ctx.repo, entry.id, 1000000000)?
+            if data.kind != "blob" { return bad_oid }
+        }
     }
     var paths = List[List[byte]]()
     for entry in indexed { (mut paths).push(copy entry.path) }
@@ -48,7 +66,7 @@ pub fn transition(
         let next = flat_at(target, path)
         let at = flat_at(indexed, path)
         let disk = file_at(snapshot.files, path)
-        if mode == "switch" {
+        if mode == "switch" || mode == "merge" {
             if same_flat(snapshot.head_entries, old, target, next) ||
                 same_flat(indexed, at, target, next) {
                 keep[text(path)?] = true
@@ -80,8 +98,12 @@ pub fn transition(
             for path in untracked { message += "\t{text(path)?}\n" }
             message += "Please move or remove them before you switch branches.\n"
         }
+        if mode == "merge" {
+            message = message.replace("checkout:", "merge:").replace("switch branches.", "merge.")
+        }
         return Failure("{message}Aborting")
     }
+    if dry { return }
     let previous = copy value
     // Remove first so a tracked directory-to-file change can be installed.
     if mode != "mixed" {

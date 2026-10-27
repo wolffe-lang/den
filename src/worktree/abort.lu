@@ -1,0 +1,76 @@
+use index
+use oid
+
+/// Restore HEAD after a merge, retaining unchanged dirty paths. Unmerged paths
+/// are restored from HEAD; stage-zero paths to replace require current stat
+/// identity, as reset --merge does. Caller owns the index transaction.
+pub fn abort_merge(
+    ctx: Context,
+    mut value: index.Index,
+    target: List[FlatEntry],
+) -> () ! WorkErrors {
+    let snapshot = scan_index(ctx, value)?
+    var paths = List[List[byte]](), conflicts = Map[str, bool]()
+    for entry in value.entries {
+        let name = text(entry.path)?
+        if index.stage(entry) != 0 { conflicts[name] = true }
+        var seen = false
+        for path in paths { if compare(path, entry.path) == 0 { seen = true } }
+        if !seen { (mut paths).push(copy entry.path) }
+    }
+    for entry in target {
+        if index_at(value.entries, entry.path) < 0 { (mut paths).push(copy entry.path) }
+    }
+    for path in paths {
+        if conflicts[text(path)?] else false { continue }
+        let at = index_at(value.entries, path), next = flat_at(target, path)
+        if at < 0 { continue }
+        let entry = copy value.entries[at]
+        if next >= 0 && entry.stat[6] == target[next].mode && oid.equal(entry.id, target[next].id) {
+            continue
+        }
+        let disk = file_at(snapshot.files, path)
+        if disk < 0 { continue }
+        let fresh = entry_for(snapshot.files[disk], [copy entry], add_options())?
+        var same = true
+        for i in 0..10 { if entry.stat[i] != fresh.stat[i] { same = false } }
+        if !same { return Failure("Entry '{text(path)?}' not uptodate. Cannot merge.") }
+    }
+    for path in paths {
+        let at = index_at(value.entries, path), next = flat_at(target, path)
+        let unresolved = conflicts[text(path)?] else false
+        if next < 0 { if at >= 0 { remove_file(ctx, path)? }; continue }
+        if !unresolved &&
+            at >= 0 &&
+            value.entries[at].stat[6] == target[next].mode &&
+            oid.equal(value.entries[at].id, target[next].id) {
+            continue
+        }
+        install(ctx, target[next])?
+    }
+    var entries = List[index.Entry]()
+    for desired in target {
+        let at = index_at(value.entries, desired.path)
+        var prior = List[index.Entry]()
+        if at >= 0 && index.stage(value.entries[at]) == 0 {
+            (mut prior).push(copy value.entries[at])
+        }
+        if at >= 0 && index.stage(value.entries[at]) == 0 && value.entries[at].stat[6] == desired.mode && oid.equal(value.entries[at].id,desired.id) {
+            (mut entries).push(copy value.entries[at])
+            continue
+        }
+        var entry = cached_entry(desired, prior)
+        let file = read_file(ctx, desired.path, [copy entry]) else |e| match e {
+            not_found => { (mut entries).push(entry); continue },
+            _ => { return Unsupported("abort unreadable path: {e}") },
+        }
+        if file.mode == desired.mode && oid.equal(file.id, desired.id) {
+            entry = entry_for(file, [copy entry], add_options())?
+        }
+        (mut entries).push(entry)
+    }
+    value.entries = entries
+    value.extensions = []
+    let tree = index.build_trees(value)?
+    value.extensions = [index.Extension { signature: "TREE", data: copy tree.cache }]
+}

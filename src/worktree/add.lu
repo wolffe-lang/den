@@ -149,9 +149,10 @@ pub fn stage_paths_with_warnings(
     var candidates = List[List[byte]]()
     for entry in current.entries {
         if !selected(entry.path, paths) { continue }
-        if index.stage(entry) != 0 { return unmerged }
         if entry.extended & 0x4000 != 0 || entry.flags & 0x8000 != 0 { continue }
-        (mut candidates).push(copy entry.path)
+        var already = false
+        for path in candidates { if compare(path, entry.path) == 0 { already = true } }
+        if !already { (mut candidates).push(copy entry.path) }
     }
     var ignored = List[List[byte]]()
     if !options.force && !options.update {
@@ -226,7 +227,9 @@ pub fn stage_paths_with_warnings(
         }
         if options.intent && at >= 0 { continue }
         var prior = List[index.Entry]()
-        if at >= 0 { (mut prior).push(copy current.entries[at]) }
+        if at >= 0 && index.stage(current.entries[at]) == 0 {
+            (mut prior).push(copy current.entries[at])
+        }
         let file = copy walked.files[disk]
         let entry = entry_for(file, prior, options)?
         if !options.dry_run {

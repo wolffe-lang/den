@@ -211,8 +211,8 @@ fn with_cache(value: Index, data: List[byte]) -> Index {
     result
 }
 
-/// Sorted insert/replace of one stage. Resolving higher stages needs REUC
-/// recording, so a stage-zero replacement of an unmerged path refuses explicitly.
+/// Sorted insert/replace of one stage. Resolving a path saves higher stages
+/// in REUC before installing stage zero; replacing zero with a conflict refuses.
 pub fn replace_entry(value: Index, entry: Entry) -> Index ! IndexErrors {
     validate_entry(entry)?
     check_version(value.version)?
@@ -227,11 +227,12 @@ pub fn replace_entry(value: Index, entry: Entry) -> Index ! IndexErrors {
         }
     }
     var result = if tree_changed then invalidate_tree(value, entry.path)? else copy value
+    if stage(entry) == 0 { result = record_undo(result, entry.path)? }
     var entries = List[Entry]()
     var inserted = false
     for previous in value.entries {
         let cmp = byte_compare(previous.path, entry.path)
-        if cmp == 0 && stage(entry) == 0 && stage(previous) != 0 { return unmerged }
+        if cmp == 0 && stage(entry) == 0 && stage(previous) != 0 { continue }
         if cmp == 0 && stage(entry) != 0 && stage(previous) == 0 { return unmerged }
         if !inserted && (cmp > 0 || cmp == 0 && stage(previous) >= stage(entry)) {
             (mut entries).push(copy entry)
@@ -244,8 +245,7 @@ pub fn replace_entry(value: Index, entry: Entry) -> Index ! IndexErrors {
     result
 }
 
-/// Remove a stage-zero path, retaining REUC and the invalidated TREE shape.
-/// Higher-stage removal refuses until its resolve-undo record can be generated.
+/// Remove a path, recording higher stages in REUC and invalidating TREE.
 pub fn remove_path(value: Index, path: List[byte]) -> Index ! IndexErrors {
     check_version(value.version)?
     validate_entries(value.entries)?
@@ -254,11 +254,11 @@ pub fn remove_path(value: Index, path: List[byte]) -> Index ! IndexErrors {
     var found = false
     for entry in value.entries {
         if byte_compare(entry.path, path) == 0 {
-            if stage(entry) != 0 { return unmerged }
             found = true
         }
     }
     var result = if found then invalidate_tree(value, path)? else copy value
+    result = record_undo(result, path)?
     var entries = List[Entry]()
     for entry in value.entries {
         if byte_compare(entry.path, path) != 0 { (mut entries).push(copy entry) }
