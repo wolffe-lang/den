@@ -2,8 +2,8 @@
 
 The codec, owned OIDs, bounded loose store and binary parsers underpin the
 index/worktree/commit interface and diff. The dispatcher routes the implemented
-porcelain, plumbing, diff and bounded log/show commands. Combined merge show,
-general refs, packs and transports remain separate work; M2 is not complete. Diff's known hunk
+porcelain, plumbing, diff, bounded log/show and ref commands. Combined merge show,
+merge/rebase, packs and transports remain separate work; M2 and M3 are not complete. Diff's known hunk
 alignment differences and binary representation exceptions are explicit below,
 not a blanket byte-parity claim.
 
@@ -14,7 +14,7 @@ not a blanket byte-parity claim.
 | M0 | CLI refusal scaffold, `hash`, probes, oracle/corpus/review harness (vc00) |
 | M1 | `zlib`: inflate then deflate, Adler-32 (vc01); `oid`, `object`, `repository`, init/hash-object/cat-file/tree/commit/tag plumbing (vc02) |
 | M2 (partial) | `index`, `worktree`, `ignore`, `commit_format`, `commit`: implemented subset (vc03); `delta`, `rename`, `difftext`, `diffbinary`, `diff` (vc04); `walk`, `pretty`, log/show (vc05) |
-| M3 | `refs`, `reflog`, branch/tag/checkout/reset (vc06); three-way merge/revert (vc07); rebase/cherry-pick/sequencer (vc08); blame (vc09); stash/notes/revision grammar (vc10) |
+| M3 (partial) | `refs`, `refcmd`, `worktree.transition`: refs/reflogs, branch/tag/switch/checkout/reset (vc06); three-way merge/revert (vc07); rebase/cherry-pick/sequencer (vc08); blame (vc09); stash/notes/revision grammar (vc10) |
 | M4 | `pack`, `pack_index`, delta decoding (vc11); pack writing, gc/repack/fsck/count-objects (vc12) |
 | M5 | `pktline`, protocol v2 fetch (vc13); receive-pack push/remotes (vc14); clone/pull porcelain (vc15) |
 | M6 | static build and PAX handoff (vc16, then px lane); optional `git` alias |
@@ -145,7 +145,7 @@ fixtures plus ignore, staged rename, modes/symlink, unborn, amend, index-v4 and
 edited-rename states. The original nine builders remain unchanged. The two
 independent corpus builds compare OID manifests, not inode-dependent stat data.
 `tests/cases.json` defines 188 main cases; its latest measured main comparison
-is 170 parity / 17 named not-yet / 1 version-shape / 0 reviewed / 0 failures.
+is 173 parity / 14 named not-yet / 1 version-shape / 0 reviewed / 0 failures.
 Implemented diff and edited-rename cases require parity and cannot regress to
 a named refusal unnoticed. Generated component matrices remain separately
 counted. Historical vc03 counts and 636 stat-proof rows are retained in
@@ -419,8 +419,8 @@ Clock-relative dates, unsupported identity search and input/size limits have
 explicit rows. Command-edge UTF-8 repair is not part of these pure APIs.
 
 `commit.reflog_line` builds owned bytes; `publish_ref` publishes an attached
-loose branch with exclusive HEAD/branch locks and an expected-old-OID recheck.
-It never writes ORIG_HEAD. Reflog appends and ref/index publication are not one
+branch or detached HEAD, with exclusive locks and an expected-old-OID recheck.
+An unchanged packed branch is not unpacked. It never writes ORIG_HEAD. Reflog appends and ref/index publication are not one
 multi-file atomic transaction: later IO failure can leave earlier log bytes.
 `commit.subject` formats the human first paragraph; `reflog_subject` uses only
 the first physical line, before command-edge UTF-8 repair. FORMATS describes
@@ -663,3 +663,67 @@ relative/human dates and non-UTC local zones. ASCII tab rendering is supported;
 non-ASCII prefixes before tabs require a future display-width surface. General
 revision grammar stays M3. M2 is not complete merely because the bounded
 history matrix passes.
+
+## Refs and branch transitions (vc06)
+
+`refs.Packed {name, id, peeled}` owns a full ref name, the actual target OID and
+zero or one peeled OID. Peeling metadata does not replace an annotated tag's
+OID. `parse_packed` checks names, IDs, duplicate records and peeling placement;
+`packed_bytes(records, traits)` emits only caller-proven peeling traits. Deletion
+carries the source file's traits rather than inventing `fully-peeled`.
+
+`read(repo, full_name)` resolves HEAD or full symbolic/loose/packed refs, with
+loose precedence and a sixteen-link bound. `optional` returns an empty list only
+for absence; malformed and inaccessible refs are not unborn refs. `list(repo,
+prefix)` merges the namespaces and sorts by refname, parsing the packed file
+once. Parsing/writing caps packed data at 16 MiB and 100,000 records; listing
+caps entries and visited loose nodes at 4,096. The independent client exercises
+1,002 heads and an explicit over-limit input.
+
+`update(repo, name, expected, after, identity, message, force_log)` is a direct
+ref CAS: empty `expected` requires absence, empty `after` deletes. The caller
+validates referenced objects. Exclusive ref locks are owned until publication
+or abort. Deletion acquires `packed-refs.lock` even when no packed file exists.
+`set_head` compares exact prior HEAD text under HEAD.lock. `rename_ref` holds
+old/new ref locks and, for the current branch, HEAD.lock; it retains the source
+reflog. These operations do not promise an atomic multi-file transaction.
+
+`log_line` constructs owned raw reflog bytes. A same-OID direct update omits its
+log; an attached reset still appends HEAD's record. A current-branch rename has
+two HEAD records, old-to-zero and zero-to-old, while its branch log has one
+old-to-old record. Tag reflogs describe the original target, first physical
+commit-message line, and UTC committer date. These distinctions have separate
+black-box captures; they are not inferred from human log subjects.
+
+`worktree.transition(ctx, mut index, target, mode)` accepts owned flattened
+target leaves and switch/hard/mixed modes. Its caller holds the index transaction
+and publishes it explicitly. It validates target blobs, preserves compatible
+local changes, refuses destructive ordinary switches, and reuses worktree file
+installation and index-entry APIs. Mixed reset invalidates affected TREE paths;
+hard reset and clean checkout rebuild TREE in memory. It never calls
+`index.write_tree`, writes a history object, or forks the rename/diff scorer.
+
+`refcmd` supplies branch/tag/switch/checkout/reset command edges and shares
+commit identity/date and object/tag writers. `commit.environment_identity` is
+now public for that reuse. Reset publishes index/worktree changes before ref
+updates; a foreign ref lock can therefore leave those earlier changes visible.
+ORIG_HEAD is reset's responsibility, never commit's. AUTO_MERGE cleanup has two
+measured attempts, and its failures can be diagnostics on a successful command.
+
+Supported revision inputs are HEAD, a full ref, a short branch/tag, a full OID
+or an unambiguous loose-object prefix. Ambiguous short names are rejected.
+General ancestry/ranges/reflog selectors and previous-checkout syntax remain
+vc10's work. Tracking configuration, list glob patterns, orphan branches,
+overlapping rename paths, merge-mode checkout, tag editors/signing/stdin and
+reflog management commands remain outside the bounded surface. Tree transitions
+refuse unmerged/flagged indices and submodules; checkout during an in-progress
+operation is a named refusal. Switch and soft reset have measured in-progress
+safety errors. None of these limits completes M2 or the remaining M3 rows.
+
+`tools/check-refs` is mandatory in the full gate, with native/release complete
+command/state captures, an independent importing package, and refs/reflog
+actual-checked units. Exact comparisons and named unsupported captures are
+separate. It uses the inherited six-word stat proof, not an index exclusion.
+The original oracle build failed at the non-CI mount `/work`; the identical
+image at `/work/den` reproduced the existing binary pin. The default build path
+is therefore part of the reproducible input contract.
