@@ -1,0 +1,20 @@
+use std.fs
+use object
+use oid
+use repository
+
+fn run(args: List[str]) -> () ! object.StoreErrors {
+    if args.len != 3 { return invalid }
+    let repo = repository.open(args[0])?
+    let id = object.lookup(repo, args[1])?
+    let cap = args[2].to_int() else |_| { return invalid }
+    let value = object.read_object(repo, id, cap)?
+    print("{value.kind} {value.data.len} {oid.hex(id)?}")
+    var stdout = fs.stdout()
+    fs.write_chunk(mut stdout, value.data)?
+}
+
+fn main() -> int {
+    run(env_args()) else |e| { eprint("{e}"); return 1 }
+    0
+}

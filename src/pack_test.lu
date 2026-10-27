@@ -1,0 +1,22 @@
+use pack
+
+fn main() -> int {
+    assert(pack.crc32("123456789".bytes()) == 3421780262)
+    let base = "abcdef".bytes()
+    let instructions: List[byte] = [6 as byte, 7 as byte, 0x91 as byte, 1 as byte, 3 as byte, 4 as byte, 88 as byte, 89 as byte, 90 as byte, 33 as byte]
+    let out = pack.apply_delta(base, instructions, 7) else |e| { eprint("{e}"); return 1 }
+    assert((str_from_utf8(out) else "") == "bcdXYZ!")
+    var rejected = false
+    let _ = pack.apply_delta(base, instructions, 6) else |_| { rejected = true; List[byte]() }
+    assert(rejected)
+    let invalid_code: List[byte] = [6 as byte, 0 as byte, 0 as byte]
+    rejected = false
+    let _ = pack.apply_delta(base, invalid_code, 7) else |_| { rejected = true; List[byte]() }
+    assert(rejected)
+    let bad_copy: List[byte] = [6 as byte, 1 as byte, 0x91 as byte, 6 as byte, 1 as byte]
+    rejected = false
+    let _ = pack.apply_delta(base, bad_copy, 7) else |_| { rejected = true; List[byte]() }
+    assert(rejected)
+    print("pack: crc and bounded delta units")
+    0
+}

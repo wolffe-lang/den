@@ -1,0 +1,10 @@
+pkg {
+    name: "pack-client",
+    edition: "1",
+    capabilities: [fs, env],
+    deps: {
+        object: {path: "../../src/object"},
+        oid: {path: "../../src/oid"},
+        repository: {path: "../../src/repository"},
+    },
+}
