@@ -6,7 +6,7 @@ fn main() -> !int {
     let args = env_args()
     if args.len != 3 { return 2 }
     let repo = repository.open(args[0])?
-    let left = oid.parse("sha1",args[1])?, right = oid.parse("sha1",args[2])?
-    for id in mergetree.bases(repo,left,right)? { print(oid.hex(id)?) }
+    let left = oid.parse("sha1", args[1])?, right = oid.parse("sha1", args[2])?
+    for id in mergetree.bases(repo, left, right)? { print(oid.hex(id)?) }
     0
 }
