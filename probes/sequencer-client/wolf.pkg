@@ -1,0 +1,8 @@
+pkg {
+    name: "sequencer-client",
+    edition: "1",
+    capabilities: [env, fs],
+    deps: {
+        sequencer: {path: "../../src/sequencer"},
+    },
+}

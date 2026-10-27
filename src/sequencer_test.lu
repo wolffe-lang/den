@@ -5,7 +5,9 @@ fn main() -> int ! {invalid, limit, utf8} {
     assert(rows.len == 2)
     assert(rows[0].name == "1234abcd")
     assert(rows[1].subject == "other")
-    assert(str_from_utf8(sequencer.render(rows)?)? == "pick 1234abcd subject\npick abcdef01 other\n")
+    assert(
+        str_from_utf8(sequencer.render(rows)?)? == "pick 1234abcd subject\npick abcdef01 other\n",
+    )
     let bad = sequencer.parse("exec arbitrary\n".bytes()) else |e| match e {
         invalid => List[sequencer.Step](),
         _ => { assert(false); List[sequencer.Step]() },

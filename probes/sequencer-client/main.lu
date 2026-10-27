@@ -1,0 +1,13 @@
+use std.fs
+use sequencer
+
+fn main() -> int {
+    let args = env_args()
+    if args.len != 1 { return 64 }
+    let data = fs.read_bytes(args[0]) else |_| { return 65 }
+    let steps = sequencer.parse(data) else |e| { eprint("{e}"); return 2 }
+    let rendered = sequencer.render(steps) else |e| { eprint("{e}"); return 2 }
+    var stdout = fs.stdout()
+    fs.write_chunk(mut stdout, rendered) else |_| { return 1 }
+    0
+}

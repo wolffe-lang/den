@@ -1,0 +1,55 @@
+// Original bounded sequencer records; Git 2.56.0 sequencer.adoc and
+// git-cherry-pick(1), --allow-empty/--empty. No command execution here.
+/// Owned pick record: a lowercase full/prefix SHA-1 and one physical subject line.
+pub struct Step { name: str, subject: str }
+
+/// Invalid record/policy, explicit 16-MiB/100,000-row bound, or invalid UTF-8.
+pub error SequenceErrors = {invalid, limit, utf8}
+
+/// Parse owned pick records; comments/blank lines are ignored. Reject other
+/// operations, NUL/CR, malformed names and bounds without executing anything.
+pub fn parse(data: List[byte]) -> List[Step] ! SequenceErrors {
+    if data.len > 16777216 { return limit }
+    let text = str_from_utf8(data)?
+    if text.contains("\0") || text.contains("\r") { return invalid }
+    var out = List[Step]()
+    for line in text.split("\n") {
+        if line == "" || line.starts_with("#") { continue }
+        if !line.starts_with("pick ") { return invalid }
+        let rest = line[5..]
+        let split = rest.find(" ") else rest.len
+        let name = rest[0..split]
+        if name.len < 4 || name.len > 40 { return invalid }
+        for b in name.bytes() {
+            if !(b >= 48 as byte && b <= 57 as byte || b >= 97 as byte && b <= 102 as byte) {
+                return invalid
+            }
+        }
+        if out.len == 100000 { return limit }
+        (mut out).push(Step { name, subject: if split < rest.len then rest[split + 1..] else "" })
+    }
+    out
+}
+
+/// Validate and serialize owned LF-terminated pick lines under the parser bounds.
+pub fn render(steps: List[Step]) -> List[byte] ! SequenceErrors {
+    if steps.len > 100000 { return limit }
+    var out = List[byte]()
+    for step in steps {
+        if step.subject.contains("\n") || step.subject.contains("\r") { return invalid }
+        let line = "pick {step.name} {step.subject}\n"
+        if out.len + line.len > 16777216 { return limit }
+        for b in line.bytes() { (mut out).push(b) }
+    }
+    let _ = parse(out)?
+    out
+}
+
+/// Return keep/drop/stop for an empty result, distinguishing originally empty
+/// commits from redundant changes. Unknown policies return invalid, never trap.
+pub fn empty_action(originally_empty: bool, allow_empty: bool, policy: str) -> str ! {invalid} {
+    if policy != "stop" && policy != "keep" && policy != "drop" { return invalid }
+    if policy == "keep" || originally_empty && allow_empty { return "keep" }
+    if originally_empty { return "stop" }
+    policy
+}
