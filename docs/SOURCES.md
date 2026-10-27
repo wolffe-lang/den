@@ -405,3 +405,45 @@ builder now preserves and compares the entire before/after OID sets; command
 expectations were not weakened. A structural offset witness was corrected to
 mutate the first physical offset, not the first lexicographic name's offset,
 so it isolates the intended first-entry invariant.
+
+## Shared revision grammar (vc10)
+
+Read only Git v2.56.0 documentation, never implementation sources:
+
+- `Documentation/revisions.adoc`, included by gitrevisions(7): Specifying
+  Revisions, full/prefix object IDs, documented refname search order and
+  pseudorefs; numeric/date/previous-checkout/upstream/push selectors; ordered
+  parent/ancestor chains, empty and typed peels, message searches, literal
+  tree paths and index expressions. Specifying Ranges: exclusions, two-dot,
+  symmetric three-dot, parent-set shorthands and the complete range summary.
+- `Documentation/git-rev-parse.adoc`: Description, Options for Output
+  (verify, quiet, symbolic and short forms), Options for Objects and Examples.
+  The remaining parseopt/quoting documentation was read but not implemented.
+- Versioned documentation URLs:
+  https://raw.githubusercontent.com/git/git/v2.56.0/Documentation/revisions.adoc
+  and https://raw.githubusercontent.com/git/git/v2.56.0/Documentation/git-rev-parse.adoc.
+- Den's own object/ref/HEAD/reflog, ordered raw commit parents, walk and diff
+  APIs, plus vc09/vc08/vc06/vc04 notes. The existing lossless first-paragraph
+  subject function moved unchanged from commit/support.lu into object/subject.lu;
+  commit.subject remains a compatibility wrapper. Date formatting uses the
+  pinned std.time UTC formatting surface, not an external implementation.
+
+`tools/revision-test.py` constructs commits, tags, ref collisions, real short-OID
+collisions, literal raw tree names and deterministic reflogs independently.
+The pinned binary supplies expected successful and malformed/ambiguous process
+results on loose and packed copies; every repository/worktree file remains in
+read-only comparisons. Inherited refs/merge/replay harnesses independently
+exercise mutation consumers and retain their original state/stat proof.
+`hint-measure.py` retains commit/blob and tag/blob measurements: log selects a
+unique commit-ish without a warning, while untyped rev-parse/cat-file remain
+ambiguous. Hint dates, first-paragraph subjects, tag names and type ordering
+are measured output, not rules attributed to prose that does not specify them.
+
+An initial exploratory runner mistakenly selected the image's system Git 2.43
+instead of the built oracle. Those provisional captures and identity files are
+retained but not counted as Git 2.56 parity. The correct oracle was then built
+at the pinned `/work/den` path, its c4848492… binary digest read twice, and the
+revision harness now asserts its full pinned SHA256 before measuring anything.
+No expectation was changed to fit that mistake. The later type/path diagnostic
+and `heads/topic` merge-message counterexamples remain retained reds; correct
+production behavior follows the independent pinned observations.

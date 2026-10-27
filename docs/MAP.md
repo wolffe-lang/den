@@ -15,7 +15,7 @@ not a blanket byte-parity claim.
 | M0 | CLI refusal scaffold, `hash`, probes, oracle/corpus/review harness (vc00) |
 | M1 | `zlib`: inflate then deflate, Adler-32 (vc01); `oid`, `object`, `repository`, init/hash-object/cat-file/tree/commit/tag plumbing (vc02) |
 | M2 (partial) | `index`, `worktree`, `ignore`, `commit_format`, `commit`: implemented subset (vc03); `delta`, `rename`, `difftext`, `diffbinary`, `diff` (vc04); `walk`, `pretty`, log/show (vc05) |
-| M3 (partial) | `refs`, `refcmd`, `worktree.transition`: refs/reflogs, branch/tag/switch/checkout/reset (vc06); three-way merge/revert (vc07); rebase/cherry-pick/sequencer (vc08); blame (later); stash/notes/revision grammar (vc10) |
+| M3 (partial) | `refs`, `refcmd`, `worktree.transition`: refs/reflogs, branch/tag/switch/checkout/reset (vc06); three-way merge/revert (vc07); rebase/cherry-pick/sequencer (vc08); `revsyntax`, `revision`, `revset`: shared bounded grammar (vc10); blame/stash/notes (later) |
 | M4 (partial) | `pack`: pack-v2/idx-v2 reads and delta decoding (vc09); pack writing, gc/repack/fsck/count-objects (later) |
 | M5 | `pktline`, protocol v2 fetch (vc13); receive-pack push/remotes (vc14); clone/pull porcelain (vc15) |
 | M6 | static build and PAX handoff (vc16, then px lane); optional `git` alias |
@@ -146,7 +146,7 @@ fixtures plus ignore, staged rename, modes/symlink, unborn, amend, index-v4 and
 edited-rename states. The original nine builders remain unchanged. The two
 independent corpus builds compare OID manifests, not inode-dependent stat data.
 `tests/cases.json` defines 190 main cases; its latest measured main comparison
-is 176 parity / 13 named not-yet / 1 version-shape / 0 reviewed / 0 failures.
+is 178 parity / 11 named not-yet / 1 version-shape / 0 reviewed / 0 failures.
 Implemented diff and edited-rename cases require parity and cannot regress to
 a named refusal unnoticed. Generated component matrices remain separately
 counted. Historical vc03 counts and 636 stat-proof rows are retained in
@@ -263,8 +263,9 @@ These object APIs remain available to the index and porcelain modules.
 nested consumers. `index.write_tree` now writes nested trees and refreshes TREE
 under index.lock. Generic headers/messages remain byte-lossless; UTF-8 repair
 belongs only at commit creation command edges. Configuration and deterministic
-date/message parsing have their own APIs below; no general revision grammar or
-production Git/shell dependency has been introduced.
+date/message parsing have their own APIs below. `object.resolve` is a legacy
+low-level name helper; command expressions use `revision` below. No production
+Git/shell dependency exists.
 
 ## Packed storage boundary (vc09)
 
@@ -306,8 +307,8 @@ Loose objects retain precedence. Prefixes merge loose and packed identities,
 including duplicates across packs. Writers verify and reuse an already-packed
 object instead of adding a duplicate loose file. `.keep` files do not hide packs;
 `.rev` and `.mtimes` sidecars are unnecessary for these reads. Multi-pack-index
-and bitmaps refuse by name. No pack writer, protocol/thin-pack support or new
-revision grammar is exposed.
+and bitmaps refuse by name. Revision grammar is layered above this store;
+no pack writer or protocol/thin-pack support is exposed here.
 
 The mandatory `tools/check-pack` independently writes valid/corrupt structures,
 reads every oracle-listed object from 34 fixtures (2,442 object comparisons per
@@ -652,7 +653,9 @@ Endpoints must be sorted by
 unsigned path for `changes`; each Change side is an owned zero/one file list.
 `collect` handles worktree/index, cached HEAD or a named endpoint, two loose/packed
 commits/trees and two blobs. Aggregate body input is limited to 128 MiB per
-endpoint. Simple bounded `^n`/`~n` ancestry is not a general revision parser.
+endpoint. `diff.resolve` now delegates to the shared evaluator. The command
+expands standalone dotted endpoints through `revset.endpoints`; importing
+`collect` clients supply two normalized endpoint spellings, not a commit set.
 
 Only `run` performs documented `diff.autoRefreshIndex` work: a selected stale
 but content-equal entry triggers refresh of all unchanged entries. Foreign
@@ -701,9 +704,9 @@ ambiguity remain bytes; message transcoding is an explicit refusal.
 `history.patch` compares a root against an in-memory empty endpoint with
 `diff.changes`; nonroots use `diff.collect`. Both paths call `diff.render` with
 `diff.configured` defaults. They never invoke `diff.run` or `index.write_tree`.
-`diff.resolve` is now public: its bounded caret/tilde adapter is unchanged.
-Show handles loose/packed commits, blobs, tree entries, annotated tags and a literal
-`REV:path` traversal; these are not a general revision grammar.
+`diff.resolve` remains a compatibility adapter to the shared revision evaluator.
+Show handles loose/packed commits, blobs, raw tree entries, annotated tags and
+literal `REV:path` through that same owned syntax tree and evaluator.
 
 `tools/check-history` is mandatory: native/release command stdout, stderr,
 status and complete file-byte/mode state; an independent importing package;
@@ -715,9 +718,8 @@ binary representation policy remain unchanged and are not history parity.
 Remaining M2 surfaces: combined merge show, show revision limiting, history
 path simplification, graph/topological order, custom pretty formats,
 relative/human dates and non-UTC local zones. ASCII tab rendering is supported;
-non-ASCII prefixes before tabs require a future display-width surface. General
-revision grammar stays M3. M2 is not complete merely because the bounded
-history matrix passes.
+non-ASCII prefixes before tabs require a future display-width surface. Revision grammar is shared below; these remaining display/path limits do not
+complete M2 merely because the bounded history matrix passes.
 
 ## Refs and branch transitions (vc06)
 
@@ -765,10 +767,10 @@ updates; a foreign ref lock can therefore leave those earlier changes visible.
 ORIG_HEAD is reset's responsibility, never commit's. AUTO_MERGE cleanup has two
 measured attempts, and its failures can be diagnostics on a successful command.
 
-Supported revision inputs are HEAD, a full ref, a short branch/tag, a full OID
-or an unambiguous loose/packed object prefix. Ambiguous short names are rejected.
-General ancestry/ranges/reflog selectors and previous-checkout syntax remain
-vc10's work. Tracking configuration, list glob patterns, orphan branches,
+Revision inputs share `revsyntax` and `revision`, including required pseudorefs,
+ordered ancestry/peels, literal tree paths and numeric/previous-checkout selectors.
+Single-object consumers reject set operands by name. Tracking configuration,
+list glob patterns, orphan branches,
 overlapping rename paths, merge-mode checkout, tag editors/signing/stdin and
 reflog management commands remain outside the bounded surface. Tree transitions
 refuse unmerged/flagged indices and submodules; checkout during an in-progress
@@ -824,7 +826,7 @@ dirty paths, and checks stage-zero stat identity before replacing such a path.
 a nonempty revert preserves COMMIT_EDITMSG, and AUTO_MERGE remains after success.
 Ordinary `commit` now consumes MERGE_HEAD parents and resolved REVERT_HEAD state.
 
-The command matrix contains 117 exact complete-state rows and 12 separate named
+The command matrix contains 132 exact complete-state rows and 12 separate named
 not-yet captures per native tier. It measures ORIG_HEAD before fast-forward
 publication, MERGE_HEAD/MERGE_MSG/MERGE_MODE, AUTO_MERGE, SQUASH_MSG, REVERT_HEAD,
 ref-lock failure after index publication, packed/detached inputs, root revert,
@@ -878,7 +880,7 @@ CHERRY_PICK_HEAD and preserves author provenance. Rebase skip/abort restores
 hard, unlike cherry-pick's merge-style reset. HEAD-lock failures can leave the
 new index/worktree visible; initial and recovery failure phases are compared.
 
-`tools/check-replay` is mandatory. Per native/release tier it measures 89 exact
+`tools/check-replay` is mandatory. Per native/release tier it measures 96 exact
 complete-state scenarios, 20 separately named scope captures, and 136 independent
 importing-client checks. One bounded actual-checked program covers records,
 empty policy and the conservative checksum. Each intermediate process result is
@@ -891,5 +893,93 @@ or changed operation state, non-default replay configuration, apply/interactive
 backends, real merge replay, branch/upstream inference and a separate branch
 operand. The inherited repeated-line/multi-hunk, rename, nonregular, binary and
 modify/delete boundaries remain; recursive true-merge bases and dirty true-merge
-recovery are not closed by this lane. General revision grammar stays vc10.
+recovery are not closed by this lane. Replay uses the shared single-object
+revision evaluator; replay range selection remains a named refusal.
 M2 editor/combined-show/history limits and all diff exceptions remain open.
+
+## Shared revision grammar (vc10)
+
+`revsyntax` is pure and repository-independent. `Expression {kind, left, right}`
+owns its atoms. Each `Atom {source, base, selector, steps, has_path, path}` owns
+its original revision spelling, ordered operations and literal raw path bytes.
+`parse(str)` adapts argv; `parse_bytes(List[byte])` also accepts non-UTF-8 bytes
+in the path after the colon. Nothing after that colon is reparsed as a suffix
+or range. The grammar is:
+
+```text
+expression = atom | "^" atom | [atom] ".." [atom] | [atom] "..." [atom]
+atom       = (name [selector] | selector) suffix* [":" raw-path]
+selector   = "@{" uint "}" | "@{-" positive-uint "}"
+           | "@{upstream}" | "@{u}" | "@{push}"
+suffix     = "^" [uint] | "~" [uint]
+           | "^{" ("" | "commit" | "tree" | "tag" | "object") "}"
+name       = object-id-or-prefix | ref-spelling | "@"
+```
+
+Omitted dotted endpoints mean HEAD; `@` is HEAD. A bare `..` is parsed as a
+range by the pure parser, but the porcelain command's documented revision/path
+edge treats that exact spelling as the parent directory and reports the measured
+outside-repository diagnostic. `upstream`/`u`/`push` are recognized but refused
+by name because tracking is not implemented. Date selectors, message searches,
+index expressions, parent-set shorthands and ref-glob option families remain
+explicitly unstaged. Literal relative tree paths (`.`/`..` components) also refuse.
+
+`revision.evaluate(repo, atom, mut warnings)` returns owned
+`Resolved {id, reference, detached}` without printing or writing.
+`evaluate_typed(..., preference, mut warnings)` adds the consumer's required
+object kind when resolving an ambiguous object prefix. Explicit ancestry/peel
+suffixes supply their own kind requirement. A unique commit-ish candidate can
+therefore satisfy `log PREFIX` while `cat-file -t PREFIX` still reports a
+commit/blob collision. The selected tag's original OID is retained until a peel
+is actually requested. Untyped ambiguity hints include author/tagger dates,
+first-paragraph commit subjects or tag names, with type-prioritized ordering.
+The lossless `object.subject` boundary is also reused by `commit.subject`.
+
+Ref lookup follows the documented order: `$GIT_DIR/name`, `refs/name`,
+`refs/tags/name`, `refs/heads/name`, `refs/remotes/name`, then
+`refs/remotes/name/HEAD`; multiple matches warn rather than silently guessing
+or rejecting every ambiguous ref. Loose/packed identity lookup stays beneath
+that layer. Required pseudorefs read their first OID record. HEAD provenance
+is a separate `Provenance {reference, detached, unborn}` result: unborn is never
+represented by a fabricated zero OID. Numeric reflogs distinguish HEAD from
+current-branch logs; previous checkout reads only HEAD checkout records and
+retains branch spelling for switch/checkout.
+
+`revision.resolve`/`resolve_typed` and `resolve_atom`/`resolve_atom_typed` are
+command adapters that print pending diagnostics even on failure.
+`diff.resolve` is only a compatibility wrapper, not a second parser.
+`revset.expand` constructs positive tips and a full-parent exclusion set;
+`revset.collect` applies exclusions before count/skip and delegates ordering to
+`walk`. Three-dot selection excludes all common ancestors. `revset.endpoints`
+is the distinct diff interpretation, requiring one best base for three-dot.
+
+| Consumer | Objects and selectors | Commit sets |
+|---|---|---|
+| log | Shared atoms; commit-ish prefix preference | Multiple inclusions, `^REV`, two-/three-dot; count/skip after exclusion |
+| show | Each explicit operand is one shared atom, including literal paths | Named refusal; show limiting/combined display remain separate |
+| diff CLI | Shared atoms; normalized endpoint pairs | Standalone dotted endpoints only; mixed range operands and multiple bases refuse |
+| branch/tag/reset/switch/branch checkout | Shared single-object resolution; previous-checkout branch spelling where applicable | Named refusal; switch's branch-only mode retains its branch restriction |
+| restore --source | Shared tree-ish atom | Named refusal; explicit path operands remain the worktree layer |
+| merge/revert/cherry-pick/rebase | Shared single-object resolution; cherry-pick retains explicit lists | Named refusal; all inherited merge/replay scope limits stand |
+| cat-file/commit-tree/mktag | Shared object expressions, with their existing kind checks | Named refusal |
+
+Parser inputs cap at 4,096 bytes, suffixes at 256, numeric selectors/counts at
+10,000 and actual ancestry steps at 10,000 per atom. Each peel visits at most
+64 objects; paths cap at 256 components. Suffix/path evaluation, candidate
+filtering and hint rendering each charge a separate 128-MiB body budget with
+16-MiB individual bodies. Ambiguity diagnostics
+bound prefix exploration at 65,536 nodes and 256 identities. Commit-set argument
+lists cap at 256 and each inherited walk at 10,000 commits/128 MiB. These are
+payload/operation bounds, not a whole-command peak-RSS or streaming claim.
+Public AST sizes, step kinds and counts are validated before evaluation indexes
+steps or reads repository objects.
+
+`tools/check-revision` is mandatory: per native/release tier, 183 exact command
+rows plus 49 importing-client checks on each of the loose and packed fixtures,
+with eight separate named scope rows each. Client checks cover raw byte paths,
+attached/detached/unborn provenance, malformed public ASTs and exact parser cap
+boundaries. A bounded pure parser program has actual-checked `exit(0)`.
+Foreign index locks and dirty files stay present and immutable in read matrices.
+Expanded refs (632 exact / 17 named), merge (132 / 12) and replay (96 / 20)
+matrices run on both native tiers and again over packed fixture copies. No history
+read calls `index.write_tree`; no new production subprocess dependency exists.
