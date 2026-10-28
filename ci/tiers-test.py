@@ -126,6 +126,9 @@ r = subprocess.run([sys.executable, PLAN, "plan", "--json", "--event", "pull_req
                    capture_output=True, text=True, env=env())
 say(json.loads(r.stdout)["tier"] == "full", "T3 unreadable paths are full")
 # T4
+linux_block = WF.split("\n  linux:\n", 1)[1].split("\n  macos:\n", 1)[0]
+say(re.search(r"^    timeout-minutes: 60$", linux_block, re.M) is not None,
+    "T4 Linux full gauntlet has a 60-minute budget")
 jobs = re.findall(r"^  ([a-z-]+):\s*$", WF.split("\njobs:\n", 1)[1], re.M)
 say(jobs == ["plan", "plan-test", "linux", "macos", "tier", "nightly-red"], "T4 the jobs, in order: %s" % jobs)
 for j in ALL:
