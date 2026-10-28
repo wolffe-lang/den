@@ -1,0 +1,77 @@
+vc12 prediction (stash and notes), written 2026-10-28 before any oracle
+measurement of stash/notes and before the first change. Sources: Git v2.56.0
+Documentation/git-stash.adoc (Synopsis, Description, Commands, Options,
+Discussion, Exit Status), git-notes.adoc (Description, Subcommands, Options,
+Discussion, Configuration, Environment), config/stash.adoc, config/notes.adoc,
+pretty-options.adoc (--notes). No implementation source read.
+
+Stash snapshot and publication (push, bare stash):
+S1  An entry is W with ordered parents [H, I]: I's tree is the index, its one
+    parent H; W's tree is the index tree overlaid with every tracked worktree
+    modification/deletion; untracked files are not in W. Messages:
+    I "index on <branch>: <abbrev> <subject>", W "WIP on <branch>: <abbrev>
+    <subject>" or "On <branch>: <msg>" with -m. Author and committer both come
+    from the environment identity (the pinned dates), as for commit.
+S2  Publication writes refs/stash and appends its reflog (old OID zero for the
+    first entry); the reflog message equals W's first line. HEAD and its
+    reflog do not move; ORIG_HEAD is not written.
+S3  After publication the tracked index and worktree return to HEAD (keep-index
+    returns the worktree to the index instead); untracked files stay. stdout
+    is "Saved working directory and index state <W subject>". The index is
+    rewritten with fresh stat words (the six-word proof applies).
+S4  No tracked change: "No local changes to save", status 0, nothing written.
+    Unborn HEAD refuses with a message naming the missing initial commit.
+S5  Construction (objects) and publication (ref, reflog, reset) are separable:
+    a foreign refs/stash.lock fails after the objects exist and before the
+    index/worktree reset.
+
+Listing and display:
+S6  list prints "stash@{N}: <reflog message>" newest first; nothing when no
+    refs/stash. show defaults to the diffstat of W against W^1; -p is the patch;
+    both reuse the existing diff renderer and write nothing.
+
+Recovery (apply/pop/drop/clear), kept separate from construction:
+S7  apply on the snapshot's own base with a clean tracked tree restores W's
+    worktree contents; without --index the index returns to HEAD except paths
+    newly added in I, which stay staged; with --index the index becomes I's
+    tree. Unless -q the long status follows. Status 0.
+S8  pop = apply, then drop of the same entry: "Dropped refs/stash@{0} (<oid>)".
+S9  drop removes one reflog entry (rewriting the following entry's old OID);
+    dropping the last entry deletes refs/stash and logs/refs/stash; the named
+    form echoes the operand ("Dropped stash@{1} (<oid>)"). clear deletes both,
+    silently. No entry: an error, nonzero status, nothing written.
+S10 stash@{N} and a bare N resolve through the shared revision evaluator, not
+    a second parser; an out-of-range N is an error naming the operand.
+S11 A HEAD that moved since the snapshot needs a three-way merge (base H,
+    ours current HEAD, theirs W): clean cases go through the existing merge
+    plan; conflicts, dirty overlapping paths and untracked collisions stay
+    named refusals in this lane, before any write.
+
+Notes:
+N1  add -m writes the cleaned message (stripspace, final LF) as a blob, a
+    notes tree with one 100644 entry named by the annotated object's full
+    hex, a commit "Notes added by 'git notes add'" whose parent is the previous
+    notes commit, and refs/notes/commits with a reflog record
+    "notes: Notes added by 'git notes add'". Nothing on stdout.
+N2  An existing note without -f is an error naming the object and -f, status
+    1, nothing written; with -f a stderr line says it is overwriting.
+N3  show prints the blob bytes; a missing note is "error: no note found for
+    object <oid>." with status 1. list prints "<note blob> <object>" sorted by
+    object; list <object> prints the blob id alone.
+N4  remove prints "Removing note for object <oid>" (stderr) and commits
+    "Notes removed by 'git notes remove'"; a missing note is an error unless
+    --ignore-missing.
+N5  Fan-out: small notes trees are flat; the oracle introduces two-hex
+    directories past a count threshold (guess: more than 256 notes). den reads
+    any permitted fan-out and writes the oracle's shape, refusing by name
+    where the threshold is not yet measured.
+N6  log/show in their default formats display the default ref's notes as an
+    unindented "Notes:" line and four-space-indented note lines after the
+    message; --oneline does not. A history consumer that ignores a present
+    notes ref would silently diverge, so it either renders or refuses.
+N7  append, copy, edit, merge, prune, get-ref, -F/-C/-c, --ref, GIT_NOTES_REF,
+    core.notesRef and the editor stay named refusals unless cheap and measured.
+
+Boundaries expected to stay named: -u/-a untracked/ignored snapshots, -p,
+-S, pathspec push, store/create/export/import/branch, conflicting or dirty
+apply, the naming editor, notes merge/editor, pack writing, transports.
