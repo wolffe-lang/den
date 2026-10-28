@@ -2,7 +2,8 @@
 
 The codec, owned OIDs, bounded loose/packed store and binary parsers underpin the
 index/worktree/commit interface and diff. The dispatcher routes the implemented
-porcelain, plumbing, diff, bounded log/show, ref commands, merge/revert and replay.
+porcelain, plumbing, diff, bounded log/show, ref commands, merge/revert, replay,
+blame, stash and notes.
 Combined merge show, recursive/complex merges, full replay semantics, pack writing and transports
 remain separate work; M2 and M3 are not complete. Diff's known hunk
 alignment differences and binary representation exceptions are explicit below,
@@ -15,7 +16,7 @@ not a blanket byte-parity claim.
 | M0 | CLI refusal scaffold, `hash`, probes, oracle/corpus/review harness (vc00) |
 | M1 | `zlib`: inflate then deflate, Adler-32 (vc01); `oid`, `object`, `repository`, init/hash-object/cat-file/tree/commit/tag plumbing (vc02) |
 | M2 (partial) | `index`, `worktree`, `ignore`, `commit_format`, `commit`: implemented subset (vc03); `delta`, `rename`, `difftext`, `diffbinary`, `diff` (vc04); `walk`, `pretty`, log/show (vc05) |
-| M3 (partial) | `refs`, `refcmd`, `worktree.transition`: refs/reflogs, branch/tag/switch/checkout/reset (vc06); three-way merge/revert (vc07); rebase/cherry-pick/sequencer (vc08); `revsyntax`, `revision`, `revset`: shared bounded grammar (vc10); `blame`, `blamerange` and shared `difftext.correspondence`: bounded line attribution (vc11); stash/notes (later) |
+| M3 (partial) | `refs`, `refcmd`, `worktree.transition`: refs/reflogs, branch/tag/switch/checkout/reset (vc06); three-way merge/revert (vc07); rebase/cherry-pick/sequencer (vc08); `revsyntax`, `revision`, `revset`: shared bounded grammar (vc10); `blame`, `blamerange` and shared `difftext.correspondence`: bounded line attribution (vc11); `stash`, `stashlog`, `notes`, `notestree`: stash and notes (vc12) |
 | M4 (partial) | `pack`: pack-v2/idx-v2 reads and delta decoding (vc09); pack writing, gc/repack/fsck/count-objects (later) |
 | M5 | `pktline`, protocol v2 fetch (vc13); receive-pack push/remotes (vc14); clone/pull porcelain (vc15) |
 | M6 | static build and PAX handoff (vc16, then px lane); optional `git` alias |
@@ -64,7 +65,49 @@ Six importing-client rows per mode include raw non-UTF-8 paths, returned ownersh
 exact/over/invalid payload caps and malformed public results. Ten named scope
 rows per mode are separate non-parity captures. A bounded actual-checked program
 covers ranges and shared correspondence. No index/object/ref/reflog is written.
-Stash/notes, pack writing and inherited M2/M3 boundaries remain open.
+Pack writing and inherited M2/M3 boundaries remain open.
+
+## Stash and notes (vc12)
+
+`stashlog` and `notestree` are pure layers with an actual-checked program.
+`stashlog.Record {before, after, rest}` owns one stored reflog record;
+`parse(bytes)` refuses malformed or unterminated records by name, `without(list,
+n)` is the measured drop rewrite (the following record takes the removed one's
+old id), `line`, `message` and `render` produce stored and `stash list` bytes.
+`notestree.Note {object, blob}` sets stay sorted by object hex; `insert`,
+`find`, `with_note`, `fanout` (R-vc12-2: flat until all sixteen first-hex-digit
+groups hold two notes, two-hex directories after, more than sixteen notes in
+one directory refuses) and `display` (the measured history block) are pure.
+
+`stash.construct(ctx, snapshot, message)` builds I and W from a caller's scan
+and writes objects only; `stash.changed(snapshot)` decides "No local changes".
+W records the worktree of every path tracked by the index or HEAD. `publish`
+compare-and-swaps `refs/stash` with an always-written reflog whose message is
+W's message with whitespace collapsed by the shared reflog writer. The command
+edge refreshes and writes the index first, then constructs, publishes and
+resets through `worktree.transition` (keep-index: `mixed` to I plus
+`restore_paths`), ORIG_HEAD and `commit.publish_ref`'s same-OID HEAD record.
+`stash.apply(ctx, stash, name)` is recovery: it reads only stash-like (two
+parent) commits, merges W into the current index tree with `mergetree.plan`
+(the trivial base-equals-ours case takes W directly, so whole-tree renames
+need no rename topology), refuses conflicts before writing, checks safety with
+`worktree.merge_check`, writes the index tree, merged tree and AUTO_MERGE, then
+`transition(..., "merge")` and resets changed paths to their previous index
+entries as zero-stat tree entries; new paths stay staged with fresh stat.
+`records`, `drop` (reflog lock first; a kept value still written loose) and
+`clear` own the durable list. Operands go through `revsyntax`/`revision`:
+none is `refs/stash@{0}`, a bare integer N is `refs/stash@{N}`.
+
+`notes.read(repo, ref)` accepts any permitted fan-out and refuses other tree
+entries by name; `write_tree` writes the measured shape through the raw tree
+writer; `display` renders a note for history. The command edge implements
+`add`/`show`/`list`/`remove`/`get-ref` for `refs/notes/commits`; history now
+displays the default ref in the default format and refuses other refs,
+formats and patch-with-stat by name. `tools/check-stash` requires native and
+release exact complete state for 104 cases (395 processes) and 39 named
+refusals per loose/packed mode, the independent `probes/stash-client` (19 rows
+per mode, including `construct` naming the oracle's `stash create` commit with
+only new objects written), and the bounded checked program.
 
 ## Surfaces
 
