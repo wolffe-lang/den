@@ -1,0 +1,7 @@
+blame bounded units: 18 checks
+blame 582 rows 12 clients 20 named scopes 0 failures
+blame bounded units: 18 checks
+blame 582 rows 12 clients 20 named scopes 0 failures
+{"commit":"cf0c13d","diagnostics":[],"file":"src/blame_test.lu","impl":"wolfgang","impl_version":"0.2.35","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"blame bounded units: 18 checks\n","stdout_sha256":"1572b112e82316ca3eee2b3af4e010beb0aee40ad64f977a37ee5d4a8a87d4da","verdict":"exit(0)","warnings":[]}
+revision checked: exit(0)
+blame: exact loose/packed commands and clients; actual checked exit; zero skips
