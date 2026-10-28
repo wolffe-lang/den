@@ -4,7 +4,7 @@ A version control system in [wolf](https://github.com/wolffe-lang/wolf-lang),
 working toward Git-compatible repositories and wire protocols. Where a wolf
 keeps what it has.
 
-**State: loose and packed objects, index/worktree commands, and bounded diff, history, refs, merge and replay with a shared revision grammar.**
+**State: loose and packed objects, index/worktree commands, and bounded diff, history, refs, merge, replay and blame with a shared revision grammar.**
 This is not a replacement for Git; M2, M3 and M4 remain incomplete. Log/show support
 bounded loose or packed history; branches, tags, branch switching and resets share
 loose/packed ref storage. Merge, single-commit revert, cherry-pick and linear
@@ -28,7 +28,7 @@ measured bytes and documentation discrepancies.
 
 Archive and oracle pins are in `wolf-toolchain.toml` and `den-oracle.toml`.
 Downloads fail on a digest mismatch. Both release-metadata reads are retained
-in `notes/vc10-evidence/pins/` (earlier reads in `notes/vc09-evidence/pins/`); the original signature verification and two matching
+in `notes/vc11-evidence/pins/` (earlier reads in `notes/vc10-evidence/pins/`); the original signature verification and two matching
 oracle builds are in `notes/vc00-evidence/`.
 
 ## Commands implemented so far
@@ -50,6 +50,7 @@ oracle builds are in `notes/vc00-evidence/`.
 | Revert / resolution | Single ordinary or root commit, `--no-edit`, `--no-commit`; merge-parent refusal; `add` saves REUC when resolving/deleting higher stages, and `commit` completes a resolved merge |
 | Cherry-pick | Single commits and explicit commit lists; preserved source author/date, current committer, durable todo/head/options, conflicts, resolved `--continue`, `--skip`, `--abort`, `--allow-empty`, `--keep-redundant-commits` and `--empty=keep/drop/stop` |
 | Revisions | Shared bounded parser/evaluator: documented ref precedence, full/prefix OIDs, pseudorefs, parent/ancestor chains, object peels, literal `REV:path`, numeric reflogs and previous checkout; `log` exclusions/ranges and `diff` dotted endpoints |
+| Blame | Default columns, numeric/offset `-L` unions, `-w`, ordered merge parents and `--first-parent`, whole-file renames, raw line bytes, `--porcelain` and `--line-porcelain`; conservative alignment limits below |
 | Rebase | Linear current-branch replay with explicit upstream, `--onto`, `--reapply-cherry-picks`, durable `rebase-merge` state, conflict stops, skip/abort and continuation after an explicit resolution commit; editor-dependent continuation remains refused |
 
 Status, commit summaries and diff share one rename/copy pairer. Exact OIDs are
@@ -89,6 +90,7 @@ tools/check-index
 tools/check-ignore
 tools/check-worktree
 tools/check-commit
+tools/check-blame                  # immutable original/new loose/packed fixtures
 tools/check-revision               # loose/packed grammar and independent clients
 tools/check-history
 tools/check-refs
@@ -111,7 +113,7 @@ full repository-byte comparisons. Formatting/date API comparisons are not a
 claim of CLI stderr/exit-status parity. A checked result means the JSON verdict
 from `wolf conform-run --checked`, not merely a successful process exit.
 
-The expanded main matrix contains 190 cases: 178 parity, 11 named not-yet and
+The expanded main matrix contains 190 cases: 179 parity, 10 named not-yet and
 one version-shape check. Generated diff, similarity, pairing and application
 matrices are reported separately in `notes/vc04-evidence/`; their explicit
 representation/alignment differences are never added to the parity count.
@@ -279,6 +281,37 @@ keeps its prepared index unpublished until ref publication succeeds. FORMATS
 records these lifecycle differences and the possible earlier object/message
 side effects. Unsupported-command refusals must not be confused with rollback
 of every ordinary commit failure.
+
+## Blame boundaries
+
+Blame uses the shared revision evaluator and raw loose/packed object readers;
+it never writes the index, objects, refs or reflogs. A whole-file-identical
+parent wins before partial matching; otherwise parents transfer lines in their
+stored order. Whole-file renames reuse the existing 50-percent rename pairer.
+The original bytes are rendered even when `-w` changes comparison semantics.
+Without an explicit revision, only worktree contents identical to HEAD are
+supported; uncommitted contents are a named refusal.
+
+Changed repeated/hash-colliding lines, reordered common lines and multiple
+origin paths for the same commit refuse rather than guess an alignment.
+Unchanged repeated content is supported. Function/regex `-L`, moved/copied-line
+`-M`/`-C` (all levels), ignored revisions, reverse history, alternate contents,
+nonregular paths, mailmaps, attributes, message transcoding, non-ASCII author
+display widths and unsupported blame/diff configuration remain named limits.
+Porcelain retains raw identity/content bytes; the public path API accepts raw
+non-UTF-8 tree names, while argv remains UTF-8-limited.
+
+Bodies cap at 16 MiB/200,000 lines, inherited edit searches at 2,000 changes,
+and attribution at 10,000 work items with 128 MiB of charged commit/blob,
+rename-input and line-position payload. Numeric ranges cap at 256 operands of
+4,096 bytes. Rendering caps at 128 MiB and reclaims per-line scratch; the shared
+comparison boundary reclaims each edit search's scratch. These are payload/work
+bounds, not streaming or peak-RSS guarantees. `tools/check-blame` compares 241 new
+and 50 inherited-corpus command/state rows **per storage mode and native/release
+tier**, with six independent client rows and ten separately named refusals per
+mode. A small actual-checked program covers line correspondence and numeric
+ranges. This does not complete M3: stash, notes and all inherited merge/replay
+and editor limitations remain open.
 
 ## Packed object reads
 
