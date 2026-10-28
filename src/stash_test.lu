@@ -1,0 +1,161 @@
+//! member: false
+
+// Bounded units for the pure stash-list and notes-set layers, run natively
+// and on the actual checked machine (conform-run --checked).
+use notestree
+use oid
+use stashlog
+
+fn id(text: str) -> oid.Oid {
+    var hex = text
+    while hex.len < 40 { hex += "0" }
+    let parsed = oid.parse("sha1", hex) else {
+        assert(false)
+        return oid.Oid { algorithm: "sha1", bytes: List[byte]() }
+    }
+    parsed
+}
+
+fn record(before: str, after: str, text: str) -> List[byte] {
+    var out = List[byte]()
+    for b in "{before} {after} Den Tester <den@example.invalid> 1700000000 +0000\t{text}\n".
+        bytes() {
+        (mut out).push(b)
+    }
+    out
+}
+
+fn notes(prefixes: List[str]) -> List[notestree.Note] {
+    var out = List[notestree.Note]()
+    for i in 0..prefixes.len {
+        let item = notestree.Note { object: id(prefixes[i]), blob: id("b{i}") }
+        notestree.insert(mut out, item) else { assert(false) }
+    }
+    out
+}
+
+fn feature(value: List[notestree.Note]) -> str {
+    let _ = notestree.fanout(value) else |e| match e {
+        Unsupported(name) => { return name },
+        _ => { return "other" },
+    }
+    "accepted"
+}
+
+fn main() {
+    var checks = 0
+    let zero = "0000000000000000000000000000000000000000"
+    let a = "a".repeat(40), b = "b".repeat(40), c = "c".repeat(40)
+    var data = record(zero, a, "On main: m0")
+    for x in record(a, b, "WIP on main: 1234567 two") { (mut data).push(x) }
+    for x in record(b, c, "On main: m2") { (mut data).push(x) }
+    let list = stashlog.parse(data) else { assert(false); return }
+    assert(list.len == 3)
+    checks += 1
+    let shown = str_from_utf8(stashlog.render(list)) else { assert(false); return }
+    assert(
+        shown ==
+            "stash@{{0}}: On main: m2\nstash@{{1}}: WIP on main: 1234567 two\nstash@{{2}}: On main: m0\n",
+    )
+    checks += 1
+    let middle = stashlog.without(list, 1) else { assert(false); return }
+    assert(
+        middle.len == 2 &&
+            middle[1].before == a &&
+            middle[1].after == c &&
+            middle[0].before == zero,
+    )
+    checks += 1
+    let top = stashlog.without(list, 0) else { assert(false); return }
+    assert(top.len == 2 && top[1].after == b)
+    checks += 1
+    let oldest = stashlog.without(list, 2) else { assert(false); return }
+    assert(oldest.len == 2 && oldest[0].before == zero && oldest[0].after == b)
+    checks += 1
+    var rebuilt = List[byte]()
+    for item in list { for x in stashlog.line(item) { (mut rebuilt).push(x) } }
+    assert(rebuilt.len == data.len)
+    checks += 1
+    let _ = stashlog.without(list, 3) else |e| match e {
+        invalid => { checks += 1; List[stashlog.Record]() },
+        _ => { assert(false); List[stashlog.Record]() },
+    }
+    var broken = copy data
+    let _ = (mut broken).pop() else 0 as byte
+    let _ = stashlog.parse(broken) else |e| match e {
+        Unsupported(name) => {
+            assert(name == "stash unterminated reflog record")
+            checks += 1
+            List[stashlog.Record]()
+        },
+        _ => { assert(false); List[stashlog.Record]() },
+    }
+    let _ = stashlog.parse("short\n".bytes()) else |e| match e {
+        Unsupported(name) => {
+            assert(name == "stash malformed reflog record")
+            checks += 1
+            List[stashlog.Record]()
+        },
+        _ => { assert(false); List[stashlog.Record]() },
+    }
+    assert((str_from_utf8(stashlog.message(list[1])) else "") == "WIP on main: 1234567 two")
+    checks += 1
+    // Fan-out rule: sixteen first-hex-digit groups, each needing two notes.
+    let digits = "0123456789abcdef"
+    var pairs = List[str]()
+    for i in 0..16 {
+        (mut pairs).push(digits[i..i + 1] + "1")
+        (mut pairs).push(digits[i..i + 1] + "2")
+    }
+    let flat = notes(pairs[0..31])
+    assert((notestree.fanout(flat) else -1) == 0)
+    checks += 1
+    let fanned = notes(pairs)
+    assert((notestree.fanout(fanned) else -1) == 1)
+    checks += 1
+    var crowded = copy pairs
+    for i in 0..16 { (mut crowded).push("00{digits[i..i + 1]}") }
+    (mut crowded).push("0000f")
+    assert(feature(notes(crowded)) == "notes fan-out beyond two-hex directories")
+    checks += 1
+    var duplicate = notes(["ab"])
+    let _ = notestree.insert(mut duplicate, notestree.
+        Note { object: id("ab"), blob: id("ff") }) else |e| match e {
+        Unsupported(name) => { assert(name.starts_with("notes duplicate entry")); checks += 1 },
+        _ => { assert(false) },
+    }
+    let replaced = notestree.with_note(fanned, id("a1"), [id("ee")]) else { assert(false); return }
+    assert(replaced.len == 32 && oid.equal(notestree.find(replaced, id("a1"))[0], id("ee")))
+    checks += 1
+    let removed = notestree.with_note(fanned, id("a1"), []) else { assert(false); return }
+    assert(removed.len == 31 && notestree.find(removed, id("a1")).len == 0)
+    assert((notestree.fanout(removed) else -1) == 0)
+    checks += 1
+    var ordered = true
+    for i in 1..fanned.len {
+        let left = oid.hex(fanned[i - 1].object) else "", right = oid.hex(fanned[i].object) else ""
+        if left >= right { ordered = false }
+    }
+    assert(ordered)
+    checks += 1
+    let block = notestree.display("one\n\ntwo\n".bytes()) else { assert(false); return }
+    assert((str_from_utf8(block) else "") == "\nNotes:\n    one\n    \n    two\n")
+    checks += 1
+    let _ = notestree.display("tail".bytes()) else |e| match e {
+        Unsupported(name) => {
+            assert(name == "history notes without a final newline")
+            checks += 1
+            List[byte]()
+        },
+        _ => { assert(false); List[byte]() },
+    }
+    let _ = notestree.display("a\tb\n".bytes()) else |e| match e {
+        Unsupported(name) => {
+            assert(name == "history notes with tab, carriage return or NUL")
+            checks += 1
+            List[byte]()
+        },
+        _ => { assert(false); List[byte]() },
+    }
+    print("stash/notes bounded units: {checks} checks")
+}
