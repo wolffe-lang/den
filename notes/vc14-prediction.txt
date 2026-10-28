@@ -1,0 +1,32 @@
+vc14 prediction — before implementation and oracle measurements
+
+P1. One owned typed object graph can supply fsck diagnostics and housekeeping
+selection, without another object parser or delta encoder. Roots from HEAD,
+refs, index and both reflog endpoints must remain distinguishable.
+P2. repack -a and -a -d differ in removal, not reachable selection. Incremental
+repack needs a separate selection policy. Unreachable packed objects and recent
+loose objects make -A, -k and expiry non-interchangeable; unmeasured forms refuse.
+P3. Construction and verification can use pack.encode/install unchanged. Removal
+must revalidate the newly published pair independently of loose duplicates and
+must preserve the last readable copy across interrupted/repeated publication.
+P4. prune-packed only removes loose objects proved present in valid packs; it
+must not treat an orphan pack or a merely matching filename as proof.
+P5. gc is not repack: expiry, reflogs, packed refs and commit-graph effects need
+separate measured policies and explicit refusals before any unsupported write.
+P6. A single-file commit-graph validator can verify chunk framing, checksums,
+OIDs, parents, trees, generation and timestamps against existing object parsers.
+Split graphs and Bloom data must be measured or refused, never silently ignored.
+P7. fsck's detailed missing/type/root errors and multiple dangling order will
+need binary observations beyond the documentation. No guessed sorted order is
+parity. Preserve original disagreement captures.
+P8. Larger repetitive, binary and mixed fixtures may expose the REF 1.399425
+ratio's narrow headroom. Every fixture/mode retains its own 1.5 gate; changing
+a baseline or excluding an expensive fixture is not a fix.
+P9. Batch read-only object exchanges and one complete snapshot per process keep
+new gates affordable. Measure the largest per-object row before integration;
+retain the Linux 60-minute budget and run exactly one final inherited gauntlet.
+
+Implementation order: docs/observations; independent fixtures and clients;
+shared validation and closure; verified housekeeping phases and recovery;
+mandatory native/release/checked gates and isolated plants; documentation;
+sole final gauntlet, PR five-section record and one canonical audit.
