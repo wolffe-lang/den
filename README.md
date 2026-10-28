@@ -4,7 +4,7 @@ A version control system in [wolf](https://github.com/wolffe-lang/wolf-lang),
 working toward Git-compatible repositories and wire protocols. Where a wolf
 keeps what it has.
 
-**State: loose and packed objects, index/worktree commands, and bounded diff, history, refs, merge, replay and blame with a shared revision grammar.**
+**State: loose and packed objects, index/worktree commands, and bounded diff, history, refs, merge, replay, blame, stash and notes with a shared revision grammar.**
 This is not a replacement for Git; M2, M3 and M4 remain incomplete. Log/show support
 bounded loose or packed history; branches, tags, branch switching and resets share
 loose/packed ref storage. Merge, single-commit revert, cherry-pick and linear
@@ -28,7 +28,7 @@ measured bytes and documentation discrepancies.
 
 Archive and oracle pins are in `wolf-toolchain.toml` and `den-oracle.toml`.
 Downloads fail on a digest mismatch. Both release-metadata reads are retained
-in `notes/vc11-evidence/pins/` (earlier reads in `notes/vc10-evidence/pins/`); the original signature verification and two matching
+in `notes/vc12-evidence/pins/` (earlier reads in `notes/vc11-evidence/pins/`); the original signature verification and two matching
 oracle builds are in `notes/vc00-evidence/`.
 
 ## Commands implemented so far
@@ -42,7 +42,7 @@ oracle builds are in `notes/vc00-evidence/`.
 | Status | Human, short and porcelain v1, branch/unborn/detached headings, NUL output, untracked grouping and ignored paths |
 | Commit | Ordered `-m`, `-F`, `-a`, `--amend`, `--reset-author`, `--author`, fixed `--date`, cleanup modes, quiet and allow-empty options; attached/detached HEAD and loose-over-packed branch updates |
 | Diff | Worktree/index, `--cached`, two commits/trees or blobs; unified context, final-newline markers, modes, binary patches, stat/name forms, rename/copy detection and common pathspec magic |
-| History | `log` default/oneline/short/full/fuller, `-n`, `--skip`, `--reverse`, `--first-parent`, fixed date formats, patch/stat; `show` commits, trees, blobs, annotated tags and `REV:path` |
+| History | `log` default/oneline/short/full/fuller, `-n`, `--skip`, `--reverse`, `--first-parent`, fixed date formats, patch/stat; `show` commits, trees, blobs, annotated tags and `REV:path`; default-format display of `refs/notes/commits` notes |
 | Restore | Index-to-worktree `restore`, `--staged`, `--worktree`, `--source`; `checkout -- <paths>` |
 | Refs | Loose and packed refs with peeled tag records; branch list/create/force/delete/rename, lightweight and message-supplied annotated tags, command reflogs |
 | Branch worktree | `switch` and branch `checkout`, `-c`/`-b` creation, explicit and implicit detached HEAD, dirty-worktree protection; `reset --soft/--mixed/--hard` |
@@ -51,6 +51,8 @@ oracle builds are in `notes/vc00-evidence/`.
 | Cherry-pick | Single commits and explicit commit lists; preserved source author/date, current committer, durable todo/head/options, conflicts, resolved `--continue`, `--skip`, `--abort`, `--allow-empty`, `--keep-redundant-commits` and `--empty=keep/drop/stop` |
 | Revisions | Shared bounded parser/evaluator: documented ref precedence, full/prefix OIDs, pseudorefs, parent/ancestor chains, object peels, literal `REV:path`, numeric reflogs and previous checkout; `log` exclusions/ranges and `diff` dotted endpoints |
 | Blame | Default columns, numeric/offset `-L` unions, `-w`, ordered merge parents and `--first-parent`, whole-file renames, raw line bytes, `--porcelain` and `--line-porcelain`; conservative alignment limits below |
+| Stash | `push`/bare/`save` with `-m`, `-q`, `--keep-index`; `list`; `show` (diffstat default, any diff option); `apply`/`pop` over the shared merge plan against the index tree; `drop` (reflog record rewrite) and `clear`; `stash@{N}` and bare `N` through the shared evaluator |
+| Notes | `notes add` (`-m`, `-f`, `--allow-empty`), `show`, `list`, `remove` (`--ignore-missing`) and `get-ref` over `refs/notes/commits`; any permitted fan-out read, the measured fan-out written |
 | Rebase | Linear current-branch replay with explicit upstream, `--onto`, `--reapply-cherry-picks`, durable `rebase-merge` state, conflict stops, skip/abort and continuation after an explicit resolution commit; editor-dependent continuation remains refused |
 
 Status, commit summaries and diff share one rename/copy pairer. Exact OIDs are
@@ -91,6 +93,7 @@ tools/check-ignore
 tools/check-worktree
 tools/check-commit
 tools/check-blame                  # immutable original/new loose/packed fixtures
+tools/check-stash                  # stash/notes complete state, loose/packed, client, checked units
 tools/check-revision               # loose/packed grammar and independent clients
 tools/check-history
 tools/check-refs
@@ -113,7 +116,7 @@ full repository-byte comparisons. Formatting/date API comparisons are not a
 claim of CLI stderr/exit-status parity. A checked result means the JSON verdict
 from `wolf conform-run --checked`, not merely a successful process exit.
 
-The expanded main matrix contains 190 cases: 179 parity, 10 named not-yet and
+The expanded main matrix contains 190 cases: 181 parity, 8 named not-yet and
 one version-shape check. Generated diff, similarity, pairing and application
 matrices are reported separately in `notes/vc04-evidence/`; their explicit
 representation/alignment differences are never added to the parity count.
@@ -310,8 +313,38 @@ bounds, not streaming or peak-RSS guarantees. `tools/check-blame` compares 241 n
 and 50 inherited-corpus command/state rows **per storage mode and native/release
 tier**, with six independent client rows and ten separately named refusals per
 mode. A small actual-checked program covers line correspondence and numeric
-ranges. This does not complete M3: stash, notes and all inherited merge/replay
-and editor limitations remain open.
+ranges. This does not complete M3: all inherited merge/replay and editor
+limitations remain open.
+
+## Stash and notes boundaries
+
+A stash entry is constructed before it is published: I records the index over
+HEAD, W the worktree of every path the index or HEAD tracks, over [HEAD, I]
+(git-stash Discussion). Objects are written first; `refs/stash` and its
+always-written reflog follow, then the measured reset (ORIG_HEAD and HEAD's
+`reset: moving to HEAD` record). The index is refreshed and written before the
+unborn, no-change and lock checks, as the oracle does. Recovery is separate:
+`apply`/`pop` merge W into the current index tree through the existing merge
+plan (base W^1, labels `Updated upstream`/`Stash base`/`Stashed changes`), then
+return changed paths to their previous index entries as zero-stat tree entries
+while new paths stay staged; `AUTO_MERGE` names the merged tree. `drop` takes the
+reflog lock first, rewrites the following record's old id and writes a loose
+`refs/stash` even when its value is kept.
+
+Notes are blobs in a tree under `refs/notes/commits`. Any permitted fan-out is
+read; writes use the oracle's measured shape: flat until each of the sixteen
+first-hex-digit groups holds two notes, then two-hex directories (R-vc12-2).
+`log`/`show` display the default ref's notes in the default format only.
+
+Named refusals: untracked/ignored snapshots (`-u`/`-a`) and their entries,
+`-p`, `--staged`, path-limited push, `--index`, conflicting apply, `branch`,
+`create`, `store`, `export`, `import`, `list` log options, `show -u`, `stash.*`
+configuration; notes `append`, `copy`, `edit`, `merge`, `prune`, `-F`/`-C`/`-c`/`-e`,
+the editor, `--ref`, `GIT_NOTES_REF`, `core.notesRef`, `notes.displayRef`,
+`--stdin`, and notes in non-default formats or with patch and stat.
+`tools/check-stash` compares 104 complete-state cases (395 intermediate
+processes) and 39 named refusals **per storage mode and native/release tier**,
+19 independent client rows per mode and a bounded actual-checked unit.
 
 ## Packed object reads
 
