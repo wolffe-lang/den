@@ -1,0 +1,8 @@
+pkg {
+    name: "diffbinary",
+    edition: "1",
+    deps: {
+        pack: {path: "../pack"},
+        zlib: {path: "../zlib"},
+    },
+}
