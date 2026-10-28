@@ -1,0 +1,126 @@
+[
+  {
+    "fixture": "linear-ofs",
+    "args": [
+      "count-objects",
+      "-v"
+    ],
+    "status": 0,
+    "out": "count: 0\nsize: 0\nin-pack: 31\npacks: 1\nsize-pack: 3\nprune-packable: 0\ngarbage: 0\nsize-garbage: 0\n",
+    "err": ""
+  },
+  {
+    "fixture": "linear-ofs",
+    "args": [
+      "fsck",
+      "--full"
+    ],
+    "status": 0,
+    "out": "",
+    "err": ""
+  },
+  {
+    "fixture": "linear-ofs",
+    "args": [
+      "verify-pack",
+      "-v",
+      "/work/den/target/pack-write-native/linear-ofs/.git/objects/pack/pack-a55cc699c7d124960da1d47861f24a7fea4ae0e5.idx"
+    ],
+    "status": 0,
+    "out": "094a4e90675111f39d49b2d57bcb4421adad59ac blob   8 17 12\n273ed49c106f3b564072ebdc4f9e8b3f25c94be6 blob   8 17 29\n516fc5f0683e0dddf43f90e97959e650c3eef632 blob   8 17 46\naabd92a097f221ad1cce8696c9cb42bc55f28f4c blob   8 17 63\nc58252d09e16070bcb05717d57f3dee3ca2b698b blob   8 17 80\nc7a5159c7b5f4a54b7fd26636b73a37663fe21c6 blob   8 17 97\nce3b7b05124a0f9bd0fab1def8ece6789f2c395f blob   8 17 114\ne4b5094b3e59d930c176e00732ef47d95fd9a1af blob   8 17 131\nff00258b00eaaa2342ecffbb428ffb31eeeef820 blob   8 17 148\n4a58007052a65fbc2fc3f910f2855f45a4058e74 blob   6 15 165\n65b2df87f7df3aeedef04be96703e55ac19c2cfb blob   5 14 180\n0b8ea9ca21a3ab08220bc0b102db96c618c52368 commit 221 154 194\n3b3c13fe9a70889bb3c22781a5f814e0b62133d6 commit 132 123 348 1 0b8ea9ca21a3ab08220bc0b102db96c618c52368\n41536e1bb91b2c9e24153456c5b1a391adf164a2 commit 130 124 471 1 0b8ea9ca21a3ab08220bc0b102db96c618c52368\n604b07adb07fa316931518ea999a6d54909a1e1a commit 132 123 595 2 41536e1bb91b2c9e24153456c5b1a391adf164a2\n689911e4a8388b50622b1ca98ea2a6d7cc6931c7 commit 132 123 718 3 604b07adb07fa316931518ea999a6d54909a1e1a\n6f9e461fd3807941e9134fa9a018d01ca8311b2f commit 132 124 841 4 689911e4a8388b50622b1ca98ea2a6d7cc6931c7\n98d4fdc348d7729ea3c8826b8ccc6022e7f9da4f commit 130 123 965 3 604b07adb07fa316931518ea999a6d54909a1e1a\nd80cba76dce20adaab36d6bc0f9c5eb8e1eef41f commit 132 125 1088 4 98d4fdc348d7729ea3c8826b8ccc6022e7f9da4f\ne08e7d1805cbdc80dfd35ab962b9e71c5e072105 commit 132 125 1213 5 d80cba76dce20adaab36d6bc0f9c5eb8e1eef41f\na6e91b14eec8022f510b48963f5931d148496bbe commit 81 92 1338 4 689911e4a8388b50622b1ca98ea2a6d7cc6931c7\n18154cb9a5f802b82eff6e1d9330c1bd73a325ed tree   66 70 1430\n2ab54ec102f60003c77f0d7f13019b5bfeba2919 tree   54 58 1500 1 18154cb9a5f802b82eff6e1d9330c1bd73a325ed\n3400f2257c648f71535ea73def0a24e48c34304a tree   54 58 1558 2 2ab54ec102f60003c77f0d7f13019b5bfeba2919\n68ba7e4f796cbce5ed86bad3e9df986fb138d99f tree   54 58 1616 2 2ab54ec102f60003c77f0d7f13019b5bfeba2919\n7ca076551210f2a2d1836e4566bd7c5d5bb236cb tree   54 58 1674 3 3400f2257c648f71535ea73def0a24e48c34304a\n8658a2628848c410d703e2d5f2d96c32ef3b2eb5 tree   54 58 1732 3 68ba7e4f796cbce5ed86bad3e9df986fb138d99f\nbd0130dcf7b14682a63309a7511bcf75d864dd8b tree   54 58 1790 4 7ca076551210f2a2d1836e4566bd7c5d5bb236cb\nc557f6beefb41cbcd34b9d8ce454d3ed80ab8591 tree   54 58 1848 4 8658a2628848c410d703e2d5f2d96c32ef3b2eb5\nee20fcbebe04091a70ac2654e17297443ed1e7cf tree   54 59 1906 5 bd0130dcf7b14682a63309a7511bcf75d864dd8b\nf938b072f403e629a80b009ebed9b18d36f8bc1d tree   54 58 1965 5 c557f6beefb41cbcd34b9d8ce454d3ed80ab8591\nnon delta: 13 objects\nchain length = 1: 3 objects\nchain length = 2: 3 objects\nchain length = 3: 4 objects\nchain length = 4: 5 objects\nchain length = 5: 3 objects\n/work/den/target/pack-write-native/linear-ofs/.git/objects/pack/pack-a55cc699c7d124960da1d47861f24a7fea4ae0e5.pack: ok\n",
+    "err": ""
+  },
+  {
+    "fixture": "empty-none",
+    "args": [
+      "count-objects",
+      "-v"
+    ],
+    "status": 0,
+    "out": "count: 0\nsize: 0\nin-pack: 2\npacks: 1\nsize-pack: 1\nprune-packable: 0\ngarbage: 0\nsize-garbage: 0\n",
+    "err": ""
+  },
+  {
+    "fixture": "empty-none",
+    "args": [
+      "fsck",
+      "--full"
+    ],
+    "status": 0,
+    "out": "",
+    "err": ""
+  },
+  {
+    "fixture": "empty-none",
+    "args": [
+      "verify-pack",
+      "-v",
+      "/work/den/target/pack-write-native/empty-none/.git/objects/pack/pack-f1639835a81e54954a4de1bbb0de937f0bce70c1.idx"
+    ],
+    "status": 0,
+    "out": "e7bed59c730632b9fc25ea5094440ee98cd71f23 commit 170 121 12\n4b825dc642cb6eb9a060e54bf8d69288fbee4904 tree   0 9 133\nnon delta: 2 objects\n/work/den/target/pack-write-native/empty-none/.git/objects/pack/pack-f1639835a81e54954a4de1bbb0de937f0bce70c1.pack: ok\n",
+    "err": ""
+  },
+  {
+    "fixture": "m2-unborn-none",
+    "args": [
+      "count-objects",
+      "-v"
+    ],
+    "status": 0,
+    "out": "count: 0\nsize: 0\nin-pack: 0\npacks: 1\nsize-pack: 1\nprune-packable: 0\ngarbage: 0\nsize-garbage: 0\n",
+    "err": ""
+  },
+  {
+    "fixture": "m2-unborn-none",
+    "args": [
+      "fsck",
+      "--full"
+    ],
+    "status": 0,
+    "out": "",
+    "err": "notice: No default references\n"
+  },
+  {
+    "fixture": "m2-unborn-none",
+    "args": [
+      "verify-pack",
+      "-v",
+      "/work/den/target/pack-write-native/m2-unborn-none/.git/objects/pack/pack-029d08823bd8a8eab510ad6ac75c823cfd3ed31e.idx"
+    ],
+    "status": 0,
+    "out": "/work/den/target/pack-write-native/m2-unborn-none/.git/objects/pack/pack-029d08823bd8a8eab510ad6ac75c823cfd3ed31e.pack: ok\n",
+    "err": ""
+  },
+  {
+    "fixture": "similar-ofs",
+    "args": [
+      "count-objects",
+      "-v"
+    ],
+    "status": 0,
+    "out": "count: 0\nsize: 0\nin-pack: 24\npacks: 1\nsize-pack: 2\nprune-packable: 0\ngarbage: 0\nsize-garbage: 0\n",
+    "err": ""
+  },
+  {
+    "fixture": "similar-ofs",
+    "args": [
+      "fsck",
+      "--full"
+    ],
+    "status": 0,
+    "out": "dangling blob 0451179ad4b62a4a7a6c84aaed542622d6899cc2\ndangling blob c6cc47040fe96ed2da12dbe88116eaf1e16036f1\ndangling blob c7a52bc05681c053aa302391543e5f6e130019f6\ndangling blob 489293c2cfa9f5c9157ff69ed2d55635aac5185b\ndangling blob 8858fc6afe917eeb85718933cd0145e15dc5b41d\ndangling blob 4f8c3353a7209c199f55fd7d7c0d9b494667a12c\ndangling blob d8562d9ad822b6e5b76941fcfbc384859d2c95a6\ndangling blob d95d900ae74c8cc2fe3312335dd35707c3e350a1\ndangling blob 5b14bdbfad1e1b804c92c258152ebabd4c02a92c\ndangling blob 5c0b3fb4ff0a2b393f696969b854a8af7ba28225\ndangling blob db23d6809959420848a65f6663c71aba9c9e5ad2\ndangling blob dc1cb16fc374e3fa5218db6a265bd9b3cf0d5fd6\ndangling blob df50f6e526f6e095c36050df2752426629bcfd7f\ndangling blob e0b885c55e2313147d12314fbba7d0f15f541468\ndangling blob a14754ac82d21c6f71440665a277e41ed2669fd1\ndangling blob dccc113ae13aeba209af2a030c403456a0321dab\ndangling blob 6311f44933cb25bbf5f908b732aeebea8bed5caa\ndangling blob 64ab885af8c9500b3a13d892f23d1bbd22c6a9e3\ndangling blob 66018b1cf230488a3c890ef1670352bdc7a271b8\ndangling blob a92b2b6b01700bf3e474da9b1436f52a71ccf199\ndangling blob 34ba0360bcd2a25884a57dd4f0e00c9a762d64eb\ndangling blob 7655143f56c378b82b90564b9e60cb1015a518ce\ndangling blob f753ccb94b97f84fe4cae61700e1cbcf3b4a7b17\ndangling blob bf5634aab09838c1737753bd5166410b9771b6d6\n",
+    "err": "notice: No default references\n"
+  },
+  {
+    "fixture": "similar-ofs",
+    "args": [
+      "verify-pack",
+      "-v",
+      "/work/den/target/pack-write-native/similar-ofs/.git/objects/pack/pack-bbb02330774f3402c481027995fa2e101e8adecf.idx"
+    ],
+    "status": 0,
+    "out": "34ba0360bcd2a25884a57dd4f0e00c9a762d64eb blob   7612 532 12\n5b14bdbfad1e1b804c92c258152ebabd4c02a92c blob   11 22 544 1 34ba0360bcd2a25884a57dd4f0e00c9a762d64eb\n5c0b3fb4ff0a2b393f696969b854a8af7ba28225 blob   10 20 566 2 5b14bdbfad1e1b804c92c258152ebabd4c02a92c\n64ab885af8c9500b3a13d892f23d1bbd22c6a9e3 blob   10 20 586 2 5b14bdbfad1e1b804c92c258152ebabd4c02a92c\n7655143f56c378b82b90564b9e60cb1015a518ce blob   10 20 606 2 5b14bdbfad1e1b804c92c258152ebabd4c02a92c\na14754ac82d21c6f71440665a277e41ed2669fd1 blob   10 21 626 1 34ba0360bcd2a25884a57dd4f0e00c9a762d64eb\na92b2b6b01700bf3e474da9b1436f52a71ccf199 blob   10 20 647 2 a14754ac82d21c6f71440665a277e41ed2669fd1\nbf5634aab09838c1737753bd5166410b9771b6d6 blob   10 20 667 2 5b14bdbfad1e1b804c92c258152ebabd4c02a92c\nc6cc47040fe96ed2da12dbe88116eaf1e16036f1 blob   10 20 687 2 a14754ac82d21c6f71440665a277e41ed2669fd1\nc7a52bc05681c053aa302391543e5f6e130019f6 blob   10 20 707 3 64ab885af8c9500b3a13d892f23d1bbd22c6a9e3\nd8562d9ad822b6e5b76941fcfbc384859d2c95a6 blob   10 20 727 3 7655143f56c378b82b90564b9e60cb1015a518ce\ndf50f6e526f6e095c36050df2752426629bcfd7f blob   10 20 747 3 bf5634aab09838c1737753bd5166410b9771b6d6\ne0b885c55e2313147d12314fbba7d0f15f541468 blob   10 20 767 3 bf5634aab09838c1737753bd5166410b9771b6d6\nf753ccb94b97f84fe4cae61700e1cbcf3b4a7b17 blob   10 20 787 3 bf5634aab09838c1737753bd5166410b9771b6d6\n0451179ad4b62a4a7a6c84aaed542622d6899cc2 blob   9 19 807 4 c7a52bc05681c053aa302391543e5f6e130019f6\n489293c2cfa9f5c9157ff69ed2d55635aac5185b blob   10 20 826 4 c7a52bc05681c053aa302391543e5f6e130019f6\n4f8c3353a7209c199f55fd7d7c0d9b494667a12c blob   10 20 846 4 d8562d9ad822b6e5b76941fcfbc384859d2c95a6\n6311f44933cb25bbf5f908b732aeebea8bed5caa blob   10 20 866 4 df50f6e526f6e095c36050df2752426629bcfd7f\n66018b1cf230488a3c890ef1670352bdc7a271b8 blob   10 20 886 4 e0b885c55e2313147d12314fbba7d0f15f541468\n8858fc6afe917eeb85718933cd0145e15dc5b41d blob   10 20 906 4 f753ccb94b97f84fe4cae61700e1cbcf3b4a7b17\nd95d900ae74c8cc2fe3312335dd35707c3e350a1 blob   10 20 926 5 0451179ad4b62a4a7a6c84aaed542622d6899cc2\ndb23d6809959420848a65f6663c71aba9c9e5ad2 blob   10 20 946 5 489293c2cfa9f5c9157ff69ed2d55635aac5185b\ndc1cb16fc374e3fa5218db6a265bd9b3cf0d5fd6 blob   10 20 966 5 4f8c3353a7209c199f55fd7d7c0d9b494667a12c\ndccc113ae13aeba209af2a030c403456a0321dab blob   10 20 986 5 6311f44933cb25bbf5f908b732aeebea8bed5caa\nnon delta: 1 object\nchain length = 1: 2 objects\nchain length = 2: 6 objects\nchain length = 3: 5 objects\nchain length = 4: 6 objects\nchain length = 5: 4 objects\n/work/den/target/pack-write-native/similar-ofs/.git/objects/pack/pack-bbb02330774f3402c481027995fa2e101e8adecf.pack: ok\n",
+    "err": ""
+  }
+]

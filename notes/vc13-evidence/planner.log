@@ -1,0 +1,72 @@
+tiers-test: PASS T1 push is full
+tiers-test: PASS T1 schedule is full
+tiers-test: PASS T1 workflow_dispatch is full
+tiers-test: PASS T1 the full-matrix label is full
+tiers-test: PASS T1 another label is a noop
+tiers-test: PASS T1 a dispatch naming linux is partial
+tiers-test: PASS T1 a dispatch naming no job of the workflow is refused
+tiers-test: PASS T2 code is pr
+tiers-test: PASS T2 prose alone is a noop
+tiers-test: PASS T2 prose beside code is pr
+tiers-test: PASS T2 object gate path src/object/store.lu
+tiers-test: PASS T2 object gate path src/oid/oid.lu
+tiers-test: PASS T2 object gate path src/index/index.lu
+tiers-test: PASS T2 object gate path src/repository/repository.lu
+tiers-test: PASS T2 object gate path tools/check-objects
+tiers-test: PASS T2 object gate path tools/objects-test.py
+tiers-test: PASS T2 object gate path probes/object-client/main.lu
+tiers-test: PASS T2 object integration gate is mandatory
+tiers-test: PASS T2 M2 integration gate is mandatory: tools/check-config
+tiers-test: PASS T2 M2 integration gate is mandatory: tools/check-index
+tiers-test: PASS T2 M2 integration gate is mandatory: tools/check-ignore
+tiers-test: PASS T2 M2 integration gate is mandatory: tools/check-worktree
+tiers-test: PASS T2 M2 integration gate is mandatory: tools/check-commit
+tiers-test: PASS T2 M2 integration gate is mandatory: tools/check-history
+tiers-test: PASS T2 strict witness remains unimplemented
+tiers-test: PASS T2 blame attribution gate is mandatory
+tiers-test: PASS T2 stash and notes gate is mandatory
+tiers-test: PASS T2 shared revision grammar gate is mandatory
+tiers-test: PASS T2 inherited history gate remains mandatory
+tiers-test: PASS T2 refs integration gate is mandatory
+tiers-test: PASS T2 merge integration gate is mandatory
+tiers-test: PASS T2 replay integration gate is mandatory
+tiers-test: PASS T2 pack writer R4c gate is mandatory
+tiers-test: PASS T2 packed storage and packed regression gate is mandatory
+tiers-test: PASS T2 pack gate path src/pack/read.lu
+tiers-test: PASS T2 pack gate path tools/check-pack
+tiers-test: PASS T2 pack gate path tools/pack-interop.py
+tiers-test: PASS T2 pack gate path tools/packed-fixture.py
+tiers-test: PASS T2 pack gate path probes/pack-client/main.lu
+tiers-test: PASS T2 diff integration gate is mandatory: tools/check-diff --units-only
+tiers-test: PASS T2 diff integration gate is mandatory: tools/check-delta
+tiers-test: PASS T2 diff integration gate is mandatory: tools/check-rename
+tiers-test: PASS T2 diff integration gate is mandatory: tools/check-diff --corpus-only
+tiers-test: PASS T2 diff integration gate is mandatory: tools/check-diffbinary --reviewed-body --with-cli
+tiers-test: PASS T2 implemented diff/history/refs cases cannot regress to named refusals
+tiers-test: PASS T2 replay parity rows cannot regress to named refusals
+tiers-test: PASS T3 a path no rule names is full
+tiers-test: PASS T3 unreadable paths are full
+tiers-test: PASS T4 the jobs, in order: ['plan', 'plan-test', 'linux', 'macos', 'tier', 'nightly-red']
+tiers-test: PASS T4 plan-test needs the plan and runs only when it is named
+tiers-test: PASS T4 linux needs the plan and runs only when it is named
+tiers-test: PASS T4 macos needs the plan and runs only when it is named
+tiers-test: PASS T4 tier needs every job, runs unless cancelled, checks the verdict
+tiers-test: PASS T4 cancel-in-progress for pull requests only
+tiers-test: PASS T4 the trunk push, the nightly, the label and the dispatch input
+tiers-test: PASS T6 a green full
+tiers-test: PASS T6 a green pr
+tiers-test: PASS T6 a green noop
+tiers-test: PASS T6 a green partial
+tiers-test: PASS T6 a chosen job failed
+tiers-test: PASS T6 a chosen job skipped
+tiers-test: PASS T6 a job that ran unasked
+tiers-test: PASS T6 a full that chose less
+tiers-test: PASS T6 a failed plan
+tiers-test: PASS T6 a plan with no tier
+tiers-test: PASS T8 no open issue: one is opened, labelled nightly-red, titled 'nightly red: ci on trunk'
+tiers-test: PASS T8 an open issue: a comment on it, no new issue
+tiers-test: PASS T8 a label that already exists is no failure
+tiers-test: PASS T8 the script refuses to run without REPO, WORKFLOW and RUN_URL
+tiers-test: PASS T8 the workflow's name is ci, the title's
+tiers-test: PASS T8 nightly-red runs after the verdict, on a red schedule only, may write issues
+tiers-test: every check passes
