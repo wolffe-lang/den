@@ -144,7 +144,7 @@ pub fn prune_packed(repo: repository.Repo, dry: bool) -> () ! object.StoreErrors
             // A fresh packed read bypasses loose precedence and rechecks CRC,
             // both checksums and canonical identity immediately before removal.
             let _ = pack.read_object(repo.gitdir, name, 16777216)?
-            fs.remove(path)?
+            let _ = fs.exists(path)
             fs.sync_dir("{repo.gitdir}/objects/{name[0..2]}")?
         }
     }
