@@ -9,7 +9,7 @@ This is not a replacement for Git; M2, M3 and M4 remain incomplete. Log/show sup
 bounded loose or packed history; branches, tags, branch switching and resets share
 loose/packed ref storage. Merge, single-commit revert, cherry-pick and linear
 rebase cover the measured subsets below. Combined merge display, full replay
-semantics, pack housekeeping and transports remain unfinished. Text diff has
+semantics, gc policy and transports remain unfinished. Text diff has
 two recorded equal-cost alignment differences; binary patches reconstruct the
 exact blobs but do not always use Git's byte representation. `den --version`
 prints `den 0.0.0 (built with wolf 0.2.35)`.
@@ -28,7 +28,7 @@ measured bytes and documentation discrepancies.
 
 Archive and oracle pins are in `wolf-toolchain.toml` and `den-oracle.toml`.
 Downloads fail on a digest mismatch. Both release-metadata reads are retained
-in `notes/vc12-evidence/pins/` (earlier reads in `notes/vc11-evidence/pins/`); the original signature verification and two matching
+in `notes/vc14-evidence/pins/` (earlier reads in `notes/vc13-evidence/pins/`); the original signature verification and two matching
 oracle builds are in `notes/vc00-evidence/`.
 
 ## Commands implemented so far
@@ -36,7 +36,7 @@ oracle builds are in `notes/vc00-evidence/`.
 | Area | Commands and supported surface |
 |---|---|
 | Objects | `init`, `hash-object`, `cat-file -p/-t/-s`, `mktree`, `commit-tree`, `mktag` |
-| Packs | `pack-objects` from stdin object IDs to `objects/pack/pack`, OFS/REF deltas or no deltas; `verify-pack [-v]`; `count-objects [-v]`; bounded `fsck --full` (limits below); no gc/repack/pruning |
+| Packs | `pack-objects` from stdin object IDs to `objects/pack/pack`, OFS/REF deltas or no deltas; `verify-pack [-v]`; `count-objects [-v]`; bounded `fsck --full`; `repack -a -n -q [-d] [-k]` and `prune-packed [-n] [-q]` within the limits below |
 | Index | `write-tree` over nested index v2/v3/v4 entries; exclusive `index.lock` writes, stat fields, flags and TREE cache updates |
 | Config / ignore | Read-only `config --get`; `check-ignore` with provenance, negation, tracked-file bypass and `--no-index` |
 | Worktree | `add` paths/directories, `-A`, `-u`, `--ignore-removal`, `-f`, `-N`, `--chmod`; `rm`, `mv` and their implemented safety/force/recursive options |
@@ -102,6 +102,7 @@ tools/check-merge
 tools/check-replay
 tools/check-pack                   # after corpus and inherited client builds
 tools/check-pack-write             # after check-pack/check-stash; interop, sizes, commands and corruption
+tools/check-housekeeping           # closure, verified retirement/recovery, validator and checked parser
 tools/check-delta
 tools/check-rename
 tools/check-diff
@@ -118,7 +119,7 @@ full repository-byte comparisons. Formatting/date API comparisons are not a
 claim of CLI stderr/exit-status parity. A checked result means the JSON verdict
 from `wolf conform-run --checked`, not merely a successful process exit.
 
-The expanded main matrix contains 190 cases: 182 parity, 7 named not-yet and
+The expanded main matrix contains 190 cases: 183 parity requirements, 6 named not-yet and
 one version-shape check. Generated diff, similarity, pairing and application
 matrices are reported separately in `notes/vc04-evidence/`; their explicit
 representation/alignment differences are never added to the parity count.
@@ -155,7 +156,7 @@ The SHA-1 store reads and writes loose objects and pack-v2/idx-v2 pairs.
 Binary object/tree names are preserved, but filesystem path arguments
 remain UTF-8 `str`; raw non-UTF-8 OS paths have named upstream limitations.
 SHA-256 IDs are representable, but SHA-256 repositories are refused before writes.
-Pack housekeeping, thin packs, multi-pack-index, bitmaps, alternates, linked worktrees,
+GC expiry/reflog/ref-packing policy, thin packs, multi-pack-index, bitmaps, alternates, linked worktrees,
 submodules and unstaged revision forms remain unsupported.
 `log` accepts inclusions, `^REV` exclusions and two-/three-dot sets. `diff` treats
 a dotted range as endpoints, with one merge base required for three-dot. Other
@@ -389,11 +390,12 @@ window/depth settings remain named refusals.
 
 Publication writes and syncs an exclusive temporary pair, validates every object
 through the existing reader, then renames pack before idx and syncs the directory.
-Ordinary failures clean owned temporaries. A crash may leave an orphan pack;
-this is not a two-file transaction. Loose objects are never pruned. `gc`, `repack`,
-cruft packs, .keep policy, bitmaps and multi-pack-index remain unimplemented.
+Ordinary failures clean owned temporaries. A repeated publication can restore a
+missing index after independently verifying the orphan pack against the new index.
+This is not a two-file transaction; the writer itself never prunes loose objects.
+GC, cruft packs, .keep policy, bitmaps and multi-pack-index remain unimplemented.
 
-The writer gate checks 58 source fixtures in three modes, 14,055 object reads
+The writer gate checks 61 source fixtures in three modes, 15,207 object reads
 per native/release tier, and all-object Git verification after isolating the new
 pack from loose and older packed copies. Pack bytes need not equal Git's:
 compressed OFS packs measure at most 1.025967 times Git's size and REF packs
@@ -407,11 +409,40 @@ from the bounded actual-checked delta program.
 histogram. `count-objects -v` reports actual allocated loose blocks and pack/index
 sizes; unavailable allocation metadata is a named refusal. `fsck --full` checks
 objects, typed links and HEAD/ref/index/reflog roots without writes. It supports
-`--no-dangling`, `--no-reflogs` and `--no-progress`; commit-graph verification,
-multiple dangling-tip display ordering, strict/configured checks and detailed
-corruption diagnostics remain named refusals. In particular the inherited main
-packed fsck fixture remains a refusal, not a clean-check claim. No M4 completion
-is claimed.
+`--no-dangling`, `--no-reflogs` and `--no-progress`. Single-file commit graphs
+validate chunk framing, fanout, object names, parent edges, checksums and object
+database metadata, including corrected generations. Missing objects, corrupt
+loose headers/hash paths, wrong tree types and invalid roots have measured
+bounded diagnostics. Multiple dangling/missing output ordering, multiple broken
+links, malformed refs and unmeasured diagnostic combinations remain named;
+split/Bloom graphs and strict/configured checks are also refused. The main packed
+fsck fixture now requires exact parity. No M4 completion is claimed.
+
+Housekeeping separates reachable selection, pair construction, verified publication
+and removal. Roots include refs, HEAD, both reflog endpoints and the index, including
+valid cache-tree records. `repack -a -n -q -d` retires only redundant packs;
+if an old pack has unreachable objects outside the replacement, it refuses before
+publication. Add `-k` to retain every old packed and loose object. Incremental
+repacking, `-A`, server-info updates and nonquiet output remain named refusals.
+`gc` remains separate and unsupported: repack never expires reflogs, packs refs,
+prunes unique unreachable objects or writes a commit graph.
+
+Every replacement is read back before retirement. A synced retirement record
+allows a repeated repack to finish interrupted pack/index removal after verifying
+the replacement again. An incomplete or foreign record is preserved and refused;
+foreign temporary files are never swept. Interrupted retirement can leave an old
+index without its pack, so ordinary den reads may refuse until repack recovery.
+The new pair remains independently readable; this is not a multi-file transaction.
+`prune-packed` verifies packed copies before removing loose duplicates and removes
+empty fanout directories. Its dry run preserves raw directory order within each
+hex prefix; both tools are compared on one immutable physical fixture.
+
+The housekeeping differential has 56 exact command/state rows and four separate
+unreachable-retirement refusals per tier. Validator tests add 40 exact immutable
+commands and three independent metadata clients. Five interruption phases,
+foreign files, repeated cleanup, orphan publication and bounded actual-checked
+parser tests have separate witnesses. The larger repetitive/binary/mixed writer
+fixtures retain the original REF 1.399425 headroom warning and every 1.5 size gate.
 
 ## Loose objects and historical measurements
 
