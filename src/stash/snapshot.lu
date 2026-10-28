@@ -1,0 +1,188 @@
+// Clean-room: Git v2.56.0 Documentation/git-stash.adoc (Description,
+// Commands, Options, Discussion) and black-box runs of the pinned oracle.
+// No implementation source consulted. Construction is separate from both
+// publication (refs/stash and its reflog) and recovery (apply/pop/drop).
+use commit
+use commit_format
+use history
+use index
+use object
+use oid
+use refs
+use walk
+use worktree
+
+/// A constructed, unpublished entry. worktree_commit W has ordered parents
+/// [head, index_commit] as the page's Discussion draws; message is W's
+/// complete message bytes and title the stdout/reflog text derived from it.
+pub struct Snapshot {
+    head: oid.Oid,
+    index_commit: oid.Oid,
+    worktree_commit: oid.Oid,
+    message: List[byte],
+}
+
+fn owned(text: str) -> List[byte] {
+    var out = List[byte]()
+    for b in text.bytes() { (mut out).push(b) }
+    out
+}
+
+fn add(mut out: List[byte], bytes: List[byte]) { for b in bytes { (mut out).push(b) } }
+
+/// "<branch>" or "(no branch)" for a detached HEAD.
+pub fn label(head: worktree.Head) -> str {
+    if head.detached then "(no branch)" else head.branch
+}
+
+/// "<abbrev> <first-paragraph subject>" of the HEAD commit (measured: the
+/// subject paragraph's lines are joined with one space, as %s is).
+pub fn title(ctx: worktree.Context, id: oid.Oid) -> List[byte] ! commit.CommitErrors {
+    let value = ctx.repo.config["core.abbrev"] else "7"
+    let minimum = value.to_int() else |_| { return Unsupported("core.abbrev={value}") }
+    let item = walk.read(ctx.repo, id)?
+    var out = owned("{history.abbreviate(ctx.repo, id, minimum)?} ")
+    add(mut out, commit.subject(item.headers.message)?)
+    out
+}
+
+fn write_trees(ctx: worktree.Context, value: index.Index) -> oid.Oid ! commit.CommitErrors {
+    let assembly = index.build_trees(value)?
+    for item in assembly.objects { let _ = object.write_object(ctx.repo, "tree", item.data)? }
+    copy assembly.root
+}
+
+/// True when the scanned tracked state differs from HEAD in the index or the
+/// worktree. Untracked and ignored rows never count (no -u/-a in scope).
+pub fn changed(snapshot: worktree.Snapshot) -> bool {
+    for row in snapshot.rows {
+        if !row.untracked && !row.ignored && (row.x != " " || row.y != " ") { return true }
+    }
+    false
+}
+
+/// Build I (the index tree over HEAD) and W (the index overlaid with every
+/// tracked worktree change, over [HEAD, I]) from a caller-owned scan of the
+/// caller's locked index. Writes objects only; no ref, index or worktree.
+/// message is the -m text; empty selects "WIP on <branch>: <title>".
+pub fn construct(
+    ctx: worktree.Context,
+    snapshot: worktree.Snapshot,
+    message: List[byte],
+) -> Snapshot ! commit.CommitErrors {
+    let head = snapshot.head
+    if head.commits.len != 1 { return Unsupported("stash unborn HEAD") }
+    for entry in snapshot.index.entries {
+        if index.stage(entry) != 0 { return Unsupported("stash unmerged index") }
+        if entry.extended != 0 || entry.flags & 0x8000 != 0 {
+            return Unsupported("stash flagged index entry")
+        }
+    }
+    let branch = label(head)
+    let heading = title(ctx, head.commits[0])?
+    let author = commit_format.identity_text(commit.environment_identity(ctx, "AUTHOR", "")?)?
+    let committer = commit_format.identity_text(commit.environment_identity(ctx, "COMMITTER", "")?)?
+    var plain = index.empty(snapshot.index.version)?
+    plain.entries = copy snapshot.index.entries
+    let index_tree = write_trees(ctx, plain)?
+    var index_message = owned("index on {branch}: ")
+    add(mut index_message, heading)
+    (mut index_message).push(10 as byte)
+    let index_commit = object.write_object(
+        ctx.repo,
+        "commit",
+        object.build_commit(
+            index_tree,
+            [copy head.commits[0]],
+            author,
+            committer,
+            "",
+            index_message,
+        )?,
+    )?
+    // W records the worktree of every path the index or HEAD tracks (measured:
+    // a HEAD path dropped from the index but present on disk is recorded).
+    var work = index.empty(snapshot.index.version)?
+    for entry in snapshot.index.entries {
+        for file in snapshot.files {
+            if worktree_compare(file.path, entry.path) != 0 { continue }
+            var replacement = copy entry
+            if !oid.equal(file.id, entry.id) {
+                replacement.id = object.write_object(ctx.repo, "blob", file.data)?
+            }
+            replacement.stat[6] = file.mode
+            (mut work.entries).push(replacement)
+        }
+    }
+    for leaf in snapshot.head_entries {
+        var indexed = false
+        for entry in snapshot.index.entries {
+            if worktree_compare(entry.path, leaf.path) == 0 { indexed = true }
+        }
+        if indexed { continue }
+        let file = worktree.read_file(ctx, leaf.path, []) else |e| match e {
+            not_found => { continue },
+            _ => { return Unsupported("stash unreadable tracked path: {e}") },
+        }
+        var added = index.conflict_entry(leaf.path, file.mode, file.id, 1)?
+        added.flags -= 4096
+        let _ = object.write_object(ctx.repo, "blob", file.data)?
+        work = index.replace_entry(work, added)?
+    }
+    let work_tree = write_trees(ctx, work)?
+    var text = List[byte]()
+    if message.len > 0 {
+        add(mut text, owned("On {branch}: "))
+        add(mut text, message)
+    } else {
+        add(mut text, owned("WIP on {branch}: "))
+        add(mut text, heading)
+    }
+    let worktree_commit = object.write_object(
+        ctx.repo,
+        "commit",
+        object.build_commit(
+            work_tree,
+            [copy head.commits[0], copy index_commit],
+            author,
+            committer,
+            "",
+            copy text,
+        )?,
+    )?
+    Snapshot {
+        head: copy head.commits[0],
+        index_commit: index_commit,
+        worktree_commit: worktree_commit,
+        message: text,
+    }
+}
+
+fn worktree_compare(a: List[byte], b: List[byte]) -> int {
+    var i = 0
+    while i < a.len && i < b.len {
+        if a[i] != b[i] { return a[i] as int - b[i] as int }
+        i += 1
+    }
+    a.len - b.len
+}
+
+/// Publish a constructed entry: refs/stash (compare-and-swap against its
+/// current value) and an always-written reflog record whose message is W's
+/// message with whitespace runs collapsed (the shared reflog writer's rule).
+pub fn publish(ctx: worktree.Context, entry: Snapshot) -> () ! commit.CommitErrors {
+    let current = refs.optional(ctx.repo, "refs/stash")?
+    let committer = commit_format.identity_text(commit.environment_identity(ctx, "COMMITTER", "")?)?
+    let text = str_from_utf8(entry.message) else |_| {
+        return Unsupported("stash non-UTF-8 message")
+    }
+    refs.update(
+        ctx.repo,
+        "refs/stash",
+        current,
+        [copy entry.worktree_commit],
+        committer,
+        text,
+        true,
+    )?
+}

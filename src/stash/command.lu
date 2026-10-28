@@ -1,0 +1,366 @@
+// Command edge for git-stash(1): push (bare and save forms), list, show,
+// apply, pop, drop and clear, measured on the pinned oracle. Every other
+// form is a named refusal before any write.
+use std.fs
+use commit
+use diff
+use index
+use oid
+use refs
+use repository
+use revision
+use revsyntax
+use walk
+use worktree
+
+struct Selected { found: bool, label: str, n: int, ids: List[oid.Oid] }
+
+fn digits(text: str) -> bool {
+    if text == "" || text.len > 9 { return false }
+    for b in text.bytes() { if b < 48 as byte || b > 57 as byte { return false } }
+    true
+}
+
+fn write_out(data: List[byte]) -> () ! commit.CommitErrors {
+    var stdout = fs.stdout()
+    fs.write_chunk(mut stdout, data)?
+}
+
+/// Resolve a stash operand through the shared evaluator: none is
+/// refs/stash@{0}; a bare integer N is refs/stash@{N} (measured spelling).
+/// n is the reflog position when the operand names one, otherwise -1.
+fn choose(
+    ctx: worktree.Context,
+    operands: List[str],
+    command: str,
+) -> Selected ! commit.CommitErrors {
+    if operands.len > 1 { return Unsupported("stash {command} with more than one operand") }
+    if operands.len == 0 && refs.optional(ctx.repo, "refs/stash")?.len == 0 {
+        eprint("No stash entries found.")
+        return Selected { found: false, label: "", n: -1, ids: List[oid.Oid]() }
+    }
+    var spelled = "refs/stash@{{0}}"
+    if operands.len == 1 {
+        spelled = operands[0]
+        if digits(spelled) { spelled = "refs/stash@{{{spelled}}}" }
+    }
+    let id = revision.resolve(ctx.repo, spelled) else |e| match e {
+        Fatal(message) => { return Fatal(message) },
+        Unsupported(feature) => { return Unsupported(feature) },
+        _ => { return Unsupported("stash operand {spelled}") },
+    }
+    var n = -1
+    let expression = revsyntax.parse(spelled) else |_| {
+        return Selected { found: true, label: spelled, n: -1, ids: [id] }
+    }
+    if expression.kind == "single" &&
+        (expression.left.base == "stash" || expression.left.base == "refs/stash") &&
+        expression.left.steps.len == 0 &&
+        !expression.left.has_path &&
+        digits(expression.left.selector) {
+        n = expression.left.selector.to_int() else -1
+    }
+    Selected { found: true, label: spelled, n: n, ids: [id] }
+}
+
+/// stash.* configuration changes display/apply defaults; unmeasured here.
+fn controls(ctx: worktree.Context) -> () ! commit.CommitErrors {
+    for (key, _) in ctx.repo.config.pairs() {
+        if key.starts_with("stash.") { return Unsupported("stash configuration {key}") }
+    }
+}
+
+fn push(args: List[str], start: int, mode: str) -> int ! commit.CommitErrors {
+    var quiet = false, keep = false, literal = false
+    var message = List[byte](), words = List[str]()
+    var at = start
+    while at < args.len {
+        let arg = args[at]
+        at += 1
+        if literal { return Unsupported("stash path-limited push") }
+        if arg == "--" && mode != "save" {
+            literal = true
+        } else if arg == "-q" || arg == "--quiet" {
+            quiet = true
+        } else if arg == "-k" || arg == "--keep-index" {
+            keep = true
+        } else if arg == "--no-keep-index" {
+            keep = false
+        } else if mode != "save" && (arg == "-m" || arg == "--message") {
+            if at == args.len { return Unsupported("stash push missing message") }
+            message = owned(args[at])
+            at += 1
+        } else if mode != "save" && arg.starts_with("--message=") {
+            message = owned(arg[10..])
+        } else if mode != "save" && arg.starts_with("-m") && arg.len > 2 {
+            message = owned(arg[2..])
+        } else if arg == "-u" || arg == "--include-untracked" || arg == "-a" || arg == "--all" {
+            return Unsupported("stash untracked snapshot (-u/-a)")
+        } else if arg == "--no-include-untracked" {} else if arg == "-p" || arg == "--patch" {
+            return Unsupported("stash interactive patch selection")
+        } else if arg == "-S" || arg == "--staged" {
+            return Unsupported("stash staged-only snapshot")
+        } else if arg.starts_with("--pathspec-from-file") || arg == "--pathspec-file-nul" {
+            return Unsupported("stash path-limited push")
+        } else if arg.starts_with("-") {
+            return Unsupported("stash {if mode == "save" then "save" else "push"} {arg}")
+        } else if mode == "save" {
+            (mut words).push(arg)
+        } else if mode == "bare" {
+            return Fatal(
+                "subcommand wasn't specified; 'push' can't be assumed due to unexpected token '{arg}'",
+            )
+        } else {
+            return Unsupported("stash path-limited push")
+        }
+    }
+    if mode == "save" {
+        for i in 0..words.len {
+            if i > 0 { (mut message).push(32 as byte) }
+            for b in words[i].bytes() { (mut message).push(b) }
+        }
+    }
+    let ctx = worktree.discover(".")?
+    // Measured order: the index is refreshed and written before the unborn,
+    // no-change and publication checks, so each of those sees it written.
+    var refresh = index.begin(ctx.repo, 1000000000, worktree.index_version(ctx)?) else |e| match e {
+        exists => {
+            eprint(
+                "error: Unable to create '{ctx.repo.gitdir}/index.lock': File exists.\n\nAnother git process seems to be running in this repository, or the lock file may be stale\nerror: could not write index",
+            )
+            return 1
+        },
+        _ => { return Fatal("cannot read index: {e}") },
+    }
+    defer index.abort(mut refresh)
+    var warnings = List[str]()
+    let scan = worktree.scan_index_with_warnings(ctx, refresh.value, false, mut warnings)?
+    commit.refresh_index(mut refresh.value, scan.files)?
+    index.commit(mut refresh)?
+    let head = copy scan.head
+    if head.commits.len == 0 {
+        eprint("You do not have the initial commit yet")
+        return 1
+    }
+    if !changed(scan) {
+        print("No local changes to save")
+        return 0
+    }
+    if keep {
+        for row in scan.rows {
+            if row.x == "D" { return Unsupported("stash keep-index staged deletion") }
+        }
+    }
+    let entry = construct(ctx, scan, message)?
+    publish(ctx, entry) else |e| match e {
+        exists => { eprint("Cannot save the current status"); return 1 },
+        _ => { return Fatal("cannot update refs/stash: {e}") },
+    }
+    let tree = worktree.flatten_tree(ctx.repo, entry.head)?
+    var tx = index.begin(ctx.repo, 1000000000, worktree.index_version(ctx)?) else |e| match e {
+        exists => {
+            return Fatal(
+                "Unable to create '{ctx.repo.gitdir}/index.lock': File exists.\n\nAnother git process seems to be running in this repository, or the lock file may be stale",
+            )
+        },
+        _ => { return Fatal("cannot read index: {e}") },
+    }
+    defer index.abort(mut tx)
+    worktree.transition(ctx, mut tx.value, tree, "hard")?
+    if keep {
+        let staged = worktree.flatten_tree(ctx.repo, entry.index_commit)?
+        worktree.transition(ctx, mut tx.value, staged, "mixed")?
+        var paths = List[List[byte]]()
+        for item in staged {
+            var same = false
+            for old in tree {
+                if old.mode == item.mode &&
+                    oid.equal(old.id, item.id) &&
+                    worktree_compare(old.path, item.path) == 0 {
+                    same = true
+                }
+            }
+            if !same { (mut paths).push(copy item.path) }
+        }
+        if paths.len > 0 {
+            worktree.restore_paths(ctx, mut tx.value, paths, worktree.
+                RestoreOptions { staged: false, worktree: true, source: "", overlay: false })?
+        }
+    }
+    index.commit(mut tx)?
+    orig_head(ctx, entry.head)?
+    commit.publish_ref(
+        ctx,
+        head,
+        entry.head,
+        commit.environment_identity(ctx, "COMMITTER", "")?,
+        "reset",
+        owned("moving to HEAD"),
+    )?
+    if !quiet {
+        var out = owned("Saved working directory and index state ")
+        for b in entry.message { (mut out).push(b) }
+        (mut out).push(10 as byte)
+        write_out(out)?
+    }
+    0
+}
+
+fn orig_head(ctx: worktree.Context, id: oid.Oid) -> () ! commit.CommitErrors {
+    let path = refs.administrative(ctx.repo, "ORIG_HEAD", false)?
+    let lock = "{path}.lock"
+    let file = fs.create_new_with_mode(lock, 0o666)?
+    var fd = file.fd, active = true
+    defer { if fd >= 0 { fs_close(fd) else |_| {} }; if active { fs.remove(lock) else |_| {} } }
+    fs_write_chunk(fd, "{oid.hex(id)?}\n".bytes())?
+    fs_sync(fd)?
+    fs_close(fd)?
+    fd = -1
+    fs_rename(lock, path)?
+    active = false
+}
+
+fn list(args: List[str]) -> int ! commit.CommitErrors {
+    if args.len > 2 { return Unsupported("stash list log options") }
+    let ctx = worktree.discover(".")?
+    if refs.optional(ctx.repo, "refs/stash")?.len == 0 { return 0 }
+    let all = records(ctx.repo)?
+    var out = List[byte]()
+    for n in 0..all.len {
+        for b in "stash@{{{n}}}: ".bytes() { (mut out).push(b) }
+        for b in message(all[all.len - 1 - n]) { (mut out).push(b) }
+        (mut out).push(10 as byte)
+    }
+    write_out(out)?
+    0
+}
+
+fn show(args: List[str]) -> int ! commit.CommitErrors {
+    var options = List[str](), operands = List[str]()
+    for arg in args[2..] {
+        if arg == "-u" || arg == "--include-untracked" || arg == "--only-untracked" {
+            return Unsupported("stash show untracked")
+        } else if arg.starts_with("-") {
+            (mut options).push(arg)
+        } else {
+            (mut operands).push(arg)
+        }
+    }
+    let ctx = worktree.discover(".")?
+    controls(ctx)?
+    let selected = choose(ctx, operands, "show")?
+    if !selected.found { return 128 }
+    let item = walk.read(ctx.repo, selected.ids[0])?
+    if item.parents.len < 2 { return Fatal("'{selected.label}' is not a stash-like commit") }
+    if item.parents.len > 2 { return Unsupported("stash show untracked snapshot") }
+    var argv = ["diff"]
+    if options.len == 0 { (mut argv).push("--stat") }
+    for option in options { (mut argv).push(option) }
+    (mut argv).push(oid.hex(item.parents[0])?)
+    (mut argv).push(oid.hex(item.id)?)
+    diff.run(argv)
+}
+
+fn recover(args: List[str], pop: bool) -> int ! commit.CommitErrors {
+    let command = if pop then "pop" else "apply"
+    var quiet = false
+    var operands = List[str]()
+    for arg in args[2..] {
+        if arg == "-q" || arg == "--quiet" {
+            quiet = true
+        } else if arg == "--index" {
+            return Unsupported("stash apply --index")
+        } else if arg.starts_with("-") {
+            return Unsupported("stash {command} {arg}")
+        } else {
+            (mut operands).push(arg)
+        }
+    }
+    let ctx = worktree.discover(".")?
+    controls(ctx)?
+    let selected = choose(ctx, operands, command)?
+    if !selected.found { return 128 }
+    if pop && selected.n < 0 { return Unsupported("stash pop non-reflog operand") }
+    let outcome = apply(ctx, selected.ids[0], selected.label)?
+    var out = List[byte]()
+    for line in outcome.messages {
+        for b in line.bytes() { (mut out).push(b) }
+        (mut out).push(10 as byte)
+    }
+    if !quiet { for b in status(ctx)? { (mut out).push(b) } }
+    if outcome.status != 0 {
+        if pop {
+            for b in "The stash entry is kept in case you need it again.\n".bytes() {
+                (mut out).push(b)
+            }
+        }
+        write_out(out)?
+        eprint("error: {outcome.error}")
+        return outcome.status
+    }
+    if pop {
+        let id = drop(ctx, selected.n)?
+        if !quiet {
+            for b in "Dropped {selected.label} ({oid.hex(id)?})\n".bytes() { (mut out).push(b) }
+        }
+    }
+    write_out(out)?
+    0
+}
+
+fn drop_command(args: List[str]) -> int ! commit.CommitErrors {
+    var quiet = false
+    var operands = List[str]()
+    for arg in args[2..] {
+        if arg == "-q" || arg == "--quiet" {
+            quiet = true
+        } else if arg.starts_with("-") {
+            return Unsupported("stash drop {arg}")
+        } else {
+            (mut operands).push(arg)
+        }
+    }
+    let ctx = worktree.discover(".")?
+    let selected = choose(ctx, operands, "drop")?
+    if !selected.found { return 128 }
+    if selected.n < 0 { return Unsupported("stash drop non-reflog operand") }
+    let id = drop(ctx, selected.n)?
+    if !quiet { print("Dropped {selected.label} ({oid.hex(id)?})") }
+    0
+}
+
+fn dispatch(args: List[str]) -> int ! commit.CommitErrors {
+    if args.len == 1 { return push(args, 1, "bare")? }
+    let sub = args[1]
+    if sub == "push" { return push(args, 2, "push")? }
+    if sub == "save" { return push(args, 2, "save")? }
+    if sub == "list" { return list(args)? }
+    if sub == "show" { return show(args)? }
+    if sub == "apply" { return recover(args, false)? }
+    if sub == "pop" { return recover(args, true)? }
+    if sub == "drop" { return drop_command(args)? }
+    if sub == "clear" {
+        if args.len > 2 { return Unsupported("stash clear arguments") }
+        clear(worktree.discover(".")?)?
+        return 0
+    }
+    if sub == "branch" || sub == "create" || sub == "store" || sub == "export" || sub == "import" {
+        return Unsupported("stash {sub}")
+    }
+    if sub.starts_with("-") { return push(args, 1, "bare")? }
+    Fatal("subcommand wasn't specified; 'push' can't be assumed due to unexpected token '{sub}'")
+}
+
+/// CLI boundary: measured output or an explicit unsupported feature.
+pub fn run(args: List[str]) -> int {
+    repository.check_config(".") else |e| match e {
+        ConfigDiagnostic(message) => { eprint(message); return 128 },
+        _ => {},
+    }
+    dispatch(args) else |e| match e {
+        Fatal(message) => { eprint("fatal: {message}"); 128 },
+        Failure(message) => { eprint("error: {message}"); 1 },
+        Unsupported(message) => { eprint("den: not yet implemented: {message}"); 2 },
+        _ => { eprint("fatal: {e}"); 128 },
+    }
+}

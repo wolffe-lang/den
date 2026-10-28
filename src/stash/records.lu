@@ -1,0 +1,115 @@
+// Durable stash list state: refs/stash and logs/refs/stash as git-stash(1)
+// Description defines them (the latest entry in the ref, older ones in its
+// reflog). Drop rewrites one record as measured on the pinned oracle.
+use std.fs
+use commit
+use commit_format
+use oid
+use refs
+use repository
+use worktree
+
+/// One stored reflog record: its two hex ids and the raw remainder after the
+/// second id (" <identity> <date>\t<message>"), without the final LF.
+pub struct Record { before: str, after: str, rest: List[byte] }
+
+/// Every record of logs/refs/stash, oldest first, exactly as stored; empty
+/// when the log is absent. Malformed records refuse rather than guess.
+pub fn records(repo: repository.Repo) -> List[Record] ! commit.CommitErrors {
+    let path = "{repo.gitdir}/logs/refs/stash"
+    if !fs.exists(path) { return List[Record]() }
+    let data = repository.read_bytes(path, 16777216)?
+    var out = List[Record](), start = 0
+    for i in 0..data.len {
+        if data[i] != 10 as byte { continue }
+        let line = data[start..i]
+        start = i + 1
+        if line.len < 82 || line[40] != 32 as byte || line[81] != 32 as byte {
+            return Unsupported("stash malformed reflog record")
+        }
+        if out.len >= 100000 { return Unsupported("stash reflog limit") }
+        let before = str_from_utf8(line[0..40])?, after = str_from_utf8(line[41..81])?
+        let _ = oid.parse("sha1", before)?
+        let _ = oid.parse("sha1", after)?
+        var rest = List[byte]()
+        for b in line[81..] { (mut rest).push(b) }
+        (mut out).push(Record { before: before, after: after, rest: rest })
+    }
+    if start != data.len { return Unsupported("stash unterminated reflog record") }
+    out
+}
+
+/// The message after the record's TAB, or empty.
+pub fn message(record: Record) -> List[byte] {
+    var out = List[byte](), seen = false
+    for b in record.rest {
+        if seen { (mut out).push(b) } else if b == 9 as byte { seen = true }
+    }
+    out
+}
+
+/// Pure drop rewrite: remove the record at stash@{n} (n = 0 newest) and give
+/// the record that followed it the removed record's old id, as measured.
+pub fn without(list: List[Record], n: int) -> List[Record] ! commit.CommitErrors {
+    if n < 0 || n >= list.len { return invalid }
+    let at = list.len - 1 - n
+    var out = List[Record]()
+    for i in 0..list.len {
+        if i == at { continue }
+        var record = copy list[i]
+        if i == at + 1 { record.before = list[at].before }
+        (mut out).push(record)
+    }
+    out
+}
+
+fn line(record: Record) -> List[byte] {
+    var out = List[byte]()
+    for b in "{record.before} {record.after}".bytes() { (mut out).push(b) }
+    for b in record.rest { (mut out).push(b) }
+    (mut out).push(10 as byte)
+    out
+}
+
+/// Drop stash@{n}. The last entry deletes refs/stash and its reflog; dropping
+/// the newest moves refs/stash to the new newest; the rewritten reflog is
+/// installed through an exclusive lock. Returns the dropped entry's id.
+pub fn drop(ctx: worktree.Context, n: int) -> oid.Oid ! commit.CommitErrors {
+    let list = records(ctx.repo)?
+    let current = refs.optional(ctx.repo, "refs/stash")?
+    if current.len == 0 || n >= list.len { return invalid }
+    let dropped = oid.parse("sha1", list[list.len - 1 - n].after)?
+    let kept = without(list, n)?
+    let committer = commit_format.identity_text(commit.environment_identity(ctx, "COMMITTER", "")?)?
+    if kept.len == 0 {
+        refs.update(ctx.repo, "refs/stash", current, [], committer, "", false)?
+        return dropped
+    }
+    let top = oid.parse("sha1", kept[kept.len - 1].after)?
+    if !oid.equal(top, current[0]) {
+        refs.update(ctx.repo, "refs/stash", current, [top], committer, "", false)?
+    }
+    let path = refs.administrative(ctx.repo, "logs/refs/stash", false)?
+    let lock = "{path}.lock"
+    let file = fs.create_new_with_mode(lock, 0o666)?
+    var fd = file.fd, active = true
+    defer { if fd >= 0 { fs_close(fd) else |_| {} }; if active { fs.remove(lock) else |_| {} } }
+    var data = List[byte]()
+    for record in kept { for b in line(record) { (mut data).push(b) } }
+    fs_write_chunk(fd, data)?
+    fs_sync(fd)?
+    fs_close(fd)?
+    fd = -1
+    fs_rename(lock, path)?
+    active = false
+    fs.sync_dir(fs.parent(path) else |_| { return invalid })?
+    dropped
+}
+
+/// Remove every entry: refs/stash (loose or packed) and its reflog.
+pub fn clear(ctx: worktree.Context) -> () ! commit.CommitErrors {
+    let current = refs.optional(ctx.repo, "refs/stash")?
+    if current.len == 0 { return }
+    let committer = commit_format.identity_text(commit.environment_identity(ctx, "COMMITTER", "")?)?
+    refs.update(ctx.repo, "refs/stash", current, [], committer, "", false)?
+}

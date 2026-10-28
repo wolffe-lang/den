@@ -1,0 +1,152 @@
+// Recovery of a constructed entry: git-stash(1) apply/pop, measured on the
+// pinned oracle. The merge is the existing vc07 plan (base W^1, ours HEAD,
+// theirs W), never a forked matcher; conflicts and unsupported topologies
+// refuse by name before any object, AUTO_MERGE, index or worktree write.
+use commit
+use diff
+use index
+use mergetree
+use object
+use oid
+use refs
+use walk
+use worktree
+
+fn entry_at(entries: List[worktree.FlatEntry], path: List[byte]) -> int {
+    for i in 0..entries.len { if worktree_compare(entries[i].path, path) == 0 { return i } }
+    -1
+}
+
+fn same(a: List[worktree.FlatEntry], ai: int, b: List[worktree.FlatEntry], bi: int) -> bool {
+    if ai < 0 || bi < 0 { return ai < 0 && bi < 0 }
+    a[ai].mode == b[bi].mode && oid.equal(a[ai].id, b[bi].id)
+}
+
+fn flat(files: List[diff.File]) -> List[worktree.FlatEntry] {
+    var out = List[worktree.FlatEntry]()
+    for file in files { (mut out).push(worktree.FlatEntry { path: copy file.path, mode: file.mode, id: copy file.id }) }
+    out
+}
+
+/// The index side of the merge, bounded as mergetree.files bounds a tree.
+fn index_files(ctx: worktree.Context, entries: List[worktree.FlatEntry]) -> List[diff.File] ! commit.CommitErrors {
+    var out = List[diff.File](), total = 0
+    for entry in entries {
+        if entry.mode != 0o100644 && entry.mode != 0o100755 {
+            return Unsupported("merge nonregular tree entry")
+        }
+        let blob = object.read_object(ctx.repo, entry.id, 16777216)?
+        if blob.kind != "blob" { return bad_oid }
+        total += blob.data.len
+        if total > 134217728 { return limit }
+        (mut out).push(diff.File { path: copy entry.path, mode: entry.mode, id: copy entry.id, data: copy blob.data })
+    }
+    out
+}
+
+fn zero_stat(entry: worktree.FlatEntry) -> index.Entry ! commit.CommitErrors {
+    var value = index.conflict_entry(entry.path, entry.mode, entry.id, 1)?
+    value.flags -= 4096
+    value
+}
+
+/// The measured long status that follows a successful (or merge-refused)
+/// apply, from a fresh read-only scan.
+pub fn status(ctx: worktree.Context) -> List[byte] ! commit.CommitErrors {
+    var options = worktree.status_options(ctx)?
+    options.short = false
+    options.porcelain = false
+    var warnings = List[str]()
+    let snapshot = worktree.scan_with_warnings(ctx, options.untracked != "no", mut warnings)?
+    for warning in warnings { eprint(warning) }
+    worktree.render_status(snapshot, options)?
+}
+
+/// Outcome of recovery: status 0 applied; 128 refused by the merge-safety
+/// check with message (already reported state untouched).
+pub struct Outcome { status: int, messages: List[str], error: str }
+
+/// Apply W onto the current index/worktree. Without --index the index keeps
+/// its previous entries (as zero-stat tree entries where the merge changed
+/// them) except paths new in the result, which stay staged; AUTO_MERGE names
+/// the merged tree. Unmerged indices, untracked snapshots and content
+/// conflicts are refused by name before any write.
+pub fn apply(ctx: worktree.Context, stash: oid.Oid, name: str) -> Outcome ! commit.CommitErrors {
+    let item = walk.read(ctx.repo, stash) else |e| match e {
+        Unsupported(feature) => { return Unsupported(feature) },
+        _ => { return Fatal("'{name}' is not a stash-like commit") },
+    }
+    if item.parents.len == 3 { return Unsupported("stash untracked snapshot apply") }
+    if item.parents.len != 2 { return Fatal("'{name}' is not a stash-like commit") }
+    let head = worktree.head(ctx)?
+    if head.commits.len != 1 { return Unsupported("stash apply unborn HEAD") }
+    var tx = index.begin(ctx.repo, 1000000000, worktree.index_version(ctx)?) else |e| match e {
+        exists => {
+            return Fatal(
+                "Unable to create '{ctx.repo.gitdir}/index.lock': File exists.\n\nAnother git process seems to be running in this repository, or the lock file may be stale",
+            )
+        },
+        _ => { return Fatal("cannot read index: {e}") },
+    }
+    defer index.abort(mut tx)
+    let snapshot = worktree.scan_index(ctx, tx.value)?
+    for entry in snapshot.index.entries {
+        if index.stage(entry) != 0 { return Unsupported("stash apply unmerged index") }
+    }
+    commit.refresh_index(mut tx.value, snapshot.files)?
+    // ours is the current index tree (written as write-tree would), so staged
+    // state takes part in the merge and is what changed paths return to.
+    var plain = index.empty(tx.value.version)?
+    plain.entries = copy tx.value.entries
+    let current = index.build_trees(plain)?
+    let base = walk.read(ctx.repo, item.parents[0])?
+    var ours = List[worktree.FlatEntry]()
+    for entry in plain.entries {
+        (mut ours).push(worktree.FlatEntry { path: copy entry.path, mode: entry.stat[6], id: copy entry.id })
+    }
+    var merged = List[worktree.FlatEntry](), messages = List[str]()
+    if oid.equal(base.tree, current.root) {
+        merged = worktree.flatten_tree(ctx.repo, stash)?
+    } else {
+        let plan = mergetree.plan(
+            mergetree.files(ctx.repo, item.parents[0])?,
+            index_files(ctx, ours)?,
+            mergetree.files(ctx.repo, stash)?,
+            "Updated upstream",
+            "Stash base",
+            "Stashed changes",
+            ctx.repo.config["merge.conflictstyle"] else "merge",
+        )?
+        if plan.conflicts.len > 0 { return Unsupported("stash apply conflict") }
+        merged = flat(plan.files)
+        messages = plan.messages
+        for file in plan.files { let _ = object.write_object(ctx.repo, "blob", file.data)? }
+    }
+    worktree.merge_check(ctx, tx.value, merged) else |e| match e {
+        Failure(text) => {
+            index.commit(mut tx)?
+            return Outcome { status: 128, messages: messages, error: text }
+        },
+        _ => { return Unsupported("stash apply safety: {e}") },
+    }
+    for tree in current.objects { let _ = object.write_object(ctx.repo, "tree", tree.data)? }
+    var scratch = index.empty(2)?
+    for entry in merged { (mut scratch.entries).push(zero_stat(entry)?) }
+    let assembly = index.build_trees(scratch)?
+    for tree in assembly.objects { let _ = object.write_object(ctx.repo, "tree", tree.data)? }
+    let path = refs.administrative(ctx.repo, "AUTO_MERGE", false)?
+    let fd = fs_open_mode(path, 1)?
+    defer fs_close(fd) else |_| {}
+    fs_write_chunk(fd, "{oid.hex(assembly.root)?}\n".bytes())?
+    worktree.transition(ctx, mut tx.value, merged, "merge")?
+    var paths = List[List[byte]]()
+    for entry in ours { (mut paths).push(copy entry.path) }
+    for entry in merged { if entry_at(ours, entry.path) < 0 { (mut paths).push(copy entry.path) } }
+    for path in paths {
+        let o = entry_at(ours, path), m = entry_at(merged, path)
+        if same(ours, o, merged, m) || o < 0 { continue }
+        tx.value = index.replace_entry(tx.value, zero_stat(ours[o])?)?
+    }
+    index.commit(mut tx)?
+    Outcome { status: 0, messages: messages, error: "" }
+}

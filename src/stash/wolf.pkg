@@ -1,0 +1,21 @@
+pkg {
+    name: "stash",
+    edition: "1",
+    capabilities: [env, fs],
+    deps: {
+        commit: {path: "../commit"},
+        commit_format: {path: "../commit_format"},
+        diff: {path: "../diff"},
+        history: {path: "../history"},
+        index: {path: "../index"},
+        mergetree: {path: "../mergetree"},
+        object: {path: "../object"},
+        oid: {path: "../oid"},
+        refs: {path: "../refs"},
+        repository: {path: "../repository"},
+        revision: {path: "../revision"},
+        revsyntax: {path: "../revsyntax"},
+        walk: {path: "../walk"},
+        worktree: {path: "../worktree"},
+    },
+}
