@@ -3,6 +3,8 @@
 import argparse, base64, hashlib, json, os, pathlib, runpy, shutil, subprocess
 R = pathlib.Path(__file__).resolve().parent.parent
 G = str(next((R/'target/oracle').glob('*/root/opt/git/bin/git')))
+os.environ['DEN_GIT']=G
+os.environ['GIT_EXEC_PATH']=str(pathlib.Path(G).parent.parent/'libexec/git-core')
 assert hashlib.sha256(pathlib.Path(G).read_bytes()).hexdigest() == 'c4848492938c4ebfffbefe1fbbaa68b9af90c86d1f6a20e76816c5ff37fcfa60'
 a = argparse.ArgumentParser(); a.add_argument('--tier',default='native'); args=a.parse_args()
 root=R/'target'/('pack-write-'+args.tier)

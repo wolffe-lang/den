@@ -1,0 +1,91 @@
+// Original vc04 matcher, shared by binary patches and pack writing.
+// Instruction encoding: gitformat-pack(5), not Git implementation source.
+fn append_delta(mut out: List[byte], data: List[byte]) {
+    for b in data { (mut out).push(b) }
+}
+
+fn number(mut out: List[byte], value: int) {
+    var n = value
+    while n >= 128 {
+        (mut out).push((n & 127 | 128) as byte)
+        n = n >> 7
+    }
+    (mut out).push(n as byte)
+}
+
+fn copied(mut out: List[byte], offset: int, length: int) {
+    var pos = offset, remaining = length
+    while remaining > 0 {
+        let n = if remaining > 65536 then 65536 else remaining
+        var op = 128
+        var fields = List[byte]()
+        for i in 0..4 {
+            let b = pos >> i * 8 & 255
+            if b != 0 { op = op | 1 << i; (mut fields).push(b as byte) }
+        }
+        if n != 65536 {
+            for i in 0..3 {
+                let b = n >> i * 8 & 255
+                if b != 0 { op = op | 1 << i + 4; (mut fields).push(b as byte) }
+            }
+        }
+        (mut out).push(op as byte)
+        append_delta(mut out, fields)
+        pos += n
+        remaining -= n
+    }
+}
+
+fn inserted(mut out: List[byte], data: List[byte], start: int, end: int) {
+    var pos = start
+    while pos < end {
+        let n = if end - pos > 127 then 127 else end - pos
+        (mut out).push(n as byte)
+        for i in pos..pos + n { (mut out).push(data[i]) }
+        pos += n
+    }
+}
+
+fn fingerprint(data: List[byte], pos: int) -> int {
+    var key = 0
+    for i in pos..pos + 16 { key = key * 257 + data[i] as int & 0xffffffff }
+    key
+}
+
+/// Owned delta instructions. Inputs capped at 16 MiB; one sampled candidate per
+/// 16-byte fingerprint, verified before use. No fixture-specific heuristics.
+pub fn encode_delta(before: List[byte], after: List[byte]) -> List[byte] ! DeltaErrors {
+    if before.len > 16777216 || after.len > 16777216 { return limit }
+    var out = List[byte]()
+    number(mut out, before.len)
+    number(mut out, after.len)
+    var table = Map[int, int]()
+    var pos = 0
+    while pos + 16 <= before.len {
+        let key = fingerprint(before, pos)
+        let existing = table[key] else -1
+        if existing == -1 { table[key] = pos }
+        pos += 16
+    }
+    pos = 0
+    var pending = 0
+    while pos + 16 <= after.len {
+        let candidate = table[fingerprint(after, pos)] else -1
+        var length = 0
+        if candidate >= 0 {
+            while candidate + length < before.len &&
+                pos + length < after.len &&
+                before[candidate + length] == after[pos + length] { length += 1 }
+        }
+        if length >= 16 {
+            inserted(mut out, after, pending, pos)
+            copied(mut out, candidate, length)
+            pos += length
+            pending = pos
+        } else {
+            pos += 1
+        }
+    }
+    inserted(mut out, after, pending, after.len)
+    out
+}

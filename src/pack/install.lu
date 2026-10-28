@@ -1,0 +1,78 @@
+// Publication is separate from construction and from gc/repack policy.
+use std.fs
+use oid
+
+fn validate_pair(pack_path: str, idx_path: str) -> () ! PackErrors {
+    let index = load_index(idx_path)?
+    let fd = open_pack(pack_path)?
+    defer fs_close(fd) else |_| {}
+    let end = verify(fd, index)?
+    for slot in 0..index.entries.len {
+        region object_check {
+            var seen = Map[int, bool](), total = 0
+            let _ = unpack(fd, end, index, slot, mut seen, mut total, 0)?
+        }
+    }
+}
+
+/// Atomically publish each component, pack before idx; never prune loose data.
+/// Validates all objects through the unchanged reader before publication.
+pub fn install(gitdir: str, value: Encoded) -> str ! PackErrors {
+    install_injected(gitdir, value, "")?
+}
+
+/// Test-only failure injection; no environment-controlled production backdoor.
+/// pack-rename failures leave no final files; idx-rename failures clean our new
+/// pack on ordinary unwind. A crash can leave an orphan pack, never prune data.
+pub fn install_injected(gitdir: str, value: Encoded, fail: str) -> str ! PackErrors {
+    let id = oid.parse("sha1", value.name) else |_| { return Unsupported("pack writer name") }
+    if value.data.len < 32 || value.data.len > 134217728 ||
+        value.index.len > 16777216 || !same(id.bytes, value.data[value.data.len - 20..]) {
+        return Unsupported("pack writer name or limit")
+    }
+    let dir = "{gitdir}/objects/pack"
+    fs.create_dir_all(dir) else |_| { return io }
+    let stem = "{dir}/pack-{value.name}"
+    let temporary = "{dir}/tmp_den_{value.name}"
+    var packfile = fs.create_new_with_mode("{temporary}.pack", 0o444) else |e| { return Unsupported("pack writer temporary {e}") }
+    var pack_closed = false, pack_owned = true
+    defer {
+        if !pack_closed { fs_close(packfile.fd) else |_| {} }
+        if pack_owned { fs.remove("{temporary}.pack") else |_| {} }
+    }
+    var idxfile = fs.create_new_with_mode("{temporary}.idx", 0o444) else |e| { return Unsupported("pack writer temporary {e}") }
+    var idx_closed = false, idx_owned = true
+    defer {
+        if !idx_closed { fs_close(idxfile.fd) else |_| {} }
+        if idx_owned { fs.remove("{temporary}.idx") else |_| {} }
+    }
+    if fail == "write" { return io }
+    fs.write_chunk(mut packfile, value.data) else |_| { return io }
+    fs.write_chunk(mut idxfile, value.index) else |_| { return io }
+    if fail == "sync" { return io }
+    fs.sync(mut packfile) else |_| { return io }
+    fs.sync(mut idxfile) else |_| { return io }
+    fs_close(packfile.fd) else |_| { return io }
+    pack_closed = true
+    fs_close(idxfile.fd) else |_| { return io }
+    idx_closed = true
+    validate_pair("{temporary}.pack", "{temporary}.idx")?
+    if fs.exists("{stem}.pack") || fs.exists("{stem}.idx") {
+        validate_pair("{stem}.pack", "{stem}.idx")?
+        let existing = load_index("{stem}.idx")?
+        if !same(existing.pack_sum, id.bytes) { return Unsupported("pack writer existing name") }
+        return copy value.name
+    }
+    if fail == "pack-rename" { return io }
+    fs.move_file("{temporary}.pack", "{stem}.pack") else |_| { return io }
+    pack_owned = false
+    var published = false
+    defer { if !published { fs.remove("{stem}.pack") else |_| {} } }
+    if fail == "idx-rename" { return io }
+    fs.move_file("{temporary}.idx", "{stem}.idx") else |_| { return io }
+    idx_owned = false
+    published = true
+    if fail == "directory-sync" { return io }
+    fs.sync_dir(dir) else |_| { return io }
+    copy value.name
+}

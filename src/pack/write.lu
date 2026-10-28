@@ -1,0 +1,179 @@
+// Original pack-v2/idx-v2 writer from gitformat-pack(5). R4c: representation
+// is not byte parity. No object-store dependency, subprocess or pruning here.
+use hash
+use oid
+use zlib
+
+/// Owned pair; install validates the public bytes before publishing either file.
+pub struct Encoded { data: List[byte], index: List[byte], name: str }
+
+fn append_write(mut out: List[byte], bytes: List[byte]) {
+    for b in bytes { (mut out).push(b) }
+}
+
+fn put32(mut out: List[byte], n: int) {
+    for i in 0..4 { (mut out).push((n >> (3 - i) * 8 & 255) as byte) }
+}
+
+fn entry_header(kind: int, size: int) -> List[byte] {
+    var n = size >> 4
+    var out = [(kind << 4 | size & 15 | (if n > 0 then 128 else 0)) as byte]
+    while n > 0 {
+        let b = n & 127
+        n = n >> 7
+        (mut out).push((b | (if n > 0 then 128 else 0)) as byte)
+    }
+    out
+}
+
+fn offset_bytes(distance: int) -> List[byte] {
+    var n = distance
+    var reverse = [(n & 127) as byte]
+    while n >= 128 {
+        n = (n >> 7) - 1
+        (mut reverse).push((n & 127 | 128) as byte)
+    }
+    var out = List[byte]()
+    for i in 0..reverse.len { (mut out).push(reverse[reverse.len - 1 - i]) }
+    out
+}
+
+fn kind_number(kind: str) -> int ! PackErrors {
+    match kind {
+        "commit" => 1,
+        "tree" => 2,
+        "blob" => 3,
+        "tag" => 4,
+        _ => { return Unsupported("pack writer object type") },
+    }
+}
+
+fn body_name(body: Body) -> str ! PackErrors {
+    var h = hash.new1()
+    hash.update1(mut h, "{body.kind} {body.data.len}\0".bytes())
+    hash.update1(mut h, body.data)
+    let id = oid.from_bytes("sha1", hash.final1(take h)) else |_| { return Unsupported("pack writer identity") }
+    oid.hex(id) else |_| { return Unsupported("pack writer identity") }
+}
+
+fn instructions(before: List[byte], after: List[byte]) -> List[byte] ! PackErrors {
+    encode_delta(before, after) else |e| { return Unsupported("pack writer delta {e}") }
+}
+
+fn raw_id(name: str) -> List[byte] ! PackErrors {
+    let id = oid.parse("sha1", name) else |_| { return Unsupported("pack writer identity") }
+    copy id.bytes
+}
+
+fn check_output(size: int, addition: int) -> () ! PackErrors {
+    if addition > 134217708 - size { return Unsupported("pack writer output limit") }
+}
+
+fn deflated(data: List[byte]) -> List[byte] ! PackErrors {
+    zlib.deflate(data, 1, 17000000) else |e| { return Unsupported("pack writer compression {e}") }
+}
+
+/// Encode an owned pack/idx pair. mode is none, ofs or ref. Candidate window 10,
+/// depth 50; 16 MiB/body, 128 MiB aggregate input and output, 10,000 objects.
+/// Duplicate identities are emitted once. Ordering is type then descending size.
+pub fn encode(bodies: List[Body], mode: str) -> Encoded ! PackErrors {
+    if mode != "none" && mode != "ofs" && mode != "ref" { return Unsupported("pack writer delta mode") }
+    if bodies.len > 10000 { return Unsupported("pack writer object count limit") }
+    var total = 0, order = List[int](), names = List[str](), seen = Map[str, bool]()
+    for i in 0..bodies.len {
+        let _ = kind_number(bodies[i].kind)?
+        if bodies[i].data.len > 16777216 { return Unsupported("pack writer object size limit") }
+        if bodies[i].data.len > 134217728 - total { return Unsupported("pack writer payload limit") }
+        total += bodies[i].data.len
+        let name = body_name(bodies[i])?
+        (mut names).push(copy name)
+        if seen[name] else false { continue }
+        seen[name] = true
+        (mut order).push(i)
+        var j = order.len - 1
+        while j > 0 {
+            let a = order[j - 1], b = order[j]
+            if bodies[a].kind < bodies[b].kind ||
+                (bodies[a].kind == bodies[b].kind && bodies[a].data.len >= bodies[b].data.len) { break }
+            order[j - 1] = b
+            order[j] = a
+            j -= 1
+        }
+    }
+    var data = List[byte]()
+    append_write(mut data, "PACK".bytes())
+    put32(mut data, 2)
+    put32(mut data, order.len)
+    var entries = List[Entry](), depths = List[int]()
+    for slot in 0..order.len {
+        let b = order[slot]
+        let offset = data.len
+        var record = Entry { name: copy names[b], offset: offset, crc: 0 }
+        region candidate {
+            var encoded = entry_header(kind_number(bodies[b].kind)?, bodies[b].data.len)
+            append_write(mut encoded, deflated(bodies[b].data)?)
+            var depth = 0
+            if mode != "none" {
+                let start = if slot > 10 then slot - 10 else 0
+                for prior in start..slot {
+                    region delta_candidate {
+                        let a = order[prior]
+                        if bodies[a].kind != bodies[b].kind || depths[prior] >= 50 { continue }
+                        let delta = instructions(bodies[a].data, bodies[b].data)?
+                        if delta.len > 16777216 { continue }
+                        var trial = entry_header(if mode == "ofs" then 6 else 7, delta.len)
+                        if mode == "ofs" {
+                            append_write(mut trial, offset_bytes(offset - entries[prior].offset))
+                        } else {
+                            append_write(mut trial, raw_id(names[a])?)
+                        }
+                        append_write(mut trial, deflated(delta)?)
+                        if trial.len < encoded.len {
+                            encoded = copy trial
+                            depth = depths[prior] + 1
+                        }
+                    }
+                }
+            }
+            check_output(data.len, encoded.len)?
+            record.crc = crc32(encoded)
+            (mut depths).push(depth)
+            append_write(mut data, encoded)
+        }
+        (mut entries).push(record)
+    }
+    let sum = hash.sum1(data)
+    append_write(mut data, sum)
+    let id = oid.from_bytes("sha1", sum) else |_| { return Unsupported("pack writer identity") }
+    let name = oid.hex(id) else |_| { return Unsupported("pack writer identity") }
+    for i in 1..entries.len {
+        var j = i
+        while j > 0 && entries[j].name < entries[j - 1].name {
+            let saved = copy entries[j]
+            entries[j] = copy entries[j - 1]
+            entries[j - 1] = saved
+            j -= 1
+        }
+    }
+    var index = [255 as byte, 116 as byte, 79 as byte, 99 as byte]
+    put32(mut index, 2)
+    var count = 0
+    for bucket in 0..256 {
+        while count < entries.len {
+            let id = oid.parse("sha1", entries[count].name) else |_| { return Unsupported("pack writer identity") }
+            if id.bytes[0] as int > bucket { break }
+            count += 1
+        }
+        put32(mut index, count)
+    }
+    for entry in entries {
+        let id = oid.parse("sha1", entry.name) else |_| { return Unsupported("pack writer identity") }
+        append_write(mut index, id.bytes)
+    }
+    for entry in entries { put32(mut index, entry.crc) }
+    for entry in entries { put32(mut index, entry.offset) }
+    append_write(mut index, sum)
+    let index_sum = hash.sum1(index)
+    append_write(mut index, index_sum)
+    Encoded { data: data, index: index, name: name }
+}
