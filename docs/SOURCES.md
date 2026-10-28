@@ -6,7 +6,43 @@ extracted for reading. No other Git implementation was consulted. The prose
 below is original, not copied from the references. Raw AsciiDoc is from the
 same signed Git 2.56.0 tarball pinned in `den-oracle.toml`.
 
-## Pack writing and inspection (vc13)
+## Housekeeping and validator (vc14)
+
+Consulted versioned Git v2.56.0 documentation only, under
+`https://raw.githubusercontent.com/git/git/v2.56.0/Documentation/`:
+
+- `git-repack.adoc`: description, incremental versus all-object selection,
+  `-a`, `-A`, `-d`, `-k`, quiet, server-info, keep and cruft options.
+- `git-gc.adoc`: description, options, expiry, aggressive mode and concurrency
+  notes. GC's ref/reflog/expiry/commit-graph effects are not repack effects;
+  unimplemented policy remains a named refusal rather than an approximation.
+- `git-prune-packed.adoc`: entire command page, dry-run and quiet behavior.
+- `git-fsck.adoc`: root selection, full validation, reflogs, dangling objects,
+  extracted diagnostics and commit-graph/configuration controls.
+- `git-commit-graph.adoc`: verify, split chains, progress, object directories
+  and configuration; `gitformat-commit-graph.adoc`: header, chunk lookup,
+  required OIDF/OIDL/CDAT, parent/EDGE encoding, generation-v2 overflow,
+  optional Bloom/base chunks and trailer. Split/Bloom/unknown chunks refuse.
+
+The 52 initial observations in `notes/vc14-observations.json` retain complete
+process outputs, status and before/after file/mode state. Further independent
+validator captures establish exact error text/exit bits; documentation did not
+supply an implementation or diagnostic-order algorithm. Multiple dangling order
+changed between loose, packed and duplicate storage and remains named. Prune
+packed dry-run preserves directory enumeration order within each ascending hex
+prefix; two copied directories can differ physically, so read-only parity uses
+one shared immutable physical fixture rather than sorting either output.
+
+Implementation references are den's existing object/header/tree, index TREE,
+refs/reflog, pack reader/writer and shared delta encoder only. The signed oracle
+installation was copied read-only from vc13 into a fresh vc14 clone, then verified
+through `tools/fetch-oracle` and the unchanged executable digest. No Git/libgit2,
+other VCS, library or codec implementation source was opened. No production Git,
+shell or Python dependency was introduced. Pack representation remains R4c;
+every actual process retains a complete state capture and object batches retain
+strict framing, identity and byte comparisons.
+
+## Pack writing and inspection (vc13; historical scope)
 
 Read versioned Git v2.56.0 documentation only, from
 `https://raw.githubusercontent.com/git/git/v2.56.0/Documentation/`:

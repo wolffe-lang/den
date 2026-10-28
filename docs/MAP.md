@@ -17,7 +17,7 @@ not a blanket byte-parity claim.
 | M1 | `zlib`: inflate then deflate, Adler-32 (vc01); `oid`, `object`, `repository`, init/hash-object/cat-file/tree/commit/tag plumbing (vc02) |
 | M2 (partial) | `index`, `worktree`, `ignore`, `commit_format`, `commit`: implemented subset (vc03); `delta`, `rename`, `difftext`, `diffbinary`, `diff` (vc04); `walk`, `pretty`, log/show (vc05) |
 | M3 (partial) | `refs`, `refcmd`, `worktree.transition`: refs/reflogs, branch/tag/switch/checkout/reset (vc06); three-way merge/revert (vc07); rebase/cherry-pick/sequencer (vc08); `revsyntax`, `revision`, `revset`: shared bounded grammar (vc10); `blame`, `blamerange` and shared `difftext.correspondence`: bounded line attribution (vc11); `stash`, `stashlog`, `notes`, `notestree`: stash and notes (vc12) |
-| M4 (partial) | `pack`: pack-v2/idx-v2 reading (vc09), shared delta encoder and verified pair writer; `packcmd`: pack-objects, verify-pack, count-objects and bounded fsck (vc13); gc/repack later |
+| M4 (partial) | `pack`: pack-v2/idx-v2 reading (vc09), shared delta encoder and verified pair writer; `packcmd`: pack-objects, verify-pack, count-objects, bounded fsck (vc13/vc14), reachable closure and verified repack/prune-packed; gc policy remains named |
 | M5 | `pktline`, protocol v2 fetch (vc13); receive-pack push/remotes (vc14); clone/pull porcelain (vc15) |
 | M6 | static build and PAX handoff (vc16, then px lane); optional `git` alias |
 | Later | HTTPS beyond measured TLS profile, hooks, worktrees, sparse index, submodules, SHA-256 repositories, interactive rebase, bundles and protocol v0/v1 fetch |
@@ -52,7 +52,8 @@ write/sync/rename/directory-sync failures for tests, never an environment switch
 Ordinary prepublication errors remove owned temporaries; an idx-rename error
 also removes the newly published pack. Abrupt termination can leave an orphan
 pack; this is not a two-file atomic transaction. Neither construction nor
-publication removes loose objects. gc/repack/pruning policy remains unimplemented.
+publication removes loose objects. Repeated publication can repair a missing idx
+only after validating the existing pack against the new idx. Housekeeping is below.
 
 `pack.inspect(idx_path)` returns `Inspection {objects, bytes}` with physical-order
 `PackedEntry {name, kind, size, stored, offset, depth, base}` records. For deltas,
@@ -70,16 +71,18 @@ object bytes and sizes, never pack-byte identity or pack-hash stdout parity.
 
 Bounded `fsck [--full] [--no-dangling] [--no-reflogs] [--no-progress]` validates
 all loose/packed objects, parsed trees/headers/identities, typed graph links,
-HEAD/refs/index/reflog roots and zero/one dangling tip. Commit-graph verification
-(unless `core.commitGraph=false`), multiple-tip display ordering, corrupt-object
-and missing/wrong-type diagnostic rendering, strict/configured fsck and alternate
-stores remain named refusals. The main packed fsck row remains named, not parity.
-The main count-objects row requires parity. Bitmaps, multi-pack-index, cruft packs,
+HEAD/refs/index/reflog roots and zero/one dangling tip. Single-file commit-graph
+validation and bounded missing/corrupt/type/root diagnostics are now implemented
+below. Multiple-tip/missing-output ordering, multiple broken-link ordering,
+unmeasured diagnostic combinations, split/Bloom graphs, strict/configured fsck
+and alternate stores remain named. The main packed fsck and count-objects rows
+both require parity. Bitmaps, multi-pack-index, cruft packs,
 .keep policy, thin packs, transport/stdout and nondefault window/depth remain named.
 
-The writer gate uses 58 source fixtures (16 original, similarity, den-origin,
-34 vc09 packed and six vc12 stash/notes), each in none/OFS/REF modes. Per native
-and release tier it validates 14,055 objects across 174 pairs. Complete process
+The writer gate uses 61 source fixtures (16 original, similarity, den-origin,
+34 vc09 packed, six vc12 stash/notes and three larger vc14 repetitive/binary/mixed
+sets), each in none/OFS/REF modes. Per native
+and release tier it validates 15,207 objects across 183 pairs. Complete process
 captures retain both tools' states; command and refusal counts are derived from
 the final captures rather than conflated with object comparisons. Maximum
 measured OFS/Git is 1.025967 and REF/Git 1.399425, below 1.5; REF has narrow
@@ -88,6 +91,55 @@ headroom. No-delta mode is also gated at 1.5 against Git explicitly given
 12.254789 remains separately recorded, not hidden by the matched-mode baseline. Independent publication/corruption tests and a real
 fifty-link chain complement bounded actual-checked delta units. Component counts
 are separate from the inherited gauntlet's counts.
+
+## Housekeeping and validator (vc14)
+
+`packcmd.reachable(repo)` returns an owned typed closure from refs, HEAD, reflogs
+and index entries/cache trees. It reuses the existing tree/header/ref/index/reflog
+parsers, never `index.write_tree`. Bounds are 10,000 objects, 100,000 links,
+16-MiB bodies and 128-MiB accumulated payload, not peak RSS guarantees.
+`index.cached_trees` exposes valid OIDs through the existing TREE parser.
+
+`packcmd.repack(repo, keep, remove, fail)` separates selection, `pack.encode`,
+verified `pack.install` and retirement. The CLI accepts `repack -a -n -q`,
+optionally `-d`, and `-k` with `-d`. Without `-k`, an unreachable old packed
+object causes a prepublication refusal: retirement never discards a unique body.
+`-k` keeps all old loose and packed identities. The synced
+`objects/info/den-repack-retire` record identifies a replacement and old pairs;
+`recover_repack` revalidates the replacement and old index bindings before every
+removal. Only an empty old index may be retired without a replacement. Failure
+seams cover publication, the retirement record and the pack-before-idx removal
+window. Missing old companions can temporarily block ordinary den lookups;
+recovery precedes the next repack inventory. No multi-file atomicity is claimed.
+
+`packcmd.prune_packed(repo, dry)` validates every packed copy, checks each object
+again before loose removal, then removes empty fanout directories. Dry-run output
+uses ascending prefixes and raw within-directory order. Its differential runs
+both tools on one immutable physical fixture, preserving exact output rather
+than sorting it. GC expiry, reflog expiry, ref-packing, server-info publication,
+incremental repack, `-A`, .keep/cruft/bitmap/multi-pack-index and transport policy
+remain named; repack does not pretend to implement gc. Foreign temporaries and
+incomplete retirement records are preserved, never swept.
+
+`packcmd.parse_commit_graph(bytes)` is a pure bounded parser returning owned
+`CommitGraph`/`GraphNode` metadata. The 16-MiB/10,000-node single-file format
+checks header, nonoverlapping chunks, OID fanout/order, parent/EDGE positions,
+generation-v2 overflow slots and checksum. A parsed graph is not a clean verdict:
+fsck also compares trees, ordered parents and timestamps with canonical commits
+and checks generation ordering. `GraphDiagnostic` carries measured corruption
+text; `Unsupported` names unmeasured forms. Split/Bloom/unknown chunks refuse.
+Object diagnostics retain exit-bit distinctions for missing links, corrupt loose
+objects, wrong tree types and ref/HEAD/cache-tree errors; complex ordering stays
+named. No new production dependency or second delta encoder was added.
+
+`tools/check-housekeeping` runs 56 exact housekeeping rows plus four separately
+named unreachable-retirement refusals, 40 exact immutable fsck rows, three graph
+metadata clients, closure and recovery clients, and six actual-checked parser
+groups per native/release tier. Full captures include every file and mode.
+Housekeeping compares canonical objects, per-pack membership and validated pairs
+under R4c; compressed loose bytes follow R-vc00-2, and optional reverse-index
+representation is retained in captures rather than treated as pack-byte parity.
+All nonrepresentation paths remain exact. M4 is not complete.
 
 ## Blame attribution (vc11)
 
@@ -290,8 +342,9 @@ is needed beyond referring to the equivalent `DeflateErrors` alias.
 fixtures plus ignore, staged rename, modes/symlink, unborn, amend, index-v4 and
 edited-rename states. The original nine builders remain unchanged. The two
 independent corpus builds compare OID manifests, not inode-dependent stat data.
-`tests/cases.json` defines 190 main cases; its latest measured main comparison
-is 182 parity / 7 named not-yet / 1 version-shape / 0 reviewed / 0 failures.
+`tests/cases.json` defines 190 main cases; packed fsck now joins the parity
+requirements: 183 parity / 6 named not-yet / 1 version-shape. Final measured
+counts remain bound to the corresponding gate captures.
 Implemented diff and edited-rename cases require parity and cannot regress to
 a named refusal unnoticed. Generated component matrices remain separately
 counted. Historical vc03 counts and 636 stat-proof rows are retained in
