@@ -1,0 +1,4 @@
+SPOT CHECK PASS: similar-ref; independent idx/pack SHA1, CRC32, REF delta reconstruction, all 24 canonical OIDs
+Selected deepest object dc1cb16fc374e3fa5218db6a265bd9b3cf0d5fd6 depth 4 body bytes 7611 body SHA256 fe7b92a2c703ab2b828f2313b79ab07b6161ae2535023689875d072c263b98af
+Captured Git cat-file and importing-client bodies match; pack-only state is identical
+Size 1461 / Git 1044 = 1.3994252873563218 < 1.5; REF headroom 0.10057471264367823
