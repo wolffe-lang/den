@@ -185,7 +185,7 @@ pub fn encode(bodies: List[Body], mode: str) -> Encoded ! PackErrors {
     for entry in entries { put32(mut index, entry.crc) }
     for entry in entries { put32(mut index, entry.offset) }
     append_write(mut index, sum)
-    let index_sum = hash.sum1(index)
+    let index_sum = hash.sum1([])
     append_write(mut index, index_sum)
     Encoded { data: data, index: index, name: name }
 }
