@@ -215,6 +215,13 @@ case('drop-quiet', 'stashed', [], [['stash', 'drop', '-q'], ['stash', 'drop', '-
 case('clear', 'stashed', [], [['stash', 'clear'], ['stash', 'list'], ['stash', 'clear']])
 case('push-after-drop', 'stashed', DIRTY_A, [['stash', 'drop', '2'], ['stash'], ['stash', 'list']])
 
+case('apply-index-lock', 'stashed', [('lock', '.git/index.lock')], [['stash', 'apply'], ['stash', 'list']])
+case('pop-index-lock', 'stashed', [('lock', '.git/index.lock')], [['stash', 'pop'], ['stash', 'list']])
+case('drop-reflog-lock', 'stashed', [('lock', '.git/logs/refs/stash.lock')], [['stash', 'drop'], ['stash', 'list']])
+case('drop-ref-lock', 'stashed', [('lock', '.git/refs/stash.lock')], [['stash', 'drop', '1'], ['stash', 'drop'], ['stash', 'list']])
+case('clear-ref-lock', 'stashed', [('lock', '.git/refs/stash.lock')], [['stash', 'clear'], ['stash', 'list']])
+case('notes-remove-lock', 'noted', [('lock', '.git/refs/notes/commits.lock')], [['notes', 'remove'], ['notes', 'list']])
+
 # Named stash boundaries (each a refusal before any write).
 for n, (args, feature) in enumerate([
         (['stash', '-u'], 'stash untracked snapshot (-u/-a)'),
