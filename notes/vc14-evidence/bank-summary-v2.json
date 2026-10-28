@@ -1,0 +1,16 @@
+{
+  "bank_bytes": 36480032,
+  "complete_files": 6614,
+  "compressed_manifest_path": "/home/mfwolffe/lanes/vc14/evidence-bank/4cd291ef291242b7d2c215aba1b08979834df554/manifest.json.xz",
+  "compressed_manifest_second_read": "657ea4a0e4bbbe86e2afe0946514804596a0c5b48e57d757610f9c272c1ef9c7",
+  "compressed_manifest_sha256": "657ea4a0e4bbbe86e2afe0946514804596a0c5b48e57d757610f9c272c1ef9c7",
+  "compressed_manifest_size": 290692,
+  "head": "4cd291ef291242b7d2c215aba1b08979834df554",
+  "manifest_path": "/home/mfwolffe/lanes/vc14/evidence-bank/4cd291ef291242b7d2c215aba1b08979834df554/manifest.json",
+  "manifest_second_read": "e101197b828af3d02757ec72c29fd966938434cd4144cec0ea86a1ef7f0bfbc7",
+  "manifest_sha256": "e101197b828af3d02757ec72c29fd966938434cd4144cec0ea86a1ef7f0bfbc7",
+  "manifest_size": 3518816,
+  "original_bank_manifest_unchanged": "593a0909692563f41f85af877d682ce0b677a30a9381e1795fb40e09534c76ef",
+  "original_bytes": 2345421346,
+  "rederive": "xz -dc bank-manifest-v2.json.xz yields every file path, size and both SHA256 reads; each entry describes its lossless original."
+}
