@@ -4,6 +4,11 @@ use oid
 use pack
 use repository
 
+fn gitdir_display(repo: repository.Repo) -> str {
+    let local = fs.realpath(".git") else ""
+    if local == repo.gitdir then ".git" else copy repo.gitdir
+}
+
 /// Inventory keeps loose duplicates and per-pack counts distinct.
 pub struct Inventory {
     loose: List[str],
@@ -44,6 +49,9 @@ pub fn inventory(repo: repository.Repo) -> Inventory ! object.StoreErrors {
         if prefix == "pack" {
             for item in fs.entries("{root}/pack")? {
                 let name = str_from_utf8(item.name) else ""
+                if !name.starts_with("pack-") {
+                    return Unsupported("object inventory temporary or garbage")
+                }
                 if name.ends_with(".keep") { return Unsupported("pack .keep policy") }
                 if name.ends_with(".mtimes") { return Unsupported("cruft packs") }
                 if name.ends_with(".rev") { continue }
@@ -227,6 +235,9 @@ pub fn run(args: List[str]) -> int {
 }
 
 fn dispatch(args: List[str]) -> int ! object.StoreErrors {
+    if args[0] == "repack" || args[0] == "gc" || args[0] == "prune-packed" {
+        return housekeeping(args)?
+    }
     if args[0] == "fsck" { return fsck(args)? }
     if args[0] == "count-objects" { return count_objects(args)? }
     if args[0] == "verify-pack" { return verify_pack(args)? }

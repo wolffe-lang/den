@@ -9,8 +9,11 @@ use pack
 use refs
 use repository
 use stashlog
+use zlib
 
 struct Link { name: str, kind: str }
+
+struct ValidationLink { source: str, kind: str, target: Link }
 
 fn linked_name(bytes: List[byte]) -> str ! object.StoreErrors {
     let name = str_from_utf8(bytes) else |_| { return Unsupported("fsck object header bytes") }
@@ -104,6 +107,84 @@ fn reflog_roots(path: str, depth: int, mut roots: Map[str, bool]) -> () ! object
     }
 }
 
+fn corrupt_diagnostic(
+    repo: repository.Repo,
+    name: str,
+    mut messages: List[str],
+) -> () ! object.StoreErrors {
+    let source = object.path(repo, oid.parse("sha1", name)?)?
+    let path = "{gitdir_display(repo)}/objects/{name[0..2]}/{name[2..]}"
+    let bytes = repository.read_bytes(source, 17000000)?
+    if bytes.len == 0 {
+        (mut messages).push("error: object file {path} is empty")
+        (mut messages).push("error: unable to mmap {path}: No such file or directory")
+    } else if bytes.len >= 2 && (bytes[0] as int * 256 + bytes[1] as int) % 31 != 0 {
+        (mut messages).push("error: inflate: data stream error (incorrect header check)")
+        (mut messages).push("error: unable to unpack header of {path}")
+    } else {
+        let inflated = zlib.inflate(bytes, 16777344) else |_| {
+            return Unsupported("fsck compressed corruption diagnostics")
+        }
+        let actual = oid.digest("sha1", inflated.data)?
+        let _ = object.decode(bytes, actual, 16777216) else |_| {
+            return Unsupported("fsck malformed object diagnostics")
+        }
+        if oid.hex(actual)? == name { return Unsupported("fsck object read failure diagnostics") }
+        (mut messages).push("error: {oid.hex(actual)?}: hash-path mismatch, found at: {path}")
+        return
+    }
+    (mut messages).push("error: {name}: object corrupt or missing: {path}")
+}
+
+fn checked_reflogs(
+    repo: repository.Repo,
+    relative: str,
+    depth: int,
+    kinds: Map[str, str],
+    mut roots: Map[str, bool],
+    mut messages: List[str],
+) -> () ! object.StoreErrors {
+    if depth > 32 { return Unsupported("fsck reflog depth") }
+    let path = "{repo.gitdir}/logs/{relative}"
+    let entries = fs.entries(path) else |e| match e {
+        not_found => { return },
+        _ => { return io },
+    }
+    var names = List[str](), types = Map[str, int]()
+    for entry in entries {
+        let name = str_from_utf8(entry.name) else |_| {
+            return Unsupported("fsck reflog path bytes")
+        }
+        (mut names).push(copy name)
+        types[name] = entry.kind
+    }
+    for name in sorted_names(names) {
+        let child = if relative == "" then name else "{relative}/{name}"
+        if (types[name] else -1) == 1 {
+            checked_reflogs(repo, child, depth + 1, kinds, mut roots, mut messages)?
+        } else if (types[name] else -1) == 0 {
+            let records = stashlog.parse(
+                repository.read_bytes("{repo.gitdir}/logs/{child}", 16777216)?,
+            ) else |_| { return Unsupported("fsck reflog diagnostics") }
+            for record in records {
+                for id in [record.before, record.after] {
+                    if id == "0000000000000000000000000000000000000000" { continue }
+                    if (kinds[id] else "") == "" {
+                        (mut messages).push("error: {child}: invalid reflog entry {id}")
+                    } else {
+                        roots[id] = true
+                    }
+                }
+            }
+        } else {
+            return Unsupported("fsck reflog file type")
+        }
+        if roots.len > 10000 || messages.len > 10000 {
+            return Unsupported("fsck reflog count limit")
+        }
+    }
+}
+
 fn fsck(args: List[str]) -> int ! object.StoreErrors {
     var dangling = true, logs = true
     for arg in args[1..] {
@@ -122,19 +203,17 @@ fn fsck(args: List[str]) -> int ! object.StoreErrors {
         if key.starts_with("fsck.") { return Unsupported("fsck configuration") }
     }
     let items = inventory(repo)?
-    if (repo.config["core.commitgraph"] else "true") != "false" &&
-        (
-            fs.exists("{repo.gitdir}/objects/info/commit-graph") ||
-                fs.exists("{repo.gitdir}/objects/info/commit-graphs")
-        ) {
-        return Unsupported("fsck commit-graph validation")
+    let check_graph = (repo.config["core.commitgraph"] else "true") != "false"
+    if check_graph && fs.exists("{repo.gitdir}/objects/info/commit-graphs") {
+        return Unsupported("fsck split commit-graph validation")
     }
     for path in items.indexes { let _ = pack.inspect(path)? }
     var names = List[str](),
         kinds = Map[str, str](),
         used = Map[str, bool](),
-        all_links = List[Link](),
+        all_links = List[ValidationLink](),
         seen = Map[str, bool]()
+    var messages = List[str](), broken = List[str](), missing = Map[str, str](), status = 0
     for name in items.loose {
         if !(seen[name] else false) { seen[name] = true; (mut names).push(copy name) }
     }
@@ -145,17 +224,44 @@ fn fsck(args: List[str]) -> int ! object.StoreErrors {
     var total = 0
     for name in names {
         let body = object.read_object(repo, oid.parse("sha1", name)?, 16777216) else |_| {
-            return Unsupported("fsck corrupt object diagnostics")
+            corrupt_diagnostic(repo, name, mut messages)?
+            status |= 1
+            continue
         }
         if body.data.len > 134217728 - total { return Unsupported("fsck payload limit") }
         total += body.data.len
         kinds[name] = copy body.kind
-        for link in links(body)? { (mut all_links).push(copy link) }
+        for link in links(body)? {
+            (mut all_links).push(ValidationLink {
+                source: copy name,
+                kind: copy body.kind,
+                target: copy link,
+            })
+        }
         if all_links.len > 100000 { return Unsupported("fsck link count limit") }
     }
-    for link in all_links {
-        if (kinds[link.name] else "") != link.kind {
-            return Unsupported("fsck missing or wrong-type link diagnostics")
+    var invalid_sources = Map[str, bool]()
+    for edge in all_links {
+        let link = edge.target
+        let actual = kinds[link.name] else ""
+        if actual == "" {
+            if (missing[link.name] else link.kind) != link.kind {
+                return Unsupported("fsck conflicting missing types")
+            }
+            missing[link.name] = copy link.kind
+            status |= 2
+        } else if actual != link.kind {
+            (mut messages).push("error: object {link.name} is a {actual}, not a {link.kind}")
+            if edge.kind == "tree" {
+                (mut messages).push("error in tree {edge.source}: broken links")
+            } else if edge.kind == "commit" && link.kind == "tree" {
+                (mut messages).push("error: bad tree pointer {link.name} in commit {edge.source}")
+                (mut messages).push("error: {edge.source}: object corrupt or missing")
+                invalid_sources[edge.source] = true
+            } else {
+                return Unsupported("fsck wrong-type parent or tag diagnostics")
+            }
+            status |= 1
         }
         used[link.name] = true
     }
@@ -163,46 +269,107 @@ fn fsck(args: List[str]) -> int ! object.StoreErrors {
     let references = refs.list(repo, "refs/")?
     for reference in references {
         let name = oid.hex(reference.id)?
+        if (kinds[name] else "") == "" {
+            (mut messages).push("error: {reference.name}: invalid sha1 pointer {name}")
+            status |= 2
+            continue
+        }
         if reference.name.starts_with("refs/heads/") && (kinds[name] else "") != "commit" {
-            return Unsupported("fsck branch type diagnostics")
+            (mut messages).push("error: {reference.name}: not a commit")
+            status |= 8
         }
         roots[name] = true
     }
     for id in refs.optional(repo, "HEAD")? {
         let name = oid.hex(id)?
-        if (kinds[name] else "") != "commit" { return Unsupported("fsck HEAD type diagnostics") }
+        if (kinds[name] else "") == "" {
+            (mut messages).push("error: HEAD: invalid sha1 pointer {name}")
+            status |= 2
+            continue
+        }
+        if (kinds[name] else "") != "commit" {
+            (mut messages).push("error: HEAD: not a commit")
+            status |= 8
+        }
         roots[name] = true
     }
     let default_references = roots.len
-    if logs { reflog_roots("{repo.gitdir}/logs", 0, mut roots)? }
+    if logs {
+        let count = messages.len
+        checked_reflogs(repo, "", 0, kinds, mut roots, mut messages)?
+        if messages.len != count { status |= 2 }
+    }
     if fs.exists("{repo.gitdir}/index") {
         let value = index.read(repo, 16777216) else |_| {
             return Unsupported("fsck index diagnostics")
         }
+        let cached = index.cached_trees(value) else |_| {
+            return Unsupported("fsck cache-tree diagnostics")
+        }
+        for id in cached {
+            let name = oid.hex(id)?
+            if (kinds[name] else "") == "" {
+                (mut messages).push(
+                    "error: {name}: invalid sha1 pointer in cache-tree of {gitdir_display(repo)}/index",
+                )
+                status |= 8
+            } else if (kinds[name] else "") != "tree" {
+                return Unsupported("fsck cache-tree type diagnostics")
+            } else {
+                used[name] = true
+            }
+        }
         for entry in value.entries {
             if entry.stat[6] == 0o160000 { continue }
             let name = oid.hex(entry.id)?
-            if (kinds[name] else "") != "blob" {
+            if (kinds[name] else "") == "" {
+                missing[name] = "blob"
+                status |= 2
+            } else if (kinds[name] else "") != "blob" {
                 return Unsupported("fsck index object diagnostics")
             }
             roots[name] = true
         }
     }
-    for (name, _) in roots.pairs() {
-        if (kinds[name] else "") == "" { return Unsupported("fsck missing root diagnostics") }
-        used[name] = true
+    for (name, _) in roots.pairs() { used[name] = true }
+    for edge in all_links {
+        if (missing[edge.target.name] else "") != "" && !(roots[edge.target.name] else false) {
+            var source_kind = edge.kind, target_kind = edge.target.kind
+            while source_kind.len < 7 { source_kind = " {source_kind}" }
+            while target_kind.len < 7 { target_kind = " {target_kind}" }
+            (mut broken).push(
+                "broken link from {source_kind} {edge.source}\n              to {target_kind} {edge.target.name}",
+            )
+        }
     }
     var tips = List[str]()
     if dangling {
-        for name in names { if !(used[name] else false) { (mut tips).push(copy name) } }
+        for name in names {
+            if (kinds[name] else "") != "" &&
+                !(used[name] else false) &&
+                !(invalid_sources[name] else false) {
+                (mut tips).push(copy name)
+            }
+        }
         // Git's hash-table iteration is not sorted OID order. Until measured,
         // refuse multiple-tip display rather than inventing porcelain parity.
         if tips.len > 1 { return Unsupported("fsck multiple dangling object order") }
     }
+    if tips.len + missing.len > 1 {
+        return Unsupported("fsck multiple dangling or missing object order")
+    }
+    if broken.len > 1 { return Unsupported("fsck multiple broken-link order") }
+    for message in messages { eprint(message) }
     if default_references == 0 { eprint("notice: No default references") }
+    for line in broken { print(line) }
+    for (name, kind) in missing.pairs() { print("missing {kind} {name}") }
     for name in tips {
         let kind = kinds[name] else ""
         print("dangling {kind} {name}")
     }
-    0
+    if check_graph && fs.exists("{repo.gitdir}/objects/info/commit-graph") {
+        let bytes = repository.read_bytes("{repo.gitdir}/objects/info/commit-graph", 16777216)?
+        return status | verify_commit_graph(repo, bytes)?
+    }
+    status
 }

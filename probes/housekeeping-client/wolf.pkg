@@ -1,0 +1,9 @@
+pkg {
+    name: "housekeeping-client",
+    edition: "1",
+    capabilities: [env, fs],
+    deps: {
+        packcmd: {path: "../../src/packcmd"},
+        repository: {path: "../../src/repository"},
+    },
+}

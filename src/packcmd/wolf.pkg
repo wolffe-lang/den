@@ -1,0 +1,18 @@
+pkg {
+    name: "packcmd",
+    edition: "1",
+    capabilities: [fs],
+    deps: {
+        commit_format: {path: "../commit_format"},
+        hash: {path: "../hash"},
+        index: {path: "../index"},
+        object: {path: "../object"},
+        oid: {path: "../oid"},
+        pack: {path: "../pack"},
+        refs: {path: "../refs"},
+        repository: {path: "../repository"},
+        stashlog: {path: "../stashlog"},
+        walk: {path: "../walk"},
+        zlib: {path: "../zlib"},
+    },
+}

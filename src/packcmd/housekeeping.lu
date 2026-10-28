@@ -1,0 +1,349 @@
+// Selection, construction, verified publication and retirement are separate.
+// Policy derives only from git-repack/prune-packed and vc14 binary captures.
+use std.fs
+use index
+use object
+use oid
+use pack
+use refs
+use repository
+
+/// Owned closure identities; reading this never refreshes or writes the index.
+pub fn reachable(repo: repository.Repo) -> List[str] ! object.StoreErrors {
+    var roots = Map[str, bool](), expected = Map[str, str]()
+    for reference in refs.list(repo, "refs/")? {
+        let name = oid.hex(reference.id)?
+        roots[name] = true
+        if reference.name.starts_with("refs/heads/") { expected[name] = "commit" }
+    }
+    for id in refs.optional(repo, "HEAD")? {
+        let name = oid.hex(id)?
+        roots[name] = true
+        expected[name] = "commit"
+    }
+    reflog_roots("{repo.gitdir}/logs", 0, mut roots)?
+    if fs.exists("{repo.gitdir}/index") {
+        let value = index.read(repo, 16777216) else |_| {
+            return Unsupported("repack index validation")
+        }
+        let cached = index.cached_trees(value) else |_| {
+            return Unsupported("repack cache-tree validation")
+        }
+        for id in cached {
+            let name = oid.hex(id)?
+            if (expected[name] else "tree") != "tree" {
+                return Unsupported("repack root type conflict")
+            }
+            roots[name] = true
+            expected[name] = "tree"
+        }
+        for entry in value.entries {
+            if entry.stat[6] != 0o160000 {
+                let name = oid.hex(entry.id)?
+                if (expected[name] else "blob") != "blob" {
+                    return Unsupported("repack root type conflict")
+                }
+                roots[name] = true
+                expected[name] = "blob"
+            }
+        }
+    }
+    var pending = List[Link](), seen = Map[str, str](), out = List[str](), total = 0
+    for (name, _) in roots.pairs() { (mut pending).push(Link { name: copy name, kind: expected[name] else "" }) }
+    var at = 0
+    while at < pending.len {
+        let link = copy pending[at]
+        at += 1
+        let prior = seen[link.name] else ""
+        if prior != "" {
+            if link.kind != "" && prior != link.kind {
+                return Unsupported("repack wrong-type link")
+            }
+            continue
+        }
+        if out.len >= 10000 { return Unsupported("repack closure count limit") }
+        var wrong_type = false, too_large = false
+        region closure_object {
+            let body = object.read_object(repo, oid.parse("sha1", link.name)?, 16777216)?
+            wrong_type = link.kind != "" && body.kind != link.kind
+            too_large = body.data.len > 134217728 - total
+            if !wrong_type && !too_large {
+                seen[link.name] = copy body.kind
+                total += body.data.len
+                for child in links(body)? { (mut pending).push(copy child) }
+            }
+        }
+        if wrong_type { return Unsupported("repack wrong-type link") }
+        if too_large { return Unsupported("repack closure payload limit") }
+        if pending.len > 100000 { return Unsupported("repack closure link limit") }
+        (mut out).push(copy link.name)
+    }
+    out
+}
+
+fn housekeeping_config(repo: repository.Repo) -> () ! object.StoreErrors {
+    for (key, value) in repo.config.pairs() {
+        if key == "pack.window" && value == "10" { continue }
+        if key == "pack.depth" && value == "50" { continue }
+        if key.starts_with("pack.") || key.starts_with("repack.") || key == "core.compression" {
+            return Unsupported("repack configuration {key}")
+        }
+    }
+    if fs.exists("{repo.gitdir}/shallow") ||
+        fs.exists("{repo.gitdir}/info/grafts") ||
+        fs.exists("{repo.gitdir}/refs/replace") ||
+        fs.exists("{repo.gitdir}/worktrees") {
+        return Unsupported("repack shallow, graft, replacement or linked worktree roots")
+    }
+}
+
+fn sorted_names(values: List[str]) -> List[str] {
+    var out = List[str](), seen = Map[str, bool]()
+    for name in values {
+        if seen[name] else false { continue }
+        seen[name] = true
+        (mut out).push(copy name)
+        var i = out.len - 1
+        while i > 0 && out[i] < out[i - 1] {
+            let saved = copy out[i]
+            out[i] = copy out[i - 1]
+            out[i - 1] = saved
+            i -= 1
+        }
+    }
+    out
+}
+
+/// Prove pack copies before removing any loose duplicate. Foreign temporary
+/// files and unsupported pack sidecars are rejected by the shared inventory.
+pub fn prune_packed(repo: repository.Repo, dry: bool) -> () ! object.StoreErrors {
+    let items = inventory(repo)?
+    var present = Map[str, bool]()
+    for path in items.indexes {
+        let checked = pack.inspect(path)?
+        for row in checked.objects { present[row.name] = true }
+    }
+    // The measured dry-run walks fanout directories numerically and preserves
+    // each directory's raw entry order; it is not a lexicographic OID listing.
+    var loose = copy items.loose
+    for i in 1..loose.len {
+        var j = i
+        while j > 0 && loose[j][0..2] < loose[j - 1][0..2] {
+            let saved = copy loose[j]
+            loose[j] = copy loose[j - 1]
+            loose[j - 1] = saved
+            j -= 1
+        }
+    }
+    for name in loose {
+        if !(present[name] else false) { continue }
+        let path = "{repo.gitdir}/objects/{name[0..2]}/{name[2..]}"
+        if dry {
+            print("rm -f {gitdir_display(repo)}/objects/{name[0..2]}/{name[2..]}")
+        } else {
+            // A fresh packed read bypasses loose precedence and rechecks CRC,
+            // both checksums and canonical identity immediately before removal.
+            let _ = pack.read_object(repo.gitdir, name, 16777216)?
+            fs.remove(path)?
+            fs.sync_dir("{repo.gitdir}/objects/{name[0..2]}")?
+        }
+    }
+    if !dry {
+        var prefixes = Map[str, bool]()
+        for name in items.loose { prefixes[name[0..2]] = true }
+        for (prefix, _) in prefixes.pairs() {
+            let dir = "{repo.gitdir}/objects/{prefix}"
+            if fs.entries(dir)?.len == 0 { fs.remove_dir(dir)? }
+        }
+        fs.sync_dir("{repo.gitdir}/objects")?
+    }
+}
+
+/// Resume only a fully framed retirement record. A validated replacement must
+/// contain every old identity; even a forged record cannot discard unique data.
+/// Missing/foreign temporary files are never swept by pattern.
+pub fn recover_repack(repo: repository.Repo, fail: str) -> () ! object.StoreErrors {
+    let journal = "{repo.gitdir}/objects/info/den-repack-retire"
+    if !fs.exists(journal) { return }
+    let data = repository.read_bytes(journal, 32768)?
+    let text = str_from_utf8(data) else |_| { return Unsupported("repack retirement record bytes") }
+    let lines = text.split("\n")
+    if lines.len < 4 ||
+        lines[0] != "den-repack-retire-v1" ||
+        lines[lines.len - 1] != "" ||
+        lines[lines.len - 2] != "complete" {
+        return Unsupported("repack incomplete retirement record")
+    }
+    let name = if lines[1] == "empty" then "empty" else oid.hex(oid.parse("sha1", lines[1])?)?
+    let dir = "{repo.gitdir}/objects/pack"
+    let replacement = "{dir}/pack-{name}.idx"
+    var present = Map[str, bool]()
+    if name != "empty" {
+        for row in pack.inspect(replacement)?.objects { present[row.name] = true }
+    }
+    var old_names = List[str](), seen = Map[str, bool]()
+    for line in lines[2..lines.len - 2] {
+        let old = oid.hex(oid.parse("sha1", line)?)?
+        if old == name || (seen[old] else false) {
+            return Unsupported("repack retirement identity")
+        }
+        seen[old] = true
+        let stem = "{dir}/pack-{old}"
+        if fs.exists("{stem}.idx") {
+            for id in pack.retirement_names("{stem}.idx", old)? {
+                if !(present[id] else false) {
+                    return Unsupported("repack retirement unique object")
+                }
+            }
+            if fs.exists("{stem}.pack") { let _ = pack.inspect("{stem}.idx")? }
+        } else if fs.exists("{stem}.pack") {
+            return Unsupported("repack retirement missing index")
+        }
+        (mut old_names).push(copy old)
+    }
+    for old in old_names {
+        let stem = "{dir}/pack-{old}"
+        if name != "empty" { let _ = pack.inspect(replacement)? }
+        if fs.exists("{stem}.pack") { fs.remove("{stem}.pack")?; fs.sync_dir(dir)? }
+        if fail == "after-pack-removal" { return io }
+        if fs.exists("{stem}.idx") { fs.remove("{stem}.idx")?; fs.sync_dir(dir)? }
+        if fs.exists("{stem}.rev") { fs.remove("{stem}.rev")?; fs.sync_dir(dir)? }
+    }
+    fs.remove(journal)?
+    fs.sync_dir("{repo.gitdir}/objects/info")?
+}
+
+/// Keep all old objects until the new pair is fully read back. Failure seams
+/// are explicit parameters only; the command never reads an injection env var.
+pub fn repack(
+    repo: repository.Repo,
+    keep: bool,
+    remove: bool,
+    fail: str,
+) -> () ! object.StoreErrors {
+    housekeeping_config(repo)?
+    recover_repack(repo, "")?
+    let items = inventory(repo)?
+    for path in items.indexes { let _ = pack.inspect(path)? }
+    var names = reachable(repo)?
+    if keep {
+        for name in items.packed { (mut names).push(copy name) }
+        for name in items.loose { (mut names).push(copy name) }
+    }
+    names = sorted_names(names)
+    if remove && !keep {
+        var selected = Map[str, bool]()
+        for id in names { selected[id] = true }
+        for id in items.packed {
+            if !(selected[id] else false) {
+                return Unsupported("repack unreachable packed retirement (use -k)")
+            }
+        }
+    }
+    if names.len == 0 {
+        if remove && items.indexes.len > 0 { retire_packs(repo, "empty", items.indexes, fail)? }
+        return
+    }
+    var bodies = List[pack.Body](), total = 0
+    for name in names {
+        var too_large = false
+        region selected_object {
+            let value = object.read_object(repo, oid.parse("sha1", name)?, 16777216)?
+            too_large = value.data.len > 134217728 - total
+            if !too_large {
+                total += value.data.len
+                (mut bodies).push(copy pack.Body { kind: copy value.kind, data: copy value.data })
+            }
+        }
+        if too_large { return Unsupported("repack payload limit") }
+    }
+    let encoded = pack.encode(bodies, "ofs")?
+    if fail == "before-publication" { return io }
+    let name = pack.install(repo.gitdir, encoded)?
+    let stem = "{repo.gitdir}/objects/pack/pack-{name}"
+    let checked = pack.inspect("{stem}.idx")?
+    if checked.objects.len != names.len { return Unsupported("repack verification count") }
+    var verified = Map[str, bool]()
+    for row in checked.objects { verified[row.name] = true }
+    for id in names {
+        if !(verified[id] else false) { return Unsupported("repack verification identity") }
+    }
+    if fail == "after-publication" { return io }
+    if !remove { return }
+    // Retirement records and interrupted deletion recovery are a separate
+    // boundary. Never retire an object outside the selected replacement here.
+    for path in items.indexes {
+        if path == "{stem}.idx" { continue }
+        for old in pack.names(path)? {
+            if !(verified[old] else false) {
+                return Unsupported("repack unreachable packed retirement")
+            }
+        }
+    }
+    if fail == "before-removal" { return io }
+    retire_packs(repo, name, items.indexes, fail)?
+    prune_packed(repo, false)?
+}
+
+fn retire_packs(
+    repo: repository.Repo,
+    name: str,
+    indexes: List[str],
+    fail: str,
+) -> () ! object.StoreErrors {
+    var journal_text = "den-repack-retire-v1\n{name}\n"
+    for path in indexes {
+        if path == "{repo.gitdir}/objects/pack/pack-{name}.idx" { continue }
+        let prefix = "{repo.gitdir}/objects/pack/pack-"
+        if !path.starts_with(prefix) { return Unsupported("repack retirement filename") }
+        let old = path[prefix.len..path.len - 4]
+        let _ = oid.parse("sha1", old)?
+        journal_text = "{journal_text}{old}\n"
+    }
+    journal_text = "{journal_text}complete\n"
+    let journal = "{repo.gitdir}/objects/info/den-repack-retire"
+    var file = fs.create_new_with_mode(journal, 0o444)?
+    defer fs_close(file.fd) else |_| {}
+    fs.write_chunk(mut file, journal_text.bytes())?
+    fs.sync(mut file)?
+    fs.sync_dir("{repo.gitdir}/objects/info")?
+    if fail == "after-retirement-record" { return io }
+    recover_repack(repo, fail)?
+}
+
+fn housekeeping(args: List[str]) -> int ! object.StoreErrors {
+    let repo = repository.discover(".")?
+    if args[0] == "gc" {
+        return Unsupported("gc expiry, reflog, ref-packing and commit-graph policy")
+    }
+    if args[0] == "prune-packed" {
+        var dry = false
+        for arg in args[1..] {
+            if arg == "-n" || arg == "--dry-run" {
+                dry = true
+            } else if arg != "-q" && arg != "--quiet" {
+                return Unsupported("prune-packed {arg}")
+            }
+        }
+        prune_packed(repo, dry)?
+        return 0
+    }
+    var all = false, remove = false, keep = false, no_info = false
+    for arg in args[1..] {
+        if arg == "-a" {
+            all = true
+        } else if arg == "-d" {
+            remove = true
+        } else if arg == "-k" || arg == "--keep-unreachable" {
+            keep = true
+        } else if arg == "-n" {
+            no_info = true
+        } else if arg != "-q" && arg != "--quiet" {
+            return Unsupported("repack {arg}")
+        }
+    }
+    if !all { return Unsupported("repack incremental selection") }
+    if !no_info { return Unsupported("repack server-info publication (use -n)") }
+    repack(repo, keep, remove, "")?
+    0
+}

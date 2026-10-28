@@ -1,0 +1,305 @@
+// Original bounded single-file commit-graph validator from
+// gitformat-commit-graph(5); diagnostic text measured with pinned Git 2.56.0.
+use hash
+use object
+use oid
+use repository
+use walk
+
+/// Unsupported names an unmeasured/bounded form; GraphDiagnostic is exact
+/// measured fsck corruption text. Neither is a successful validation.
+pub error GraphErrors = {Unsupported(str), GraphDiagnostic(str)}
+
+/// Owned graph metadata, with parent positions checked against the node array.
+pub struct GraphNode {
+    name: str,
+    tree: str,
+    parents: List[int],
+    generation: int,
+    timestamp: int,
+    corrected: int,
+}
+
+/// Parsed structure; checksum=false is retained for ordered validator reporting.
+/// A parsed graph still requires comparison with the canonical object database.
+pub struct CommitGraph { nodes: List[GraphNode], version2: bool, checksum: bool }
+
+fn graph_u32(data: List[byte], pos: int) -> int {
+    var value = 0
+    for i in 0..4 { value = value * 256 + data[pos + i] as int }
+    value
+}
+
+fn graph_hex(data: List[byte]) -> str {
+    let alphabet = "0123456789abcdef"
+    var out = ""
+    for b in data {
+        let n = b as int
+        out = "{out}{alphabet[n / 16..n / 16 + 1]}{alphabet[n % 16..n % 16 + 1]}"
+    }
+    out
+}
+
+fn graph_equal(a: List[byte], b: List[byte]) -> bool {
+    if a.len != b.len { return false }
+    for i in 0..a.len { if a[i] != b[i] { return false } }
+    true
+}
+
+fn graph_name(data: List[byte], pos: int) -> str { graph_hex(data[pos..pos + 20]) }
+
+fn graph_double(text: str) -> CommitGraph ! GraphErrors { GraphDiagnostic("{text}\n{text}") }
+
+/// Pure bounded parser. No object is trusted merely because it is in the graph.
+pub fn parse_commit_graph(data: List[byte]) -> CommitGraph ! GraphErrors {
+    if data.len < 20 + 8 + 12 || data.len > 16777216 {
+        return Unsupported("fsck commit-graph size")
+    }
+    if graph_hex(data[0..4]) != "43475048" {
+        return graph_double(
+            "error: commit-graph signature {graph_hex(data[0..4])} does not match signature 43475048",
+        )?
+    }
+    if data[4] != 1 as byte {
+        return graph_double(
+            "error: commit-graph version {data[4] as int} does not match version 1",
+        )?
+    }
+    if data[5] != 1 as byte {
+        return graph_double(
+            "error: commit-graph hash version {data[5] as int} does not match version 1",
+        )?
+    }
+    if data[7] != 0 as byte { return Unsupported("fsck split commit-graph") }
+    let count = data[6] as int
+    let table_end = 8 + (count + 1) * 12
+    if table_end > data.len - 20 { return Unsupported("fsck commit-graph chunk table") }
+    var starts = Map[str, int](), lengths = Map[str, int](), previous = table_end
+    for i in 0..count + 1 {
+        let at = 8 + i * 12
+        if graph_u32(data, at + 4) != 0 {
+            return Unsupported("fsck commit-graph large chunk offset")
+        }
+        let start = graph_u32(data, at + 8)
+        if start < previous || start > data.len - 20 {
+            return Unsupported("fsck commit-graph chunk offset")
+        }
+        let tag = graph_hex(data[at..at + 4])
+        if i == count {
+            if tag != "00000000" || start != data.len - 20 {
+                return Unsupported("fsck commit-graph chunk terminator")
+            }
+        } else {
+            if tag == "00000000" || (starts[tag] else -1) >= 0 {
+                return Unsupported("fsck commit-graph duplicate chunk")
+            }
+            if i == 0 && start != table_end {
+                return Unsupported("fsck commit-graph initial chunk offset")
+            }
+            starts[tag] = start
+            let next = graph_u32(data, at + 20)
+            if next < start || next > data.len - 20 {
+                return Unsupported("fsck commit-graph chunk length")
+            }
+            lengths[tag] = next - start
+        }
+        previous = start
+    }
+    // OIDF, OIDL, CDAT; EDGE and generation v2 are the only optional chunks
+    // consumed here. Unknown/Bloom/base data is explicitly not certified.
+    for (tag, _) in starts.pairs() {
+        if tag != "4f494446" &&
+            tag != "4f49444c" &&
+            tag != "43444154" &&
+            tag != "45444745" &&
+            tag != "47444132" &&
+            tag != "47444f32" {
+            return Unsupported("fsck commit-graph optional chunk {tag}")
+        }
+    }
+    let fanout = starts["4f494446"] else -1
+    let ids = starts["4f49444c"] else -1
+    let commits = starts["43444154"] else -1
+    if fanout < 0 || ids < 0 || commits < 0 || (lengths["4f494446"] else 0) != 1024 {
+        return Unsupported("fsck commit-graph required chunk")
+    }
+    let n = graph_u32(data, fanout + 1020)
+    var last = 0
+    for i in 0..256 {
+        let current = graph_u32(data, fanout + i * 4)
+        if current < last {
+            return graph_double(
+                "error: commit-graph fanout values out of order\nerror: commit-graph required OID fanout chunk missing or corrupted",
+            )?
+        }
+        last = current
+    }
+    if n > 10000 { return Unsupported("fsck commit-graph object count limit") }
+    if (lengths["4f49444c"] else 0) != n * 20 {
+        return graph_double(
+            "error: commit-graph OID lookup chunk is the wrong size\nerror: commit-graph required OID lookup chunk missing or corrupted",
+        )?
+    }
+    if (lengths["43444154"] else 0) != n * 36 {
+        return Unsupported("fsck commit-graph data length")
+    }
+    let generations = starts["47444132"] else -1
+    let overflow = starts["47444f32"] else -1
+    let edges = starts["45444745"] else -1
+    if generations >= 0 && (lengths["47444132"] else 0) != n * 4 {
+        return Unsupported("fsck commit-graph generation length")
+    }
+    if overflow >= 0 && (generations < 0 || (lengths["47444f32"] else 0) % 8 != 0) {
+        return Unsupported("fsck commit-graph generation overflow")
+    }
+    if edges >= 0 && (lengths["45444745"] else 0) % 4 != 0 {
+        return Unsupported("fsck commit-graph edge length")
+    }
+    var nodes = List[GraphNode](), prior = "", bucket = 0
+    for i in 0..n {
+        let name = graph_name(data, ids + 20 * i)
+        if i > 0 && name <= prior { return Unsupported("fsck commit-graph OID ordering") }
+        prior = name
+        let first = data[ids + 20 * i] as int
+        while bucket < first {
+            if graph_u32(data, fanout + bucket * 4) != i {
+                return Unsupported("fsck commit-graph fanout identity")
+            }
+            bucket += 1
+        }
+        let at = commits + 36 * i
+        var parents = List[int]()
+        let p1 = graph_u32(data, at + 20), p2 = graph_u32(data, at + 24)
+        if p1 != 1879048192 {
+            if p1 >= n { return GraphDiagnostic("fatal: invalid parent position {p1}") }
+            (mut parents).push(p1)
+        }
+        if p2 >= 2147483648 {
+            if edges < 0 { return Unsupported("fsck commit-graph missing extra edges") }
+            var slot = p2 - 2147483648, done = false
+            while !done {
+                if slot >= (lengths["45444745"] else 0) / 4 || parents.len >= 10000 {
+                    return Unsupported("fsck commit-graph extra edge range")
+                }
+                let raw = graph_u32(data, edges + slot * 4)
+                let parent = raw & 2147483647
+                if parent >= n { return GraphDiagnostic("fatal: invalid parent position {parent}") }
+                (mut parents).push(parent)
+                done = raw >= 2147483648
+                slot += 1
+            }
+        } else if p2 != 1879048192 {
+            if p2 >= n { return GraphDiagnostic("fatal: invalid parent position {p2}") }
+            (mut parents).push(p2)
+        }
+        let top = graph_u32(data, at + 28)
+        let timestamp = (top & 3) * 4294967296 + graph_u32(data, at + 32)
+        var corrected = timestamp
+        if generations >= 0 {
+            var offset = graph_u32(data, generations + i * 4)
+            if offset >= 2147483648 {
+                let slot = offset - 2147483648
+                if overflow < 0 || slot >= (lengths["47444f32"] else 0) / 8 {
+                    return Unsupported("fsck commit-graph generation overflow slot")
+                }
+                let high = graph_u32(data, overflow + slot * 8)
+                if high > 2147483646 {
+                    return Unsupported("fsck commit-graph corrected date range")
+                }
+                offset = high * 4294967296 + graph_u32(data, overflow + slot * 8 + 4)
+            }
+            if offset > 9223372036854775807 - timestamp {
+                return Unsupported("fsck commit-graph corrected date overflow")
+            }
+            corrected += offset
+        }
+        (mut nodes).push(GraphNode {
+            name: name,
+            tree: graph_name(data, at),
+            parents: parents,
+            generation: top >> 2,
+            timestamp: timestamp,
+            corrected: corrected,
+        })
+    }
+    while bucket < 256 {
+        if graph_u32(data, fanout + bucket * 4) != n {
+            return Unsupported("fsck commit-graph fanout identity")
+        }
+        bucket += 1
+    }
+    CommitGraph {
+        nodes: nodes,
+        version2: generations >= 0,
+        checksum: graph_equal(hash.sum1(data[0..data.len - 20]), data[data.len - 20..]),
+    }
+}
+
+fn verify_commit_graph(repo: repository.Repo, bytes: List[byte]) -> int ! object.StoreErrors {
+    let graph = parse_commit_graph(bytes) else |e| match e {
+        Unsupported(feature) => { return Unsupported(feature) },
+        GraphDiagnostic(text) => { eprint(text); return 16 },
+    }
+    var errors = List[str](), total = 0
+    if !graph.checksum {
+        (mut errors).push("the commit-graph file has incorrect checksum and is likely corrupt")
+    }
+    for node in graph.nodes {
+        let id = oid.parse("sha1", node.name)?
+        let raw = object.read_object(repo, id, 16777216) else |_| {
+            (mut errors).push("error: Could not read {node.name}")
+            (mut errors).push(
+                "failed to parse commit {node.name} from object database for commit-graph",
+            )
+            continue
+        }
+        if raw.data.len > 134217728 - total {
+            return Unsupported("fsck commit-graph payload limit")
+        }
+        total += raw.data.len
+        if raw.kind != "commit" { return Unsupported("fsck commit-graph non-commit diagnostics") }
+        let value = walk.parse(id, raw.data) else |_| {
+            return Unsupported("fsck commit-graph malformed commit diagnostics")
+        }
+        let tree = oid.hex(value.tree)?
+        if node.tree != tree {
+            (mut errors).push(
+                "root tree OID for commit {node.name} in commit-graph is {node.tree} != {tree}",
+            )
+        }
+        if node.timestamp != value.timestamp {
+            (mut errors).push(
+                "commit date for commit {node.name} in commit-graph is {node.timestamp} != {value.timestamp}",
+            )
+        }
+        if node.parents.len != value.parents.len {
+            return Unsupported("fsck commit-graph parent count diagnostics")
+        }
+        for i in 0..node.parents.len {
+            let actual = graph.nodes[node.parents[i]].name, expected = oid.hex(value.parents[i])?
+            if actual != expected {
+                (mut errors).push("commit-graph parent for {node.name} is {actual} != {expected}")
+            }
+        }
+        var expected = if graph.version2 then node.timestamp else 1
+        for parent in node.parents {
+            let prior = if graph.version2 {
+                graph.nodes[parent].corrected
+            } else {
+                graph.nodes[parent].generation
+            }
+            if prior >= 9223372036854775806 {
+                return Unsupported("fsck commit-graph generation overflow")
+            }
+            if prior + 1 > expected { expected = prior + 1 }
+        }
+        let actual = if graph.version2 then node.corrected else node.generation
+        if actual < expected {
+            (mut errors).push(
+                "commit-graph generation for commit {node.name} is {actual} < {expected}",
+            )
+        }
+    }
+    for error in errors { eprint(error) }
+    if errors.len > 0 then 16 else 0
+}

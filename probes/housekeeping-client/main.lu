@@ -1,0 +1,28 @@
+use packcmd
+use repository
+
+fn main() -> int {
+    let args = env_args()
+    if args.len < 2 || args.len > 3 { return 2 }
+    let repo = repository.open(args[0]) else |e| { eprint("{e}"); return 1 }
+    if args[1] == "closure" {
+        let ids = packcmd.reachable(repo) else |e| { eprint("{e}"); return 1 }
+        for id in ids { print(id) }
+        return 0
+    }
+    if args[1] == "graph" {
+        let bytes = repository.read_bytes(
+            "{repo.gitdir}/objects/info/commit-graph",
+            16777216,
+        ) else |e| { eprint("{e}"); return 1 }
+        let graph = packcmd.parse_commit_graph(bytes) else |e| { eprint("{e}"); return 1 }
+        if !graph.checksum { return 1 }
+        for node in graph.nodes {
+            print("{node.name} {node.tree} {node.timestamp} {node.parents.len}")
+        }
+        return 0
+    }
+    if args[1] != "repack" || args.len != 3 { return 2 }
+    packcmd.repack(repo, true, true, args[2]) else |e| { eprint("{e}"); return 1 }
+    0
+}

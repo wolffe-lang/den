@@ -6,9 +6,9 @@ R = pathlib.Path(__file__).resolve().parent.parent
 G = str(next((R/'target/oracle').glob('*/root/opt/git/bin/git')))
 assert hashlib.sha256(pathlib.Path(G).read_bytes()).hexdigest() == 'c4848492938c4ebfffbefe1fbbaa68b9af90c86d1f6a20e76816c5ff37fcfa60'
 os.environ['GIT_EXEC_PATH'] = str(pathlib.Path(G).parent.parent/'libexec/git-core')
-a = argparse.ArgumentParser(); a.add_argument('--tier',default='native'); args = a.parse_args()
+a = argparse.ArgumentParser(); a.add_argument('--tier',default='native'); a.add_argument('--run',default='final'); args = a.parse_args()
 D = R/'target'/args.tier/'den'
-root = R/'target'/('housekeeping-'+args.tier)
+root = R/'target'/('housekeeping-'+args.tier+'-'+args.run)
 root.mkdir(parents=True,exist_ok=True)
 rows, states, contents = [], {}, {}
 def snap(p):
@@ -32,6 +32,18 @@ def inventory(p):
     assert q['status']==0 and q['before']==q['after']
     return q
 
+def packed_sets(p):
+    groups, captures = [], []
+    for idx in sorted((p/'.git/objects/pack').glob('*.idx')):
+        q = call(G,p,['verify-pack','-v',str(idx)])
+        assert q['status']==0 and q['before']==q['after'],q
+        names = []
+        for line in bytes.fromhex(q['stdout']).decode().splitlines():
+            fields = line.split()
+            if fields and len(fields[0])==40 and all(c in '0123456789abcdef' for c in fields[0]): names.append(fields[0])
+        groups.append(sorted(names));captures.append(q)
+    return sorted(groups),captures
+
 def canonical_state(p):
     # Every path is retained above. Only the format's representation-variable
     # pack pair files become a canonical all-object batch in this comparison.
@@ -46,7 +58,7 @@ def canonical_state(p):
     return result
 try:
     fixtures = []
-    for shape in ('closure','empty','large-mixed'):
+    for shape in ('large-mixed','closure','empty'):
         p = root/(shape+'-source'); p.mkdir(exist_ok=False)
         git(p,'init','-q','-b','main','--template=')
         if shape != 'empty':
@@ -69,18 +81,32 @@ try:
             for cmd in (['repack','-a','-n','-q'],['repack','-a','-d','-n','-q'],['repack','-a','-d','-k','-n','-q'],['prune-packed','-n'],['prune-packed','-q']):
                 label = f'{source.name}-{packed}-{len(rows)}'
                 gp,dp = root/(label+'-git'),root/(label+'-den')
-                shutil.copytree(base,gp);shutil.copytree(base,dp)
+                shutil.copytree(base,gp)
+                if cmd==['prune-packed','-n']:
+                    # Raw directory order is observable here. Execute both
+                    # read-only processes on one immutable physical fixture,
+                    # not two directories with independent filesystem ordering.
+                    dp=gp
+                else:
+                    shutil.copytree(base,dp)
                 for repeat in range(2):
                     g,d = call(G,gp,cmd),call(D,dp,cmd)
+                    if cmd==['prune-packed','-n']: assert g['before']==g['after']==d['before']==d['after']
                     row = dict(label=label,repeat=repeat,git=g,den=d);rows.append(row)
-                    assert tuple(g[k] for k in ('stdout','stderr','status'))==tuple(d[k] for k in ('stdout','stderr','status')),(label,repeat,g,d)
+                    if packed and source.name != 'empty-source' and '-d' in cmd and '-k' not in cmd:
+                        row['named_refusal'] = 'repack unreachable packed retirement (use -k)'
+                        assert d['status']==2 and row['named_refusal'].encode() in bytes.fromhex(d['stderr']) and d['before']==d['after']
+                        continue
+                    assert tuple(g[k] for k in ('stdout','stderr','status'))==tuple(d[k] for k in ('stdout','stderr','status')),(label,repeat,'exact process bytes; full captures retained')
                     gi,di = inventory(gp),inventory(dp);row.update(git_objects=gi,den_objects=di)
                     assert gi['stdout']==di['stdout'],(label,'canonical all-object bytes')
+                    gs,gc = packed_sets(gp);ds,dc = packed_sets(dp);row.update(git_packs=gc,den_packs=dc)
+                    assert gs==ds,(label,'per-pack object membership',gs,ds)
                     assert canonical_state(gp)==canonical_state(dp),(label,'non-representation state')
                     for tool,p in ((G,gp),(D,dp)):
                         f = call(G,p,['fsck','--full','--no-progress']);row.setdefault('fsck',[]).append(f)
                         assert f['status']==0 and f['before']==f['after'],(label,'git fsck',f)
                     print('HOUSEKEEPING',label,repeat,round(d['seconds'],3),flush=True)
 finally:
-    (R/'target'/('housekeeping-'+args.tier+'.json')).write_text(json.dumps(dict(rows=rows,states=states,contents=contents)))
-print('HOUSEKEEPING COMPLETE',len(rows),'exact process and semantic state comparisons')
+    (R/'target'/('housekeeping-'+args.tier+'-'+args.run+'.json')).write_text(json.dumps(dict(rows=rows,states=states,contents=contents)))
+print('HOUSEKEEPING COMPLETE',len(rows),'rows',sum('named_refusal' not in r for r in rows),'exact',sum('named_refusal' in r for r in rows),'named refusals')

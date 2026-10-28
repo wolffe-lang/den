@@ -43,7 +43,7 @@ fn main() -> int {
             "branch" | "tag" | "switch" | "reset" | "merge" | "revert" | "cherry-pick" | "rebase" => {
                 return refcmd.run(args)
             },
-            "fsck" | "count-objects" | "verify-pack" | "pack-objects" => {
+            "fsck" | "count-objects" | "verify-pack" | "pack-objects" | "repack" | "prune-packed" | "gc" => {
                 return packcmd.run(args)
             },
             "blame" => { return blame.run(args) },

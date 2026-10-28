@@ -1,0 +1,37 @@
+//! member: false
+
+use packcmd
+
+fn rejects(bytes: List[byte], needle: str, diagnostic: bool) -> bool {
+    var refused = false
+    let _ = packcmd.parse_commit_graph(bytes) else |e| {
+        match e {
+            Unsupported(text) => { refused = !diagnostic && text.contains(needle) },
+            GraphDiagnostic(text) => { refused = diagnostic && text.contains(needle) },
+        }
+        packcmd.CommitGraph { nodes: List[packcmd.GraphNode](), version2: false, checksum: false }
+    }
+    refused
+}
+
+fn main() -> int {
+    var bytes = List[byte]()
+    assert(rejects(bytes, "size", false))
+    for _ in 0..64 { (mut bytes).push(0 as byte) }
+    assert(rejects(bytes, "signature", true))
+    bytes[0] = 67 as byte
+    bytes[1] = 71 as byte
+    bytes[2] = 80 as byte
+    bytes[3] = 72 as byte
+    assert(rejects(bytes, "version 0", true))
+    bytes[4] = 1 as byte
+    assert(rejects(bytes, "hash version", true))
+    bytes[5] = 1 as byte
+    bytes[7] = 1 as byte
+    assert(rejects(bytes, "split", false))
+    bytes[7] = 0 as byte
+    bytes[6] = 255 as byte
+    assert(rejects(bytes, "chunk table", false))
+    print("vc14 graph parser: six bounded corruption groups; zero skips")
+    0
+}
