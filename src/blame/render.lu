@@ -1,0 +1,212 @@
+use blamerange
+use difftext
+use history
+use object
+use oid
+use pretty
+use worktree
+
+fn add(mut out: List[byte], data: List[byte]) { for b in data { (mut out).push(b) } }
+
+fn text(mut out: List[byte], value: str) { add(mut out, value.bytes()) }
+
+fn line(mut out: List[byte], key: str, value: List[byte]) {
+    text(mut out, key)
+    add(mut out, value)
+    text(mut out, "\n")
+}
+
+fn pad(mut out: List[byte], n: int) { for _ in 0..n { (mut out).push(32 as byte) } }
+
+struct Person { name: List[byte], mail: List[byte], seconds: int, zone: str }
+
+fn person(raw: List[byte]) -> Person ! worktree.WorkErrors {
+    var left = 0, right = 0
+    for i in 0..raw.len {
+        if raw[i] == 60 as byte { left = i }
+        if raw[i] == 62 as byte { right = i }
+    }
+    if left < 1 || right <= left || right + 1 >= raw.len { return invalid_header }
+    let tail = str_from_utf8(raw[right + 1..])?.words()
+    if tail.len != 2 { return invalid_header }
+    let seconds = tail[0].to_int() else |_| { return invalid_header }
+    var end = left
+    while end > 0 && raw[end - 1] == 32 as byte { end -= 1 }
+    Person { name: raw[0..end], mail: raw[left..right + 1], seconds: seconds, zone: tail[1] }
+}
+
+fn identity(source: Source, key: str) -> Person ! worktree.WorkErrors {
+    for field in source.value.headers.fields { if field.key == key { return person(field.value)? } }
+    invalid_header
+}
+
+fn metadata(
+    mut out: List[byte],
+    source: Source,
+    root: bool,
+    quote: bool,
+) -> () ! worktree.WorkErrors {
+    for key in ["author", "committer"] {
+        let who = identity(source, key)?
+        line(mut out, "{key} ", who.name)
+        line(mut out, "{key}-mail ", who.mail)
+        text(mut out, "{key}-time {who.seconds}\n{key}-tz {who.zone}\n")
+    }
+    line(mut out, "summary ", object.subject(source.value.headers.message)?)
+    if source.value.parents.len == 0 && !root { text(mut out, "boundary\n") }
+    if source.previous.len > 0 {
+        let prior = source.previous[0]
+        text(mut out, "previous {oid.hex(prior.id)?} ")
+        add(mut out, worktree.quote(prior.path, quote, false))
+        text(mut out, "\n")
+    }
+    line(mut out, "filename ", worktree.quote(source.path, quote, false))
+}
+
+fn contiguous(result: Result, selected: List[bool], before: int, after: int) -> bool {
+    if !selected[before] || !selected[after] { return false }
+    let a = copy result.rows[before], b = copy result.rows[after]
+    oid.equal(result.sources[a.source].value.id, result.sources[b.source].value.id) &&
+        difftext.identical(result.sources[a.source].path, result.sources[b.source].path) &&
+        a.original + 1 == b.original
+}
+
+/// Pure byte renderer with validated owned result indices. It never changes the
+/// index or object namespace. Porcelain preserves raw identity/content bytes.
+pub fn render(
+    ctx: worktree.Context,
+    result: Result,
+    options: Options,
+) -> List[byte] ! worktree.WorkErrors {
+    let lines = difftext.lines(result.data)?
+    if result.rows.len != lines.len || result.sources.len > 10000 { return invalid }
+    for row in result.rows {
+        if row.source < 0 ||
+            row.source >= result.sources.len ||
+            row.original < 0 ||
+            row.original >= 200000 {
+            return invalid
+        }
+        let _ = oid.hex(result.sources[row.source].value.id)?
+    }
+    if options.line_porcelain && !options.porcelain { return invalid }
+    var keys = List[str](), first_source = Map[str, int]()
+    for i in 0..result.sources.len {
+        let source = copy result.sources[i]
+        if source.path.len == 0 || source.path.len > 4096 || source.previous.len > 1 {
+            return invalid
+        }
+        for field in source.value.headers.fields {
+            if field.key == "encoding" && str_from_utf8(field.value)?.lower() != "utf-8" {
+                return Unsupported("blame message encoding")
+            }
+        }
+        let full = oid.hex(source.value.id)?
+        let first = first_source[full] else i
+        if !difftext.identical(result.sources[first].path, source.path) {
+            return Unsupported("blame multiple origin paths per commit")
+        }
+        first_source[full] = i
+        (mut keys).push(full)
+    }
+    let selected = blamerange.selection(lines.len, options.ranges, result.path)?
+    let quote = worktree.config_bool(ctx, "core.quotepath", true)?
+    var name_width = 0,
+        path_width = 0,
+        number_width = 1,
+        original_width = 1,
+        id_width = if options.long_ids then 40 else 7
+    var show_name = options.show_name, boundary = false
+    var measured_ids = Map[int, bool](), unsupported_width = false
+    for i in 0..lines.len {
+        if !selected[i] { continue }
+        region width_scratch {
+            let row = copy result.rows[i], source = copy result.sources[row.source]
+            if !difftext.identical(source.path, result.path) { show_name = true }
+            if source.value.parents.len == 0 && !options.root { boundary = true }
+            let path = worktree.quote(source.path, quote, false)
+            if path.len > path_width { path_width = path.len }
+            let who = identity(source, "author")?
+            let name = if options.email then copy who.mail else copy who.name
+            if !options.porcelain && !options.suppress {
+                for b in name {
+                    if b >= 128 as byte || b < 32 as byte {
+                        unsupported_width = true
+                    }
+                }
+            }
+            if name.len > name_width { name_width = name.len }
+            let number = "{i + 1}", original = "{row.original + 1}"
+            if number.len > number_width { number_width = number.len }
+            if original.len > original_width { original_width = original.len }
+            if !(measured_ids[row.source] else false) {
+                let id = history.abbreviate(
+                    ctx.repo,
+                    source.value.id,
+                    if options.long_ids then 40 else 7,
+                )?
+                if id.len > id_width { id_width = id.len }
+                measured_ids[row.source] = true
+            }
+        }
+    }
+    if unsupported_width { return Unsupported("blame author display width") }
+    if boundary && !options.long_ids && id_width < 40 { id_width += 1 }
+    var seen = Map[str, bool](), out = List[byte]()
+    for i in 0..lines.len {
+        if !selected[i] { continue }
+        region row_scratch {
+            let row = copy result.rows[i], source = copy result.sources[row.source]
+            let full = keys[row.source]
+            if options.porcelain {
+                text(mut out, "{full} {row.original + 1} {i + 1}")
+                if i == 0 || !contiguous(result, selected, i - 1, i) {
+                    var end = i + 1
+                    while end < lines.len && contiguous(result, selected, end - 1, end) { end += 1 }
+                    text(mut out, " {end - i}")
+                }
+                text(mut out, "\n")
+                if options.line_porcelain || !(seen[full] else false) {
+                    metadata(mut out, source, options.root, quote)?
+                }
+                seen[full] = true
+                text(mut out, "\t")
+            } else {
+                if source.value.parents.len == 0 && !options.root {
+                    text(mut out, "^{full[0..id_width - 1]}")
+                } else {
+                    text(mut out, full[0..id_width])
+                }
+                text(mut out, " ")
+                if show_name {
+                    let path = worktree.quote(source.path, quote, false)
+                    add(mut out, path)
+                    pad(mut out, path_width - path.len + 1)
+                }
+                if options.show_number {
+                    let number = "{row.original + 1}"
+                    pad(mut out, original_width - number.len)
+                    text(mut out, "{number} ")
+                }
+                if !options.suppress {
+                    text(mut out, "(")
+                    let author = identity(source, "author")?
+                    let name = if options.email then copy author.mail else copy author.name
+                    add(mut out, name)
+                    pad(mut out, name_width - name.len + 1)
+                    let who = identity(source, "author")?
+                    text(mut out, "{pretty.date(who.seconds, who.zone, "iso")?} ")
+                }
+                let number = "{i + 1}"
+                pad(mut out, number_width - number.len)
+                text(mut out, "{number}) ")
+            }
+            var end = lines[i].end
+            if end > lines[i].start && result.data[end - 1] == 10 as byte { end -= 1 }
+            add(mut out, result.data[lines[i].start..end])
+            text(mut out, "\n")
+            if out.len > 134217728 { return limit }
+        }
+    }
+    out
+}

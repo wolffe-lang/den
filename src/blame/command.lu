@@ -1,0 +1,150 @@
+use std.fs
+use difftext
+use repository
+use revision
+use revsyntax
+use worktree
+
+fn dispatch(args: List[str]) -> int ! worktree.WorkErrors {
+    var options = defaults(), operands = List[str](), after = false, i = 1
+    while i < args.len {
+        let arg = args[i]
+        if after {
+            (mut operands).push(arg)
+        } else if arg == "--" {
+            after = true
+        } else if arg == "-w" {
+            options.ignore_whitespace = true
+        } else if arg == "--first-parent" {
+            options.first_parent = true
+        } else if arg == "--root" {
+            options.root = true
+        } else if arg == "-p" || arg == "--porcelain" {
+            options.porcelain = true
+        } else if arg == "--line-porcelain" {
+            options.porcelain = true
+            options.line_porcelain = true
+        } else if arg == "-l" {
+            options.long_ids = true
+        } else if arg == "-s" {
+            options.suppress = true
+        } else if arg == "-e" || arg == "--show-email" {
+            options.email = true
+        } else if arg == "-f" || arg == "--show-name" {
+            options.show_name = true
+        } else if arg == "-n" || arg == "--show-number" {
+            options.show_number = true
+        } else if arg == "-L" {
+            i += 1
+            if i >= args.len { return invalid }
+            (mut options.ranges).push(args[i])
+        } else if arg.starts_with("-L") {
+            (mut options.ranges).push(arg[2..])
+        } else if arg.starts_with("-M") {
+            return Unsupported("blame moved-line detection (-M)")
+        } else if arg.starts_with("-C") {
+            return Unsupported("blame copied-line detection (-C)")
+        } else if arg.starts_with("--ignore-rev") {
+            return Unsupported("blame ignored revisions")
+        } else if arg.starts_with("--contents") {
+            return Unsupported("blame alternate contents")
+        } else if arg == "--reverse" {
+            return Unsupported("blame reverse history")
+        } else if arg.starts_with("-") {
+            return Unsupported("blame option {arg}")
+        } else {
+            (mut operands).push(arg)
+        }
+        i += 1
+    }
+    if operands.len < 1 || operands.len > 2 { return Unsupported("blame operand shape") }
+    let repo = repository.discover(".")?
+    let ctx = if (repo.config["core.bare"] else "false") == "true" {
+        worktree.Context { repo: copy repo, root: "", cwd: ".", prefix: "" }
+    } else {
+        worktree.discover(".")?
+    }
+    for key in [
+        "blame.blankboundary",
+        "blame.showroot",
+        "blame.date",
+        "blame.ignorerevsfile",
+        "blame.markignoredlines",
+        "blame.markunblamablelines",
+        "blame.coloring",
+        "blame.showemail",
+        "blame.showname",
+        "blame.repeatedlines",
+        "mailmap.file",
+        "mailmap.blob",
+        "i18n.logoutputencoding",
+        "core.abbrev",
+        "diff.algorithm",
+        "diff.indentheuristic",
+        "diff.renames",
+        "diff.external",
+        "blame.showstats",
+        "blame.highlightrecent",
+    ] {
+        if (repo.config[key] else "") != "" { return Unsupported("blame configuration {key}") }
+    }
+    for path in ["shallow", "info/grafts", "refs/replace", "info/attributes"] {
+        if fs.exists("{repo.gitdir}/{path}") { return Unsupported("blame repository {path}") }
+    }
+    for path in [".mailmap", ".gitattributes"] {
+        if ctx.root != "" && fs.exists("{ctx.root}/{path}") { return Unsupported("blame {path}") }
+    }
+    if (repo.config["core.attributesfile"] else "") != "" { return Unsupported("blame attributes") }
+    let rev = if operands.len == 2 then operands[0] else "HEAD"
+    let path_arg = operands[operands.len - 1]
+    let path = if ctx.root == "" then path_arg.bytes() else worktree.normalize(ctx, path_arg)?
+    if ctx.root != "" {
+        var prefix = ctx.root
+        let components = str_from_utf8(path)?.split("/")
+        for n in 0..components.len - 1 {
+            prefix += "/{components[n]}"
+            if fs.exists("{prefix}/.gitattributes") {
+                return Unsupported("blame nested attributes")
+            }
+        }
+    }
+    let expr = revsyntax.parse(rev)?
+    if expr.kind != "single" { return Unsupported("blame revision sets") }
+    if expr.left.has_path { return Unsupported("blame revision path operand") }
+    var atom = copy expr.left
+    (mut atom.steps).push(revsyntax.Step { kind: "commit", count: 0 })
+    let resolved = revision.resolve_atom_typed(repo, atom, rev, "commit") else |e| match e {
+        Unsupported(feature) => { return Unsupported(feature) },
+        _ => { return Fatal("bad revision '{rev}'") },
+    }
+    // Keep the user's revision spelling in the path diagnostic, not a full OID.
+    let result = attribute(repo, resolved, path, options) else |e| match e {
+        Fatal(_) => { return Fatal("no such path {path_arg} in {rev}") },
+        Unsupported(feature) => { return Unsupported(feature) },
+        _ => { return invalid },
+    }
+    if operands.len == 1 {
+        if ctx.root == "" { return Unsupported("blame bare worktree contents") }
+        let content = repository.read_bytes("{ctx.root}/{str_from_utf8(path)?}", 16777216)?
+        if !difftext.identical(content, result.data) {
+            return Unsupported("blame uncommitted contents")
+        }
+    }
+    let out = render(ctx, result, options)?
+    var stdout = fs.stdout()
+    fs.write_chunk(mut stdout, out)?
+    0
+}
+
+/// Command edge: byte output or named unsupported feature, never guessed blame.
+pub fn run(args: List[str]) -> int {
+    repository.check_config(".") else |e| match e {
+        ConfigDiagnostic(message) => { eprint(message); return 128 },
+        _ => {},
+    }
+    dispatch(args) else |e| match e {
+        Unsupported(feature) => { eprint("den: not yet implemented: {feature}"); 2 },
+        Fatal(message) => { eprint("fatal: {message}"); 128 },
+        _ => { eprint("fatal: {e}"); 128 },
+    }
+}

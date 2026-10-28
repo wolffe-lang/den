@@ -1,0 +1,259 @@
+// Clean-room Git 2.56.0 git-blame documentation and pinned measurements.
+use diff
+use difftext
+use object
+use oid
+use repository
+use walk
+use worktree
+
+/// Attribution budgets and independent presentation switches; defaults below.
+pub struct Options {
+    ignore_whitespace: bool,
+    first_parent: bool,
+    root: bool,
+    porcelain: bool,
+    line_porcelain: bool,
+    long_ids: bool,
+    show_name: bool,
+    show_number: bool,
+    suppress: bool,
+    email: bool,
+    ranges: List[str],
+    max_visits: int,
+    max_payload: int,
+}
+
+/// Default human display and bounded full-parent attribution.
+pub fn defaults() -> Options {
+    Options {
+        ignore_whitespace: false,
+        first_parent: false,
+        root: false,
+        porcelain: false,
+        line_porcelain: false,
+        long_ids: false,
+        show_name: false,
+        show_number: false,
+        suppress: false,
+        email: false,
+        ranges: List[str](),
+        max_visits: 10000,
+        max_payload: 134217728,
+    }
+}
+
+/// Zero or one previous path is retained separately from ancestry.
+pub struct Previous { id: oid.Oid, path: List[byte] }
+
+/// Owned attribution origin and raw commit metadata.
+pub struct Source { value: walk.Commit, path: List[byte], previous: List[Previous] }
+
+/// Zero-based source-table index and original physical line.
+pub struct Row { source: int, original: int }
+
+/// Owned raw final content, literal path and line attribution; no retained input.
+pub struct Result { data: List[byte], path: List[byte], sources: List[Source], rows: List[Row] }
+
+struct Position { final_line: int, current: int }
+
+struct Pending { source: int, positions: List[Position] }
+
+struct File { path: List[byte], data: List[byte] }
+
+struct Ancestor { value: walk.Commit, file: File }
+
+fn file(
+    repo: repository.Repo,
+    value: walk.Commit,
+    path: List[byte],
+) -> List[File] ! worktree.WorkErrors {
+    for entry in worktree.flatten_tree(repo, value.tree)? {
+        if !difftext.identical(entry.path, path) { continue }
+        if entry.mode != 0o100644 && entry.mode != 0o100755 {
+            return Unsupported("blame nonregular path")
+        }
+        let blob = object.read_object(repo, entry.id, 16777216)?
+        if blob.kind != "blob" { return invalid_tree }
+        return [File { path: copy path, data: copy blob.data }]
+    }
+    List[File]()
+}
+
+fn files(
+    repo: repository.Repo,
+    value: walk.Commit,
+    mut charged: int,
+    cap: int,
+) -> List[diff.File] ! worktree.WorkErrors {
+    var out = List[diff.File](), total = 0
+    for entry in worktree.flatten_tree(repo, value.tree)? {
+        if entry.mode != 0o100644 && entry.mode != 0o100755 {
+            return Unsupported("blame rename nonregular tree")
+        }
+        let blob = object.read_object(repo, entry.id, 16777216)?
+        if blob.kind != "blob" { return invalid_tree }
+        total += blob.data.len
+        charged += blob.data.len
+        if charged > cap { return Unsupported("blame attribution limit") }
+        if total > 134217728 { return limit }
+        (mut out).push(diff.File {
+            path: copy entry.path,
+            mode: entry.mode,
+            id: copy entry.id,
+            data: copy blob.data,
+        })
+    }
+    out
+}
+
+fn parent_file(
+    repo: repository.Repo,
+    parent: walk.Commit,
+    child: walk.Commit,
+    path: List[byte],
+    mut charged: int,
+    cap: int,
+) -> List[File] ! worktree.WorkErrors {
+    let direct = file(repo, parent, path)?
+    if direct.len != 0 { return direct }
+    // Whole-file rename following is distinct from -M/-C moved-line detection.
+    let before = files(repo, parent, mut charged, cap)?
+    let after = files(repo, child, mut charged, cap)?
+    let changes = diff.changes(before, after, diff.defaults())?
+    for change in changes {
+        if change.status == "R" &&
+            change.after.len == 1 &&
+            change.before.len == 1 &&
+            difftext.identical(change.after[0].path, path) {
+            return [File { path: copy change.before[0].path, data: copy change.before[0].data }]
+        }
+    }
+    List[File]()
+}
+
+/// Read-only ordered-parent attribution. Each origin owns its raw commit/path;
+/// each result row refers to that table. All limits are inclusive payload/work
+/// bounds, not streaming or peak-RSS claims. Caller supplies an evaluated commit.
+pub fn attribute(
+    repo: repository.Repo,
+    id: oid.Oid,
+    path: List[byte],
+    options: Options,
+) -> Result ! worktree.WorkErrors {
+    if options.max_visits < 1 ||
+        options.max_visits > 10000 ||
+        options.max_payload < 0 ||
+        options.max_payload > 134217728 {
+        return invalid
+    }
+    if path.len == 0 || path.len > 4096 { return invalid }
+    let start = walk.read(repo, id)?
+    let found = file(repo, start, path)?
+    if found.len == 0 { return Fatal("no such path {str_from_utf8(path)?} in {oid.hex(id)?}") }
+    var result = Result {
+        data: copy found[0].data,
+        path: copy path,
+        sources: [Source { value: copy start, path: copy path, previous: List[Previous]() }],
+        rows: List[Row](),
+    }
+    let lines = difftext.lines(result.data)?
+    var initial = List[Position]()
+    for i in 0..lines.len {
+        (mut initial).push(Position { final_line: i, current: i })
+        (mut result.rows).push(Row { source: 0, original: i })
+    }
+    var queue = [Pending { source: 0, positions: initial }], at = 0, visits = 0
+    var charged = start.encoded_size + result.data.len + lines.len * 24
+    while at < queue.len {
+        if charged > options.max_payload || visits >= options.max_visits {
+            return Unsupported("blame attribution limit")
+        }
+        visits += 1
+        let item = copy queue[at]
+        at += 1
+        let source = copy result.sources[item.source]
+        let current = file(repo, source.value, source.path)?
+        if current.len != 1 { return invalid }
+        charged += current[0].data.len
+        var remaining = copy item.positions
+        var parents = List[Ancestor](), exact_parent = List[int]()
+        for parent_id in source.value.parents {
+            let parent = walk.read(repo, parent_id)?
+            charged += parent.encoded_size
+            if charged > options.max_payload { return Unsupported("blame attribution limit") }
+            let prior = parent_file(
+                repo,
+                parent,
+                source.value,
+                source.path,
+                mut charged,
+                options.max_payload,
+            )?
+            if prior.len > 0 {
+                charged += prior[0].data.len
+                if charged > options.max_payload { return Unsupported("blame attribution limit") }
+                if exact_parent.len == 0 && difftext.identical(prior[0].data, current[0].data) {
+                    (mut exact_parent).push(parents.len)
+                }
+                (mut parents).push(Ancestor { value: copy parent, file: copy prior[0] })
+            }
+            if options.first_parent { break }
+        }
+        // An identical whole-file parent wins before any partial parent diff.
+        // This is observable when a merge's second parent is its exact content.
+        for p in 0..parents.len {
+            if remaining.len == 0 { break }
+            if exact_parent.len > 0 && p != exact_parent[0] { continue }
+            let parent = copy parents[p].value
+            let prior = [copy parents[p].file]
+            {
+                if result.sources[item.source].previous.len == 0 {
+                    (mut result.sources[item.source].previous).push(Previous {
+                        id: copy parent.id,
+                        path: copy prior[0].path,
+                    })
+                }
+                let links = difftext.correspondence(
+                    prior[0].data,
+                    current[0].data,
+                    options.ignore_whitespace,
+                ) else |e| match e {
+                    ambiguous_lines => {
+                        return Unsupported("blame repeated or hash-colliding changed lines")
+                    },
+                    reordered_lines => { return Unsupported("blame reordered common lines") },
+                    invalid => { return invalid },
+                    limit => { return limit },
+                }
+                var mapping = Map[int, int]()
+                for link in links { mapping[link.new_line] = link.old_line }
+                var transfer = List[Position](), keep = List[Position]()
+                for pos in remaining {
+                    let original = mapping[pos.current] else { (mut keep).push(copy pos); continue }
+                    (mut transfer).push(Position { final_line: pos.final_line, current: original })
+                }
+                if transfer.len > 0 {
+                    if result.sources.len >= options.max_visits {
+                        return Unsupported("blame attribution limit")
+                    }
+                    let index = result.sources.len
+                    (mut result.sources).push(Source {
+                        value: copy parent,
+                        path: copy prior[0].path,
+                        previous: List[Previous](),
+                    })
+                    (mut queue).push(Pending { source: index, positions: copy transfer })
+                    charged += transfer.len * 24
+                }
+                remaining = keep
+            }
+            if options.first_parent { break }
+        }
+        for pos in remaining {
+            result.rows[pos.final_line] = Row { source: item.source, original: pos.current }
+        }
+    }
+    if charged > options.max_payload { return Unsupported("blame attribution limit") }
+    result
+}

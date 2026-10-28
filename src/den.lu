@@ -1,5 +1,6 @@
 //! member: false
 
+use blame
 use commit
 use diff
 use history
@@ -39,6 +40,7 @@ fn main() -> int {
             "branch" | "tag" | "switch" | "reset" | "merge" | "revert" | "cherry-pick" | "rebase" => {
                 return refcmd.run(args)
             },
+            "blame" => { return blame.run(args) },
             "commit" => { return commit.run(args) },
             "log" | "show" => { return history.run(args) },
             "diff" => { return diff.run(args) },

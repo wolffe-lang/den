@@ -1,0 +1,4 @@
+pkg {
+    name: "blame", edition: "1", capabilities: [env, fs],
+    deps: {blamerange: {path: "../blamerange"}, diff: {path: "../diff"}, difftext: {path: "../difftext"}, history: {path: "../history"}, object: {path: "../object"}, oid: {path: "../oid"}, pretty: {path: "../pretty"}, repository: {path: "../repository"}, revision: {path: "../revision"}, revsyntax: {path: "../revsyntax"}, walk: {path: "../walk"}, worktree: {path: "../worktree"}},
+}
