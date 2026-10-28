@@ -340,7 +340,9 @@ fn dispatch(args: List[str]) -> int ! worktree.WorkErrors {
         add(mut out, formatted)
         if displayed && notes.find(annotations, value.id).len > 0 {
             if format != "medium" { return Unsupported("history notes in {format} format") }
-            if display.patch && display.stat { return Unsupported("history notes with patch and stat") }
+            if display.patch && display.stat {
+                return Unsupported("history notes with patch and stat")
+            }
             add(mut out, notes.display(ctx.repo, annotations, value.id)?)
         }
         let changes = if !show && !root_diff && value.parents.len == 0 {
