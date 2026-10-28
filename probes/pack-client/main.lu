@@ -3,15 +3,41 @@ use object
 use oid
 use repository
 
-fn run(args: List[str]) -> () ! object.StoreErrors {
-    if args.len != 3 { return invalid }
-    let repo = repository.open(args[0])?
-    let id = object.lookup(repo, args[1])?
-    let cap = args[2].to_int() else |_| { return invalid }
+fn emit(repo: repository.Repo, id: oid.Oid, cap: int, batch: bool) -> () ! object.StoreErrors {
     let value = object.read_object(repo, id, cap)?
-    print("{value.kind} {value.data.len} {oid.hex(id)?}")
+    if batch {
+        print("{oid.hex(id)?} {value.kind} {value.data.len}")
+    } else {
+        print("{value.kind} {value.data.len} {oid.hex(id)?}")
+    }
     var stdout = fs.stdout()
     fs.write_chunk(mut stdout, value.data)?
+    if batch { fs.write_chunk(mut stdout, "\n".bytes())? }
+}
+
+fn run(args: List[str]) -> () ! object.StoreErrors {
+    if args.len != 3 && args.len != 4 { return invalid }
+    let repo = repository.open(args[0])?
+    if args.len == 4 {
+        if args[1] != "--batch" { return invalid }
+        let cap = args[3].to_int() else |_| { return invalid }
+        let input = repository.read_bytes(args[2], 1000000)?
+        let names = str_from_utf8(input) else |_| { return invalid }
+        var count = 0
+        for name in names.split("\n") {
+            if name == "" { continue }
+            count += 1
+            if count > 10000 { return limit }
+            region object_read {
+                let id = oid.parse("sha1", name)?
+                emit(repo, id, cap, true)?
+            }
+        }
+        return
+    }
+    let id = object.lookup(repo, args[1])?
+    let cap = args[2].to_int() else |_| { return invalid }
+    emit(repo, id, cap, false)?
 }
 
 fn main() -> int {

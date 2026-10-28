@@ -2,6 +2,7 @@
 """Independent R4c pack writer interop; captures are evidence, not pack-byte parity."""
 import argparse, base64, hashlib, json, os, pathlib, re, runpy, shutil, subprocess, time
 R = pathlib.Path(__file__).resolve().parent.parent
+decode_batch=runpy.run_path(str(R/'tools/pack-batch.py'))['decode']
 G = str(next((R/'target/oracle').glob('*/root/opt/git/bin/git')))
 os.environ['DEN_GIT']=G
 os.environ['GIT_EXEC_PATH']=str(pathlib.Path(G).parent.parent/'libexec/git-core')
@@ -37,6 +38,11 @@ def run(cmd,p,data=None,ok=True):
     charge('record-serialization',time.perf_counter()-started)
     if ok: assert q.returncode==0,(cmd,q.returncode,q.stderr)
     return q
+def readonly(cmd,p,data=None):
+    before=state(p)
+    result=run(cmd,p,data)
+    assert states[records[-1]['state']]==before,('read-only process changed state',cmd)
+    return result
 try:
     corpus=root/'corpus'
     runpy.run_path(str(R/'tools/corpus.py'))['build'](corpus)
@@ -68,11 +74,11 @@ try:
     assert selected,('empty fixture selection',args.fixture)
     for src in selected:
         row_start=time.perf_counter(); before_costs=costs.copy()
-        ids=run([G,'cat-file','--batch-all-objects','--batch-check=%(objectname)'],src).stdout
-        expected={}
-        for id in ids.decode().splitlines():
-            kind=run([G,'cat-file','-t',id],src).stdout.decode().strip()
-            expected[id]=(kind,run([G,'cat-file',kind,id],src).stdout)
+        ids=readonly([G,'cat-file','--batch-all-objects','--batch-check=%(objectname)'],src).stdout
+        object_names=ids.decode().splitlines()
+        if src.name in ('thousand','vc09-14-ofs','vc09-14-ref'):
+            assert len(object_names)==1002,('thousand-object fixture shrank',src.name,len(object_names))
+        expected=decode_batch(readonly([G,'cat-file','--batch'],src,ids).stdout,object_names)
         baseline=root/(src.name+'-git'); shutil.copytree(src,baseline,symlinks=True)
         oraclebase=baseline/'.git/objects/pack/pack'
         oid=run([G,'pack-objects','-q','--delta-base-offset',oraclebase],baseline,ids).stdout.decode().strip()
@@ -93,7 +99,7 @@ try:
             after=state(p)
             assert all(after.get(k)==v for k,v in before.items()),'writer modified existing files'
             assert set(after)-set(before)==({str(pack.relative_to(p)),str(idx.relative_to(p))}-set(before))
-            verify=run([G,'verify-pack','-v',idx],p)
+            verify=readonly([G,'verify-pack','-v',idx],p)
             assert b': ok\n' in verify.stdout
             # Isolate the new pair: old packed copies must not mask a broken writer.
             for old in (p/'.git/objects/pack').iterdir():
@@ -101,11 +107,14 @@ try:
             for id,(kind,body) in expected.items():
                 loose=p/'.git/objects'/id[:2]/id[2:]
                 if loose.exists(): loose.unlink()
-            run([G,'fsck','--full'],p)
-            for id,(kind,body) in expected.items():
-                assert run([G,'cat-file',kind,id],p).stdout==body
-                got=run([R/'target'/args.tier/'pack-client',p/'.git',id,'16777216'],p).stdout
-                assert got==('%s %d %s\n'%(kind,len(body),id)).encode()+body
+            readonly([G,'fsck','--full'],p)
+            # One batch per actual process, with complete before/after snapshots.
+            # Enumerating the isolated store also rejects unexpected packed IDs.
+            git_batch=readonly([G,'cat-file','--batch-all-objects','--batch'],p).stdout
+            assert decode_batch(git_batch,object_names)==expected
+            den_batch=readonly([R/'target'/args.tier/'pack-client',p/'.git','--batch',names,'16777216'],p).stdout
+            assert decode_batch(den_batch,object_names)==expected
+            assert den_batch==git_batch,('batch bytes differ',src.name,mode)
             reference_size=none_size if mode=='none' else git_size
             ratio=pack.stat().st_size/reference_size
             sizes.append({'fixture':src.name,'mode':mode,'objects':len(expected),'den':pack.stat().st_size,'git':reference_size,'ratio':ratio,'git_default':git_size,'default_ratio':pack.stat().st_size/git_size,'baseline':'no-delta' if mode=='none' else 'default-ofs'})

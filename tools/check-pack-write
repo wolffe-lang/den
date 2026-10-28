@@ -5,12 +5,14 @@ DEN_ROOT=$(cd "$(dirname "$0")/.." && pwd)
 export DEN_ROOT
 cd "$DEN_ROOT"
 . tools/lib-toolchain.sh
+python3 -I tools/pack-batch-test.py
 for tier in native release; do
     flag=
     [ "$tier" != release ] || flag=--release
     "$WOLF" build $flag --deny-warnings src/pack_write_test.lu -o "target/$tier/pack-write-test"
     "target/$tier/pack-write-test"
     "$WOLF" build $flag --deny-warnings probes/pack-write-client/main.lu -o "target/$tier/pack-write-client"
+    "$WOLF" build $flag --deny-warnings probes/pack-client/main.lu -o "target/$tier/pack-client"
     tools/env python3 -I tools/pack-write-test.py --tier "$tier"
     tools/env python3 -I tools/pack-command-test.py --tier "$tier"
     tools/env python3 -I tools/pack-failure-test.py --tier "$tier"
