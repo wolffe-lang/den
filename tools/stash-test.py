@@ -280,8 +280,22 @@ for n, (args, feature) in enumerate([
         (['notes', 'append', '-m', 'x'], 'notes append'), (['notes', 'copy', 'HEAD', 'first'], 'notes copy'),
         (['notes', 'edit'], 'notes edit'), (['notes', 'merge', 'other'], 'notes merge'), (['notes', 'prune'], 'notes prune'),
         (['notes', '--ref=other', 'list'], 'notes --ref'), (['notes', 'remove', '--stdin'], 'notes remove --stdin'),
-        (['log', '-1'], 'history notes')]):
+        (['log', '--notes', '--pretty=full'], 'history notes in full format'),
+        (['log', '--oneline', '--notes'], 'history notes in oneline format'),
+        (['log', '-p', '--stat'], 'history notes with patch and stat'),
+        (['log', '--notes=other'], 'log option --notes=other')]):
     case(f'scope-notes-{n}', 'noted', [], [args], refusal=(0, feature))
+# Notes in history: the default ref in the default format (pretty-options --notes).
+case('notes-history', 'noted', [], [['log'], ['log', '-1'], ['log', '-p'], ['log', '--stat'], ['show'], ['show', '--stat'], ['show', '-s'],
+                                    ['log', '--no-notes'], ['log', '--pretty=medium'], ['log', '--format=medium'], ['log', '--pretty=full'],
+                                    ['log', '--oneline'], ['log', '--notes'], ['show', 'first'], ['log', '--notes', '-1'], ['log', '--no-notes', '--notes', '-1']])
+case('notes-history-written', 'linear', [], [['notes', 'add', '-m', 'multi\n\nline note'], ['log'], ['show', '-s'],
+                                             ['notes', 'remove'], ['log', '-1']])
+case('notes-history-other-ref', 'noted', [('git', 'notes', '--ref=other', 'add', '-m', 'other ref', 'HEAD~1')], [['log'], ['log', '--oneline']])
+case('scope-notes-history-empty', 'linear', [('git', 'notes', 'add', '--allow-empty', '-m', '')], [['log', '-1']],
+     refusal=(0, 'history notes without a final newline'))
+case('scope-notes-history-display-ref', 'noted', [('git', 'config', 'notes.displayRef', 'refs/notes/other')], [['log', '-1']],
+     refusal=(0, 'history notes notes.displayref'))
 case('scope-notes-config', 'linear', [('git', 'config', 'core.notesRef', 'refs/notes/other')], [['notes', 'list']],
      refusal=(0, 'notes core.notesRef'))
 
