@@ -1,0 +1,15 @@
+use difftext
+
+fn main() {
+    let a = difftext.comparison(" a \nlast".bytes(), true) else { assert(false); return }
+    assert(a == "a\nlast\n".bytes())
+    let map = difftext.correspondence("a\nb\nc\n".bytes(), "a\nx\nc\n".bytes(), false) else { assert(false); return }
+    assert(map == [0, -1, 2])
+    let same = difftext.correspondence("a\na\n".bytes(), "a\na\n".bytes(), false) else { assert(false); return }
+    assert(same == [0, 1])
+    let repeated = difftext.correspondence("a\na\n".bytes(), "a\nx\n".bytes(), false) else |e| match e {
+        ambiguous_lines => { print("ambiguous"); return },
+        _ => { assert(false); return },
+    }
+    assert(repeated.len == -1)
+}
