@@ -1,0 +1,243 @@
+{
+  "captures": {
+    "target/pack-write-native-before-vc09-14-ofs.json": {
+      "file": "performance-pack-write-native-before-vc09-14-ofs.json.gz",
+      "sha256": "2ca4ce3b9931db282837af3bd3fb555b8664dc5ef3d7b29dd280b1326512a0eb",
+      "bytes": 5158162
+    },
+    "target/pack-write-native-before-vc09-14-ref.json": {
+      "file": "performance-pack-write-native-before-vc09-14-ref.json.gz",
+      "sha256": "cfdcfa2789300099042932008b3cb7768813c35c8e01d29a6a7d8635c4aa637f",
+      "bytes": 4952436
+    },
+    "target/pack-write-native-after-vc09-14.json": {
+      "file": "performance-pack-write-native-after-vc09-14.json.gz",
+      "sha256": "87da40c5ebaf85a4d3d4e97aeeb46284410b778da16ff25064cd294a9198d00f",
+      "bytes": 4697302
+    },
+    "target/pack-write-native.json": {
+      "file": "performance-pack-write-native.json.gz",
+      "sha256": "2c5bf45e3eb01f5baa426b200fff5c59d422ad4975821def395fc44640fdac1f",
+      "bytes": 60890019
+    },
+    "target/pack-command-native.json": {
+      "file": "performance-pack-command-native.json.gz",
+      "sha256": "c3d5b43c3c8c4f8e9845370b9034e3a56bdf38c9a23199b8c6f362345b4e1ce2",
+      "bytes": 10691420
+    },
+    "target/pack-failure-native.json": {
+      "file": "performance-pack-failure-native.json.gz",
+      "sha256": "3e8565b07772d7ffad9bfe9090804f5ec6daf004f1fb5462d8ca36b0e4b89968",
+      "bytes": 58261
+    },
+    "target/pack-adversarial-native.json": {
+      "file": "performance-pack-adversarial-native.json.gz",
+      "sha256": "56e335089100b5a95d5dc41a50d5189ecf5727cd239e69afacb0a278859efec8",
+      "bytes": 4051340
+    },
+    "target/pack-interop-native/results.json": {
+      "file": "performance-pack-interop-native-results.json.gz",
+      "sha256": "c8a06eb59f7ceabd26b81d32dc80fe9020f15025b21497d75f8725cc56bfdb5f",
+      "bytes": 1171630
+    },
+    "target/pack-native/results.json": {
+      "file": "performance-pack-native-results.json.gz",
+      "sha256": "e690d794578e5c6b5e370d54c85b7b422a1aa60c55174d57ab16ebfc7d142f84",
+      "bytes": 26003
+    },
+    "target/pack-write-release.json": {
+      "file": "performance-pack-write-release.json.gz",
+      "sha256": "6f16392ed63c9e179ff91ea6f8b6c56c7e2c21af9a7733c14a04ca491048aae6",
+      "bytes": 60891743
+    },
+    "target/pack-command-release.json": {
+      "file": "performance-pack-command-release.json.gz",
+      "sha256": "ac1be4ddcb769901a70d4105e8a35572cb213d2e30f9f1030a30c3a071503086",
+      "bytes": 10693040
+    },
+    "target/pack-failure-release.json": {
+      "file": "performance-pack-failure-release.json.gz",
+      "sha256": "6edccb148e576b5442238128e664bc818d2e6ee740cfe9ad29bbdc1eedd64354",
+      "bytes": 58292
+    },
+    "target/pack-adversarial-release.json": {
+      "file": "performance-pack-adversarial-release.json.gz",
+      "sha256": "c6cc13dff254a84c7b46ab88598641eba539b5c26b521e7120372072c202e787",
+      "bytes": 4051400
+    },
+    "target/pack-interop-release/results.json": {
+      "file": "performance-pack-interop-release-results.json.gz",
+      "sha256": "be566e905c7b2a708d126707d553eae3d1be811413ea12323e21f9aa5492d873",
+      "bytes": 1171665
+    },
+    "target/pack-release/results.json": {
+      "file": "performance-pack-release-results.json.gz",
+      "sha256": "e690d794578e5c6b5e370d54c85b7b422a1aa60c55174d57ab16ebfc7d142f84",
+      "bytes": 26003
+    },
+    "target/pack-batch-vectors.json": {
+      "file": "performance-pack-batch-vectors.json.gz",
+      "sha256": "c8d48178535950e1439a28db738590b9338588b5274de4c342f84004f5a08b36",
+      "bytes": 445968
+    },
+    "target/pack-write-checked.json": {
+      "file": "performance-pack-write-checked.json.gz",
+      "sha256": "f57d4a88fcc0baaf712801d91d0838e10401bcc1cb8b33db14ea4cbb5ceef95b",
+      "bytes": 339
+    }
+  },
+  "timing_rows": [
+    {
+      "fixture": "vc09-14-ofs",
+      "mode": "none",
+      "objects": 1002,
+      "before_seconds": 144.4267556000268,
+      "after_seconds": 9.01328547205776,
+      "speedup": 16.02376359295028,
+      "before_setup_seconds": 69.20241804898251,
+      "after_setup_seconds": 0.4097697780234739,
+      "before_snapshot_seconds": 129.92917910846882,
+      "after_snapshot_seconds": 0.5856272007804364,
+      "before_writer_seconds": 4.251655283966102,
+      "after_writer_seconds": 4.128088682075031,
+      "before_reader_seconds": 5.103202774189413,
+      "after_reader_seconds": 4.069529872969724,
+      "before_git_seconds": 2.4741054179612547,
+      "after_git_seconds": 0.00661687389947474
+    },
+    {
+      "fixture": "vc09-14-ofs",
+      "mode": "ofs",
+      "objects": 1002,
+      "before_seconds": 75.99279803701211,
+      "after_seconds": 9.284061644924805,
+      "speedup": 8.185296580678575,
+      "before_setup_seconds": 0.0,
+      "after_setup_seconds": 0.0,
+      "before_snapshot_seconds": 63.71068714000285,
+      "after_snapshot_seconds": 0.34903665515594184,
+      "before_writer_seconds": 4.882961201947182,
+      "after_writer_seconds": 4.8398725900333375,
+      "before_reader_seconds": 5.107771970098838,
+      "after_reader_seconds": 4.04308504902292,
+      "before_git_seconds": 0.8541286278050393,
+      "after_git_seconds": 0.00262076104991138
+    },
+    {
+      "fixture": "vc09-14-ofs",
+      "mode": "ref",
+      "objects": 1002,
+      "before_seconds": 76.2258552480489,
+      "after_seconds": 9.457339823013172,
+      "speedup": 8.059967884686081,
+      "before_setup_seconds": 0.0,
+      "after_setup_seconds": 0.0,
+      "before_snapshot_seconds": 63.921160794678144,
+      "after_snapshot_seconds": 0.3512804938945919,
+      "before_writer_seconds": 4.894470977014862,
+      "after_writer_seconds": 5.0134937149705365,
+      "before_reader_seconds": 5.104474926134571,
+      "after_reader_seconds": 4.035885518998839,
+      "before_git_seconds": 0.8459187907865271,
+      "after_git_seconds": 0.0025968289701268077
+    },
+    {
+      "fixture": "vc09-14-ref",
+      "mode": "none",
+      "objects": 1002,
+      "before_seconds": 143.92530087800696,
+      "after_seconds": 8.980118034989573,
+      "speedup": 16.027105692511544,
+      "before_setup_seconds": 69.04434989299625,
+      "after_setup_seconds": 0.3555602760752663,
+      "before_snapshot_seconds": 129.58912727225106,
+      "after_snapshot_seconds": 0.5721225257730111,
+      "before_writer_seconds": 4.093496187007986,
+      "after_writer_seconds": 4.0986593490233645,
+      "before_reader_seconds": 5.105386534356512,
+      "after_reader_seconds": 4.119282966013998,
+      "before_git_seconds": 2.4730072933016345,
+      "after_git_seconds": 0.006553278071805835
+    },
+    {
+      "fixture": "vc09-14-ref",
+      "mode": "ofs",
+      "objects": 1002,
+      "before_seconds": 75.93224898609333,
+      "after_seconds": 9.203136497060768,
+      "speedup": 8.250692468849508,
+      "before_setup_seconds": 0.0,
+      "after_setup_seconds": 0.0,
+      "before_snapshot_seconds": 63.466391620924696,
+      "after_snapshot_seconds": 0.3522560892160982,
+      "before_writer_seconds": 5.05758246302139,
+      "after_writer_seconds": 4.856097179930657,
+      "before_reader_seconds": 5.115463924477808,
+      "after_reader_seconds": 3.942410910036415,
+      "before_git_seconds": 0.8575105820782483,
+      "after_git_seconds": 0.0026807780377566814
+    },
+    {
+      "fixture": "vc09-14-ref",
+      "mode": "ref",
+      "objects": 1002,
+      "before_seconds": 75.61381398304366,
+      "after_seconds": 9.297553202020936,
+      "speedup": 8.132657306721093,
+      "before_setup_seconds": 0.0,
+      "after_setup_seconds": 0.0,
+      "before_snapshot_seconds": 63.2948870388791,
+      "after_snapshot_seconds": 0.3542644730769098,
+      "before_writer_seconds": 4.91077359195333,
+      "after_writer_seconds": 4.86792708793655,
+      "before_reader_seconds": 5.106838699895889,
+      "after_reader_seconds": 4.022857611998916,
+      "before_git_seconds": 0.8485705900238827,
+      "after_git_seconds": 0.002639087033458054
+    }
+  ],
+  "tiers": {
+    "native": {
+      "pairs": 174,
+      "objects": 14055,
+      "processes": 1134,
+      "exact_commands": 1439,
+      "named_commands": 39,
+      "publication_processes": 14,
+      "adversarial_cases": 22,
+      "adversarial_processes": 415,
+      "legacy_single_client_objects": 2442,
+      "legacy_structural_inputs": 141,
+      "size_table_identical": true
+    },
+    "release": {
+      "pairs": 174,
+      "objects": 14055,
+      "processes": 1134,
+      "exact_commands": 1439,
+      "named_commands": 39,
+      "publication_processes": 14,
+      "adversarial_cases": 22,
+      "adversarial_processes": 415,
+      "legacy_single_client_objects": 2442,
+      "legacy_structural_inputs": 141,
+      "size_table_identical": true
+    }
+  },
+  "inputs": {
+    "tools/pack-write-test.py": "d137b05c4d1c7ae23c194449c517fc7e2e4cd15ba3f9eec957dfba823d4b761a",
+    "tools/pack-batch.py": "473f2dddd294a3e94ace301fa6f65902d31303914b716911e488d82db48ef8a8",
+    "tools/pack-batch-test.py": "3a97f6670085ac4b768e7f9d96b8ddc41478d09ae79c950bd59d2e7780430a4a",
+    "tools/check-pack-write": "becbbb91927eb4faf2754a639271e4302ad78c39c65af37a6d7fa3c877591753",
+    "probes/pack-client/main.lu": "e373fbd5fe25510aed8889af55a73c32109a7220ebf1978320678ecc3ee063c0",
+    "ci/tiers-test.py": "108c46a8d6aee7227a3907cbe6361abc407ef1fd8c8d700a4c34ee6fab8b38b5",
+    ".github/workflows/ci.yml": "2286f31ced181eef87a71ac735cfaded0a509631511980fc6e2db9b454eb67c3",
+    "wolf-toolchain.toml": "ea3541a8651b8ada2670519087b9e0affd58a07f49b8365c18d08b91bc23ae05",
+    "den-oracle.toml": "ac2557c9e98f429c94b7491f8f27690c13be9883261c8e7c896e0bca70996a8a"
+  },
+  "batch_vectors": {
+    "valid": 6,
+    "rejected": 18
+  },
+  "checked_verdict": "exit(0)"
+}

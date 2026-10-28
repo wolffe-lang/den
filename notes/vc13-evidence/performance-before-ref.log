@@ -1,0 +1,10 @@
+2026-10-28T17:35:58Z
+4f1b21b46a066eebf4f81107522acc92347c9f1c9060085f951006998a227657  tools/pack-write-test.py
+PACK WRITE vc09-14-ref none 1002 1.025966956095702
+PACK TIMING {"costs": {"den": 0.0, "git-cat-file": 2.4730072933016345, "git-fsck": 0.004309390904381871, "git-hash-object": 0.0, "git-init": 0.0, "git-pack-objects": 0.07942528394050896, "git-verify-pack": 0.0029719979502260685, "pack-client": 5.105386534356512, "pack-write-client": 4.093496187007986, "record-serialization": 2.4260536906076595, "snapshot": 129.58912727225106}, "fixture": "vc09-14-ref", "mode": "none", "mode_seconds": 74.88094597996678, "objects": 1002, "row_seconds": 143.92530087800696, "setup_costs": {"den": 0.0, "git-cat-file": 1.6283501635771245, "git-hash-object": 0.0, "git-init": 0.0, "git-pack-objects": 0.07942528394050896, "record-serialization": 1.1847302038222551, "snapshot": 66.08856813737657}, "setup_seconds": 69.04434989299625}
+PACK WRITE vc09-14-ref ofs 1002 1.025966956095702
+PACK TIMING {"costs": {"den": 0.0, "git-cat-file": 0.8575105820782483, "git-fsck": 0.004369422094896436, "git-hash-object": 0.0, "git-init": 0.0, "git-pack-objects": 0.0, "git-verify-pack": 0.002923786989413202, "pack-client": 5.115463924477808, "pack-write-client": 5.05758246302139, "record-serialization": 1.3376572142587975, "snapshot": 63.466391620924696}, "fixture": "vc09-14-ref", "mode": "ofs", "mode_seconds": 75.93224733008537, "objects": 1002, "row_seconds": 75.93224898609333, "setup_seconds": 0.0}
+PACK WRITE vc09-14-ref ref 1002 1.025966956095702
+PACK TIMING {"costs": {"den": 0.0, "git-cat-file": 0.8485705900238827, "git-fsck": 0.0042933610966429114, "git-hash-object": 0.0, "git-init": 0.0, "git-pack-objects": 0.0, "git-verify-pack": 0.0028621890814974904, "pack-client": 5.106838699895889, "pack-write-client": 4.91077359195333, "record-serialization": 1.3563253227621317, "snapshot": 63.2948870388791}, "fixture": "vc09-14-ref", "mode": "ref", "mode_seconds": 75.61380695004482, "objects": 1002, "row_seconds": 75.61381398304366, "setup_seconds": 0.0}
+PACK WRITE COMPLETE 3 fixtures/modes 3006 objects
+2026-10-28T17:40:55Z
