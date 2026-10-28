@@ -325,8 +325,8 @@
       "fsck",
       "--full"
     ],
-    "lane": "M4, vc13",
-    "refusal_feature": "fsck commit-graph validation"
+    "lane": "M4, vc14",
+    "require_parity": true
   },
   {
     "name": "count-objects",

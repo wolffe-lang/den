@@ -1,0 +1,23 @@
+#!/bin/sh
+# vc14: measured housekeeping, restart recovery and exact bounded validators.
+set -eu
+DEN_ROOT=$(cd "$(dirname "$0")/.." && pwd)
+export DEN_ROOT
+cd "$DEN_ROOT"
+. tools/lib-toolchain.sh
+for tier in native release; do
+    flag=
+    [ "$tier" != release ] || flag=--release
+    "$WOLF" build $flag --deny-warnings src/housekeeping_test.lu -o "target/$tier/housekeeping-test"
+    "target/$tier/housekeeping-test"
+    "$WOLF" build $flag --deny-warnings probes/housekeeping-client/main.lu -o "target/$tier/housekeeping-client"
+    "$WOLF" build $flag --deny-warnings probes/pack-write-client/main.lu -o "target/$tier/pack-write-client"
+    "$WOLF" build $flag --deny-warnings probes/pack-client/main.lu -o "target/$tier/pack-client"
+    tools/env python3 -I tools/housekeeping-test.py --tier "$tier"
+    tools/env python3 -I tools/validator-test.py --tier "$tier"
+    tools/env python3 -I tools/housekeeping-recovery-test.py --tier "$tier"
+done
+"$WOLF" conform-run src/housekeeping_test.lu --checked --json > target/housekeeping-checked.json
+cat target/housekeeping-checked.json
+python3 -I -c 'import json; rows=[json.loads(x) for x in open("target/housekeeping-checked.json") if x.startswith("{")]; assert len(rows)==1 and rows[0]["verdict"]=="exit(0)",rows'
+echo 'housekeeping: native/release closure, verification, recovery, exact diagnostics and actual checked; zero skips'

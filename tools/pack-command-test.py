@@ -26,10 +26,6 @@ try:
    commands.extend([['verify-pack',str(idx)],['verify-pack','-v',str(idx)]])
   for cmd in commands:
    g=call(G,p,cmd);d=call(D,p,cmd)
-   if cmd[0]=='fsck' and (p/'.git/objects/info/commit-graph').exists():
-    refused.append({'fixture':p.name,'args':cmd,'git':g,'den':d})
-    assert d['status']==2 and b'fsck commit-graph validation' in bytes.fromhex(d['stderr']) and d['state']==before
-    continue
    if cmd[0]=='fsck' and bytes.fromhex(g['stdout']).count(b'dangling ')>1:
     refused.append({'fixture':p.name,'args':cmd,'git':g,'den':d})
     assert d['status']==2 and b'fsck multiple dangling object order' in bytes.fromhex(d['stderr']) and d['state']==before

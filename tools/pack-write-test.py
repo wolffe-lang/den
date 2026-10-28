@@ -59,6 +59,17 @@ try:
         (own/'a').write_bytes(('own object %d\n'%n).encode())
         run([den,'add','a'],own);run([den,'commit','-q','-m','own history'],own)
     fixtures.append(own)
+    # vc14 expansion: larger repetitive, binary and mixed whole-object corpora.
+    # Every mode keeps the same per-fixture 1.5 gate and independent batch reads.
+    for shape in ('repetitive','binary','mixed'):
+        expanded=root/('vc14-'+shape);expanded.mkdir()
+        run([G,'init','-q','--template='],expanded)
+        for n in range(128):
+            text=b''.join(('record %04d stable content with varied words and numbers\n'%k).encode() for k in range(800))
+            binary=b''.join(hashlib.sha256(('block %d'%k).encode()).digest() for k in range(1500))
+            body=(text if shape=='repetitive' or shape=='mixed' and n%2==0 else binary)+n.to_bytes(4,'big')
+            run([G,'hash-object','-w','--stdin'],expanded,body)
+        fixtures.append(expanded)
     if not args.core_only:
         sources=root/'inherited';sources.mkdir()
         inherited=sorted(p for p in (R/'target'/('pack-interop-'+args.tier)).glob('*-*') if (p/'.git').is_dir())
