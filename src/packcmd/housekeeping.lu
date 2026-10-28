@@ -328,7 +328,7 @@ fn housekeeping(args: List[str]) -> int ! object.StoreErrors {
         prune_packed(repo, dry)?
         return 0
     }
-    var all = false, remove = false, keep = false, no_info = false
+    var all = false, remove = false, keep = false, no_info = false, quiet = false
     for arg in args[1..] {
         if arg == "-a" {
             all = true
@@ -338,12 +338,16 @@ fn housekeeping(args: List[str]) -> int ! object.StoreErrors {
             keep = true
         } else if arg == "-n" {
             no_info = true
-        } else if arg != "-q" && arg != "--quiet" {
+        } else if arg == "-q" || arg == "--quiet" {
+            quiet = true
+        } else {
             return Unsupported("repack {arg}")
         }
     }
     if !all { return Unsupported("repack incremental selection") }
     if !no_info { return Unsupported("repack server-info publication (use -n)") }
+    if !quiet { return Unsupported("repack progress and empty-output policy (use -q)") }
+    if keep && !remove { return Unsupported("repack -k without -d") }
     repack(repo, keep, remove, "")?
     0
 }

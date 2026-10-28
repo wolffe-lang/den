@@ -6,7 +6,7 @@ assert hashlib.sha256(pathlib.Path(G).read_bytes()).hexdigest()=='c4848492938c4e
 os.environ['GIT_EXEC_PATH']=str(pathlib.Path(G).parent.parent/'libexec/git-core')
 a=argparse.ArgumentParser();a.add_argument('--tier',default='native');a.add_argument('--run',default='final');args=a.parse_args()
 C=R/'target'/args.tier/'housekeeping-client';W=C.with_name('pack-write-client');P=C.with_name('pack-client')
-root=R/'target'/('recovery-'+args.tier+'-'+args.run);root.mkdir();rows=[];contents={};states={}
+root=R/'target'/('recovery-'+args.tier+'-'+args.run);root.mkdir();rows=[];refusals=[];contents={};states={}
 def snap(p):
  out={}
  for f in sorted(p.rglob('*')):
@@ -39,6 +39,19 @@ try:
   names=root/(phase+'.names');names.write_bytes(ids)
   assert call(p,P,p/'.git','--batch',names,'16777216').stdout==expected
   print('RECOVERY',phase,'all objects retained; recovered; repeated',flush=True)
+ for number,(cmd,feature) in enumerate([
+  (['gc'],'gc expiry'),
+  (['repack','-a','-q'],'server-info'),
+  (['repack','-a','-n'],'progress and empty-output'),
+  (['repack','-a','-n','-q','-k'],'-k without -d'),
+  (['repack','-d'],'incremental selection'),
+  (['repack','-A','-d','-n','-q'],'repack -A'),
+  (['prune-packed','--expire=now'],'prune-packed --expire=now'),
+ ]):
+  p=root/('refusal-'+str(number));shutil.copytree(base,p);before=snap(p)
+  q=call(p,C.with_name('den'),*cmd,ok=False)
+  assert q.returncode==2 and feature.encode() in q.stderr and snap(p)==before
+  refusals.append(dict(command=cmd,feature=feature,process=len(rows)-1))
  p=root/'foreign-temporary';shutil.copytree(base,p);foreign=p/'.git/objects/pack/tmp_den_foreign.pack';foreign.write_bytes(b'foreign temporary')
  before=snap(p);q=call(p,C,p/'.git','repack','',ok=False);assert q.returncode==1 and snap(p)==before
  p=root/'foreign-journal';shutil.copytree(base,p);(p/'.git/objects/info/den-repack-retire').write_bytes(b'foreign incomplete record')
@@ -48,4 +61,4 @@ try:
  call(p,G,'verify-pack',idx);assert call(p,G,'cat-file','--batch',data=ids).stdout==expected
  print('RECOVERY orphan publication restored through unchanged reader',flush=True)
 finally:
- (R/'target'/('recovery-'+args.tier+'-'+args.run+'.json')).write_text(json.dumps(dict(rows=rows,states=states,contents=contents)))
+ (R/'target'/('recovery-'+args.tier+'-'+args.run+'.json')).write_text(json.dumps(dict(rows=rows,refusals=refusals,states=states,contents=contents)))
