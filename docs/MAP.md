@@ -133,7 +133,7 @@ objects, wrong tree types and ref/HEAD/cache-tree errors; complex ordering stays
 named. No new production dependency or second delta encoder was added.
 
 `tools/check-housekeeping` runs 56 exact housekeeping rows plus four separately
-named unreachable-retirement refusals, 40 exact immutable fsck rows, three graph
+named unreachable-retirement refusals, 41 exact immutable fsck rows, three graph
 metadata clients, closure and recovery clients, and six actual-checked parser
 groups per native/release tier. Full captures include every file and mode.
 Housekeeping compares canonical objects, per-pack membership and validated pairs
