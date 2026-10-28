@@ -438,7 +438,7 @@ empty fanout directories. Its dry run preserves raw directory order within each
 hex prefix; both tools are compared on one immutable physical fixture.
 
 The housekeeping differential has 56 exact command/state rows and four separate
-unreachable-retirement refusals per tier. Validator tests add 40 exact immutable
+unreachable-retirement refusals per tier. Validator tests add 41 exact immutable
 commands and three independent metadata clients. Five interruption phases,
 foreign files, repeated cleanup, orphan publication and bounded actual-checked
 parser tests have separate witnesses. The larger repetitive/binary/mixed writer
