@@ -1,0 +1,32 @@
+vc13 prediction, before implementation and oracle observations
+Base: 1d64bb7f. Contract: wolf/sprints/vcs/vc13-pack-writing.md.
+
+P1. Pack v2 plus idx v2 can be written without changing the vc09 reader:
+    raw object headers, network-order count/offset tables, entry CRC32,
+    a pack SHA1 and an idx SHA1 independently bind the two files.
+P2. The existing diffbinary delta encoder can serve OFS and REF packs unchanged
+    after extraction to one shared pure boundary. Delta size in an entry header
+    is the instruction stream size, not the reconstructed object's size.
+P3. A same-kind sliding candidate window of ten and chain cap fifty should keep
+    all fixture pack sizes below 1.5 times pinned Git. Size measurements may
+    disprove the proposed ordering or cost selection; bytes are not a target.
+P4. Publication needs temporary pack and idx files, both synced, then pack rename
+    before idx rename and directory sync. A failed prepublication write must not
+    prune loose objects. There is no two-file atomic rename promise.
+P5. verify-pack -v reports physical pack order, compressed entry size including
+    its header/base reference, and reconstructed object size for delta objects;
+    histogram counts delta entries by depth, with a separate non-delta count.
+P6. count-objects -v uses filesystem allocation for loose size and logical pack
+    plus idx bytes for size-pack, KiB rounded down. Duplicate loose IDs already
+    in packs count as prune-packable. Empty object directories are not garbage.
+P7. fsck --full can share object inventory and parsers while separately checking
+    graph links and roots (HEAD/refs/index/reflogs). Unreachable tips are dangling;
+    valid unreachable objects are not errors. Diagnostics require measurement.
+P8. gc/repack publication is separable; unless measured completely, keep explicit
+    named refusals rather than guessing pruning/reflog/keep policy.
+
+Proof before claims: pinned oracle digest each harness; full process and file/mode
+captures; native/release importing client; bounded actual checked units; original
+corpus and vc09/vc12 fixtures; independent Git verify-pack/fsck/cat-file for every
+pack; per-fixture size table; deliberate corruption plant off base without its
+break in the fix history; one full inherited final-head gate. No M4-complete claim.
