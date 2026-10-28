@@ -35,8 +35,9 @@ fn main() {
         assert(false)
         return
     }
+    print("vc11 gate: exact unchanged line correspondence")
     assert(
-        map.len == 2 &&
+        map.len == 999 &&
             map[0].old_line == 0 &&
             map[0].new_line == 0 &&
             map[1].old_line == 2 &&
