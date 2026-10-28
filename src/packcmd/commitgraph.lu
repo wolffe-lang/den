@@ -241,7 +241,7 @@ fn verify_commit_graph(repo: repository.Repo, bytes: List[byte]) -> int ! object
         GraphDiagnostic(text) => { eprint(text); return 16 },
     }
     var errors = List[str](), total = 0
-    if !graph.checksum {
+    if graph.checksum {
         (mut errors).push("the commit-graph file has incorrect checksum and is likely corrupt")
     }
     for node in graph.nodes {
