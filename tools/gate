@@ -20,6 +20,7 @@ export DEN_GIT
 tools/check-fmt
 tools/build --all
 tools/check-blame
+tools/check-stash
 tools/check-revision
 tools/check-history
 tools/check-refs
@@ -60,7 +61,7 @@ PYREPORT
 done
 tools/oracle --selftest
 tools/oracle
-if tools/oracle --filter stash --strict; then
+if tools/oracle --filter fsck --strict; then
     echo "gate: strict not-yet unexpectedly passed" >&2
     exit 1
 else
