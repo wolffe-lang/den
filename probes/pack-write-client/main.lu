@@ -1,3 +1,4 @@
+use std.fs
 use object
 use oid
 use pack
@@ -24,6 +25,10 @@ fn main() -> int {
         ) as byte
     }
     if fail == "corrupt-pack" { encoded.data[12] = (encoded.data[12] as int ^ 1) as byte }
+    if fail == "orphan-publication" {
+        let name = pack.install(repo.gitdir, encoded) else |e| { eprint("{e}"); return 1 }
+        fs.remove("{repo.gitdir}/objects/pack/pack-{name}.idx") else |e| { eprint("{e}"); return 1 }
+    }
     let name = pack.install_injected(repo.gitdir, encoded, fail) else |e| {
         eprint("{e}")
         return 1

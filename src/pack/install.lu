@@ -63,6 +63,17 @@ pub fn install_injected(gitdir: str, value: Encoded, fail: str) -> str ! PackErr
     fs_close(idxfile.fd) else |_| { return io }
     idx_closed = true
     validate_pair("{temporary}.pack", "{temporary}.idx")?
+    if fs.exists("{stem}.pack") && !fs.exists("{stem}.idx") {
+        // Recover only this content-addressed publication. Verify the orphan
+        // against the newly constructed index and unchanged reader before
+        // publishing its missing companion; never remove a foreign temporary.
+        validate_pair("{stem}.pack", "{temporary}.idx")?
+        if fail == "idx-rename" { return io }
+        fs.move_file("{temporary}.idx", "{stem}.idx") else |_| { return io }
+        idx_owned = false
+        fs.sync_dir(dir) else |_| { return io }
+        return copy value.name
+    }
     if fs.exists("{stem}.pack") || fs.exists("{stem}.idx") {
         validate_pair("{stem}.pack", "{stem}.idx")?
         let existing = load_index("{stem}.idx")?

@@ -115,6 +115,19 @@ pub fn inspect(path: str) -> Inspection ! PackErrors {
 /// Validated pack-index paths. No partial or unsupported pack metadata is hidden.
 pub fn paths(gitdir: str) -> List[str] ! PackErrors { indexes(gitdir)? }
 
+/// Check an index even after its pack was retired. This is ONLY metadata for
+/// recovery; it never certifies readable object bodies or ordinary inventory.
+pub fn retirement_names(path: str, expected: str) -> List[str] ! PackErrors {
+    let index = load_index(path)?
+    let id = oid.from_bytes("sha1", index.pack_sum) else |_| {
+        return Unsupported("retirement checksum")
+    }
+    if (oid.hex(id) else "") != expected { return Unsupported("retirement pack binding") }
+    var names = List[str]()
+    for entry in index.entries { (mut names).push(copy entry.name) }
+    names
+}
+
 /// Validated object-name inventory, including duplicate names in separate packs.
 pub fn names(path: str) -> List[str] ! PackErrors {
     if !path.ends_with(".idx") { return Unsupported("pack index pathname") }
