@@ -1,0 +1,1 @@
+{"commit":"cf0c13d","diagnostics":[],"file":"src/housekeeping_test.lu","impl":"wolfgang","impl_version":"0.2.35","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"vc14 graph parser: six bounded corruption groups; zero skips\n","stdout_sha256":"4db3a63990df4dbcd8838ddad45f6293f90be4418dc19bc4e551c303ed6a001f","verdict":"exit(0)","warnings":[]}
