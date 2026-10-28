@@ -292,7 +292,9 @@
       "scratch"
     ],
     "prepare": "dirty",
-    "lane": "M3, vc10"
+    "lane": "M3, vc12",
+    "require_parity": true,
+    "comparison": "index-stat-proven"
   },
   {
     "name": "notes",
@@ -304,7 +306,8 @@
       "note",
       "HEAD"
     ],
-    "lane": "M3, vc10"
+    "lane": "M3, vc12",
+    "require_parity": true
   },
   {
     "name": "rev-parse",
