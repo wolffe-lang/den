@@ -99,7 +99,8 @@ gate = open(os.path.join(ROOT, "tools", "gate")).read()
 say("tools/check-objects" in gate, "T2 object integration gate is mandatory")
 for command in ("tools/check-config", "tools/check-index", "tools/check-ignore", "tools/check-worktree", "tools/check-commit", "tools/check-history"):
     say(command in gate, "T2 M2 integration gate is mandatory: " + command)
-say("--filter blame --strict" in gate, "T2 strict witness remains unimplemented")
+say("--filter stash --strict" in gate, "T2 strict witness remains unimplemented")
+say("tools/check-blame" in gate, "T2 blame attribution gate is mandatory")
 say("tools/check-revision" in gate, "T2 shared revision grammar gate is mandatory")
 say("tools/check-history" in gate, "T2 inherited history gate remains mandatory")
 say("tools/check-refs" in gate, "T2 refs integration gate is mandatory")
@@ -112,7 +113,7 @@ for path in ("src/pack/read.lu", "tools/check-pack", "tools/pack-interop.py", "t
 for command in ("tools/check-diff --units-only", "tools/check-delta", "tools/check-rename", "tools/check-diff --corpus-only", "tools/check-diffbinary --reviewed-body --with-cli"):
     say(command in gate, "T2 diff integration gate is mandatory: " + command)
 cases = json.load(open(os.path.join(ROOT, "tests", "cases.json")))
-say(all(c.get("require_parity") for c in cases if c["args"][0] in ("diff", "log", "show", "branch", "tag", "switch", "merge")),
+say(all(c.get("require_parity") for c in cases if c["args"][0] in ("diff", "log", "show", "branch", "tag", "switch", "merge", "blame")),
     "T2 implemented diff/history/refs cases cannot regress to named refusals")
 say(all(c.get("require_parity") for c in cases if c["name"] in ("reset", "rebase", "rebase-up-to-date", "cherry-pick-redundant")),
     "T2 replay parity rows cannot regress to named refusals")

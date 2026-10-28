@@ -1,0 +1,21 @@
+#!/bin/sh
+# Exact blame attribution, both storage modes, external client and actual checked units.
+set -eu
+DEN_ROOT=$(cd "$(dirname "$0")/.." && pwd)
+export DEN_ROOT
+cd "$DEN_ROOT"
+. tools/lib-toolchain.sh
+mkdir -p target/runs/vc11-evidence
+trap 'status=$?; for f in target/blame-*.json; do [ ! -f "$f" ] || cp "$f" target/runs/vc11-evidence/; done; exit "$status"' EXIT
+for tier in native release; do
+    flag=
+    [ "$tier" != release ] || flag=--release
+    "$WOLF" build $flag --deny-warnings src/blame_test.lu -o "target/$tier/blame-test"
+    "target/$tier/blame-test"
+    "$WOLF" build $flag --deny-warnings probes/blame-client/main.lu -o "target/$tier/blame-client"
+    tools/env python3 -I tools/blame-test.py --tier "$tier"
+done
+"$WOLF" conform-run src/blame_test.lu --checked --json > target/blame-checked.json
+cat target/blame-checked.json
+python3 -I tools/revision-verdict.py target/blame-checked.json
+echo 'blame: exact loose/packed commands and clients; actual checked exit; zero skips'

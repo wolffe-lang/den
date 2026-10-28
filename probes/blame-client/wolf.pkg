@@ -1,4 +1,4 @@
 pkg {
     name: "blame-client", edition: "1", capabilities: [env, fs],
-    deps: {blame: {path: "../../src/blame"}, revision: {path: "../../src/revision"}, revsyntax: {path: "../../src/revsyntax"}, repository: {path: "../../src/repository"}, worktree: {path: "../../src/worktree"}},
+    deps: {difftext: {path: "../../src/difftext"}, walk: {path: "../../src/walk"}, blame: {path: "../../src/blame"}, revision: {path: "../../src/revision"}, revsyntax: {path: "../../src/revsyntax"}, repository: {path: "../../src/repository"}, worktree: {path: "../../src/worktree"}},
 }

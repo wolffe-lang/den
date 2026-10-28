@@ -1,23 +1,79 @@
 use std.fs
 use blame
+use difftext
 use repository
 use revision
 use revsyntax
+use walk
 use worktree
+
+fn limits(repo: repository.Repo, id: str) -> bool {
+    var warnings = List[str]()
+    let expression = revsyntax.parse(id) else { return false }
+    let resolved = revision.evaluate_typed(repo, expression.left, "commit", mut warnings) else {
+        return false
+    }
+    let commit = walk.read(repo, resolved.id) else { return false }
+    var options = blame.defaults()
+    options.max_visits = 1
+    let root = blame.attribute(repo, resolved.id, "file".bytes(), options) else { return false }
+    options.max_payload = commit.encoded_size + root.data.len * 2 + root.rows.len * 24
+    let exact = blame.attribute(repo, resolved.id, "file".bytes(), options) else { return false }
+    if !difftext.identical(exact.data, root.data) { return false }
+    options.max_payload -= 1
+    var capped = false
+    let _ = blame.attribute(repo, resolved.id, "file".bytes(), options) else |e| match e {
+        Unsupported(feature) => { capped = feature == "blame attribution limit"; copy root },
+        _ => { return false },
+    }
+    if !capped { return false }
+    options.max_visits = 0
+    var invalid_cap = false
+    let _ = blame.attribute(repo, resolved.id, "file".bytes(), options) else |e| match e {
+        invalid => { invalid_cap = true; copy root },
+        _ => { return false },
+    }
+    if !invalid_cap { return false }
+    var malformed = copy root
+    malformed.rows[0].source = 999999
+    let ctx = worktree.Context { repo: copy repo, root: "", cwd: ".", prefix: "" }
+    var invalid_result = false
+    let _ = blame.render(ctx, malformed, blame.defaults()) else |e| match e {
+        invalid => { invalid_result = true; List[byte]() },
+        _ => { return false },
+    }
+    invalid_result
+}
 
 fn main() -> int {
     let args = env_args()
     let repo = repository.discover(".") else { return 1 }
+    if args[0] == "--limits" {
+        if !limits(repo, "root") { return 1 }
+        print("limits: exact cap, over cap, invalid cap, malformed result")
+        return 0
+    }
     var warnings = List[str]()
-    let expression = revsyntax.parse(args[1]) else { return 1 }
-    let resolved = revision.evaluate_typed(repo, expression.left, "commit", mut warnings) else { return 1 }
-    let path = if args[2] == "--raw" then [114 as byte, 97 as byte, 119 as byte, 255 as byte] else args[2].bytes()
+    let expression = revsyntax.parse(args[0]) else { return 1 }
+    let resolved = revision.evaluate_typed(repo, expression.left, "commit", mut warnings) else {
+        return 1
+    }
+    var path = if args[1] == "--raw" {
+        [114 as byte, 97 as byte, 119 as byte, 255 as byte]
+    } else {
+        args[1].bytes()
+    }
     let result = blame.attribute(repo, resolved.id, path, blame.defaults()) else { return 1 }
+    let before = copy result.path
+    path[0] = 0 as byte
+    if !difftext.identical(before, result.path) { return 1 }
+    // Returned data and origin metadata are independent of caller inputs.
     var options = blame.defaults()
     options.porcelain = true
     options.line_porcelain = true
     let ctx = worktree.Context { repo: repo, root: "", cwd: ".", prefix: "" }
     let output = blame.render(ctx, result, options) else { return 1 }
-    fs_write_chunk(fs.stdout().fd, output) else { return 1 }
+    var stdout = fs.stdout()
+    fs.write_chunk(mut stdout, output) else { return 1 }
     0
 }

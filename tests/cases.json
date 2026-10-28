@@ -279,7 +279,8 @@
       "blame",
       "a.txt"
     ],
-    "lane": "M3, vc09"
+    "lane": "M3, vc11",
+    "require_parity": true
   },
   {
     "name": "stash",
