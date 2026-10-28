@@ -14,6 +14,7 @@ for tier in native release; do
     tools/env python3 -I tools/pack-write-test.py --tier "$tier"
     tools/env python3 -I tools/pack-command-test.py --tier "$tier"
     tools/env python3 -I tools/pack-failure-test.py --tier "$tier"
+    tools/env python3 -I tools/pack-adversarial-test.py --tier "$tier"
 done
 "$WOLF" conform-run src/pack_write_test.lu --checked --json > target/pack-write-checked.json
 cat target/pack-write-checked.json

@@ -61,11 +61,14 @@ try:
         oraclebase=baseline/'.git/objects/pack/pack'
         oid=run([G,'pack-objects','-q','--delta-base-offset',oraclebase],baseline,ids).stdout.decode().strip()
         git_size=pathlib.Path(str(oraclebase)+'-'+oid+'.pack').stat().st_size
+        none_oid=run([G,'pack-objects','-q','--window=0','--no-reuse-object',oraclebase],baseline,ids).stdout.decode().strip()
+        none_size=pathlib.Path(str(oraclebase)+'-'+none_oid+'.pack').stat().st_size
         for mode in ['none','ofs','ref']:
             p=root/(src.name+'-'+mode); shutil.copytree(src,p,symlinks=True)
             names=root/(src.name+'-'+mode+'.names'); names.write_bytes(ids)
             before=state(p)
-            out=run([R/'target'/args.tier/'pack-write-client',p/'.git',names,mode],p)
+            out=run([R/'target'/args.tier/'pack-write-client',p/'.git',names,mode],p,ok=False)
+            assert out.returncode==0,('vc13 writer '+src.name+'-'+mode+': validated pair publication',out.returncode,out.stdout,out.stderr)
             name=out.stdout.decode().strip(); stem=p/'.git/objects/pack'/('pack-'+name)
             idx=pathlib.Path(str(stem)+'.idx'); pack=pathlib.Path(str(stem)+'.pack')
             after=state(p)
@@ -84,9 +87,10 @@ try:
                 assert run([G,'cat-file',kind,id],p).stdout==body
                 got=run([R/'target'/args.tier/'pack-client',p/'.git',id,'16777216'],p).stdout
                 assert got==('%s %d %s\n'%(kind,len(body),id)).encode()+body
-            ratio=pack.stat().st_size/git_size
-            sizes.append({'fixture':src.name,'mode':mode,'objects':len(expected),'den':pack.stat().st_size,'git':git_size,'ratio':ratio})
-            if mode!='none': assert ratio<=1.5,(src.name,mode,ratio)
+            reference_size=none_size if mode=='none' else git_size
+            ratio=pack.stat().st_size/reference_size
+            sizes.append({'fixture':src.name,'mode':mode,'objects':len(expected),'den':pack.stat().st_size,'git':reference_size,'ratio':ratio,'git_default':git_size,'default_ratio':pack.stat().st_size/git_size,'baseline':'no-delta' if mode=='none' else 'default-ofs'})
+            assert ratio<=1.5,(src.name,mode,ratio)
             print('PACK WRITE',src.name,mode,len(expected),ratio,flush=True)
 finally:
     (R/'target'/('pack-write-'+args.tier+'.json')).write_text(json.dumps({'processes':records,'sizes':sizes,'states':states,'contents':contents,'core_only':args.core_only}))
