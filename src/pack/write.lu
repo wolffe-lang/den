@@ -52,7 +52,9 @@ fn body_name(body: Body) -> str ! PackErrors {
     var h = hash.new1()
     hash.update1(mut h, "{body.kind} {body.data.len}\0".bytes())
     hash.update1(mut h, body.data)
-    let id = oid.from_bytes("sha1", hash.final1(take h)) else |_| { return Unsupported("pack writer identity") }
+    let id = oid.from_bytes("sha1", hash.final1(take h)) else |_| {
+        return Unsupported("pack writer identity")
+    }
     oid.hex(id) else |_| { return Unsupported("pack writer identity") }
 }
 
@@ -77,13 +79,17 @@ fn deflated(data: List[byte]) -> List[byte] ! PackErrors {
 /// depth 50; 16 MiB/body, 128 MiB aggregate input and output, 10,000 objects.
 /// Duplicate identities are emitted once. Ordering is type then descending size.
 pub fn encode(bodies: List[Body], mode: str) -> Encoded ! PackErrors {
-    if mode != "none" && mode != "ofs" && mode != "ref" { return Unsupported("pack writer delta mode") }
+    if mode != "none" && mode != "ofs" && mode != "ref" {
+        return Unsupported("pack writer delta mode")
+    }
     if bodies.len > 10000 { return Unsupported("pack writer object count limit") }
     var total = 0, order = List[int](), names = List[str](), seen = Map[str, bool]()
     for i in 0..bodies.len {
         let _ = kind_number(bodies[i].kind)?
         if bodies[i].data.len > 16777216 { return Unsupported("pack writer object size limit") }
-        if bodies[i].data.len > 134217728 - total { return Unsupported("pack writer payload limit") }
+        if bodies[i].data.len > 134217728 - total {
+            return Unsupported("pack writer payload limit")
+        }
         total += bodies[i].data.len
         let name = body_name(bodies[i])?
         (mut names).push(copy name)
@@ -94,7 +100,9 @@ pub fn encode(bodies: List[Body], mode: str) -> Encoded ! PackErrors {
         while j > 0 {
             let a = order[j - 1], b = order[j]
             if bodies[a].kind < bodies[b].kind ||
-                (bodies[a].kind == bodies[b].kind && bodies[a].data.len >= bodies[b].data.len) { break }
+                bodies[a].kind == bodies[b].kind && bodies[a].data.len >= bodies[b].data.len {
+                break
+            }
             order[j - 1] = b
             order[j] = a
             j -= 1
@@ -160,14 +168,18 @@ pub fn encode(bodies: List[Body], mode: str) -> Encoded ! PackErrors {
     var count = 0
     for bucket in 0..256 {
         while count < entries.len {
-            let id = oid.parse("sha1", entries[count].name) else |_| { return Unsupported("pack writer identity") }
+            let id = oid.parse("sha1", entries[count].name) else |_| {
+                return Unsupported("pack writer identity")
+            }
             if id.bytes[0] as int > bucket { break }
             count += 1
         }
         put32(mut index, count)
     }
     for entry in entries {
-        let id = oid.parse("sha1", entry.name) else |_| { return Unsupported("pack writer identity") }
+        let id = oid.parse("sha1", entry.name) else |_| {
+            return Unsupported("pack writer identity")
+        }
         append_write(mut index, id.bytes)
     }
     for entry in entries { put32(mut index, entry.crc) }

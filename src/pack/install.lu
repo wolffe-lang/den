@@ -26,21 +26,27 @@ pub fn install(gitdir: str, value: Encoded) -> str ! PackErrors {
 /// pack on ordinary unwind. A crash can leave an orphan pack, never prune data.
 pub fn install_injected(gitdir: str, value: Encoded, fail: str) -> str ! PackErrors {
     let id = oid.parse("sha1", value.name) else |_| { return Unsupported("pack writer name") }
-    if value.data.len < 32 || value.data.len > 134217728 ||
-        value.index.len > 16777216 || !same(id.bytes, value.data[value.data.len - 20..]) {
+    if value.data.len < 32 ||
+        value.data.len > 134217728 ||
+        value.index.len > 16777216 ||
+        !same(id.bytes, value.data[value.data.len - 20..]) {
         return Unsupported("pack writer name or limit")
     }
     let dir = "{gitdir}/objects/pack"
     fs.create_dir_all(dir) else |_| { return io }
     let stem = "{dir}/pack-{value.name}"
     let temporary = "{dir}/tmp_den_{value.name}"
-    var packfile = fs.create_new_with_mode("{temporary}.pack", 0o444) else |e| { return Unsupported("pack writer temporary {e}") }
+    var packfile = fs.create_new_with_mode("{temporary}.pack", 0o444) else |e| {
+        return Unsupported("pack writer temporary {e}")
+    }
     var pack_closed = false, pack_owned = true
     defer {
         if !pack_closed { fs_close(packfile.fd) else |_| {} }
         if pack_owned { fs.remove("{temporary}.pack") else |_| {} }
     }
-    var idxfile = fs.create_new_with_mode("{temporary}.idx", 0o444) else |e| { return Unsupported("pack writer temporary {e}") }
+    var idxfile = fs.create_new_with_mode("{temporary}.idx", 0o444) else |e| {
+        return Unsupported("pack writer temporary {e}")
+    }
     var idx_closed = false, idx_owned = true
     defer {
         if !idx_closed { fs_close(idxfile.fd) else |_| {} }

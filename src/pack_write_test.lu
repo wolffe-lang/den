@@ -1,0 +1,29 @@
+//! member: false
+
+use pack
+
+fn main() -> int {
+    let before = "0123456789abcdef0123456789abcdef".bytes()
+    let after = "0123456789abcdef--changed--0123456789abcdef".bytes()
+    let encoded = pack.encode_delta(before, after) else |_| { assert(false); return 1 }
+    let decoded = pack.apply_delta(before, encoded, after.len) else |_| { assert(false); return 1 }
+    assert(decoded.len == after.len)
+    for i in 0..after.len { assert(decoded[i] == after[i]) }
+    let empty = pack.encode_delta([], []) else |_| { assert(false); return 1 }
+    assert(empty.len == 2 && empty[0] == 0 as byte && empty[1] == 0 as byte)
+    let literal = pack.encode_delta([], [255 as byte, 0 as byte]) else |_| {
+        assert(false)
+        return 1
+    }
+    assert(literal.len == 5 && literal[2] == 2 as byte)
+    let restored = pack.apply_delta([], literal, 2) else |_| { assert(false); return 1 }
+    assert(restored[0] == 255 as byte && restored[1] == 0 as byte)
+    var refused = false
+    let _ = pack.apply_delta(before, encoded, after.len - 1) else |_| {
+        refused = true
+        List[byte]()
+    }
+    assert(refused)
+    print("pack writer delta: 5 checks; zero skips")
+    0
+}

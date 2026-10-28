@@ -1,8 +1,8 @@
+use pack
 // Original encoder: RFC 1950/1951 through the org-owned zlib module;
 // pack delta opcodes from gitformat-pack(5), binary envelope/base85 measured
 // against the pinned Git executable. No implementation source consulted.
 use zlib
-use pack
 
 /// limit: an input exceeds 16 MiB or compression exceeds its bounded cap.
 /// invalid: the internal compressor rejects a fixed valid configuration.
