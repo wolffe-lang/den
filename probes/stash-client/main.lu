@@ -1,0 +1,168 @@
+// Independent importing client of den's public stash and notes layers.
+// Each mode prints one result the driver compares with the pinned oracle.
+use std.fs
+use notes
+use notestree
+use oid
+use repository
+use revision
+use stash
+use stashlog
+use worktree
+
+fn out(data: List[byte]) {
+    var stdout = fs.stdout()
+    fs.write_chunk(mut stdout, data) else |_| {}
+}
+
+fn bytes(text: str) -> List[byte] {
+    var result = List[byte]()
+    for b in text.bytes() { (mut result).push(b) }
+    result
+}
+
+fn construct(message: str) -> str {
+    let ctx = worktree.discover(".") else |e| { return "error {e}" }
+    let value = worktree.read_index(ctx) else |e| { return "error {e}" }
+    var warnings = List[str]()
+    let scan = worktree.scan_index_with_warnings(ctx, value, false, mut warnings) else |e| match e {
+        Unsupported(feature) => { return "unsupported: {feature}" },
+        _ => { return "error {e}" },
+    }
+    if !stash.changed(scan) { return "unchanged" }
+    let entry = stash.construct(ctx, scan, bytes(message)) else |e| match e {
+        Unsupported(feature) => { return "unsupported: {feature}" },
+        _ => { return "error {e}" },
+    }
+    let w = oid.hex(entry.worktree_commit) else "",
+        i = oid.hex(entry.index_commit) else "",
+        h = oid.hex(entry.head) else ""
+    "{w} {i} {h}"
+}
+
+fn records() -> List[byte] {
+    let repo = repository.discover(".") else |e| { return bytes("error {e}\n") }
+    let list = stash.records(repo) else |e| match e {
+        Unsupported(feature) => { return bytes("unsupported: {feature}\n") },
+        _ => { return bytes("error {e}\n") },
+    }
+    var result = List[byte]()
+    for n in 0..list.len {
+        let item = copy list[list.len - 1 - n]
+        for b in "{item.after} ".bytes() { (mut result).push(b) }
+        for b in stashlog.message(item) { (mut result).push(b) }
+        (mut result).push(10 as byte)
+    }
+    result
+}
+
+fn without(n: str) -> List[byte] {
+    let repo = repository.discover(".") else |e| { return bytes("error {e}\n") }
+    let list = stash.records(repo) else |e| { return bytes("error {e}\n") }
+    let at = n.to_int() else -1
+    let kept = stashlog.without(list, at) else |e| { return bytes("error {e}\n") }
+    var result = List[byte]()
+    for item in kept { for b in stashlog.line(item) { (mut result).push(b) } }
+    result
+}
+
+fn listing() -> List[byte] {
+    let repo = repository.discover(".") else |e| { return bytes("error {e}\n") }
+    let value = notes.read(repo, "refs/notes/commits") else |e| match e {
+        Unsupported(feature) => { return bytes("unsupported: {feature}\n") },
+        _ => { return bytes("error {e}\n") },
+    }
+    var result = List[byte]()
+    for note in value.notes {
+        let blob = oid.hex(note.blob) else "", object = oid.hex(note.object) else ""
+        for b in "{blob} {object}\n".bytes() { (mut result).push(b) }
+    }
+    result
+}
+
+fn rewrite(object: str, blob: str) -> str {
+    let repo = repository.discover(".") else |e| { return "error {e}" }
+    let value = notes.read(repo, "refs/notes/commits") else |e| { return "error {e}" }
+    var set = copy value.notes
+    if object != "" {
+        let target = revision.resolve(repo, object) else |e| { return "error {e}" }
+        let note = oid.parse("sha1", blob) else |e| { return "error {e}" }
+        set = notestree.with_note(value.notes, target, [note]) else |e| { return "error {e}" }
+    }
+    let tree = notes.write_tree(repo, set) else |e| match e {
+        Unsupported(feature) => { return "unsupported: {feature}" },
+        _ => { return "error {e}" },
+    }
+    "{oid.hex(tree) else ""} {notestree.fanout(set) else -1}"
+}
+
+fn display(name: str) -> List[byte] {
+    let repo = repository.discover(".") else |e| { return bytes("error {e}\n") }
+    let value = notes.read(repo, "refs/notes/commits") else |e| { return bytes("error {e}\n") }
+    let target = revision.resolve(repo, name) else |e| { return bytes("error {e}\n") }
+    notes.display(repo, value, target) else |e| match e {
+        Unsupported(feature) => { return bytes("unsupported: {feature}\n") },
+        _ => { return bytes("error {e}\n") },
+    }
+}
+
+fn limits() -> str {
+    var seen = 0
+    let _ = stashlog.parse(bytes("not a record\n")) else |e| match e {
+        Unsupported(feature) => {
+            if feature == "stash malformed reflog record" { seen += 1 }
+            List[stashlog.Record]()
+        },
+        _ => { List[stashlog.Record]() },
+    }
+    let zero = "0000000000000000000000000000000000000000"
+    let _ = stashlog.parse(bytes("{zero} {zero} x")) else |e| match e {
+        Unsupported(feature) => {
+            if feature == "stash unterminated reflog record" { seen += 1 }
+            List[stashlog.Record]()
+        },
+        _ => { List[stashlog.Record]() },
+    }
+    let one = oid.parse("sha1", "1111111111111111111111111111111111111111") else |_| {
+        return "bad oid"
+    }
+    var set = List[notestree.Note]()
+    notestree.insert(mut set, notestree.Note { object: copy one, blob: copy one }) else |_| {
+        return "bad insert"
+    }
+    notestree.insert(mut set, notestree.
+        Note { object: copy one, blob: copy one }) else |e| match e {
+        Unsupported(feature) => { if feature.starts_with("notes duplicate entry") { seen += 1 } },
+        _ => {},
+    }
+    let _ = notestree.with_note(set, one, [copy one, copy one]) else |e| match e {
+        invalid => { seen += 1; List[notestree.Note]() },
+        _ => { List[notestree.Note]() },
+    }
+    "limits: {seen} of 4 refused by name"
+}
+
+fn main() -> int {
+    let args = env_args()
+    if args.len == 0 { eprint("usage: stash-client MODE"); return 2 }
+    let mode = args[0]
+    if mode == "construct" {
+        print(construct(if args.len > 1 then args[1] else ""))
+    } else if mode == "records" {
+        out(records())
+    } else if mode == "without" && args.len == 2 {
+        out(without(args[1]))
+    } else if mode == "notes" {
+        out(listing())
+    } else if mode == "rewrite" {
+        print(if args.len == 3 then rewrite(args[1], args[2]) else rewrite("", ""))
+    } else if mode == "display" && args.len == 2 {
+        out(display(args[1]))
+    } else if mode == "limits" {
+        print(limits())
+    } else {
+        eprint("unknown mode {mode}")
+        return 2
+    }
+    0
+}

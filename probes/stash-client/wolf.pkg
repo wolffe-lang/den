@@ -1,0 +1,4 @@
+pkg {
+    name: "stash-client", edition: "1", capabilities: [env, fs],
+    deps: {notes: {path: "../../src/notes"}, notestree: {path: "../../src/notestree"}, oid: {path: "../../src/oid"}, repository: {path: "../../src/repository"}, revision: {path: "../../src/revision"}, stash: {path: "../../src/stash"}, stashlog: {path: "../../src/stashlog"}, worktree: {path: "../../src/worktree"}},
+}
