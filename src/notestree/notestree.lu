@@ -60,7 +60,7 @@ pub fn fanout(notes: List[Note]) -> int ! TreeErrors {
         let d = digit(hex.bytes()[0])
         groups[d] = groups[d] + 1
     }
-    for count in groups { if count < 2 { return 0 } }
+    for count in groups { if count < 3 { return 0 } }
     var directories = Map[str, int]()
     for note in notes {
         let hex = oid.hex(note.object)?
