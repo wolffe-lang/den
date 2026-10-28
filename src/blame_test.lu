@@ -1,15 +1,87 @@
+use blamerange
 use difftext
+
+fn ambiguous() -> bool {
+    let _ = difftext.correspondence("a\na\n".bytes(), "a\nx\n".bytes(), false) else |e| match e {
+        ambiguous_lines => { return true },
+        _ => { return false },
+    }
+    false
+}
+
+fn reordered() -> bool {
+    let _ = difftext.correspondence("a\nb\n".bytes(), "b\na\n".bytes(), false) else |e| match e {
+        reordered_lines => { return true },
+        _ => { return false },
+    }
+    false
+}
+
+fn range_error(value: str) -> str {
+    let _ = blamerange.selection(5, [value], "file".bytes()) else |e| match e {
+        Fatal(message) => { return message },
+        Unsupported(feature) => { return feature },
+        _ => { return "invalid" },
+    }
+    "accepted"
+}
 
 fn main() {
     let a = difftext.comparison(" a \nlast".bytes(), true) else { assert(false); return }
-    assert(a == "a\nlast\n".bytes())
-    let map = difftext.correspondence("a\nb\nc\n".bytes(), "a\nx\nc\n".bytes(), false) else { assert(false); return }
-    assert(map == [0, -1, 2])
-    let same = difftext.correspondence("a\na\n".bytes(), "a\na\n".bytes(), false) else { assert(false); return }
-    assert(same == [0, 1])
-    let repeated = difftext.correspondence("a\na\n".bytes(), "a\nx\n".bytes(), false) else |e| match e {
-        ambiguous_lines => { print("ambiguous"); return },
-        _ => { assert(false); return },
+    assert(difftext.identical(a, "a\nlast\n".bytes()))
+    let raw = difftext.comparison("a".bytes(), false) else { assert(false); return }
+    assert(difftext.identical(raw, "a".bytes()))
+    let map = difftext.correspondence("a\nb\nc\n".bytes(), "a\nx\nc\n".bytes(), false) else {
+        assert(false)
+        return
     }
-    assert(repeated.len == -1)
+    assert(
+        map.len == 2 &&
+            map[0].old_line == 0 &&
+            map[0].new_line == 0 &&
+            map[1].old_line == 2 &&
+            map[1].new_line == 2,
+    )
+    let same = difftext.correspondence("a\na\n".bytes(), "a\na\n".bytes(), false) else {
+        assert(false)
+        return
+    }
+    assert(same.len == 2 && same[0].old_line == 0 && same[1].old_line == 1)
+    let white = difftext.correspondence("a b\nlast\n".bytes(), " a\tb\r\nlast".bytes(), true) else {
+        assert(false)
+        return
+    }
+    assert(white.len == 2)
+    let empty = difftext.correspondence("".bytes(), "a\n".bytes(), false) else {
+        assert(false)
+        return
+    }
+    assert(empty.len == 0)
+    assert(ambiguous())
+    assert(reordered())
+    let selected = blamerange.selection(5, ["4,-2", "1,2"], "file".bytes()) else {
+        assert(false)
+        return
+    }
+    assert(
+        selected.len == 5 &&
+            selected[0] &&
+            selected[1] &&
+            selected[2] &&
+            selected[3] &&
+            !selected[4],
+    )
+    let reverse = blamerange.selection(5, ["4,2"], "file".bytes()) else { assert(false); return }
+    assert(!reverse[0] && reverse[1] && reverse[2] && reverse[3] && !reverse[4])
+    assert(range_error("0,2") == "-L invalid line number: 0")
+    assert(range_error("2,+0") == "-L invalid empty range")
+    assert(range_error("99,100") == "file file has only 5 lines")
+    assert(range_error("9223372036854775807,+2") == "invalid")
+    assert(range_error(":function") == "blame function ranges")
+    assert(range_error("/line/,4") == "blame regex ranges")
+    let omitted = blamerange.selection(5, [",3"], "file".bytes()) else { assert(false); return }
+    assert(omitted[0] && omitted[1] && omitted[2] && !omitted[3] && !omitted[4])
+    let clipped = blamerange.selection(5, ["5,999"], "file".bytes()) else { assert(false); return }
+    assert(!clipped[0] && !clipped[3] && clipped[4])
+    print("blame bounded units: 18 checks")
 }

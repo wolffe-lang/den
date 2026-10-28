@@ -1,0 +1,96 @@
+// Shared comparison policy for attribution. Raw source bytes never change.
+// Git-blame documentation: -w ignores whitespace in parent/child comparisons.
+
+/// Invalid arguments, inherited edit limits or conservative ambiguity refusals.
+pub error CorrespondenceErrors = {invalid, limit, ambiguous_lines, reordered_lines}
+
+/// One unchanged line correspondence in zero-based parent/child coordinates.
+pub struct LineLink { old_line: int, new_line: int }
+
+/// Byte identity without encoding conversion or a hash-only conclusion.
+pub fn identical(a: List[byte], b: List[byte]) -> bool {
+    if a.len != b.len { return false }
+    for i in 0..a.len { if a[i] != b[i] { return false } }
+    true
+}
+
+/// Default comparison preserves final-LF identity. With -w only ASCII
+/// whitespace is omitted and every physical line ends with a comparison LF.
+pub fn comparison(data: List[byte], ignore_whitespace: bool) -> List[byte] ! DeltaErrors {
+    let spans = lines(data)?
+    var out = List[byte]()
+    if !ignore_whitespace {
+        for b in data { (mut out).push(b) }
+        return out
+    }
+    for row in spans {
+        for i in row.start..row.end {
+            let b = data[i] as int
+            if b == 10 { continue }
+            if ignore_whitespace && (b == 32 || b >= 9 && b <= 13) { continue }
+            (mut out).push(data[i])
+        }
+        (mut out).push(10 as byte)
+    }
+    out
+}
+
+/// Unambiguous line links through the existing Myers/compaction boundary.
+/// Changed repeated/hash-colliding lines and reordered common lines refuse;
+/// unchanged files can contain any repetition. No second matcher or heuristic.
+pub fn correspondence(
+    before: List[byte],
+    after: List[byte],
+    ignore_whitespace: bool,
+) -> List[LineLink] ! CorrespondenceErrors {
+    var links = List[LineLink]()
+    region correspondence_scratch { append_links(mut links, before, after, ignore_whitespace)? }
+    links
+}
+
+fn append_links(
+    mut links: List[LineLink],
+    before: List[byte],
+    after: List[byte],
+    ignore_whitespace: bool,
+) -> () ! CorrespondenceErrors {
+    let a = comparison(before, ignore_whitespace)?
+    let b = comparison(after, ignore_whitespace)?
+    let left = lines(a)?, right = lines(b)?
+    if identical(a, b) {
+        for i in 0..left.len { (mut links).push(LineLink { old_line: i, new_line: i }) }
+        return
+    }
+    var old_hashes = Map[int, int](), old_seen = Map[int, bool](), new_seen = Map[int, bool]()
+    for i in 0..left.len {
+        if old_seen[left[i].hash] else false { return ambiguous_lines }
+        old_seen[left[i].hash] = true
+        old_hashes[left[i].hash] = i
+    }
+    var previous = 0, have_previous = false
+    for i in 0..right.len {
+        if new_seen[right[i].hash] else false { return ambiguous_lines }
+        new_seen[right[i].hash] = true
+        let old = old_hashes[right[i].hash] else { continue }
+        if !equal_line(a, left[old], b, right[i]) { return ambiguous_lines }
+        if have_previous && old < previous { return reordered_lines }
+        previous = old
+        have_previous = true
+    }
+    let changes = compact(a, b)?
+    var x = 0, y = 0
+    for change in changes {
+        while y < change.new_start {
+            (mut links).push(LineLink { old_line: x, new_line: y })
+            x += 1
+            y += 1
+        }
+        x += change.old_count
+        y += change.new_count
+    }
+    while y < right.len {
+        (mut links).push(LineLink { old_line: x, new_line: y })
+        x += 1
+        y += 1
+    }
+}
