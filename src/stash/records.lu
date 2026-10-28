@@ -88,6 +88,23 @@ pub fn drop(ctx: worktree.Context, n: int) -> oid.Oid ! commit.CommitErrors {
     let top = oid.parse("sha1", kept[kept.len - 1].after)?
     if !oid.equal(top, current[0]) {
         refs.update(ctx.repo, "refs/stash", current, [top], committer, "", false)?
+    } else {
+        // Measured: an unchanged value is still written as a loose ref (a
+        // packed refs/stash gains a loose copy; packed-refs is untouched).
+        let target = refs.administrative(ctx.repo, "refs/stash", true)?
+        let ref_lock = "{target}.lock"
+        let held = fs.create_new_with_mode(ref_lock, 0o666)?
+        var ref_fd = held.fd, holding = true
+        defer {
+            if ref_fd >= 0 { fs_close(ref_fd) else |_| {} }
+            if holding { fs.remove(ref_lock) else |_| {} }
+        }
+        fs_write_chunk(ref_fd, "{oid.hex(top)?}\n".bytes())?
+        fs_sync(ref_fd)?
+        fs_close(ref_fd)?
+        ref_fd = -1
+        fs_rename(ref_lock, target)?
+        holding = false
     }
     let path = refs.administrative(ctx.repo, "logs/refs/stash", false)?
     let lock = "{path}.lock"
