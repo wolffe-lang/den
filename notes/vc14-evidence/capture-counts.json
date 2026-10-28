@@ -1,0 +1,89 @@
+{
+  "housekeeping-checked-targeted.json": {
+    "verdict": "exit(0)"
+  },
+  "housekeeping-native-fourth.json": {
+    "named_rows": 4,
+    "rows": 60
+  },
+  "housekeeping-native-second.json": {
+    "named_rows": 2,
+    "rows": 17
+  },
+  "housekeeping-native-third.json": {
+    "named_rows": 4,
+    "rows": 53
+  },
+  "housekeeping-native.json": {
+    "named_rows": 0,
+    "rows": 3
+  },
+  "housekeeping-release-targeted.json": {
+    "named_rows": 4,
+    "rows": 60
+  },
+  "pack-write-native-expansion.json": {
+    "processes": 476,
+    "sizes": 9
+  },
+  "pack-write-release-expansion.json": {
+    "processes": 476,
+    "sizes": 9
+  },
+  "recovery-native-first.json": {
+    "named_rows": 0,
+    "rows": 61
+  },
+  "recovery-native-scope.json": {
+    "named_rows": 0,
+    "refusals": 7,
+    "rows": 72
+  },
+  "recovery-native-second.json": {
+    "named_rows": 0,
+    "rows": 65
+  },
+  "recovery-release-scope.json": {
+    "named_rows": 0,
+    "refusals": 7,
+    "rows": 72
+  },
+  "recovery-release-targeted.json": {
+    "named_rows": 0,
+    "rows": 65
+  },
+  "validator-native-clients.json": {
+    "clients": 3,
+    "named_rows": 0,
+    "rows": 40
+  },
+  "validator-native-fifth.json": {
+    "named_rows": 0,
+    "rows": 31
+  },
+  "validator-native-first.json": {
+    "named_rows": 0,
+    "rows": 18
+  },
+  "validator-native-fourth.json": {
+    "named_rows": 0,
+    "rows": 31
+  },
+  "validator-native-second.json": {
+    "named_rows": 0,
+    "rows": 19
+  },
+  "validator-native-sixth.json": {
+    "named_rows": 0,
+    "rows": 40
+  },
+  "validator-native-third.json": {
+    "named_rows": 0,
+    "rows": 20
+  },
+  "validator-release-targeted.json": {
+    "clients": 3,
+    "named_rows": 0,
+    "rows": 40
+  }
+}
