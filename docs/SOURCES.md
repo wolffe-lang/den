@@ -24,6 +24,11 @@ Read versioned Git v2.56.0 documentation only, from
   histogram text, physical listing order, delta instruction sizes and empty-pack
   output. Full-stat word 8 supplies allocated 512-byte blocks; no allocation
   estimate is substituted for unavailable host metadata.
+- `git-cat-file.adoc`: `--batch`, `--batch-all-objects` and BATCH OUTPUT,
+  including exact object header/body/newline framing and missing-object replies.
+  The performance follow-up batches read-only exchanges, not object comparisons:
+  every requested OID, type, size and body is checked, with canonical SHA-1
+  recomputed and malformed/truncated/reordered/extra replies rejected.
 - `git-fsck.adoc`: Synopsis, Description, Options, Discussion, Extracted
   Diagnostics and Environment. Commit-graph validation, complex corruption
   diagnostics and multiple dangling-tip ordering are explicitly unimplemented,
@@ -47,6 +52,13 @@ pack. Complete snapshots use a content-addressed byte store with state reference
 no repository path is excluded. Native/release fixtures include vc09 and vc12
 corpora, den-origin history, corruption with loose duplicates still present,
 publication failures and a measured fifty-link chain in both delta modes.
+Read-only batches retain complete stdout/stderr/status and before/after repository
+file/mode state for each actual process. The importing client's batch mode still
+calls the unchanged transparent reader once per OID, reclaiming each object's
+scratch; there is no checksum cache or weakened object validation. The original
+single-object client mode remains covered by vc09 interop. Phase timings separate
+writer/read-back subprocesses from snapshot hashing and capture serialization;
+the 1,002-object fixtures remain intact.
 
 ## Stash and notes (vc12)
 
