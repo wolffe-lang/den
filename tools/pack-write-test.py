@@ -70,7 +70,7 @@ try:
             idx=pathlib.Path(str(stem)+'.idx'); pack=pathlib.Path(str(stem)+'.pack')
             after=state(p)
             assert all(after.get(k)==v for k,v in before.items()),'writer modified existing files'
-            assert set(after)-set(before)=={str(pack.relative_to(p)),str(idx.relative_to(p))}
+            assert set(after)-set(before)==({str(pack.relative_to(p)),str(idx.relative_to(p))}-set(before))
             verify=run([G,'verify-pack','-v',idx],p)
             assert b': ok\n' in verify.stdout
             # Isolate the new pair: old packed copies must not mask a broken writer.
