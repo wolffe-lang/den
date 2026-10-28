@@ -282,7 +282,7 @@ fn recover(args: List[str], pop: bool) -> int ! commit.CommitErrors {
         for b in line.bytes() { (mut out).push(b) }
         (mut out).push(10 as byte)
     }
-    if !quiet { for b in status(ctx)? { (mut out).push(b) } }
+    if !quiet && outcome.report { for b in status(ctx)? { (mut out).push(b) } }
     if outcome.status != 0 {
         if pop {
             for b in "The stash entry is kept in case you need it again.\n".bytes() {
@@ -294,7 +294,15 @@ fn recover(args: List[str], pop: bool) -> int ! commit.CommitErrors {
         return outcome.status
     }
     if pop {
-        let id = drop(ctx, selected.n)?
+        let id = drop(ctx, selected.n) else |e| match e {
+            Failure(kind) => {
+                write_out(out)?
+                return locked(ctx, kind, selected.label)
+            },
+            Unsupported(feature) => { return Unsupported(feature) },
+            Fatal(message) => { return Fatal(message) },
+            _ => { return Fatal("{e}") },
+        }
         if !quiet {
             for b in "Dropped {selected.label} ({oid.hex(id)?})\n".bytes() { (mut out).push(b) }
         }
@@ -319,9 +327,30 @@ fn drop_command(args: List[str]) -> int ! commit.CommitErrors {
     let selected = choose(ctx, operands, "drop")?
     if !selected.found { return 128 }
     if selected.n < 0 { return Unsupported("stash drop non-reflog operand") }
-    let id = drop(ctx, selected.n)?
+    let id = drop(ctx, selected.n) else |e| match e {
+        Failure(kind) => { return locked(ctx, kind, selected.label) },
+        Unsupported(feature) => { return Unsupported(feature) },
+        Fatal(message) => { return Fatal(message) },
+        _ => { return Fatal("{e}") },
+    }
     if !quiet { print("Dropped {selected.label} ({oid.hex(id)?})") }
     0
+}
+
+/// The measured diagnostics for a foreign lock met while dropping.
+fn locked(ctx: worktree.Context, kind: str, label: str) -> int {
+    let advice = "File exists.\n\nAnother git process seems to be running in this repository, or the lock file may be stale"
+    let first = if kind == "reflog lock" {
+        "error: Unable to create '{ctx.repo.gitdir}/logs/refs/stash.lock': {advice}"
+    } else {
+        "error: cannot lock ref 'refs/stash': Unable to create '{ctx.repo.gitdir}/refs/stash.lock': {advice}"
+    }
+    if label == "" {
+        eprint(first)
+        return 1
+    }
+    eprint("{first}\nerror: {label}: Could not drop stash entry")
+    128
 }
 
 fn dispatch(args: List[str]) -> int ! commit.CommitErrors {
@@ -336,7 +365,13 @@ fn dispatch(args: List[str]) -> int ! commit.CommitErrors {
     if sub == "drop" { return drop_command(args)? }
     if sub == "clear" {
         if args.len > 2 { return Unsupported("stash clear arguments") }
-        clear(worktree.discover(".")?)?
+        let ctx = worktree.discover(".")?
+        clear(ctx) else |e| match e {
+            Failure(kind) => { return locked(ctx, kind, "") },
+            Unsupported(feature) => { return Unsupported(feature) },
+            Fatal(message) => { return Fatal(message) },
+            _ => { return Fatal("{e}") },
+        }
         return 0
     }
     if sub == "branch" || sub == "create" || sub == "store" || sub == "export" || sub == "import" {

@@ -72,7 +72,7 @@ pub fn status(ctx: worktree.Context) -> List[byte] ! commit.CommitErrors {
 
 /// Outcome of recovery: status 0 applied; 128 refused by the merge-safety
 /// check with message (already reported state untouched).
-pub struct Outcome { status: int, messages: List[str], error: str }
+pub struct Outcome { status: int, messages: List[str], error: str, report: bool }
 
 /// Apply W onto the current index/worktree. Without --index the index keeps
 /// its previous entries (as zero-stat tree entries where the merge changed
@@ -90,9 +90,12 @@ pub fn apply(ctx: worktree.Context, stash: oid.Oid, name: str) -> Outcome ! comm
     if head.commits.len != 1 { return Unsupported("stash apply unborn HEAD") }
     var tx = index.begin(ctx.repo, 1000000000, worktree.index_version(ctx)?) else |e| match e {
         exists => {
-            return Fatal(
-                "Unable to create '{ctx.repo.gitdir}/index.lock': File exists.\n\nAnother git process seems to be running in this repository, or the lock file may be stale",
-            )
+            return Outcome {
+                status: 128,
+                messages: [],
+                error: "Unable to create '{ctx.repo.gitdir}/index.lock': File exists.\n\nAnother git process seems to be running in this repository, or the lock file may be stale\nerror: could not write index",
+                report: false,
+            }
         },
         _ => { return Fatal("cannot read index: {e}") },
     }
@@ -134,7 +137,7 @@ pub fn apply(ctx: worktree.Context, stash: oid.Oid, name: str) -> Outcome ! comm
     worktree.merge_check(ctx, tx.value, merged) else |e| match e {
         Failure(text) => {
             index.commit(mut tx)?
-            return Outcome { status: 128, messages: messages, error: text }
+            return Outcome { status: 128, messages: messages, error: text, report: true }
         },
         _ => { return Unsupported("stash apply safety: {e}") },
     }
@@ -157,5 +160,5 @@ pub fn apply(ctx: worktree.Context, stash: oid.Oid, name: str) -> Outcome ! comm
         tx.value = index.replace_entry(tx.value, zero_stat(ours[o])?)?
     }
     index.commit(mut tx)?
-    Outcome { status: 0, messages: messages, error: "" }
+    Outcome { status: 0, messages: messages, error: "", report: true }
 }

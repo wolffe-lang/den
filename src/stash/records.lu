@@ -31,11 +31,13 @@ fn write_loose(ctx: worktree.Context, id: oid.Oid) -> () ! commit.CommitErrors {
     active = false
 }
 
-/// Drop stash@{n}. The last entry deletes refs/stash and its reflog; dropping
-/// the newest moves refs/stash to the new newest; a kept value is still
-/// written as a loose ref (measured: a packed refs/stash gains a loose copy,
-/// packed-refs untouched); the rewritten reflog is installed through an
-/// exclusive lock. Returns the dropped entry's id.
+/// Drop stash@{n}. The reflog lock is taken first (measured: a foreign
+/// logs/refs/stash.lock or refs/stash.lock changes nothing). The last entry
+/// deletes refs/stash and its reflog; dropping the newest moves refs/stash to
+/// the new newest; a kept value is still written as a loose ref (measured: a
+/// packed refs/stash gains a loose copy, packed-refs untouched); the rewritten
+/// reflog is installed by renaming its lock. Returns the dropped entry's id;
+/// Failure("reflog lock") / Failure("ref lock") name a foreign lock.
 pub fn drop(ctx: worktree.Context, n: int) -> oid.Oid ! commit.CommitErrors {
     let list = records(ctx.repo)?
     let current = refs.optional(ctx.repo, "refs/stash")?
@@ -43,21 +45,34 @@ pub fn drop(ctx: worktree.Context, n: int) -> oid.Oid ! commit.CommitErrors {
     let dropped = oid.parse("sha1", list[list.len - 1 - n].after)?
     let kept = stashlog.without(list, n)?
     let committer = commit_format.identity_text(commit.environment_identity(ctx, "COMMITTER", "")?)?
+    let path = refs.administrative(ctx.repo, "logs/refs/stash", false)?
+    let lock = "{path}.lock"
+    let file = fs.create_new_with_mode(lock, 0o666) else |e| match e {
+        exists => { return Failure("reflog lock") },
+        _ => { return Fatal("cannot lock the stash reflog: {e}") },
+    }
+    var fd = file.fd, active = true
+    defer { if fd >= 0 { fs_close(fd) else |_| {} }; if active { fs.remove(lock) else |_| {} } }
+    if fs.exists("{ctx.repo.gitdir}/refs/stash.lock") { return Failure("ref lock") }
     if kept.len == 0 {
-        refs.update(ctx.repo, "refs/stash", current, [], committer, "", false)?
+        refs.update(ctx.repo, "refs/stash", current, [], committer, "", false) else |e| match e {
+            exists => { return Failure("ref lock") },
+            _ => { return Fatal("cannot delete refs/stash: {e}") },
+        }
         return dropped
     }
     let top = oid.parse("sha1", kept[kept.len - 1].after)?
     if oid.equal(top, current[0]) {
-        write_loose(ctx, top)?
+        write_loose(ctx, top) else |e| match e {
+            exists => { return Failure("ref lock") },
+            _ => { return Fatal("cannot update refs/stash: {e}") },
+        }
     } else {
-        refs.update(ctx.repo, "refs/stash", current, [top], committer, "", false)?
+        refs.update(ctx.repo, "refs/stash", current, [top], committer, "", false) else |e| match e {
+            exists => { return Failure("ref lock") },
+            _ => { return Fatal("cannot update refs/stash: {e}") },
+        }
     }
-    let path = refs.administrative(ctx.repo, "logs/refs/stash", false)?
-    let lock = "{path}.lock"
-    let file = fs.create_new_with_mode(lock, 0o666)?
-    var fd = file.fd, active = true
-    defer { if fd >= 0 { fs_close(fd) else |_| {} }; if active { fs.remove(lock) else |_| {} } }
     var data = List[byte]()
     for record in kept { for b in stashlog.line(record) { (mut data).push(b) } }
     fs_write_chunk(fd, data)?
@@ -75,5 +90,8 @@ pub fn clear(ctx: worktree.Context) -> () ! commit.CommitErrors {
     let current = refs.optional(ctx.repo, "refs/stash")?
     if current.len == 0 { return }
     let committer = commit_format.identity_text(commit.environment_identity(ctx, "COMMITTER", "")?)?
-    refs.update(ctx.repo, "refs/stash", current, [], committer, "", false)?
+    refs.update(ctx.repo, "refs/stash", current, [], committer, "", false) else |e| match e {
+        exists => { return Failure("ref lock") },
+        _ => { return Fatal("cannot delete refs/stash: {e}") },
+    }
 }
