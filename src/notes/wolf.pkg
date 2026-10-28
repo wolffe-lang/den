@@ -5,6 +5,7 @@ pkg {
     deps: {
         commit: {path: "../commit"},
         commit_format: {path: "../commit_format"},
+        notestree: {path: "../notestree"},
         object: {path: "../object"},
         oid: {path: "../oid"},
         refs: {path: "../refs"},

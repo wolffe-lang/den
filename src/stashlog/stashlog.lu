@@ -1,0 +1,79 @@
+// Pure stash-list layer over logs/refs/stash bytes: no filesystem. The
+// list's meaning is Git v2.56.0 git-stash(1) Description (stash@{n} names
+// the n-th older reflog entry); the drop rewrite is measured on the oracle.
+use oid
+
+/// Bounds and malformed records; every tag is a subset of the callers' rows.
+pub error LogErrors = {invalid, limit, invalid_oid, unsupported_format, utf8, Unsupported(str)}
+
+/// One stored reflog record: its two hex ids and the raw remainder after the
+/// second id (" <identity> <date>\t<message>"), without the final LF.
+pub struct Record { before: str, after: str, rest: List[byte] }
+
+/// Parse every record, oldest first, exactly as stored. Malformed or
+/// unterminated records refuse rather than guess.
+pub fn parse(data: List[byte]) -> List[Record] ! LogErrors {
+    if data.len > 16777216 { return limit }
+    var out = List[Record](), start = 0
+    for i in 0..data.len {
+        if data[i] != 10 as byte { continue }
+        let line = data[start..i]
+        start = i + 1
+        if line.len < 82 || line[40] != 32 as byte || line[81] != 32 as byte {
+            return Unsupported("stash malformed reflog record")
+        }
+        if out.len >= 100000 { return Unsupported("stash reflog limit") }
+        let before = str_from_utf8(line[0..40])?, after = str_from_utf8(line[41..81])?
+        let _ = oid.parse("sha1", before)?
+        let _ = oid.parse("sha1", after)?
+        var rest = List[byte]()
+        for b in line[81..] { (mut rest).push(b) }
+        (mut out).push(Record { before: before, after: after, rest: rest })
+    }
+    if start != data.len { return Unsupported("stash unterminated reflog record") }
+    out
+}
+
+/// The message after the record's TAB, or empty.
+pub fn message(record: Record) -> List[byte] {
+    var out = List[byte](), seen = false
+    for b in record.rest {
+        if seen { (mut out).push(b) } else if b == 9 as byte { seen = true }
+    }
+    out
+}
+
+/// The record's stored bytes with its final LF.
+pub fn line(record: Record) -> List[byte] {
+    var out = List[byte]()
+    for b in "{record.before} {record.after}".bytes() { (mut out).push(b) }
+    for b in record.rest { (mut out).push(b) }
+    (mut out).push(10 as byte)
+    out
+}
+
+/// Measured drop rewrite: remove stash@{n} (n = 0 newest) and give the record
+/// that followed it the removed record's old id.
+pub fn without(list: List[Record], n: int) -> List[Record] ! LogErrors {
+    if n < 0 || n >= list.len { return invalid }
+    let at = list.len - 1 - n
+    var out = List[Record]()
+    for i in 0..list.len {
+        if i == at { continue }
+        var record = copy list[i]
+        if i == at + 1 { record.before = list[at].before }
+        (mut out).push(record)
+    }
+    out
+}
+
+/// `stash list` bytes: "stash@{n}: <message>" newest first.
+pub fn render(list: List[Record]) -> List[byte] {
+    var out = List[byte]()
+    for n in 0..list.len {
+        for b in "stash@{{{n}}}: ".bytes() { (mut out).push(b) }
+        for b in message(list[list.len - 1 - n]) { (mut out).push(b) }
+        (mut out).push(10 as byte)
+    }
+    out
+}

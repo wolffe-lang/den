@@ -1,0 +1,97 @@
+// Pure notes-set layer: no repository, filesystem or object store. Shapes
+// are Git v2.56.0 git-notes(1) Discussion's permitted pathnames and the
+// pinned oracle's measured write fan-out and display (R-vc12-2).
+use oid
+
+/// Bounds and named limits; every tag is a subset of the callers' rows.
+pub error TreeErrors = {invalid, limit, invalid_oid, unsupported_format, Unsupported(str)}
+
+/// One annotation: the annotated object and the blob holding its note.
+pub struct Note { object: oid.Oid, blob: oid.Oid }
+
+/// Insert keeping lowercase-hex object order; a second note for one object
+/// in the same set is a malformed tree, refused by name.
+pub fn insert(mut notes: List[Note], note: Note) -> () ! TreeErrors {
+    if notes.len >= 100000 { return Unsupported("notes count limit") }
+    let hex = oid.hex(note.object)?
+    (mut notes).push(copy note)
+    var at = notes.len - 1
+    while at > 0 {
+        let previous = oid.hex(notes[at - 1].object)?
+        if previous == hex { return Unsupported("notes duplicate entry {hex}") }
+        if previous < hex { break }
+        notes[at] = copy notes[at - 1]
+        at -= 1
+    }
+    notes[at] = note
+}
+
+/// Empty when object has no note, otherwise its one note blob.
+pub fn find(notes: List[Note], object: oid.Oid) -> List[oid.Oid] {
+    for note in notes { if oid.equal(note.object, object) { return [copy note.blob] } }
+    List[oid.Oid]()
+}
+
+/// The set with object's note replaced, inserted or (empty blob) removed.
+pub fn with_note(
+    notes: List[Note],
+    object: oid.Oid,
+    blob: List[oid.Oid],
+) -> List[Note] ! TreeErrors {
+    if blob.len > 1 { return invalid }
+    var out = List[Note]()
+    for note in notes { if !oid.equal(note.object, object) { (mut out).push(copy note) } }
+    if blob.len == 1 { insert(mut out, Note { object: copy object, blob: copy blob[0] })? }
+    out
+}
+
+fn digit(b: byte) -> int {
+    if b >= 97 as byte then b as int - 87 else b as int - 48
+}
+
+/// Measured write fan-out (R-vc12-2): one flat tree until each of the sixteen
+/// first-hex-digit groups holds at least two notes, then two-hex directories
+/// (thresholds 61, 66, 71, 77 and 78 predicted exactly over five independent
+/// object sets). A directory over sixteen notes is beyond the measured depth.
+pub fn fanout(notes: List[Note]) -> int ! TreeErrors {
+    var groups = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    for note in notes {
+        let hex = oid.hex(note.object)?
+        let d = digit(hex.bytes()[0])
+        groups[d] = groups[d] + 1
+    }
+    for count in groups { if count < 2 { return 0 } }
+    var directories = Map[str, int]()
+    for note in notes {
+        let hex = oid.hex(note.object)?
+        let key = hex[0..2]
+        let count = (directories[key] else 0) + 1
+        directories[key] = count
+        if count > 16 { return Unsupported("notes fan-out beyond two-hex directories") }
+    }
+    1
+}
+
+/// The measured default-format history block for one note body: an empty
+/// line, "Notes:", then each line indented by four spaces (an empty line
+/// becomes four spaces). Bodies outside the measured shape refuse by name.
+pub fn display(data: List[byte]) -> List[byte] ! TreeErrors {
+    if data.len == 0 || data[data.len - 1] != 10 as byte {
+        return Unsupported("history notes without a final newline")
+    }
+    if data.len > 16777216 { return limit }
+    for b in data {
+        if b == 9 as byte || b == 13 as byte || b == 0 as byte {
+            return Unsupported("history notes with tab, carriage return or NUL")
+        }
+    }
+    var out = List[byte]()
+    for b in "\nNotes:\n    ".bytes() { (mut out).push(b) }
+    for i in 0..data.len {
+        (mut out).push(data[i])
+        if data[i] == 10 as byte && i + 1 < data.len {
+            for b in "    ".bytes() { (mut out).push(b) }
+        }
+    }
+    out
+}

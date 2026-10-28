@@ -10,6 +10,7 @@ use refs
 use repository
 use revision
 use revsyntax
+use stashlog
 use walk
 use worktree
 
@@ -224,13 +225,7 @@ fn list(args: List[str]) -> int ! commit.CommitErrors {
     if args.len > 2 { return Unsupported("stash list log options") }
     let ctx = worktree.discover(".")?
     if refs.optional(ctx.repo, "refs/stash")?.len == 0 { return 0 }
-    let all = records(ctx.repo)?
-    var out = List[byte]()
-    for n in 0..all.len {
-        for b in "stash@{{{n}}}: ".bytes() { (mut out).push(b) }
-        for b in message(all[all.len - 1 - n]) { (mut out).push(b) }
-        (mut out).push(10 as byte)
-    }
+    let out = stashlog.render(records(ctx.repo)?)
     write_out(out)?
     0
 }

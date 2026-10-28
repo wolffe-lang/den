@@ -1,0 +1,5 @@
+pkg {
+    name: "stashlog",
+    edition: "1",
+    deps: {oid: {path: "../oid"}},
+}

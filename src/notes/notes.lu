@@ -1,21 +1,19 @@
 // Clean-room: Git v2.56.0 Documentation/git-notes.adoc (Description,
 // Subcommands, Options, Discussion, Configuration, Environment) and
 // black-box runs of the pinned oracle. No implementation source consulted.
-// The write fan-out is a measured rule, not a documented one (R-vc12-2).
+// Store-facing read/write over the pure notestree layer (R-vc12-2).
+use notestree
 use object
 use oid
 use refs
 use repository
 use worktree
 
-/// One annotation: the annotated object and the blob holding its note.
-pub struct Note { object: oid.Oid, blob: oid.Oid }
-
 /// Owned notes state of one ref: its zero or one tip commit and every note,
 /// sorted by the annotated object's lowercase hex name.
-pub struct Notes { reference: str, tip: List[oid.Oid], notes: List[Note] }
+pub struct Notes { reference: str, tip: List[oid.Oid], notes: List[notestree.Note] }
 
-struct Pending { prefix: str, id: oid.Oid, depth: int }
+struct Pending { prefix: str, id: oid.Oid }
 
 fn owned(text: str) -> List[byte] {
     var out = List[byte]()
@@ -33,19 +31,6 @@ fn hex_name(name: List[byte]) -> bool {
     true
 }
 
-fn insert_sorted(mut notes: List[Note], note: Note, hex: str) -> () ! worktree.WorkErrors {
-    (mut notes).push(copy note)
-    var at = notes.len - 1
-    while at > 0 {
-        let previous = oid.hex(notes[at - 1].object)?
-        if previous == hex { return Unsupported("notes duplicate entry {hex}") }
-        if previous < hex { break }
-        notes[at] = copy notes[at - 1]
-        at -= 1
-    }
-    notes[at] = note
-}
-
 /// The default notes ref. Other refs (--ref, GIT_NOTES_REF, core.notesRef)
 /// are named refusals rather than silently ignored overrides.
 pub fn default_ref(repo: repository.Repo) -> str ! worktree.WorkErrors {
@@ -59,7 +44,7 @@ pub fn default_ref(repo: repository.Repo) -> str ! worktree.WorkErrors {
 /// ref is an empty set. Other entries and a ref naming a tree refuse by name.
 pub fn read(repo: repository.Repo, reference: str) -> Notes ! worktree.WorkErrors {
     let tip = refs.optional(repo, reference)?
-    var notes = List[Note]()
+    var notes = List[notestree.Note]()
     if tip.len == 0 { return Notes { reference: reference, tip: tip, notes: notes } }
     let stored = object.read_object(repo, tip[0], 16777216)?
     if stored.kind != "commit" { return Unsupported("notes ref to a {stored.kind}") }
@@ -71,7 +56,7 @@ pub fn read(repo: repository.Repo, reference: str) -> Notes ! worktree.WorkError
         }
     }
     if root.len != 1 { return invalid_header }
-    var pending = [Pending { prefix: "", id: copy root[0], depth: 0 }]
+    var pending = [Pending { prefix: "", id: copy root[0] }]
     var trees = 0
     while pending.len > 0 {
         let next = (mut pending).pop() else |_| { return invalid }
@@ -85,18 +70,10 @@ pub fn read(repo: repository.Repo, reference: str) -> Notes ! worktree.WorkError
             }
             let name = "{next.prefix}{str_from_utf8(entry.name)?}"
             if entry.mode == 0o40000 && entry.name.len == 2 && name.len < 40 {
-                (mut pending).push(Pending {
-                    prefix: name,
-                    id: copy entry.id,
-                    depth: next.depth + 1,
-                })
+                (mut pending).push(Pending { prefix: name, id: copy entry.id })
             } else if entry.mode == 0o100644 && name.len == 40 {
-                if notes.len >= 100000 { return Unsupported("notes count limit") }
-                insert_sorted(
-                    mut notes,
-                    Note { object: oid.parse("sha1", name)?, blob: copy entry.id },
-                    name,
-                )?
+                notestree.insert(mut notes, notestree.
+                    Note { object: oid.parse("sha1", name)?, blob: copy entry.id })?
             } else {
                 return Unsupported("notes tree entry {name}")
             }
@@ -106,83 +83,36 @@ pub fn read(repo: repository.Repo, reference: str) -> Notes ! worktree.WorkError
 }
 
 /// Empty when object has no note, otherwise its one note blob.
-pub fn find(value: Notes, object: oid.Oid) -> List[oid.Oid] {
-    for note in value.notes { if oid.equal(note.object, object) { return [copy note.blob] } }
-    List[oid.Oid]()
-}
+pub fn find(value: Notes, object: oid.Oid) -> List[oid.Oid] { notestree.find(value.notes, object) }
 
 /// The set with object's note replaced, inserted or (empty blob list) removed.
 pub fn with_note(
     value: Notes,
     object: oid.Oid,
     blob: List[oid.Oid],
-) -> List[Note] ! worktree.WorkErrors {
-    var out = List[Note]()
-    let hex = oid.hex(object)?
-    for note in value.notes { if !oid.equal(note.object, object) { (mut out).push(copy note) } }
-    if blob.len == 1 {
-        insert_sorted(mut out, Note { object: copy object, blob: copy blob[0] }, hex)?
-    }
-    out
+) -> List[notestree.Note] ! worktree.WorkErrors {
+    notestree.with_note(value.notes, object, blob)?
 }
 
-/// The measured default-format block after a commit message: an empty line,
-/// "Notes:", then each note line indented by four spaces (an empty line
-/// becomes four spaces). Empty when object has no note. Note bodies outside
-/// the measured shape (no final LF, TAB, CR or NUL, empty) refuse by name.
-pub fn display(repo: repository.Repo, value: Notes, target: oid.Oid) -> List[byte] ! worktree.WorkErrors {
-    let blob = find(value, target)
-    var out = List[byte]()
-    if blob.len == 0 { return out }
+/// The measured default-format history block for target's note, or empty.
+pub fn display(
+    repo: repository.Repo,
+    value: Notes,
+    target: oid.Oid,
+) -> List[byte] ! worktree.WorkErrors {
+    let blob = notestree.find(value.notes, target)
+    if blob.len == 0 { return List[byte]() }
     let stored = object.read_object(repo, blob[0], 16777216)?
     if stored.kind != "blob" { return Unsupported("history notes {stored.kind} note") }
-    let data = stored.data
-    if data.len == 0 || data[data.len - 1] != 10 as byte {
-        return Unsupported("history notes without a final newline")
-    }
-    for b in data {
-        if b == 9 as byte || b == 13 as byte || b == 0 as byte {
-            return Unsupported("history notes with tab, carriage return or NUL")
-        }
-    }
-    for b in "\nNotes:\n    ".bytes() { (mut out).push(b) }
-    for i in 0..data.len {
-        (mut out).push(data[i])
-        if data[i] == 10 as byte && i + 1 < data.len {
-            for b in "    ".bytes() { (mut out).push(b) }
-        }
-    }
-    out
-}
-
-fn digit(hex: str, at: int) -> int {
-    let b = hex.bytes()[at]
-    if b >= 97 as byte then b as int - 87 else b as int - 48
-}
-
-/// Measured fan-out (R-vc12-2): the pinned oracle writes one flat tree until
-/// each of the sixteen first-hex-digit groups holds at least two notes, then
-/// two-hex directories. Thresholds 61, 66, 71, 77 and 78 were predicted exactly
-/// by this rule over five independent object sets. A directory that would
-/// hold more than sixteen notes is beyond the measured depth and refuses.
-pub fn fanout(notes: List[Note]) -> int ! worktree.WorkErrors {
-    var groups = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-    for note in notes { let d = digit(oid.hex(note.object)?, 0); groups[d] = groups[d] + 1 }
-    for count in groups { if count < 2 { return 0 } }
-    var directories = Map[str, int]()
-    for note in notes {
-        let hex = oid.hex(note.object)?
-        let key = hex[0..2]
-        let count = (directories[key] else 0) + 1
-        directories[key] = count
-        if count > 16 { return Unsupported("notes fan-out beyond two-hex directories") }
-    }
-    1
+    notestree.display(stored.data)?
 }
 
 /// Write the notes tree in the oracle's measured shape; returns the root id.
-pub fn write_tree(repo: repository.Repo, notes: List[Note]) -> oid.Oid ! worktree.WorkErrors {
-    let level = fanout(notes)?
+pub fn write_tree(
+    repo: repository.Repo,
+    notes: List[notestree.Note],
+) -> oid.Oid ! worktree.WorkErrors {
+    let level = notestree.fanout(notes)?
     var root = List[object.TreeEntry]()
     if level == 0 {
         for note in notes {

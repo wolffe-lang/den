@@ -4,6 +4,7 @@
 use std.fs
 use commit
 use commit_format
+use notestree
 use object
 use oid
 use refs
@@ -27,7 +28,7 @@ fn identity(ctx: worktree.Context, role: str) -> str ! commit.CommitErrors {
 fn publish(
     ctx: worktree.Context,
     value: Notes,
-    notes: List[Note],
+    notes: List[notestree.Note],
     message: str,
 ) -> () ! commit.CommitErrors {
     let tree = write_tree(ctx.repo, notes)?

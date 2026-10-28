@@ -29,7 +29,10 @@ fn flat(files: List[diff.File]) -> List[worktree.FlatEntry] {
 }
 
 /// The index side of the merge, bounded as mergetree.files bounds a tree.
-fn index_files(ctx: worktree.Context, entries: List[worktree.FlatEntry]) -> List[diff.File] ! commit.CommitErrors {
+fn index_files(
+    ctx: worktree.Context,
+    entries: List[worktree.FlatEntry],
+) -> List[diff.File] ! commit.CommitErrors {
     var out = List[diff.File](), total = 0
     for entry in entries {
         if entry.mode != 0o100644 && entry.mode != 0o100755 {
@@ -39,7 +42,12 @@ fn index_files(ctx: worktree.Context, entries: List[worktree.FlatEntry]) -> List
         if blob.kind != "blob" { return bad_oid }
         total += blob.data.len
         if total > 134217728 { return limit }
-        (mut out).push(diff.File { path: copy entry.path, mode: entry.mode, id: copy entry.id, data: copy blob.data })
+        (mut out).push(diff.File {
+            path: copy entry.path,
+            mode: entry.mode,
+            id: copy entry.id,
+            data: copy blob.data,
+        })
     }
     out
 }
@@ -102,7 +110,8 @@ pub fn apply(ctx: worktree.Context, stash: oid.Oid, name: str) -> Outcome ! comm
     let base = walk.read(ctx.repo, item.parents[0])?
     var ours = List[worktree.FlatEntry]()
     for entry in plain.entries {
-        (mut ours).push(worktree.FlatEntry { path: copy entry.path, mode: entry.stat[6], id: copy entry.id })
+        (mut ours).push(worktree.
+            FlatEntry { path: copy entry.path, mode: entry.stat[6], id: copy entry.id })
     }
     var merged = List[worktree.FlatEntry](), messages = List[str]()
     if oid.equal(base.tree, current.root) {

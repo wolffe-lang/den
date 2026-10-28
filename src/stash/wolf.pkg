@@ -15,6 +15,7 @@ pkg {
         repository: {path: "../repository"},
         revision: {path: "../revision"},
         revsyntax: {path: "../revsyntax"},
+        stashlog: {path: "../stashlog"},
         walk: {path: "../walk"},
         worktree: {path: "../worktree"},
     },
