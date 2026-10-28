@@ -107,6 +107,7 @@ say("tools/check-history" in gate, "T2 inherited history gate remains mandatory"
 say("tools/check-refs" in gate, "T2 refs integration gate is mandatory")
 say("tools/check-merge" in gate, "T2 merge integration gate is mandatory")
 say("tools/check-replay" in gate, "T2 replay integration gate is mandatory")
+say("tools/check-pack-write" in gate, "T2 pack writer R4c gate is mandatory")
 say("tools/check-pack" in gate, "T2 packed storage and packed regression gate is mandatory")
 for path in ("src/pack/read.lu", "tools/check-pack", "tools/pack-interop.py", "tools/packed-fixture.py", "probes/pack-client/main.lu"):
     p = plan([path], event="pull_request", action="synchronize")

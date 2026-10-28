@@ -1,0 +1,21 @@
+#!/bin/sh
+# R4c writer gate, independent Git reader and complete-state command captures.
+set -eu
+DEN_ROOT=$(cd "$(dirname "$0")/.." && pwd)
+export DEN_ROOT
+cd "$DEN_ROOT"
+. tools/lib-toolchain.sh
+for tier in native release; do
+    flag=
+    [ "$tier" != release ] || flag=--release
+    "$WOLF" build $flag --deny-warnings src/pack_write_test.lu -o "target/$tier/pack-write-test"
+    "target/$tier/pack-write-test"
+    "$WOLF" build $flag --deny-warnings probes/pack-write-client/main.lu -o "target/$tier/pack-write-client"
+    tools/env python3 -I tools/pack-write-test.py --tier "$tier"
+    tools/env python3 -I tools/pack-command-test.py --tier "$tier"
+    tools/env python3 -I tools/pack-failure-test.py --tier "$tier"
+done
+"$WOLF" conform-run src/pack_write_test.lu --checked --json > target/pack-write-checked.json
+cat target/pack-write-checked.json
+python3 -I -c 'import json; rows=[json.loads(x) for x in open("target/pack-write-checked.json") if x.startswith("{")]; assert len(rows)==1 and rows[0]["verdict"]=="exit(0)", rows'
+echo 'pack writer: native/release Git verification, size bar, immutable commands, failure publication and actual checked; zero skips'
