@@ -1,0 +1,15 @@
+pkg {
+    name: "notes",
+    edition: "1",
+    capabilities: [env, fs],
+    deps: {
+        commit: {path: "../commit"},
+        commit_format: {path: "../commit_format"},
+        object: {path: "../object"},
+        oid: {path: "../oid"},
+        refs: {path: "../refs"},
+        repository: {path: "../repository"},
+        revision: {path: "../revision"},
+        worktree: {path: "../worktree"},
+    },
+}

@@ -4,6 +4,7 @@ use blame
 use commit
 use diff
 use history
+use notes
 use plumbing
 use refcmd
 use worktree
@@ -19,7 +20,7 @@ fn destination(command: str) -> str {
         "merge" | "revert" => "M3, vc07",
         "rebase" | "cherry-pick" => "M3, vc08",
         "blame" => "M3, vc09",
-        "stash" | "notes" | "rev-parse" => "M3, vc10",
+        "stash" | "rev-parse" => "M3, vc10",
         "verify-pack" => "M4, vc11",
         "gc" | "repack" | "fsck" | "count-objects" => "M4, vc12",
         "fetch" => "M5, vc13",
@@ -41,6 +42,7 @@ fn main() -> int {
                 return refcmd.run(args)
             },
             "blame" => { return blame.run(args) },
+            "notes" => { return notes.run(args) },
             "commit" => { return commit.run(args) },
             "log" | "show" => { return history.run(args) },
             "diff" => { return diff.run(args) },
