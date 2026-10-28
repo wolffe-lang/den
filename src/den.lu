@@ -5,6 +5,7 @@ use commit
 use diff
 use history
 use notes
+use packcmd
 use plumbing
 use refcmd
 use stash
@@ -41,6 +42,9 @@ fn main() -> int {
         match args[0] {
             "branch" | "tag" | "switch" | "reset" | "merge" | "revert" | "cherry-pick" | "rebase" => {
                 return refcmd.run(args)
+            },
+            "fsck" | "count-objects" | "verify-pack" | "pack-objects" => {
+                return packcmd.run(args)
             },
             "blame" => { return blame.run(args) },
             "notes" => { return notes.run(args) },

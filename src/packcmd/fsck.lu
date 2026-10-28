@@ -1,0 +1,208 @@
+// Bounded full-object validation and default-root connectivity, git-fsck(1).
+// Diagnostic-rich corrupt repositories remain named, never reported clean.
+use std.fs
+use commit_format
+use index
+use object
+use oid
+use pack
+use refs
+use repository
+use stashlog
+
+struct Link { name: str, kind: str }
+
+fn linked_name(bytes: List[byte]) -> str ! object.StoreErrors {
+    let name = str_from_utf8(bytes) else |_| { return Unsupported("fsck object header bytes") }
+    let id = oid.parse("sha1", name)?
+    oid.hex(id)?
+}
+
+fn links(body: object.Object) -> List[Link] ! object.StoreErrors {
+    var out = List[Link]()
+    if body.kind == "blob" { return out }
+    if body.kind == "tree" {
+        let entries = object.parse_tree(body.data, "sha1") else |_| {
+            return Unsupported("fsck malformed tree diagnostics")
+        }
+        for entry in entries {
+            let path = str_from_utf8(entry.name) else ""
+            if path == "." || path == ".." || path.lower() == ".git" {
+                return Unsupported("fsck unsafe tree path diagnostics")
+            }
+            if entry.mode == 0o160000 { continue }
+            let kind = if entry.mode == 0o40000 then "tree" else "blob"
+            (mut out).push(Link { name: oid.hex(entry.id)?, kind: kind })
+        }
+        return out
+    }
+    var parsed = object.Headers { fields: List[object.Header](), message: List[byte]() }
+    if body.kind == "commit" {
+        parsed = object.parse_commit(body.data, "sha1") else |_| {
+            return Unsupported("fsck malformed commit diagnostics")
+        }
+    } else {
+        parsed = object.parse_tag(body.data, "sha1") else |_| {
+            return Unsupported("fsck malformed tag diagnostics")
+        }
+    }
+    for field in parsed.fields {
+        if body.kind == "commit" && (field.key == "tree" || field.key == "parent") {
+            (mut out).push(Link {
+                name: linked_name(field.value)?,
+                kind: if field.key == "tree" then "tree" else "commit",
+            })
+        } else if body.kind == "tag" && field.key == "object" {
+            let kind = str_from_utf8(parsed.fields[1].value) else |_| {
+                return Unsupported("fsck tag type")
+            }
+            (mut out).push(Link { name: linked_name(field.value)?, kind: kind })
+        } else if field.key == "author" || field.key == "committer" || field.key == "tagger" {
+            let text = str_from_utf8(field.value) else |_| {
+                return Unsupported("fsck identity bytes")
+            }
+            let _ = commit_format.parse_identity(text) else |_| {
+                return Unsupported("fsck identity diagnostics")
+            }
+        } else if body.kind == "tag" && field.key == "tag" {
+            let text = str_from_utf8(field.value) else |_| {
+                return Unsupported("fsck tag name bytes")
+            }
+            if !refs.valid("refs/tags/{text}") { return Unsupported("fsck tag name diagnostics") }
+        }
+    }
+    out
+}
+
+fn reflog_roots(path: str, depth: int, mut roots: Map[str, bool]) -> () ! object.StoreErrors {
+    if depth > 32 { return Unsupported("fsck reflog depth") }
+    let entries = fs.entries(path) else |e| match e {
+        not_found => { return },
+        _ => { return io },
+    }
+    for entry in entries {
+        let name = str_from_utf8(entry.name) else |_| {
+            return Unsupported("fsck reflog path bytes")
+        }
+        let full = "{path}/{name}"
+        if entry.kind == 1 {
+            reflog_roots(full, depth + 1, mut roots)?
+        } else if entry.kind == 0 {
+            let bytes = repository.read_bytes(full, 16777216)?
+            let records = stashlog.parse(bytes) else |_| {
+                return Unsupported("fsck reflog diagnostics")
+            }
+            for record in records {
+                for id in [record.before, record.after] {
+                    if id != "0000000000000000000000000000000000000000" { roots[id] = true }
+                }
+            }
+        } else {
+            return Unsupported("fsck reflog file type")
+        }
+        if roots.len > 10000 { return Unsupported("fsck root count limit") }
+    }
+}
+
+fn fsck(args: List[str]) -> int ! object.StoreErrors {
+    var dangling = true, logs = true
+    for arg in args[1..] {
+        if arg == "--full" || arg == "--no-progress" {
+            continue
+        } else if arg == "--no-dangling" {
+            dangling = false
+        } else if arg == "--no-reflogs" {
+            logs = false
+        } else {
+            return Unsupported("fsck {arg}")
+        }
+    }
+    let repo = repository.discover(".")?
+    for (key, _) in repo.config.pairs() {
+        if key.starts_with("fsck.") { return Unsupported("fsck configuration") }
+    }
+    let items = inventory(repo)?
+    if (repo.config["core.commitgraph"] else "true") != "false" &&
+        (
+            fs.exists("{repo.gitdir}/objects/info/commit-graph") ||
+                fs.exists("{repo.gitdir}/objects/info/commit-graphs")
+        ) {
+        return Unsupported("fsck commit-graph validation")
+    }
+    for path in items.indexes { let _ = pack.inspect(path)? }
+    var names = List[str](),
+        kinds = Map[str, str](),
+        used = Map[str, bool](),
+        all_links = List[Link](),
+        seen = Map[str, bool]()
+    for name in items.loose {
+        if !(seen[name] else false) { seen[name] = true; (mut names).push(copy name) }
+    }
+    for name in items.packed {
+        if !(seen[name] else false) { seen[name] = true; (mut names).push(copy name) }
+    }
+    if names.len > 10000 { return Unsupported("fsck object count limit") }
+    var total = 0
+    for name in names {
+        let body = object.read_object(repo, oid.parse("sha1", name)?, 16777216) else |_| {
+            return Unsupported("fsck corrupt object diagnostics")
+        }
+        if body.data.len > 134217728 - total { return Unsupported("fsck payload limit") }
+        total += body.data.len
+        kinds[name] = copy body.kind
+        for link in links(body)? { (mut all_links).push(copy link) }
+        if all_links.len > 100000 { return Unsupported("fsck link count limit") }
+    }
+    for link in all_links {
+        if (kinds[link.name] else "") != link.kind {
+            return Unsupported("fsck missing or wrong-type link diagnostics")
+        }
+        used[link.name] = true
+    }
+    var roots = Map[str, bool]()
+    let references = refs.list(repo, "refs/")?
+    for reference in references {
+        let name = oid.hex(reference.id)?
+        if reference.name.starts_with("refs/heads/") && (kinds[name] else "") != "commit" {
+            return Unsupported("fsck branch type diagnostics")
+        }
+        roots[name] = true
+    }
+    for id in refs.optional(repo, "HEAD")? {
+        let name = oid.hex(id)?
+        if (kinds[name] else "") != "commit" { return Unsupported("fsck HEAD type diagnostics") }
+        roots[name] = true
+    }
+    let default_references = roots.len
+    if logs { reflog_roots("{repo.gitdir}/logs", 0, mut roots)? }
+    if fs.exists("{repo.gitdir}/index") {
+        let value = index.read(repo, 16777216) else |_| {
+            return Unsupported("fsck index diagnostics")
+        }
+        for entry in value.entries {
+            if entry.stat[6] == 0o160000 { continue }
+            let name = oid.hex(entry.id)?
+            if (kinds[name] else "") != "blob" {
+                return Unsupported("fsck index object diagnostics")
+            }
+            roots[name] = true
+        }
+    }
+    for (name, _) in roots.pairs() {
+        if (kinds[name] else "") == "" { return Unsupported("fsck missing root diagnostics") }
+        used[name] = true
+    }
+    var tips = List[str]()
+    if dangling {
+        for name in names { if !(used[name] else false) { (mut tips).push(copy name) } }
+        // Git's hash-table iteration is not sorted OID order. Until measured,
+        // refuse multiple-tip display rather than inventing porcelain parity.
+        if tips.len > 1 { return Unsupported("fsck multiple dangling object order") }
+    }
+    if default_references == 0 { eprint("notice: No default references") }
+    for name in tips {
+        let kind = kinds[name] else ""
+        print("dangling {kind} {name}")
+    }
+    0
+}

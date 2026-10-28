@@ -1,0 +1,128 @@
+// Pack inspection reuses the reader's checksum, CRC, identity and delta checks.
+use oid
+
+/// Physical entry metadata; size is delta instruction bytes for a delta.
+pub struct PackedEntry {
+    name: str,
+    kind: str,
+    size: int,
+    stored: int,
+    offset: int,
+    depth: int,
+    base: str,
+}
+
+/// Owned physical rows and the complete pack's logical byte count.
+pub struct Inspection { objects: List[PackedEntry], bytes: int }
+
+fn entry_meta(fd: int, end: int, index: Index, slot: int, depth: int) -> (
+    int,
+    int,
+    str,
+    int,
+) ! PackErrors {
+    if depth > 64 { return Unsupported("pack delta depth limit") }
+    let offset = index.entries[slot].offset
+    var next = end
+    for item in index.entries {
+        if item.offset > offset && item.offset < next { next = item.offset }
+    }
+    let bytes = range_bytes(fd, offset, if next - offset > 40 then 40 else next - offset)?
+    var b = bytes[0] as int, pos = 1, size = b & 15, scale = 16
+    let kind = b >> 4 & 7
+    while b >= 128 {
+        if pos >= bytes.len { return Unsupported("pack entry header") }
+        b = bytes[pos] as int
+        pos += 1
+        if b & 127 > (16777216 - size) / scale { return Unsupported("pack object size limit") }
+        size += (b & 127) * scale
+        if b >= 128 {
+            if scale > 16777216 / 128 { return Unsupported("pack object size limit") }
+            scale *= 128
+        }
+    }
+    var base = -1
+    if kind == 6 {
+        if pos >= bytes.len { return Unsupported("pack OFS_DELTA offset") }
+        b = bytes[pos] as int
+        pos += 1
+        var distance = b & 127
+        while b >= 128 {
+            if pos >= bytes.len || distance >= offset / 128 {
+                return Unsupported("pack OFS_DELTA offset")
+            }
+            b = bytes[pos] as int
+            pos += 1
+            distance = (distance + 1) * 128 + (b & 127)
+        }
+        base = index.by_offset[offset - distance] else -1
+    } else if kind == 7 {
+        if bytes.len - pos < 20 { return Unsupported("pack REF_DELTA name") }
+        let id = oid.from_bytes("sha1", bytes[pos..pos + 20]) else |_| {
+            return Unsupported("pack REF_DELTA name")
+        }
+        base = index.by_name[oid.hex(id) else ""] else -1
+    }
+    if kind == 6 || kind == 7 {
+        if base < 0 { return Unsupported("thin pack REF_DELTA base") }
+        let (_, _, _, links) = entry_meta(fd, end, index, base, depth + 1)?
+        return (size, next - offset, copy index.entries[base].name, links + 1)
+    }
+    (size, next - offset, "", 0)
+}
+
+/// Inspect a named idx and validate every canonical body, even when loose copies
+/// exist. Returned rows are in physical pack order, not object-name order.
+pub fn inspect(path: str) -> Inspection ! PackErrors {
+    let index = load_index(path)?
+    if !path.ends_with(".idx") { return Unsupported("pack index pathname") }
+    let fd = open_pack("{path[0..path.len - 4]}.pack")?
+    defer fs_close(fd) else |_| {}
+    let end = verify(fd, index)?
+    var objects = List[PackedEntry]()
+    for slot in 0..index.entries.len {
+        var row = PackedEntry {
+            name: copy index.entries[slot].name,
+            kind: "",
+            size: 0,
+            stored: 0,
+            offset: index.entries[slot].offset,
+            depth: 0,
+            base: "",
+        }
+        region object_check {
+            var seen = Map[int, bool](), total = 0
+            let body = unpack(fd, end, index, slot, mut seen, mut total, 0)?
+            let (size, stored, base, depth) = entry_meta(fd, end, index, slot, 0)?
+            row.kind = copy body.kind
+            row.size = size
+            row.stored = stored
+            row.base = copy base
+            row.depth = depth
+        }
+        (mut objects).push(row)
+        var j = objects.len - 1
+        while j > 0 && objects[j].offset < objects[j - 1].offset {
+            let saved = copy objects[j]
+            objects[j] = copy objects[j - 1]
+            objects[j - 1] = saved
+            j -= 1
+        }
+    }
+    Inspection { objects: objects, bytes: end + 20 }
+}
+
+/// Validated pack-index paths. No partial or unsupported pack metadata is hidden.
+pub fn paths(gitdir: str) -> List[str] ! PackErrors { indexes(gitdir)? }
+
+/// Validated object-name inventory, including duplicate names in separate packs.
+pub fn names(path: str) -> List[str] ! PackErrors {
+    if !path.ends_with(".idx") { return Unsupported("pack index pathname") }
+    let index = load_index(path)?
+    let fd = open_pack("{path[0..path.len - 4]}.pack")?
+    defer fs_close(fd) else |_| {}
+    let _ = verify(fd, index)?
+    var out = List[str]()
+    for entry in index.entries { (mut out).push(copy entry.name) }
+    out
+}

@@ -1,0 +1,235 @@
+use std.fs
+use object
+use oid
+use pack
+use repository
+
+/// Inventory keeps loose duplicates and per-pack counts distinct.
+pub struct Inventory {
+    loose: List[str],
+    packed: List[str],
+    indexes: List[str],
+    loose_blocks: int,
+    pack_bytes: int,
+}
+
+/// Count actual allocated blocks, never infer allocation from logical length.
+pub fn inventory(repo: repository.Repo) -> Inventory ! object.StoreErrors {
+    var loose = List[str](), packed = List[str](), blocks = 0, bytes = 0
+    let indexes = pack.paths(repo.gitdir)?
+    for path in indexes {
+        for name in pack.names(path)? { (mut packed).push(copy name) }
+        let idx = fs_lstat(path)?
+        let data = fs_lstat("{path[0..path.len - 4]}.pack")?
+        if idx[0] != 0 || data[0] != 0 { return Unsupported("pack file type") }
+        if idx[1] > 134217728 || data[1] > 134217728 {
+            return Unsupported("pack inventory size limit")
+        }
+        bytes += idx[1] + data[1]
+    }
+    let root = "{repo.gitdir}/objects"
+    for dir in fs.entries(root)? {
+        let prefix = str_from_utf8(dir.name) else |_| {
+            return Unsupported("non-UTF-8 object path")
+        }
+        if prefix == "info" {
+            for item in fs.entries("{root}/info")? {
+                let name = str_from_utf8(item.name) else ""
+                if name == "alternates" || name == "http-alternates" {
+                    return Unsupported("object inventory {name}")
+                }
+            }
+            continue
+        }
+        if prefix == "pack" {
+            for item in fs.entries("{root}/pack")? {
+                let name = str_from_utf8(item.name) else ""
+                if name.ends_with(".keep") { return Unsupported("pack .keep policy") }
+                if name.ends_with(".mtimes") { return Unsupported("cruft packs") }
+                if name.ends_with(".rev") { continue }
+                if !name.ends_with(".idx") && !name.ends_with(".pack") {
+                    return Unsupported("object inventory garbage")
+                }
+            }
+            continue
+        }
+        if dir.kind != 1 || prefix.len != 2 { return Unsupported("object inventory garbage") }
+        let _ = oid.parse("sha1", "{prefix}00000000000000000000000000000000000000") else |_| {
+            return Unsupported("object inventory garbage")
+        }
+        for item in fs.entries("{root}/{prefix}")? {
+            if loose.len >= 10000 { return Unsupported("object inventory count limit") }
+            let suffix = str_from_utf8(item.name) else |_| {
+                return Unsupported("non-UTF-8 object path")
+            }
+            let name = "{prefix}{suffix}"
+            let _ = oid.parse("sha1", name) else |_| {
+                return Unsupported("object inventory garbage")
+            }
+            let stat = fs_lstat("{root}/{prefix}/{suffix}")?
+            if stat[0] != 0 { return Unsupported("object inventory file type") }
+            if stat[3] & 256 == 0 || stat[8] < 0 {
+                return Unsupported("count-objects allocated blocks")
+            }
+            if stat[8] > 268435456 - blocks { return Unsupported("object inventory size limit") }
+            blocks += stat[8]
+            (mut loose).push(name)
+        }
+    }
+    Inventory {
+        loose: loose,
+        packed: packed,
+        indexes: indexes,
+        loose_blocks: blocks,
+        pack_bytes: bytes,
+    }
+}
+
+fn count_objects(args: List[str]) -> int ! object.StoreErrors {
+    var verbose = false
+    for arg in args[1..] {
+        if arg == "-v" || arg == "--verbose" {
+            verbose = true
+        } else {
+            return Unsupported("count-objects {arg}")
+        }
+    }
+    let repo = repository.discover(".")?
+    let items = inventory(repo)?
+    if !verbose { print("{items.loose.len} objects, {items.loose_blocks / 2} kilobytes"); return 0 }
+    var present = Map[str, bool](), prune = 0
+    for name in items.packed { present[name] = true }
+    for name in items.loose { if present[name] else false { prune += 1 } }
+    print(
+        "count: {items.loose.len}\nsize: {items.loose_blocks / 2}\nin-pack: {items.packed.len}\npacks: {items.indexes.len}\nsize-pack: {items.pack_bytes / 1024}\nprune-packable: {prune}\ngarbage: 0\nsize-garbage: 0",
+    )
+    0
+}
+
+fn verify_pack(args: List[str]) -> int ! object.StoreErrors {
+    var verbose = false, paths = List[str](), options = true
+    for arg in args[1..] {
+        if options && arg == "--" {
+            options = false
+        } else if options && (arg == "-v" || arg == "--verbose") {
+            verbose = true
+        } else if options && arg.starts_with("-") {
+            return Unsupported("verify-pack {arg}")
+        } else {
+            (mut paths).push(copy arg)
+        }
+    }
+    if paths.len == 0 { return Unsupported("verify-pack missing pack") }
+    for path in paths {
+        let stem = if path.ends_with(".idx") {
+            path[0..path.len - 4]
+        } else if path.ends_with(".pack") {
+            path[0..path.len - 5]
+        } else {
+            path
+        }
+        let result = pack.inspect("{stem}.idx")?
+        if verbose {
+            var nondelta = 0, histogram = Map[int, int](), maximum = 0
+            for row in result.objects {
+                var kind = row.kind
+                while kind.len < 6 { kind = "{kind} " }
+                if row.depth == 0 {
+                    print("{row.name} {kind} {row.size} {row.stored} {row.offset}")
+                    nondelta += 1
+                } else {
+                    print(
+                        "{row.name} {kind} {row.size} {row.stored} {row.offset} {row.depth} {row.base}",
+                    )
+                    histogram[row.depth] = (histogram[row.depth] else 0) + 1
+                    if row.depth > maximum { maximum = row.depth }
+                }
+            }
+            let noun = if nondelta == 1 then "object" else "objects"
+            if nondelta > 0 { print("non delta: {nondelta} {noun}") }
+            for depth in 1..maximum + 1 {
+                let n = histogram[depth] else 0
+                let noun = if n == 1 then "object" else "objects"
+                if n > 0 { print("chain length = {depth}: {n} {noun}") }
+            }
+            print("{stem}.pack: ok")
+        }
+    }
+    0
+}
+
+fn pack_objects(args: List[str]) -> int ! object.StoreErrors {
+    var mode = "ref", base = ""
+    for arg in args[1..] {
+        if arg == "-q" || arg == "--no-reuse-delta" || arg == "--no-reuse-object" {
+            continue
+        } else if arg == "--delta-base-offset" {
+            mode = "ofs"
+        } else if arg == "--window=0" || arg == "--depth=0" {
+            mode = "none"
+        } else if arg == "--window=10" || arg == "--depth=50" {
+            continue
+        } else if arg.starts_with("-") {
+            return Unsupported("pack-objects {arg}")
+        } else if base == "" {
+            base = arg
+        } else {
+            return Unsupported("pack-objects operands")
+        }
+    }
+    let repo = repository.discover(".")?
+    // Scope the publication API to the repository's pack directory. Transport,
+    // arbitrary output paths and housekeeping policy are deliberately separate.
+    for (key, value) in repo.config.pairs() {
+        if key == "pack.window" && value == "10" { continue }
+        if key == "pack.depth" && value == "50" { continue }
+        if key.starts_with("pack.") || key == "core.compression" {
+            return Unsupported("pack-objects configuration {key}")
+        }
+    }
+    if base != ".git/objects/pack/pack" && base != "{repo.gitdir}/objects/pack/pack" {
+        return Unsupported("pack-objects output base (requires objects/pack/pack)")
+    }
+    let _ = inventory(repo)?
+    var input = fs.stdin(), bytes = List[byte]()
+    loop {
+        let chunk = fs.read_chunk(mut input, 65536) else |e| match e {
+            eof => { break },
+            _ => { return io },
+        }
+        if chunk.len == 0 { break }
+        if chunk.len > 1000000 - bytes.len { return Unsupported("pack-objects input limit") }
+        for b in chunk { (mut bytes).push(b) }
+    }
+    let text = str_from_utf8(bytes) else |_| { return Unsupported("pack-objects input bytes") }
+    var bodies = List[pack.Body](), total = 0
+    for line in text.split("\n") {
+        if line == "" { continue }
+        let fields = line.split(" ")
+        let id = oid.parse("sha1", fields[0])?
+        let value = object.read_object(repo, id, 16777216)?
+        if value.data.len > 134217728 - total { return Unsupported("pack writer payload limit") }
+        total += value.data.len
+        if bodies.len >= 10000 { return Unsupported("pack writer object count limit") }
+        (mut bodies).push(pack.Body { kind: copy value.kind, data: copy value.data })
+    }
+    let value = pack.encode(bodies, mode)?
+    print(pack.install(repo.gitdir, value)?)
+    0
+}
+
+/// Process edge: unsupported policy is explicit and never mutates the store.
+pub fn run(args: List[str]) -> int {
+    dispatch(args) else |e| match e {
+        Unsupported(feature) => { eprint("den: not yet implemented: {feature} (M4, vc13)"); 2 },
+        _ => { eprint("fatal: den: {e}"); 128 },
+    }
+}
+
+fn dispatch(args: List[str]) -> int ! object.StoreErrors {
+    if args[0] == "fsck" { return fsck(args)? }
+    if args[0] == "count-objects" { return count_objects(args)? }
+    if args[0] == "verify-pack" { return verify_pack(args)? }
+    if args[0] == "pack-objects" { return pack_objects(args)? }
+    Unsupported(args[0])
+}

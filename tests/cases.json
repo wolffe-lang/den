@@ -334,7 +334,8 @@
       "count-objects",
       "-v"
     ],
-    "lane": "M4, vc12"
+    "lane": "M4, vc13",
+    "require_parity": true
   },
   {
     "name": "diff-symlink",
