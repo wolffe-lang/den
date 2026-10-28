@@ -1,0 +1,19 @@
+{
+  "deduplicated": {
+    "component-stash-native.json.gz": {
+      "retained_as": "stash-native.json.gz",
+      "sha256": "bc2afe1e337e5661c759ff5ddd036981a69783eb2ec9ffbf80847819f3c90f96"
+    },
+    "component-stash-release.json.gz": {
+      "retained_as": "stash-release.json.gz",
+      "sha256": "3771633e1e2f171739d12bb331274230af1762e05c81054057de45a2a01b9527"
+    }
+  },
+  "stale_removed": {
+    "component-stash-measure.json.gz": {
+      "source": "target/stash-measure.json",
+      "raw_sha256": "8376db3b8370253e2ea6c212b9c824b1bded45c5dc8bba7009d3648c0a3ee9f2",
+      "reason": "pre-gauntlet oracle-only --measure output (2026-10-27 23:22 local), not produced by the final gauntlet"
+    }
+  }
+}

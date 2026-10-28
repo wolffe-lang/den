@@ -1,0 +1,1 @@
+{"commit":"cf0c13d","diagnostics":[],"file":"src/pack_test.lu","impl":"wolfgang","impl_version":"0.2.35","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"pack: crc and bounded delta units\n","stdout_sha256":"631d57d479885bc7bbb3ddc8bda424d7202b33c463611148b0c37783137f7cb0","verdict":"exit(0)","warnings":[]}

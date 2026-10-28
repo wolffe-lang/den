@@ -1,0 +1,409 @@
+{
+  "tiers": {
+    "native": {
+      "stash": {
+        "loose": {
+          "exact_cases": 104,
+          "exact_processes": 395,
+          "named": 39,
+          "named_process_captures": 44,
+          "corpus_cases": 20,
+          "stash_cases": 61,
+          "notes_cases": 22,
+          "corpus_stash": 10,
+          "corpus_notes": 10
+        },
+        "packed": {
+          "exact_cases": 104,
+          "exact_processes": 395,
+          "named": 39,
+          "named_process_captures": 44,
+          "corpus_cases": 20,
+          "stash_cases": 61,
+          "notes_cases": 22,
+          "corpus_stash": 10,
+          "corpus_notes": 10
+        }
+      },
+      "stash_client": {
+        "loose": {
+          "exact": 19
+        },
+        "packed": {
+          "exact": 19
+        }
+      },
+      "blame": {
+        "loose": {
+          "exact": 291,
+          "clients": 6,
+          "named": 10
+        },
+        "packed": {
+          "exact": 291,
+          "clients": 6,
+          "named": 10
+        }
+      },
+      "revision": {
+        "loose": {
+          "exact": 183,
+          "clients": 49,
+          "named": 8
+        },
+        "packed": {
+          "exact": 183,
+          "clients": 49,
+          "named": 8
+        }
+      },
+      "loose": {
+        "history": {
+          "exact": 576,
+          "total": 576,
+          "named": 7,
+          "clients": 3
+        },
+        "refs": {
+          "exact": 632,
+          "total": 632
+        },
+        "refs_scope": {
+          "named": 17
+        },
+        "merge": {
+          "exact": 132,
+          "named": 12,
+          "total": 144
+        },
+        "replay": {
+          "exact_scenarios": 96,
+          "named": 20,
+          "total": 116,
+          "process_captures": 157,
+          "exact_process_comparisons": 137
+        }
+      },
+      "packed": {
+        "history": {
+          "exact": 576,
+          "total": 576,
+          "named": 7,
+          "clients": 3
+        },
+        "refs": {
+          "exact": 632,
+          "total": 632
+        },
+        "refs_scope": {
+          "named": 17
+        },
+        "merge": {
+          "exact": 132,
+          "named": 12,
+          "total": 144
+        },
+        "replay": {
+          "exact_scenarios": 96,
+          "named": 20,
+          "total": 116,
+          "process_captures": 157,
+          "exact_process_comparisons": 137
+        }
+      },
+      "pack_structural": {
+        "exact": 141,
+        "total": 141
+      },
+      "pack_interop": {
+        "exact": 2442,
+        "objects": 2442,
+        "fixtures": 34,
+        "entry_types": {
+          "1": 134,
+          "2": 132,
+          "3": 2108,
+          "4": 2,
+          "6": 33,
+          "7": 33
+        }
+      }
+    },
+    "release": {
+      "stash": {
+        "loose": {
+          "exact_cases": 104,
+          "exact_processes": 395,
+          "named": 39,
+          "named_process_captures": 44,
+          "corpus_cases": 20,
+          "stash_cases": 61,
+          "notes_cases": 22,
+          "corpus_stash": 10,
+          "corpus_notes": 10
+        },
+        "packed": {
+          "exact_cases": 104,
+          "exact_processes": 395,
+          "named": 39,
+          "named_process_captures": 44,
+          "corpus_cases": 20,
+          "stash_cases": 61,
+          "notes_cases": 22,
+          "corpus_stash": 10,
+          "corpus_notes": 10
+        }
+      },
+      "stash_client": {
+        "loose": {
+          "exact": 19
+        },
+        "packed": {
+          "exact": 19
+        }
+      },
+      "blame": {
+        "loose": {
+          "exact": 291,
+          "clients": 6,
+          "named": 10
+        },
+        "packed": {
+          "exact": 291,
+          "clients": 6,
+          "named": 10
+        }
+      },
+      "revision": {
+        "loose": {
+          "exact": 183,
+          "clients": 49,
+          "named": 8
+        },
+        "packed": {
+          "exact": 183,
+          "clients": 49,
+          "named": 8
+        }
+      },
+      "loose": {
+        "history": {
+          "exact": 576,
+          "total": 576,
+          "named": 7,
+          "clients": 3
+        },
+        "refs": {
+          "exact": 632,
+          "total": 632
+        },
+        "refs_scope": {
+          "named": 17
+        },
+        "merge": {
+          "exact": 132,
+          "named": 12,
+          "total": 144
+        },
+        "replay": {
+          "exact_scenarios": 96,
+          "named": 20,
+          "total": 116,
+          "process_captures": 157,
+          "exact_process_comparisons": 137
+        }
+      },
+      "packed": {
+        "history": {
+          "exact": 576,
+          "total": 576,
+          "named": 7,
+          "clients": 3
+        },
+        "refs": {
+          "exact": 632,
+          "total": 632
+        },
+        "refs_scope": {
+          "named": 17
+        },
+        "merge": {
+          "exact": 132,
+          "named": 12,
+          "total": 144
+        },
+        "replay": {
+          "exact_scenarios": 96,
+          "named": 20,
+          "total": 116,
+          "process_captures": 157,
+          "exact_process_comparisons": 137
+        }
+      },
+      "pack_structural": {
+        "exact": 141,
+        "total": 141
+      },
+      "pack_interop": {
+        "exact": 2442,
+        "objects": 2442,
+        "fixtures": 34,
+        "entry_types": {
+          "1": 134,
+          "2": 132,
+          "3": 2108,
+          "4": 2,
+          "6": 33,
+          "7": 33
+        }
+      }
+    }
+  },
+  "captures": {
+    "stash-native.json.gz": {
+      "sha256": "3c3acc3cebfb46fdb473fba7aaaa5880844b4320e2ebdf889f612124c1f879cf",
+      "bytes": 89164246
+    },
+    "stash-api-native.json.gz": {
+      "sha256": "a8b324f295c362f11e0480d405142d215321225c725a118c7057e665bf873b07",
+      "bytes": 88543
+    },
+    "blame-native.json.gz": {
+      "sha256": "9a88affd8ea23a7269709389dbb7719dc958d8d0dcda480cb24bc78e5b23e174",
+      "bytes": 2189620
+    },
+    "revision-native.json.gz": {
+      "sha256": "c847a1f828a4c582d99a7d76eec388d5dc49a4c395fc3fd90a91ee364bfb767e",
+      "bytes": 303505
+    },
+    "history-native-loose.json.gz": {
+      "sha256": "ac943ea57c83d2e384d5927e79411d6bf517bfc21fe12f2501acb7c8dc7a9c34",
+      "bytes": 714640
+    },
+    "refs-native-loose.json.gz": {
+      "sha256": "1c2024de1bbeec750d7c71856c417151c3425ce1c24215b55f13104904ca63dc",
+      "bytes": 9143107
+    },
+    "refs_scope-native-loose.json.gz": {
+      "sha256": "fc3773aad9d91c5c1398ee80ce96303037b70fa90347699aef6832da465fdfe8",
+      "bytes": 205237
+    },
+    "merge-native-loose.json.gz": {
+      "sha256": "6e5943284409a200e16f3ccae2b734ad1198ca0209909dedf113221ffb2e84a6",
+      "bytes": 2900224
+    },
+    "replay-native-loose.json.gz": {
+      "sha256": "767da43a0dc2983a4483b6a8a08f6201c44e44f56d37e943a68b9d68a69def9e",
+      "bytes": 5585265
+    },
+    "history-native-packed.json.gz": {
+      "sha256": "ac943ea57c83d2e384d5927e79411d6bf517bfc21fe12f2501acb7c8dc7a9c34",
+      "bytes": 714640
+    },
+    "refs-native-packed.json.gz": {
+      "sha256": "934d78fdd6d468f34f598b7708ee1ba353f148bd057394db10ae8aaa7f0a42f5",
+      "bytes": 12817080
+    },
+    "refs_scope-native-packed.json.gz": {
+      "sha256": "839b8f4d68489450ebca99e3641bccc02cd22e38e2c38025e84c858a058fe183",
+      "bytes": 304211
+    },
+    "merge-native-packed.json.gz": {
+      "sha256": "7a8d4a8d5aa2d80879fa5ee1b98bc6b1806a119b70c82350d1e552527d75ec85",
+      "bytes": 3651475
+    },
+    "replay-native-packed.json.gz": {
+      "sha256": "bcbdcc8eb71dc8dfe68929dcab498866e8c904b5a49a310f73ff57e164a0460c",
+      "bytes": 6289077
+    },
+    "structural-native.json.gz": {
+      "sha256": "e690d794578e5c6b5e370d54c85b7b422a1aa60c55174d57ab16ebfc7d142f84",
+      "bytes": 26003
+    },
+    "interop-native.json.gz": {
+      "sha256": "c8a06eb59f7ceabd26b81d32dc80fe9020f15025b21497d75f8725cc56bfdb5f",
+      "bytes": 1171630
+    },
+    "stash-release.json.gz": {
+      "sha256": "752113f7b06321f46ab80e4db98f0c6c2f191b1d18864744985a77cd7e9700b6",
+      "bytes": 89265663
+    },
+    "stash-api-release.json.gz": {
+      "sha256": "a8b324f295c362f11e0480d405142d215321225c725a118c7057e665bf873b07",
+      "bytes": 88543
+    },
+    "blame-release.json.gz": {
+      "sha256": "1897ec9897a45063805054bf287f958f36f663ce5c159e557c1e1fb9012cc071",
+      "bytes": 2189620
+    },
+    "revision-release.json.gz": {
+      "sha256": "693bf579312f6279d7a42e9d7fe0e6d5108eede99ef5b19200f4e154b7c03d13",
+      "bytes": 303545
+    },
+    "history-release-loose.json.gz": {
+      "sha256": "a7ed920a93f64c2c1cb635749fee2937415c5c44b300c8844a5c78199b70f0d8",
+      "bytes": 714641
+    },
+    "refs-release-loose.json.gz": {
+      "sha256": "44bc991ba167117789ed708d01b6f2ae10ad557da17d5a405375c421079cc300",
+      "bytes": 9140969
+    },
+    "refs_scope-release-loose.json.gz": {
+      "sha256": "4409f659b0b632b41152443619796a843f9dceb98b21c5f5dbd83aff4e35f53f",
+      "bytes": 205237
+    },
+    "merge-release-loose.json.gz": {
+      "sha256": "99816927f3a04e23731cf1e517191df0ebd7cf53490c4a3c77d4af039f27e340",
+      "bytes": 2900264
+    },
+    "replay-release-loose.json.gz": {
+      "sha256": "d745fe08cfab6bea4bb5aa26c65527ac7f99823a783b83431fb061b1513c031f",
+      "bytes": 5585363
+    },
+    "history-release-packed.json.gz": {
+      "sha256": "a7ed920a93f64c2c1cb635749fee2937415c5c44b300c8844a5c78199b70f0d8",
+      "bytes": 714641
+    },
+    "refs-release-packed.json.gz": {
+      "sha256": "d63743350c9681ebdd9351d0da68507b933e97d119e175ab9312d9c6b3cf43b5",
+      "bytes": 12819554
+    },
+    "refs_scope-release-packed.json.gz": {
+      "sha256": "4749304521e39e7d4e8098ac7a83e9c289d38af0c41540ccfb7ec714b7bb3ad4",
+      "bytes": 304211
+    },
+    "merge-release-packed.json.gz": {
+      "sha256": "951a826a902e3706c508c9b22b6840507877052f7492487f18de423a00ce4300",
+      "bytes": 3651517
+    },
+    "replay-release-packed.json.gz": {
+      "sha256": "853b7368d6f4beaf3fc0725c649bb54b425908b1773310feb60b191507249466",
+      "bytes": 6289106
+    },
+    "structural-release.json.gz": {
+      "sha256": "e690d794578e5c6b5e370d54c85b7b422a1aa60c55174d57ab16ebfc7d142f84",
+      "bytes": 26003
+    },
+    "interop-release.json.gz": {
+      "sha256": "be566e905c7b2a708d126707d553eae3d1be811413ea12323e21f9aa5492d873",
+      "bytes": 1171665
+    }
+  },
+  "checked_units": [
+    "stash",
+    "blame",
+    "revision",
+    "pack",
+    "pretty",
+    "walk",
+    "refs",
+    "reflog",
+    "sequencer"
+  ],
+  "zero_new_skips": true,
+  "main": {
+    "not-yet": 8,
+    "parity": 181,
+    "shape-pass": 1
+  }
+}
