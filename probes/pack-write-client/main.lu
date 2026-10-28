@@ -1,0 +1,23 @@
+use std.fs
+use object
+use oid
+use repository
+use pack
+
+fn main() -> int {
+    let args = env_args()
+    if args.len != 3 { return 2 }
+    let repo = repository.open(args[0]) else |e| { eprint("{e}"); return 1 }
+    let input = fs.read_file(args[1]) else |e| { eprint("{e}"); return 1 }
+    var bodies = List[pack.Body]()
+    for line in input.split("\n") {
+        if line == "" { continue }
+        let id = oid.parse("sha1", line) else |e| { eprint("{e}"); return 1 }
+        let value = object.read_object(repo, id, 16777216) else |e| { eprint("{e}"); return 1 }
+        (mut bodies).push(pack.Body { kind: copy value.kind, data: copy value.data })
+    }
+    let encoded = pack.encode(bodies, args[2]) else |e| { eprint("{e}"); return 1 }
+    let name = pack.install(repo.gitdir, encoded) else |e| { eprint("{e}"); return 1 }
+    print(name)
+    0
+}
