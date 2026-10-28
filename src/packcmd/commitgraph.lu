@@ -170,6 +170,9 @@ pub fn parse_commit_graph(data: List[byte]) -> CommitGraph ! GraphErrors {
         let at = commits + 36 * i
         var parents = List[int]()
         let p1 = graph_u32(data, at + 20), p2 = graph_u32(data, at + 24)
+        if p1 == 1879048192 && p2 != 1879048192 {
+            return GraphDiagnostic("commit-graph parent list for commit {name} terminates early")
+        }
         if p1 != 1879048192 {
             if p1 >= n { return GraphDiagnostic("fatal: invalid parent position {p1}") }
             (mut parents).push(p1)

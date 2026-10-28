@@ -62,6 +62,15 @@ try:
    q=root/(shape+'-'+str(len(rows)));shutil.copytree(p,q);data=bytearray(graph);data[pos]^=mask
    if checksum:data[-20:]=hashlib.sha1(data[:-20]).digest()
    (q/'.git/objects/info/commit-graph').write_bytes(data);compare(q,shape+' '+label)
+  if shape=='linear':
+   q=root/'absent-first-present-second';shutil.copytree(p,q);data=bytearray(graph)
+   for slot in range(count):
+    at=chunks[b'CDAT']+slot*36;p1,p2=struct.unpack_from('>II',data,at+20)
+    if p1!=0x70000000 and p2==0x70000000:
+     struct.pack_into('>II',data,at+20,0x70000000,p1);break
+   else:raise AssertionError('single-parent witness absent')
+   data[-20:]=hashlib.sha1(data[:-20]).digest();(q/'.git/objects/info/commit-graph').write_bytes(data)
+   compare(q,'absent first parent with present second slot')
  p=root/'diagnostic-base';p.mkdir();git(p,'init','-q','-b','main','--template=')
  (p/'file').write_bytes(b'content\n');git(p,'add','file');git(p,'commit','-qm','diagnostic')
  blob=git(p,'rev-parse','HEAD:file').strip().decode();tree=git(p,'rev-parse','HEAD^{tree}').strip().decode();head=git(p,'rev-parse','HEAD').strip().decode()
