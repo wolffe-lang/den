@@ -1,6 +1,7 @@
 // Git 2.56.0 git-log/git-show/pretty-formats documentation and binary witnesses.
 use std.fs
 use diff
+use notes
 use object
 use oid
 use pretty
@@ -92,7 +93,7 @@ fn dispatch(args: List[str]) -> int ! worktree.WorkErrors {
         first_parent = false,
         reverse = false,
         explicit_patch = false
-    var mailmap = true, notes = true
+    var mailmap = true, show_notes = true, explicit_notes = false, format_given = false
     var decoration = ctx.repo.config["log.decorate"] else "auto"
     let root_diff = worktree.config_bool(ctx, "log.showroot", true)?
     var count = 100000, skip = 0, minimum = display.abbreviate
@@ -115,10 +116,13 @@ fn dispatch(args: List[str]) -> int ! worktree.WorkErrors {
         if arg == "--oneline" {
             format = "oneline"
             abbrev = true
+            format_given = true
         } else if arg.starts_with("--pretty=") {
             format = arg[9..]
+            format_given = true
         } else if arg.starts_with("--format=") {
             format = arg[9..]
+            format_given = true
         } else if arg == "--abbrev-commit" {
             abbrev = true
         } else if arg == "--no-abbrev-commit" {
@@ -173,7 +177,11 @@ fn dispatch(args: List[str]) -> int ! worktree.WorkErrors {
         } else if arg == "--no-decorate" {
             decoration = "no"
         } else if arg == "--no-notes" {
-            notes = false
+            show_notes = false
+            explicit_notes = false
+        } else if arg == "--notes" {
+            show_notes = true
+            explicit_notes = true
         } else if arg == "--no-mailmap" {
             mailmap = false
         } else if arg == "--no-color" || arg == "--color=never" {} else if arg.starts_with("-") {
@@ -202,9 +210,18 @@ fn dispatch(args: List[str]) -> int ! worktree.WorkErrors {
     for path in ["refs/replace", "info/grafts"] {
         if fs.exists("{ctx.repo.gitdir}/{path}") { return Unsupported("history {path}") }
     }
-    if notes &&
-        (fs.exists("{ctx.repo.gitdir}/refs/notes") || (env_get("GIT_NOTES_REF") else "") != "") {
-        return Unsupported("history notes")
+    // Notes are the default without --pretty/--format/--oneline (pretty-options
+    // --notes); only the default ref is displayed, other refs refuse by name.
+    let displayed = show_notes && (explicit_notes || !format_given)
+    var annotations = notes.Notes { reference: "", tip: [], notes: [] }
+    if displayed {
+        for name in ["GIT_NOTES_REF", "GIT_NOTES_DISPLAY_REF"] {
+            if (env_get(name) else "") != "" { return Unsupported("history notes {name}") }
+        }
+        for key in ["core.notesref", "notes.displayref"] {
+            if (ctx.repo.config[key] else "") != "" { return Unsupported("history notes {key}") }
+        }
+        annotations = notes.read(ctx.repo, "refs/notes/commits")?
     }
     if fs.exists("{ctx.repo.gitdir}/shallow") { return Unsupported("history shallow repository") }
     if mailmap &&
@@ -321,6 +338,11 @@ fn dispatch(args: List[str]) -> int ! worktree.WorkErrors {
             _ => { return invalid },
         }
         add(mut out, formatted)
+        if displayed && notes.find(annotations, value.id).len > 0 {
+            if format != "medium" { return Unsupported("history notes in {format} format") }
+            if display.patch && display.stat { return Unsupported("history notes with patch and stat") }
+            add(mut out, notes.display(ctx.repo, annotations, value.id)?)
+        }
         let changes = if !show && !root_diff && value.parents.len == 0 {
             List[byte]()
         } else {

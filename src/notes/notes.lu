@@ -126,6 +126,35 @@ pub fn with_note(
     out
 }
 
+/// The measured default-format block after a commit message: an empty line,
+/// "Notes:", then each note line indented by four spaces (an empty line
+/// becomes four spaces). Empty when object has no note. Note bodies outside
+/// the measured shape (no final LF, TAB, CR or NUL, empty) refuse by name.
+pub fn display(repo: repository.Repo, value: Notes, target: oid.Oid) -> List[byte] ! worktree.WorkErrors {
+    let blob = find(value, target)
+    var out = List[byte]()
+    if blob.len == 0 { return out }
+    let stored = object.read_object(repo, blob[0], 16777216)?
+    if stored.kind != "blob" { return Unsupported("history notes {stored.kind} note") }
+    let data = stored.data
+    if data.len == 0 || data[data.len - 1] != 10 as byte {
+        return Unsupported("history notes without a final newline")
+    }
+    for b in data {
+        if b == 9 as byte || b == 13 as byte || b == 0 as byte {
+            return Unsupported("history notes with tab, carriage return or NUL")
+        }
+    }
+    for b in "\nNotes:\n    ".bytes() { (mut out).push(b) }
+    for i in 0..data.len {
+        (mut out).push(data[i])
+        if data[i] == 10 as byte && i + 1 < data.len {
+            for b in "    ".bytes() { (mut out).push(b) }
+        }
+    }
+    out
+}
+
 fn digit(hex: str, at: int) -> int {
     let b = hex.bytes()[at]
     if b >= 97 as byte then b as int - 87 else b as int - 48
