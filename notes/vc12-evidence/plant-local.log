@@ -1,0 +1,6 @@
+VC12 plant-local START 2026-10-28T04:18:44Z pid=965437
+63:    for count in groups { if count < 3 { return 0 } }
+wolf-trap: assert
+  at target/plant-src/stash_test.lu:114:5
+planted unit exit=134
+VC12 plant-local EXIT 0 2026-10-28T04:18:45Z

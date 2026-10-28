@@ -1,0 +1,20 @@
+VC12 bootstrap START 2026-10-28T02:58:42Z pid=3149548
+6
+fetch-toolchain: https://github.com/wolffe-lang/wolf-lang/releases/download/v0.2.35/wolf-0.2.35-x86_64-unknown-linux-gnu.tar.gz
+fetch-toolchain: sha256 4cc4045bbbb605c07835bc4f32685953c784eeef4cd3139a48b457dfc90dad1a OK
+fetch-toolchain: https://github.com/wolffe-lang/wolf-interp/releases/download/v0.1.56/lupin-0.1.56-x86_64-unknown-linux-gnu.tar.gz
+fetch-toolchain: sha256 ad703550ac4787e8e4bb26989d591a731410274d7332f2b4e8b9a64c878822cc OK
+fetch-toolchain: the archive bundles std 2386522eb059cca5a84108562c2c0a0e72345d34; staging the pin instead
+fetch-toolchain: https://github.com/wolffe-lang/wolf-std at 2386522eb059cca5a84108562c2c0a0e72345d34
+fetch-toolchain: staged x86_64-unknown-linux-gnu into .wolf-bin/
+gpg:          There is no indication that the signature belongs to the owner.
+Primary key fingerprint: 96E0 7AF2 5771 9559 80DA  D100 20D0 4E5A 7136 60A7
+     Subkey fingerprint: E1F0 36B1 FEE7 221F C778  ECEF B0B5 E886 96AF E6CB
+oracle binary sha256 c4848492938c4ebfffbefe1fbbaa68b9af90c86d1f6a20e76816c5ff37fcfa60
+/work/den/target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git
+c4848492938c4ebfffbefe1fbbaa68b9af90c86d1f6a20e76816c5ff37fcfa60  target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git
+c4848492938c4ebfffbefe1fbbaa68b9af90c86d1f6a20e76816c5ff37fcfa60  target/oracle/4fc1e5da7ea879faa3aa991c60e3c686e7200023717870f5f2961968a72d0327/root/opt/git/bin/git
+git version 2.56.0
+build: target/native/den
+BOOTSTRAP-OK
+VC12 bootstrap EXIT 0 2026-10-28T03:00:12Z
