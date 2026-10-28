@@ -16,6 +16,19 @@ struct CacheFrame {
     remaining: int,
 }
 
+/// Return valid cache-tree object identities through the existing TREE parser.
+/// Invalidated records contain no OID; no extension or index bytes are changed.
+pub fn cached_trees(value: Index) -> List[oid.Oid] ! IndexErrors {
+    var out = List[oid.Oid]()
+    for extension in value.extensions {
+        if extension.signature != "TREE" { continue }
+        for node in parse_cache(extension.data)? {
+            if node.count >= 0 { (mut out).push(oid.from_bytes("sha1", node.id)?) }
+        }
+    }
+    out
+}
+
 fn decimal(data: List[byte], mut pos: int, terminator: byte, negative: bool) -> int ! IndexErrors {
     var sign = 1
     if pos < data.len && data[pos] == 45 as byte {
