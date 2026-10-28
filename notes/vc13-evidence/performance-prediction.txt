@@ -1,0 +1,11 @@
+vc13 performance follow-up, before profiling or cost changes.
+The none row includes fixture inventory/type/body capture before its own mode,
+whereas ofs/ref rows do not. Each run() also rehashes the complete repository
+(including 1000 worktree files) and serializes its state. Hypothesis: repeated
+per-object processes plus snapshots dominate, not delta search. Measure process
+versus snapshot/serialization time separately on vc09-14-ofs and vc09-14-ref,
+each retaining all 1002 objects and none/ofs/ref output modes, hasu block A.
+Then batch read-only object exchanges if measured costs justify it: preserve
+all object bytes, IDs and types, every actual process result and its complete
+file/mode state, pack isolation, verify-pack/fsck and the 1.5 size gate.
+Do not raise the 60-minute cap, shrink the fixture or hide failed comparisons.
