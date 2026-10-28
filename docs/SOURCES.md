@@ -6,6 +6,41 @@ extracted for reading. No other Git implementation was consulted. The prose
 below is original, not copied from the references. Raw AsciiDoc is from the
 same signed Git 2.56.0 tarball pinned in `den-oracle.toml`.
 
+## Stash and notes (vc12)
+
+Read only versioned Git v2.56.0 documentation before implementation:
+
+- `Documentation/git-stash.adoc`: Synopsis, Description, Commands (push, save,
+  list, show, pop, apply, branch, clear, drop, create, store, export, import),
+  Options, Discussion (the W/I/H ancestry graph), Examples and Exit Status.
+- `Documentation/git-notes.adoc`: Synopsis, Description, Subcommands, Options,
+  Discussion (permitted fan-out pathnames, notes commits), Notes Merge
+  Strategies, Examples, Configuration and Environment.
+- `Documentation/config/stash.adoc` and `Documentation/config/notes.adoc`;
+  `Documentation/pretty-options.adoc`, `--notes`/`--no-notes`.
+- URLs use `https://raw.githubusercontent.com/git/git/v2.56.0/` followed by
+  those documentation paths; the files' SHA-256 are 857d4544… (git-stash) and
+  9f3a7c10… (git-notes). No implementation link was followed. No new
+  gitformat-* or gitprotocol-* parser was introduced.
+
+The pages do not specify the stash message bytes (W carries no final LF, I
+does), the refresh-before-checks order, ORIG_HEAD and HEAD's same-OID reset
+record, the zero-stat entries apply leaves, the drop rewrite of the following
+record, the loose `refs/stash` written on a kept value, the lock diagnostics or
+the notes write fan-out: each was measured on the pinned executable
+(`tools/stash-notes-measure.py`, `notes/vc12-evidence/*-observations.json`,
+oracle-only, not parity) and is then compared exactly by `tools/stash-test.py`.
+The fan-out rule was inferred from five independent thresholds (61, 66, 71, 77,
+78 notes) that it predicts exactly, and the depth beyond two-hex directories is
+refused rather than extrapolated.
+
+Only den's own revision, raw object/tree/commit, packed-store, index
+transaction, worktree transition, merge plan, rename, diff CLI, ref and reflog
+APIs supplied implementation boundaries. The oracle was built afresh through
+`tools/fetch-oracle` at `/work/den` and its c4848492… digest asserted before
+every observation. Git source was built, never opened. No Git, libgit2 or other
+VCS implementation source was read; no production subprocess or new dependency.
+
 ## Blame attribution (vc11)
 
 Read only versioned Git v2.56.0 documentation before implementation:
