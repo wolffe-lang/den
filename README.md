@@ -9,7 +9,7 @@ This is not a replacement for Git; M2, M3 and M4 remain incomplete. Log/show sup
 bounded loose or packed history; branches, tags, branch switching and resets share
 loose/packed ref storage. Merge, single-commit revert, cherry-pick and linear
 rebase cover the measured subsets below. Combined merge display, full replay
-semantics, pack writing and transports remain unfinished. Text diff has
+semantics, pack housekeeping and transports remain unfinished. Text diff has
 two recorded equal-cost alignment differences; binary patches reconstruct the
 exact blobs but do not always use Git's byte representation. `den --version`
 prints `den 0.0.0 (built with wolf 0.2.35)`.
@@ -36,6 +36,7 @@ oracle builds are in `notes/vc00-evidence/`.
 | Area | Commands and supported surface |
 |---|---|
 | Objects | `init`, `hash-object`, `cat-file -p/-t/-s`, `mktree`, `commit-tree`, `mktag` |
+| Packs | `pack-objects` from stdin object IDs to `objects/pack/pack`, OFS/REF deltas or no deltas; `verify-pack [-v]`; `count-objects [-v]`; bounded `fsck --full` (limits below); no gc/repack/pruning |
 | Index | `write-tree` over nested index v2/v3/v4 entries; exclusive `index.lock` writes, stat fields, flags and TREE cache updates |
 | Config / ignore | Read-only `config --get`; `check-ignore` with provenance, negation, tracked-file bypass and `--no-index` |
 | Worktree | `add` paths/directories, `-A`, `-u`, `--ignore-removal`, `-f`, `-N`, `--chmod`; `rm`, `mv` and their implemented safety/force/recursive options |
@@ -100,6 +101,7 @@ tools/check-refs
 tools/check-merge
 tools/check-replay
 tools/check-pack                   # after corpus and inherited client builds
+tools/check-pack-write             # after check-pack/check-stash; interop, sizes, commands and corruption
 tools/check-delta
 tools/check-rename
 tools/check-diff
@@ -116,7 +118,7 @@ full repository-byte comparisons. Formatting/date API comparisons are not a
 claim of CLI stderr/exit-status parity. A checked result means the JSON verdict
 from `wolf conform-run --checked`, not merely a successful process exit.
 
-The expanded main matrix contains 190 cases: 181 parity, 8 named not-yet and
+The expanded main matrix contains 190 cases: 182 parity, 7 named not-yet and
 one version-shape check. Generated diff, similarity, pairing and application
 matrices are reported separately in `notes/vc04-evidence/`; their explicit
 representation/alignment differences are never added to the parity count.
@@ -149,11 +151,11 @@ repository state to a specific case; there are no wildcard exclusions.
 
 ## Repository and command limits
 
-The SHA-1 store reads loose objects and pack-v2/idx-v2 files; it writes loose
-objects only. Binary object/tree names are preserved, but filesystem path arguments
+The SHA-1 store reads and writes loose objects and pack-v2/idx-v2 pairs.
+Binary object/tree names are preserved, but filesystem path arguments
 remain UTF-8 `str`; raw non-UTF-8 OS paths have named upstream limitations.
 SHA-256 IDs are representable, but SHA-256 repositories are refused before writes.
-Pack writing, thin packs, multi-pack-index, bitmaps, alternates, linked worktrees,
+Pack housekeeping, thin packs, multi-pack-index, bitmaps, alternates, linked worktrees,
 submodules and unstaged revision forms remain unsupported.
 `log` accepts inclusions, `^REV` exclusions and two-/three-dot sets. `diff` treats
 a dotted range as endpoints, with one merge base required for three-dot. Other
@@ -373,9 +375,43 @@ native/release tier, plus independent corruption/limit inputs, an importing clie
 a bounded actual-checked delta/CRC program, and the existing history, refs, merge
 and replay matrices over packed copies. The fixture builder checks that packing
 preserves the entire object namespace, including unreachable objects. Existing
-M2/M3 refusals and diff representation exceptions remain unchanged. Pack writing,
-`gc`/`repack`, `fsck`, `count-objects` and `verify-pack` commands remain future work;
-those Git commands are test oracles, not den features.
+M2/M3 refusals and diff representation exceptions remain unchanged.
+
+## Packed object writes
+
+Pack construction writes v2 packs and v2 indexes, with undeltified, OFS or REF
+entries. It shares the binary patch encoder, considers ten prior candidates and
+caps delta chains at fifty. Bounds are 10,000 objects, 16 MiB per body and
+128 MiB of aggregate input/output. There is no streaming or peak-RSS guarantee.
+`pack-objects` accepts a stdin object list and the repository's
+`.git/objects/pack/pack` base; transport/stdout, thin packs and nondefault
+window/depth settings remain named refusals.
+
+Publication writes and syncs an exclusive temporary pair, validates every object
+through the existing reader, then renames pack before idx and syncs the directory.
+Ordinary failures clean owned temporaries. A crash may leave an orphan pack;
+this is not a two-file transaction. Loose objects are never pruned. `gc`, `repack`,
+cruft packs, .keep policy, bitmaps and multi-pack-index remain unimplemented.
+
+The writer gate checks 58 source fixtures in three modes, 14,055 object reads
+per native/release tier, and all-object Git verification after isolating the new
+pack from loose and older packed copies. Pack bytes need not equal Git's:
+compressed OFS packs measure at most 1.025967 times Git's size and REF packs
+1.399425 times, against a 1.5 ceiling. REF has limited headroom. No-delta mode
+is gated against Git explicitly given `--window=0 --no-reuse-object` (maximum
+1.054644); its similarity/default-Git ratio of 12.254789 is retained separately.
+Publication failure/corruption tests and a real fifty-link chain are separate
+from the bounded actual-checked delta program.
+
+`verify-pack -v` renders the validated physical object listing and chain-length
+histogram. `count-objects -v` reports actual allocated loose blocks and pack/index
+sizes; unavailable allocation metadata is a named refusal. `fsck --full` checks
+objects, typed links and HEAD/ref/index/reflog roots without writes. It supports
+`--no-dangling`, `--no-reflogs` and `--no-progress`; commit-graph verification,
+multiple dangling-tip display ordering, strict/configured checks and detailed
+corruption diagnostics remain named refusals. In particular the inherited main
+packed fsck fixture remains a refusal, not a clean-check claim. No M4 completion
+is claimed.
 
 ## Loose objects and historical measurements
 
