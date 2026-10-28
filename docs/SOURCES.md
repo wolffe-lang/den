@@ -6,6 +6,48 @@ extracted for reading. No other Git implementation was consulted. The prose
 below is original, not copied from the references. Raw AsciiDoc is from the
 same signed Git 2.56.0 tarball pinned in `den-oracle.toml`.
 
+## Pack writing and inspection (vc13)
+
+Read versioned Git v2.56.0 documentation only, from
+`https://raw.githubusercontent.com/git/git/v2.56.0/Documentation/`:
+
+- `gitformat-pack.adoc`: Checksums and object IDs; pack header, entry types,
+  size and OFS distance encodings; delta instructions; idx-v1 trailers and the
+  complete idx-v2 layout. Pack `.idx` is specified here, not by the worktree
+  `gitformat-index` page. No reader format was changed.
+- `git-pack-objects.adoc`: Synopsis, Description, base-name and stdin objects,
+  delta-base/window/depth defaults, compression, no-reuse, keep, cruft, thin and
+  stdout/transport boundaries. The measured writer uses one original vc04 delta
+  encoder, not Git's heuristics.
+- `git-verify-pack.adoc` and `git-count-objects.adoc`: entire command pages,
+  options and output descriptions. The binary establishes singular/plural
+  histogram text, physical listing order, delta instruction sizes and empty-pack
+  output. Full-stat word 8 supplies allocated 512-byte blocks; no allocation
+  estimate is substituted for unavailable host metadata.
+- `git-fsck.adoc`: Synopsis, Description, Options, Discussion, Extracted
+  Diagnostics and Environment. Commit-graph validation, complex corruption
+  diagnostics and multiple dangling-tip ordering are explicitly unimplemented,
+  not inferred from undocumented hash-table iteration.
+- `git-repack.adoc`: Description, `-a`/`-A`/`-d`, keep/cruft and window/depth
+  options; `git-gc.adoc`: Description, Options, Aggressive and Notes. These
+  housekeeping and expiry policies remain named refusals; publication never
+  prunes loose objects.
+
+The existing den codec, SHA-1, object parsers, raw identity, refs, index and
+reflog APIs are the only implementation references. The pack reader is unchanged.
+No Git, libgit2, external VCS or codec implementation source was read. The signed
+oracle was built through `tools/fetch-oracle` at `/work/den`, not opened as source;
+each harness asserts its full c4848492… executable digest. Python's stdlib hash
+and the pinned Git are independent test oracles only, never runtime dependencies.
+
+R4c proof keeps full process and file/mode captures while checking Git reads of
+all objects and per-fixture pack size. Other existing packs are removed only
+from the test copy after publication, so a duplicate cannot mask a corrupt new
+pack. Complete snapshots use a content-addressed byte store with state references;
+no repository path is excluded. Native/release fixtures include vc09 and vc12
+corpora, den-origin history, corruption with loose duplicates still present,
+publication failures and a measured fifty-link chain in both delta modes.
+
 ## Stash and notes (vc12)
 
 Read only versioned Git v2.56.0 documentation before implementation:

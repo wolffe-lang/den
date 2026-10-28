@@ -3,9 +3,9 @@
 The codec, owned OIDs, bounded loose/packed store and binary parsers underpin the
 index/worktree/commit interface and diff. The dispatcher routes the implemented
 porcelain, plumbing, diff, bounded log/show, ref commands, merge/revert, replay,
-blame, stash and notes.
-Combined merge show, recursive/complex merges, full replay semantics, pack writing and transports
-remain separate work; M2 and M3 are not complete. Diff's known hunk
+blame, stash, notes and bounded pack commands.
+Combined merge show, recursive/complex merges, full replay semantics, pack housekeeping and transports
+remain separate work; M2, M3 and M4 are not complete. Diff's known hunk
 alignment differences and binary representation exceptions are explicit below,
 not a blanket byte-parity claim.
 
@@ -17,15 +17,77 @@ not a blanket byte-parity claim.
 | M1 | `zlib`: inflate then deflate, Adler-32 (vc01); `oid`, `object`, `repository`, init/hash-object/cat-file/tree/commit/tag plumbing (vc02) |
 | M2 (partial) | `index`, `worktree`, `ignore`, `commit_format`, `commit`: implemented subset (vc03); `delta`, `rename`, `difftext`, `diffbinary`, `diff` (vc04); `walk`, `pretty`, log/show (vc05) |
 | M3 (partial) | `refs`, `refcmd`, `worktree.transition`: refs/reflogs, branch/tag/switch/checkout/reset (vc06); three-way merge/revert (vc07); rebase/cherry-pick/sequencer (vc08); `revsyntax`, `revision`, `revset`: shared bounded grammar (vc10); `blame`, `blamerange` and shared `difftext.correspondence`: bounded line attribution (vc11); `stash`, `stashlog`, `notes`, `notestree`: stash and notes (vc12) |
-| M4 (partial) | `pack`: pack-v2/idx-v2 reads and delta decoding (vc09); pack writing, gc/repack/fsck/count-objects (later) |
+| M4 (partial) | `pack`: pack-v2/idx-v2 reading (vc09), shared delta encoder and verified pair writer; `packcmd`: pack-objects, verify-pack, count-objects and bounded fsck (vc13); gc/repack later |
 | M5 | `pktline`, protocol v2 fetch (vc13); receive-pack push/remotes (vc14); clone/pull porcelain (vc15) |
 | M6 | static build and PAX handoff (vc16, then px lane); optional `git` alias |
 | Later | HTTPS beyond measured TLS profile, hooks, worktrees, sparse index, submodules, SHA-256 repositories, interactive rebase, bundles and protocol v0/v1 fetch |
 
 The MVP is M0–M3, file/git transports from M5, and M6. Pack reading is available
-beneath object lookup; pack writing and transports remain separately staged.
+beneath object lookup; pack construction is separate from housekeeping and transports.
 OID design keeps an algorithm and a byte list from the start, never a fixed
 20-byte public type. SHA-256 is available in the hash adapter already.
+
+## Pack writing and inspection (vc13)
+
+`pack.encode_delta(before, after)` is vc04's original matcher extracted unchanged
+from `diffbinary`; both binary patches and pack construction call this one
+encoder. It returns owned instruction bytes with `DeltaErrors = {invalid, limit}`
+and a 16-MiB input cap. The existing `apply_delta` independently decodes them.
+
+`pack.encode(bodies: List[Body], mode)` returns owned `Encoded {data, index, name}`.
+Modes are `none`, `ofs` and `ref`; construction hashes canonical objects,
+deduplicates identities, orders by type and descending body size, tries the
+previous ten compatible entries and never exceeds fifty delta links. Selection
+compares the complete compressed entry cost, including the reference. Bounds
+are 10,000 input objects, 16 MiB per body and 128 MiB aggregate input/output.
+These are charged payload bounds, not peak RSS or a streaming writer promise.
+The generated idx-v2 uses 31-bit offsets because the output cap is below 2 GiB;
+the existing reader still accepts independently tested 64-bit offset tables.
+
+`pack.install(gitdir, encoded)` writes an exclusive temporary pack/idx pair in
+`objects/pack`, syncs both, and validates every object through vc09's unchanged
+reader before renaming pack then idx and syncing the directory. Existing pairs
+are verified rather than overwritten. `install_injected` exposes explicit
+write/sync/rename/directory-sync failures for tests, never an environment switch.
+Ordinary prepublication errors remove owned temporaries; an idx-rename error
+also removes the newly published pack. Abrupt termination can leave an orphan
+pack; this is not a two-file atomic transaction. Neither construction nor
+publication removes loose objects. gc/repack/pruning policy remains unimplemented.
+
+`pack.inspect(idx_path)` returns `Inspection {objects, bytes}` with physical-order
+`PackedEntry {name, kind, size, stored, offset, depth, base}` records. For deltas,
+`size` is the instruction-stream size, not the reconstructed body size; `stored`
+includes the header/reference/zlib bytes. `paths` and `names` provide validated
+pack inventories. All checksums, CRCs, delta application and canonical identities
+remain checked by the existing reader, even when loose copies exist.
+
+`packcmd` implements stdin object lists to `pack-objects` with the repository's
+`objects/pack/pack` output base; `--delta-base-offset`, zero/default window/depth
+and quiet/no-reuse forms; `verify-pack` and its exact verbose listing/histogram;
+and `count-objects [-v]`, using actual allocated blocks from full stat word 8.
+Missing allocation metadata refuses by name. R4c compares valid packs, canonical
+object bytes and sizes, never pack-byte identity or pack-hash stdout parity.
+
+Bounded `fsck [--full] [--no-dangling] [--no-reflogs] [--no-progress]` validates
+all loose/packed objects, parsed trees/headers/identities, typed graph links,
+HEAD/refs/index/reflog roots and zero/one dangling tip. Commit-graph verification
+(unless `core.commitGraph=false`), multiple-tip display ordering, corrupt-object
+and missing/wrong-type diagnostic rendering, strict/configured fsck and alternate
+stores remain named refusals. The main packed fsck row remains named, not parity.
+The main count-objects row requires parity. Bitmaps, multi-pack-index, cruft packs,
+.keep policy, thin packs, transport/stdout and nondefault window/depth remain named.
+
+The writer gate uses 58 source fixtures (16 original, similarity, den-origin,
+34 vc09 packed and six vc12 stash/notes), each in none/OFS/REF modes. Per native
+and release tier it validates 14,055 objects across 174 pairs. Complete process
+captures retain both tools' states; command and refusal counts are derived from
+the final captures rather than conflated with object comparisons. Maximum
+measured OFS/Git is 1.025967 and REF/Git 1.399425, below 1.5; REF has narrow
+headroom. No-delta mode is also gated at 1.5 against Git explicitly given
+`--window=0 --no-reuse-object` (maximum 1.054644). Its similarity/default-Git ratio
+12.254789 remains separately recorded, not hidden by the matched-mode baseline. Independent publication/corruption tests and a real
+fifty-link chain complement bounded actual-checked delta units. Component counts
+are separate from the inherited gauntlet's counts.
 
 ## Blame attribution (vc11)
 
@@ -65,7 +127,7 @@ Six importing-client rows per mode include raw non-UTF-8 paths, returned ownersh
 exact/over/invalid payload caps and malformed public results. Ten named scope
 rows per mode are separate non-parity captures. A bounded actual-checked program
 covers ranges and shared correspondence. No index/object/ref/reflog is written.
-Pack writing and inherited M2/M3 boundaries remain open.
+Pack housekeeping and inherited M2/M3 boundaries remain open.
 
 ## Stash and notes (vc12)
 
@@ -229,7 +291,7 @@ fixtures plus ignore, staged rename, modes/symlink, unborn, amend, index-v4 and
 edited-rename states. The original nine builders remain unchanged. The two
 independent corpus builds compare OID manifests, not inode-dependent stat data.
 `tests/cases.json` defines 190 main cases; its latest measured main comparison
-is 179 parity / 10 named not-yet / 1 version-shape / 0 reviewed / 0 failures.
+is 182 parity / 7 named not-yet / 1 version-shape / 0 reviewed / 0 failures.
 Implemented diff and edited-rename cases require parity and cannot regress to
 a named refusal unnoticed. Generated component matrices remain separately
 counted. Historical vc03 counts and 636 stat-proof rows are retained in
@@ -391,7 +453,7 @@ including duplicates across packs. Writers verify and reuse an already-packed
 object instead of adding a duplicate loose file. `.keep` files do not hide packs;
 `.rev` and `.mtimes` sidecars are unnecessary for these reads. Multi-pack-index
 and bitmaps refuse by name. Revision grammar is layered above this store;
-no pack writer or protocol/thin-pack support is exposed here.
+protocol/thin-pack support is not exposed here; construction is described above.
 
 The mandatory `tools/check-pack` independently writes valid/corrupt structures,
 reads every oracle-listed object from 34 fixtures (2,442 object comparisons per
