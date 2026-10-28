@@ -1,0 +1,1328 @@
+{
+ "kind": "oracle-only exploratory measurement",
+ "oracle_sha256": "c4848492938c4ebfffbefe1fbbaa68b9af90c86d1f6a20e76816c5ff37fcfa60",
+ "parity": false,
+ "steps": [
+  {
+   "args": [
+    "stash"
+   ],
+   "changes": {},
+   "label": "nothing",
+   "status": 0,
+   "stderr": "",
+   "stdout": "No local changes to save\n"
+  },
+  {
+   "args": [
+    "stash"
+   ],
+   "changes": {
+    ".git/ORIG_HEAD": "3725b6686c5e83d101394fca452ea0f3cd8f76b2\n",
+    ".git/index": "<index 309 bytes, ext=[b'TREE']>",
+    ".git/logs/HEAD": "0000000000000000000000000000000000000000 3725b6686c5e83d101394fca452ea0f3cd8f76b2 Den Tester <den@example.invalid> 1700000000 +0000\tcommit (initial): first subject\n3725b6686c5e83d101394fca452ea0f3cd8f76b2 3725b6686c5e83d101394fca452ea0f3cd8f76b2 Den Tester <den@example.invalid> 1700000000 +0000\treset: moving to HEAD\n",
+    ".git/logs/refs/stash": "0000000000000000000000000000000000000000 585c391d5ad4844585206b658317a6ba0d7b4f0e Den Tester <den@example.invalid> 1700000000 +0000\tWIP on main: 3725b66 first subject\n",
+    ".git/objects/11/ee7e5dbd75dd2fcd13a627dae1e30b2f942ebc": "commit 249 | tree dd4344d55a789a90b9c6a58e752e64d5cf817b68\nparent 3725b6686c5e83d101394fca452ea0f3cd8f76b2\nauthor Den Tester <den@example.invalid> 1700000000 +0000\ncommitter Den Tester <den@example.invalid> 1700000000 +0000\n\nindex on main: 3725b66 first subject\n",
+    ".git/objects/58/5c391d5ad4844585206b658317a6ba0d7b4f0e": "commit 294 | tree 7346aeed60638d2cd11b9937b62d8f6c0b2d789f\nparent 3725b6686c5e83d101394fca452ea0f3cd8f76b2\nparent 11ee7e5dbd75dd2fcd13a627dae1e30b2f942ebc\nauthor Den Tester <den@example.invalid> 1700000000 +0000\ncommitter Den Tester <den@example.invalid> 1700000000 +0000\n\nWIP on main: 3725b66 first subject",
+    ".git/objects/73/46aeed60638d2cd11b9937b62d8f6c0b2d789f": "tree 101 | 100644 a.txt ec20141f0267805d3db1349c4701ed1f84f3ee61; 100644 b.txt 78195f7366e00b12f6c50a61f5e47754c0f6a796; 100644 new.txt d5f7fc3f74f7dec08280f370a975b112e8f60818",
+    ".git/objects/78/195f7366e00b12f6c50a61f5e47754c0f6a796": "blob 26 | beta staged then worktree\n",
+    ".git/objects/dd/4344d55a789a90b9c6a58e752e64d5cf817b68": "tree 131 | 100644 a.txt 4a58007052a65fbc2fc3f910f2855f45a4058e74; 100644 b.txt 0bb019b5a82a1aaf7f3a53519b5d35357683b36d; 40000 dir 038086020756ee686f7d5b4d19b623884055c23e; 100644 new.txt d5f7fc3f74f7dec08280f370a975b112e8f60818",
+    ".git/objects/ec/20141f0267805d3db1349c4701ed1f84f3ee61": "blob 14 | alpha changed\n",
+    ".git/refs/stash": "585c391d5ad4844585206b658317a6ba0d7b4f0e\n",
+    "a.txt": "alpha\n",
+    "b.txt": "beta\n",
+    "dir/c.txt": "gamma\n",
+    "new.txt": null
+   },
+   "label": "push-default",
+   "status": 0,
+   "stderr": "",
+   "stdout": "Saved working directory and index state WIP on main: 3725b66 first subject\n"
+  },
+  {
+   "args": [
+    "status",
+    "--porcelain"
+   ],
+   "changes": {},
+   "label": "status-after",
+   "status": 0,
+   "stderr": "",
+   "stdout": "?? untracked\n"
+  },
+  {
+   "args": [
+    "stash",
+    "list"
+   ],
+   "changes": {},
+   "label": "list-one",
+   "status": 0,
+   "stderr": "",
+   "stdout": "stash@{0}: WIP on main: 3725b66 first subject\n"
+  },
+  {
+   "args": [
+    "stash",
+    "show"
+   ],
+   "changes": {},
+   "label": "show-default",
+   "status": 0,
+   "stderr": "",
+   "stdout": " a.txt     | 2 +-\n b.txt     | 2 +-\n dir/c.txt | 1 -\n new.txt   | 1 +\n 4 files changed, 3 insertions(+), 3 deletions(-)\n"
+  },
+  {
+   "args": [
+    "stash",
+    "show",
+    "-p"
+   ],
+   "changes": {},
+   "label": "show-p",
+   "status": 0,
+   "stderr": "",
+   "stdout": "diff --git a/a.txt b/a.txt\nindex 4a58007..ec20141 100644\n--- a/a.txt\n+++ b/a.txt\n@@ -1 +1 @@\n-alpha\n+alpha changed\ndiff --git a/b.txt b/b.txt\nindex 65b2df8..78195f7 100644\n--- a/b.txt\n+++ b/b.txt\n@@ -1 +1 @@\n-beta\n+beta staged then worktree\ndiff --git a/dir/c.txt b/dir/c.txt\ndeleted file mode 100644\nindex af17f6c..0000000\n--- a/dir/c.txt\n+++ /dev/null\n@@ -1 +0,0 @@\n-gamma\ndiff --git a/new.txt b/new.txt\nnew file mode 100644\nindex 0000000..d5f7fc3\n--- /dev/null\n+++ b/new.txt\n@@ -0,0 +1 @@\n+added\n"
+  },
+  {
+   "args": [
+    "stash",
+    "show",
+    "--stat",
+    "stash@{0}"
+   ],
+   "changes": {},
+   "label": "show-stat-name",
+   "status": 0,
+   "stderr": "",
+   "stdout": " a.txt     | 2 +-\n b.txt     | 2 +-\n dir/c.txt | 1 -\n new.txt   | 1 +\n 4 files changed, 3 insertions(+), 3 deletions(-)\n"
+  },
+  {
+   "args": [
+    "cat-file",
+    "-p",
+    "stash@{0}"
+   ],
+   "changes": {},
+   "label": "cat-W",
+   "status": 0,
+   "stderr": "",
+   "stdout": "tree 7346aeed60638d2cd11b9937b62d8f6c0b2d789f\nparent 3725b6686c5e83d101394fca452ea0f3cd8f76b2\nparent 11ee7e5dbd75dd2fcd13a627dae1e30b2f942ebc\nauthor Den Tester <den@example.invalid> 1700000000 +0000\ncommitter Den Tester <den@example.invalid> 1700000000 +0000\n\nWIP on main: 3725b66 first subject"
+  },
+  {
+   "args": [
+    "cat-file",
+    "-p",
+    "stash@{0}^2"
+   ],
+   "changes": {},
+   "label": "cat-I",
+   "status": 0,
+   "stderr": "",
+   "stdout": "tree dd4344d55a789a90b9c6a58e752e64d5cf817b68\nparent 3725b6686c5e83d101394fca452ea0f3cd8f76b2\nauthor Den Tester <den@example.invalid> 1700000000 +0000\ncommitter Den Tester <den@example.invalid> 1700000000 +0000\n\nindex on main: 3725b66 first subject\n"
+  },
+  {
+   "args": [
+    "stash",
+    "push",
+    "-m",
+    "my message"
+   ],
+   "changes": {
+    ".git/index": "<index 309 bytes, ext=[b'TREE']>",
+    ".git/logs/HEAD": "0000000000000000000000000000000000000000 3725b6686c5e83d101394fca452ea0f3cd8f76b2 Den Tester <den@example.invalid> 1700000000 +0000\tcommit (initial): first subject\n3725b6686c5e83d101394fca452ea0f3cd8f76b2 3725b6686c5e83d101394fca452ea0f3cd8f76b2 Den Tester <den@example.invalid> 1700000000 +0000\treset: moving to HEAD\n3725b6686c5e83d101394fca452ea0f3cd8f76b2 3725b6686c5e83d101394fca452ea0f3cd8f76b2 Den Tester <den@example.invalid> 1700000000 +0000\treset: moving to HEAD\n",
+    ".git/logs/refs/stash": "0000000000000000000000000000000000000000 585c391d5ad4844585206b658317a6ba0d7b4f0e Den Tester <den@example.invalid> 1700000000 +0000\tWIP on main: 3725b66 first subject\n585c391d5ad4844585206b658317a6ba0d7b4f0e 4f4c7fca71e892ce2156112bd8a25576e638d95a Den Tester <den@example.invalid> 1700000000 +0000\tOn main: my message\n",
+    ".git/objects/39/fb44f61d69694499308cadc41d23e9e575edc3": "blob 13 | alpha second\n",
+    ".git/objects/3f/30f7f63caa5b343d6d326335d13555492f3a24": "tree 96 | 100644 a.txt 39fb44f61d69694499308cadc41d23e9e575edc3; 100644 b.txt 65b2df87f7df3aeedef04be96703e55ac19c2cfb; 40000 dir 038086020756ee686f7d5b4d19b623884055c23e",
+    ".git/objects/4f/4c7fca71e892ce2156112bd8a25576e638d95a": "commit 279 | tree 3f30f7f63caa5b343d6d326335d13555492f3a24\nparent 3725b6686c5e83d101394fca452ea0f3cd8f76b2\nparent 6c8dff0971649e17be0f6f08c685e6a3661a773f\nauthor Den Tester <den@example.invalid> 1700000000 +0000\ncommitter Den Tester <den@example.invalid> 1700000000 +0000\n\nOn main: my message",
+    ".git/objects/6c/8dff0971649e17be0f6f08c685e6a3661a773f": "commit 249 | tree 48b8e487314af2ade2704960f8fae4eae9c5f225\nparent 3725b6686c5e83d101394fca452ea0f3cd8f76b2\nauthor Den Tester <den@example.invalid> 1700000000 +0000\ncommitter Den Tester <den@example.invalid> 1700000000 +0000\n\nindex on main: 3725b66 first subject\n",
+    ".git/refs/stash": "4f4c7fca71e892ce2156112bd8a25576e638d95a\n",
+    "a.txt": "alpha\n"
+   },
+   "label": "push-m",
+   "status": 0,
+   "stderr": "",
+   "stdout": "Saved working directory and index state On main: my message\n"
+  },
+  {
+   "args": [
+    "stash",
+    "list"
+   ],
+   "changes": {},
+   "label": "list-two",
+   "status": 0,
+   "stderr": "",
+   "stdout": "stash@{0}: On main: my message\nstash@{1}: WIP on main: 3725b66 first subject\n"
+  },
+  {
+   "args": [
+    "stash",
+    "show",
+    "1"
+   ],
+   "changes": {},
+   "label": "show-1",
+   "status": 0,
+   "stderr": "",
+   "stdout": " a.txt     | 2 +-\n b.txt     | 2 +-\n dir/c.txt | 1 -\n new.txt   | 1 +\n 4 files changed, 3 insertions(+), 3 deletions(-)\n"
+  },
+  {
+   "args": [
+    "stash",
+    "apply"
+   ],
+   "changes": {
+    ".git/AUTO_MERGE": "3f30f7f63caa5b343d6d326335d13555492f3a24\n",
+    ".git/index": "<index 290 bytes, ext=[b'TREE']>",
+    "a.txt": "alpha second\n"
+   },
+   "label": "apply-0",
+   "status": 0,
+   "stderr": "",
+   "stdout": "On branch main\nChanges not staged for commit:\n  (use \"git add <file>...\" to update what will be committed)\n  (use \"git restore <file>...\" to discard changes in working directory)\n\tmodified:   a.txt\n\nUntracked files:\n  (use \"git add <file>...\" to include in what will be committed)\n\tuntracked\n\nno changes added to commit (use \"git add\" and/or \"git commit -a\")\n"
+  },
+  {
+   "args": [
+    "status",
+    "--porcelain"
+   ],
+   "changes": {},
+   "label": "status-apply",
+   "status": 0,
+   "stderr": "",
+   "stdout": " M a.txt\n?? untracked\n"
+  },
+  {
+   "args": [
+    "reset",
+    "-q",
+    "--hard"
+   ],
+   "changes": {
+    ".git/AUTO_MERGE": null,
+    ".git/index": "<index 309 bytes, ext=[b'TREE']>",
+    ".git/logs/HEAD": "0000000000000000000000000000000000000000 3725b6686c5e83d101394fca452ea0f3cd8f76b2 Den Tester <den@example.invalid> 1700000000 +0000\tcommit (initial): first subject\n3725b6686c5e83d101394fca452ea0f3cd8f76b2 3725b6686c5e83d101394fca452ea0f3cd8f76b2 Den Tester <den@example.invalid> 1700000000 +0000\treset: moving to HEAD\n3725b6686c5e83d101394fca452ea0f3cd8f76b2 3725b6686c5e83d101394fca452ea0f3cd8f76b2 Den Tester <den@example.invalid> 1700000000 +0000\treset: moving to HEAD\n3725b6686c5e83d101394fca452ea0f3cd8f76b2 3725b6686c5e83d101394fca452ea0f3cd8f76b2 Den Tester <den@example.invalid> 1700000000 +0000\treset: moving to HEAD\n",
+    "a.txt": "alpha\n"
+   },
+   "label": "reset-hard",
+   "status": 0,
+   "stderr": "",
+   "stdout": ""
+  },
+  {
+   "args": [
+    "stash",
+    "apply",
+    "--index",
+    "stash@{1}"
+   ],
+   "changes": {
+    ".git/AUTO_MERGE": "7346aeed60638d2cd11b9937b62d8f6c0b2d789f\n",
+    ".git/index": "<index 381 bytes, ext=[b'TREE']>",
+    ".git/logs/HEAD": "0000000000000000000000000000000000000000 3725b6686c5e83d101394fca452ea0f3cd8f76b2 Den Tester <den@example.invalid> 1700000000 +0000\tcommit (initial): first subject\n3725b6686c5e83d101394fca452ea0f3cd8f76b2 3725b6686c5e83d101394fca452ea0f3cd8f76b2 Den Tester <den@example.invalid> 1700000000 +0000\treset: moving to HEAD\n3725b6686c5e83d101394fca452ea0f3cd8f76b2 3725b6686c5e83d101394fca452ea0f3cd8f76b2 Den Tester <den@example.invalid> 1700000000 +0000\treset: moving to HEAD\n3725b6686c5e83d101394fca452ea0f3cd8f76b2 3725b6686c5e83d101394fca452ea0f3cd8f76b2 Den Tester <den@example.invalid> 1700000000 +0000\treset: moving to HEAD\n3725b6686c5e83d101394fca452ea0f3cd8f76b2 3725b6686c5e83d101394fca452ea0f3cd8f76b2 Den Tester <den@example.invalid> 1700000000 +0000\treset: moving to HEAD\n",
+    "a.txt": "alpha changed\n",
+    "b.txt": "beta staged then worktree\n",
+    "dir/c.txt": null,
+    "new.txt": "added\n"
+   },
+   "label": "apply-index-1",
+   "status": 0,
+   "stderr": "",
+   "stdout": "On branch main\nChanges to be committed:\n  (use \"git restore --staged <file>...\" to unstage)\n\tmodified:   b.txt\n\tnew file:   new.txt\n\nChanges not staged for commit:\n  (use \"git add/rm <file>...\" to update what will be committed)\n  (use \"git restore <file>...\" to discard changes in working directory)\n\tmodified:   a.txt\n\tmodified:   b.txt\n\tdeleted:    dir/c.txt\n\nUntracked files:\n  (use \"git add <file>...\" to include in what will be committed)\n\tuntracked\n\n"
+  },
+  {
+   "args": [
+    "status",
+    "--porcelain"
+   ],
+   "changes": {},
+   "label": "status-apply-index",
+   "status": 0,
+   "stderr": "",
+   "stdout": " M a.txt\nMM b.txt\n D dir/c.txt\nA  new.txt\n?? untracked\n"
+  },
+  {
+   "args": [
+    "reset",
+    "-q",
+    "--hard"
+   ],
+   "changes": {
+    ".git/AUTO_MERGE": null,
+    ".git/index": "<index 309 bytes, ext=[b'TREE']>",
+    ".git/logs/HEAD": "0000000000000000000000000000000000000000 3725b6686c5e83d101394fca452ea0f3cd8f76b2 Den Tester <den@example.invalid> 1700000000 +0000\tcommit (initial): first subject\n3725b6686c5e83d101394fca452ea0f3cd8f76b2 3725b6686c5e83d101394fca452ea0f3cd8f76b2 Den Tester <den@example.invalid> 1700000000 +0000\treset: moving to HEAD\n3725b6686c5e83d101394fca452ea0f3cd8f76b2 3725b6686c5e83d101394fca452ea0f3cd8f76b2 Den Tester <den@example.invalid> 1700000000 +0000\treset: moving to HEAD\n3725b6686c5e83d101394fca452ea0f3cd8f76b2 3725b6686c5e83d101394fca452ea0f3cd8f76b2 Den Tester <den@example.invalid> 1700000000 +0000\treset: moving to HEAD\n3725b6686c5e83d101394fca452ea0f3cd8f76b2 3725b6686c5e83d101394fca452ea0f3cd8f76b2 Den Tester <den@example.invalid> 1700000000 +0000\treset: moving to HEAD\n3725b6686c5e83d101394fca452ea0f3cd8f76b2 3725b6686c5e83d101394fca452ea0f3cd8f76b2 Den Tester <den@example.invalid> 1700000000 +0000\treset: moving to HEAD\n",
+    "a.txt": "alpha\n",
+    "b.txt": "beta\n",
+    "dir/c.txt": "gamma\n",
+    "new.txt": null
+   },
+   "label": "reset-hard2",
+   "status": 0,
+   "stderr": "",
+   "stdout": ""
+  },
+  {
+   "args": [
+    "clean",
+    "-q",
+    "-f",
+    "new.txt"
+   ],
+   "changes": {},
+   "label": "rm-new",
+   "status": 0,
+   "stderr": "",
+   "stdout": ""
+  },
+  {
+   "args": [
+    "stash",
+    "pop"
+   ],
+   "changes": {
+    ".git/AUTO_MERGE": "3f30f7f63caa5b343d6d326335d13555492f3a24\n",
+    ".git/index": "<index 290 bytes, ext=[b'TREE']>",
+    ".git/logs/refs/stash": "0000000000000000000000000000000000000000 585c391d5ad4844585206b658317a6ba0d7b4f0e Den Tester <den@example.invalid> 1700000000 +0000\tWIP on main: 3725b66 first subject\n",
+    ".git/refs/stash": "585c391d5ad4844585206b658317a6ba0d7b4f0e\n",
+    "a.txt": "alpha second\n"
+   },
+   "label": "pop",
+   "status": 0,
+   "stderr": "",
+   "stdout": "On branch main\nChanges not staged for commit:\n  (use \"git add <file>...\" to update what will be committed)\n  (use \"git restore <file>...\" to discard changes in working directory)\n\tmodified:   a.txt\n\nUntracked files:\n  (use \"git add <file>...\" to include in what will be committed)\n\tuntracked\n\nno changes added to commit (use \"git add\" and/or \"git commit -a\")\nDropped refs/stash@{0} (4f4c7fca71e892ce2156112bd8a25576e638d95a)\n"
+  },
+  {
+   "args": [
+    "stash",
+    "list"
+   ],
+   "changes": {},
+   "label": "list-after-pop",
+   "status": 0,
+   "stderr": "",
+   "stdout": "stash@{0}: WIP on main: 3725b66 first subject\n"
+  },
+  {
+   "args": [
+    "stash",
+    "drop"
+   ],
+   "changes": {
+    ".git/logs/refs/stash": null,
+    ".git/refs/stash": null
+   },
+   "label": "drop-dirty",
+   "status": 0,
+   "stderr": "",
+   "stdout": "Dropped refs/stash@{0} (585c391d5ad4844585206b658317a6ba0d7b4f0e)\n"
+  },
+  {
+   "args": [
+    "stash",
+    "drop"
+   ],
+   "changes": {},
+   "label": "drop-empty",
+   "status": 128,
+   "stderr": "No stash entries found.\n",
+   "stdout": ""
+  },
+  {
+   "args": [
+    "stash",
+    "list"
+   ],
+   "changes": {},
+   "label": "list-empty",
+   "status": 0,
+   "stderr": "",
+   "stdout": ""
+  },
+  {
+   "args": [
+    "stash",
+    "show"
+   ],
+   "changes": {},
+   "label": "show-empty",
+   "status": 128,
+   "stderr": "No stash entries found.\n",
+   "stdout": ""
+  },
+  {
+   "args": [
+    "stash",
+    "apply"
+   ],
+   "changes": {},
+   "label": "apply-empty",
+   "status": 128,
+   "stderr": "No stash entries found.\n",
+   "stdout": ""
+  },
+  {
+   "args": [
+    "stash",
+    "pop"
+   ],
+   "changes": {},
+   "label": "pop-empty",
+   "status": 128,
+   "stderr": "No stash entries found.\n",
+   "stdout": ""
+  },
+  {
+   "args": [
+    "stash",
+    "clear"
+   ],
+   "changes": {},
+   "label": "clear-empty",
+   "status": 0,
+   "stderr": "",
+   "stdout": ""
+  },
+  {
+   "args": [
+    "stash",
+    "push",
+    "-q",
+    "-m",
+    "m0"
+   ],
+   "changes": {
+    ".git/ORIG_HEAD": "3725b6686c5e83d101394fca452ea0f3cd8f76b2\n",
+    ".git/index": "<index 309 bytes, ext=[b'TREE']>",
+    ".git/logs/HEAD": "0000000000000000000000000000000000000000 3725b6686c5e83d101394fca452ea0f3cd8f76b2 Den Tester <den@example.invalid> 1700000000 +0000\tcommit (initial): first subject\n3725b6686c5e83d101394fca452ea0f3cd8f76b2 3725b6686c5e83d101394fca452ea0f3cd8f76b2 Den Tester <den@example.invalid> 1700000000 +0000\treset: moving to HEAD\n",
+    ".git/logs/refs/stash": "0000000000000000000000000000000000000000 ab14ef658edf70fae33782f4b87421f5f4ec6f63 Den Tester <den@example.invalid> 1700000000 +0000\tOn main: m0\n",
+    ".git/objects/13/ceda207b642cbbbdc409ae0bc8eefd1c2bd573": "blob 3 | v0\n",
+    ".git/objects/6c/8dff0971649e17be0f6f08c685e6a3661a773f": "commit 249 | tree 48b8e487314af2ade2704960f8fae4eae9c5f225\nparent 3725b6686c5e83d101394fca452ea0f3cd8f76b2\nauthor Den Tester <den@example.invalid> 1700000000 +0000\ncommitter Den Tester <den@example.invalid> 1700000000 +0000\n\nindex on main: 3725b66 first subject\n",
+    ".git/objects/80/14ae04b672f353b10fa6a7e006848eb401160d": "tree 96 | 100644 a.txt 13ceda207b642cbbbdc409ae0bc8eefd1c2bd573; 100644 b.txt 65b2df87f7df3aeedef04be96703e55ac19c2cfb; 40000 dir 038086020756ee686f7d5b4d19b623884055c23e",
+    ".git/objects/ab/14ef658edf70fae33782f4b87421f5f4ec6f63": "commit 271 | tree 8014ae04b672f353b10fa6a7e006848eb401160d\nparent 3725b6686c5e83d101394fca452ea0f3cd8f76b2\nparent 6c8dff0971649e17be0f6f08c685e6a3661a773f\nauthor Den Tester <den@example.invalid> 1700000000 +0000\ncommitter Den Tester <den@example.invalid> 1700000000 +0000\n\nOn main: m0",
+    ".git/refs/stash": "ab14ef658edf70fae33782f4b87421f5f4ec6f63\n",
+    "a.txt": "alpha\n"
+   },
+   "label": "push0",
+   "status": 0,
+   "stderr": "",
+   "stdout": ""
+  },
+  {
+   "args": [
+    "stash",
+    "push",
+    "-q",
+    "-m",
+    "m1"
+   ],
+   "changes": {
+    ".git/index": "<index 309 bytes, ext=[b'TREE']>",
+    ".git/logs/HEAD": "0000000000000000000000000000000000000000 3725b6686c5e83d101394fca452ea0f3cd8f76b2 Den Tester <den@example.invalid> 1700000000 +0000\tcommit (initial): first subject\n3725b6686c5e83d101394fca452ea0f3cd8f76b2 3725b6686c5e83d101394fca452ea0f3cd8f76b2 Den Tester <den@example.invalid> 1700000000 +0000\treset: moving to HEAD\n3725b6686c5e83d101394fca452ea0f3cd8f76b2 3725b6686c5e83d101394fca452ea0f3cd8f76b2 Den Tester <den@example.invalid> 1700000000 +0000\treset: moving to HEAD\n",
+    ".git/logs/refs/stash": "0000000000000000000000000000000000000000 ab14ef658edf70fae33782f4b87421f5f4ec6f63 Den Tester <den@example.invalid> 1700000000 +0000\tOn main: m0\nab14ef658edf70fae33782f4b87421f5f4ec6f63 2042096b8aeed642b6bcf738761d09ccb626229f Den Tester <den@example.invalid> 1700000000 +0000\tOn main: m1\n",
+    ".git/objects/20/42096b8aeed642b6bcf738761d09ccb626229f": "commit 271 | tree 918840ac8ffe2b77f674bafa4c5072ee232142b9\nparent 3725b6686c5e83d101394fca452ea0f3cd8f76b2\nparent 6c8dff0971649e17be0f6f08c685e6a3661a773f\nauthor Den Tester <den@example.invalid> 1700000000 +0000\ncommitter Den Tester <den@example.invalid> 1700000000 +0000\n\nOn main: m1",
+    ".git/objects/62/6799f0f85326a8c1fc522db584e86cdfccd51f": "blob 3 | v1\n",
+    ".git/objects/91/8840ac8ffe2b77f674bafa4c5072ee232142b9": "tree 96 | 100644 a.txt 626799f0f85326a8c1fc522db584e86cdfccd51f; 100644 b.txt 65b2df87f7df3aeedef04be96703e55ac19c2cfb; 40000 dir 038086020756ee686f7d5b4d19b623884055c23e",
+    ".git/refs/stash": "2042096b8aeed642b6bcf738761d09ccb626229f\n",
+    "a.txt": "alpha\n"
+   },
+   "label": "push1",
+   "status": 0,
+   "stderr": "",
+   "stdout": ""
+  },
+  {
+   "args": [
+    "stash",
+    "push",
+    "-q",
+    "-m",
+    "m2"
+   ],
+   "changes": {
+    ".git/index": "<index 309 bytes, ext=[b'TREE']>",
+    ".git/logs/HEAD": "0000000000000000000000000000000000000000 3725b6686c5e83d101394fca452ea0f3cd8f76b2 Den Tester <den@example.invalid> 1700000000 +0000\tcommit (initial): first subject\n3725b6686c5e83d101394fca452ea0f3cd8f76b2 3725b6686c5e83d101394fca452ea0f3cd8f76b2 Den Tester <den@example.invalid> 1700000000 +0000\treset: moving to HEAD\n3725b6686c5e83d101394fca452ea0f3cd8f76b2 3725b6686c5e83d101394fca452ea0f3cd8f76b2 Den Tester <den@example.invalid> 1700000000 +0000\treset: moving to HEAD\n3725b6686c5e83d101394fca452ea0f3cd8f76b2 3725b6686c5e83d101394fca452ea0f3cd8f76b2 Den Tester <den@example.invalid> 1700000000 +0000\treset: moving to HEAD\n",
+    ".git/logs/refs/stash": "0000000000000000000000000000000000000000 ab14ef658edf70fae33782f4b87421f5f4ec6f63 Den Tester <den@example.invalid> 1700000000 +0000\tOn main: m0\nab14ef658edf70fae33782f4b87421f5f4ec6f63 2042096b8aeed642b6bcf738761d09ccb626229f Den Tester <den@example.invalid> 1700000000 +0000\tOn main: m1\n2042096b8aeed642b6bcf738761d09ccb626229f 9665f56c3fbc237e61ef8f017ef0deff6328307f Den Tester <den@example.invalid> 1700000000 +0000\tOn main: m2\n",
+    ".git/objects/8c/1384d825dbbe41309b7dc18ee7991a9085c46e": "blob 3 | v2\n",
+    ".git/objects/96/65f56c3fbc237e61ef8f017ef0deff6328307f": "commit 271 | tree ee1c05b5f997c2a187434844210ad28789ea4361\nparent 3725b6686c5e83d101394fca452ea0f3cd8f76b2\nparent 6c8dff0971649e17be0f6f08c685e6a3661a773f\nauthor Den Tester <den@example.invalid> 1700000000 +0000\ncommitter Den Tester <den@example.invalid> 1700000000 +0000\n\nOn main: m2",
+    ".git/objects/ee/1c05b5f997c2a187434844210ad28789ea4361": "tree 96 | 100644 a.txt 8c1384d825dbbe41309b7dc18ee7991a9085c46e; 100644 b.txt 65b2df87f7df3aeedef04be96703e55ac19c2cfb; 40000 dir 038086020756ee686f7d5b4d19b623884055c23e",
+    ".git/refs/stash": "9665f56c3fbc237e61ef8f017ef0deff6328307f\n",
+    "a.txt": "alpha\n"
+   },
+   "label": "push2",
+   "status": 0,
+   "stderr": "",
+   "stdout": ""
+  },
+  {
+   "args": [
+    "stash",
+    "drop",
+    "stash@{1}"
+   ],
+   "changes": {
+    ".git/logs/refs/stash": "0000000000000000000000000000000000000000 ab14ef658edf70fae33782f4b87421f5f4ec6f63 Den Tester <den@example.invalid> 1700000000 +0000\tOn main: m0\nab14ef658edf70fae33782f4b87421f5f4ec6f63 9665f56c3fbc237e61ef8f017ef0deff6328307f Den Tester <den@example.invalid> 1700000000 +0000\tOn main: m2\n"
+   },
+   "label": "drop-1",
+   "status": 0,
+   "stderr": "",
+   "stdout": "Dropped stash@{1} (2042096b8aeed642b6bcf738761d09ccb626229f)\n"
+  },
+  {
+   "args": [
+    "stash",
+    "list"
+   ],
+   "changes": {},
+   "label": "list",
+   "status": 0,
+   "stderr": "",
+   "stdout": "stash@{0}: On main: m2\nstash@{1}: On main: m0\n"
+  },
+  {
+   "args": [
+    "stash",
+    "drop",
+    "1"
+   ],
+   "changes": {
+    ".git/logs/refs/stash": "0000000000000000000000000000000000000000 9665f56c3fbc237e61ef8f017ef0deff6328307f Den Tester <den@example.invalid> 1700000000 +0000\tOn main: m2\n"
+   },
+   "label": "drop-bare-1",
+   "status": 0,
+   "stderr": "",
+   "stdout": "Dropped refs/stash@{1} (ab14ef658edf70fae33782f4b87421f5f4ec6f63)\n"
+  },
+  {
+   "args": [
+    "stash",
+    "drop",
+    "stash@{5}"
+   ],
+   "changes": {},
+   "label": "drop-bad",
+   "status": 128,
+   "stderr": "fatal: log for 'stash' only has 1 entries\n",
+   "stdout": ""
+  },
+  {
+   "args": [
+    "stash",
+    "apply",
+    "stash@{5}"
+   ],
+   "changes": {},
+   "label": "apply-bad",
+   "status": 128,
+   "stderr": "fatal: log for 'stash' only has 1 entries\n",
+   "stdout": ""
+  },
+  {
+   "args": [
+    "stash",
+    "show",
+    "stash@{5}"
+   ],
+   "changes": {},
+   "label": "show-bad",
+   "status": 128,
+   "stderr": "fatal: log for 'stash' only has 1 entries\n",
+   "stdout": ""
+  },
+  {
+   "args": [
+    "stash",
+    "drop",
+    "-q"
+   ],
+   "changes": {
+    ".git/logs/refs/stash": null,
+    ".git/refs/stash": null
+   },
+   "label": "drop-q",
+   "status": 0,
+   "stderr": "",
+   "stdout": ""
+  },
+  {
+   "args": [
+    "stash",
+    "push",
+    "-m",
+    "n0"
+   ],
+   "changes": {
+    ".git/index": "<index 309 bytes, ext=[b'TREE']>",
+    ".git/logs/HEAD": "0000000000000000000000000000000000000000 3725b6686c5e83d101394fca452ea0f3cd8f76b2 Den Tester <den@example.invalid> 1700000000 +0000\tcommit (initial): first subject\n3725b6686c5e83d101394fca452ea0f3cd8f76b2 3725b6686c5e83d101394fca452ea0f3cd8f76b2 Den Tester <den@example.invalid> 1700000000 +0000\treset: moving to HEAD\n3725b6686c5e83d101394fca452ea0f3cd8f76b2 3725b6686c5e83d101394fca452ea0f3cd8f76b2 Den Tester <den@example.invalid> 1700000000 +0000\treset: moving to HEAD\n3725b6686c5e83d101394fca452ea0f3cd8f76b2 3725b6686c5e83d101394fca452ea0f3cd8f76b2 Den Tester <den@example.invalid> 1700000000 +0000\treset: moving to HEAD\n3725b6686c5e83d101394fca452ea0f3cd8f76b2 3725b6686c5e83d101394fca452ea0f3cd8f76b2 Den Tester <den@example.invalid> 1700000000 +0000\treset: moving to HEAD\n",
+    ".git/logs/refs/stash": "0000000000000000000000000000000000000000 0455a030e36214d7eabc77179a426f9f8514c28b Den Tester <den@example.invalid> 1700000000 +0000\tOn main: n0\n",
+    ".git/objects/04/55a030e36214d7eabc77179a426f9f8514c28b": "commit 271 | tree cfb100b638e30309baeabb53aa4c967029e79a41\nparent 3725b6686c5e83d101394fca452ea0f3cd8f76b2\nparent 6c8dff0971649e17be0f6f08c685e6a3661a773f\nauthor Den Tester <den@example.invalid> 1700000000 +0000\ncommitter Den Tester <den@example.invalid> 1700000000 +0000\n\nOn main: n0",
+    ".git/objects/c1/709935d439295fc61b15a1a4ee0774fb794683": "blob 3 | w0\n",
+    ".git/objects/cf/b100b638e30309baeabb53aa4c967029e79a41": "tree 96 | 100644 a.txt c1709935d439295fc61b15a1a4ee0774fb794683; 100644 b.txt 65b2df87f7df3aeedef04be96703e55ac19c2cfb; 40000 dir 038086020756ee686f7d5b4d19b623884055c23e",
+    ".git/refs/stash": "0455a030e36214d7eabc77179a426f9f8514c28b\n",
+    "a.txt": "alpha\n"
+   },
+   "label": "repush0",
+   "status": 0,
+   "stderr": "",
+   "stdout": "Saved working directory and index state On main: n0\n"
+  },
+  {
+   "args": [
+    "stash",
+    "push",
+    "-m",
+    "n1"
+   ],
+   "changes": {
+    ".git/index": "<index 309 bytes, ext=[b'TREE']>",
+    ".git/logs/HEAD": "0000000000000000000000000000000000000000 3725b6686c5e83d101394fca452ea0f3cd8f76b2 Den Tester <den@example.invalid> 1700000000 +0000\tcommit (initial): first subject\n3725b6686c5e83d101394fca452ea0f3cd8f76b2 3725b6686c5e83d101394fca452ea0f3cd8f76b2 Den Tester <den@example.invalid> 1700000000 +0000\treset: moving to HEAD\n3725b6686c5e83d101394fca452ea0f3cd8f76b2 3725b6686c5e83d101394fca452ea0f3cd8f76b2 Den Tester <den@example.invalid> 1700000000 +0000\treset: moving to HEAD\n3725b6686c5e83d101394fca452ea0f3cd8f76b2 3725b6686c5e83d101394fca452ea0f3cd8f76b2 Den Tester <den@example.invalid> 1700000000 +0000\treset: moving to HEAD\n3725b6686c5e83d101394fca452ea0f3cd8f76b2 3725b6686c5e83d101394fca452ea0f3cd8f76b2 Den Tester <den@example.invalid> 1700000000 +0000\treset: moving to HEAD\n3725b6686c5e83d101394fca452ea0f3cd8f76b2 3725b6686c5e83d101394fca452ea0f3cd8f76b2 Den Tester <den@example.invalid> 1700000000 +0000\treset: moving to HEAD\n",
+    ".git/logs/refs/stash": "0000000000000000000000000000000000000000 0455a030e36214d7eabc77179a426f9f8514c28b Den Tester <den@example.invalid> 1700000000 +0000\tOn main: n0\n0455a030e36214d7eabc77179a426f9f8514c28b 7dc749cfd90083033ca83f46b21ac6e2b60638cd Den Tester <den@example.invalid> 1700000000 +0000\tOn main: n1\n",
+    ".git/objects/5c/eab2629d188f66c4823aaedb92c7d1fbbc50a1": "blob 3 | w1\n",
+    ".git/objects/7d/c749cfd90083033ca83f46b21ac6e2b60638cd": "commit 271 | tree dab3de6daf4b1740506c6ac419b884acdbeb340e\nparent 3725b6686c5e83d101394fca452ea0f3cd8f76b2\nparent 6c8dff0971649e17be0f6f08c685e6a3661a773f\nauthor Den Tester <den@example.invalid> 1700000000 +0000\ncommitter Den Tester <den@example.invalid> 1700000000 +0000\n\nOn main: n1",
+    ".git/objects/da/b3de6daf4b1740506c6ac419b884acdbeb340e": "tree 96 | 100644 a.txt 5ceab2629d188f66c4823aaedb92c7d1fbbc50a1; 100644 b.txt 65b2df87f7df3aeedef04be96703e55ac19c2cfb; 40000 dir 038086020756ee686f7d5b4d19b623884055c23e",
+    ".git/refs/stash": "7dc749cfd90083033ca83f46b21ac6e2b60638cd\n",
+    "a.txt": "alpha\n"
+   },
+   "label": "repush1",
+   "status": 0,
+   "stderr": "",
+   "stdout": "Saved working directory and index state On main: n1\n"
+  },
+  {
+   "args": [
+    "stash",
+    "drop",
+    "stash@{0}"
+   ],
+   "changes": {
+    ".git/logs/refs/stash": "0000000000000000000000000000000000000000 0455a030e36214d7eabc77179a426f9f8514c28b Den Tester <den@example.invalid> 1700000000 +0000\tOn main: n0\n",
+    ".git/refs/stash": "0455a030e36214d7eabc77179a426f9f8514c28b\n"
+   },
+   "label": "drop-0-of-2",
+   "status": 0,
+   "stderr": "",
+   "stdout": "Dropped stash@{0} (7dc749cfd90083033ca83f46b21ac6e2b60638cd)\n"
+  },
+  {
+   "args": [
+    "stash"
+   ],
+   "changes": {
+    ".git/index": "<index 309 bytes, ext=[b'TREE']>",
+    ".git/logs/HEAD": "0000000000000000000000000000000000000000 3725b6686c5e83d101394fca452ea0f3cd8f76b2 Den Tester <den@example.invalid> 1700000000 +0000\tcommit (initial): first subject\n3725b6686c5e83d101394fca452ea0f3cd8f76b2 3725b6686c5e83d101394fca452ea0f3cd8f76b2 Den Tester <den@example.invalid> 1700000000 +0000\treset: moving to HEAD\n3725b6686c5e83d101394fca452ea0f3cd8f76b2 3725b6686c5e83d101394fca452ea0f3cd8f76b2 Den Tester <den@example.invalid> 1700000000 +0000\treset: moving to HEAD\n3725b6686c5e83d101394fca452ea0f3cd8f76b2 3725b6686c5e83d101394fca452ea0f3cd8f76b2 Den Tester <den@example.invalid> 1700000000 +0000\treset: moving to HEAD\n3725b6686c5e83d101394fca452ea0f3cd8f76b2 3725b6686c5e83d101394fca452ea0f3cd8f76b2 Den Tester <den@example.invalid> 1700000000 +0000\treset: moving to HEAD\n3725b6686c5e83d101394fca452ea0f3cd8f76b2 3725b6686c5e83d101394fca452ea0f3cd8f76b2 Den Tester <den@example.invalid> 1700000000 +0000\treset: moving to HEAD\n3725b6686c5e83d101394fca452ea0f3cd8f76b2 3725b6686c5e83d101394fca452ea0f3cd8f76b2 Den Tester <den@example.invalid> 1700000000 +0000\treset: moving to HEAD\n",
+    ".git/logs/refs/stash": "0000000000000000000000000000000000000000 0455a030e36214d7eabc77179a426f9f8514c28b Den Tester <den@example.invalid> 1700000000 +0000\tOn main: n0\n0455a030e36214d7eabc77179a426f9f8514c28b d21734cf42a103f7d1b2802ed6bb4412c68b0cda Den Tester <den@example.invalid> 1700000000 +0000\tWIP on main: 3725b66 first subject\n",
+    ".git/objects/18/6b17084ab4e13c4c557f20323f8e5bd702fa7b": "blob 3 | w9\n",
+    ".git/objects/9c/3c27b79bce7fa9d090a9b0730c1502ee491e3d": "tree 96 | 100644 a.txt 186b17084ab4e13c4c557f20323f8e5bd702fa7b; 100644 b.txt 65b2df87f7df3aeedef04be96703e55ac19c2cfb; 40000 dir 038086020756ee686f7d5b4d19b623884055c23e",
+    ".git/objects/d2/1734cf42a103f7d1b2802ed6bb4412c68b0cda": "commit 294 | tree 9c3c27b79bce7fa9d090a9b0730c1502ee491e3d\nparent 3725b6686c5e83d101394fca452ea0f3cd8f76b2\nparent 6c8dff0971649e17be0f6f08c685e6a3661a773f\nauthor Den Tester <den@example.invalid> 1700000000 +0000\ncommitter Den Tester <den@example.invalid> 1700000000 +0000\n\nWIP on main: 3725b66 first subject",
+    ".git/refs/stash": "d21734cf42a103f7d1b2802ed6bb4412c68b0cda\n",
+    "a.txt": "alpha\n"
+   },
+   "label": "repush9",
+   "status": 0,
+   "stderr": "",
+   "stdout": "Saved working directory and index state WIP on main: 3725b66 first subject\n"
+  },
+  {
+   "args": [
+    "stash",
+    "clear"
+   ],
+   "changes": {
+    ".git/logs/refs/stash": null,
+    ".git/refs/stash": null
+   },
+   "label": "clear",
+   "status": 0,
+   "stderr": "",
+   "stdout": ""
+  },
+  {
+   "args": [
+    "stash",
+    "apply",
+    "HEAD"
+   ],
+   "changes": {},
+   "label": "apply-HEAD",
+   "status": 128,
+   "stderr": "fatal: 'HEAD' is not a stash-like commit\n",
+   "stdout": ""
+  },
+  {
+   "args": [
+    "stash"
+   ],
+   "changes": {},
+   "label": "unborn",
+   "status": 1,
+   "stderr": "You do not have the initial commit yet\n",
+   "stdout": ""
+  },
+  {
+   "args": [
+    "stash"
+   ],
+   "changes": {
+    ".git/ORIG_HEAD": "3725b6686c5e83d101394fca452ea0f3cd8f76b2\n",
+    ".git/index": "<index 309 bytes, ext=[b'TREE']>",
+    ".git/logs/refs/stash": "0000000000000000000000000000000000000000 f6f41291aa55abe5af4bd8d9533ac5a5c30a7b59 Den Tester <den@example.invalid> 1700000000 +0000\tWIP on (no branch): 3725b66 first subject\n",
+    ".git/objects/39/f0834871d127dcb7ee8ef8c301c21680eaf89a": "tree 96 | 100644 a.txt e3cabc1001ea51d712a7a2393b090a5550d65c7f; 100644 b.txt 65b2df87f7df3aeedef04be96703e55ac19c2cfb; 40000 dir 038086020756ee686f7d5b4d19b623884055c23e",
+    ".git/objects/40/4261bddc3aea8000ee029b6834d5f116a3cc64": "commit 256 | tree 48b8e487314af2ade2704960f8fae4eae9c5f225\nparent 3725b6686c5e83d101394fca452ea0f3cd8f76b2\nauthor Den Tester <den@example.invalid> 1700000000 +0000\ncommitter Den Tester <den@example.invalid> 1700000000 +0000\n\nindex on (no branch): 3725b66 first subject\n",
+    ".git/objects/e3/cabc1001ea51d712a7a2393b090a5550d65c7f": "blob 16 | detached change\n",
+    ".git/objects/f6/f41291aa55abe5af4bd8d9533ac5a5c30a7b59": "commit 301 | tree 39f0834871d127dcb7ee8ef8c301c21680eaf89a\nparent 3725b6686c5e83d101394fca452ea0f3cd8f76b2\nparent 404261bddc3aea8000ee029b6834d5f116a3cc64\nauthor Den Tester <den@example.invalid> 1700000000 +0000\ncommitter Den Tester <den@example.invalid> 1700000000 +0000\n\nWIP on (no branch): 3725b66 first subject",
+    ".git/refs/stash": "f6f41291aa55abe5af4bd8d9533ac5a5c30a7b59\n",
+    "a.txt": "alpha\n"
+   },
+   "label": "detached-push",
+   "status": 0,
+   "stderr": "",
+   "stdout": "Saved working directory and index state WIP on (no branch): 3725b66 first subject\n"
+  },
+  {
+   "args": [
+    "stash",
+    "list"
+   ],
+   "changes": {},
+   "label": "detached-list",
+   "status": 0,
+   "stderr": "",
+   "stdout": "stash@{0}: WIP on (no branch): 3725b66 first subject\n"
+  },
+  {
+   "args": [
+    "stash",
+    "push",
+    "--keep-index"
+   ],
+   "changes": {
+    ".git/ORIG_HEAD": "3725b6686c5e83d101394fca452ea0f3cd8f76b2\n",
+    ".git/index": "<index 290 bytes, ext=[b'TREE']>",
+    ".git/logs/HEAD": "0000000000000000000000000000000000000000 3725b6686c5e83d101394fca452ea0f3cd8f76b2 Den Tester <den@example.invalid> 1700000000 +0000\tcommit (initial): first subject\n3725b6686c5e83d101394fca452ea0f3cd8f76b2 3725b6686c5e83d101394fca452ea0f3cd8f76b2 Den Tester <den@example.invalid> 1700000000 +0000\treset: moving to HEAD\n",
+    ".git/logs/refs/stash": "0000000000000000000000000000000000000000 a17246dfe792fc5851e0038bf04aea571a21307f Den Tester <den@example.invalid> 1700000000 +0000\tWIP on main: 3725b66 first subject\n",
+    ".git/objects/23/0b7a574aed2de704e079674b07576c91e3383a": "tree 96 | 100644 a.txt 19d9cc8584ac2c7dcf57d2680375e80f099dc481; 100644 b.txt 65b2df87f7df3aeedef04be96703e55ac19c2cfb; 40000 dir 038086020756ee686f7d5b4d19b623884055c23e",
+    ".git/objects/3c/f847f18d567f0937fe10d5bbfa04c00a4ee6de": "commit 249 | tree 230b7a574aed2de704e079674b07576c91e3383a\nparent 3725b6686c5e83d101394fca452ea0f3cd8f76b2\nauthor Den Tester <den@example.invalid> 1700000000 +0000\ncommitter Den Tester <den@example.invalid> 1700000000 +0000\n\nindex on main: 3725b66 first subject\n",
+    ".git/objects/9a/729dbf8ebe466b66997bb37edaa921a9fa63c5": "blob 14 | worktree only\n",
+    ".git/objects/a1/7246dfe792fc5851e0038bf04aea571a21307f": "commit 294 | tree d8c5c854cd389228ee8b5ba57d2c88cc25dfaa26\nparent 3725b6686c5e83d101394fca452ea0f3cd8f76b2\nparent 3cf847f18d567f0937fe10d5bbfa04c00a4ee6de\nauthor Den Tester <den@example.invalid> 1700000000 +0000\ncommitter Den Tester <den@example.invalid> 1700000000 +0000\n\nWIP on main: 3725b66 first subject",
+    ".git/objects/d8/c5c854cd389228ee8b5ba57d2c88cc25dfaa26": "tree 96 | 100644 a.txt 19d9cc8584ac2c7dcf57d2680375e80f099dc481; 100644 b.txt 9a729dbf8ebe466b66997bb37edaa921a9fa63c5; 40000 dir 038086020756ee686f7d5b4d19b623884055c23e",
+    ".git/refs/stash": "a17246dfe792fc5851e0038bf04aea571a21307f\n",
+    "b.txt": "beta\n"
+   },
+   "label": "keep-index",
+   "status": 0,
+   "stderr": "",
+   "stdout": "Saved working directory and index state WIP on main: 3725b66 first subject\n"
+  },
+  {
+   "args": [
+    "status",
+    "--porcelain"
+   ],
+   "changes": {},
+   "label": "keep-status",
+   "status": 0,
+   "stderr": "",
+   "stdout": "M  a.txt\n"
+  },
+  {
+   "args": [
+    "stash",
+    "pop"
+   ],
+   "changes": {
+    ".git/AUTO_MERGE": "d8c5c854cd389228ee8b5ba57d2c88cc25dfaa26\n",
+    ".git/index": "<index 290 bytes, ext=[b'TREE']>",
+    ".git/logs/refs/stash": null,
+    ".git/refs/stash": null,
+    "b.txt": "worktree only\n"
+   },
+   "label": "keep-pop-dirty",
+   "status": 0,
+   "stderr": "",
+   "stdout": "On branch main\nChanges to be committed:\n  (use \"git restore --staged <file>...\" to unstage)\n\tmodified:   a.txt\n\nChanges not staged for commit:\n  (use \"git add <file>...\" to update what will be committed)\n  (use \"git restore <file>...\" to discard changes in working directory)\n\tmodified:   b.txt\n\nDropped refs/stash@{0} (a17246dfe792fc5851e0038bf04aea571a21307f)\n"
+  },
+  {
+   "args": [
+    "stash",
+    "-q"
+   ],
+   "changes": {
+    ".git/ORIG_HEAD": "3725b6686c5e83d101394fca452ea0f3cd8f76b2\n",
+    ".git/index": "<index 309 bytes, ext=[b'TREE']>",
+    ".git/logs/HEAD": "0000000000000000000000000000000000000000 3725b6686c5e83d101394fca452ea0f3cd8f76b2 Den Tester <den@example.invalid> 1700000000 +0000\tcommit (initial): first subject\n3725b6686c5e83d101394fca452ea0f3cd8f76b2 3725b6686c5e83d101394fca452ea0f3cd8f76b2 Den Tester <den@example.invalid> 1700000000 +0000\treset: moving to HEAD\n",
+    ".git/logs/refs/stash": "0000000000000000000000000000000000000000 079748da928e2676bf43f265f82ae391a0a5a836 Den Tester <den@example.invalid> 1700000000 +0000\tWIP on main: 3725b66 first subject\n",
+    ".git/objects/07/9748da928e2676bf43f265f82ae391a0a5a836": "commit 294 | tree 1c3150246bd4c439c3347bd03dc8064c1649afe7\nparent 3725b6686c5e83d101394fca452ea0f3cd8f76b2\nparent 6c8dff0971649e17be0f6f08c685e6a3661a773f\nauthor Den Tester <den@example.invalid> 1700000000 +0000\ncommitter Den Tester <den@example.invalid> 1700000000 +0000\n\nWIP on main: 3725b66 first subject",
+    ".git/objects/1c/3150246bd4c439c3347bd03dc8064c1649afe7": "tree 96 | 100644 a.txt a9fe8d0f7753513c347690ef05d0a12b1186bfb2; 100644 b.txt 65b2df87f7df3aeedef04be96703e55ac19c2cfb; 40000 dir 038086020756ee686f7d5b4d19b623884055c23e",
+    ".git/objects/6c/8dff0971649e17be0f6f08c685e6a3661a773f": "commit 249 | tree 48b8e487314af2ade2704960f8fae4eae9c5f225\nparent 3725b6686c5e83d101394fca452ea0f3cd8f76b2\nauthor Den Tester <den@example.invalid> 1700000000 +0000\ncommitter Den Tester <den@example.invalid> 1700000000 +0000\n\nindex on main: 3725b66 first subject\n",
+    ".git/objects/a9/fe8d0f7753513c347690ef05d0a12b1186bfb2": "blob 10 | stashed a\n",
+    ".git/refs/stash": "079748da928e2676bf43f265f82ae391a0a5a836\n",
+    "a.txt": "alpha\n"
+   },
+   "label": "moved-push",
+   "status": 0,
+   "stderr": "",
+   "stdout": ""
+  },
+  {
+   "args": [
+    "stash",
+    "apply"
+   ],
+   "changes": {
+    ".git/AUTO_MERGE": "9ccfbcd7845311944c3be3154b07f5299a12349e\n",
+    ".git/index": "<index 290 bytes, ext=[b'TREE']>",
+    ".git/objects/9c/cfbcd7845311944c3be3154b07f5299a12349e": "tree 96 | 100644 a.txt a9fe8d0f7753513c347690ef05d0a12b1186bfb2; 100644 b.txt 9e13cfa83155e0dc47e0cb457f92b219617c41ce; 40000 dir 038086020756ee686f7d5b4d19b623884055c23e",
+    "a.txt": "stashed a\n"
+   },
+   "label": "moved-apply",
+   "status": 0,
+   "stderr": "",
+   "stdout": "On branch main\nChanges not staged for commit:\n  (use \"git add <file>...\" to update what will be committed)\n  (use \"git restore <file>...\" to discard changes in working directory)\n\tmodified:   a.txt\n\nno changes added to commit (use \"git add\" and/or \"git commit -a\")\n"
+  },
+  {
+   "args": [
+    "status",
+    "--porcelain"
+   ],
+   "changes": {},
+   "label": "moved-status",
+   "status": 0,
+   "stderr": "",
+   "stdout": " M a.txt\n"
+  },
+  {
+   "args": [
+    "stash",
+    "apply"
+   ],
+   "changes": {
+    ".git/AUTO_MERGE": "8544a874bc6ebdd0c1251b1561ca78a34cab3d9b\n",
+    ".git/index": "<index 434 bytes, ext=[b'TREE']>",
+    ".git/objects/16/577e027a0960d5045d6b8429aeeb3869a5806e": "blob 78 | <<<<<<< Updated upstream\nconflict a\n=======\nstashed a\n>>>>>>> Stashed changes\n",
+    ".git/objects/85/44a874bc6ebdd0c1251b1561ca78a34cab3d9b": "tree 96 | 100644 a.txt 16577e027a0960d5045d6b8429aeeb3869a5806e; 100644 b.txt 9e13cfa83155e0dc47e0cb457f92b219617c41ce; 40000 dir 038086020756ee686f7d5b4d19b623884055c23e",
+    "a.txt": "<<<<<<< Updated upstream\nconflict a\n=======\nstashed a\n>>>>>>> Stashed changes\n"
+   },
+   "label": "conflict-apply",
+   "status": 1,
+   "stderr": "",
+   "stdout": "Auto-merging a.txt\nCONFLICT (content): Merge conflict in a.txt\nOn branch main\nUnmerged paths:\n  (use \"git restore --staged <file>...\" to unstage)\n  (use \"git add <file>...\" to mark resolution)\n\tboth modified:   a.txt\n\nno changes added to commit (use \"git add\" and/or \"git commit -a\")\n"
+  },
+  {
+   "args": [
+    "status",
+    "--porcelain"
+   ],
+   "changes": {},
+   "label": "conflict-status",
+   "status": 0,
+   "stderr": "",
+   "stdout": "UU a.txt\n"
+  },
+  {
+   "args": [
+    "stash",
+    "-q"
+   ],
+   "changes": {
+    ".git/ORIG_HEAD": "3725b6686c5e83d101394fca452ea0f3cd8f76b2\n",
+    ".git/index": "<index 309 bytes, ext=[b'TREE']>",
+    ".git/logs/HEAD": "0000000000000000000000000000000000000000 3725b6686c5e83d101394fca452ea0f3cd8f76b2 Den Tester <den@example.invalid> 1700000000 +0000\tcommit (initial): first subject\n3725b6686c5e83d101394fca452ea0f3cd8f76b2 3725b6686c5e83d101394fca452ea0f3cd8f76b2 Den Tester <den@example.invalid> 1700000000 +0000\treset: moving to HEAD\n",
+    ".git/logs/refs/stash": "0000000000000000000000000000000000000000 079748da928e2676bf43f265f82ae391a0a5a836 Den Tester <den@example.invalid> 1700000000 +0000\tWIP on main: 3725b66 first subject\n",
+    ".git/objects/07/9748da928e2676bf43f265f82ae391a0a5a836": "commit 294 | tree 1c3150246bd4c439c3347bd03dc8064c1649afe7\nparent 3725b6686c5e83d101394fca452ea0f3cd8f76b2\nparent 6c8dff0971649e17be0f6f08c685e6a3661a773f\nauthor Den Tester <den@example.invalid> 1700000000 +0000\ncommitter Den Tester <den@example.invalid> 1700000000 +0000\n\nWIP on main: 3725b66 first subject",
+    ".git/objects/1c/3150246bd4c439c3347bd03dc8064c1649afe7": "tree 96 | 100644 a.txt a9fe8d0f7753513c347690ef05d0a12b1186bfb2; 100644 b.txt 65b2df87f7df3aeedef04be96703e55ac19c2cfb; 40000 dir 038086020756ee686f7d5b4d19b623884055c23e",
+    ".git/objects/6c/8dff0971649e17be0f6f08c685e6a3661a773f": "commit 249 | tree 48b8e487314af2ade2704960f8fae4eae9c5f225\nparent 3725b6686c5e83d101394fca452ea0f3cd8f76b2\nauthor Den Tester <den@example.invalid> 1700000000 +0000\ncommitter Den Tester <den@example.invalid> 1700000000 +0000\n\nindex on main: 3725b66 first subject\n",
+    ".git/objects/a9/fe8d0f7753513c347690ef05d0a12b1186bfb2": "blob 10 | stashed a\n",
+    ".git/refs/stash": "079748da928e2676bf43f265f82ae391a0a5a836\n",
+    "a.txt": "alpha\n"
+   },
+   "label": "dirty-push",
+   "status": 0,
+   "stderr": "",
+   "stdout": ""
+  },
+  {
+   "args": [
+    "stash",
+    "apply"
+   ],
+   "changes": {},
+   "label": "dirty-apply-same",
+   "status": 128,
+   "stderr": "error: Your local changes to the following files would be overwritten by merge:\n\ta.txt\nPlease commit your changes or stash them before you merge.\nAborting\n",
+   "stdout": "On branch main\nChanges not staged for commit:\n  (use \"git add <file>...\" to update what will be committed)\n  (use \"git restore <file>...\" to discard changes in working directory)\n\tmodified:   a.txt\n\nno changes added to commit (use \"git add\" and/or \"git commit -a\")\n"
+  },
+  {
+   "args": [
+    "stash",
+    "apply"
+   ],
+   "changes": {
+    ".git/AUTO_MERGE": "1c3150246bd4c439c3347bd03dc8064c1649afe7\n",
+    ".git/index": "<index 290 bytes, ext=[b'TREE']>",
+    "a.txt": "stashed a\n"
+   },
+   "label": "dirty-apply-other",
+   "status": 0,
+   "stderr": "",
+   "stdout": "On branch main\nChanges not staged for commit:\n  (use \"git add <file>...\" to update what will be committed)\n  (use \"git restore <file>...\" to discard changes in working directory)\n\tmodified:   a.txt\n\tmodified:   b.txt\n\nno changes added to commit (use \"git add\" and/or \"git commit -a\")\n"
+  },
+  {
+   "args": [
+    "status",
+    "--porcelain"
+   ],
+   "changes": {},
+   "label": "dirty-other-status",
+   "status": 0,
+   "stderr": "",
+   "stdout": " M a.txt\n M b.txt\n"
+  },
+  {
+   "args": [
+    "stash",
+    "-q"
+   ],
+   "changes": {
+    ".git/ORIG_HEAD": "3725b6686c5e83d101394fca452ea0f3cd8f76b2\n",
+    ".git/index": "<index 309 bytes, ext=[b'TREE']>",
+    ".git/logs/HEAD": "0000000000000000000000000000000000000000 3725b6686c5e83d101394fca452ea0f3cd8f76b2 Den Tester <den@example.invalid> 1700000000 +0000\tcommit (initial): first subject\n3725b6686c5e83d101394fca452ea0f3cd8f76b2 3725b6686c5e83d101394fca452ea0f3cd8f76b2 Den Tester <den@example.invalid> 1700000000 +0000\treset: moving to HEAD\n",
+    ".git/logs/refs/stash": "0000000000000000000000000000000000000000 c8ce9f9dd8e497cec762d91160e24ad300d6984e Den Tester <den@example.invalid> 1700000000 +0000\tWIP on main: 3725b66 first subject\n",
+    ".git/objects/85/8f7c1c26db17a822685097cf84f38c2d9dab41": "tree 129 | 100644 a.txt 4a58007052a65fbc2fc3f910f2855f45a4058e74; 100644 b.txt 65b2df87f7df3aeedef04be96703e55ac19c2cfb; 40000 dir 038086020756ee686f7d5b4d19b623884055c23e; 100644 n.txt 3e757656cf36eca53338e520d134963a44f793f8",
+    ".git/objects/c8/ce9f9dd8e497cec762d91160e24ad300d6984e": "commit 294 | tree 858f7c1c26db17a822685097cf84f38c2d9dab41\nparent 3725b6686c5e83d101394fca452ea0f3cd8f76b2\nparent d71b3fce28cff9dd209344ddbc75cd2ce13ff84f\nauthor Den Tester <den@example.invalid> 1700000000 +0000\ncommitter Den Tester <den@example.invalid> 1700000000 +0000\n\nWIP on main: 3725b66 first subject",
+    ".git/objects/d7/1b3fce28cff9dd209344ddbc75cd2ce13ff84f": "commit 249 | tree 858f7c1c26db17a822685097cf84f38c2d9dab41\nparent 3725b6686c5e83d101394fca452ea0f3cd8f76b2\nauthor Den Tester <den@example.invalid> 1700000000 +0000\ncommitter Den Tester <den@example.invalid> 1700000000 +0000\n\nindex on main: 3725b66 first subject\n",
+    ".git/refs/stash": "c8ce9f9dd8e497cec762d91160e24ad300d6984e\n",
+    "n.txt": null
+   },
+   "label": "collide-push",
+   "status": 0,
+   "stderr": "",
+   "stdout": ""
+  },
+  {
+   "args": [
+    "stash",
+    "apply"
+   ],
+   "changes": {},
+   "label": "collide-apply",
+   "status": 128,
+   "stderr": "error: The following untracked working tree files would be overwritten by merge:\n\tn.txt\nPlease move or remove them before you merge.\nAborting\n",
+   "stdout": "On branch main\nUntracked files:\n  (use \"git add <file>...\" to include in what will be committed)\n\tn.txt\n\nnothing added to commit but untracked files present (use \"git add\" to track)\n"
+  },
+  {
+   "args": [
+    "stash"
+   ],
+   "changes": {},
+   "label": "u-only-untracked",
+   "status": 0,
+   "stderr": "",
+   "stdout": "No local changes to save\n"
+  },
+  {
+   "args": [
+    "stash",
+    "-u"
+   ],
+   "changes": {
+    ".git/ORIG_HEAD": "3725b6686c5e83d101394fca452ea0f3cd8f76b2\n",
+    ".git/logs/HEAD": "0000000000000000000000000000000000000000 3725b6686c5e83d101394fca452ea0f3cd8f76b2 Den Tester <den@example.invalid> 1700000000 +0000\tcommit (initial): first subject\n3725b6686c5e83d101394fca452ea0f3cd8f76b2 3725b6686c5e83d101394fca452ea0f3cd8f76b2 Den Tester <den@example.invalid> 1700000000 +0000\treset: moving to HEAD\n",
+    ".git/logs/refs/stash": "0000000000000000000000000000000000000000 ff5e568652786e1f3acc776a376fb3c5f76bc253 Den Tester <den@example.invalid> 1700000000 +0000\tWIP on main: 3725b66 first subject\n",
+    ".git/objects/3a/7c82eeaa1d38f35ce063deba3e9e1de8f28bc9": "tree 33 | 100644 u.txt 4ae8ef021bf6fcfff43a13be5abfa52bb6fb5dbc",
+    ".git/objects/4a/e8ef021bf6fcfff43a13be5abfa52bb6fb5dbc": "blob 2 | u\n",
+    ".git/objects/51/a3096f4c3dcfc60f737fd6ae3e728a948fe1cc": "commit 211 | tree 3a7c82eeaa1d38f35ce063deba3e9e1de8f28bc9\nauthor Den Tester <den@example.invalid> 1700000000 +0000\ncommitter Den Tester <den@example.invalid> 1700000000 +0000\n\nuntracked files on main: 3725b66 first subject\n",
+    ".git/objects/6c/8dff0971649e17be0f6f08c685e6a3661a773f": "commit 249 | tree 48b8e487314af2ade2704960f8fae4eae9c5f225\nparent 3725b6686c5e83d101394fca452ea0f3cd8f76b2\nauthor Den Tester <den@example.invalid> 1700000000 +0000\ncommitter Den Tester <den@example.invalid> 1700000000 +0000\n\nindex on main: 3725b66 first subject\n",
+    ".git/objects/ff/5e568652786e1f3acc776a376fb3c5f76bc253": "commit 342 | tree 48b8e487314af2ade2704960f8fae4eae9c5f225\nparent 3725b6686c5e83d101394fca452ea0f3cd8f76b2\nparent 6c8dff0971649e17be0f6f08c685e6a3661a773f\nparent 51a3096f4c3dcfc60f737fd6ae3e728a948fe1cc\nauthor Den Tester <den@example.invalid> 1700000000 +0000\ncommitter Den Tester <den@example.invalid> 1700000000 +0000\n\nWIP on main: 3725b66 first subject",
+    ".git/refs/stash": "ff5e568652786e1f3acc776a376fb3c5f76bc253\n",
+    "u.txt": null
+   },
+   "label": "u-push",
+   "status": 0,
+   "stderr": "",
+   "stdout": "Saved working directory and index state WIP on main: 3725b66 first subject\n"
+  },
+  {
+   "args": [
+    "cat-file",
+    "-p",
+    "stash@{0}"
+   ],
+   "changes": {},
+   "label": "u-cat",
+   "status": 0,
+   "stderr": "",
+   "stdout": "tree 48b8e487314af2ade2704960f8fae4eae9c5f225\nparent 3725b6686c5e83d101394fca452ea0f3cd8f76b2\nparent 6c8dff0971649e17be0f6f08c685e6a3661a773f\nparent 51a3096f4c3dcfc60f737fd6ae3e728a948fe1cc\nauthor Den Tester <den@example.invalid> 1700000000 +0000\ncommitter Den Tester <den@example.invalid> 1700000000 +0000\n\nWIP on main: 3725b66 first subject"
+  },
+  {
+   "args": [
+    "cat-file",
+    "-p",
+    "stash@{0}^3"
+   ],
+   "changes": {},
+   "label": "u-cat3",
+   "status": 0,
+   "stderr": "",
+   "stdout": "tree 3a7c82eeaa1d38f35ce063deba3e9e1de8f28bc9\nauthor Den Tester <den@example.invalid> 1700000000 +0000\ncommitter Den Tester <den@example.invalid> 1700000000 +0000\n\nuntracked files on main: 3725b66 first subject\n"
+  },
+  {
+   "args": [
+    "notes",
+    "list"
+   ],
+   "changes": {},
+   "label": "list-none",
+   "status": 0,
+   "stderr": "",
+   "stdout": ""
+  },
+  {
+   "args": [
+    "notes"
+   ],
+   "changes": {},
+   "label": "bare-none",
+   "status": 0,
+   "stderr": "",
+   "stdout": ""
+  },
+  {
+   "args": [
+    "notes",
+    "show"
+   ],
+   "changes": {},
+   "label": "show-none",
+   "status": 1,
+   "stderr": "error: no note found for object 3725b6686c5e83d101394fca452ea0f3cd8f76b2.\n",
+   "stdout": ""
+  },
+  {
+   "args": [
+    "notes",
+    "add",
+    "-m",
+    "first note  ",
+    "HEAD"
+   ],
+   "changes": {
+    ".git/logs/refs/notes/commits": "0000000000000000000000000000000000000000 40cb8f140cd8b4bfcc49527b9369d0fdf88a15cd Den Tester <den@example.invalid> 1700000000 +0000\tnotes: Notes added by 'git notes add'\n",
+    ".git/objects/23/64510093ac1b0d61d6a6108ecf687c7c5e1111": "tree 68 | 100644 3725b6686c5e83d101394fca452ea0f3cd8f76b2 aa93d5bc06369541d7d1a7a6ad0a3975d17fb571",
+    ".git/objects/40/cb8f140cd8b4bfcc49527b9369d0fdf88a15cd": "commit 195 | tree 2364510093ac1b0d61d6a6108ecf687c7c5e1111\nauthor Den Tester <den@example.invalid> 1700000000 +0000\ncommitter Den Tester <den@example.invalid> 1700000000 +0000\n\nNotes added by 'git notes add'\n",
+    ".git/objects/aa/93d5bc06369541d7d1a7a6ad0a3975d17fb571": "blob 11 | first note\n",
+    ".git/refs/notes/commits": "40cb8f140cd8b4bfcc49527b9369d0fdf88a15cd\n"
+   },
+   "label": "add",
+   "status": 0,
+   "stderr": "",
+   "stdout": ""
+  },
+  {
+   "args": [
+    "notes",
+    "add",
+    "-m",
+    "second"
+   ],
+   "changes": {},
+   "label": "add-again",
+   "status": 1,
+   "stderr": "error: Cannot add notes. Found existing notes for object 3725b6686c5e83d101394fca452ea0f3cd8f76b2. Use '-f' to overwrite existing notes\n",
+   "stdout": ""
+  },
+  {
+   "args": [
+    "notes",
+    "add",
+    "-f",
+    "-m",
+    "second",
+    "-m",
+    "third\n\n\n"
+   ],
+   "changes": {
+    ".git/logs/refs/notes/commits": "0000000000000000000000000000000000000000 40cb8f140cd8b4bfcc49527b9369d0fdf88a15cd Den Tester <den@example.invalid> 1700000000 +0000\tnotes: Notes added by 'git notes add'\n40cb8f140cd8b4bfcc49527b9369d0fdf88a15cd c5c1ddc6980f789541dd625c7d44bd5f54957847 Den Tester <den@example.invalid> 1700000000 +0000\tnotes: Notes added by 'git notes add'\n",
+    ".git/objects/75/dab7ae813786f03b7c4f3e80fa8b5c4d491800": "blob 14 | second\n\nthird\n",
+    ".git/objects/87/27a0a909ac0fab322d0ac30820eccee1dc145d": "tree 68 | 100644 3725b6686c5e83d101394fca452ea0f3cd8f76b2 75dab7ae813786f03b7c4f3e80fa8b5c4d491800",
+    ".git/objects/c5/c1ddc6980f789541dd625c7d44bd5f54957847": "commit 243 | tree 8727a0a909ac0fab322d0ac30820eccee1dc145d\nparent 40cb8f140cd8b4bfcc49527b9369d0fdf88a15cd\nauthor Den Tester <den@example.invalid> 1700000000 +0000\ncommitter Den Tester <den@example.invalid> 1700000000 +0000\n\nNotes added by 'git notes add'\n",
+    ".git/refs/notes/commits": "c5c1ddc6980f789541dd625c7d44bd5f54957847\n"
+   },
+   "label": "add-force",
+   "status": 0,
+   "stderr": "Overwriting existing notes for object 3725b6686c5e83d101394fca452ea0f3cd8f76b2\n",
+   "stdout": ""
+  },
+  {
+   "args": [
+    "notes",
+    "show"
+   ],
+   "changes": {},
+   "label": "show",
+   "status": 0,
+   "stderr": "",
+   "stdout": "second\n\nthird\n"
+  },
+  {
+   "args": [
+    "notes",
+    "list"
+   ],
+   "changes": {},
+   "label": "list",
+   "status": 0,
+   "stderr": "",
+   "stdout": "75dab7ae813786f03b7c4f3e80fa8b5c4d491800 3725b6686c5e83d101394fca452ea0f3cd8f76b2\n"
+  },
+  {
+   "args": [
+    "notes",
+    "list",
+    "HEAD"
+   ],
+   "changes": {},
+   "label": "list-obj",
+   "status": 0,
+   "stderr": "",
+   "stdout": "75dab7ae813786f03b7c4f3e80fa8b5c4d491800\n"
+  },
+  {
+   "args": [
+    "notes"
+   ],
+   "changes": {},
+   "label": "bare",
+   "status": 0,
+   "stderr": "",
+   "stdout": "75dab7ae813786f03b7c4f3e80fa8b5c4d491800 3725b6686c5e83d101394fca452ea0f3cd8f76b2\n"
+  },
+  {
+   "args": [
+    "log"
+   ],
+   "changes": {},
+   "label": "log",
+   "status": 0,
+   "stderr": "",
+   "stdout": "commit 3725b6686c5e83d101394fca452ea0f3cd8f76b2\nAuthor: Den Tester <den@example.invalid>\nDate:   Tue Nov 14 22:13:20 2023 +0000\n\n    first subject\n    \n    body line\n\nNotes:\n    second\n    \n    third\n"
+  },
+  {
+   "args": [
+    "log",
+    "--oneline"
+   ],
+   "changes": {},
+   "label": "log-oneline",
+   "status": 0,
+   "stderr": "",
+   "stdout": "3725b66 first subject\n"
+  },
+  {
+   "args": [
+    "show",
+    "-s"
+   ],
+   "changes": {},
+   "label": "show-commit",
+   "status": 0,
+   "stderr": "",
+   "stdout": "commit 3725b6686c5e83d101394fca452ea0f3cd8f76b2\nAuthor: Den Tester <den@example.invalid>\nDate:   Tue Nov 14 22:13:20 2023 +0000\n\n    first subject\n    \n    body line\n\nNotes:\n    second\n    \n    third\n"
+  },
+  {
+   "args": [
+    "log",
+    "--format=%H %s"
+   ],
+   "changes": {},
+   "label": "log-format",
+   "status": 0,
+   "stderr": "",
+   "stdout": "3725b6686c5e83d101394fca452ea0f3cd8f76b2 first subject\n"
+  },
+  {
+   "args": [
+    "notes",
+    "add",
+    "-m",
+    "on a blob",
+    "HEAD:a.txt"
+   ],
+   "changes": {
+    ".git/logs/refs/notes/commits": "0000000000000000000000000000000000000000 40cb8f140cd8b4bfcc49527b9369d0fdf88a15cd Den Tester <den@example.invalid> 1700000000 +0000\tnotes: Notes added by 'git notes add'\n40cb8f140cd8b4bfcc49527b9369d0fdf88a15cd c5c1ddc6980f789541dd625c7d44bd5f54957847 Den Tester <den@example.invalid> 1700000000 +0000\tnotes: Notes added by 'git notes add'\nc5c1ddc6980f789541dd625c7d44bd5f54957847 7ca64966748ba3f3d00e739e732c2c0b4ba97079 Den Tester <den@example.invalid> 1700000000 +0000\tnotes: Notes added by 'git notes add'\n",
+    ".git/objects/1c/4dd7990f693c1122d9153cb89a18364c68184c": "tree 136 | 100644 3725b6686c5e83d101394fca452ea0f3cd8f76b2 75dab7ae813786f03b7c4f3e80fa8b5c4d491800; 100644 4a58007052a65fbc2fc3f910f2855f45a4058e74 cfc0ef5413edb83f778fcfd991ce4290efa95a21",
+    ".git/objects/7c/a64966748ba3f3d00e739e732c2c0b4ba97079": "commit 243 | tree 1c4dd7990f693c1122d9153cb89a18364c68184c\nparent c5c1ddc6980f789541dd625c7d44bd5f54957847\nauthor Den Tester <den@example.invalid> 1700000000 +0000\ncommitter Den Tester <den@example.invalid> 1700000000 +0000\n\nNotes added by 'git notes add'\n",
+    ".git/objects/cf/c0ef5413edb83f778fcfd991ce4290efa95a21": "blob 10 | on a blob\n",
+    ".git/refs/notes/commits": "7ca64966748ba3f3d00e739e732c2c0b4ba97079\n"
+   },
+   "label": "add-blob",
+   "status": 0,
+   "stderr": "",
+   "stdout": ""
+  },
+  {
+   "args": [
+    "notes",
+    "list"
+   ],
+   "changes": {},
+   "label": "list2",
+   "status": 0,
+   "stderr": "",
+   "stdout": "75dab7ae813786f03b7c4f3e80fa8b5c4d491800 3725b6686c5e83d101394fca452ea0f3cd8f76b2\ncfc0ef5413edb83f778fcfd991ce4290efa95a21 4a58007052a65fbc2fc3f910f2855f45a4058e74\n"
+  },
+  {
+   "args": [
+    "notes",
+    "remove",
+    "HEAD"
+   ],
+   "changes": {
+    ".git/logs/refs/notes/commits": "0000000000000000000000000000000000000000 40cb8f140cd8b4bfcc49527b9369d0fdf88a15cd Den Tester <den@example.invalid> 1700000000 +0000\tnotes: Notes added by 'git notes add'\n40cb8f140cd8b4bfcc49527b9369d0fdf88a15cd c5c1ddc6980f789541dd625c7d44bd5f54957847 Den Tester <den@example.invalid> 1700000000 +0000\tnotes: Notes added by 'git notes add'\nc5c1ddc6980f789541dd625c7d44bd5f54957847 7ca64966748ba3f3d00e739e732c2c0b4ba97079 Den Tester <den@example.invalid> 1700000000 +0000\tnotes: Notes added by 'git notes add'\n7ca64966748ba3f3d00e739e732c2c0b4ba97079 e05d26c94abdedaa1cfed70744f8cfd41ad7c6a4 Den Tester <den@example.invalid> 1700000000 +0000\tnotes: Notes removed by 'git notes remove'\n",
+    ".git/objects/77/907923ab4648f41de3192c31ce5dcd6802b9d6": "tree 68 | 100644 4a58007052a65fbc2fc3f910f2855f45a4058e74 cfc0ef5413edb83f778fcfd991ce4290efa95a21",
+    ".git/objects/e0/5d26c94abdedaa1cfed70744f8cfd41ad7c6a4": "commit 248 | tree 77907923ab4648f41de3192c31ce5dcd6802b9d6\nparent 7ca64966748ba3f3d00e739e732c2c0b4ba97079\nauthor Den Tester <den@example.invalid> 1700000000 +0000\ncommitter Den Tester <den@example.invalid> 1700000000 +0000\n\nNotes removed by 'git notes remove'\n",
+    ".git/refs/notes/commits": "e05d26c94abdedaa1cfed70744f8cfd41ad7c6a4\n"
+   },
+   "label": "remove",
+   "status": 0,
+   "stderr": "Removing note for object HEAD\n",
+   "stdout": ""
+  },
+  {
+   "args": [
+    "notes",
+    "remove",
+    "HEAD"
+   ],
+   "changes": {},
+   "label": "remove-missing",
+   "status": 1,
+   "stderr": "Object HEAD has no note\n",
+   "stdout": ""
+  },
+  {
+   "args": [
+    "notes",
+    "remove",
+    "--ignore-missing",
+    "HEAD"
+   ],
+   "changes": {},
+   "label": "remove-ignore",
+   "status": 0,
+   "stderr": "Object HEAD has no note\n",
+   "stdout": ""
+  },
+  {
+   "args": [
+    "notes",
+    "add",
+    "-m",
+    "",
+    "HEAD"
+   ],
+   "changes": {},
+   "label": "add-empty",
+   "status": 0,
+   "stderr": "Removing note for object 3725b6686c5e83d101394fca452ea0f3cd8f76b2\n",
+   "stdout": ""
+  },
+  {
+   "args": [
+    "notes",
+    "add",
+    "-m",
+    "  \n  ",
+    "HEAD"
+   ],
+   "changes": {},
+   "label": "add-ws",
+   "status": 0,
+   "stderr": "Removing note for object 3725b6686c5e83d101394fca452ea0f3cd8f76b2\n",
+   "stdout": ""
+  },
+  {
+   "args": [
+    "notes",
+    "show",
+    "HEAD"
+   ],
+   "changes": {},
+   "label": "show-missing",
+   "status": 1,
+   "stderr": "error: no note found for object 3725b6686c5e83d101394fca452ea0f3cd8f76b2.\n",
+   "stdout": ""
+  },
+  {
+   "args": [
+    "notes",
+    "list",
+    "HEAD"
+   ],
+   "changes": {},
+   "label": "list-missing",
+   "status": 1,
+   "stderr": "error: no note found for object 3725b6686c5e83d101394fca452ea0f3cd8f76b2.\n",
+   "stdout": ""
+  },
+  {
+   "args": [
+    "notes",
+    "add",
+    "-m",
+    "x",
+    "nosuch"
+   ],
+   "changes": {},
+   "label": "add-bad",
+   "status": 128,
+   "stderr": "fatal: failed to resolve 'nosuch' as a valid ref.\n",
+   "stdout": ""
+  },
+  {
+   "args": [
+    "notes",
+    "remove",
+    "HEAD:a.txt"
+   ],
+   "changes": {
+    ".git/logs/refs/notes/commits": "0000000000000000000000000000000000000000 40cb8f140cd8b4bfcc49527b9369d0fdf88a15cd Den Tester <den@example.invalid> 1700000000 +0000\tnotes: Notes added by 'git notes add'\n40cb8f140cd8b4bfcc49527b9369d0fdf88a15cd c5c1ddc6980f789541dd625c7d44bd5f54957847 Den Tester <den@example.invalid> 1700000000 +0000\tnotes: Notes added by 'git notes add'\nc5c1ddc6980f789541dd625c7d44bd5f54957847 7ca64966748ba3f3d00e739e732c2c0b4ba97079 Den Tester <den@example.invalid> 1700000000 +0000\tnotes: Notes added by 'git notes add'\n7ca64966748ba3f3d00e739e732c2c0b4ba97079 e05d26c94abdedaa1cfed70744f8cfd41ad7c6a4 Den Tester <den@example.invalid> 1700000000 +0000\tnotes: Notes removed by 'git notes remove'\ne05d26c94abdedaa1cfed70744f8cfd41ad7c6a4 e907dbf8adad813dff0f8ee23bec4dfb96c38249 Den Tester <den@example.invalid> 1700000000 +0000\tnotes: Notes removed by 'git notes remove'\n",
+    ".git/objects/4b/825dc642cb6eb9a060e54bf8d69288fbee4904": "tree 0 | ",
+    ".git/objects/e9/07dbf8adad813dff0f8ee23bec4dfb96c38249": "commit 248 | tree 4b825dc642cb6eb9a060e54bf8d69288fbee4904\nparent e05d26c94abdedaa1cfed70744f8cfd41ad7c6a4\nauthor Den Tester <den@example.invalid> 1700000000 +0000\ncommitter Den Tester <den@example.invalid> 1700000000 +0000\n\nNotes removed by 'git notes remove'\n",
+    ".git/refs/notes/commits": "e907dbf8adad813dff0f8ee23bec4dfb96c38249\n"
+   },
+   "label": "remove-blob",
+   "status": 0,
+   "stderr": "Removing note for object HEAD:a.txt\n",
+   "stdout": ""
+  },
+  {
+   "args": [
+    "notes",
+    "list"
+   ],
+   "changes": {},
+   "label": "list-after",
+   "status": 0,
+   "stderr": "",
+   "stdout": ""
+  },
+  {
+   "args": [
+    "reflog",
+    "show",
+    "refs/notes/commits"
+   ],
+   "changes": {},
+   "label": "reflog",
+   "status": 0,
+   "stderr": "",
+   "stdout": "e907dbf refs/notes/commits@{0}: notes: Notes removed by 'git notes remove'\ne05d26c refs/notes/commits@{1}: notes: Notes removed by 'git notes remove'\n7ca6496 refs/notes/commits@{2}: notes: Notes added by 'git notes add'\nc5c1ddc refs/notes/commits@{3}: notes: Notes added by 'git notes add'\n40cb8f1 refs/notes/commits@{4}: notes: Notes added by 'git notes add'\n"
+  },
+  {
+   "label": "fanout-threshold",
+   "notes": 77,
+   "subtrees": 62,
+   "tree": "040000 tree 4aac10a49150cb8aaafda8b566484a06decf2316\t04\n040000 tree cbabfb2513d8e35aaa5a61ebf726e960f6b17541\t05\n040000 tree b3f31b124f1d02eee6d359de740bb817f4df6bdf\t08\n040000 tree 595106ccd0974a1439fc219f4e3272efe3e8df60\t0c\n040000 tree 8675d058977440079be0947fc3d6858cac6ca91b\t0d\n040000 tree c6ffb13aec55bbb09573eedb309a56c176ff0e51\t0f\n040000 tree 4e49401cd3955c149490f0282cb684f60a38a424\t15\n040000 tree 246bca0e8f2e8d9401e93621b16469b185443ac4\t18\n040000 tree cf82d554222c263d7048f7aeb7d5e25faa088f8a\t1c\n040000 tree 5604e033ca99a6c5e3a0e933c02c87f52dea921a\t1e\n040000 tree 4c28e9fca8ad962f5e988d704956304377034934\t20\n040000 tree f9c237a96bffc88a379a73ca08c8fdb0a3ded37f\t2b\n040000 tree 88f88d8ec21656f7df7f29d36df9710bb0cd721c\t34\n040000 tree 28fa8267ee24fa3fe4fc8d2b81e5a9a4e72838b6\t36\n040000 tree 4aa0f920fd42bccce7cfcb334b32172b42cd476c\t3b\n040000 tree 31d350fd20d6e4820adbe22ae2c1d74cca14931f\t3c\n040000 tree 437a1422809361c0e4890c666be3b79ce6c79fb9\t41\n040000 tree 018dc87a9cb8576365035e525ff0a32463b92239\t44\n040000 tree f6d9bb8ce711d85cbe78aa003f328cfbbf21352c\t4a\n040000 tree 750b947da1681386744f6602fda883eeda63e209\t4d\n040000 tree 13a43e79d8ae793aac43b4467e5fb73edf1b8f24\t50\n040000 tree af57db2e6fbeb23e7a257751f9f361e260cb2c5a\t52\n040000 tree 3f61ab72d2c43ee96251d1c4d8d5762afcbc3851\t53\n040000 tree 702a0f7cf91385b9cc0127f9054c12df86296b46\t59\n040000 tree 775ccafa9eda5f2bf7a7aa6e2829f20b44d2c997\t5a\n040000 tree 0f92e93871c23413a7202d6303cf5173c8c92b7d\t5b\n040000 tree 59f4567b373bc757f6cfefce92fa5fcc1acbc5cd\t5d\n040000 tree f00e0cf447ec2e14b70604f923384e1400987af4\t5f\n040000 tree 441e9dab368f6cb3b07fedbf530a2e5f7ef14a12\t66\n040000 tree 30453dc9198de102074fe725c601883aa1385dbc\t6d\n040000 tree d8f81ab6b61f1796b0ccd700d2ecc738d0b40b23\t6e\n040000 tree c89f2f38efc2b86aea6acf313ce5186f52b51bed\t6f\n040000 tree 98655481e16a54ad2947bf85be2e954e34a868e6\t73\n040000 tree 2a5b5316d3869ac721207c2eb57779655d0eb437\t78\n040000 tree 55dac37650d8bf5f547a0fea26e4a8e246776038\t7c\n040000 tree 8769b76e7e5bbaefe73f57672ea3ec7f8ea8b036\t82\n040000 tree 4f81570602da76899da3826324799a70a564fe86\t87\n040000 tree e743e5e62fa169c2105e023b0dc4940821d2a666\t91\n040000 tree 5f3edcd40e20e59581f15c18a311685f99dfd437\t95\n040000 tree 0caf17383d512c9d75d97f03500e34fc5824a815\ta6\n040000 tree 06a4820ce0186cc74267fb6bc7cbe33e7bf0580d\ta8\n040000 tree c9e4afcba088dac2345be0ebdd39830f54a4a929\tad\n040000 tree 301be0b86b82ca56d5add8d4b972abe26b3ffc34\tb0\n040000 tree 52a402b85b2f8c1da4cd882e4ba2b25bd2df59e9\tb4\n040000 tree 0dc2e1b003b5c27aa6e6b28a230cb8619dccacf0\tb7\n040000 tree ba4197c47bf938f990e2eb309a6ccac242fd0800\tbb\n040000 tree 9344f1f4897308c688defabc4b40df9bacd52254\tbf\n040000 tree 00917b1710bc7f957ed8edd468b8b51e376b011a\tc1\n040000 tree 6ae2678bac5374ba9d64081b7c3d737148c90cd4\tc7\n040000 tree ddaf588ae597e0f5fbfd7146bea85cad53489aef\tce\n040000 tree d5a187c994f00ff94549b2c9105e040e7e4d0b24\td0\n040000 tree 4ab04fc06f32b43c43b556ea72a803f0de4c2fa2\td2\n040000 tree 09b7f39657d473e42b56893dd59936f7846a7f41\tdb\n040000 tree f5bc31c2ce13762a4dedf45d63a6adb2c0b4731e\tdd\n040000 tree 8684bd2b11b3d0bee67b30c966c7c15dae52e1ae\tde\n040000 tree b1bed7d59395e402d7753fab1ec401f772211b5c\tdf\n040000 tree 5d167b89f3e0fb447c39487e7fb291a0290063c8\te6\n040000 tree 41ea56b018bc6042032efaa74b4a39f6fa0cce71\te8\n040000 tree 27fed39a355647633e6ab056d1041a75ca1135d2\te9\n040000 tree 8435fd0f72645f72026cdeba766216822db1e5a4\tea\n040000 tree 56ba35425d57e65195060b5a2f1dd255812c5b67\tf4\n040000 tree f455f345260f47eb85cd574d2f9255194173ed74\tf9\n"
+  }
+ ]
+}
