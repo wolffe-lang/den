@@ -15,7 +15,7 @@ not a blanket byte-parity claim.
 | M0 | CLI refusal scaffold, `hash`, probes, oracle/corpus/review harness (vc00) |
 | M1 | `zlib`: inflate then deflate, Adler-32 (vc01); `oid`, `object`, `repository`, init/hash-object/cat-file/tree/commit/tag plumbing (vc02) |
 | M2 (partial) | `index`, `worktree`, `ignore`, `commit_format`, `commit`: implemented subset (vc03); `delta`, `rename`, `difftext`, `diffbinary`, `diff` (vc04); `walk`, `pretty`, log/show (vc05) |
-| M3 (partial) | `refs`, `refcmd`, `worktree.transition`: refs/reflogs, branch/tag/switch/checkout/reset (vc06); three-way merge/revert (vc07); rebase/cherry-pick/sequencer (vc08); `revsyntax`, `revision`, `revset`: shared bounded grammar (vc10); blame/stash/notes (later) |
+| M3 (partial) | `refs`, `refcmd`, `worktree.transition`: refs/reflogs, branch/tag/switch/checkout/reset (vc06); three-way merge/revert (vc07); rebase/cherry-pick/sequencer (vc08); `revsyntax`, `revision`, `revset`: shared bounded grammar (vc10); `blame`, `blamerange` and shared `difftext.correspondence`: bounded line attribution (vc11); stash/notes (later) |
 | M4 (partial) | `pack`: pack-v2/idx-v2 reads and delta decoding (vc09); pack writing, gc/repack/fsck/count-objects (later) |
 | M5 | `pktline`, protocol v2 fetch (vc13); receive-pack push/remotes (vc14); clone/pull porcelain (vc15) |
 | M6 | static build and PAX handoff (vc16, then px lane); optional `git` alias |
@@ -25,6 +25,46 @@ The MVP is M0–M3, file/git transports from M5, and M6. Pack reading is availab
 beneath object lookup; pack writing and transports remain separately staged.
 OID design keeps an algorithm and a byte list from the start, never a fixed
 20-byte public type. SHA-256 is available in the hash adapter already.
+
+## Blame attribution (vc11)
+
+`blamerange.selection(count, ranges, raw_path)` is pure numeric range syntax;
+regex/function ranges are named refusals. `difftext.comparison` supplies the
+whitespace comparison policy, and `correspondence` returns owned
+`LineLink {old_line, new_line}` records through the existing Myers/compact
+boundary. Changed repetitions/hash collisions and reordered common lines refuse
+before matching; unchanged repeated content maps directly. Each edit search's
+scratch is reclaimed. Ordinary comparison retains final-LF identity; `-w`
+normalizes ASCII whitespace while preserving one physical line boundary.
+
+`blame.attribute(repo, evaluated_commit, raw_path, options)` returns owned
+`Result {data, path, sources, rows}`. Each `Row {source, original}` uses zero-based
+coordinates into `Source {value: walk.Commit, path, previous}`. `Previous` is an
+empty/single list, never a fabricated parent. Identical whole-file parents take
+priority; otherwise raw parent order controls transfers. Missing paths follow
+whole-file rename pairs from the existing diff collector/pairer, not `-M`/`-C`
+line-movement heuristics. Commit/blob/rename-input payload and line-position
+charges cap at 128 MiB, work items at 10,000, bodies at 16 MiB/200,000 lines;
+these are operation/payload bounds, not a streaming or peak-RSS guarantee.
+
+`blame.render(context, result, options)` validates public result indices and
+renders default columns or porcelain/line-porcelain bytes without publication.
+It reuses unique abbreviation, date and path-quoting boundaries, reclaims each
+line's scratch and caps output at 128 MiB. Paths/content/porcelain identities
+remain raw bytes. Multiple origin paths for one commit and unsupported metadata
+or display widths refuse explicitly. The CLI resolves one revision through
+`revsyntax`/`revision`; clean default worktree contents are checked against HEAD.
+Uncommitted content, revision sets, regex/function ranges, all move/copy levels,
+ignored revisions, reverse history, alternate contents, nonregular paths,
+mailmaps, attributes, transcoding and unsupported configuration stay named.
+
+`tools/check-blame` requires native/release exact output/status and complete
+immutable state over 241 new and 50 original-corpus rows **per loose/packed mode**.
+Six importing-client rows per mode include raw non-UTF-8 paths, returned ownership,
+exact/over/invalid payload caps and malformed public results. Ten named scope
+rows per mode are separate non-parity captures. A bounded actual-checked program
+covers ranges and shared correspondence. No index/object/ref/reflog is written.
+Stash/notes, pack writing and inherited M2/M3 boundaries remain open.
 
 ## Surfaces
 
@@ -146,7 +186,7 @@ fixtures plus ignore, staged rename, modes/symlink, unborn, amend, index-v4 and
 edited-rename states. The original nine builders remain unchanged. The two
 independent corpus builds compare OID manifests, not inode-dependent stat data.
 `tests/cases.json` defines 190 main cases; its latest measured main comparison
-is 178 parity / 11 named not-yet / 1 version-shape / 0 reviewed / 0 failures.
+is 179 parity / 10 named not-yet / 1 version-shape / 0 reviewed / 0 failures.
 Implemented diff and edited-rename cases require parity and cannot regress to
 a named refusal unnoticed. Generated component matrices remain separately
 counted. Historical vc03 counts and 636 stat-proof rows are retained in

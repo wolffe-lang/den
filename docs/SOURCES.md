@@ -6,6 +6,39 @@ extracted for reading. No other Git implementation was consulted. The prose
 below is original, not copied from the references. Raw AsciiDoc is from the
 same signed Git 2.56.0 tarball pinned in `den-oracle.toml`.
 
+## Blame attribution (vc11)
+
+Read only versioned Git v2.56.0 documentation before implementation:
+
+- `Documentation/git-blame.adoc`: Synopsis, Description, Options, Specifying
+  Ranges, Porcelain Format, Incremental Output, Mapping Authors and Configuration.
+- `Documentation/blame-options.adoc`: line ranges, boundaries, root, dates,
+  first-parent/reverse traversal, porcelain/line-porcelain, moved/copied lines,
+  ignored revisions, alternate contents and display options.
+- `Documentation/line-range-format.adoc`: absolute endpoints, signed end
+  offsets, regex search anchoring and function-name range semantics.
+- `Documentation/config/blame.adoc`: boundary/root, dates, email, coloring,
+  ignore-revision files and ignored/unblamable markers. Unsupported controls are
+  refused, not silently ignored.
+- URLs use `https://raw.githubusercontent.com/git/git/v2.56.0/` followed by
+  those documentation paths. No implementation link was followed. No new
+  gitformat-* or gitprotocol-* parser was introduced.
+
+Only den's own revision, raw commit/object/path, packed-store, line/Myers/diff,
+rename-pairing, date and quoting APIs supplied implementation boundaries. The
+oracle was built afresh through `tools/fetch-oracle` at `/work/den` and its full
+c4848492… executable digest asserted before every observation. Git source was
+built, never opened. No Git/libgit2/VCS/matcher source was read and no production
+subprocess or new dependency was added.
+
+`tools/blame-test.py` independently creates raw commits, ordered merges, exact
+and edited renames, raw-byte paths/content, generated unique-line histories and
+reuses ten original corpus fixtures used by vc09. Complete stdout/stderr/status
+and immutable file/symlink/directory-mode state are compared on loose and packed
+copies. Retained reds corrected ordinary final-LF identity and whole-file-equal
+second-parent priority; oracle expectations were not altered. Repetition and
+reordering heuristics remain explicit non-parity refusals.
+
 ## Git documentation consulted
 
 | Page | Sections read and used |
