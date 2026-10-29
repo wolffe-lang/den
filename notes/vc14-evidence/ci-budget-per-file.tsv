@@ -1,0 +1,36 @@
+file	trunk_previous	trunk_end	trunk_seconds	vc14_previous	vc14_end	vc14_seconds	ratio
+src/housekeeping_test.lu	-	-	-	container step start	2026-10-29T00:07:51.6988634Z	531.699	-
+src/blame_test.lu	container step start	2026-10-28T19:29:39.1574116Z	194.157	src/housekeeping_test.lu	2026-10-29T00:09:51.7907006Z	120.092	-
+src/stash_test.lu	src/blame_test.lu	2026-10-28T19:34:29.7781849Z	290.621	src/blame_test.lu	2026-10-29T00:14:57.3548014Z	305.564	1.051
+src/revision_test.lu	src/stash_test.lu	2026-10-28T19:34:59.2797576Z	29.502	src/stash_test.lu	2026-10-29T00:15:28.4084023Z	31.054	1.053
+src/pretty_test.lu	src/revision_test.lu	2026-10-28T19:36:51.4709379Z	112.191	src/revision_test.lu	2026-10-29T00:17:29.5546422Z	121.146	1.080
+src/walk_test.lu	src/pretty_test.lu	2026-10-28T19:36:51.7252534Z	0.254	src/pretty_test.lu	2026-10-29T00:17:29.8399667Z	0.285	1.122
+src/refs_test.lu	src/walk_test.lu	2026-10-28T19:38:14.7792413Z	83.054	src/walk_test.lu	2026-10-29T00:18:55.7118055Z	85.872	1.034
+src/reflog_test.lu	src/refs_test.lu	2026-10-28T19:38:14.8547902Z	0.076	src/refs_test.lu	2026-10-29T00:18:55.7942444Z	0.082	1.091
+src/mergebase_test.lu	src/reflog_test.lu	2026-10-28T19:39:32.1240730Z	77.269	src/reflog_test.lu	2026-10-29T00:20:18.2508288Z	82.457	1.067
+src/mergefile_test.lu	src/mergebase_test.lu	2026-10-28T19:39:32.1658110Z	0.042	src/mergebase_test.lu	2026-10-29T00:20:18.2987298Z	0.048	1.148
+src/mergeundo_test.lu	src/mergefile_test.lu	2026-10-28T19:39:32.3390911Z	0.173	src/mergefile_test.lu	2026-10-29T00:20:18.5242280Z	0.225	1.301
+src/sequencer_test.lu	src/mergeundo_test.lu	2026-10-28T19:40:10.1240080Z	37.785	src/mergeundo_test.lu	2026-10-29T00:20:58.3918299Z	39.868	1.055
+src/difftext_test.lu	src/sequencer_test.lu	2026-10-28T19:40:12.0643049Z	1.940	src/sequencer_test.lu	2026-10-29T00:21:00.4254332Z	2.034	1.048
+src/hash_test.lu	src/difftext_test.lu	2026-10-28T19:40:12.3025633Z	0.238	src/difftext_test.lu	2026-10-29T00:21:00.6732814Z	0.248	1.040
+src/pack_test.lu	src/hash_test.lu	2026-10-28T19:44:04.1741457Z	231.872	src/hash_test.lu	2026-10-29T00:25:00.3978510Z	239.725	1.034
+src/pack_write_test.lu	src/pack_test.lu	2026-10-28T19:57:54.4378509Z	830.264	src/pack_test.lu	2026-10-29T00:49:55.5524608Z	1495.155	1.801
+src/zlib_test.lu	src/pack_write_test.lu	2026-10-28T19:57:54.6361050Z	0.198	src/pack_write_test.lu	2026-10-29T00:49:55.7527585Z	0.200	1.010
+src/zlib_vectors_test.lu	src/zlib_test.lu	2026-10-28T19:57:55.3497008Z	0.714	src/zlib_test.lu	2026-10-29T00:49:56.4961693Z	0.743	1.042
+src/zlib_encode_test.lu	src/zlib_vectors_test.lu	2026-10-28T19:57:55.8008208Z	0.451	src/zlib_vectors_test.lu	2026-10-29T00:49:56.9725601Z	0.476	1.056
+src/zlib/huffman_test.lu	src/zlib_encode_test.lu	2026-10-28T19:57:56.0542035Z	0.253	src/zlib_encode_test.lu	2026-10-29T00:49:57.2454804Z	0.273	1.077
+src/object_test.lu	src/zlib/huffman_test.lu	2026-10-28T19:58:40.1567190Z	44.103	src/zlib/huffman_test.lu	2026-10-29T00:50:44.5678210Z	47.322	1.073
+src/objects_test.lu	src/object_test.lu	2026-10-28T19:58:48.4122814Z	8.256	src/object_test.lu	2026-10-29T00:50:53.0151968Z	8.447	1.023
+src/config_test.lu	src/objects_test.lu	2026-10-28T19:59:09.2871876Z	20.875	src/objects_test.lu	2026-10-29T00:51:14.5802038Z	21.565	1.033
+src/index_checked_format.lu	src/config_test.lu	2026-10-28T20:00:31.0668426Z	81.780	src/config_test.lu	2026-10-29T00:52:53.8988853Z	99.319	1.214
+src/index_checked_flags.lu	src/index_checked_format.lu	2026-10-28T20:00:31.2905028Z	0.224	src/index_checked_format.lu	2026-10-29T00:52:54.1443364Z	0.245	1.097
+src/index_checked_trees.lu	src/index_checked_flags.lu	2026-10-28T20:00:31.4606936Z	0.170	src/index_checked_flags.lu	2026-10-29T00:52:54.3808625Z	0.237	1.390
+src/index_checked_malformed.lu	src/index_checked_trees.lu	2026-10-28T20:00:31.6304427Z	0.170	src/index_checked_trees.lu	2026-10-29T00:52:54.5663514Z	0.185	1.093
+src/index_checked_stat.lu	src/index_checked_malformed.lu	2026-10-28T20:00:31.7804244Z	0.150	src/index_checked_malformed.lu	2026-10-29T00:52:54.7420438Z	0.176	1.171
+src/ignore_test.lu	src/index_checked_stat.lu	2026-10-28T20:00:42.7883667Z	11.008	src/index_checked_stat.lu	2026-10-29T00:53:06.0924936Z	11.350	1.031
+src/worktree_test.lu	src/ignore_test.lu	2026-10-28T20:01:37.8456289Z	55.057	src/ignore_test.lu	2026-10-29T00:54:05.5386674Z	59.446	1.080
+src/commit_format_test.lu	src/worktree_test.lu	2026-10-28T20:02:35.4954454Z	57.650	src/worktree_test.lu	2026-10-29T00:55:10.2934430Z	64.755	1.123
+src/commit_test.lu	src/commit_format_test.lu	2026-10-28T20:02:35.8756030Z	0.380	src/commit_format_test.lu	2026-10-29T00:55:10.7309327Z	0.437	1.151
+src/delta_test.lu	src/commit_test.lu	2026-10-28T20:02:40.6169303Z	4.741	src/commit_test.lu	2026-10-29T00:55:15.7857117Z	5.055	1.066
+src/rename_test.lu	src/delta_test.lu	2026-10-28T20:04:42.8175340Z	122.201	src/delta_test.lu	2026-10-29T00:57:23.8573836Z	128.072	1.048
+src/diffbinary_test.lu	src/rename_test.lu	2026-10-28T20:06:35.8305697Z	113.013	-	-	-	-

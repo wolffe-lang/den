@@ -1,0 +1,919 @@
+{
+  "files": [
+    {
+      "file": "src/housekeeping_test.lu",
+      "occurrence": 1,
+      "ratio": null,
+      "trunk": null,
+      "vc14": {
+        "file": "src/housekeeping_test.lu",
+        "occurrence": 1,
+        "previous": "container step start",
+        "seconds": 531.698863,
+        "time": "2026-10-29T00:07:51.6988634Z",
+        "verdict": "exit(0)"
+      }
+    },
+    {
+      "file": "src/blame_test.lu",
+      "occurrence": 1,
+      "ratio": null,
+      "trunk": {
+        "file": "src/blame_test.lu",
+        "occurrence": 1,
+        "previous": "container step start",
+        "seconds": 194.157411,
+        "time": "2026-10-28T19:29:39.1574116Z",
+        "verdict": "exit(0)"
+      },
+      "vc14": {
+        "file": "src/blame_test.lu",
+        "occurrence": 1,
+        "previous": "src/housekeeping_test.lu",
+        "seconds": 120.091837,
+        "time": "2026-10-29T00:09:51.7907006Z",
+        "verdict": "exit(0)"
+      }
+    },
+    {
+      "file": "src/stash_test.lu",
+      "occurrence": 1,
+      "ratio": 1.0514186506550927,
+      "trunk": {
+        "file": "src/stash_test.lu",
+        "occurrence": 1,
+        "previous": "src/blame_test.lu",
+        "seconds": 290.620773,
+        "time": "2026-10-28T19:34:29.7781849Z",
+        "verdict": "exit(0)"
+      },
+      "vc14": {
+        "file": "src/stash_test.lu",
+        "occurrence": 1,
+        "previous": "src/blame_test.lu",
+        "seconds": 305.564101,
+        "time": "2026-10-29T00:14:57.3548014Z",
+        "verdict": "exit(0)"
+      }
+    },
+    {
+      "file": "src/revision_test.lu",
+      "occurrence": 1,
+      "ratio": 1.052608313461794,
+      "trunk": {
+        "file": "src/revision_test.lu",
+        "occurrence": 1,
+        "previous": "src/stash_test.lu",
+        "seconds": 29.501573,
+        "time": "2026-10-28T19:34:59.2797576Z",
+        "verdict": "exit(0)"
+      },
+      "vc14": {
+        "file": "src/revision_test.lu",
+        "occurrence": 1,
+        "previous": "src/stash_test.lu",
+        "seconds": 31.053601,
+        "time": "2026-10-29T00:15:28.4084023Z",
+        "verdict": "exit(0)"
+      }
+    },
+    {
+      "file": "src/pretty_test.lu",
+      "occurrence": 1,
+      "ratio": 1.0798196435762597,
+      "trunk": {
+        "file": "src/pretty_test.lu",
+        "occurrence": 1,
+        "previous": "src/revision_test.lu",
+        "seconds": 112.19118,
+        "time": "2026-10-28T19:36:51.4709379Z",
+        "verdict": "exit(0)"
+      },
+      "vc14": {
+        "file": "src/pretty_test.lu",
+        "occurrence": 1,
+        "previous": "src/revision_test.lu",
+        "seconds": 121.14624,
+        "time": "2026-10-29T00:17:29.5546422Z",
+        "verdict": "exit(0)"
+      }
+    },
+    {
+      "file": "src/walk_test.lu",
+      "occurrence": 1,
+      "ratio": 1.1219270513848913,
+      "trunk": {
+        "file": "src/walk_test.lu",
+        "occurrence": 1,
+        "previous": "src/pretty_test.lu",
+        "seconds": 0.254316,
+        "time": "2026-10-28T19:36:51.7252534Z",
+        "verdict": "exit(0)"
+      },
+      "vc14": {
+        "file": "src/walk_test.lu",
+        "occurrence": 1,
+        "previous": "src/pretty_test.lu",
+        "seconds": 0.285324,
+        "time": "2026-10-29T00:17:29.8399667Z",
+        "verdict": "exit(0)"
+      }
+    },
+    {
+      "file": "src/refs_test.lu",
+      "occurrence": 1,
+      "ratio": 1.0339279433517388,
+      "trunk": {
+        "file": "src/refs_test.lu",
+        "occurrence": 1,
+        "previous": "src/walk_test.lu",
+        "seconds": 83.053988,
+        "time": "2026-10-28T19:38:14.7792413Z",
+        "verdict": "exit(0)"
+      },
+      "vc14": {
+        "file": "src/refs_test.lu",
+        "occurrence": 1,
+        "previous": "src/walk_test.lu",
+        "seconds": 85.871839,
+        "time": "2026-10-29T00:18:55.7118055Z",
+        "verdict": "exit(0)"
+      }
+    },
+    {
+      "file": "src/reflog_test.lu",
+      "occurrence": 1,
+      "ratio": 1.0911990893327508,
+      "trunk": {
+        "file": "src/reflog_test.lu",
+        "occurrence": 1,
+        "previous": "src/refs_test.lu",
+        "seconds": 0.075549,
+        "time": "2026-10-28T19:38:14.8547902Z",
+        "verdict": "exit(0)"
+      },
+      "vc14": {
+        "file": "src/reflog_test.lu",
+        "occurrence": 1,
+        "previous": "src/refs_test.lu",
+        "seconds": 0.082439,
+        "time": "2026-10-29T00:18:55.7942444Z",
+        "verdict": "exit(0)"
+      }
+    },
+    {
+      "file": "src/mergebase_test.lu",
+      "occurrence": 1,
+      "ratio": 1.067132769952065,
+      "trunk": {
+        "file": "src/mergebase_test.lu",
+        "occurrence": 1,
+        "previous": "src/reflog_test.lu",
+        "seconds": 77.269283,
+        "time": "2026-10-28T19:39:32.1240730Z",
+        "verdict": "exit(0)"
+      },
+      "vc14": {
+        "file": "src/mergebase_test.lu",
+        "occurrence": 1,
+        "previous": "src/reflog_test.lu",
+        "seconds": 82.456584,
+        "time": "2026-10-29T00:20:18.2508288Z",
+        "verdict": "exit(0)"
+      }
+    },
+    {
+      "file": "src/mergefile_test.lu",
+      "occurrence": 1,
+      "ratio": 1.1476592074368681,
+      "trunk": {
+        "file": "src/mergefile_test.lu",
+        "occurrence": 1,
+        "previous": "src/mergebase_test.lu",
+        "seconds": 0.041738,
+        "time": "2026-10-28T19:39:32.1658110Z",
+        "verdict": "exit(0)"
+      },
+      "vc14": {
+        "file": "src/mergefile_test.lu",
+        "occurrence": 1,
+        "previous": "src/mergebase_test.lu",
+        "seconds": 0.047901,
+        "time": "2026-10-29T00:20:18.2987298Z",
+        "verdict": "exit(0)"
+      }
+    },
+    {
+      "file": "src/mergeundo_test.lu",
+      "occurrence": 1,
+      "ratio": 1.301356186518929,
+      "trunk": {
+        "file": "src/mergeundo_test.lu",
+        "occurrence": 1,
+        "previous": "src/mergefile_test.lu",
+        "seconds": 0.17328,
+        "time": "2026-10-28T19:39:32.3390911Z",
+        "verdict": "exit(0)"
+      },
+      "vc14": {
+        "file": "src/mergeundo_test.lu",
+        "occurrence": 1,
+        "previous": "src/mergefile_test.lu",
+        "seconds": 0.225499,
+        "time": "2026-10-29T00:20:18.5242280Z",
+        "verdict": "exit(0)"
+      }
+    },
+    {
+      "file": "src/sequencer_test.lu",
+      "occurrence": 1,
+      "ratio": 1.0551194541462139,
+      "trunk": {
+        "file": "src/sequencer_test.lu",
+        "occurrence": 1,
+        "previous": "src/mergeundo_test.lu",
+        "seconds": 37.784917,
+        "time": "2026-10-28T19:40:10.1240080Z",
+        "verdict": "exit(0)"
+      },
+      "vc14": {
+        "file": "src/sequencer_test.lu",
+        "occurrence": 1,
+        "previous": "src/mergeundo_test.lu",
+        "seconds": 39.867601,
+        "time": "2026-10-29T00:20:58.3918299Z",
+        "verdict": "exit(0)"
+      }
+    },
+    {
+      "file": "src/difftext_test.lu",
+      "occurrence": 1,
+      "ratio": 1.0480895698388286,
+      "trunk": {
+        "file": "src/difftext_test.lu",
+        "occurrence": 1,
+        "previous": "src/sequencer_test.lu",
+        "seconds": 1.940296,
+        "time": "2026-10-28T19:40:12.0643049Z",
+        "verdict": "exit(0)"
+      },
+      "vc14": {
+        "file": "src/difftext_test.lu",
+        "occurrence": 1,
+        "previous": "src/sequencer_test.lu",
+        "seconds": 2.033604,
+        "time": "2026-10-29T00:21:00.4254332Z",
+        "verdict": "exit(0)"
+      }
+    },
+    {
+      "file": "src/hash_test.lu",
+      "occurrence": 1,
+      "ratio": 1.0402461187195449,
+      "trunk": {
+        "file": "src/hash_test.lu",
+        "occurrence": 1,
+        "previous": "src/difftext_test.lu",
+        "seconds": 0.238259,
+        "time": "2026-10-28T19:40:12.3025633Z",
+        "verdict": "exit(0)"
+      },
+      "vc14": {
+        "file": "src/hash_test.lu",
+        "occurrence": 1,
+        "previous": "src/difftext_test.lu",
+        "seconds": 0.247848,
+        "time": "2026-10-29T00:21:00.6732814Z",
+        "verdict": "exit(0)"
+      }
+    },
+    {
+      "file": "src/pack_test.lu",
+      "occurrence": 1,
+      "ratio": 1.0338678329283146,
+      "trunk": {
+        "file": "src/pack_test.lu",
+        "occurrence": 1,
+        "previous": "src/hash_test.lu",
+        "seconds": 231.871582,
+        "time": "2026-10-28T19:44:04.1741457Z",
+        "verdict": "exit(0)"
+      },
+      "vc14": {
+        "file": "src/pack_test.lu",
+        "occurrence": 1,
+        "previous": "src/hash_test.lu",
+        "seconds": 239.72457,
+        "time": "2026-10-29T00:25:00.3978510Z",
+        "verdict": "exit(0)"
+      }
+    },
+    {
+      "file": "src/pack_write_test.lu",
+      "occurrence": 1,
+      "ratio": 1.8008189446267557,
+      "trunk": {
+        "file": "src/pack_write_test.lu",
+        "occurrence": 1,
+        "previous": "src/pack_test.lu",
+        "seconds": 830.263705,
+        "time": "2026-10-28T19:57:54.4378509Z",
+        "verdict": "exit(0)"
+      },
+      "vc14": {
+        "file": "src/pack_write_test.lu",
+        "occurrence": 1,
+        "previous": "src/pack_test.lu",
+        "seconds": 1495.154609,
+        "time": "2026-10-29T00:49:55.5524608Z",
+        "verdict": "exit(0)"
+      }
+    },
+    {
+      "file": "src/zlib_test.lu",
+      "occurrence": 1,
+      "ratio": 1.0103049103427404,
+      "trunk": {
+        "file": "src/zlib_test.lu",
+        "occurrence": 1,
+        "previous": "src/pack_write_test.lu",
+        "seconds": 0.198255,
+        "time": "2026-10-28T19:57:54.6361050Z",
+        "verdict": "exit(0)"
+      },
+      "vc14": {
+        "file": "src/zlib_test.lu",
+        "occurrence": 1,
+        "previous": "src/pack_write_test.lu",
+        "seconds": 0.200298,
+        "time": "2026-10-29T00:49:55.7527585Z",
+        "verdict": "exit(0)"
+      }
+    },
+    {
+      "file": "src/zlib_vectors_test.lu",
+      "occurrence": 1,
+      "ratio": 1.0417828039714405,
+      "trunk": {
+        "file": "src/zlib_vectors_test.lu",
+        "occurrence": 1,
+        "previous": "src/zlib_test.lu",
+        "seconds": 0.713595,
+        "time": "2026-10-28T19:57:55.3497008Z",
+        "verdict": "exit(0)"
+      },
+      "vc14": {
+        "file": "src/zlib_vectors_test.lu",
+        "occurrence": 1,
+        "previous": "src/zlib_test.lu",
+        "seconds": 0.743411,
+        "time": "2026-10-29T00:49:56.4961693Z",
+        "verdict": "exit(0)"
+      }
+    },
+    {
+      "file": "src/zlib_encode_test.lu",
+      "occurrence": 1,
+      "ratio": 1.0560183543181414,
+      "trunk": {
+        "file": "src/zlib_encode_test.lu",
+        "occurrence": 1,
+        "previous": "src/zlib_vectors_test.lu",
+        "seconds": 0.45112,
+        "time": "2026-10-28T19:57:55.8008208Z",
+        "verdict": "exit(0)"
+      },
+      "vc14": {
+        "file": "src/zlib_encode_test.lu",
+        "occurrence": 1,
+        "previous": "src/zlib_vectors_test.lu",
+        "seconds": 0.476391,
+        "time": "2026-10-29T00:49:56.9725601Z",
+        "verdict": "exit(0)"
+      }
+    },
+    {
+      "file": "src/zlib/huffman_test.lu",
+      "occurrence": 1,
+      "ratio": 1.0771046202783927,
+      "trunk": {
+        "file": "src/zlib/huffman_test.lu",
+        "occurrence": 1,
+        "previous": "src/zlib_encode_test.lu",
+        "seconds": 0.253383,
+        "time": "2026-10-28T19:57:56.0542035Z",
+        "verdict": "exit(0)"
+      },
+      "vc14": {
+        "file": "src/zlib/huffman_test.lu",
+        "occurrence": 1,
+        "previous": "src/zlib_encode_test.lu",
+        "seconds": 0.27292,
+        "time": "2026-10-29T00:49:57.2454804Z",
+        "verdict": "exit(0)"
+      }
+    },
+    {
+      "file": "src/object_test.lu",
+      "occurrence": 1,
+      "ratio": 1.0730077395130926,
+      "trunk": {
+        "file": "src/object_test.lu",
+        "occurrence": 1,
+        "previous": "src/zlib/huffman_test.lu",
+        "seconds": 44.102516,
+        "time": "2026-10-28T19:58:40.1567190Z",
+        "verdict": "exit(0)"
+      },
+      "vc14": {
+        "file": "src/object_test.lu",
+        "occurrence": 1,
+        "previous": "src/zlib/huffman_test.lu",
+        "seconds": 47.322341,
+        "time": "2026-10-29T00:50:44.5678210Z",
+        "verdict": "exit(0)"
+      }
+    },
+    {
+      "file": "src/objects_test.lu",
+      "occurrence": 1,
+      "ratio": 1.0232343963984523,
+      "trunk": {
+        "file": "src/objects_test.lu",
+        "occurrence": 1,
+        "previous": "src/object_test.lu",
+        "seconds": 8.255562,
+        "time": "2026-10-28T19:58:48.4122814Z",
+        "verdict": "exit(0)"
+      },
+      "vc14": {
+        "file": "src/objects_test.lu",
+        "occurrence": 1,
+        "previous": "src/object_test.lu",
+        "seconds": 8.447375,
+        "time": "2026-10-29T00:50:53.0151968Z",
+        "verdict": "exit(0)"
+      }
+    },
+    {
+      "file": "src/config_test.lu",
+      "occurrence": 1,
+      "ratio": 1.0330588794028583,
+      "trunk": {
+        "file": "src/config_test.lu",
+        "occurrence": 1,
+        "previous": "src/objects_test.lu",
+        "seconds": 20.874906,
+        "time": "2026-10-28T19:59:09.2871876Z",
+        "verdict": "exit(0)"
+      },
+      "vc14": {
+        "file": "src/config_test.lu",
+        "occurrence": 1,
+        "previous": "src/objects_test.lu",
+        "seconds": 21.565007,
+        "time": "2026-10-29T00:51:14.5802038Z",
+        "verdict": "exit(0)"
+      }
+    },
+    {
+      "file": "src/index_checked_format.lu",
+      "occurrence": 1,
+      "ratio": 1.2144668744322777,
+      "trunk": {
+        "file": "src/index_checked_format.lu",
+        "occurrence": 1,
+        "previous": "src/config_test.lu",
+        "seconds": 81.779655,
+        "time": "2026-10-28T20:00:31.0668426Z",
+        "verdict": "exit(0)"
+      },
+      "vc14": {
+        "file": "src/index_checked_format.lu",
+        "occurrence": 1,
+        "previous": "src/config_test.lu",
+        "seconds": 99.318682,
+        "time": "2026-10-29T00:52:53.8988853Z",
+        "verdict": "exit(0)"
+      }
+    },
+    {
+      "file": "src/index_checked_flags.lu",
+      "occurrence": 1,
+      "ratio": 1.0974291335062147,
+      "trunk": {
+        "file": "src/index_checked_flags.lu",
+        "occurrence": 1,
+        "previous": "src/index_checked_format.lu",
+        "seconds": 0.22366,
+        "time": "2026-10-28T20:00:31.2905028Z",
+        "verdict": "exit(0)"
+      },
+      "vc14": {
+        "file": "src/index_checked_flags.lu",
+        "occurrence": 1,
+        "previous": "src/index_checked_format.lu",
+        "seconds": 0.245451,
+        "time": "2026-10-29T00:52:54.1443364Z",
+        "verdict": "exit(0)"
+      }
+    },
+    {
+      "file": "src/index_checked_trees.lu",
+      "occurrence": 1,
+      "ratio": 1.3897679665787261,
+      "trunk": {
+        "file": "src/index_checked_trees.lu",
+        "occurrence": 1,
+        "previous": "src/index_checked_flags.lu",
+        "seconds": 0.170191,
+        "time": "2026-10-28T20:00:31.4606936Z",
+        "verdict": "exit(0)"
+      },
+      "vc14": {
+        "file": "src/index_checked_trees.lu",
+        "occurrence": 1,
+        "previous": "src/index_checked_flags.lu",
+        "seconds": 0.236526,
+        "time": "2026-10-29T00:52:54.3808625Z",
+        "verdict": "exit(0)"
+      }
+    },
+    {
+      "file": "src/index_checked_malformed.lu",
+      "occurrence": 1,
+      "ratio": 1.0927251412379453,
+      "trunk": {
+        "file": "src/index_checked_malformed.lu",
+        "occurrence": 1,
+        "previous": "src/index_checked_trees.lu",
+        "seconds": 0.169749,
+        "time": "2026-10-28T20:00:31.6304427Z",
+        "verdict": "exit(0)"
+      },
+      "vc14": {
+        "file": "src/index_checked_malformed.lu",
+        "occurrence": 1,
+        "previous": "src/index_checked_trees.lu",
+        "seconds": 0.185489,
+        "time": "2026-10-29T00:52:54.5663514Z",
+        "verdict": "exit(0)"
+      }
+    },
+    {
+      "file": "src/index_checked_stat.lu",
+      "occurrence": 1,
+      "ratio": 1.1714205704684562,
+      "trunk": {
+        "file": "src/index_checked_stat.lu",
+        "occurrence": 1,
+        "previous": "src/index_checked_malformed.lu",
+        "seconds": 0.149982,
+        "time": "2026-10-28T20:00:31.7804244Z",
+        "verdict": "exit(0)"
+      },
+      "vc14": {
+        "file": "src/index_checked_stat.lu",
+        "occurrence": 1,
+        "previous": "src/index_checked_malformed.lu",
+        "seconds": 0.175692,
+        "time": "2026-10-29T00:52:54.7420438Z",
+        "verdict": "exit(0)"
+      }
+    },
+    {
+      "file": "src/ignore_test.lu",
+      "occurrence": 1,
+      "ratio": 1.0311146261490114,
+      "trunk": {
+        "file": "src/ignore_test.lu",
+        "occurrence": 1,
+        "previous": "src/index_checked_stat.lu",
+        "seconds": 11.007942,
+        "time": "2026-10-28T20:00:42.7883667Z",
+        "verdict": "exit(0)"
+      },
+      "vc14": {
+        "file": "src/ignore_test.lu",
+        "occurrence": 1,
+        "previous": "src/index_checked_stat.lu",
+        "seconds": 11.35045,
+        "time": "2026-10-29T00:53:06.0924936Z",
+        "verdict": "exit(0)"
+      }
+    },
+    {
+      "file": "src/worktree_test.lu",
+      "occurrence": 1,
+      "ratio": 1.0797154061166354,
+      "trunk": {
+        "file": "src/worktree_test.lu",
+        "occurrence": 1,
+        "previous": "src/ignore_test.lu",
+        "seconds": 55.057262,
+        "time": "2026-10-28T20:01:37.8456289Z",
+        "verdict": "exit(0)"
+      },
+      "vc14": {
+        "file": "src/worktree_test.lu",
+        "occurrence": 1,
+        "previous": "src/ignore_test.lu",
+        "seconds": 59.446174,
+        "time": "2026-10-29T00:54:05.5386674Z",
+        "verdict": "exit(0)"
+      }
+    },
+    {
+      "file": "src/commit_format_test.lu",
+      "occurrence": 1,
+      "ratio": 1.1232433920822336,
+      "trunk": {
+        "file": "src/commit_format_test.lu",
+        "occurrence": 1,
+        "previous": "src/worktree_test.lu",
+        "seconds": 57.649817,
+        "time": "2026-10-28T20:02:35.4954454Z",
+        "verdict": "exit(0)"
+      },
+      "vc14": {
+        "file": "src/commit_format_test.lu",
+        "occurrence": 1,
+        "previous": "src/worktree_test.lu",
+        "seconds": 64.754776,
+        "time": "2026-10-29T00:55:10.2934430Z",
+        "verdict": "exit(0)"
+      }
+    },
+    {
+      "file": "src/commit_test.lu",
+      "occurrence": 1,
+      "ratio": 1.1508083481078921,
+      "trunk": {
+        "file": "src/commit_test.lu",
+        "occurrence": 1,
+        "previous": "src/commit_format_test.lu",
+        "seconds": 0.380158,
+        "time": "2026-10-28T20:02:35.8756030Z",
+        "verdict": "exit(0)"
+      },
+      "vc14": {
+        "file": "src/commit_test.lu",
+        "occurrence": 1,
+        "previous": "src/commit_format_test.lu",
+        "seconds": 0.437489,
+        "time": "2026-10-29T00:55:10.7309327Z",
+        "verdict": "exit(0)"
+      }
+    },
+    {
+      "file": "src/delta_test.lu",
+      "occurrence": 1,
+      "ratio": 1.0661106057439194,
+      "trunk": {
+        "file": "src/delta_test.lu",
+        "occurrence": 1,
+        "previous": "src/commit_test.lu",
+        "seconds": 4.741327,
+        "time": "2026-10-28T20:02:40.6169303Z",
+        "verdict": "exit(0)"
+      },
+      "vc14": {
+        "file": "src/delta_test.lu",
+        "occurrence": 1,
+        "previous": "src/commit_test.lu",
+        "seconds": 5.054779,
+        "time": "2026-10-29T00:55:15.7857117Z",
+        "verdict": "exit(0)"
+      }
+    },
+    {
+      "file": "src/rename_test.lu",
+      "occurrence": 1,
+      "ratio": 1.0480445088471086,
+      "trunk": {
+        "file": "src/rename_test.lu",
+        "occurrence": 1,
+        "previous": "src/delta_test.lu",
+        "seconds": 122.200604,
+        "time": "2026-10-28T20:04:42.8175340Z",
+        "verdict": "exit(0)"
+      },
+      "vc14": {
+        "file": "src/rename_test.lu",
+        "occurrence": 1,
+        "previous": "src/delta_test.lu",
+        "seconds": 128.071672,
+        "time": "2026-10-29T00:57:23.8573836Z",
+        "verdict": "exit(0)"
+      }
+    },
+    {
+      "file": "src/diffbinary_test.lu",
+      "occurrence": 1,
+      "ratio": null,
+      "trunk": {
+        "file": "src/diffbinary_test.lu",
+        "occurrence": 1,
+        "previous": "src/rename_test.lu",
+        "seconds": 113.013035,
+        "time": "2026-10-28T20:06:35.8305697Z",
+        "verdict": "exit(0)"
+      },
+      "vc14": null
+    }
+  ],
+  "summary": {
+    "commands": {
+      "native": {
+        "added_commands": 90,
+        "added_fixtures": 15,
+        "added_seconds": 157.163142,
+        "shared_commands": 1471,
+        "shared_fixtures": 234,
+        "shared_ratio": 0.9997955018703013,
+        "trunk_shared_seconds": 261.95349600000003,
+        "vc14_shared_seconds": 261.899927
+      },
+      "release": {
+        "added_commands": 90,
+        "added_fixtures": 15,
+        "added_seconds": 44.762178999999996,
+        "shared_commands": 1471,
+        "shared_fixtures": 234,
+        "shared_ratio": 0.9881191282876796,
+        "trunk_shared_seconds": 193.177997,
+        "vc14_shared_seconds": 190.882874
+      }
+    },
+    "controls": {
+      "count": 15,
+      "files": [
+        "src/stash_test.lu",
+        "src/revision_test.lu",
+        "src/pretty_test.lu",
+        "src/refs_test.lu",
+        "src/mergebase_test.lu",
+        "src/sequencer_test.lu",
+        "src/pack_test.lu",
+        "src/object_test.lu",
+        "src/objects_test.lu",
+        "src/config_test.lu",
+        "src/index_checked_format.lu",
+        "src/ignore_test.lu",
+        "src/worktree_test.lu",
+        "src/commit_format_test.lu",
+        "src/rename_test.lu"
+      ],
+      "max_ratio": 1.2144668744322777,
+      "median_ratio": 1.052608313461794,
+      "min_ratio": 1.0232343963984523
+    },
+    "housekeeping": {
+      "end": "2026-10-29T00:07:51.6988634Z",
+      "seconds": 420.541288,
+      "start": "2026-10-29T00:00:51.1575750Z"
+    },
+    "last_completed_file": "src/rename_test.lu",
+    "last_file_elapsed_seconds": 3503.857383,
+    "log_sha256": {
+      "trunk": "bfe6a971829225a1039538d8e69eda2687077c9df7444adaae3b64f267bbb6d8",
+      "vc14": "3c15620a4fb5a2e8138ade1b02f1b3f61987b0851fcd5c1febffbdcf2d45ac29"
+    },
+    "method": "Each file row measures elapsed wall time since the previous recorded file verdict, initially the container-step start. Windows include intervening builds and matrices; they are not isolated file-test execution times. Missing branch rows were not reached before cancellation.",
+    "projected_finish_at_2x_tail_seconds": 3962.222315,
+    "projected_finish_seconds": 3745.096752011275,
+    "trunk_container_seconds": 2527.0,
+    "trunk_job_seconds": 2551.0,
+    "trunk_pack_phases": [
+      {
+        "end": "2026-10-28T19:47:19.2389745Z",
+        "phase": "writer including client builds/setup/capture serialization",
+        "seconds": 194.521579,
+        "tier": "native"
+      },
+      {
+        "end": "2026-10-28T19:51:41.3113527Z",
+        "phase": "command matrix",
+        "seconds": 262.072378,
+        "tier": "native"
+      },
+      {
+        "end": "2026-10-28T19:51:41.5755052Z",
+        "phase": "publication failures",
+        "seconds": 0.264153,
+        "tier": "native"
+      },
+      {
+        "end": "2026-10-28T19:51:48.3767560Z",
+        "phase": "adversarial",
+        "seconds": 6.801251,
+        "tier": "native"
+      },
+      {
+        "end": "2026-10-28T19:54:34.4097975Z",
+        "phase": "writer including client builds/setup/capture serialization",
+        "seconds": 162.27236,
+        "tier": "release"
+      },
+      {
+        "end": "2026-10-28T19:57:47.7116300Z",
+        "phase": "command matrix",
+        "seconds": 193.301833,
+        "tier": "release"
+      },
+      {
+        "end": "2026-10-28T19:57:47.9938830Z",
+        "phase": "publication failures",
+        "seconds": 0.282253,
+        "tier": "release"
+      },
+      {
+        "end": "2026-10-28T19:57:54.3566207Z",
+        "phase": "adversarial",
+        "seconds": 6.362737,
+        "tier": "release"
+      }
+    ],
+    "trunk_remaining_seconds": 229.182466,
+    "vc14_container_seconds": 3603.0,
+    "vc14_job_seconds": 3622.0,
+    "vc14_pack_phases": [
+      {
+        "end": "2026-10-29T00:32:32.5515996Z",
+        "phase": "writer including client builds/setup/capture serialization",
+        "seconds": 451.599079,
+        "tier": "native"
+      },
+      {
+        "end": "2026-10-29T00:39:31.8591842Z",
+        "phase": "command matrix",
+        "seconds": 419.307585,
+        "tier": "native"
+      },
+      {
+        "end": "2026-10-29T00:39:32.1529075Z",
+        "phase": "publication failures",
+        "seconds": 0.293723,
+        "tier": "native"
+      },
+      {
+        "end": "2026-10-29T00:39:39.4094992Z",
+        "phase": "adversarial",
+        "seconds": 7.256592,
+        "tier": "native"
+      },
+      {
+        "end": "2026-10-29T00:45:52.5767730Z",
+        "phase": "writer including client builds/setup/capture serialization",
+        "seconds": 369.258196,
+        "tier": "release"
+      },
+      {
+        "end": "2026-10-29T00:49:48.4678301Z",
+        "phase": "command matrix",
+        "seconds": 235.891057,
+        "tier": "release"
+      },
+      {
+        "end": "2026-10-29T00:49:48.7639214Z",
+        "phase": "publication failures",
+        "seconds": 0.296091,
+        "tier": "release"
+      },
+      {
+        "end": "2026-10-29T00:49:55.4623511Z",
+        "phase": "adversarial",
+        "seconds": 6.69843,
+        "tier": "release"
+      }
+    ],
+    "writer": {
+      "native": {
+        "added_by_fixture": {
+          "vc14-binary": 113.1815433459999,
+          "vc14-mixed": 115.203252389,
+          "vc14-repetitive": 19.107192078999788
+        },
+        "added_rows": 9,
+        "added_seconds": 247.49198781399969,
+        "shared_ratio": 1.0039322860677193,
+        "shared_rows": 174,
+        "trunk_shared_seconds": 191.11304748899852,
+        "vc14_shared_seconds": 191.8645586629989
+      },
+      "release": {
+        "added_by_fixture": {
+          "vc14-binary": 85.22017189900043,
+          "vc14-mixed": 96.6851350689999,
+          "vc14-repetitive": 11.299682355999721
+        },
+        "added_rows": 9,
+        "added_seconds": 193.20498932400005,
+        "shared_ratio": 1.0309584992211145,
+        "shared_rows": 174,
+        "trunk_shared_seconds": 146.4853639580001,
+        "vc14_shared_seconds": 151.02033098399852
+      }
+    }
+  }
+}
