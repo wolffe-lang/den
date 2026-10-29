@@ -1,0 +1,27 @@
+vc14 CI-budget follow-up prediction (before changing the budget/assertion)
+
+The final-head labelled run was timeout-cancelled, not failed by a test.
+Completion-to-completion windows are not isolated checked-file runtimes.
+
+Measured: 420.541 seconds for the new housekeeping gate, 440.697 seconds
+for the new writer rows across both tiers, and 201.925 seconds for their
+new command fixtures. Shared writer rows change by factors 1.004/1.031;
+shared command fixtures by 1.000/0.988. Fifteen comparable unchanged windows
+of at least five seconds have median ratio 1.053 (range 1.023..1.214).
+The large cumulative displacement therefore mostly belongs to the added
+coverage, not a uniform 1.5..1.8 runner-speed multiplier.
+
+R-vc14-4 recommendation: retain all fixtures, modes, comparisons and captures;
+raise only the Linux every-gate job timeout from 60 to 90 minutes and update
+its existing planner invariant. Do not split or trim the new gates now.
+The last completed marker plus the scaled trunk tail projects 62m25s;
+doubling the remaining tail projects 66m02s. Ninety provides about 24m
+headroom over that latter scenario without claiming a guaranteed CI time.
+
+Prediction: the updated planner assertion fails specifically at T4 against
+60, then all planner checks pass against 90. Production code, pins, tools/gate
+and differential expectations stay unchanged. The existing full local gate
+covers that unchanged production/test surface, not the new CI setting; the
+scoped planner red/green supplies local proof of the setting, and the next
+labelled CI run supplies the actual completion verdict. No lane CI wait,
+label change, audit rerun or further full local gauntlet.
