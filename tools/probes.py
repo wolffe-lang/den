@@ -1,7 +1,7 @@
 import json,os,pathlib,subprocess,sys
 R=pathlib.Path(__file__).resolve().parent.parent
 out=R/'target/probes';rows=[]
-expected_absent={'argv0','regex','glob','bigint','deflate','mmap'}
+expected_absent={'regex','glob','bigint','deflate','mmap'}
 for p in sorted((R/'probes').glob('*/main.lu')):
  name=p.parent.name
  if name=='hash':p=R/'src/hash_test.lu'
