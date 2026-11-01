@@ -384,14 +384,16 @@ format checking, corpus reproducibility and the static archive checks.
 ### Toolchain input identity
 
 `wolf-toolchain.toml` and `den-oracle.toml` retain archive, source and container
-pins. The two metadata reads in
-`notes/vc03-evidence/{wolf,lupin}-release-read-{1,2}.json` agree on asset IDs,
-names and digests. These are input identities, not test verdicts.
+pins. At the 0.2.36 pin (r41p, 2026-10-31) two release-API reads of each
+release agree on asset IDs, names and digests, and with r41's published
+table; at 0.2.35 the reads are in
+`notes/vc03-evidence/{wolf,lupin}-release-read-{1,2}.json`. These are input
+identities, not test verdicts.
 
 | Linux x86-64 archive | Release asset ID | SHA-256 |
 |---|---:|---|
-| wolf 0.2.35 | 668511628 | `4cc4045bbbb605c07835bc4f32685953c784eeef4cd3139a48b457dfc90dad1a` |
-| lupin 0.1.56 | 667986244 | `ad703550ac4787e8e4bb26989d591a731410274d7332f2b4e8b9a64c878822cc` |
+| wolf 0.2.36 | 685931980 | `d383c74c8cd123b9d9dfaa268271d4f004294f85c2b230237d0ef07027d9500d` |
+| lupin 0.1.58 | 680737717 | `34f52792bb59bc7565e0edc1235cd47d9a6ad13d5e6528993627f2e699b62193` |
 
 The oracle executable is Git 2.56.0, SHA-256
 `c4848492938c4ebfffbefe1fbbaa68b9af90c86d1f6a20e76816c5ff37fcfa60`.
