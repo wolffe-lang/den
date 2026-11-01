@@ -522,7 +522,8 @@ observed on native and the actual checked machine. TLS completed a local
 Ed25519 handshake, but the tested RSA/GitHub chain returned `unsupported_alg`;
 the checked TLS program exhausted its mem-phase budget before a handshake.
 HTTPS remains deferred. Non-UTF-8 OS paths, non-creating writable opens,
-argv[0] at this pin, regex and mmap have the specific limitations listed in MAP.
+regex and mmap have the specific limitations listed in MAP; argv[0] is
+available since wolf 0.2.36 and den does not read it yet.
 
 The combined index checked unit also exceeds the pinned mem-phase budget.
 Five smaller checked probes cover format, flags, trees, malformed input and
