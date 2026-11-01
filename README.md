@@ -12,7 +12,7 @@ rebase cover the measured subsets below. Combined merge display, full replay
 semantics, gc policy and transports remain unfinished. Text diff has
 two recorded equal-cost alignment differences; binary patches reconstruct the
 exact blobs but do not always use Git's byte representation. `den --version`
-prints `den 0.0.0 (built with wolf 0.2.35)`.
+prints `den 0.0.0 (built with wolf 0.2.36)`.
 See [MAP](docs/MAP.md) for API contracts and [FORMATS](docs/FORMATS.md) for
 measured bytes and documentation discrepancies.
 
@@ -24,7 +24,7 @@ measured bytes and documentation discrepancies.
 | Development witnesses | hasu CPUs 0–5 for objects/index/worktree/commit and 6–11 for diff; kasumi CPUs 12–15 for the initial surface census; Linux x86-64, rootless container under a core-block lock |
 | CI PR gate | ubuntu-24.04, pinned container and oracle, including planner tests |
 | CI full field leg | macOS arm64 with Homebrew Git; nonblocking observation, not the oracle |
-| Toolchain | wolf 0.2.35 cf0c13d3, lupin 0.1.56 tag 28547b4 (binary embeds 294d626), bundled std 2386522e |
+| Toolchain | wolf 0.2.36 5adf3d91, lupin 0.1.58 tag 6240efe5 (binary embeds a5378e3), bundled std 78b9d3cb |
 
 Archive and oracle pins are in `wolf-toolchain.toml` and `den-oracle.toml`.
 Downloads fail on a digest mismatch. Both release-metadata reads are retained
