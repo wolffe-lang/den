@@ -249,7 +249,7 @@ measurements use hasu CPUs 0–5; diff uses CPUs 6–11 with the same pinned too
 | Globs | No `std.glob` | `glob`: E0301 native + checked; implement Git ignore/pathspec grammar in den, not a new generic dependency |
 | Big integers | No `std.bigint`; not needed by den | `bigint`: E0301 native + checked, existing wolf-std#100 |
 | Large packs / memory | `fs_read_at`, `fs_seek`, per-window region reclamation; no `fs_mmap` builtin | `read-at`: native + checked scan 100,000,000-byte sparse file in 64-KiB windows. Native repeated reads after warm-up: 8,339,710 and 8,495,314 ns, median 8,417,512 ns; RSS 2,588–2,652 KiB (`gauntlet-8.log`). Sparse, warm-page-cache read, not a disk benchmark. `mmap`: E0301 on both. Use a bounded window cache, not whole-pack reads |
-| argv[0] | No `env_arg0` in 0.2.35 | `argv0`: E0301 native + checked. wolf-lang#904 is merged but unreleased; revisit the git alias when the pin moves |
+| argv[0] | `env_arg0() -> str` since 0.2.36 (wolf-lang#904); 0.2.35 had none | `argv0`: E0301 at 0.2.35. At 0.2.36 it resolves; the old probe's `env_arg0() else …` met E0608 (`else` needs a fallible operand) on native and checked, so the probe prints `env_arg0()` and is expected present. The git alias by argv[0] is den code, still to come |
 | C ABI / muzzle | No dependency: den is a hosted/static wolf executable over wolf-std | `muzzle` probe; README and LEDGER read. A future C-facing libden needs the C ABI membrane and an explicit allocator/ownership convention (malloc/free for caller-owned results), not muzzle as a VCS dependency |
 
 No stat nanosecond gap was found; the prediction was wrong. std.fs.fstat is
@@ -269,7 +269,7 @@ separates standard-library wrappers from language builtins.
   the mem-phase step budget before any handshake; both local and GitHub
   checked logs witness this. Consider a way to set the budget for this
   library-sized program; do not substitute `wolf run --checked` (native).
-- Existing gaps remain #908 (open), #706 (rename-no-replace), #684 (st_blksize; not needed by index v2), #687/#912 (paths), #904 (argv[0]),
+- Existing gaps remain #908 (open), #706 (rename-no-replace), #684 (st_blksize; not needed by index v2), #687/#912 (paths),
   wolf-std#99 (regex), #100 (big integers). zlib and Git globs are den work,
   not requests for unrelated standard-library features.
 
