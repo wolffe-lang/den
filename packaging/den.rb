@@ -11,14 +11,14 @@ class Den < Formula
   resource "wolf" do
     on_macos do
       on_arm do
-        url "https://github.com/wolffe-lang/wolf-lang/releases/download/v0.2.35/wolf-0.2.35-aarch64-apple-darwin.tar.gz"
-        sha256 "240b84d079b1b9a0d88681ac08fca4816f84778e2d6c94c435ceb2dd6a5f042a"
+        url "https://github.com/wolffe-lang/wolf-lang/releases/download/v0.2.36/wolf-0.2.36-aarch64-apple-darwin.tar.gz"
+        sha256 "b79d55845f349d56789d9d1cb057ee88b5a7128d3b6dd77ca070707cfa4aa632"
       end
     end
     on_linux do
       on_intel do
-        url "https://github.com/wolffe-lang/wolf-lang/releases/download/v0.2.35/wolf-0.2.35-x86_64-unknown-linux-gnu.tar.gz"
-        sha256 "4cc4045bbbb605c07835bc4f32685953c784eeef4cd3139a48b457dfc90dad1a"
+        url "https://github.com/wolffe-lang/wolf-lang/releases/download/v0.2.36/wolf-0.2.36-x86_64-unknown-linux-gnu.tar.gz"
+        sha256 "d383c74c8cd123b9d9dfaa268271d4f004294f85c2b230237d0ef07027d9500d"
       end
     end
   end
@@ -26,7 +26,7 @@ class Den < Formula
   def install
     source = buildpath
     resource("wolf").stage do
-      odie "bundled std pin drift" unless (Pathname.pwd/"std/STD-REV").read.strip == "2386522eb059cca5a84108562c2c0a0e72345d34"
+      odie "bundled std pin drift" unless (Pathname.pwd/"std/STD-REV").read.strip == "78b9d3cbc41d51db44d18c40b6694403644d1c83"
       ENV["WOLF_STD"] = (Pathname.pwd/"std").to_s
       system "./wolf", "build", "--release", "--deny-warnings", source/"src/den.lu", "-o", source/"den"
     end
@@ -35,7 +35,7 @@ class Den < Formula
   end
 
   test do
-    assert_equal "den 0.0.0 (built with wolf 0.2.35)\n", shell_output("#{bin}/den --version")
+    assert_equal "den 0.0.0 (built with wolf 0.2.36)\n", shell_output("#{bin}/den --version")
     assert_match "not yet implemented: commit", shell_output("#{bin}/den commit 2>&1", 2)
   end
 end
