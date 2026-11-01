@@ -110,7 +110,7 @@ def one(case,base,den,git):
     (root/'git.json').write_text(json.dumps(expected,sort_keys=True)+'\n')
     (root/'den.json').write_text(json.dumps(actual,sort_keys=True)+'\n')
     if case.get('kind')=='version':
-        ok=(bytes.fromhex(actual['stdout'])==b'den 0.0.0 (built with wolf 0.2.35)\n'
+        ok=(bytes.fromhex(actual['stdout'])==b'den 0.0.0 (built with wolf 0.2.36)\n'
             and actual['stderr']=='' and actual['status']==0 and actual['repository']==before and actual['worktree']==before_worktree
             and bytes.fromhex(expected['stdout']).startswith(b'git version ') and expected['status']==0)
         return 'shape-pass' if ok else 'FAIL'
@@ -147,7 +147,7 @@ def selftest():
     assert before['stdout']==mutated['stdout'] and before!=mutated
     fixture=R/'target/corpus'
     fake=root/'den'
-    fake.write_text('#!/bin/sh\nprintf "den 0.0.1 (built with wolf 0.2.35)\\n"\n')
+    fake.write_text('#!/bin/sh\nprintf "den 0.0.1 (built with wolf 0.2.36)\\n"\n')
     fake.chmod(0o755)
     version={'name':'selftest-version','repo':'two','args':['--version'],'kind':'version'}
     assert one(version,fixture,str(fake),os.environ['DEN_GIT'])=='FAIL'
