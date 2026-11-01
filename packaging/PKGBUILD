@@ -9,12 +9,12 @@ url='https://github.com/wolffe-lang/den'
 license=('GPL-3.0-only')
 depends=('glibc' 'sh')
 makedepends=('clang')
-_wolf=0.2.35
-_std=2386522eb059cca5a84108562c2c0a0e72345d34
+_wolf=0.2.36
+_std=78b9d3cbc41d51db44d18c40b6694403644d1c83
 source=("$pkgname-$pkgver.tar.gz::https://github.com/wolffe-lang/den/archive/refs/tags/v$pkgver.tar.gz"
         "wolf-$_wolf-x86_64-unknown-linux-gnu.tar.gz::https://github.com/wolffe-lang/wolf-lang/releases/download/v$_wolf/wolf-$_wolf-x86_64-unknown-linux-gnu.tar.gz")
 sha256sums=('RELEASE-LANE-FILLS-THIS'
-            '4cc4045bbbb605c07835bc4f32685953c784eeef4cd3139a48b457dfc90dad1a')
+            'd383c74c8cd123b9d9dfaa268271d4f004294f85c2b230237d0ef07027d9500d')
 build() {
     cd "$pkgname-$pkgver"
     local tc="$srcdir/wolf-$_wolf-x86_64-unknown-linux-gnu"
@@ -23,7 +23,7 @@ build() {
 }
 check() {
     cd "$pkgname-$pkgver"
-    test "$(./den --version)" = 'den 0.0.0 (built with wolf 0.2.35)'
+    test "$(./den --version)" = 'den 0.0.0 (built with wolf 0.2.36)'
 }
 package() {
     cd "$pkgname-$pkgver"
