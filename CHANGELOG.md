@@ -2,6 +2,8 @@
 
 ## Unreleased — M1 loose objects
 
+- Pin wolf 0.2.36, lupin 0.1.58 and the bundled std `78b9d3cb`;
+  `den --version` names the wolf that builds it.
 - Add algorithm-tagged OIDs, bounded loose-object read/write with independent
   checksum/framing/oid validation, and atomic no-replace publication.
 - Preserve binary tree names, ordered parents, unknown multiline headers and
