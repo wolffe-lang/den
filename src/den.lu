@@ -35,7 +35,7 @@ fn destination(command: str) -> str {
 fn main() -> int {
     let args = env_args()
     if args.len == 1 && args[0] == "--version" {
-        print("den 0.0.0 (built with wolf 0.2.35)")
+        print("den 0.0.0 (built with wolf 0.2.36)")
         return 0
     }
     if args.len > 0 {
