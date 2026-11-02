@@ -1,0 +1,43 @@
+#!/bin/sh
+# vc15: wire framing, received streams, public clients and pinned service peers.
+set -eu
+DEN_ROOT=$(cd "$(dirname "$0")/.." && pwd)
+export DEN_ROOT
+cd "$DEN_ROOT"
+. tools/lib-toolchain.sh
+step() {
+    label=$1
+    shift
+    set +e
+    "$@"
+    rc=$?
+    set -e
+    echo "END $label exit=$rc"
+    [ "$rc" = 0 ]
+}
+checked() {
+    program=$1
+    "$WOLF" conform-run "src/$program.lu" --checked --json > "target/$program-checked.json" || return $?
+    cat "target/$program-checked.json"
+    python3 -I - "target/$program-checked.json" <<'PY'
+import json,sys
+rows=[json.loads(x) for x in open(sys.argv[1]) if x.startswith('{')]
+assert len(rows)==1 and rows[0]['verdict']=='exit(0)', rows
+PY
+}
+for tier in native release; do
+    flag=
+    [ "$tier" != release ] || flag=--release
+    mkdir -p "target/$tier"
+    step "$tier-wire-build" "$WOLF" build $flag --deny-warnings src/wire_test.lu -o "target/$tier/wire-test"
+    step "$tier-wire-unit" "target/$tier/wire-test"
+    step "$tier-pack-stream-build" "$WOLF" build $flag --deny-warnings src/pack_stream_test.lu -o "target/$tier/pack-stream-test"
+    step "$tier-pack-stream-unit" "target/$tier/pack-stream-test"
+    step "$tier-wire-client-build" "$WOLF" build $flag --deny-warnings probes/wire-client/main.lu -o "target/$tier/wire-client"
+    step "$tier-atomic-client-build" "$WOLF" build $flag --deny-warnings probes/atomic-client/main.lu -o "target/$tier/atomic-client"
+    step "$tier-wire-peers" tools/env python3 -I tools/wire-test.py --tier "$tier"
+    step "$tier-received-pack-peers" tools/env python3 -I tools/wire-pack-test.py --tier "$tier"
+done
+step actual-checked-wire checked wire_test
+step actual-checked-pack-stream checked pack_stream_test
+echo 'wire: native/release peers, real thin/OFS/REF streams and actual checked units; zero skips'
