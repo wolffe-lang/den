@@ -1,0 +1,6 @@
+pkg {
+    name: "receive-service",
+    edition: "1",
+    capabilities: [env, fs, exec, net],
+    deps: {wiregit: {path: "../../src/wiregit"}},
+}

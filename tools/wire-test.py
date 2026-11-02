@@ -61,9 +61,7 @@ def main():
         if server == 'git':
             result = run([den, 'clone', '-q', '--bare', source.as_uri(), dest])
         else:
-            upload = out / 'den-upload-pack'
-            upload.write_text('#!/bin/sh\nexec "' + str(den) + '" upload-pack "$@"\n')
-            upload.chmod(0o755)
+            upload = root / 'target' / a.tier / 'upload-service'
             result = run([git, '-c', 'protocol.version=2', 'clone', '-q', '--bare',
                           '--upload-pack=' + str(upload), source.as_uri(), dest])
         assert result.stdout == b'' and result.stderr == b'', 'quiet successful clone bytes'
@@ -100,6 +98,15 @@ def main():
     assert run([git, 'ls-files', '-s'], api_clone).stdout == run([git, 'ls-files', '-s'], expected).stdout
     assert run([git, 'status', '--porcelain=v1'], api_clone).stdout == b''
     rows.append('independent importing normal-clone client')
+    self_clone = out / 'den-to-den.git'
+    if self_clone.exists():
+        shutil.rmtree(self_clone)
+    result = run([den, 'clone', '-q', '--bare', source.as_uri(), self_clone],
+                 env={'DEN_UPLOAD_PACK': str(root / 'target' / a.tier / 'upload-service')})
+    assert result.stdout == b'' and result.stderr == b''
+    assert run([git, 'show-ref'], self_clone).stdout == run([git, 'show-ref'], source).stdout
+    run([git, 'fsck', '--full'], self_clone)
+    rows.append('den-to-den native file services, no shell or Git service executable')
 
     def pkt(data):
         assert len(data) <= 65516
@@ -172,12 +179,11 @@ def main():
         run([git, 'init', '-q', '--bare', target])
         prefix = [den, 'push', '-q']
         if client == 'git':
-            receive = out / 'den-receive-pack'
-            receive.write_text('#!/bin/sh\nexec "' + str(den) + '" receive-pack "$@"\n')
-            receive.chmod(0o755)
+            receive = root / 'target' / a.tier / 'receive-service'
             prefix = [git, 'push', '-q', '--receive-pack=' + str(receive)]
         pushspec = 'refs/heads/main:refs/heads/main'
-        run(prefix + [target.as_uri(), pushspec], fixture)
+        result = run(prefix + [target.as_uri(), pushspec], fixture)
+        assert result.stdout == b'' and result.stderr == b'', 'quiet successful push bytes'
         tip = run([git, 'rev-parse', 'HEAD'], fixture).stdout
         assert run([git, 'rev-parse', 'refs/heads/main'], target).stdout == tip
         run([git, 'fsck', '--full'], target)
@@ -216,6 +222,19 @@ def main():
             assert b'atomic' not in offered, 'do not advertise an unimplemented atomic reflog policy'
             run([git, 'config', 'core.logAllRefUpdates', 'false'], target)
             rows.append('den withdraws atomic for the named unsupported reflog policy')
+    self_server = out / 'den-to-den-push.git'
+    if self_server.exists():
+        shutil.rmtree(self_server)
+    run([git, 'init', '-q', '--bare', self_server])
+    result = run([den, 'push', '-q', '--atomic', self_server.as_uri(),
+                  'HEAD:refs/heads/a', 'HEAD:refs/heads/b'], fixture,
+                 env={'DEN_RECEIVE_PACK': str(root / 'target' / a.tier / 'receive-service')})
+    assert result.stdout == b'' and result.stderr == b''
+    self_tip = run([git, 'rev-parse', 'HEAD'], fixture).stdout
+    for name in ('a', 'b'):
+        assert run([git, 'rev-parse', 'refs/heads/' + name], self_server).stdout == self_tip
+    run([git, 'fsck', '--full'], self_server)
+    rows.append('den-to-den native atomic push service')
     atomic = root / 'target' / a.tier / 'atomic-client'
     tip = run([git, 'rev-parse', 'HEAD'], fixture).stdout.strip().decode()
     for phase in ('prepare', 'old-published', 'loose-removed', 'commit', ''):

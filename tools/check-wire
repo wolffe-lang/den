@@ -35,6 +35,8 @@ for tier in native release; do
     step "$tier-pack-stream-unit" "target/$tier/pack-stream-test"
     step "$tier-wire-client-build" "$WOLF" build $flag --deny-warnings probes/wire-client/main.lu -o "target/$tier/wire-client"
     step "$tier-atomic-client-build" "$WOLF" build $flag --deny-warnings probes/atomic-client/main.lu -o "target/$tier/atomic-client"
+    step "$tier-upload-service-build" "$WOLF" build $flag --deny-warnings probes/upload-service/main.lu -o "target/$tier/upload-service"
+    step "$tier-receive-service-build" "$WOLF" build $flag --deny-warnings probes/receive-service/main.lu -o "target/$tier/receive-service"
     step "$tier-wire-peers" tools/env python3 -I tools/wire-test.py --tier "$tier"
     step "$tier-received-pack-peers" tools/env python3 -I tools/wire-pack-test.py --tier "$tier"
 done

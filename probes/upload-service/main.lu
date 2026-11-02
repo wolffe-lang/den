@@ -1,0 +1,7 @@
+use wiregit
+
+fn main() -> int {
+    var arguments = ["upload-pack"]
+    for argument in env_args() { (mut arguments).push(copy argument) }
+    wiregit.run(arguments)
+}
