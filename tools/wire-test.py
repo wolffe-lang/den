@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Independent real-process wire contract, without implementation-source input."""
 import argparse
+import contextlib
+import selectors
 import hashlib
 import json
 import os
@@ -201,6 +203,78 @@ def main():
                 assert run([git, 'rev-parse', 'refs/heads/' + name], target).stdout.strip().decode() == tip
         run([git, 'fsck', '--full'], target)
         rows.append('atomic API phase ' + (phase or 'success'))
+    @contextlib.contextmanager
+    def daemon(server):
+        prefix = b''
+        if server == 'den':
+            argv = [str(den), 'daemon', '--enable-receive-pack', str(out), '0']
+        else:
+            with socket.socket() as reservation:
+                reservation.bind(('127.0.0.1', 0))
+                port = reservation.getsockname()[1]
+            argv = [git, 'daemon', '--reuseaddr', '--export-all', '--enable=receive-pack',
+                    '--listen=127.0.0.1', '--port=' + str(port), '--base-path=' + str(out), str(out)]
+        proc = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        try:
+            if server == 'den':
+                with selectors.DefaultSelector() as ready:
+                    ready.register(proc.stdout, selectors.EVENT_READ)
+                    assert ready.select(30), 'den daemon startup timeout'
+                prefix = proc.stdout.readline()
+                assert prefix.startswith(b'port '), prefix
+                port = int(prefix.split()[1])
+            else:
+                for _ in range(100):
+                    assert proc.poll() is None, 'git daemon exited at startup'
+                    try:
+                        with socket.create_connection(('127.0.0.1', port), timeout=0.2):
+                            break
+                    except OSError:
+                        time.sleep(0.1)
+                else:
+                    raise AssertionError('git daemon startup timeout')
+            yield f'git://127.0.0.1:{port}/'
+            if server == 'den':
+                assert proc.wait(timeout=30) == 0, 'den one-session daemon failed'
+        finally:
+            if proc.poll() is None:
+                proc.terminate()
+            stdout, stderr = proc.communicate(timeout=10)
+            captures.append(dict(server_argv=argv, pid=proc.pid, stdout=(prefix + stdout).hex(),
+                                 stderr=stderr.hex(), exit=proc.returncode, teardown='own pid only'))
+            (out / 'captures.json').write_text(json.dumps(captures, indent=2) + '\n')
+
+    (source / 'git-daemon-export-ok').write_bytes(b'')
+    for server in ('git', 'den'):
+        network = out / ('network-' + server + '.git')
+        if network.exists():
+            shutil.rmtree(network)
+        client = den if server == 'git' else git
+        with daemon(server) as base:
+            run([client, 'clone', '-q', '--bare', base + source.name, network])
+        assert run([git, 'show-ref'], network).stdout == run([git, 'show-ref'], source).stdout
+        run([git, 'fsck', '--full'], network)
+        (fixture / 'file').write_bytes((fixture / 'file').read_bytes() + ('network-' + server + '\n').encode())
+        run([git, 'add', '.'], fixture)
+        run([git, 'commit', '-qm', 'network-' + server], fixture)
+        run([git, 'push', '-q', source.as_uri(), 'HEAD:refs/heads/network'], fixture)
+        with daemon(server) as base:
+            run([client, 'fetch', '-q', base + source.name, 'refs/heads/network:refs/heads/network-copy'], network)
+        tip = run([git, 'rev-parse', 'HEAD'], fixture).stdout
+        assert run([git, 'rev-parse', 'refs/heads/network-copy'], network).stdout == tip
+        run([git, 'fsck', '--full'], network)
+        target = out / ('network-push-' + server + '.git')
+        if target.exists():
+            shutil.rmtree(target)
+        run([git, 'init', '-q', '--bare', target])
+        (target / 'git-daemon-export-ok').write_bytes(b'')
+        with daemon(server) as base:
+            run([client, 'push', '-q', '--atomic', base + target.name,
+                 'HEAD:refs/heads/a', 'HEAD:refs/heads/b'], fixture)
+        for name in ('a', 'b'):
+            assert run([git, 'rev-parse', 'refs/heads/' + name], target).stdout == tip
+        run([git, 'fsck', '--full'], target)
+        rows.append(server + ' daemon: clone, incremental fetch and atomic push, refs/objects/fsck')
     (out / 'captures.json').write_text(json.dumps(captures, indent=2) + '\n')
     (out / 'summary.json').write_text(json.dumps(dict(rows=rows, zero_skips=True), indent=2) + '\n')
     print('wire: ' + ', '.join(rows) + '; zero skips')
