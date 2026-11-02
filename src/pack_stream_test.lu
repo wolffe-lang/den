@@ -3,7 +3,10 @@
 use pack
 
 fn check() -> () ! pack.StreamErrors {
-    let input = [pack.Body { kind: "blob", data: "before\n".bytes() }, pack.Body { kind: "blob", data: "before\nafter\n".bytes() }]
+    let input = [
+        pack.Body { kind: "blob", data: "before\n".bytes() },
+        pack.Body { kind: "blob", data: "before\nafter\n".bytes() },
+    ]
     for mode in ["none", "ofs", "ref"] {
         let encoded = pack.encode(input, mode) else |_| { return invalid }
         let decoded = pack.decode(encoded.data, [])?
@@ -16,7 +19,10 @@ fn check() -> () ! pack.StreamErrors {
         let _ = pack.decode(bad, []) else |_| { rejected = true; List[pack.Body]() }
         assert(rejected)
         rejected = false
-        let _ = pack.decode(encoded.data[0..encoded.data.len - 1], []) else |_| { rejected = true; List[pack.Body]() }
+        let _ = pack.decode(encoded.data[0..encoded.data.len - 1], []) else |_| {
+            rejected = true
+            List[pack.Body]()
+        }
         assert(rejected)
         var extra = copy encoded.data
         (mut extra).push(0 as byte)
@@ -28,6 +34,8 @@ fn check() -> () ! pack.StreamErrors {
 
 fn main() -> int {
     check() else |e| { eprint("{e}"); return 1 }
-    print("vc15 pack stream: three representations and checksum/truncation/trailing refusals; zero skips")
+    print(
+        "vc15 pack stream: three representations and checksum/truncation/trailing refusals; zero skips",
+    )
     0
 }

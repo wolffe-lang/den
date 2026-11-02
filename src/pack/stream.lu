@@ -1,0 +1,180 @@
+use hash
+use oid
+// Original received-pack framing from gitformat-pack(5). Resolves thin REF
+// bases supplied by the caller; never installs a thin stream on disk.
+use zlib
+
+pub error StreamErrors = {invalid, truncated, limit, Unsupported(str)}
+
+struct StreamEntry {
+    offset: int,
+    kind: int,
+    base_offset: int,
+    base_name: str,
+    data: List[byte],
+}
+
+fn stream_entries(data: List[byte]) -> (List[StreamEntry], int) ! StreamErrors {
+    if data.len < 12 { return truncated }
+    if !same(data[0..4], "PACK".bytes()) || be32(data, 4) != 2 { return invalid }
+    let count = be32(data, 8)
+    if count > 10000 || data.len > 134217728 { return limit }
+    var pos = 12, out = List[StreamEntry](), total = 0
+    for _ in 0..count {
+        let offset = pos
+        if pos == data.len { return truncated }
+        var b = data[pos] as int, size = b & 15, scale = 16
+        let kind = b >> 4 & 7
+        pos += 1
+        while b >= 128 {
+            if pos == data.len { return truncated }
+            b = data[pos] as int
+            pos += 1
+            if b & 127 > (16777216 - size) / scale { return limit }
+            size += (b & 127) * scale
+            if b >= 128 {
+                if scale > 16777216 / 128 { return limit }
+                scale *= 128
+            }
+        }
+        var base_offset = -1, base_name = ""
+        if kind == 6 {
+            if pos == data.len { return truncated }
+            b = data[pos] as int
+            pos += 1
+            var distance = b & 127
+            while b >= 128 {
+                if pos == data.len { return truncated }
+                if distance >= offset / 128 { return invalid }
+                b = data[pos] as int
+                pos += 1
+                distance = (distance + 1) * 128 + (b & 127)
+            }
+            if distance <= 0 || distance > offset - 12 { return invalid }
+            base_offset = offset - distance
+        } else if kind == 7 {
+            if data.len - pos < 20 { return truncated }
+            let id = oid.from_bytes("sha1", data[pos..pos + 20]) else |_| { return invalid }
+            base_name = oid.hex(id) else |_| { return invalid }
+            pos += 20
+        } else if kind < 1 || kind > 4 {
+            return invalid
+        }
+        if size > 134217728 - total { return limit }
+        let inflated = zlib.inflate(data[pos..], size) else |e| match e {
+            truncated => { return truncated },
+            limit => { return limit },
+            _ => { return invalid },
+        }
+        if inflated.data.len != size { return invalid }
+        pos += inflated.consumed
+        total += size
+        (mut out).push(StreamEntry {
+            offset: offset,
+            kind: kind,
+            base_offset: base_offset,
+            base_name: base_name,
+            data: copy inflated.data,
+        })
+    }
+    if data.len - pos < 20 { return truncated }
+    if !same(hash.sum1(data[0..pos]), data[pos..pos + 20]) { return invalid }
+    (out, pos + 20)
+}
+
+/// Length through the checksum. A caller reading raw receive-pack input can
+/// distinguish incomplete input from a corrupt stream, without waiting for EOF.
+pub fn stream_length(data: List[byte]) -> int ! StreamErrors {
+    let (_, end) = stream_entries(data)?
+    end
+}
+
+/// REF base identities, including in-pack ones. The caller may supply any
+/// locally available bases; unresolved/cyclic references are refused by decode.
+pub fn stream_refs(data: List[byte]) -> List[str] ! StreamErrors {
+    let (entries, end) = stream_entries(data)?
+    if end != data.len { return invalid }
+    var out = List[str](), seen = Map[str, bool]()
+    for entry in entries {
+        if entry.base_name != "" && !(seen[entry.base_name] else false) {
+            seen[entry.base_name] = true
+            (mut out).push(copy entry.base_name)
+        }
+    }
+    out
+}
+
+/// Resolve complete and thin streams with shared apply_delta and canonical
+/// object hashing. Returned bodies contain only the transmitted objects.
+pub fn decode(data: List[byte], bases: List[Body]) -> List[Body] ! StreamErrors {
+    let (entries, end) = stream_entries(data)?
+    if end != data.len { return invalid }
+    var out = List[Body](), ready = List[bool](), depth = List[int]()
+    var offsets = Map[int, int](), names = Map[str, int](), external = Map[str, int]()
+    var total = 0
+    for i in 0..bases.len {
+        let body = bases[i]
+        if body.data.len > 16777216 || body.data.len > 134217728 - total { return limit }
+        total += body.data.len
+        let id = body_name(body) else |_| { return invalid }
+        external[id] = i
+    }
+    for i in 0..entries.len {
+        offsets[entries[i].offset] = i
+        (mut out).push(Body { kind: "", data: List[byte]() })
+        (mut ready).push(false)
+        (mut depth).push(0)
+    }
+    var remaining = entries.len
+    while remaining > 0 {
+        var progress = false
+        for i in 0..entries.len {
+            if ready[i] { continue }
+            let entry = entries[i]
+            var body = Body { kind: "", data: List[byte]() }
+            if entry.kind < 5 {
+                body.kind = match entry.kind {
+                    1 => "commit",
+                    2 => "tree",
+                    3 => "blob",
+                    _ => "tag",
+                }
+                body.data = copy entry.data
+            } else {
+                var base = Body { kind: "", data: List[byte]() }, level = 1
+                if entry.kind == 6 {
+                    let slot = offsets[entry.base_offset] else -1
+                    if slot < 0 { return invalid }
+                    if !ready[slot] { continue }
+                    base = copy out[slot]
+                    level += depth[slot]
+                } else {
+                    let slot = names[entry.base_name] else -1
+                    let ext = external[entry.base_name] else -1
+                    if slot >= 0 {
+                        base = copy out[slot]
+                        level += depth[slot]
+                    } else if ext >= 0 {
+                        base = copy bases[ext]
+                    } else {
+                        continue
+                    }
+                }
+                if level > 64 { return limit }
+                let bytes = apply_delta(base.data, entry.data, 16777216) else |_| { return invalid }
+                body = Body { kind: copy base.kind, data: bytes }
+                depth[i] = level
+            }
+            if body.data.len > 134217728 - total { return limit }
+            total += body.data.len
+            let name = body_name(body) else |_| { return invalid }
+            out[i] = body
+            names[name] = i
+            ready[i] = true
+            remaining -= 1
+            progress = true
+        }
+        if !progress { return Unsupported("unresolved or cyclic thin pack base") }
+    }
+    out
+}
