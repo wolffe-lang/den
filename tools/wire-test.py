@@ -101,8 +101,11 @@ def main():
     self_clone = out / 'den-to-den.git'
     if self_clone.exists():
         shutil.rmtree(self_clone)
+    empty_path = out / 'empty-path'
+    empty_path.mkdir(exist_ok=True)
     result = run([den, 'clone', '-q', '--bare', source.as_uri(), self_clone],
-                 env={'DEN_UPLOAD_PACK': str(root / 'target' / a.tier / 'upload-service')})
+                 env={'DEN_UPLOAD_PACK': str(root / 'target' / a.tier / 'upload-service'),
+                      'PATH': str(empty_path), 'GIT_EXEC_PATH': str(empty_path)})
     assert result.stdout == b'' and result.stderr == b''
     assert run([git, 'show-ref'], self_clone).stdout == run([git, 'show-ref'], source).stdout
     run([git, 'fsck', '--full'], self_clone)
@@ -228,7 +231,8 @@ def main():
     run([git, 'init', '-q', '--bare', self_server])
     result = run([den, 'push', '-q', '--atomic', self_server.as_uri(),
                   'HEAD:refs/heads/a', 'HEAD:refs/heads/b'], fixture,
-                 env={'DEN_RECEIVE_PACK': str(root / 'target' / a.tier / 'receive-service')})
+                 env={'DEN_RECEIVE_PACK': str(root / 'target' / a.tier / 'receive-service'),
+                      'PATH': str(empty_path), 'GIT_EXEC_PATH': str(empty_path)})
     assert result.stdout == b'' and result.stderr == b''
     self_tip = run([git, 'rev-parse', 'HEAD'], fixture).stdout
     for name in ('a', 'b'):
