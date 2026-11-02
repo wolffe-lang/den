@@ -175,6 +175,13 @@ def main():
     dest = out / 'clone-git.git'
     spec = 'refs/heads/main:refs/heads/copied'
     run([den, 'fetch', '-q', source.as_uri(), spec], dest)
+    run([git, 'update-ref', 'refs/heads/replay', first.decode()], source)
+    forward = 'refs/heads/replay:refs/heads/forward'
+    run([den, 'fetch', '-q', source.as_uri(), forward], dest)
+    run([git, 'update-ref', 'refs/heads/replay', tip.decode()], source)
+    run([den, 'fetch', '-q', source.as_uri(), forward], dest)
+    assert run([git, 'rev-parse', 'refs/heads/forward'], dest).stdout.strip() == tip
+    rows.append('existing destination fetch fast-forward accepted')
     run([git, 'update-ref', 'refs/heads/main', first.decode()], source)
     before = run([git, 'show-ref'], dest).stdout
     refused = run([den, 'fetch', '-q', source.as_uri(), spec], dest, ok=False)
@@ -219,6 +226,11 @@ def main():
                       'refs/heads/main:refs/heads/atomic-a',
                       'refs/heads/main:refs/heads/atomic-b'], fixture)
         run([git, 'config', 'receive.denyNonFastForwards', 'true'], target)
+        run([git, 'update-ref', 'refs/heads/ff-policy', first.decode()], target)
+        result = run(prefix + [target.as_uri(), 'refs/heads/main:refs/heads/ff-policy'], fixture)
+        assert result.stdout == b'' and result.stderr == b''
+        assert run([git, 'rev-parse', 'refs/heads/ff-policy'], target).stdout == tip
+        rows.append(client + ' receive policy accepts an existing-ref fast-forward')
         before = run([git, 'show-ref'], target).stdout
         failed = run(prefix + ['--atomic', '--force', target.as_uri(),
                               'refs/heads/old:refs/heads/atomic-a',
@@ -226,6 +238,13 @@ def main():
         assert failed.returncode != 0
         assert run([git, 'show-ref'], target).stdout == before
         rows.append(client + ' atomic success/late-policy-rejection all refs unchanged')
+        failed = run(prefix + ['--force', target.as_uri(),
+                              'refs/heads/old:refs/heads/atomic-a',
+                              'refs/heads/main:refs/heads/atomic-c'], fixture, ok=False)
+        assert failed.returncode != 0
+        assert run([git, 'rev-parse', 'refs/heads/atomic-a'], target).stdout == tip
+        assert run([git, 'rev-parse', 'refs/heads/atomic-c'], target).stdout == tip
+        rows.append(client + ' non-atomic policy rejection preserves the accepted sibling update')
         if client == 'git':
             run([git, 'config', 'core.logAllRefUpdates', 'true'], target)
             advertisement = packets(run([den, 'receive-pack', target], data=b'0000').stdout)
@@ -233,6 +252,10 @@ def main():
             assert b'atomic' not in offered, 'do not advertise an unimplemented atomic reflog policy'
             run([git, 'config', 'core.logAllRefUpdates', 'false'], target)
             rows.append('den withdraws atomic for the named unsupported reflog policy')
+    def file_state(path):
+        return {str(p.relative_to(path)): [p.stat().st_mode & 0o777, hashlib.sha256(p.read_bytes()).hexdigest()]
+                for p in path.rglob('*') if p.is_file()}
+
     self_server = out / 'den-to-den-push.git'
     if self_server.exists():
         shutil.rmtree(self_server)
@@ -269,11 +292,37 @@ def main():
                 assert run([git, 'rev-parse', 'refs/heads/' + name], target).stdout.strip().decode() == tip
         run([git, 'fsck', '--full'], target)
         rows.append('atomic API phase ' + (phase or 'success'))
+        if not phase:
+            run([atomic, target, '', 'refs/heads/main', tip, first.decode(),
+                 'refs/heads/second', tip, first.decode()])
+            for name in ('main', 'second'):
+                assert run([git, 'rev-parse', 'refs/heads/' + name], target).stdout.strip() == first
+            run([atomic, target, '', 'refs/heads/main', first.decode(), '0' * 40,
+                 'refs/heads/second', first.decode(), tip])
+            assert run([git, 'show-ref', '--verify', '--quiet', 'refs/heads/main'], target, ok=False).returncode != 0
+            assert run([git, 'rev-parse', 'refs/heads/second'], target).stdout.strip().decode() == tip
+            run([git, 'fsck', '--full'], target)
+            rows.append('atomic packed-target updates and mixed delete/update publication')
+    for refusal in ('stale', 'foreign-lock'):
+        target = out / ('transaction-' + refusal + '.git')
+        if target.exists():
+            shutil.rmtree(target)
+        run([git, 'clone', '-q', '--bare', fixture, target])
+        for name in ('main', 'second'):
+            run([git, 'update-ref', 'refs/heads/' + name, first.decode()], target)
+        expected_second = tip if refusal == 'stale' else first.decode()
+        if refusal == 'foreign-lock':
+            (target / 'refs/heads/second.lock').write_bytes(b'foreign lock\n')
+        before = file_state(target)
+        result = run([atomic, target, '', 'refs/heads/main', first.decode(), tip,
+                      'refs/heads/second', expected_second, tip], ok=False)
+        assert result.returncode != 0 and file_state(target) == before
+        rows.append('atomic immutable ' + refusal + ' refusal')
     @contextlib.contextmanager
-    def daemon(server):
+    def daemon(server, expected_exit=0, allow_receive=True):
         prefix = b''
         if server == 'den':
-            argv = [str(den), 'daemon', '--enable-receive-pack', str(out), '0']
+            argv = [str(den), 'daemon'] + (['--enable-receive-pack'] if allow_receive else []) + [str(out), '0']
         else:
             with socket.socket() as reservation:
                 reservation.bind(('127.0.0.1', 0))
@@ -301,7 +350,7 @@ def main():
                     raise AssertionError('git daemon startup timeout')
             yield f'git://127.0.0.1:{port}/'
             if server == 'den':
-                assert proc.wait(timeout=30) == 0, 'den one-session daemon failed'
+                assert proc.wait(timeout=30) == expected_exit, 'den one-session daemon outcome'
         finally:
             if proc.poll() is None:
                 proc.terminate()
@@ -310,6 +359,47 @@ def main():
                                  stderr=stderr.hex(), exit=proc.returncode, teardown='own pid only'))
             (out / 'captures.json').write_text(json.dumps(captures, indent=2) + '\n')
 
+    outside = out.parent / ('vc15-outside-' + a.tier + '.git')
+    if outside.exists():
+        shutil.rmtree(outside)
+    run([git, 'clone', '-q', '--bare', '--no-hardlinks', fixture, outside])
+    (outside / 'git-daemon-export-ok').write_bytes(b'')
+    linked = out / 'admin-escape'
+    linked.mkdir(exist_ok=True)
+    if (linked / '.git').is_symlink():
+        (linked / '.git').unlink()
+    (linked / '.git').symlink_to(outside, target_is_directory=True)
+    before = file_state(outside)
+    for i, path in enumerate(('../' + outside.name, linked.name)):
+        failed_clone = out / f'denied-export-{i}.git'
+        if failed_clone.exists():
+            shutil.rmtree(failed_clone)
+        with daemon('den', expected_exit=2) as base:
+            assert run([den, 'clone', '-q', '--bare', base + path, failed_clone], ok=False).returncode != 0
+        assert b'denied' in bytes.fromhex(captures[-1]['stderr'])
+        assert file_state(outside) == before
+        rows.append('daemon rejects canonical export escape ' + str(i))
+    hidden = out / 'not-exported.git'
+    if hidden.exists():
+        shutil.rmtree(hidden)
+    run([git, 'clone', '-q', '--bare', fixture, hidden])
+    assert not (hidden / 'git-daemon-export-ok').exists()
+    failed_clone = out / 'denied-unexported.git'
+    if failed_clone.exists():
+        shutil.rmtree(failed_clone)
+    before = file_state(hidden)
+    with daemon('den', expected_exit=2) as base:
+        assert run([den, 'clone', '-q', '--bare', base + hidden.name, failed_clone], ok=False).returncode != 0
+    assert b'denied' in bytes.fromhex(captures[-1]['stderr'])
+    assert file_state(hidden) == before
+    rows.append('daemon requires explicit export marker')
+    (hidden / 'git-daemon-export-ok').write_bytes(b'')
+    before = file_state(hidden)
+    with daemon('den', expected_exit=2, allow_receive=False) as base:
+        assert run([den, 'push', '-q', base + hidden.name, 'HEAD:refs/heads/write-disabled'], fixture, ok=False).returncode != 0
+    assert b'receive service disabled' in bytes.fromhex(captures[-1]['stderr'])
+    assert file_state(hidden) == before
+    rows.append('daemon requires separate write-service opt-in')
     (source / 'git-daemon-export-ok').write_bytes(b'')
     for server in ('git', 'den'):
         network = out / ('network-' + server + '.git')
