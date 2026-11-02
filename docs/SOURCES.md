@@ -605,3 +605,63 @@ revision harness now asserts its full pinned SHA256 before measuring anything.
 No expectation was changed to fit that mistake. The later type/path diagnostic
 and `heads/topic` merge-message counterexamples remain retained reds; correct
 production behavior follows the independent pinned observations.
+
+## Wire protocols and atomic logical refs (vc15)
+
+Only published Git documentation and the pinned Git 2.56.0 executable were used:
+
+- `gitprotocol-common(5)` / `Documentation/gitprotocol-common.adoc` at v2.56.0:
+  binary pkt-line lengths, the 65,520-byte inclusive maximum, flush versus empty
+  data, and the requirement to accept text with or without its optional final LF.
+- `gitprotocol-v2(5)` / `Documentation/gitprotocol-v2.adoc` at v2.56.0: transport
+  version selection, capability advertisement, command/delimiter/flush requests,
+  stateless negotiation rounds, ls-refs/symrefs/peeling/unborn HEAD, fetch wants,
+  haves, done, include-tag, packfile sections and sideband. Shallow/filter/URI and
+  other unimplemented command features are not advertised by den.
+- `gitprotocol-pack(5)` / `Documentation/gitprotocol-pack.adoc` at v2.56.0: file
+  service processes, the Git transport's NUL-delimited service request and extra
+  version parameter, receive-pack advertisement, old/new/ref commands, deletes,
+  raw pack placement and report-status. Receive-pack uses this documented framing,
+  not an invented protocol-v2 push command.
+- `gitprotocol-capabilities(5)`, published receive capabilities: report-status,
+  delete-refs, ofs-delta, quiet and atomic. Atomic is specified as an all-or-none
+  ref-update outcome; this is not a statement about crash durability or isolation
+  for arbitrary concurrent readers.
+- `gitformat-pack(5)` / `Documentation/gitformat-pack.adoc` at v2.56.0: pack-v2
+  headers, type/size varints, whole/OFS/REF entries, delta instructions, the pack
+  checksum and external REF bases in thin packs. Existing packed-ref format and
+  repository-layout documentation from the refs work supplies the publication
+  format; no Git ref-transaction implementation was read.
+
+The exact versioned documentation URLs have the form
+`https://raw.githubusercontent.com/git/git/v2.56.0/Documentation/<page>.adoc`.
+The rendered manuals are at `https://git-scm.com/docs/gitprotocol-common`,
+`gitprotocol-v2`, `gitprotocol-pack`, `gitprotocol-capabilities` and
+`gitformat-pack` on the same documentation site. No implementation source,
+sample hook/template content, libgit2 or another VCS implementation was read.
+
+`tools/wire-test.py` independently constructs fixed-identity fixture repositories,
+starts the real pinned file services and daemon, and checks both directions.
+Native independently compiled den services replace shell wrappers, and self-hosted
+file clone/atomic push also run with empty PATH/GIT_EXEC_PATH. Raw captures retain
+argv, selected environment changes, stdin, stdout, stderr, exits and daemon
+teardown. Quiet success bytes are compared separately from refs, canonical objects,
+index entries, worktree bytes and fsck. General failure-text/porcelain parity is
+not inferred from successful transport operations.
+
+`tools/wire-pack-test.py` obtains complete none/OFS/REF and real external-base thin
+streams from the pinned pack-objects executable. Its independent Python framing
+inspection proves that the intended delta entry kinds/bases actually occur;
+Git index-pack and canonical cat-file bodies validate the independent importing
+client. Missing bases, checksum/framing/size/delta failures and strict trailing
+input are retained with immutable den-store snapshots. Git's index-pack stdin
+interface may retain trailing transport data for its caller; that outcome is
+recorded, not relabelled as identical refusal behavior.
+
+The packed-ref commit strategy is an original den design: reserve all targets and
+packed-refs, publish equivalent old target values before removing loose shadows,
+then rename the prepared new packed-ref snapshot once. Explicit failure arguments
+exercise every precommit stage through an independent package client. This is not
+an assertion about Git's filesystem implementation, a reflog transaction, crash
+lock recovery or concurrent reader snapshot isolation. Atomic capability is
+withdrawn for the named unimplemented reflog policy.
