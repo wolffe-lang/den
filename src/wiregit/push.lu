@@ -1,0 +1,357 @@
+use std.fs
+use object
+use oid
+use pack
+use pktline
+use refs
+use repository
+use transport
+use wire
+
+fn zero() -> str { "0000000000000000000000000000000000000000" }
+
+struct PushUpdate { name: str, before: str, after: str }
+
+fn ids(text: str) -> List[oid.Oid] ! object.StoreErrors {
+    if text == zero() { return [] }
+    [oid.parse("sha1", text)?]
+}
+
+fn receive_advertisement(data: List[byte]) -> (List[wire.Ref], List[str]) ! object.StoreErrors {
+    var pos = 0, out = List[wire.Ref](), caps = List[str](), first = true, seen = Map[str, bool]()
+    while pos < data.len {
+        let p = pktline.decode(data, pos)?
+        pos = p.next
+        if p.kind == 0 { if pos != data.len { return invalid }; return (out, caps) }
+        if p.kind != 4 || out.len > 10000 { return invalid }
+        let text = str_from_utf8(p.data) else |_| {
+            return Unsupported("non-UTF-8 push advertisement")
+        }
+        let nul = text.split("\0")
+        if first {
+            if nul.len != 2 { return invalid }
+            caps = nul[1].trim().split(" ")
+        } else if nul.len != 1 {
+            return invalid
+        }
+        first = false
+        let fields = pktline.text(nul[0].bytes())?.split(" ")
+        if fields.len != 2 { return invalid }
+        let id = oid.hex(oid.parse("sha1", fields[0])?)?
+        if fields[1] == "capabilities^{{}}" && id == zero() { continue }
+        if !refs.valid(fields[1]) || (seen[fields[1]] else false) { return invalid }
+        seen[fields[1]] = true
+        (mut out).push(wire.Ref { name: copy fields[1], id: id, target: "", peeled: "" })
+    }
+    truncated
+}
+
+/// Push fully-qualified refspecs, with local fast-forward/tag guards unless
+/// forced; honor server atomic/report-status capabilities and final status.
+pub fn push(
+    repo: repository.Repo,
+    url: str,
+    specs: List[str],
+    force: bool,
+    atomic: bool,
+) -> () ! object.StoreErrors {
+    if specs.len == 0 || specs.len > 10000 { return invalid }
+    var c = transport.connect(url, "receive-pack")?, active = true
+    defer { if active { let _ = transport.close(copy c) else 1 } }
+    let (remote, caps) = receive_advertisement(transport.message(mut c, 2097152)?)?
+    if !wire.supports(caps, "report-status") {
+        return Unsupported("push server lacks report-status")
+    }
+    if atomic && !wire.supports(caps, "atomic") {
+        return Unsupported("server does not support --atomic push")
+    }
+    for cap in caps {
+        if cap.starts_with("object-format=") && cap != "object-format=sha1" {
+            return unsupported_format
+        }
+    }
+    var before = Map[str, str](),
+        updates = List[PushUpdate](),
+        seen = Map[str, bool](),
+        roots = List[str]()
+    for reference in remote { before[reference.name] = copy reference.id }
+    for raw in specs {
+        let override = raw.starts_with("+")
+        let spec = if override then raw[1..] else copy raw
+        let parts = spec.split(":")
+        if parts.len != 2 || !refs.valid(parts[1]) { return invalid }
+        let destination = parts[1]
+        if seen[destination] else false { return invalid }
+        seen[destination] = true
+        let old = before[destination] else zero()
+        var next = copy zero()
+        if parts[0] != "" {
+            let id = object.resolve(repo, parts[0])?
+            next = oid.hex(id)?
+            let body = object.read_object(repo, id, 16777216)?
+            if destination.starts_with("refs/heads/") && body.kind != "commit" { return invalid }
+            (mut roots).push(copy next)
+        } else if !wire.supports(caps, "delete-refs") {
+            return Unsupported("server does not support delete-refs")
+        }
+        if next == old { continue }
+        if old != zero() && next != zero() && !force && !override {
+            if destination.starts_with("refs/tags/") {
+                return Unsupported("push would replace tag (use --force)")
+            }
+            if destination.starts_with("refs/heads/") {
+                let _ = object.read_object(repo, oid.parse("sha1", old)?, 16777216) else |_| {
+                    return Unsupported("push needs fetch first")
+                }
+                if !ancestor(repo, old, next)? {
+                    return Unsupported("non-fast-forward push (use --force)")
+                }
+            }
+        }
+        (mut updates).push(PushUpdate { name: copy destination, before: copy old, after: next })
+    }
+    if updates.len == 0 {
+        transport.write(mut c, "0000".bytes())?
+        let status = transport.close(copy c)?
+        active = false
+        if status != 0 { return io }
+        return
+    }
+    var selected = "report-status"
+    if wire.supports(caps, "ofs-delta") { selected = "{selected} ofs-delta" }
+    if wire.supports(caps, "quiet") { selected = "{selected} quiet" }
+    if wire.supports(caps, "object-format") { selected = "{selected} object-format=sha1" }
+    if atomic { selected = "{selected} atomic" }
+    var request = List[byte]()
+    for i in 0..updates.len {
+        let u = updates[i]
+        let extra = if i == 0 then "\0{selected}" else ""
+        wire.append(mut request, pktline.encode("{u.before} {u.after} {u.name}{extra}\n".bytes())?)
+    }
+    wire.append(mut request, "0000".bytes())
+    transport.write(mut c, request)?
+    if roots.len > 0 { transport.write(mut c, pack_for(repo, roots, [], "ofs")?)? }
+    let response = transport.message(mut c, 2097152)?
+    var pos = 0, unpacked = false, reported = Map[str, bool](), failed = false
+    while pos < response.len {
+        let p = pktline.decode(response, pos)?
+        pos = p.next
+        if p.kind == 0 { break }
+        if p.kind != 4 { return invalid }
+        let text = pktline.text(p.data)?
+        if !unpacked {
+            if !text.starts_with("unpack ") { return invalid }
+            unpacked = true
+            if text != "unpack ok" { failed = true }
+        } else if text.starts_with("ok ") || text.starts_with("ng ") {
+            let fields = text.split(" ")
+            if fields.len < 2 || !(seen[fields[1]] else false) || (reported[fields[1]] else false) {
+                return invalid
+            }
+            reported[fields[1]] = true
+            if text.starts_with("ng ") { failed = true }
+        } else {
+            return invalid
+        }
+    }
+    for u in updates { if !(reported[u.name] else false) { return truncated } }
+    let status = transport.close(copy c)?
+    active = false
+    if failed { return Unsupported("remote rejected push") }
+    if !unpacked || status != 0 { return io }
+}
+
+fn receive_configuration(repo: repository.Repo) -> () ! object.StoreErrors {
+    if (repo.config["core.bare"] else "false") != "true" {
+        return Unsupported("receive-pack requires bare repository")
+    }
+    for (key, _) in repo.config.pairs() {
+        if key.starts_with("receive.") &&
+            key != "receive.denynonfastforwards" &&
+            key != "receive.denydeletes" {
+            return Unsupported("receive-pack configuration {key}")
+        }
+        if key == "transfer.hiderefs" || key == "transfer.fsckobjects" {
+            return Unsupported("receive-pack configuration {key}")
+        }
+    }
+    let hooks = repo.config["core.hookspath"] else "{repo.gitdir}/hooks"
+    if fs.is_dir(hooks) && fs.entries(hooks)?.len != 0 { return Unsupported("receive-pack hooks") }
+}
+
+fn receive_pack_bytes(mut c: transport.Channel) -> List[byte] ! object.StoreErrors {
+    var bytes = List[byte]()
+    loop {
+        let chunk = transport.read(mut c, 65536)?
+        if chunk.len == 0 { return truncated }
+        if chunk.len > 134217728 - bytes.len { return limit }
+        wire.append(mut bytes, chunk)
+        let end = pack.stream_length(bytes) else |e| match e {
+            truncated => { continue },
+            _ => { return e },
+        }
+        if end != bytes.len { return invalid }
+        return bytes
+    }
+}
+
+fn true_value(value: str) -> bool {
+    value == "true" || value == "1" || value == "yes" || value == "on"
+}
+
+/// Receive v0 push framing (Git does not define v2 push commands), import the
+/// pack before ref mutation, apply policy, and report every update. Atomic
+/// requests commit all refs through the shared single-file transaction.
+pub fn receive(repo: repository.Repo, mut c: transport.Channel) -> () ! object.StoreErrors {
+    receive_configuration(repo)?
+    let cap = "report-status delete-refs ofs-delta atomic quiet object-format=sha1 agent=den/0.0.0"
+    let references = refs.list(repo, "refs/")?
+    var advertisement = List[byte]()
+    if references.len == 0 {
+        wire.append(
+            mut advertisement,
+            pktline.encode("{zero()} capabilities^{{}}\0{cap}\n".bytes())?,
+        )
+    }
+    for i in 0..references.len {
+        let reference = references[i]
+        let extra = if i == 0 then "\0{cap}" else ""
+        wire.append(
+            mut advertisement,
+            pktline.encode("{oid.hex(reference.id)?} {reference.name}{extra}\n".bytes())?,
+        )
+    }
+    wire.append(mut advertisement, "0000".bytes())
+    transport.write(mut c, advertisement)?
+    let request = transport.message(mut c, 2097152)?
+    if request.len == 0 || request.len == 4 { return }
+    var pos = 0,
+        updates = List[PushUpdate](),
+        atomic = false,
+        report = false,
+        seen = Map[str, bool](),
+        needs_pack = false
+    while pos < request.len {
+        let p = pktline.decode(request, pos)?
+        pos = p.next
+        if p.kind == 0 { break }
+        if p.kind != 4 { return invalid }
+        let raw = str_from_utf8(p.data) else |_| { return invalid }
+        let parts = raw.split("\0")
+        if updates.len == 0 {
+            if parts.len != 2 { return invalid }
+            for choice in parts[1].trim().split(" ") {
+                if choice == "atomic" {
+                    atomic = true
+                } else if choice == "report-status" {
+                    report = true
+                } else if choice != "ofs-delta" &&
+                    choice != "quiet" &&
+                    choice != "object-format=sha1" &&
+                    !choice.starts_with("agent=") {
+                    return Unsupported("push capability {choice}")
+                }
+            }
+        } else if parts.len != 1 {
+            return invalid
+        }
+        let fields = pktline.text(parts[0].bytes())?.split(" ")
+        if fields.len != 3 || !refs.valid(fields[2]) || (seen[fields[2]] else false) {
+            return invalid
+        }
+        let before = oid.hex(oid.parse("sha1", fields[0])?)?,
+            after = oid.hex(oid.parse("sha1", fields[1])?)?
+        if before == zero() && after == zero() { return invalid }
+        if after != zero() { needs_pack = true }
+        seen[fields[2]] = true
+        (mut updates).push(PushUpdate { name: copy fields[2], before: before, after: after })
+        if updates.len > 10000 { return limit }
+    }
+    var unpack_error = ""
+    if needs_pack {
+        let bytes = receive_pack_bytes(mut c)?
+        import_pack(repo, bytes) else |e| { unpack_error = "{e}" }
+    }
+    var reasons = List[str](), changes = List[refs.AtomicUpdate](), any_failed = unpack_error != ""
+    for u in updates {
+        var reason = ""
+        if unpack_error != "" {
+            reason = "unpacker error"
+        } else {
+            let current = refs.optional(repo, u.name)?
+            let actual = if current.len == 0 then zero() else oid.hex(current[0])?
+            if actual != u.before {
+                reason = "stale info"
+            } else if u.after == zero() {
+                if true_value(repo.config["receive.denydeletes"] else "false") {
+                    reason = "deletion prohibited"
+                }
+            } else {
+                let body = object.read_object(repo, oid.parse("sha1", u.after)?, 16777216)?
+                if u.name.starts_with("refs/heads/") && body.kind != "commit" {
+                    reason = "non-commit object"
+                }
+                if reason == "" &&
+                    u.before != zero() &&
+                    u.name.starts_with("refs/heads/") &&
+                    true_value(repo.config["receive.denynonfastforwards"] else "false") &&
+                    !ancestor(repo, u.before, u.after)? {
+                    reason = "non-fast-forward"
+                }
+                if reason == "" { let _ = closure(repo, [u.after], [])? }
+            }
+        }
+        if reason != "" { any_failed = true }
+        (mut reasons).push(reason)
+        (mut changes).push(refs.
+            AtomicUpdate { name: copy u.name, expected: ids(u.before)?, after: ids(u.after)? })
+    }
+    if atomic {
+        if any_failed {
+            for i in 0..reasons.len { if reasons[i] == "" { reasons[i] = "atomic push failure" } }
+        } else {
+            let durable = refs.transaction(repo, changes) else |e| {
+                for i in 0..reasons.len { reasons[i] = "atomic transaction failed" }
+                eprint("den: atomic refs: {e}")
+                true
+            }
+            if !durable { eprint("den: atomic refs committed; directory sync failed") }
+        }
+    } else {
+        for i in 0..changes.len {
+            if reasons[i] != "" { continue }
+            let change = changes[i]
+            refs.update(
+                repo,
+                change.name,
+                change.expected,
+                change.after,
+                "Den Transport <den@example.invalid> 0 +0000",
+                "push",
+                false,
+            ) else |e| {
+                reasons[i] = "ref update failed"
+                eprint("den: receive refs: {e}")
+            }
+        }
+    }
+    if report {
+        var response = List[byte]()
+        wire.line(
+            mut response,
+            if unpack_error == "" then "unpack ok" else "unpack {unpack_error}",
+        )?
+        for i in 0..updates.len {
+            wire.line(
+                mut response,
+                if reasons[i] == "" {
+                    "ok {updates[i].name}"
+                } else {
+                    "ng {updates[i].name} {reasons[i]}"
+                },
+            )?
+        }
+        wire.append(mut response, "0000".bytes())
+        transport.write(mut c, response)?
+    }
+}
