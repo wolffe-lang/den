@@ -38,7 +38,10 @@ fn checks() -> () ! wire.Errors {
     let id = "0123456789012345678901234567890123456789"
     let request = wire.fetch_request([id], [id], true)?
     let expected = "0012command=fetch\n0001000ethin-pack\n000eofs-delta\n0010no-progress\n0032want {id}\n0032have {id}\n0009done\n0000"
-    assert(same(request, expected.bytes()), "outbound want includes newline")
+    if !same(request, expected.bytes()) {
+        eprint("FAIL outbound want includes newline")
+        return invalid
+    }
     let caps = wire.capabilities(
         "000eversion 2\n0013ls-refs=unborn\n0012fetch=shallow\n0017object-format=sha1\n0000".
             bytes(),
