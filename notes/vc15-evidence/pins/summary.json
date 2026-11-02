@@ -1,0 +1,24 @@
+{
+  "lupin": {
+    "asset": [
+      680737717,
+      "lupin-0.1.58-x86_64-unknown-linux-gnu.tar.gz",
+      "sha256:34f52792bb59bc7565e0edc1235cd47d9a6ad13d5e6528993627f2e699b62193"
+    ],
+    "executable_sha256": "47c646a61b9fd0dfe7d4565a74e22428a259eb54642f6d0d6ef3c1c0abe01ada",
+    "rev": "6240efe5570dba1a33ba6269e3ba44bae33dd972"
+  },
+  "std": {
+    "files": 56,
+    "rev": "78b9d3cbc41d51db44d18c40b6694403644d1c83"
+  },
+  "wolf": {
+    "asset": [
+      685931980,
+      "wolf-0.2.36-x86_64-unknown-linux-gnu.tar.gz",
+      "sha256:d383c74c8cd123b9d9dfaa268271d4f004294f85c2b230237d0ef07027d9500d"
+    ],
+    "executable_sha256": "f7b73fba526e06116cc5eeda146cc80c8a42cd1f7a198d574e8a961f6c7a57ef",
+    "rev": "5adf3d91f75b3545ff8d38e5b6693b0b9f367a05"
+  }
+}
