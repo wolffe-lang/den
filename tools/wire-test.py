@@ -23,11 +23,12 @@ def main():
     den = root / 'target' / a.tier / 'den'
     captures = []
 
-    def run(argv, cwd=None, data=None, ok=True):
+    def run(argv, cwd=None, data=None, ok=True, env=None):
         result = subprocess.run(list(map(str, argv)), cwd=cwd, input=data, stdout=subprocess.PIPE,
-                                stderr=subprocess.PIPE, timeout=60)
+                                stderr=subprocess.PIPE, timeout=60, env={**os.environ, **(env or {})})
         captures.append(dict(argv=list(map(str, argv)), cwd=str(cwd), stdin=(data or b'').hex(),
-                             stdout=result.stdout.hex(), stderr=result.stderr.hex(), exit=result.returncode))
+                             stdout=result.stdout.hex(), stderr=result.stderr.hex(), exit=result.returncode,
+                             extra_env=env or {}))
         (out / 'captures.json').write_text(json.dumps(captures, indent=2) + '\n')
         if ok:
             assert result.returncode == 0, captures[-1]
@@ -85,6 +86,53 @@ def main():
         assert (normal / 'file').read_bytes() == (expected / 'file').read_bytes()
         run([git, 'fsck', '--full'], normal)
         rows.append(server + ' normal clone refs/index/worktree/fsck')
+    def pkt(data):
+        assert len(data) <= 65516
+        return f'{len(data) + 4:04x}'.encode() + data
+
+    def packets(data):
+        pos = 0
+        result = []
+        while pos < len(data):
+            assert len(data) - pos >= 4
+            size = int(data[pos:pos + 4], 16)
+            assert size != 3 and size <= 65520
+            if size < 4:
+                result.append((size, b''))
+                pos += 4
+            else:
+                assert size <= len(data) - pos
+                result.append((4, data[pos + 4:pos + size]))
+                pos += size
+        return result
+
+    tip = run([git, 'rev-parse', 'refs/heads/main'], source).stdout.strip()
+    tag = run([git, 'rev-parse', 'refs/tags/v1'], source).stdout.strip()
+    request = (pkt(b'command=fetch\n') + b'0001' + pkt(b'include-tag\n') +
+               pkt(b'no-progress\n') + pkt(b'ofs-delta\n') + pkt(b'want ' + tip + b'\n') +
+               pkt(b'done\n') + b'00000000')
+    for server in ('git', 'den'):
+        command = [git, 'upload-pack', source] if server == 'git' else [den, 'upload-pack', source]
+        response = run(command, data=request, env={'GIT_PROTOCOL': 'version=2'}).stdout
+        decoded = packets(response)
+        stop = next(i for i, row in enumerate(decoded) if row[0] == 0)
+        assert decoded[0] == (4, b'version 2\n')
+        response = decoded[stop + 1:]
+        assert response[0] == (4, b'packfile\n') and response[-1][0] == 0
+        body = b''
+        for kind, payload in response[1:-1]:
+            assert kind == 4 and payload and payload[0] in (1, 2)
+            if payload[0] == 1:
+                body += payload[1:]
+        assert hashlib.sha1(body[:-20]).digest() == body[-20:]
+        target = out / ('include-tag-' + server + '.git')
+        if target.exists():
+            shutil.rmtree(target)
+        run([git, 'init', '-q', '--bare', target])
+        run([git, 'index-pack', '--stdin'], target, data=body)
+        assert run([git, 'cat-file', '-t', tag.decode()], target).stdout == b'tag\n'
+        run([git, 'fsck', '--full'], target)
+        rows.append(server + ' include-tag without a tag want, independent pkt parser/index-pack')
     dest = out / 'clone-git.git'
     spec = 'refs/heads/main:refs/heads/copied'
     run([den, 'fetch', '-q', source.as_uri(), spec], dest)
