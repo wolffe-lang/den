@@ -131,7 +131,7 @@ pub fn clone_bare(url: str, destination: str) -> () ! object.StoreErrors {
 
 fn checkout_clone(repo: repository.Repo, root: str, id: oid.Oid) -> () ! worktree.WorkErrors {
     let absolute = fs.realpath(root)?
-    let ctx = worktree.Context { repo: repo, root: copy absolute, cwd: absolute, prefix: "" }
+    let ctx = worktree.Context { repo: copy repo, root: copy absolute, cwd: absolute, prefix: "" }
     let tree = worktree.flatten_tree(repo, id)?
     var tx = index.begin(repo, 16777216, worktree.index_version(ctx)?)?
     defer index.abort(mut tx)

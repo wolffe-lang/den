@@ -132,7 +132,7 @@ pub fn push(
     if atomic { selected = "{selected} atomic" }
     var request = List[byte]()
     for i in 0..updates.len {
-        let u = updates[i]
+        let u = copy updates[i]
         let extra = if i == 0 then "\0{selected}" else ""
         wire.append(mut request, pktline.encode("{u.before} {u.after} {u.name}{extra}\n".bytes())?)
     }
