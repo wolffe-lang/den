@@ -23,6 +23,7 @@ def main():
     git = os.environ['DEN_GIT']
     assert hashlib.sha256(pathlib.Path(git).read_bytes()).hexdigest() == 'c4848492938c4ebfffbefe1fbbaa68b9af90c86d1f6a20e76816c5ff37fcfa60'
     den = root / 'target' / a.tier / 'den'
+    wire_client = root / 'target' / a.tier / 'wire-client'
     captures = []
 
     def run(argv, cwd=None, data=None, ok=True, env=None):
@@ -58,13 +59,14 @@ def main():
         if dest.exists():
             shutil.rmtree(dest)
         if server == 'git':
-            run([den, 'clone', '-q', '--bare', source.as_uri(), dest])
+            result = run([den, 'clone', '-q', '--bare', source.as_uri(), dest])
         else:
             upload = out / 'den-upload-pack'
             upload.write_text('#!/bin/sh\nexec "' + str(den) + '" upload-pack "$@"\n')
             upload.chmod(0o755)
-            run([git, '-c', 'protocol.version=2', 'clone', '-q', '--bare',
-                 '--upload-pack=' + str(upload), source.as_uri(), dest])
+            result = run([git, '-c', 'protocol.version=2', 'clone', '-q', '--bare',
+                          '--upload-pack=' + str(upload), source.as_uri(), dest])
+        assert result.stdout == b'' and result.stderr == b'', 'quiet successful clone bytes'
         refs = run([git, 'show-ref'], source).stdout
         assert run([git, 'show-ref'], dest).stdout == refs
         run([git, 'fsck', '--full'], dest)
@@ -76,18 +78,29 @@ def main():
         for path in (normal, expected):
             if path.exists():
                 shutil.rmtree(path)
-        run([git, 'clone', '-q', source.as_uri(), expected])
+        golden = run([git, 'clone', '-q', source.as_uri(), expected])
         if server == 'git':
-            run([den, 'clone', '-q', source.as_uri(), normal])
+            result = run([den, 'clone', '-q', source.as_uri(), normal])
         else:
-            run([git, '-c', 'protocol.version=2', 'clone', '-q',
-                 '--upload-pack=' + str(upload), source.as_uri(), normal])
+            result = run([git, '-c', 'protocol.version=2', 'clone', '-q',
+                          '--upload-pack=' + str(upload), source.as_uri(), normal])
+        assert (result.stdout, result.stderr) == (golden.stdout, golden.stderr), 'normal quiet clone bytes'
         assert run([git, 'show-ref'], normal).stdout == run([git, 'show-ref'], expected).stdout
         assert run([git, 'ls-files', '-s'], normal).stdout == run([git, 'ls-files', '-s'], expected).stdout
         assert run([git, 'status', '--porcelain=v1'], normal).stdout == b''
         assert (normal / 'file').read_bytes() == (expected / 'file').read_bytes()
         run([git, 'fsck', '--full'], normal)
         rows.append(server + ' normal clone refs/index/worktree/fsck')
+    api_clone = out / 'api-clone'
+    if api_clone.exists():
+        shutil.rmtree(api_clone)
+    result = run([wire_client, 'clone', source.as_uri(), api_clone])
+    assert result.stdout == b'' and result.stderr == b''
+    assert run([git, 'show-ref'], api_clone).stdout == run([git, 'show-ref'], expected).stdout
+    assert run([git, 'ls-files', '-s'], api_clone).stdout == run([git, 'ls-files', '-s'], expected).stdout
+    assert run([git, 'status', '--porcelain=v1'], api_clone).stdout == b''
+    rows.append('independent importing normal-clone client')
+
     def pkt(data):
         assert len(data) <= 65516
         return f'{len(data) + 4:04x}'.encode() + data
@@ -113,9 +126,15 @@ def main():
     request = (pkt(b'command=fetch\n') + b'0001' + pkt(b'include-tag\n') +
                pkt(b'no-progress\n') + pkt(b'ofs-delta\n') + pkt(b'want ' + tip + b'\n') +
                pkt(b'done\n') + b'00000000')
-    for server in ('git', 'den'):
-        command = [git, 'upload-pack', source] if server == 'git' else [den, 'upload-pack', source]
-        response = run(command, data=request, env={'GIT_PROTOCOL': 'version=2'}).stdout
+    generated = run([wire_client, 'request', tip.decode(), '-']).stdout
+    canonical_request = (pkt(b'command=fetch\n') + b'0001' + pkt(b'thin-pack\n') + pkt(b'ofs-delta\n') +
+                         pkt(b'no-progress\n') + pkt(b'want ' + tip + b'\n') + pkt(b'done\n') + b'0000')
+    assert generated == canonical_request, 'outbound want includes newline'
+    rows.append('independent canonical outbound request bytes')
+    for server in ('git', 'den', 'git-no-lf', 'den-no-lf'):
+        command = [git, 'upload-pack', source] if server.startswith('git') else [den, 'upload-pack', source]
+        incoming = request if not server.endswith('no-lf') else request.replace(pkt(b'want ' + tip + b'\n'), pkt(b'want ' + tip))
+        response = run(command, data=incoming, env={'GIT_PROTOCOL': 'version=2'}).stdout
         decoded = packets(response)
         stop = next(i for i, row in enumerate(decoded) if row[0] == 0)
         assert decoded[0] == (4, b'version 2\n')
