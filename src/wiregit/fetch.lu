@@ -77,7 +77,9 @@ fn update(repo: repository.Repo, name: str, id: str) -> () ! object.StoreErrors 
 
 /// Bounded bare clone. Existing destination directories are never repurposed.
 pub fn clone_bare(url: str, destination: str) -> () ! object.StoreErrors {
+    if url.contains("\n") || url.contains("\r") { return invalid }
     if fs.exists(destination) { return exists }
+    fs.create_dir(destination)?
     let (repo, _) = repository.init(destination, true, "main")?
     let advertised = fetch_objects(repo, url)?
     for reference in advertised {
@@ -114,7 +116,6 @@ pub fn clone_bare(url: str, destination: str) -> () ! object.StoreErrors {
     var config = fs.open_append("{repo.gitdir}/config")?
     defer fs.close(take config) else |_| {}
     // Config quoted values must escape user-controlled paths, not shell-quote.
-    if url.contains("\n") || url.contains("\r") { return invalid }
     let quoted = url.replace("\\", "\\\\").replace("\"", "\\\"")
     fs.write(mut config, "[remote \"origin\"]\n\turl = \"{quoted}\"\n")?
 }
@@ -125,12 +126,43 @@ pub fn fetch_into(
     url: str,
     source: str,
     destination: str,
+    force: bool,
 ) -> () ! object.StoreErrors {
     if !refs.valid(source) || !refs.valid(destination) { return invalid }
+    if (repo.config["core.bare"] else "false") != "true" {
+        let head = str_from_utf8(repository.read_bytes("{repo.gitdir}/HEAD", 4096)?) else |_| {
+            return invalid
+        }
+        if head.trim() == "ref: {destination}" {
+            return Unsupported("fetch into checked-out branch")
+        }
+    }
     let advertised = fetch_objects(repo, url)?
     for reference in advertised {
         if reference.name == source && reference.id != "unborn" {
-            update(repo, destination, reference.id)?
+            let before = refs.optional(repo, destination)?
+            if destination.starts_with("refs/heads/") {
+                let body = object.read_object(repo, oid.parse("sha1", reference.id)?, 16777216)?
+                if body.kind != "commit" { return invalid }
+            }
+            if before.len > 0 && !force {
+                let old = oid.hex(before[0])?
+                if old != reference.id && destination.starts_with("refs/tags/") {
+                    return Unsupported("fetch would replace tag (use force)")
+                }
+                if destination.starts_with("refs/heads/") && !ancestor(repo, old, reference.id)? {
+                    return Unsupported("non-fast-forward fetch (use force)")
+                }
+            }
+            refs.update(
+                repo,
+                destination,
+                before,
+                [oid.parse("sha1", reference.id)?],
+                "Den Transport <den@example.invalid> 0 +0000",
+                "fetch",
+                false,
+            )?
             return
         }
     }
