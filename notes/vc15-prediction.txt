@@ -54,3 +54,14 @@ IDs, foreign locks, multiple updates/deletes, Git visibility and fsck.
 Alternative sequential loose publication is rejected: it cannot supply the
 advertised all-or-none outcome on a late publication failure. Bare repositories
 without reflog policy are the initial measured scope.
+
+R-vc15-4 review recommendation: git-push(1) also constrains updates outside
+refs/heads and refs/tags (commit/tag peeling and tree/blob policy). Until that
+broader policy has its own complete witness, refuse non-forced updates in those
+namespaces rather than silently treating them as forced. Keep creations,
+deletions, unchanged values and explicit force. Alternative: implement the full
+outside-namespace policy now; defer it rather than guess. A custom-namespace
+creation should succeed, an unforced rewind must preserve refs, and explicit
+force should succeed. A safe custom fast-forward remains a separately named
+scope refusal, not Git CLI parity. This later code edit requires replacement
+final-head coverage; the already submitted c5e8037 run is not its proof.
