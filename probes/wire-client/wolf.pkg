@@ -1,0 +1,11 @@
+pkg {
+    name: "wire-client",
+    edition: "1",
+    capabilities: [env, fs, exec, net],
+    deps: {
+        wire: {path: "../../src/wire"},
+        wiregit: {path: "../../src/wiregit"},
+        repository: {path: "../../src/repository"},
+        object: {path: "../../src/object"},
+    },
+}

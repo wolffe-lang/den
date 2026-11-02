@@ -1,0 +1,33 @@
+use std.fs
+use object
+use repository
+use wire
+use wiregit
+
+fn execute(args: List[str]) -> () ! object.StoreErrors {
+    if args.len != 3 { return invalid }
+    if args[0] == "import" {
+        let repo = repository.open(args[1])?
+        let bytes = repository.read_bytes(args[2], 134217728)?
+        wiregit.import_pack(repo, bytes)?
+        print("imported")
+        return
+    }
+    if args[0] == "request" {
+        let haves = if args[2] == "-" then List[str]() else [args[2]]
+        let bytes = wire.fetch_request([args[1]], haves, true)?
+        var out = fs.stdout()
+        fs.write_chunk(mut out, bytes)?
+        return
+    }
+    if args[0] == "clone" {
+        wiregit.clone_repository(args[1], args[2], false)?
+        return
+    }
+    invalid
+}
+
+fn main() -> int {
+    execute(env_args()) else |e| { eprint("{e}"); return 1 }
+    0
+}
