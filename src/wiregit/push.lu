@@ -56,14 +56,15 @@ pub fn push(
     atomic: bool,
 ) -> () ! object.StoreErrors {
     if specs.len == 0 || specs.len > 10000 { return invalid }
-    var c = transport.connect(url, "receive-pack")?, active = true, started = false
+    let c = transport.connect(url, "receive-pack")?
+    var active = true, started = false
     defer {
         if active {
-            if !started { transport.write(mut c, "0000".bytes()) else |_| {} }
+            if !started { transport.write(c, "0000".bytes()) else |_| {} }
             let _ = transport.close(copy c) else 1
         }
     }
-    let (remote, caps) = receive_advertisement(transport.message(mut c, 2097152)?)?
+    let (remote, caps) = receive_advertisement(transport.message(c, 2097152)?)?
     if !wire.supports(caps, "report-status") {
         return Unsupported("push server lacks report-status")
     }
@@ -118,7 +119,7 @@ pub fn push(
     }
     if updates.len == 0 {
         started = true
-        transport.write(mut c, "0000".bytes())?
+        transport.write(c, "0000".bytes())?
         active = false
         let status = transport.close(copy c)?
         if status != 0 { return io }
@@ -137,9 +138,9 @@ pub fn push(
     }
     wire.append(mut request, "0000".bytes())
     started = true
-    transport.write(mut c, request)?
-    if roots.len > 0 { transport.write(mut c, pack_for(repo, roots, [], "ofs")?)? }
-    let response = transport.message(mut c, 2097152)?
+    transport.write(c, request)?
+    if roots.len > 0 { transport.write(c, pack_for(repo, roots, [], "ofs")?)? }
+    let response = transport.message(c, 2097152)?
     var pos = 0, unpacked = false, reported = Map[str, bool](), failed = false
     while pos < response.len {
         let p = pktline.decode(response, pos)?
@@ -187,10 +188,10 @@ fn receive_configuration(repo: repository.Repo) -> () ! object.StoreErrors {
     if fs.is_dir(hooks) && fs.entries(hooks)?.len != 0 { return Unsupported("receive-pack hooks") }
 }
 
-fn receive_pack_bytes(mut c: transport.Channel) -> List[byte] ! object.StoreErrors {
+fn receive_pack_bytes(c: transport.Channel) -> List[byte] ! object.StoreErrors {
     var bytes = List[byte]()
     loop {
-        let chunk = transport.read(mut c, 65536)?
+        let chunk = transport.read(c, 65536)?
         if chunk.len == 0 { return truncated }
         if chunk.len > 134217728 - bytes.len { return limit }
         wire.append(mut bytes, chunk)
@@ -210,7 +211,7 @@ fn true_value(value: str) -> bool {
 /// Receive v0 push framing (Git does not define v2 push commands), import the
 /// pack before ref mutation, apply policy, and report every update. Atomic
 /// requests commit all refs through the shared single-file transaction.
-pub fn receive(repo: repository.Repo, mut c: transport.Channel) -> () ! object.StoreErrors {
+pub fn receive(repo: repository.Repo, c: transport.Channel) -> () ! object.StoreErrors {
     receive_configuration(repo)?
     let log_policy = repo.config["core.logallrefupdates"] else "false"
     let can_atomic = log_policy == "false" || log_policy == "0"
@@ -233,8 +234,8 @@ pub fn receive(repo: repository.Repo, mut c: transport.Channel) -> () ! object.S
         )
     }
     wire.append(mut advertisement, "0000".bytes())
-    transport.write(mut c, advertisement)?
-    let request = transport.message(mut c, 2097152)?
+    transport.write(c, advertisement)?
+    let request = transport.message(c, 2097152)?
     if request.len == 0 || request.len == 4 { return }
     var pos = 0,
         updates = List[PushUpdate](),
@@ -281,7 +282,7 @@ pub fn receive(repo: repository.Repo, mut c: transport.Channel) -> () ! object.S
     }
     var unpack_error = ""
     if needs_pack {
-        let bytes = receive_pack_bytes(mut c)?
+        let bytes = receive_pack_bytes(c)?
         import_pack(repo, bytes) else |e| { unpack_error = "{e}" }
     }
     var reasons = List[str](), changes = List[refs.AtomicUpdate](), any_failed = unpack_error != ""
@@ -364,6 +365,6 @@ pub fn receive(repo: repository.Repo, mut c: transport.Channel) -> () ! object.S
             )?
         }
         wire.append(mut response, "0000".bytes())
-        transport.write(mut c, response)?
+        transport.write(c, response)?
     }
 }

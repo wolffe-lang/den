@@ -19,7 +19,7 @@ pub fn stdio() -> Channel {
 }
 
 /// Read at most count bytes (1..65536); return empty bytes for clean EOF, IO otherwise.
-pub fn read(mut c: Channel, count: int) -> List[byte] ! Errors {
+pub fn read(c: Channel, count: int) -> List[byte] ! Errors {
     if count < 1 || count > 65536 { return invalid }
     if c.socket {
         net_read_bytes(c.input, count) else |e| match e {
@@ -35,11 +35,11 @@ pub fn read(mut c: Channel, count: int) -> List[byte] ! Errors {
 }
 
 /// Read exactly count bytes with a 65520 bound; truncated on EOF, IO on transport failure.
-pub fn exact(mut c: Channel, count: int) -> List[byte] ! Errors {
+pub fn exact(c: Channel, count: int) -> List[byte] ! Errors {
     if count < 0 || count > 65520 { return limit }
     var out = List[byte]()
     while out.len < count {
-        let bytes = read(mut c, count - out.len)?
+        let bytes = read(c, count - out.len)?
         if bytes.len == 0 { return truncated }
         wire.append(mut out, bytes)
     }
@@ -47,7 +47,7 @@ pub fn exact(mut c: Channel, count: int) -> List[byte] ! Errors {
 }
 
 /// Write all binary bytes or return IO; never converts pack data to text.
-pub fn write(mut c: Channel, data: List[byte]) -> () ! Errors {
+pub fn write(c: Channel, data: List[byte]) -> () ! Errors {
     if c.socket {
         net_write_bytes(c.output, data) else |_| { return io }
     } else {
@@ -56,21 +56,21 @@ pub fn write(mut c: Channel, data: List[byte]) -> () ! Errors {
 }
 
 /// Read one framed packet; kind -1 means clean EOF before a header, partial headers/bodies are truncated.
-pub fn packet(mut c: Channel) -> pktline.Packet ! Errors {
-    var header = read(mut c, 4)?
+pub fn packet(c: Channel) -> pktline.Packet ! Errors {
+    var header = read(c, 4)?
     if header.len == 0 { return pktline.Packet { kind: -1, data: List[byte](), next: 0 } }
-    if header.len < 4 { wire.append(mut header, exact(mut c, 4 - header.len)?) }
+    if header.len < 4 { wire.append(mut header, exact(c, 4 - header.len)?) }
     let size = pktline.header(header)?
     if size < 4 { return pktline.Packet { kind: size, data: List[byte](), next: 4 } }
-    pktline.Packet { kind: 4, data: exact(mut c, size - 4)?, next: size }
+    pktline.Packet { kind: 4, data: exact(c, size - 4)?, next: size }
 }
 
 /// Preserves headers and special packets, never conflating delimiter with flush.
-pub fn message(mut c: Channel, cap: int) -> List[byte] ! Errors {
+pub fn message(c: Channel, cap: int) -> List[byte] ! Errors {
     if cap < 4 || cap > 140000000 { return limit }
     var out = List[byte]()
     loop {
-        let p = packet(mut c)?
+        let p = packet(c)?
         if p.kind == -1 { if out.len == 0 { return out }; return truncated }
         let size = if p.kind < 4 then 4 else p.data.len + 4
         if size > cap - out.len { return limit }

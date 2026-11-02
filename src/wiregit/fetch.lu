@@ -15,10 +15,10 @@ pub fn fetch_objects(repo: repository.Repo, url: str) -> List[wire.Ref] ! object
 }
 
 fn fetch_view(repo: repository.Repo, url: str, source: str) -> List[wire.Ref] ! object.StoreErrors {
-    var c = transport.connect(url, "upload-pack")?
+    let c = transport.connect(url, "upload-pack")?
     var active = true
     defer { if active { let _ = transport.close(copy c) else 1 } }
-    let caps = wire.capabilities(transport.message(mut c, 65536)?)?
+    let caps = wire.capabilities(transport.message(c, 65536)?)?
     if !wire.supports(caps, "ls-refs") || !wire.supports(caps, "fetch") {
         return Unsupported("v2 ls-refs/fetch unavailable")
     }
@@ -42,8 +42,8 @@ fn fetch_view(repo: repository.Repo, url: str, source: str) -> List[wire.Ref] ! 
     } else {
         (mut args).push("ref-prefix {source}")
     }
-    transport.write(mut c, wire.request("ls-refs", args)?)?
-    let received = wire.parse_refs(transport.message(mut c, 2097152)?)?
+    transport.write(c, wire.request("ls-refs", args)?)?
+    let received = wire.parse_refs(transport.message(c, 2097152)?)?
     var advertised = List[wire.Ref]()
     for reference in received {
         let selected = if source != "" {
@@ -77,8 +77,8 @@ fn fetch_view(repo: repository.Repo, url: str, source: str) -> List[wire.Ref] ! 
         }
     }
     if wants.len > 0 {
-        transport.write(mut c, wire.fetch_request(wants, haves, true)?)?
-        let bytes = wire.parse_pack(transport.message(mut c, 140000000)?)?
+        transport.write(c, wire.fetch_request(wants, haves, true)?)?
+        let bytes = wire.parse_pack(transport.message(c, 140000000)?)?
         import_pack(repo, bytes)?
     }
     var roots = List[str]()
@@ -86,7 +86,7 @@ fn fetch_view(repo: repository.Repo, url: str, source: str) -> List[wire.Ref] ! 
         if reference.id != "unborn" { (mut roots).push(copy reference.id) }
     }
     let _ = closure(repo, roots, [])?
-    transport.write(mut c, "0000".bytes())?
+    transport.write(c, "0000".bytes())?
     let code = transport.close(copy c)?
     active = false
     if code != 0 { return io }

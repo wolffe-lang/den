@@ -32,11 +32,11 @@ fn execute(args: List[str]) -> () ! object.StoreErrors {
         if path == "" { return invalid }
         let admin = if fs.is_dir("{path}/.git") then "{path}/.git" else copy path
         let repo = repository.open(admin)?
-        var channel = transport.stdio()
+        let peer = transport.stdio()
         if args[0] == "upload-pack" {
-            upload(repo, mut channel)?
+            upload(repo, peer)?
         } else {
-            receive(repo, mut channel)?
+            receive(repo, peer)?
         }
         return
     }

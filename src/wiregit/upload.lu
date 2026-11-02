@@ -177,19 +177,19 @@ fn fetch(repo: repository.Repo, args: List[str]) -> List[byte] ! object.StoreErr
 }
 
 /// Stateful transport, stateless command rounds; no hidden per-round wants.
-pub fn upload(repo: repository.Repo, mut c: transport.Channel) -> () ! object.StoreErrors {
+pub fn upload(repo: repository.Repo, c: transport.Channel) -> () ! object.StoreErrors {
     configuration(repo)?
     var caps = List[byte]()
     for text in ["version 2", "agent=den/0.0.0", "ls-refs=unborn", "fetch", "object-format=sha1"] {
         wire.line(mut caps, text)?
     }
     wire.append(mut caps, "0000".bytes())
-    transport.write(mut c, caps)?
+    transport.write(c, caps)?
     loop {
-        let request = transport.message(mut c, 2097152)?
+        let request = transport.message(c, 2097152)?
         if request.len == 0 || request.len == 4 { return }
         let (name, args) = command(request)?
         let reply = if name == "ls-refs" then ls_refs(repo, args)? else fetch(repo, args)?
-        transport.write(mut c, reply)?
+        transport.write(c, reply)?
     }
 }
