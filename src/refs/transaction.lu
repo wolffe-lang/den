@@ -10,7 +10,7 @@ pub struct AtomicUpdate { name: str, expected: List[oid.Oid], after: List[oid.Oi
 
 struct AtomicLock { path: str, fd: int }
 
-fn atomic_sorted(values: Map[str, oid.Oid]) -> List[Packed] ! RefErrors {
+fn atomic_sorted(values: Map[str, str]) -> List[Packed] ! RefErrors {
     var names = List[str]()
     for (name, _) in values.pairs() {
         (mut names).push(copy name)
@@ -25,10 +25,10 @@ fn atomic_sorted(values: Map[str, oid.Oid]) -> List[Packed] ! RefErrors {
     if names.len > 10000 { return limit }
     var out = List[Packed]()
     for name in names {
-        let id = values[name] else { return invalid }
+        let text = values[name] else { return invalid }
         (mut out).push(Packed {
             name: copy name,
-            id: copy id,
+            id: oid.parse("sha1", text)?,
             peeled: [],
         })
     }
@@ -113,16 +113,16 @@ pub fn transaction_injected(
         if packed_fd >= 0 { fs_close(packed_fd) else |_| {} }
         if packed_active { fs.remove(lock_path) else |_| {} }
     }
-    var old_values = Map[str, oid.Oid](), next_values = Map[str, oid.Oid]()
+    var old_values = Map[str, str](), next_values = Map[str, str]()
     for reference in packed(repo)? {
-        old_values[reference.name] = copy reference.id
+        old_values[reference.name] = oid.hex(reference.id)?
         if !(selected[reference.name] else false) {
-            next_values[reference.name] = copy reference.id
+            next_values[reference.name] = oid.hex(reference.id)?
         }
     }
     for change in changes {
-        if change.expected.len == 1 { old_values[change.name] = copy change.expected[0] }
-        if change.after.len == 1 { next_values[change.name] = copy change.after[0] }
+        if change.expected.len == 1 { old_values[change.name] = oid.hex(change.expected[0])? }
+        if change.after.len == 1 { next_values[change.name] = oid.hex(change.after[0])? }
     }
     let old_bytes = packed_bytes(atomic_sorted(old_values)?, "")?
     let next_bytes = packed_bytes(atomic_sorted(next_values)?, "")?
