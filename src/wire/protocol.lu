@@ -18,6 +18,17 @@ fn object_id(id: str) -> () ! Errors {
     let _ = oid.parse("sha1", id) else |_| { return invalid }
 }
 
+fn valid_capability(text: str) -> bool {
+    let equal = text.find("=") else text.len
+    if equal == 0 || equal < text.len && equal == text.len - 1 { return false }
+    for b in text[0..equal].bytes() {
+        let c = b as int
+        if !(c >= 48 && c <= 57 || c >= 65 && c <= 90 || c >= 97 && c <= 122 || c == 45 || c == 95) { return false }
+    }
+    for b in text.bytes() { if b as int < 32 || b as int > 126 { return false } }
+    true
+}
+
 /// Unknown capability keys are preserved, not interpreted as commands.
 pub fn capabilities(data: List[byte]) -> List[str] ! Errors {
     let first = pktline.decode(data, 0)?
@@ -34,7 +45,7 @@ pub fn capabilities(data: List[byte]) -> List[str] ! Errors {
         }
         if p.kind != 4 || out.len >= 256 { return invalid }
         let text = pktline.text(p.data)?
-        if text == "" { return invalid }
+        if !valid_capability(text) { return invalid }
         (mut out).push(text)
     }
     truncated
@@ -91,6 +102,7 @@ pub fn parse_refs(data: List[byte]) -> List[Ref] ! Errors {
                 object_id(peeled)?
             }
         }
+        if parts[0] == "unborn" && (parts[1] != "HEAD" || target == "" || peeled != "") { return invalid }
         (mut out).push(Ref { name: copy parts[1], id: copy parts[0], target: target, peeled: peeled })
     }
     truncated

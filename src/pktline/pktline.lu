@@ -38,9 +38,10 @@ pub fn decode(bytes: List[byte], start: int) -> Packet ! Errors {
     Packet { kind: 4, data: copy bytes[start + 4..start + n], next: start + n }
 }
 
-/// Text control records are ASCII; LF is optional, never strip other bytes.
+/// UTF-8 text adapter; framing itself is binary-clean. LF is optional, never
+/// strip other bytes. Non-UTF-8 names remain an explicit caller-level refusal.
 pub fn text(bytes: List[byte]) -> str ! Errors {
-    for b in bytes { if b == 0 as byte || b as int > 127 { return invalid } }
+    for b in bytes { if b == 0 as byte { return invalid } }
     let end = if bytes.len > 0 && bytes[bytes.len - 1] == 10 as byte then bytes.len - 1 else bytes.len
     str_from_utf8(bytes[0..end]) else |_| { return invalid }
 }
