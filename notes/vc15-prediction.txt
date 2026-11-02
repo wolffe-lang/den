@@ -38,3 +38,19 @@ R-vc15-2 recommendation: preserve conservative bounds and explicit refusals for
 unimplemented protocol features instead of advertising unsupported capabilities.
 Alternative: claim general Git wire parity from happy-path interoperability;
 rejected. No atomic capability until all-or-nothing ref publication is proven.
+
+R-vc15-3 atomic-ref recommendation (2026-11-02 resume): use a single
+packed-refs rename as the logical commit point, not sequential loose ref
+renames described as atomic. Lock every target and packed-refs; validate all
+expected IDs/types/policies before publication. Prepare a packed snapshot of
+all old target values, publish that representation without changing any
+logical ref, and remove same-value loose target shadows while locks remain
+held. Then rename the prepared new packed-refs once. Failure before that
+last rename leaves all logical values old, even if representation changed;
+success changes all target values together. Do not claim crash recovery,
+reflog transactions or generic worktree updates. Refuse unmeasured policy
+rather than ignore it. Tests must cover loose and packed targets, stale old
+IDs, foreign locks, multiple updates/deletes, Git visibility and fsck.
+Alternative sequential loose publication is rejected: it cannot supply the
+advertised all-or-none outcome on a late publication failure. Bare repositories
+without reflog policy are the initial measured scope.
