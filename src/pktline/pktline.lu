@@ -9,9 +9,13 @@ pub fn header(bytes: List[byte]) -> int ! Errors {
     var n = 0
     for b in bytes {
         let c = b as int
-        if c >= 48 && c <= 57 { n = n * 16 + c - 48 }
-        else if c >= 97 && c <= 102 { n = n * 16 + c - 87 }
-        else { return invalid }
+        if c >= 48 && c <= 57 {
+            n = n * 16 + c - 48
+        } else if c >= 97 && c <= 102 {
+            n = n * 16 + c - 87
+        } else {
+            return invalid
+        }
     }
     if n == 3 { return invalid }
     if n > 65520 { return limit }
@@ -42,6 +46,10 @@ pub fn decode(bytes: List[byte], start: int) -> Packet ! Errors {
 /// strip other bytes. Non-UTF-8 names remain an explicit caller-level refusal.
 pub fn text(bytes: List[byte]) -> str ! Errors {
     for b in bytes { if b == 0 as byte { return invalid } }
-    let end = if bytes.len > 0 && bytes[bytes.len - 1] == 10 as byte then bytes.len - 1 else bytes.len
+    let end = if bytes.len > 0 && bytes[bytes.len - 1] == 10 as byte {
+        bytes.len - 1
+    } else {
+        bytes.len
+    }
     str_from_utf8(bytes[0..end]) else |_| { return invalid }
 }

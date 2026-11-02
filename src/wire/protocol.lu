@@ -1,8 +1,9 @@
-use pktline
 use oid
+use pktline
 use refs
 
 pub error Errors = {invalid, truncated, limit, Unsupported(str)}
+
 pub struct Ref { name: str, id: str, target: str, peeled: str }
 
 pub fn append(mut out: List[byte], bytes: List[byte]) {
@@ -23,7 +24,11 @@ fn valid_capability(text: str) -> bool {
     if equal == 0 || equal < text.len && equal == text.len - 1 { return false }
     for b in text[0..equal].bytes() {
         let c = b as int
-        if !(c >= 48 && c <= 57 || c >= 65 && c <= 90 || c >= 97 && c <= 122 || c == 45 || c == 95) { return false }
+        if !(
+            c >= 48 && c <= 57 || c >= 65 && c <= 90 || c >= 97 && c <= 122 || c == 45 || c == 95
+        ) {
+            return false
+        }
     }
     for b in text.bytes() { if b as int < 32 || b as int > 126 { return false } }
     true
@@ -102,8 +107,15 @@ pub fn parse_refs(data: List[byte]) -> List[Ref] ! Errors {
                 object_id(peeled)?
             }
         }
-        if parts[0] == "unborn" && (parts[1] != "HEAD" || target == "" || peeled != "") { return invalid }
-        (mut out).push(Ref { name: copy parts[1], id: copy parts[0], target: target, peeled: peeled })
+        if parts[0] == "unborn" && (parts[1] != "HEAD" || target == "" || peeled != "") {
+            return invalid
+        }
+        (mut out).push(Ref {
+            name: copy parts[1],
+            id: copy parts[0],
+            target: target,
+            peeled: peeled,
+        })
     }
     truncated
 }
@@ -122,8 +134,11 @@ pub fn parse_pack(data: List[byte]) -> List[byte] ! Errors {
         if p.data[0] == 1 as byte {
             if p.data.len - 1 > 134217728 - out.len { return limit }
             append(mut out, p.data[1..])
-        } else if p.data[0] == 3 as byte { return Unsupported("remote fatal sideband") }
-        else if p.data[0] != 2 as byte { return invalid }
+        } else if p.data[0] == 3 as byte {
+            return Unsupported("remote fatal sideband")
+        } else if p.data[0] != 2 as byte {
+            return invalid
+        }
     }
     truncated
 }
