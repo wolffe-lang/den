@@ -1,0 +1,9 @@
+pkg {
+    name: "transport",
+    edition: "1",
+    capabilities: [fs, env, exec, net],
+    deps: {
+        pktline: {path: "../pktline"},
+        wire: {path: "../wire"},
+    },
+}

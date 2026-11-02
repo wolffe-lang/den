@@ -1,0 +1,162 @@
+// Byte-stream transports. file:// executes only the remote service as an argv
+// vector; all protocol, packs and ref decisions remain den code.
+use std.env
+use std.fs
+use std.net
+use std.process
+use pktline
+use wire
+
+/// Transport framing/size/IO failures and named unsupported URLs; never traps.
+pub error Errors = {invalid, truncated, limit, io, Unsupported(str)}
+
+/// Owned transport handles; close exactly once after the last operation, never copy ownership.
+pub struct Channel { input: int, output: int, socket: bool, child: int }
+
+/// Borrow standard input/output for a server; close on this channel never closes caller-owned descriptors.
+pub fn stdio() -> Channel {
+    Channel { input: fs.stdin().fd, output: fs.stdout().fd, socket: false, child: -1 }
+}
+
+/// Read at most count bytes (1..65536); return empty bytes for clean EOF, IO otherwise.
+pub fn read(mut c: Channel, count: int) -> List[byte] ! Errors {
+    if count < 1 || count > 65536 { return invalid }
+    if c.socket {
+        net_read_bytes(c.input, count) else |e| match e {
+            closed => List[byte](),
+            _ => { return io },
+        }
+    } else {
+        fs_read_chunk(c.input, count) else |e| match e {
+            eof => List[byte](),
+            _ => { return io },
+        }
+    }
+}
+
+/// Read exactly count bytes with a 65520 bound; truncated on EOF, IO on transport failure.
+pub fn exact(mut c: Channel, count: int) -> List[byte] ! Errors {
+    if count < 0 || count > 65520 { return limit }
+    var out = List[byte]()
+    while out.len < count {
+        let bytes = read(mut c, count - out.len)?
+        if bytes.len == 0 { return truncated }
+        wire.append(mut out, bytes)
+    }
+    out
+}
+
+/// Write all binary bytes or return IO; never converts pack data to text.
+pub fn write(mut c: Channel, data: List[byte]) -> () ! Errors {
+    if c.socket {
+        net_write_bytes(c.output, data) else |_| { return io }
+    } else {
+        fs_write_chunk(c.output, data) else |_| { return io }
+    }
+}
+
+/// Read one framed packet; kind -1 means clean EOF before a header, partial headers/bodies are truncated.
+pub fn packet(mut c: Channel) -> pktline.Packet ! Errors {
+    var header = read(mut c, 4)?
+    if header.len == 0 { return pktline.Packet { kind: -1, data: List[byte](), next: 0 } }
+    if header.len < 4 { wire.append(mut header, exact(mut c, 4 - header.len)?) }
+    let size = pktline.header(header)?
+    if size < 4 { return pktline.Packet { kind: size, data: List[byte](), next: 4 } }
+    pktline.Packet { kind: 4, data: exact(mut c, size - 4)?, next: size }
+}
+
+/// Preserves headers and special packets, never conflating delimiter with flush.
+pub fn message(mut c: Channel, cap: int) -> List[byte] ! Errors {
+    if cap < 4 || cap > 140000000 { return limit }
+    var out = List[byte]()
+    loop {
+        let p = packet(mut c)?
+        if p.kind == -1 { if out.len == 0 { return out }; return truncated }
+        let size = if p.kind < 4 then 4 else p.data.len + 4
+        if size > cap - out.len { return limit }
+        if p.kind < 4 {
+            wire.append(
+                mut out,
+                (if p.kind == 0 then "0000" else if p.kind == 1 then "0001" else "0002").bytes(),
+            )
+        } else {
+            wire.append(mut out, pktline.encode(p.data)?)
+        }
+        if p.kind == 0 { return out }
+        if p.kind == 2 { return invalid }
+    }
+}
+
+/// Close owned pipe/socket ends and reap a file service; stdio is borrowed, IO on close/wait failure.
+pub fn close(take c: Channel) -> int ! Errors {
+    if c.socket { net_close(c.input) else |_| { return io }; return 0 }
+    if c.child < 0 { return 0 }
+    fs_close(c.output) else |_| {}
+    fs_close(c.input) else |_| {}
+    process.wait(process.Child { slot: c.child }) else |_| { return io }
+}
+
+fn file_channel(path: str, service: str) -> Channel ! Errors {
+    if !path.starts_with("/") || path.contains("\0") || path.contains("%") { return invalid }
+    let variable = if service == "upload-pack" then "DEN_UPLOAD_PACK" else "DEN_RECEIVE_PACK"
+    let program = env.get(variable) else "git-{service}"
+    var command = process.from_argv([program, path])
+    let to_child = process.pipe() else |_| { return io }
+    let from_child = process.pipe() else |_| {
+        fs.close(take to_child.read) else |_| {}
+        fs.close(take to_child.write) else |_| {}
+        return io
+    }
+    process.set_stdin(mut command, to_child.read)
+    process.set_stdout(mut command, from_child.write)
+    let prior = env.get("GIT_PROTOCOL") else ""
+    env.set("GIT_PROTOCOL", "version=2") else |_| { return invalid }
+    defer {
+        if prior == "" {
+            env.unset("GIT_PROTOCOL") else |_| {}
+        } else {
+            env.set("GIT_PROTOCOL", prior) else |_| {}
+        }
+    }
+    let child = process.start(command) else |_| {
+        fs.close(take to_child.read) else |_| {}
+        fs.close(take to_child.write) else |_| {}
+        fs.close(take from_child.read) else |_| {}
+        fs.close(take from_child.write) else |_| {}
+        return io
+    }
+    fs.close(take to_child.read) else |_| {}
+    fs.close(take from_child.write) else |_| {}
+    Channel {
+        input: from_child.read.fd,
+        output: to_child.write.fd,
+        socket: false,
+        child: child.slot,
+    }
+}
+
+/// Open a file service subprocess or git TCP session; no shell, no protocol fallback, 30-second TCP deadlines.
+pub fn connect(url: str, service: str) -> Channel ! Errors {
+    if service != "upload-pack" && service != "receive-pack" { return invalid }
+    if url.starts_with("file://") { return file_channel(url[7..], service)? }
+    if !url.starts_with("git://") { return Unsupported("transport requires file:// or git://") }
+    let remote = url[6..]
+    let slash = remote.find("/") else |_| { return invalid }
+    let host = remote[0..slash], path = remote[slash..]
+    if host == "" || host.contains("\0") || path.contains("\0") || path.contains("%") {
+        return invalid
+    }
+    let address = if host.contains(":") then copy host else "{host}:9418"
+    var socket = net.connect(address) else |_| { return io }
+    net.set_deadline(mut socket, 30000) else |_| {
+        net.close(take socket) else |_| {}
+        return io
+    }
+    let extra = if service == "upload-pack" then "\0version=2\0" else ""
+    let bytes = pktline.encode("git-{service} {path}\0host={host}\0{extra}".bytes())?
+    net.write_bytes(mut socket, bytes) else |_| {
+        net.close(take socket) else |_| {}
+        return io
+    }
+    Channel { input: socket.fd, output: socket.fd, socket: true, child: -1 }
+}
