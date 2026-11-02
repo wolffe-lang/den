@@ -96,6 +96,10 @@ for path in ("src/object/store.lu", "src/oid/oid.lu", "src/index/index.lu", "src
     p = plan([path], event="pull_request", action="synchronize")
     say(p["tier"] == "pr" and p["jobs"] == PR, "T2 object gate path " + path)
 gate = open(os.path.join(ROOT, "tools", "gate")).read()
+say("tools/check-wire" in gate.splitlines(), "T2 wire integration gate is mandatory")
+for path in ("src/pktline/pktline.lu", "src/wiregit/upload.lu", "src/refs/transaction.lu", "tools/check-wire", "probes/wire-client/main.lu"):
+    p = plan([path], event="pull_request", action="synchronize")
+    say(p["tier"] == "pr" and p["jobs"] == PR, "T2 wire gate path " + path)
 say("tools/check-objects" in gate, "T2 object integration gate is mandatory")
 for command in ("tools/check-config", "tools/check-index", "tools/check-ignore", "tools/check-worktree", "tools/check-commit", "tools/check-history"):
     say(command in gate, "T2 M2 integration gate is mandatory: " + command)
