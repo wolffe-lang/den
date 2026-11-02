@@ -18,7 +18,7 @@ def main():
     p.add_argument('--tier', default='native')
     a = p.parse_args()
     root = pathlib.Path(__file__).resolve().parent.parent
-    out = root / 'target' / ('wire-' + a.tier)
+    out = root / 'target' / 'runs' / ('wire-' + a.tier)
     out.mkdir(parents=True, exist_ok=True)
     git = os.environ['DEN_GIT']
     assert hashlib.sha256(pathlib.Path(git).read_bytes()).hexdigest() == 'c4848492938c4ebfffbefe1fbbaa68b9af90c86d1f6a20e76816c5ff37fcfa60'
