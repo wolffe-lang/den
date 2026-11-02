@@ -56,8 +56,13 @@ pub fn push(
     atomic: bool,
 ) -> () ! object.StoreErrors {
     if specs.len == 0 || specs.len > 10000 { return invalid }
-    var c = transport.connect(url, "receive-pack")?, active = true
-    defer { if active { let _ = transport.close(copy c) else 1 } }
+    var c = transport.connect(url, "receive-pack")?, active = true, started = false
+    defer {
+        if active {
+            if !started { transport.write(mut c, "0000".bytes()) else |_| {} }
+            let _ = transport.close(copy c) else 1
+        }
+    }
     let (remote, caps) = receive_advertisement(transport.message(mut c, 2097152)?)?
     if !wire.supports(caps, "report-status") {
         return Unsupported("push server lacks report-status")
@@ -90,10 +95,10 @@ pub fn push(
             next = oid.hex(id)?
             let body = object.read_object(repo, id, 16777216)?
             if destination.starts_with("refs/heads/") && body.kind != "commit" { return invalid }
-            (mut roots).push(copy next)
         } else if !wire.supports(caps, "delete-refs") {
             return Unsupported("server does not support delete-refs")
         }
+        if next == zero() && old == zero() { return Unsupported("remote ref does not exist") }
         if next == old { continue }
         if old != zero() && next != zero() && !force && !override {
             if destination.starts_with("refs/tags/") {
@@ -108,12 +113,14 @@ pub fn push(
                 }
             }
         }
+        if next != zero() { (mut roots).push(copy next) }
         (mut updates).push(PushUpdate { name: copy destination, before: copy old, after: next })
     }
     if updates.len == 0 {
+        started = true
         transport.write(mut c, "0000".bytes())?
-        let status = transport.close(copy c)?
         active = false
+        let status = transport.close(copy c)?
         if status != 0 { return io }
         return
     }
@@ -129,6 +136,7 @@ pub fn push(
         wire.append(mut request, pktline.encode("{u.before} {u.after} {u.name}{extra}\n".bytes())?)
     }
     wire.append(mut request, "0000".bytes())
+    started = true
     transport.write(mut c, request)?
     if roots.len > 0 { transport.write(mut c, pack_for(repo, roots, [], "ofs")?)? }
     let response = transport.message(mut c, 2097152)?
@@ -155,8 +163,8 @@ pub fn push(
         }
     }
     for u in updates { if !(reported[u.name] else false) { return truncated } }
-    let status = transport.close(copy c)?
     active = false
+    let status = transport.close(copy c)?
     if failed { return Unsupported("remote rejected push") }
     if !unpacked || status != 0 { return io }
 }
@@ -204,7 +212,10 @@ fn true_value(value: str) -> bool {
 /// requests commit all refs through the shared single-file transaction.
 pub fn receive(repo: repository.Repo, mut c: transport.Channel) -> () ! object.StoreErrors {
     receive_configuration(repo)?
-    let cap = "report-status delete-refs ofs-delta atomic quiet object-format=sha1 agent=den/0.0.0"
+    let log_policy = repo.config["core.logallrefupdates"] else "false"
+    let can_atomic = log_policy == "false" || log_policy == "0"
+    let base_cap = "report-status delete-refs ofs-delta quiet object-format=sha1 agent=den/0.0.0"
+    let cap = if can_atomic then "{base_cap} atomic" else copy base_cap
     let references = refs.list(repo, "refs/")?
     var advertisement = List[byte]()
     if references.len == 0 {
@@ -242,6 +253,7 @@ pub fn receive(repo: repository.Repo, mut c: transport.Channel) -> () ! object.S
             if parts.len != 2 { return invalid }
             for choice in parts[1].trim().split(" ") {
                 if choice == "atomic" {
+                    if !can_atomic { return Unsupported("atomic reflog policy") }
                     atomic = true
                 } else if choice == "report-status" {
                     report = true
