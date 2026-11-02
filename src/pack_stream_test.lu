@@ -14,7 +14,7 @@ fn check() -> () ! pack.StreamErrors {
         let external = pack.stream_refs(encoded.data)?
         assert(external.len <= 2)
         var bad = copy encoded.data
-        bad[bad.len - 1] = bad[bad.len - 1] ^ 1 as byte
+        bad[bad.len - 1] = (bad[bad.len - 1] as int ^ 1) as byte
         var rejected = false
         let _ = pack.decode(bad, []) else |_| { rejected = true; List[pack.Body]() }
         assert(rejected)
