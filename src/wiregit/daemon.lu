@@ -32,7 +32,9 @@ pub fn serve(base: str, port: int) -> () ! object.StoreErrors {
     if !version2 { return Unsupported("git transport requires version 2") }
     let absolute = fs.realpath("{root}{path}")?
     if absolute != root && !absolute.starts_with("{root}/") { return denied }
-    let admin = if fs.is_dir("{absolute}/.git") then "{absolute}/.git" else copy absolute
+    let candidate = if fs.is_dir("{absolute}/.git") then "{absolute}/.git" else copy absolute
+    let admin = fs.realpath(candidate)?
+    if admin != root && !admin.starts_with("{root}/") { return denied }
     if !fs.is_file("{admin}/git-daemon-export-ok") { return denied }
     upload(repository.open(admin)?, mut c)?
 }
