@@ -25,9 +25,10 @@ fn atomic_sorted(values: Map[str, oid.Oid]) -> List[Packed] ! RefErrors {
     if names.len > 10000 { return limit }
     var out = List[Packed]()
     for name in names {
+        let id = values[name] else { return invalid }
         (mut out).push(Packed {
             name: copy name,
-            id: copy values[name] else { return invalid },
+            id: copy id,
             peeled: [],
         })
     }
