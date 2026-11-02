@@ -1,0 +1,24 @@
+{
+  "lupin": {
+    "asset": [
+      680770911,
+      "lupin-0.1.58-aarch64-apple-darwin.tar.gz",
+      "sha256:c1b0277133c052892be10539062666e873e874997cbb5be300cffe2c309ec055"
+    ],
+    "executable_sha256": "5ac6e3cac5620ed05f5a6faf99cfab3ba124e68388f78c8fe53e8dbbdf99d5c2",
+    "rev": "6240efe5570dba1a33ba6269e3ba44bae33dd972"
+  },
+  "std": {
+    "files": 56,
+    "rev": "78b9d3cbc41d51db44d18c40b6694403644d1c83"
+  },
+  "wolf": {
+    "asset": [
+      686061645,
+      "wolf-0.2.36-aarch64-apple-darwin.tar.gz",
+      "sha256:b79d55845f349d56789d9d1cb057ee88b5a7128d3b6dd77ca070707cfa4aa632"
+    ],
+    "executable_sha256": "6edc5016f669f4cbccc1525c2bf76cd2794a260f49b6a3fbb88b1e9505ec73f4",
+    "rev": "5adf3d91f75b3545ff8d38e5b6693b0b9f367a05"
+  }
+}

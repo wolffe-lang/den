@@ -10,11 +10,13 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--archives', type=pathlib.Path, required=True)
 parser.add_argument('--staged', type=pathlib.Path, required=True)
 parser.add_argument('--oracle', type=pathlib.Path, required=True)
+parser.add_argument('--target', default='x86_64-unknown-linux-gnu')
+parser.add_argument('--prefix', default='')
 args = parser.parse_args()
 root = pathlib.Path(__file__).resolve().parents[3]
 metadata = pathlib.Path(__file__).resolve().parent
 pin = tomllib.loads((root / 'wolf-toolchain.toml').read_text())
-target = 'x86_64-unknown-linux-gnu'
+target = args.target
 summary = {}
 for repo, tool in [('wolf-lang', 'wolf'), ('wolf-interp', 'lupin')]:
     version = pin[tool]['version']
@@ -62,8 +64,8 @@ for n in (1, 2):
     manifest = {str(p.relative_to(args.staged)): hashlib.sha256(p.read_bytes()).hexdigest() for p in files}
     manifest['oracle'] = hashlib.sha256(args.oracle.read_bytes()).hexdigest()
     assert manifest['oracle'] == tomllib.loads((root / 'den-oracle.toml').read_text())['oracle']['binary_sha256']
-    (metadata / f'staged-{n}.json').write_text(json.dumps(manifest, sort_keys=True, indent=2) + '\n')
-assert (metadata / 'staged-1.json').read_bytes() == (metadata / 'staged-2.json').read_bytes()
+    (metadata / f'{args.prefix}staged-{n}.json').write_text(json.dumps(manifest, sort_keys=True, indent=2) + '\n')
+assert (metadata / f'{args.prefix}staged-1.json').read_bytes() == (metadata / f'{args.prefix}staged-2.json').read_bytes()
 summary['std'] = dict(rev=std_revision, files=len(actual))
-(metadata / 'summary.json').write_text(json.dumps(summary, sort_keys=True, indent=2) + '\n')
+(metadata / f'{args.prefix}summary.json').write_text(json.dumps(summary, sort_keys=True, indent=2) + '\n')
 print('VC15 PINS VERIFIED: twice-read metadata/archives/staged payloads; complete std matches pinned tree; unchanged oracle')
