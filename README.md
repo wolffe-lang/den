@@ -4,12 +4,12 @@ A version control system in [wolf](https://github.com/wolffe-lang/wolf-lang),
 working toward Git-compatible repositories and wire protocols. Where a wolf
 keeps what it has.
 
-**State: loose and packed objects, index/worktree commands, and bounded diff, history, refs, merge, replay, blame, stash and notes with a shared revision grammar.**
-This is not a replacement for Git; M2, M3 and M4 remain incomplete. Log/show support
+**State: loose and packed objects, index/worktree commands, bounded local history operations, and experimental file/git wire services.**
+This is not a replacement for Git; M2, M3, M4 and M5 remain incomplete. Log/show support
 bounded loose or packed history; branches, tags, branch switching and resets share
 loose/packed ref storage. Merge, single-commit revert, cherry-pick and linear
 rebase cover the measured subsets below. Combined merge display, full replay
-semantics, gc policy and transports remain unfinished. Text diff has
+semantics, gc policy and wider transport policies remain unfinished. Text diff has
 two recorded equal-cost alignment differences; binary patches reconstruct the
 exact blobs but do not always use Git's byte representation. `den --version`
 prints `den 0.0.0 (built with wolf 0.2.36)`.
@@ -21,14 +21,16 @@ measured bytes and documentation discrepancies.
 | Role | Machine / identity |
 |---|---|
 | Behavioral oracle | Git 2.56.0, signed kernel.org tarball; default build, Ubuntu 24.04 image pinned by digest |
-| Development witnesses | hasu CPUs 0–5 for objects/index/worktree/commit and 6–11 for diff; kasumi CPUs 12–15 for the initial surface census; Linux x86-64, rootless container under a core-block lock |
+| Development witnesses | hasu core blocks for local object/history work; kasumi CPUs 4–7 for wire protocols and 12–15 for the initial census; Linux x86-64, rootless containers under core locks |
 | CI PR gate | ubuntu-24.04, pinned container and oracle, including planner tests |
 | CI full field leg | macOS arm64 with Homebrew Git; nonblocking observation, not the oracle |
 | Toolchain | wolf 0.2.36 5adf3d91, lupin 0.1.58 tag 6240efe5 (binary embeds a5378e3), bundled std 78b9d3cb |
 
 Archive and oracle pins are in `wolf-toolchain.toml` and `den-oracle.toml`.
 Downloads fail on a digest mismatch. Both release-metadata reads are retained
-in `notes/vc14-evidence/pins/` (earlier reads in `notes/vc13-evidence/pins/`); the original signature verification and two matching
+in `notes/vc15-evidence/pins/`, including archive/staged-runtime and complete std
+comparisons for Linux and Mac. Earlier reads are in `notes/vc14-evidence/pins/`
+and `notes/vc13-evidence/pins/`; the original signature verification and matching
 oracle builds are in `notes/vc00-evidence/`.
 
 ## Commands implemented so far
@@ -36,6 +38,7 @@ oracle builds are in `notes/vc00-evidence/`.
 | Area | Commands and supported surface |
 |---|---|
 | Objects | `init`, `hash-object`, `cat-file -p/-t/-s`, `mktree`, `commit-tree`, `mktag` |
+| Wire | `clone [-q] [--bare] URL DIRECTORY`; explicit `fetch -q URL SRC:DST`; `push -q [--force] [--atomic] URL SRC:DST...`; `upload-pack`, bare `receive-pack`, and one-session loopback `daemon` within the limits below |
 | Packs | `pack-objects` from stdin object IDs to `objects/pack/pack`, OFS/REF deltas or no deltas; `verify-pack [-v]`; `count-objects [-v]`; bounded `fsck --full`; `repack -a -n -q [-d] [-k]` and `prune-packed [-n] [-q]` within the limits below |
 | Index | `write-tree` over nested index v2/v3/v4 entries; exclusive `index.lock` writes, stat fields, flags and TREE cache updates |
 | Config / ignore | Read-only `config --get`; `check-ignore` with provenance, negation, tracked-file bypass and `--no-index` |
@@ -102,6 +105,7 @@ tools/check-merge
 tools/check-replay
 tools/check-pack                   # after corpus and inherited client builds
 tools/check-pack-write             # after check-pack/check-stash; interop, sizes, commands and corruption
+tools/check-wire                   # file/git peers, native service clients, received streams and checked parsers
 tools/check-housekeeping           # closure, verified retirement/recovery, validator and checked parser
 tools/check-delta
 tools/check-rename
@@ -127,7 +131,11 @@ History has a separate exact command/state matrix on native and release,
 bounded actual-checked units and an independent package client. The inherited
 diff exceptions remain separately counted. CI remains the merge gate, not a
 consequence of a successful local run.
-There is no production dependency on Git, Python, zlib or OpenSSL. Shipped wolf
+Object, pack and protocol algorithms have no Git, Python, zlib or OpenSSL
+implementation dependency. The file transport starts the selected remote service
+executable: Git's service by default, or native den service probes through
+`DEN_UPLOAD_PACK` / `DEN_RECEIVE_PACK`. There is no shell command parser in den.
+The self-hosted file tests run with empty `PATH` and `GIT_EXEC_PATH`. Shipped wolf
 code uses wolf-std and the provenance-marked SHA-1 code from boreutils.
 
 ## Corpus and comparison rules
@@ -156,7 +164,7 @@ The SHA-1 store reads and writes loose objects and pack-v2/idx-v2 pairs.
 Binary object/tree names are preserved, but filesystem path arguments
 remain UTF-8 `str`; raw non-UTF-8 OS paths have named upstream limitations.
 SHA-256 IDs are representable, but SHA-256 repositories are refused before writes.
-GC expiry/reflog/ref-packing policy, thin packs, multi-pack-index, bitmaps, alternates, linked worktrees,
+GC expiry/reflog/ref-packing policy, on-disk thin packs, multi-pack-index, bitmaps, alternates, linked worktrees,
 submodules and unstaged revision forms remain unsupported.
 `log` accepts inclusions, `^REV` exclusions and two-/three-dot sets. `diff` treats
 a dotted range as endpoints, with one merge base required for three-dot. Other
@@ -385,8 +393,10 @@ entries. It shares the binary patch encoder, considers ten prior candidates and
 caps delta chains at fifty. Bounds are 10,000 objects, 16 MiB per body and
 128 MiB of aggregate input/output. There is no streaming or peak-RSS guarantee.
 `pack-objects` accepts a stdin object list and the repository's
-`.git/objects/pack/pack` base; transport/stdout, thin packs and nondefault
-window/depth settings remain named refusals.
+`.git/objects/pack/pack` base; that command's stdout transport, thin output and
+nondefault window/depth settings remain named refusals. Wire services call the
+shared encoder directly; received thin streams are reconstructed as canonical
+loose objects rather than installed as thin on-disk packs.
 
 Publication writes and syncs an exclusive temporary pair, validates every object
 through the existing reader, then renames pack before idx and syncs the directory.
@@ -443,6 +453,72 @@ commands and three independent metadata clients. Five interruption phases,
 foreign files, repeated cleanup, orphan publication and bounded actual-checked
 parser tests have separate witnesses. The larger repetitive/binary/mixed writer
 fixtures retain the original REF 1.399425 headroom warning and every 1.5 size gate.
+
+## Wire protocols and transport bounds
+
+The wire layer uses binary-clean pkt-lines, protocol-v2 capability advertisement,
+`ls-refs`, and `fetch` with want/have/done and multiplexed pack data. Text writers
+emit LF; readers accept the optional missing LF required by the protocol. Push
+uses Git's documented receive-pack framing, capability negotiation and per-ref
+status, not an invented v2 push command.
+
+Supported command forms are explicit:
+
+```sh
+den clone -q --bare file:///absolute/source.git destination.git
+den clone -q git://127.0.0.1:9418/source.git destination
+den fetch -q URL refs/heads/main:refs/remotes/origin/main
+den push -q --force URL refs/heads/main:refs/heads/main
+den push -q --atomic URL HEAD:refs/heads/a HEAD:refs/heads/b
+den daemon --enable-receive-pack /dedicated/export/base 9418
+```
+
+Clone requires a new destination. Normal checkout uses the existing verified
+worktree/index transaction; bare clone preserves the selected HEAD and branch/tag
+refs. Fetch accepts one fully qualified source/destination refspec, with `+` or
+`--force` for deliberate rewrites. Push accepts explicit refspecs, deletion and
+force; local fast-forward/tag checks precede transmission, and receive-side policy
+and expected-old-id checks precede reference publication. Failure diagnostic text
+and the remaining porcelain spellings are not general Git CLI parity claims.
+
+The daemon serves one connection on IPv4 loopback, requires
+`git-daemon-export-ok`, checks canonical repository and administrative paths
+against its export root, and enables writes only with the explicit flag. The
+transport supports plain `file:///absolute/path` and `git://host[:port]/path` URLs
+up to 4,096 bytes; percent-escaped paths and other URL forms remain explicit
+refusals. TCP operations have 30-second deadlines; file services are child
+processes with mapped byte pipes, not shell commands.
+
+Receive-pack currently requires a bare repository. Atomic receive is advertised
+only without the unimplemented reflog policy. It locks every target and
+`packed-refs`, preserves old values in a packed snapshot while removing equivalent
+loose shadows, then publishes all new values with one `packed-refs` rename.
+Precommit failure preserves every logical old value. This is not a reflog
+transaction, crash-lock recovery or concurrent reader snapshot-isolation promise;
+a postcommit directory-sync failure is reported separately from the committed
+logical result. Non-atomic requests retain per-ref outcomes.
+
+Received pack-v2 streams support whole objects, OFS/REF deltas, forward REF bases
+and thin REF bases found in the local object store. The existing inflater, delta
+application and canonical object hashing remain shared. The complete stream is
+validated before loose object publication; selected typed closures are checked
+before refs change. Bounds are 10,000 transmitted objects, 16 MiB per body,
+128 MiB of charged pack/reconstruction payload and 64 delta links, not streaming,
+peak-RSS or pack-size-independent CPU guarantees. Thin streams are never stored
+as thin on-disk packs.
+
+`tools/check-wire` exercises native/release peers in both directions against the
+pinned Git services and daemon, native self-hosted services without external tools
+on PATH, normal checkout, force/policy/atomic outcomes, explicit atomic failure
+phases and actual-checked pure parsers. A separate received-stream family has four
+real Git pack modes and thirteen malformed/strict-input cases; it retains complete
+process bytes, canonical object comparisons, refs, fsck results and raw streams
+under `target/runs/wire-*` and `target/runs/wire-pack-*`. The original 16-repository
+main corpus and its 190-case classification remain separately counted. HTTPS,
+shallow/filter/URI fetches, arbitrary unadvertised wants, hooks, non-bare receive,
+atomic reflog policy, linked worktrees, SHA-256 repositories, broader configuration
+and remaining porcelain/error-output parity are not complete. No M5-complete
+claim is made.
 
 ## Loose objects and historical measurements
 
