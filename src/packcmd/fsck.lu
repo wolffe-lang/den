@@ -11,7 +11,8 @@ use repository
 use stashlog
 use zlib
 
-struct Link { name: str, kind: str }
+/// Typed canonical-object graph edge, shared by validators and wire closure.
+pub struct Link { name: str, kind: str }
 
 struct ValidationLink { source: str, kind: str, target: Link }
 
@@ -21,7 +22,8 @@ fn linked_name(bytes: List[byte]) -> str ! object.StoreErrors {
     oid.hex(id)?
 }
 
-fn links(body: object.Object) -> List[Link] ! object.StoreErrors {
+/// Validate shared tree/header/identity formats and return typed links.
+pub fn links(body: object.Object) -> List[Link] ! object.StoreErrors {
     var out = List[Link]()
     if body.kind == "blob" { return out }
     if body.kind == "tree" {
