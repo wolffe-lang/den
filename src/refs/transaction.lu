@@ -1,0 +1,161 @@
+// Atomic logical ref publication through one packed-refs rename. The old
+// snapshot removes loose shadows without changing a logical value. No claim
+// of reflog transactions, lock recovery after a crash, or fsync infallibility.
+use std.fs
+use oid
+use repository
+
+/// One direct fully-qualified ref change; zero/one identities mean absent/present.
+pub struct AtomicUpdate { name: str, expected: List[oid.Oid], after: List[oid.Oid] }
+
+struct AtomicLock { path: str, fd: int }
+
+fn atomic_sorted(values: Map[str, oid.Oid]) -> List[Packed] ! RefErrors {
+    var names = List[str]()
+    for (name, _) in values.pairs() {
+        (mut names).push(copy name)
+        var i = names.len - 1
+        while i > 0 && names[i] < names[i - 1] {
+            let saved = copy names[i]
+            names[i] = copy names[i - 1]
+            names[i - 1] = saved
+            i -= 1
+        }
+    }
+    if names.len > 10000 { return limit }
+    var out = List[Packed]()
+    for name in names {
+        (mut out).push(Packed {
+            name: copy name,
+            id: copy values[name] else { return invalid },
+            peeled: [],
+        })
+    }
+    out
+}
+
+/// All-or-none logical updates in a bare repository without reflog policy.
+/// False means the single commit rename succeeded but its directory fsync failed;
+/// errors before the commit point leave every logical target unchanged.
+pub fn transaction(repo: repository.Repo, changes: List[AtomicUpdate]) -> bool ! RefErrors {
+    transaction_injected(repo, changes, "")?
+}
+
+/// Same publication path with explicit test-only precommit failures: prepare,
+/// old-published, loose-removed, commit. Never controlled by environment state.
+pub fn transaction_injected(
+    repo: repository.Repo,
+    changes: List[AtomicUpdate],
+    fail: str,
+) -> bool ! RefErrors {
+    if changes.len == 0 || changes.len > 10000 { return limit }
+    if fail != "" &&
+        fail != "prepare" &&
+        fail != "old-published" &&
+        fail != "loose-removed" &&
+        fail != "commit" {
+        return invalid
+    }
+    if (repo.config["core.bare"] else "false") != "true" {
+        return Unsupported("atomic refs require bare repository")
+    }
+    let logging = repo.config["core.logallrefupdates"] else "false"
+    if logging != "false" && logging != "0" { return Unsupported("atomic reflog policy") }
+    var selected = Map[str, bool](), locks = List[AtomicLock]()
+    defer {
+        for lock in locks {
+            fs_close(lock.fd) else |_| {}
+            fs.remove(lock.path) else |_| {}
+        }
+    }
+    for change in changes {
+        if !valid(change.name) || (selected[change.name] else false) { return invalid }
+        let _ = zero_or_hex(change.expected)?
+        let _ = zero_or_hex(change.after)?
+        selected[change.name] = true
+    }
+    for change in changes {
+        let path = administrative(repo, change.name, true)?
+        let lock_path = "{path}.lock"
+        let file = fs.create_new_with_mode(lock_path, 0o666)?
+        (mut locks).push(AtomicLock { path: lock_path, fd: file.fd })
+    }
+    for change in changes {
+        if !equal_optional(optional(repo, change.name)?, change.expected) { return invalid }
+        let path = "{repo.gitdir}/{change.name}"
+        if fs.exists(path) {
+            let raw = str_from_utf8(repository.read_bytes(path, 4096)?) else |_| { return invalid }
+            if raw.starts_with("ref: ") { return Unsupported("atomic symbolic ref") }
+        }
+    }
+    // Validate the final logical namespace before publishing even an old snapshot.
+    var final_names = List[str]()
+    for reference in list(repo, "refs/")? {
+        if !(selected[reference.name] else false) { (mut final_names).push(copy reference.name) }
+    }
+    for change in changes { if change.after.len == 1 { (mut final_names).push(copy change.name) } }
+    if final_names.len > 10000 { return limit }
+    for i in 0..final_names.len {
+        for j in i + 1..final_names.len {
+            if final_names[i] == final_names[j] ||
+                final_names[i].starts_with("{final_names[j]}/") ||
+                final_names[j].starts_with("{final_names[i]}/") {
+                return invalid
+            }
+        }
+    }
+    let packed_path = administrative(repo, "packed-refs", false)?
+    let lock_path = "{packed_path}.lock"
+    let file = fs.create_new_with_mode(lock_path, 0o666)?
+    var packed_fd = file.fd, packed_active = true
+    defer {
+        if packed_fd >= 0 { fs_close(packed_fd) else |_| {} }
+        if packed_active { fs.remove(lock_path) else |_| {} }
+    }
+    var old_values = Map[str, oid.Oid](), next_values = Map[str, oid.Oid]()
+    for reference in packed(repo)? {
+        old_values[reference.name] = copy reference.id
+        if !(selected[reference.name] else false) {
+            next_values[reference.name] = copy reference.id
+        }
+    }
+    for change in changes {
+        if change.expected.len == 1 { old_values[change.name] = copy change.expected[0] }
+        if change.after.len == 1 { next_values[change.name] = copy change.after[0] }
+    }
+    let old_bytes = packed_bytes(atomic_sorted(old_values)?, "")?
+    let next_bytes = packed_bytes(atomic_sorted(next_values)?, "")?
+    let old_path = "{repo.gitdir}/den-atomic-old"
+    let old_file = fs.create_new_with_mode(old_path, 0o666)?
+    var old_fd = old_file.fd, old_active = true
+    defer {
+        if old_fd >= 0 { fs_close(old_fd) else |_| {} }
+        if old_active { fs.remove(old_path) else |_| {} }
+    }
+    fs_write_chunk(old_fd, old_bytes)?
+    fs_sync(old_fd)?
+    fs_close(old_fd)?
+    old_fd = -1
+    fs_write_chunk(packed_fd, next_bytes)?
+    fs_sync(packed_fd)?
+    fs_close(packed_fd)?
+    packed_fd = -1
+    if fail == "prepare" { return io }
+    fs_rename(old_path, packed_path)?
+    old_active = false
+    fs.sync_dir(repo.gitdir)?
+    if fail == "old-published" { return io }
+    for change in changes {
+        let path = "{repo.gitdir}/{change.name}"
+        if fs.exists(path) {
+            fs.remove(path)?
+            fs.sync_dir(fs.parent(path) else |_| { return invalid })?
+        }
+        if fail == "loose-removed" { return io }
+    }
+    if fail == "commit" { return io }
+    fs_rename(lock_path, packed_path)?
+    packed_active = false
+    fs.sync_dir(repo.gitdir) else |_| { return false }
+    true
+}
