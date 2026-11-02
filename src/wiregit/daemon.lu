@@ -4,9 +4,10 @@ use object
 use repository
 use transport
 
-/// Serve one unauthenticated v2 upload connection on loopback. Canonical paths
-/// must remain within base and carry git-daemon-export-ok; no write service.
-pub fn serve(base: str, port: int) -> () ! object.StoreErrors {
+/// Serve one unauthenticated connection on loopback. Canonical administrative
+/// paths remain within base and require git-daemon-export-ok. The v0 receive
+/// service is available only with the caller's explicit write opt-in.
+pub fn serve(base: str, port: int, allow_receive: bool) -> () ! object.StoreErrors {
     if port < 0 || port > 65535 { return invalid }
     let root = fs.realpath(base)?
     var listener = net.listen("127.0.0.1:{port}") else |_| { return io }
@@ -15,26 +16,32 @@ pub fn serve(base: str, port: int) -> () ! object.StoreErrors {
     let chosen = net.port(listener) else |_| { return io }
     print("port {chosen}")
     var socket = net.accept(mut listener) else |_| { return io }
-    net.set_deadline(mut socket, 30000) else |_| { return io }
+    net.set_deadline(mut socket, 30000) else |_| {
+        net.close(take socket) else |_| {}
+        return io
+    }
     var c = transport.Channel { input: socket.fd, output: socket.fd, socket: true, child: -1 }
     defer { let _ = transport.close(copy c) else 1 }
     let first = transport.packet(mut c)?
     if first.kind != 4 { return invalid }
     let text = str_from_utf8(first.data) else |_| { return invalid }
     let parts = text.split("\0")
-    if parts.len < 2 || !parts[0].starts_with("git-upload-pack ") {
-        return Unsupported("git service")
-    }
-    let path = parts[0][16..]
+    if parts.len < 2 { return invalid }
+    let writing = parts[0].starts_with("git-receive-pack ")
+    if !parts[0].starts_with("git-upload-pack ") && !writing { return Unsupported("git service") }
+    if writing && !allow_receive { return Unsupported("receive service disabled") }
+    let prefix = if writing then 17 else 16
+    let path = parts[0][prefix..]
     if !path.starts_with("/") { return invalid }
     var version2 = false
     for item in parts { if item == "version=2" { version2 = true } }
-    if !version2 { return Unsupported("git transport requires version 2") }
+    if !writing && !version2 { return Unsupported("git transport requires version 2") }
     let absolute = fs.realpath("{root}{path}")?
     if absolute != root && !absolute.starts_with("{root}/") { return denied }
     let candidate = if fs.is_dir("{absolute}/.git") then "{absolute}/.git" else copy absolute
     let admin = fs.realpath(candidate)?
     if admin != root && !admin.starts_with("{root}/") { return denied }
     if !fs.is_file("{admin}/git-daemon-export-ok") { return denied }
-    upload(repository.open(admin)?, mut c)?
+    let repo = repository.open(admin)?
+    if writing { receive(repo, mut c)? } else { upload(repo, mut c)? }
 }
