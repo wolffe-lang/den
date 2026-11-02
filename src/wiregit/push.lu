@@ -61,7 +61,7 @@ pub fn push(
     defer {
         if active {
             if !started { transport.write(c, "0000".bytes()) else |_| {} }
-            let _ = transport.close(copy c) else 1
+            let _ = transport.close(take copy c) else 1
         }
     }
     let (remote, caps) = receive_advertisement(transport.message(c, 2097152)?)?
@@ -121,7 +121,7 @@ pub fn push(
         started = true
         transport.write(c, "0000".bytes())?
         active = false
-        let status = transport.close(copy c)?
+        let status = transport.close(take copy c)?
         if status != 0 { return io }
         return
     }
@@ -165,7 +165,7 @@ pub fn push(
     }
     for u in updates { if !(reported[u.name] else false) { return truncated } }
     active = false
-    let status = transport.close(copy c)?
+    let status = transport.close(take copy c)?
     if failed { return Unsupported("remote rejected push") }
     if !unpacked || status != 0 { return io }
 }

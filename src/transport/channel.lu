@@ -93,7 +93,7 @@ pub fn close(take c: Channel) -> int ! Errors {
     if c.child < 0 { return 0 }
     fs_close(c.output) else |_| {}
     fs_close(c.input) else |_| {}
-    process.wait(process.Child { slot: c.child }) else |_| { return io }
+    process.wait(take process.Child { slot: c.child }) else |_| { return io }
 }
 
 fn file_channel(path: str, service: str) -> Channel ! Errors {

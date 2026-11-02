@@ -21,7 +21,7 @@ pub fn serve(base: str, port: int, allow_receive: bool) -> () ! object.StoreErro
         return io
     }
     let c = transport.Channel { input: socket.fd, output: socket.fd, socket: true, child: -1 }
-    defer { let _ = transport.close(copy c) else 1 }
+    defer { let _ = transport.close(take copy c) else 1 }
     let first = transport.packet(c)?
     if first.kind != 4 { return invalid }
     let text = str_from_utf8(first.data) else |_| { return invalid }

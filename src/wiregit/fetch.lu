@@ -17,7 +17,7 @@ pub fn fetch_objects(repo: repository.Repo, url: str) -> List[wire.Ref] ! object
 fn fetch_view(repo: repository.Repo, url: str, source: str) -> List[wire.Ref] ! object.StoreErrors {
     let c = transport.connect(url, "upload-pack")?
     var active = true
-    defer { if active { let _ = transport.close(copy c) else 1 } }
+    defer { if active { let _ = transport.close(take copy c) else 1 } }
     let caps = wire.capabilities(transport.message(c, 65536)?)?
     if !wire.supports(caps, "ls-refs") || !wire.supports(caps, "fetch") {
         return Unsupported("v2 ls-refs/fetch unavailable")
@@ -105,7 +105,7 @@ fn fetch_view(repo: repository.Repo, url: str, source: str) -> List[wire.Ref] ! 
     }
     let _ = closure(repo, roots, [])?
     transport.write(c, "0000".bytes())?
-    let code = transport.close(copy c)?
+    let code = transport.close(take copy c)?
     active = false
     if code != 0 { return io }
     advertised
