@@ -1,0 +1,178 @@
+use std.fs
+use object
+use oid
+use pktline
+use refs
+use repository
+use transport
+use wire
+
+fn head_target(repo: repository.Repo) -> str ! object.StoreErrors {
+    let bytes = repository.read_bytes("{repo.gitdir}/HEAD", 4096)?
+    let text = str_from_utf8(bytes) else |_| { return invalid }
+    if !text.starts_with("ref: ") { return "" }
+    let target = text[5..].trim()
+    if !refs.valid(target) { return invalid }
+    target
+}
+
+fn peeled(repo: repository.Repo, name: str) -> str ! object.StoreErrors {
+    var next = copy name
+    for _ in 0..32 {
+        let body = object.read_object(repo, oid.parse("sha1", next)?, 16777216)?
+        if body.kind != "tag" { return next }
+        let parsed = object.parse_tag(body.data, "sha1") else |_| { return invalid }
+        next = str_from_utf8(parsed.fields[0].value) else |_| { return invalid }
+    }
+    limit
+}
+
+/// Read HEAD and refs with owned symref/peeling metadata; bounded annotated-tag chains, no mutation.
+pub fn advertised(repo: repository.Repo) -> List[wire.Ref] ! object.StoreErrors {
+    var out = List[wire.Ref]()
+    let target = head_target(repo)?
+    let head = refs.optional(repo, "HEAD")?
+    if head.len == 1 {
+        (mut out).push(wire.Ref { name: "HEAD", id: oid.hex(head[0])?, target: target, peeled: "" })
+    } else if target != "" {
+        (mut out).push(wire.Ref { name: "HEAD", id: "unborn", target: target, peeled: "" })
+    }
+    for record in refs.list(repo, "refs/")? {
+        let id = oid.hex(record.id)?
+        let peel = if record.name.starts_with("refs/tags/") then peeled(repo, id)? else copy id
+        (mut out).push(wire.Ref {
+            name: copy record.name,
+            id: copy id,
+            target: "",
+            peeled: if peel != id then peel else "",
+        })
+    }
+    out
+}
+
+fn configuration(repo: repository.Repo) -> () ! object.StoreErrors {
+    for (key, _) in repo.config.pairs() {
+        if key.starts_with("uploadpack.") || key == "transfer.hiderefs" {
+            return Unsupported("upload-pack configuration {key}")
+        }
+    }
+    for path in ["shallow", "info/grafts", "refs/replace"] {
+        if fs.exists("{repo.gitdir}/{path}") { return Unsupported("upload-pack {path}") }
+    }
+}
+
+fn command(data: List[byte]) -> (str, List[str]) ! object.StoreErrors {
+    let first = pktline.decode(data, 0)?
+    if first.kind != 4 { return invalid }
+    let text = pktline.text(first.data)?
+    if text != "command=ls-refs" && text != "command=fetch" { return Unsupported("v2 command") }
+    var pos = first.next, args = List[str](), delimiter = false
+    while pos < data.len {
+        let p = pktline.decode(data, pos)?
+        pos = p.next
+        if p.kind == 0 {
+            if pos != data.len || !delimiter { return invalid }
+            return (text[8..], args)
+        }
+        if p.kind == 1 {
+            if delimiter { return invalid }
+            delimiter = true
+            continue
+        }
+        if p.kind != 4 || args.len > 20010 { return invalid }
+        let value = pktline.text(p.data)?
+        if delimiter {
+            (mut args).push(value)
+        } else if value != "object-format=sha1" && !value.starts_with("agent=") {
+            return Unsupported("v2 client capability")
+        }
+    }
+    truncated
+}
+
+fn ls_refs(repo: repository.Repo, args: List[str]) -> List[byte] ! object.StoreErrors {
+    var symrefs = false, peel = false, unborn = false
+    for arg in args {
+        if arg == "symrefs" {
+            symrefs = true
+        } else if arg == "peel" {
+            peel = true
+        } else if arg == "unborn" {
+            unborn = true
+        } else if !arg.starts_with("ref-prefix ") {
+            return Unsupported("ls-refs argument")
+        }
+    }
+    var out = List[byte]()
+    for record in advertised(repo)? {
+        if record.id == "unborn" && !unborn { continue }
+        var text = "{record.id} {record.name}"
+        if symrefs && record.target != "" { text = "{text} symref-target:{record.target}" }
+        if peel && record.peeled != "" { text = "{text} peeled:{record.peeled}" }
+        wire.line(mut out, text)?
+    }
+    wire.append(mut out, "0000".bytes())
+    out
+}
+
+fn fetch(repo: repository.Repo, args: List[str]) -> List[byte] ! object.StoreErrors {
+    var wants = List[str](), haves = List[str](), done = false, ofs = false
+    var allowed = Map[str, bool]()
+    for record in advertised(repo)? { if record.id != "unborn" { allowed[record.id] = true } }
+    for arg in args {
+        if arg.starts_with("want ") {
+            let name = oid.hex(oid.parse("sha1", arg[5..])?)?
+            if !(allowed[name] else false) { return Unsupported("want not advertised") }
+            (mut wants).push(name)
+        } else if arg.starts_with("have ") {
+            let name = oid.hex(oid.parse("sha1", arg[5..])?)?
+            let body = object.read_object(
+                repo,
+                oid.parse("sha1", name)?,
+                16777216,
+            ) else |e| match e {
+                not_found => { continue },
+                _ => { return e },
+            }
+            if body.kind == "commit" { (mut haves).push(name) }
+        } else if arg == "done" {
+            done = true
+        } else if arg == "ofs-delta" {
+            ofs = true
+        } else if arg != "thin-pack" && arg != "no-progress" && arg != "include-tag" {
+            return Unsupported("fetch argument {arg}")
+        }
+    }
+    if wants.len == 0 || wants.len > 10000 || haves.len > 10000 { return invalid }
+    if !done {
+        var out = List[byte]()
+        wire.line(mut out, "acknowledgments")?
+        if haves.len == 0 {
+            wire.line(mut out, "NAK")?
+        } else {
+            for name in haves { wire.line(mut out, "ACK {name}")? }
+        }
+        wire.append(mut out, "0000".bytes())
+        return out
+    }
+    let bytes = pack_for(repo, wants, haves, if ofs then "ofs" else "ref")?
+    wire.pack_response(bytes)?
+}
+
+/// Stateful transport, stateless command rounds; no hidden per-round wants.
+pub fn upload(repo: repository.Repo, mut c: transport.Channel) -> () ! object.StoreErrors {
+    configuration(repo)?
+    var caps = List[byte]()
+    for text in ["version 2", "agent=den/0.0.0", "ls-refs=unborn", "fetch", "object-format=sha1"] {
+        wire.line(mut caps, text)?
+    }
+    wire.append(mut caps, "0000".bytes())
+    transport.write(mut c, caps)?
+    loop {
+        let request = transport.message(mut c, 2097152)?
+        if request.len == 0 || request.len == 4 { return }
+        let (name, args) = command(request)?
+        let reply = if name == "ls-refs" then ls_refs(repo, args)? else fetch(repo, args)?
+        transport.write(mut c, reply)?
+    }
+}

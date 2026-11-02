@@ -1,0 +1,138 @@
+use std.fs
+use object
+use oid
+use refs
+use repository
+use transport
+use wire
+
+/// Negotiate v2, receive/import canonical objects and validate all advertised closures before returning owned refs.
+pub fn fetch_objects(repo: repository.Repo, url: str) -> List[wire.Ref] ! object.StoreErrors {
+    var c = transport.connect(url, "upload-pack")?
+    var active = true
+    defer { if active { let _ = transport.close(copy c) else 1 } }
+    let caps = wire.capabilities(transport.message(mut c, 65536)?)?
+    if !wire.supports(caps, "ls-refs") || !wire.supports(caps, "fetch") {
+        return Unsupported("v2 ls-refs/fetch unavailable")
+    }
+    for cap in caps {
+        if cap.starts_with("object-format=") && cap != "object-format=sha1" {
+            return Unsupported("remote object format")
+        }
+    }
+    var args = ["symrefs", "peel"]
+    for cap in caps { if cap == "ls-refs=unborn" { (mut args).push("unborn") } }
+    transport.write(mut c, wire.request("ls-refs", args)?)?
+    let advertised = wire.parse_refs(transport.message(mut c, 2097152)?)?
+    var wants = List[str](), haves = List[str](), wanted = Map[str, bool](), had = Map[str, bool]()
+    for reference in refs.list(repo, "refs/")? {
+        let name = oid.hex(reference.id)?
+        let body = object.read_object(repo, reference.id, 16777216)?
+        if body.kind == "commit" && !(had[name] else false) {
+            (mut haves).push(copy name)
+            had[name] = true
+        }
+    }
+    for reference in advertised {
+        if reference.id == "unborn" || (wanted[reference.id] else false) { continue }
+        wanted[reference.id] = true
+        let _ = object.read_object(
+            repo,
+            oid.parse("sha1", reference.id)?,
+            16777216,
+        ) else |e| match e {
+            not_found => { (mut wants).push(copy reference.id); continue },
+            _ => { return e },
+        }
+    }
+    if wants.len > 0 {
+        transport.write(mut c, wire.fetch_request(wants, haves, true)?)?
+        let bytes = wire.parse_pack(transport.message(mut c, 140000000)?)?
+        import_pack(repo, bytes)?
+    }
+    var roots = List[str]()
+    for reference in advertised {
+        if reference.id != "unborn" { (mut roots).push(copy reference.id) }
+    }
+    let _ = closure(repo, roots, [])?
+    transport.write(mut c, "0000".bytes())?
+    let code = transport.close(copy c)?
+    active = false
+    if code != 0 { return io }
+    advertised
+}
+
+fn update(repo: repository.Repo, name: str, id: str) -> () ! object.StoreErrors {
+    let before = refs.optional(repo, name)?
+    refs.update(
+        repo,
+        name,
+        before,
+        [oid.parse("sha1", id)?],
+        "Den Transport <den@example.invalid> 0 +0000",
+        "fetch",
+        false,
+    )?
+}
+
+/// Bounded bare clone. Existing destination directories are never repurposed.
+pub fn clone_bare(url: str, destination: str) -> () ! object.StoreErrors {
+    if fs.exists(destination) { return exists }
+    let (repo, _) = repository.init(destination, true, "main")?
+    let advertised = fetch_objects(repo, url)?
+    for reference in advertised {
+        if reference.name != "HEAD" && reference.id != "unborn" {
+            update(repo, reference.name, reference.id)?
+        }
+    }
+    for reference in advertised {
+        if reference.name != "HEAD" { continue }
+        let raw = repository.read_bytes("{repo.gitdir}/HEAD", 4096)?
+        let old = str_from_utf8(raw) else |_| { return invalid }
+        if reference.target != "" {
+            refs.set_head(
+                repo,
+                old,
+                "ref: {reference.target}\n",
+                [],
+                [],
+                "Den Transport <den@example.invalid> 0 +0000",
+                "clone",
+            )?
+        } else if reference.id != "unborn" {
+            refs.set_head(
+                repo,
+                old,
+                "{reference.id}\n",
+                [],
+                [oid.parse("sha1", reference.id)?],
+                "Den Transport <den@example.invalid> 0 +0000",
+                "clone",
+            )?
+        }
+    }
+    var config = fs.open_append("{repo.gitdir}/config")?
+    defer fs.close(take config) else |_| {}
+    // Config quoted values must escape user-controlled paths, not shell-quote.
+    if url.contains("\n") || url.contains("\r") { return invalid }
+    let quoted = url.replace("\\", "\\\\").replace("\"", "\\\"")
+    fs.write(mut config, "[remote \"origin\"]\n\turl = \"{quoted}\"\n")?
+}
+
+/// Fetch a single fully-qualified source ref into a single fully-qualified destination; preserve errors.
+pub fn fetch_into(
+    repo: repository.Repo,
+    url: str,
+    source: str,
+    destination: str,
+) -> () ! object.StoreErrors {
+    if !refs.valid(source) || !refs.valid(destination) { return invalid }
+    let advertised = fetch_objects(repo, url)?
+    for reference in advertised {
+        if reference.name == source && reference.id != "unborn" {
+            update(repo, destination, reference.id)?
+            return
+        }
+    }
+    not_found
+}

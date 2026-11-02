@@ -2,5 +2,5 @@ pkg {
     name: "den",
     version: "0.0.0",
     edition: "1",
-    capabilities: [env, fs],
+    capabilities: [env, fs, exec, net],
 }

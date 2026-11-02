@@ -1,0 +1,98 @@
+use object
+use oid
+use pack
+use packcmd
+use repository
+
+/// Typed closure rooted only at explicitly requested objects. Shared validator
+/// parsers enforce link types; excluded objects are validated separately first.
+pub fn closure(
+    repo: repository.Repo,
+    roots: List[str],
+    excluded: List[str],
+) -> List[str] ! object.StoreErrors {
+    var pending = List[packcmd.Link](), seen = Map[str, str](), omit = Map[str, bool]()
+    for name in excluded { omit[name] = true }
+    for name in roots { (mut pending).push(packcmd.Link { name: copy name, kind: "" }) }
+    var pos = 0, total = 0, out = List[str]()
+    while pos < pending.len {
+        let link = copy pending[pos]
+        pos += 1
+        if omit[link.name] else false { continue }
+        let prior = seen[link.name] else ""
+        if prior != "" {
+            if link.kind != "" && link.kind != prior { return invalid }
+            continue
+        }
+        if out.len >= 10000 || pending.len > 100000 { return limit }
+        region body_read {
+            let body = object.read_object(repo, oid.parse("sha1", link.name)?, 16777216)?
+            if link.kind != "" && link.kind != body.kind { return invalid }
+            if body.data.len > 134217728 - total { return limit }
+            total += body.data.len
+            seen[link.name] = copy body.kind
+            for child in packcmd.links(body)? { (mut pending).push(copy child) }
+        }
+        (mut out).push(copy link.name)
+    }
+    out
+}
+
+/// Validate selected typed closures and encode only roots minus common-have closure; shared pack bounds apply.
+pub fn pack_for(
+    repo: repository.Repo,
+    roots: List[str],
+    haves: List[str],
+    mode: str,
+) -> List[byte] ! object.StoreErrors {
+    let omitted = closure(repo, haves, [])?
+    let names = closure(repo, roots, omitted)?
+    var bodies = List[pack.Body]()
+    for name in names {
+        let body = object.read_object(repo, oid.parse("sha1", name)?, 16777216)?
+        (mut bodies).push(pack.Body { kind: copy body.kind, data: copy body.data })
+    }
+    let encoded = pack.encode(bodies, mode)?
+    copy encoded.data
+}
+
+/// Decode and validate the whole stream before any object is published. Loose
+/// installation preserves the canonical identities, never persists a thin pack.
+pub fn import_pack(repo: repository.Repo, bytes: List[byte]) -> () ! object.StoreErrors {
+    var bases = List[pack.Body](), total = 0
+    for name in pack.stream_refs(bytes)? {
+        let id = oid.parse("sha1", name)?
+        let body = object.read_object(repo, id, 16777216) else |e| match e {
+            not_found => { continue },
+            _ => { return e },
+        }
+        if body.data.len > 134217728 - total { return limit }
+        total += body.data.len
+        (mut bases).push(pack.Body { kind: copy body.kind, data: copy body.data })
+    }
+    let bodies = pack.decode(bytes, bases)?
+    for body in bodies { let _ = object.write_object(repo, body.kind, body.data)? }
+}
+
+/// Test commit ancestry with shared header parsing and bounded graph traversal; not a general revision evaluator.
+pub fn ancestor(repo: repository.Repo, older: str, newer: str) -> bool ! object.StoreErrors {
+    if older == newer { return true }
+    var pending = [newer], seen = Map[str, bool](), pos = 0
+    while pos < pending.len {
+        let name = copy pending[pos]
+        pos += 1
+        if seen[name] else false { continue }
+        seen[name] = true
+        if pos > 10000 || pending.len > 100000 { return limit }
+        let body = object.read_object(repo, oid.parse("sha1", name)?, 16777216)?
+        if body.kind != "commit" { return false }
+        let headers = object.parse_commit(body.data, "sha1") else |_| { return invalid }
+        for field in headers.fields {
+            if field.key != "parent" { continue }
+            let parent = str_from_utf8(field.value) else |_| { return invalid }
+            if parent == older { return true }
+            (mut pending).push(parent)
+        }
+    }
+    false
+}

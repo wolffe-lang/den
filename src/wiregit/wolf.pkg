@@ -1,0 +1,16 @@
+pkg {
+    name: "wiregit",
+    edition: "1",
+    capabilities: [fs, env, exec, net],
+    deps: {
+        object: {path: "../object"},
+        oid: {path: "../oid"},
+        pack: {path: "../pack"},
+        packcmd: {path: "../packcmd"},
+        pktline: {path: "../pktline"},
+        refs: {path: "../refs"},
+        repository: {path: "../repository"},
+        transport: {path: "../transport"},
+        wire: {path: "../wire"},
+    },
+}
