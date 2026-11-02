@@ -13,12 +13,12 @@ fn execute(args: List[str]) -> () ! object.StoreErrors {
         serve(args[1], port)?
         return
     }
-    if args[0] == "upload-pack" {
+    if args[0] == "upload-pack" || args[0] == "receive-pack" {
         var version2 = false
         for item in (env_get("GIT_PROTOCOL") else "").split(":") {
             if item == "version=2" { version2 = true }
         }
-        if !version2 {
+        if args[0] == "upload-pack" && !version2 {
             return Unsupported("upload-pack requires protocol v2")
         }
         var path = ""
@@ -31,16 +31,24 @@ fn execute(args: List[str]) -> () ! object.StoreErrors {
         let admin = if fs.is_dir("{path}/.git") then "{path}/.git" else copy path
         let repo = repository.open(admin)?
         var channel = transport.stdio()
-        upload(repo, mut channel)?
+        if args[0] == "upload-pack" {
+            upload(repo, mut channel)?
+        } else {
+            receive(repo, mut channel)?
+        }
         return
     }
-    var quiet = false, bare = false, operands = List[str]()
+    var quiet = false, bare = false, force = false, atomic = false, operands = List[str]()
     for i in 1..args.len {
         let arg = args[i]
         if arg == "-q" || arg == "--quiet" {
             quiet = true
         } else if arg == "--bare" {
             bare = true
+        } else if (arg == "--force" || arg == "-f") && (args[0] == "push" || args[0] == "fetch") {
+            force = true
+        } else if arg == "--atomic" && args[0] == "push" {
+            atomic = true
         } else if arg.starts_with("-") {
             return Unsupported("{args[0]} option {arg}")
         } else {
@@ -58,12 +66,19 @@ fn execute(args: List[str]) -> () ! object.StoreErrors {
         if !quiet || bare || operands.len != 2 {
             return Unsupported("fetch requires -q URL SRC:DST")
         }
-        let force = operands[1].starts_with("+")
-        let spec = if force then operands[1][1..] else copy operands[1]
+        let forced_spec = operands[1].starts_with("+")
+        let spec = if forced_spec then operands[1][1..] else copy operands[1]
         let pair = spec.split(":")
         if pair.len != 2 { return invalid }
         let repo = repository.discover(".")?
-        fetch_into(repo, operands[0], pair[0], pair[1], force)?
+        fetch_into(repo, operands[0], pair[0], pair[1], force || forced_spec)?
+        return
+    }
+    if args[0] == "push" {
+        if !quiet || bare || operands.len < 2 {
+            return Unsupported("push requires -q URL SRC:DST...")
+        }
+        push(repository.discover(".")?, operands[0], operands[1..], force, atomic)?
         return
     }
     Unsupported("wire command {args[0]}")

@@ -14,7 +14,9 @@ fn check(args: List[str]) -> () ! refs.RefErrors {
     for i in 0..(args.len - 2) / 3 {
         let pos = 2 + i * 3
         (mut changes).push(refs.AtomicUpdate {
-            name: copy args[pos], expected: optional(args[pos + 1])?, after: optional(args[pos + 2])?,
+            name: copy args[pos],
+            expected: optional(args[pos + 1])?,
+            after: optional(args[pos + 2])?,
         })
     }
     let durable = refs.transaction_injected(repo, changes, args[1])?
