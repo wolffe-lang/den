@@ -1,11 +1,17 @@
 use std.fs
 use object
 use repository
+use transport
 use wire
 use wiregit
 
 fn execute(args: List[str]) -> () ! object.StoreErrors {
     if args.len != 3 { return invalid }
+    if args[0] == "connect" {
+        let peer = transport.connect(args[1], args[2])?
+        let _ = transport.close(take peer)?
+        return
+    }
     if args[0] == "import" {
         let repo = repository.open(args[1])?
         let bytes = repository.read_bytes(args[2], 134217728)?

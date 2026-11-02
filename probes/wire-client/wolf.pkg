@@ -4,6 +4,7 @@ pkg {
     capabilities: [env, fs, exec, net],
     deps: {
         wire: {path: "../../src/wire"},
+        transport: {path: "../../src/transport"},
         wiregit: {path: "../../src/wiregit"},
         repository: {path: "../../src/repository"},
         object: {path: "../../src/object"},

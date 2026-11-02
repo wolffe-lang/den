@@ -54,6 +54,14 @@ def main():
         shutil.rmtree(source)
     run([git, 'clone', '-q', '--bare', fixture, source])
     rows = []
+    for url, needle in (
+            ('git://127.0.0.1:1/' + 'x' * 5000, b'limit'),
+            ('file:///a%20b', b'percent-encoded file URL'),
+            ('git://127.0.0.1:1/a%20b', b'percent-encoded git URL'),
+            ('file://other-host/repository', b'absolute local path')):
+        result = run([wire_client, 'connect', url, 'upload-pack'], ok=False)
+        assert result.returncode != 0 and needle in result.stderr
+        rows.append('bounded URL refusal: ' + needle.decode())
     for server in ('git', 'den'):
         dest = out / ('clone-' + server + '.git')
         if dest.exists():
