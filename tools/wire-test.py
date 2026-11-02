@@ -103,6 +103,39 @@ def main():
         run(prefix + ['--force', target.as_uri(), oldspec], fixture)
         assert run([git, 'rev-parse', 'refs/heads/main'], target).stdout.strip() == first
         rows.append(client + ' file push/create/non-fast-forward refusal/force/fsck')
+        run(prefix + ['--atomic', target.as_uri(),
+                      'refs/heads/main:refs/heads/atomic-a',
+                      'refs/heads/main:refs/heads/atomic-b'], fixture)
+        run([git, 'config', 'receive.denyNonFastForwards', 'true'], target)
+        before = run([git, 'show-ref'], target).stdout
+        failed = run(prefix + ['--atomic', '--force', target.as_uri(),
+                              'refs/heads/old:refs/heads/atomic-a',
+                              'refs/heads/main:refs/heads/atomic-c'], fixture, ok=False)
+        assert failed.returncode != 0
+        assert run([git, 'show-ref'], target).stdout == before
+        rows.append(client + ' atomic success/late-policy-rejection all refs unchanged')
+    atomic = root / 'target' / a.tier / 'atomic-client'
+    tip = run([git, 'rev-parse', 'HEAD'], fixture).stdout.strip().decode()
+    for phase in ('prepare', 'old-published', 'loose-removed', 'commit', ''):
+        target = out / ('transaction-' + (phase or 'success') + '.git')
+        if target.exists():
+            shutil.rmtree(target)
+        run([git, 'clone', '-q', '--bare', fixture, target])
+        for name in ('main', 'second'):
+            run([git, 'update-ref', 'refs/heads/' + name, first.decode()], target)
+        before = run([git, 'show-ref'], target).stdout
+        command = [atomic, target, phase,
+                   'refs/heads/main', first.decode(), tip,
+                   'refs/heads/second', first.decode(), tip]
+        result = run(command, ok=not phase)
+        if phase:
+            assert result.returncode != 0
+            assert run([git, 'show-ref'], target).stdout == before
+        else:
+            for name in ('main', 'second'):
+                assert run([git, 'rev-parse', 'refs/heads/' + name], target).stdout.strip().decode() == tip
+        run([git, 'fsck', '--full'], target)
+        rows.append('atomic API phase ' + (phase or 'success'))
     (out / 'captures.json').write_text(json.dumps(captures, indent=2) + '\n')
     (out / 'summary.json').write_text(json.dumps(dict(rows=rows, zero_skips=True), indent=2) + '\n')
     print('wire: ' + ', '.join(rows) + '; zero skips')

@@ -1,0 +1,27 @@
+use oid
+use refs
+use repository
+
+fn optional(text: str) -> List[oid.Oid] ! refs.RefErrors {
+    if text == "0000000000000000000000000000000000000000" { return [] }
+    [oid.parse("sha1", text)?]
+}
+
+fn check(args: List[str]) -> () ! refs.RefErrors {
+    if args.len < 5 || (args.len - 2) % 3 != 0 { return invalid }
+    let repo = repository.open(args[0])?
+    var changes = List[refs.AtomicUpdate]()
+    for i in 0..(args.len - 2) / 3 {
+        let pos = 2 + i * 3
+        (mut changes).push(refs.AtomicUpdate {
+            name: copy args[pos], expected: optional(args[pos + 1])?, after: optional(args[pos + 2])?,
+        })
+    }
+    let durable = refs.transaction_injected(repo, changes, args[1])?
+    print("durable {durable}")
+}
+
+fn main() -> int {
+    check(env_args()) else |e| { eprint("{e}"); return 1 }
+    0
+}
