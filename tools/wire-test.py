@@ -79,6 +79,30 @@ def main():
     run([den, 'fetch', '-q', source.as_uri(), '+' + spec], dest)
     assert run([git, 'rev-parse', 'refs/heads/copied'], dest).stdout.strip() == first
     rows.append('fetch refspec creation/non-fast-forward refusal/force')
+    for client in ('git', 'den'):
+        target = out / ('push-' + client + '.git')
+        if target.exists():
+            shutil.rmtree(target)
+        run([git, 'init', '-q', '--bare', target])
+        prefix = [den, 'push', '-q']
+        if client == 'git':
+            receive = out / 'den-receive-pack'
+            receive.write_text('#!/bin/sh\nexec "' + str(den) + '" receive-pack "$@"\n')
+            receive.chmod(0o755)
+            prefix = [git, 'push', '-q', '--receive-pack=' + str(receive)]
+        pushspec = 'refs/heads/main:refs/heads/main'
+        run(prefix + [target.as_uri(), pushspec], fixture)
+        tip = run([git, 'rev-parse', 'HEAD'], fixture).stdout
+        assert run([git, 'rev-parse', 'refs/heads/main'], target).stdout == tip
+        run([git, 'fsck', '--full'], target)
+        run([git, 'update-ref', 'refs/heads/old', first.decode()], fixture)
+        before = run([git, 'show-ref'], target).stdout
+        oldspec = 'refs/heads/old:refs/heads/main'
+        assert run(prefix + [target.as_uri(), oldspec], fixture, ok=False).returncode != 0
+        assert run([git, 'show-ref'], target).stdout == before
+        run(prefix + ['--force', target.as_uri(), oldspec], fixture)
+        assert run([git, 'rev-parse', 'refs/heads/main'], target).stdout.strip() == first
+        rows.append(client + ' file push/create/non-fast-forward refusal/force/fsck')
     (out / 'captures.json').write_text(json.dumps(captures, indent=2) + '\n')
     (out / 'summary.json').write_text(json.dumps(dict(rows=rows, zero_skips=True), indent=2) + '\n')
     print('wire: ' + ', '.join(rows) + '; zero skips')
