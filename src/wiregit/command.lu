@@ -56,10 +56,15 @@ fn execute(args: List[str]) -> () ! object.StoreErrors {
         }
     }
     if args[0] == "clone" {
-        if !bare { return Unsupported("clone currently requires --bare") }
         if operands.len != 2 { return invalid }
-        if !quiet { eprint("Cloning into bare repository '{operands[1]}'...") }
-        clone_bare(operands[0], operands[1])?
+        if !quiet {
+            if bare {
+                eprint("Cloning into bare repository '{operands[1]}'...")
+            } else {
+                eprint("Cloning into '{operands[1]}'...")
+            }
+        }
+        clone_repository(operands[0], operands[1], bare)?
         return
     }
     if args[0] == "fetch" {

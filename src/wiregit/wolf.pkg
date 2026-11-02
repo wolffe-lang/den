@@ -12,5 +12,7 @@ pkg {
         repository: {path: "../repository"},
         transport: {path: "../transport"},
         wire: {path: "../wire"},
+        index: {path: "../index"},
+        worktree: {path: "../worktree"},
     },
 }
