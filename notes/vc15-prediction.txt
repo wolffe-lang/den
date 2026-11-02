@@ -1,0 +1,40 @@
+vc15 — wire prediction, 2026-11-02; base 13bc2caa
+
+The explicit M5 contract overrides vc14's advisory draft to continue M4.
+No M2/M3/M4 completion claim follows this work. Documentation and black-box
+Git 2.56.0 only; no implementation source, no new production Git dependency.
+
+I expect one bounded pkt-line parser/encoder to serve protocol-v2 advertisement,
+ls-refs and fetch, sideband framing, and receive-pack's update/report messages.
+Unit rows will cover partial headers/bodies, special packets, binary payloads,
+maximum packet length, invalid lengths and the distinction between flush,
+delimiter, response-end and EOF. Writers always include LF on textual requests.
+Receivers must tolerate missing LF as gitprotocol-pack requires: the required
+want-without-LF plant therefore fails a named outbound-byte assertion, not an
+invented assertion that the Git server must reject an optional LF.
+
+I expect file transport to use argument-vector child processes with mapped
+pipes, and git transport to use TCP plus the documented service request.
+Production transport must never invoke Git as a substitute for den's parsers,
+pack encoder/decoder, object validation or reference updates. Independent clients
+will exercise the exported modules. Fixture byte streams and command captures
+will be retained, comparing deterministic bytes and otherwise canonical objects,
+refs and git fsck. Thin REF deltas should reuse apply_delta and resolve an
+external base from the local object store; never persist a thin pack as-is.
+
+Red rows will precede each implementation concern. Native and release rows,
+actual checked pure parsing, external clients and real Git subprocess/daemon
+integration are distinct targets. Both directions and transports, repeated
+fetches with haves, malformed/early EOF, thin/OFS/REF packs and fast-forward,
+force and atomic failure semantics are owed before any M5-complete claim.
+The final wrapper will stop on the first error and print END step exit=N.
+
+R-vc15-1 recommendation: outbound writers canonicalize LF, inbound accepts
+optional LF. Alternative: misclassify a missing LF as invalid wire syntax;
+rejected because the documentation explicitly requires receivers to accept it.
+Implement the recommendation; isolate the mandated missing-LF plant off-line.
+
+R-vc15-2 recommendation: preserve conservative bounds and explicit refusals for
+unimplemented protocol features instead of advertising unsupported capabilities.
+Alternative: claim general Git wire parity from happy-path interoperability;
+rejected. No atomic capability until all-or-nothing ref publication is proven.
