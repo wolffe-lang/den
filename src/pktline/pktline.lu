@@ -1,9 +1,11 @@
 // Original binary-clean framing from Git 2.56.0 gitprotocol-common/v2.
+/// Framing failures: invalid syntax, incomplete bytes, or the documented size limit; never traps.
 pub error Errors = {invalid, truncated, limit}
 
 /// kind 0/1/2 are flush/delimiter/response-end; 4 is data (including empty).
 pub struct Packet { kind: int, data: List[byte], next: int }
 
+/// Read exactly four lowercase hex digits; preserve special lengths 0/1/2, reject 3 and values above 65520.
 pub fn header(bytes: List[byte]) -> int ! Errors {
     if bytes.len != 4 { return truncated }
     var n = 0
@@ -22,6 +24,7 @@ pub fn header(bytes: List[byte]) -> int ! Errors {
     n
 }
 
+/// Encode arbitrary binary payload with its inclusive length; limit above 65516 data bytes, never traps.
 pub fn encode(data: List[byte]) -> List[byte] ! Errors {
     if data.len > 65516 { return limit }
     let n = data.len + 4

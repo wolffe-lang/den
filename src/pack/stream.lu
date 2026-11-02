@@ -4,6 +4,7 @@ use oid
 // bases supplied by the caller; never installs a thin stream on disk.
 use zlib
 
+/// Received-pack failures: invalid framing/checksum/delta, incomplete stream, limits, or unresolved bases.
 pub error StreamErrors = {invalid, truncated, limit, Unsupported(str)}
 
 struct StreamEntry {

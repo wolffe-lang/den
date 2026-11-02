@@ -2,14 +2,18 @@ use oid
 use pktline
 use refs
 
+/// Framing errors plus a named unsupported protocol/remote-fatal outcome; never traps.
 pub error Errors = {invalid, truncated, limit, Unsupported(str)}
 
+/// Owned v2 ref record; id may be unborn, target/peeled are empty when absent.
 pub struct Ref { name: str, id: str, target: str, peeled: str }
 
+/// Append owned bytes without interpreting or normalizing them.
 pub fn append(mut out: List[byte], bytes: List[byte]) {
     for b in bytes { (mut out).push(b) }
 }
 
+/// Append a canonical LF-terminated pkt-line; reject embedded LF/NUL and oversized payloads.
 pub fn line(mut out: List[byte], text: str) -> () ! Errors {
     if text.contains("\n") || text.contains("\0") { return invalid }
     append(mut out, pktline.encode("{text}\n".bytes())?)
@@ -56,11 +60,13 @@ pub fn capabilities(data: List[byte]) -> List[str] ! Errors {
     truncated
 }
 
+/// Test an exact advertised capability key, ignoring its optional value.
 pub fn supports(caps: List[str], name: str) -> bool {
     for cap in caps { if cap == name || cap.starts_with("{name}=") { return true } }
     false
 }
 
+/// Encode one supported v2 command with delimiter, canonical argument lines and flush.
 pub fn request(command: str, args: List[str]) -> List[byte] ! Errors {
     if command != "fetch" && command != "ls-refs" { return invalid }
     var out = List[byte]()
@@ -71,6 +77,7 @@ pub fn request(command: str, args: List[str]) -> List[byte] ! Errors {
     out
 }
 
+/// Encode wants/haves/done and negotiated thin/OFS support; enforce identity and count bounds.
 pub fn fetch_request(wants: List[str], haves: List[str], thin: bool) -> List[byte] ! Errors {
     if wants.len == 0 || wants.len > 10000 || haves.len > 10000 { return limit }
     var args = List[str]()
@@ -83,6 +90,7 @@ pub fn fetch_request(wants: List[str], haves: List[str], thin: bool) -> List[byt
     request("fetch", args)?
 }
 
+/// Decode a complete flushed ls-refs response; validate identities, names, attributes and count.
 pub fn parse_refs(data: List[byte]) -> List[Ref] ! Errors {
     var pos = 0, out = List[Ref](), seen = Map[str, bool]()
     while pos < data.len {
@@ -143,6 +151,7 @@ pub fn parse_pack(data: List[byte]) -> List[byte] ! Errors {
     truncated
 }
 
+/// Frame pack bytes as v2 sideband-1 chunks and a final flush; enforce the 128-MiB payload cap.
 pub fn pack_response(data: List[byte]) -> List[byte] ! Errors {
     if data.len > 134217728 { return limit }
     var out = List[byte](), pos = 0
