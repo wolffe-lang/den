@@ -174,6 +174,10 @@ def main():
         assert run([git, 'show-ref', '--verify', '--quiet', 'refs/heads/remove'], target, ok=False).returncode != 0
         assert run([git, 'rev-parse', 'refs/heads/main'], target).stdout.strip() == first
         rows.append(client + ' delete-only wire request mixed with an unchanged positive refspec')
+        before = run([git, 'show-ref'], target).stdout
+        assert run(prefix + [target.as_uri(), ':refs/heads/remove'], fixture, ok=False).returncode != 0
+        assert run([git, 'show-ref'], target).stdout == before
+        rows.append(client + ' nonexistent deletion is an immutable refusal')
         rows.append(client + ' file push/create/non-fast-forward refusal/force/fsck')
         run(prefix + ['--atomic', target.as_uri(),
                       'refs/heads/main:refs/heads/atomic-a',
