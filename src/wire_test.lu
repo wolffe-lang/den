@@ -1,0 +1,50 @@
+//! member: false
+
+use pktline
+use wire
+
+fn main() -> int {
+    assert(pktline.encode("a\n".bytes())? == "0006a\n".bytes())
+    assert(pktline.header("0000".bytes())? == 0)
+    assert(pktline.header("0001".bytes())? == 1)
+    assert(pktline.header("0002".bytes())? == 2)
+    assert(pktline.header("fff0".bytes())? == 65520)
+    for bad in ["0003", "fff1", "ffff", "00xz", "000", "FFFF"] {
+        var rejected = false
+        let _ = pktline.header(bad.bytes()) else |_| { rejected = true; 0 }
+        assert(rejected)
+    }
+    let binary = [0 as byte, 255 as byte, 10 as byte]
+    let packet = pktline.decode(pktline.encode(binary)?, 0)?
+    assert(packet.kind == 4 && packet.data == binary && packet.next == 7)
+    let empty = pktline.decode("0004".bytes(), 0)?
+    assert(empty.kind == 4 && empty.data.len == 0)
+    for bad in ["", "0", "000", "0005", "0008abc"] {
+        var rejected = false
+        let _ = pktline.decode(bad.bytes(), 0) else |_| {
+            rejected = true
+            pktline.Packet { kind: 0, data: List[byte](), next: 0 }
+        }
+        assert(rejected)
+    }
+    assert(pktline.text("done\n".bytes())? == "done")
+    assert(pktline.text("done".bytes())? == "done")
+    let id = "0123456789012345678901234567890123456789"
+    let request = wire.fetch_request([id], [id], true)?
+    let expected = "0012command=fetch\n0001000ethin-pack\n000eofs-delta\n0010no-progress\n0032want {id}\n0032have {id}\n0009done\n0000"
+    assert(request == expected.bytes(), "outbound want includes newline")
+    let caps = wire.capabilities("000eversion 2\n0013ls-refs=unborn\n0012fetch=shallow\n0017object-format=sha1\n0000".bytes())?
+    assert(caps.len == 3)
+    let refs = wire.parse_refs("0051{id} HEAD symref-target:refs/heads/main\n0000".bytes())?
+    assert(refs.len == 1 && refs[0].target == "refs/heads/main")
+    let response = wire.pack_response(binary)?
+    assert(wire.parse_pack(response)? == binary)
+    var fatal = false
+    let _ = wire.parse_pack("000dpackfile\n0009\x03bad\n0000".bytes()) else |_| {
+        fatal = true
+        List[byte]()
+    }
+    assert(fatal)
+    print("vc15 pkt-line/v2: framing, requests, refs and sideband; zero skips")
+    0
+}
