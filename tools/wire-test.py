@@ -68,6 +68,23 @@ def main():
         objects = run([git, 'cat-file', '--batch-all-objects', '--batch-check'], source).stdout
         assert run([git, 'cat-file', '--batch-all-objects', '--batch-check'], dest).stdout == objects
         rows.append(server + ' file clone refs/objects/fsck')
+        normal = out / ('worktree-' + server)
+        expected = out / ('worktree-oracle-' + server)
+        for path in (normal, expected):
+            if path.exists():
+                shutil.rmtree(path)
+        run([git, 'clone', '-q', source.as_uri(), expected])
+        if server == 'git':
+            run([den, 'clone', '-q', source.as_uri(), normal])
+        else:
+            run([git, '-c', 'protocol.version=2', 'clone', '-q',
+                 '--upload-pack=' + str(upload), source.as_uri(), normal])
+        assert run([git, 'show-ref'], normal).stdout == run([git, 'show-ref'], expected).stdout
+        assert run([git, 'ls-files', '-s'], normal).stdout == run([git, 'ls-files', '-s'], expected).stdout
+        assert run([git, 'status', '--porcelain=v1'], normal).stdout == b''
+        assert (normal / 'file').read_bytes() == (expected / 'file').read_bytes()
+        run([git, 'fsck', '--full'], normal)
+        rows.append(server + ' normal clone refs/index/worktree/fsck')
     dest = out / 'clone-git.git'
     spec = 'refs/heads/main:refs/heads/copied'
     run([den, 'fetch', '-q', source.as_uri(), spec], dest)
