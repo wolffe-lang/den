@@ -190,6 +190,13 @@ def main():
         assert failed.returncode != 0
         assert run([git, 'show-ref'], target).stdout == before
         rows.append(client + ' atomic success/late-policy-rejection all refs unchanged')
+        if client == 'git':
+            run([git, 'config', 'core.logAllRefUpdates', 'true'], target)
+            advertisement = packets(run([den, 'receive-pack', target], data=b'0000').stdout)
+            offered = advertisement[0][1].split(b'\0')[1].split()
+            assert b'atomic' not in offered, 'do not advertise an unimplemented atomic reflog policy'
+            run([git, 'config', 'core.logAllRefUpdates', 'false'], target)
+            rows.append('den withdraws atomic for the named unsupported reflog policy')
     atomic = root / 'target' / a.tier / 'atomic-client'
     tip = run([git, 'rev-parse', 'HEAD'], fixture).stdout.strip().decode()
     for phase in ('prepare', 'old-published', 'loose-removed', 'commit', ''):
