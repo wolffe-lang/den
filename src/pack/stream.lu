@@ -114,7 +114,7 @@ pub fn decode(data: List[byte], bases: List[Body]) -> List[Body] ! StreamErrors 
     var offsets = Map[int, int](), names = Map[str, int](), external = Map[str, int]()
     var total = 0
     for i in 0..bases.len {
-        let body = bases[i]
+        let body = copy bases[i]
         if body.data.len > 16777216 || body.data.len > 134217728 - total { return limit }
         total += body.data.len
         let id = body_name(body) else |_| { return invalid }
@@ -131,7 +131,7 @@ pub fn decode(data: List[byte], bases: List[Body]) -> List[Body] ! StreamErrors 
         var progress = false
         for i in 0..entries.len {
             if ready[i] { continue }
-            let entry = entries[i]
+            let entry = copy entries[i]
             var body = Body { kind: "", data: List[byte]() }
             if entry.kind < 5 {
                 body.kind = match entry.kind {
