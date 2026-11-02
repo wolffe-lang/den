@@ -72,7 +72,13 @@ pub fn request(command: str, args: List[str]) -> List[byte] ! Errors {
     var out = List[byte]()
     line(mut out, "command={command}")?
     append(mut out, "0001".bytes())
-    for arg in args { line(mut out, arg)? }
+    for arg in args {
+        if arg.starts_with("want ") {
+            append(mut out, pktline.encode(arg.bytes())?)
+        } else {
+            line(mut out, arg)?
+        }
+    }
     append(mut out, "0000".bytes())
     out
 }
