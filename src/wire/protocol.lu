@@ -1,0 +1,132 @@
+use pktline
+use oid
+use refs
+
+pub error Errors = {invalid, truncated, limit, Unsupported(str)}
+pub struct Ref { name: str, id: str, target: str, peeled: str }
+
+pub fn append(mut out: List[byte], bytes: List[byte]) {
+    for b in bytes { (mut out).push(b) }
+}
+
+pub fn line(mut out: List[byte], text: str) -> () ! Errors {
+    if text.contains("\n") || text.contains("\0") { return invalid }
+    append(mut out, pktline.encode("{text}\n".bytes())?)
+}
+
+fn object_id(id: str) -> () ! Errors {
+    let _ = oid.parse("sha1", id) else |_| { return invalid }
+}
+
+/// Unknown capability keys are preserved, not interpreted as commands.
+pub fn capabilities(data: List[byte]) -> List[str] ! Errors {
+    let first = pktline.decode(data, 0)?
+    if first.kind != 4 || pktline.text(first.data)? != "version 2" {
+        return Unsupported("requires protocol version 2")
+    }
+    var pos = first.next, out = List[str]()
+    while pos < data.len {
+        let p = pktline.decode(data, pos)?
+        pos = p.next
+        if p.kind == 0 {
+            if pos != data.len { return invalid }
+            return out
+        }
+        if p.kind != 4 || out.len >= 256 { return invalid }
+        let text = pktline.text(p.data)?
+        if text == "" { return invalid }
+        (mut out).push(text)
+    }
+    truncated
+}
+
+pub fn supports(caps: List[str], name: str) -> bool {
+    for cap in caps { if cap == name || cap.starts_with("{name}=") { return true } }
+    false
+}
+
+pub fn request(command: str, args: List[str]) -> List[byte] ! Errors {
+    if command != "fetch" && command != "ls-refs" { return invalid }
+    var out = List[byte]()
+    line(mut out, "command={command}")?
+    append(mut out, "0001".bytes())
+    for arg in args { line(mut out, arg)? }
+    append(mut out, "0000".bytes())
+    out
+}
+
+pub fn fetch_request(wants: List[str], haves: List[str], thin: bool) -> List[byte] ! Errors {
+    if wants.len == 0 || wants.len > 10000 || haves.len > 10000 { return limit }
+    var args = List[str]()
+    if thin { (mut args).push("thin-pack") }
+    (mut args).push("ofs-delta")
+    (mut args).push("no-progress")
+    for id in wants { object_id(id)?; (mut args).push("want {id}") }
+    for id in haves { object_id(id)?; (mut args).push("have {id}") }
+    (mut args).push("done")
+    request("fetch", args)?
+}
+
+pub fn parse_refs(data: List[byte]) -> List[Ref] ! Errors {
+    var pos = 0, out = List[Ref](), seen = Map[str, bool]()
+    while pos < data.len {
+        let p = pktline.decode(data, pos)?
+        pos = p.next
+        if p.kind == 0 { if pos != data.len { return invalid }; return out }
+        if p.kind != 4 || out.len >= 10000 { return invalid }
+        let parts = pktline.text(p.data)?.split(" ")
+        if parts.len < 2 { return invalid }
+        if parts[0] != "unborn" { object_id(parts[0])? }
+        if parts[1] != "HEAD" && !refs.valid(parts[1]) { return invalid }
+        if seen[parts[1]] else false { return invalid }
+        seen[parts[1]] = true
+        var target = "", peeled = ""
+        for i in 2..parts.len {
+            let item = parts[i]
+            if item.starts_with("symref-target:") {
+                target = item[14..]
+                if !refs.valid(target) { return invalid }
+            } else if item.starts_with("peeled:") {
+                peeled = item[7..]
+                object_id(peeled)?
+            }
+        }
+        (mut out).push(Ref { name: copy parts[1], id: copy parts[0], target: target, peeled: peeled })
+    }
+    truncated
+}
+
+/// v2 fetch response after done: only the negotiated packfile section.
+/// Progress is consumed, never confused with pack bytes; fatal is an error.
+pub fn parse_pack(data: List[byte]) -> List[byte] ! Errors {
+    let first = pktline.decode(data, 0)?
+    if first.kind != 4 || pktline.text(first.data)? != "packfile" { return invalid }
+    var pos = first.next, out = List[byte]()
+    while pos < data.len {
+        let p = pktline.decode(data, pos)?
+        pos = p.next
+        if p.kind == 0 { if pos != data.len { return invalid }; return out }
+        if p.kind != 4 || p.data.len == 0 { return invalid }
+        if p.data[0] == 1 as byte {
+            if p.data.len - 1 > 134217728 - out.len { return limit }
+            append(mut out, p.data[1..])
+        } else if p.data[0] == 3 as byte { return Unsupported("remote fatal sideband") }
+        else if p.data[0] != 2 as byte { return invalid }
+    }
+    truncated
+}
+
+pub fn pack_response(data: List[byte]) -> List[byte] ! Errors {
+    if data.len > 134217728 { return limit }
+    var out = List[byte](), pos = 0
+    line(mut out, "packfile")?
+    while pos < data.len {
+        let end = if data.len - pos > 65515 then pos + 65515 else data.len
+        var payload = [1 as byte]
+        append(mut payload, data[pos..end])
+        append(mut out, pktline.encode(payload)?)
+        pos = end
+    }
+    append(mut out, "0000".bytes())
+    out
+}

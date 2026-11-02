@@ -1,0 +1,46 @@
+// Original binary-clean framing from Git 2.56.0 gitprotocol-common/v2.
+pub error Errors = {invalid, truncated, limit}
+
+/// kind 0/1/2 are flush/delimiter/response-end; 4 is data (including empty).
+pub struct Packet { kind: int, data: List[byte], next: int }
+
+pub fn header(bytes: List[byte]) -> int ! Errors {
+    if bytes.len != 4 { return truncated }
+    var n = 0
+    for b in bytes {
+        let c = b as int
+        if c >= 48 && c <= 57 { n = n * 16 + c - 48 }
+        else if c >= 97 && c <= 102 { n = n * 16 + c - 87 }
+        else { return invalid }
+    }
+    if n == 3 { return invalid }
+    if n > 65520 { return limit }
+    n
+}
+
+pub fn encode(data: List[byte]) -> List[byte] ! Errors {
+    if data.len > 65516 { return limit }
+    let n = data.len + 4
+    let digits = "0123456789abcdef".bytes()
+    var out = List[byte]()
+    for shift in [12, 8, 4, 0] { (mut out).push(digits[n >> shift & 15]) }
+    for b in data { (mut out).push(b) }
+    out
+}
+
+/// Decode one packet, preserving a next offset for concatenated streams.
+pub fn decode(bytes: List[byte], start: int) -> Packet ! Errors {
+    if start < 0 || start > bytes.len { return invalid }
+    if bytes.len - start < 4 { return truncated }
+    let n = header(bytes[start..start + 4])?
+    if n < 4 { return Packet { kind: n, data: List[byte](), next: start + 4 } }
+    if n > bytes.len - start { return truncated }
+    Packet { kind: 4, data: copy bytes[start + 4..start + n], next: start + n }
+}
+
+/// Text control records are ASCII; LF is optional, never strip other bytes.
+pub fn text(bytes: List[byte]) -> str ! Errors {
+    for b in bytes { if b == 0 as byte || b as int > 127 { return invalid } }
+    let end = if bytes.len > 0 && bytes[bytes.len - 1] == 10 as byte then bytes.len - 1 else bytes.len
+    str_from_utf8(bytes[0..end]) else |_| { return invalid }
+}

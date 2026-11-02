@@ -3,7 +3,7 @@
 use pktline
 use wire
 
-fn main() -> int {
+fn checks() -> () ! wire.Errors {
     assert(pktline.encode("a\n".bytes())? == "0006a\n".bytes())
     assert(pktline.header("0000".bytes())? == 0)
     assert(pktline.header("0001".bytes())? == 1)
@@ -35,16 +35,23 @@ fn main() -> int {
     assert(request == expected.bytes(), "outbound want includes newline")
     let caps = wire.capabilities("000eversion 2\n0013ls-refs=unborn\n0012fetch=shallow\n0017object-format=sha1\n0000".bytes())?
     assert(caps.len == 3)
-    let refs = wire.parse_refs("0051{id} HEAD symref-target:refs/heads/main\n0000".bytes())?
+    let refs = wire.parse_refs("0050{id} HEAD symref-target:refs/heads/main\n0000".bytes())?
     assert(refs.len == 1 && refs[0].target == "refs/heads/main")
     let response = wire.pack_response(binary)?
     assert(wire.parse_pack(response)? == binary)
     var fatal = false
-    let _ = wire.parse_pack("000dpackfile\n0009\x03bad\n0000".bytes()) else |_| {
+    var bad_response = "000dpackfile\n0009".bytes()
+    (mut bad_response).push(3 as byte)
+    wire.append(mut bad_response, "bad\n0000".bytes())
+    let _ = wire.parse_pack(bad_response) else |_| {
         fatal = true
         List[byte]()
     }
     assert(fatal)
     print("vc15 pkt-line/v2: framing, requests, refs and sideband; zero skips")
+}
+
+fn main() -> int {
+    checks() else |e| { eprint("{e}"); return 1 }
     0
 }
