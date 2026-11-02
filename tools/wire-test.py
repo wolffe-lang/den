@@ -28,6 +28,7 @@ def main():
                                 stderr=subprocess.PIPE, timeout=60)
         captures.append(dict(argv=list(map(str, argv)), cwd=str(cwd), stdin=(data or b'').hex(),
                              stdout=result.stdout.hex(), stderr=result.stderr.hex(), exit=result.returncode))
+        (out / 'captures.json').write_text(json.dumps(captures, indent=2) + '\n')
         if ok:
             assert result.returncode == 0, captures[-1]
         return result
@@ -67,6 +68,17 @@ def main():
         objects = run([git, 'cat-file', '--batch-all-objects', '--batch-check'], source).stdout
         assert run([git, 'cat-file', '--batch-all-objects', '--batch-check'], dest).stdout == objects
         rows.append(server + ' file clone refs/objects/fsck')
+    dest = out / 'clone-git.git'
+    spec = 'refs/heads/main:refs/heads/copied'
+    run([den, 'fetch', '-q', source.as_uri(), spec], dest)
+    run([git, 'update-ref', 'refs/heads/main', first.decode()], source)
+    before = run([git, 'show-ref'], dest).stdout
+    refused = run([den, 'fetch', '-q', source.as_uri(), spec], dest, ok=False)
+    assert refused.returncode != 0, 'non-fast-forward fetch must refuse'
+    assert run([git, 'show-ref'], dest).stdout == before, 'refusal must preserve refs'
+    run([den, 'fetch', '-q', source.as_uri(), '+' + spec], dest)
+    assert run([git, 'rev-parse', 'refs/heads/copied'], dest).stdout.strip() == first
+    rows.append('fetch refspec creation/non-fast-forward refusal/force')
     (out / 'captures.json').write_text(json.dumps(captures, indent=2) + '\n')
     (out / 'summary.json').write_text(json.dumps(dict(rows=rows, zero_skips=True), indent=2) + '\n')
     print('wire: ' + ', '.join(rows) + '; zero skips')
