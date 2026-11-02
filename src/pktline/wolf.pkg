@@ -1,0 +1,5 @@
+pkg {
+    name: "pktline",
+    edition: "1",
+    capabilities: [],
+}

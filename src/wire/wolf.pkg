@@ -1,0 +1,10 @@
+pkg {
+    name: "wire",
+    edition: "1",
+    capabilities: [fs, env],
+    deps: {
+        pktline: {path: "../pktline"},
+        oid: {path: "../oid"},
+        refs: {path: "../refs"},
+    },
+}
