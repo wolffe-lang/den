@@ -3,9 +3,9 @@
 The codec, owned OIDs, bounded loose/packed store and binary parsers underpin the
 index/worktree/commit interface and diff. The dispatcher routes the implemented
 porcelain, plumbing, diff, bounded log/show, ref commands, merge/revert, replay,
-blame, stash, notes and bounded pack commands.
-Combined merge show, recursive/complex merges, full replay semantics, pack housekeeping and transports
-remain separate work; M2, M3 and M4 are not complete. Diff's known hunk
+blame, stash, notes, bounded pack commands and the explicit wire commands.
+Combined merge show, recursive/complex merges, full replay semantics, gc policy and wider transport policies
+remain separate work; M2, M3, M4 and M5 are not complete. Diff's known hunk
 alignment differences and binary representation exceptions are explicit below,
 not a blanket byte-parity claim.
 
@@ -18,7 +18,7 @@ not a blanket byte-parity claim.
 | M2 (partial) | `index`, `worktree`, `ignore`, `commit_format`, `commit`: implemented subset (vc03); `delta`, `rename`, `difftext`, `diffbinary`, `diff` (vc04); `walk`, `pretty`, log/show (vc05) |
 | M3 (partial) | `refs`, `refcmd`, `worktree.transition`: refs/reflogs, branch/tag/switch/checkout/reset (vc06); three-way merge/revert (vc07); rebase/cherry-pick/sequencer (vc08); `revsyntax`, `revision`, `revset`: shared bounded grammar (vc10); `blame`, `blamerange` and shared `difftext.correspondence`: bounded line attribution (vc11); `stash`, `stashlog`, `notes`, `notestree`: stash and notes (vc12) |
 | M4 (partial) | `pack`: pack-v2/idx-v2 reading (vc09), shared delta encoder and verified pair writer; `packcmd`: pack-objects, verify-pack, count-objects, bounded fsck (vc13/vc14), reachable closure and verified repack/prune-packed; gc policy remains named |
-| M5 | `pktline`, protocol v2 fetch (vc13); receive-pack push/remotes (vc14); clone/pull porcelain (vc15) |
+| M5 (partial) | `pktline`, `wire`, `transport`, `wiregit`: v2 fetch/ls-refs and v0 receive-pack, file/git peers, explicit clone/fetch/push; `pack` received/thin streams and `refs.transaction` logical atomic publication (vc15); broader remotes/pull and policies remain named |
 | M6 | static build and PAX handoff (vc16, then px lane); optional `git` alias |
 | Later | HTTPS beyond measured TLS profile, hooks, worktrees, sparse index, submodules, SHA-256 repositories, interactive rebase, bundles and protocol v0/v1 fetch |
 
@@ -26,6 +26,61 @@ The MVP is M0–M3, file/git transports from M5, and M6. Pack reading is availab
 beneath object lookup; pack construction is separate from housekeeping and transports.
 OID design keeps an algorithm and a byte list from the start, never a fixed
 20-byte public type. SHA-256 is available in the hash adapter already.
+
+## Wire API boundaries
+
+- `pktline.header`, `encode`, `decode`, `text`: binary framing with the 65,520-byte
+  inclusive packet limit. `Packet.kind` distinguishes flush/delimiter/response-end
+  (0/1/2) from data (4), including empty data. Pure decode's `next` is an absolute
+  input cursor. Text adaptation preserves everything except one optional final LF
+  and rejects NUL/non-UTF-8; binary framing never converts payloads to text.
+- `wire.capabilities`, `request`, `fetch_request`, `parse_refs`, `parse_pack`,
+  `pack_response`: owned v2 control and sideband boundaries. Unknown capability
+  keys are retained and ignored; unsupported object formats are refused by the
+  client. Writers canonicalize LF; readers tolerate its documented absence.
+  A done response requires the negotiated packfile section; fatal sideband is an
+  error, progress never becomes object data. This is not the shallow/filter/URI
+  command family.
+- `transport.connect(url, service)` returns one owned `Channel`; its descriptor
+  fields are borrowed for IO, with explicit `close(take channel)` after use.
+  Channels wrap either mapped child pipes or a TCP socket, never a command shell.
+  `packet` uses exact bounded reads and kind -1 only for EOF before a header;
+  partial headers/bodies are truncated. `message` retains framing through flush,
+  returns empty bytes only for clean EOF before a message and rejects the
+  stateless-only response-end marker. URLs cap at 4,096 bytes before acquiring
+  handles; unsupported encoded paths are named. TCP IO has 30-second deadlines.
+- `pack.stream_length`, `stream_refs`, `decode(data, bases)` read complete pack-v2
+  streams without an index. Whole/OFS/REF entries and forward REF chains reuse
+  the inflater, delta application and canonical hash code. `bases` contains owned
+  canonical bodies supplied by the caller; stream_refs also lists internal REF
+  bases, so missing local copies are not by themselves errors. Decode resolves
+  all entries or rejects unresolved/cyclic bases. Counts cap at 10,000, bodies at
+  16 MiB, charged stream/reconstruction payload at 128 MiB and depth at 64.
+  These are not streaming or peak-RSS promises.
+- `wiregit.fetch_objects`, `fetch_into`, `clone_repository`, `push`, `upload`,
+  `receive`, `serve`: the public peer/data boundaries behind the bounded CLI.
+  Clone filters the ordinary HEAD/branch/tag view and uses the existing
+  worktree/index transaction. Received streams decode completely before loose
+  publication; selected typed closures validate before refs change. The shared
+  validator's `packcmd.Link` / `links` provide typed graph edges. Ancestry uses
+  the same canonical commit-header parser, not a second revision grammar.
+- `refs.AtomicUpdate`, `transaction`, `transaction_injected`: bare, no-reflog
+  logical transactions. Every target and packed-refs is reserved first. Old
+  target values are packed before same-value loose shadows are removed; one
+  final packed-ref rename changes all targets. Before that rename, failure
+  preserves every logical old value. The boolean result distinguishes successful
+  directory sync from a committed rename whose directory sync failed. Explicit
+  precommit injections are API arguments, never environment fault switches.
+  This does not supply reflog transactions, crash-lock recovery or reader
+  snapshot isolation.
+
+`probes/wire-client`, `atomic-client`, `upload-service` and `receive-service`
+compile as independent packages. `tools/check-wire` runs native/release peers,
+real Git-generated OFS/REF/thin streams, malformed-input immutability and bounded
+actual-checked pure programs. Complete process bytes/streams live under
+`target/runs/wire-*` and `wire-pack-*`. Quiet success bytes and canonical object,
+ref and checkout comparisons are separate; general failure-message/porcelain
+parity is not inferred. All inherited M2/M3/M4 refusals remain named.
 
 ## Pack writing and inspection (vc13)
 
@@ -77,7 +132,7 @@ below. Multiple-tip/missing-output ordering, multiple broken-link ordering,
 unmeasured diagnostic combinations, split/Bloom graphs, strict/configured fsck
 and alternate stores remain named. The main packed fsck and count-objects rows
 both require parity. Bitmaps, multi-pack-index, cruft packs,
-.keep policy, thin packs, transport/stdout and nondefault window/depth remain named.
+.keep policy and pack-objects thin/stdout or nondefault window/depth forms remain named.
 
 The writer gate uses 61 source fixtures (16 original, similarity, den-origin,
 34 vc09 packed, six vc12 stash/notes and three larger vc14 repetitive/binary/mixed
