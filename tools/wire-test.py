@@ -169,6 +169,11 @@ def main():
         assert run([git, 'show-ref'], target).stdout == before
         run(prefix + ['--force', target.as_uri(), oldspec], fixture)
         assert run([git, 'rev-parse', 'refs/heads/main'], target).stdout.strip() == first
+        run([git, 'update-ref', 'refs/heads/remove', first.decode()], target)
+        run(prefix + [target.as_uri(), oldspec, ':refs/heads/remove'], fixture)
+        assert run([git, 'show-ref', '--verify', '--quiet', 'refs/heads/remove'], target, ok=False).returncode != 0
+        assert run([git, 'rev-parse', 'refs/heads/main'], target).stdout.strip() == first
+        rows.append(client + ' delete-only wire request mixed with an unchanged positive refspec')
         rows.append(client + ' file push/create/non-fast-forward refusal/force/fsck')
         run(prefix + ['--atomic', target.as_uri(),
                       'refs/heads/main:refs/heads/atomic-a',
