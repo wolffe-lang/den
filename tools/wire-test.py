@@ -256,6 +256,25 @@ def main():
         return {str(p.relative_to(path)): [p.stat().st_mode & 0o777, hashlib.sha256(p.read_bytes()).hexdigest()]
                 for p in path.rglob('*') if p.is_file()}
 
+    custom = out / 'custom-namespace.git'
+    if custom.exists():
+        shutil.rmtree(custom)
+    run([git, 'init', '-q', '--bare', custom])
+    custom_spec = 'refs/heads/main:refs/custom/item'
+    rewind_spec = 'refs/heads/old:refs/custom/item'
+    run([den, 'push', '-q', custom.as_uri(), custom_spec], fixture)
+    before = run([git, 'show-ref'], custom).stdout
+    assert run([git, 'push', '-q', custom.as_uri(), rewind_spec], fixture, ok=False).returncode != 0
+    result = run([den, 'push', '-q', custom.as_uri(), rewind_spec], fixture, ok=False)
+    assert result.returncode != 0, 'unforced custom-namespace rewind must refuse'
+    assert run([git, 'show-ref'], custom).stdout == before
+    run([den, 'push', '-q', '--force', custom.as_uri(), rewind_spec], fixture)
+    assert run([git, 'rev-parse', 'refs/custom/item'], custom).stdout.strip() == first
+    before = run([git, 'show-ref'], custom).stdout
+    result = run([den, 'push', '-q', custom.as_uri(), custom_spec], fixture, ok=False)
+    assert result.returncode != 0 and b'custom-namespace update requires force' in result.stderr
+    assert run([git, 'show-ref'], custom).stdout == before
+    rows.append('custom namespace creation/force and safe unforced policy refusal (not general parity)')
     self_server = out / 'den-to-den-push.git'
     if self_server.exists():
         shutil.rmtree(self_server)
