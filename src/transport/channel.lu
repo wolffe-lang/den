@@ -97,7 +97,9 @@ pub fn close(take c: Channel) -> int ! Errors {
 }
 
 fn file_channel(path: str, service: str) -> Channel ! Errors {
-    if !path.starts_with("/") || path.contains("\0") || path.contains("%") { return invalid }
+    if path.contains("\0") { return invalid }
+    if path.contains("%") { return Unsupported("percent-encoded file URL") }
+    if !path.starts_with("/") { return Unsupported("file URL requires an absolute local path") }
     let variable = if service == "upload-pack" then "DEN_UPLOAD_PACK" else "DEN_RECEIVE_PACK"
     let program = env.get(variable) else "git-{service}"
     var command = process.from_argv([program, path])
@@ -138,14 +140,14 @@ fn file_channel(path: str, service: str) -> Channel ! Errors {
 /// Open a file service subprocess or git TCP session; no shell, no protocol fallback, 30-second TCP deadlines.
 pub fn connect(url: str, service: str) -> Channel ! Errors {
     if service != "upload-pack" && service != "receive-pack" { return invalid }
+    if url.len > 4096 { return limit }
     if url.starts_with("file://") { return file_channel(url[7..], service)? }
     if !url.starts_with("git://") { return Unsupported("transport requires file:// or git://") }
     let remote = url[6..]
     let slash = remote.find("/") else |_| { return invalid }
     let host = remote[0..slash], path = remote[slash..]
-    if host == "" || host.contains("\0") || path.contains("\0") || path.contains("%") {
-        return invalid
-    }
+    if host == "" || host.contains("\0") || path.contains("\0") { return invalid }
+    if path.contains("%") { return Unsupported("percent-encoded git URL") }
     let address = if host.contains(":") then copy host else "{host}:9418"
     var socket = net.connect(address) else |_| { return io }
     net.set_deadline(mut socket, 30000) else |_| {
