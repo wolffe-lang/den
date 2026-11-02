@@ -5,6 +5,14 @@ use transport
 
 fn execute(args: List[str]) -> () ! object.StoreErrors {
     if args.len == 0 { return invalid }
+    if args[0] == "daemon" {
+        if args.len != 3 {
+            return Unsupported("daemon requires BASE PORT (one loopback upload session)")
+        }
+        let port = args[2].to_int() else |_| { return invalid }
+        serve(args[1], port)?
+        return
+    }
     if args[0] == "upload-pack" {
         var version2 = false
         for item in (env_get("GIT_PROTOCOL") else "").split(":") {
@@ -50,10 +58,12 @@ fn execute(args: List[str]) -> () ! object.StoreErrors {
         if !quiet || bare || operands.len != 2 {
             return Unsupported("fetch requires -q URL SRC:DST")
         }
-        let pair = operands[1].split(":")
+        let force = operands[1].starts_with("+")
+        let spec = if force then operands[1][1..] else copy operands[1]
+        let pair = spec.split(":")
         if pair.len != 2 { return invalid }
         let repo = repository.discover(".")?
-        fetch_into(repo, operands[0], pair[0], pair[1])?
+        fetch_into(repo, operands[0], pair[0], pair[1], force)?
         return
     }
     Unsupported("wire command {args[0]}")

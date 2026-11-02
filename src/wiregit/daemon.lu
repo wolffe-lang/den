@@ -1,0 +1,38 @@
+use std.fs
+use std.net
+use object
+use repository
+use transport
+
+/// Serve one unauthenticated v2 upload connection on loopback. Canonical paths
+/// must remain within base and carry git-daemon-export-ok; no write service.
+pub fn serve(base: str, port: int) -> () ! object.StoreErrors {
+    if port < 0 || port > 65535 { return invalid }
+    let root = fs.realpath(base)?
+    var listener = net.listen("127.0.0.1:{port}") else |_| { return io }
+    defer net.close_listener(take listener) else |_| {}
+    net.set_listener_deadline(mut listener, 30000) else |_| { return io }
+    let chosen = net.port(listener) else |_| { return io }
+    print("port {chosen}")
+    var socket = net.accept(mut listener) else |_| { return io }
+    net.set_deadline(mut socket, 30000) else |_| { return io }
+    var c = transport.Channel { input: socket.fd, output: socket.fd, socket: true, child: -1 }
+    defer { let _ = transport.close(copy c) else 1 }
+    let first = transport.packet(mut c)?
+    if first.kind != 4 { return invalid }
+    let text = str_from_utf8(first.data) else |_| { return invalid }
+    let parts = text.split("\0")
+    if parts.len < 2 || !parts[0].starts_with("git-upload-pack ") {
+        return Unsupported("git service")
+    }
+    let path = parts[0][16..]
+    if !path.starts_with("/") { return invalid }
+    var version2 = false
+    for item in parts { if item == "version=2" { version2 = true } }
+    if !version2 { return Unsupported("git transport requires version 2") }
+    let absolute = fs.realpath("{root}{path}")?
+    if absolute != root && !absolute.starts_with("{root}/") { return denied }
+    let admin = if fs.is_dir("{absolute}/.git") then "{absolute}/.git" else copy absolute
+    if !fs.is_file("{admin}/git-daemon-export-ok") { return denied }
+    upload(repository.open(admin)?, mut c)?
+}
