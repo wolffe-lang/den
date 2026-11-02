@@ -3,7 +3,7 @@ use refs
 use repository
 
 fn optional(text: str) -> List[oid.Oid] ! refs.RefErrors {
-    if text == "0000000000000000000000000000000000000000" { return [] }
+    if text == "0000000000000000000000000000000000000000" { return List[oid.Oid]() }
     [oid.parse("sha1", text)?]
 }
 

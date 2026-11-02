@@ -64,7 +64,25 @@ pub fn import_pack(repo: repository.Repo, bytes: List[byte]) -> () ! object.Stor
         let id = oid.parse("sha1", name)?
         let body = object.read_object(repo, id, 16777216) else |e| match e {
             not_found => { continue },
-            _ => { return e },
+            invalid => { return invalid },
+            invalid_oid => { return invalid_oid },
+            unsupported_format => { return unsupported_format },
+            bad_header => { return bad_header },
+            bad_size => { return bad_size },
+            bad_oid => { return bad_oid },
+            truncated => { return truncated },
+            dictionary => { return dictionary },
+            checksum => { return checksum },
+            limit => { return limit },
+            trailing => { return trailing },
+            unsupported_level => { return unsupported_level },
+            denied => { return denied },
+            io => { return io },
+            exists => { return exists },
+            unsupported => { return unsupported },
+            ambiguous => { return ambiguous },
+            cross_device => { return cross_device },
+            Unsupported(text) => { return Unsupported(text) },
         }
         if body.data.len > 134217728 - total { return limit }
         total += body.data.len

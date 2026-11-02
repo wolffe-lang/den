@@ -13,7 +13,7 @@ fn zero() -> str { "0000000000000000000000000000000000000000" }
 struct PushUpdate { name: str, before: str, after: str }
 
 fn ids(text: str) -> List[oid.Oid] ! object.StoreErrors {
-    if text == zero() { return [] }
+    if text == zero() { return List[oid.Oid]() }
     [oid.parse("sha1", text)?]
 }
 
@@ -197,7 +197,9 @@ fn receive_pack_bytes(c: transport.Channel) -> List[byte] ! object.StoreErrors {
         wire.append(mut bytes, chunk)
         let end = pack.stream_length(bytes) else |e| match e {
             truncated => { continue },
-            _ => { return e },
+            invalid => { return invalid },
+            limit => { return limit },
+            Unsupported(text) => { return Unsupported(text) },
         }
         if end != bytes.len { return invalid }
         return bytes
