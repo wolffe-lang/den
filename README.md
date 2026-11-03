@@ -478,7 +478,10 @@ worktree/index transaction; bare clone preserves the selected HEAD and branch/ta
 refs. Fetch accepts one fully qualified source/destination refspec, with `+` or
 `--force` for deliberate rewrites. Push accepts explicit refspecs, deletion and
 force; local fast-forward/tag checks precede transmission, and receive-side policy
-and expected-old-id checks precede reference publication. Failure diagnostic text
+and expected-old-id checks precede reference publication. Non-forced updates
+outside `refs/heads` and `refs/tags` are a named scope refusal until the broader
+typed commit/tag-peeling policy is measured; creations, deletes and explicit
+force remain available. Failure diagnostic text
 and the remaining porcelain spellings are not general Git CLI parity claims.
 
 The daemon serves one connection on IPv4 loopback, requires
