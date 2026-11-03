@@ -58,3 +58,6 @@ upload/receive). Each proves its wrapper actually ran; 895 total projected.
 
 Add an inherited explicit-URL fetch full-state witness while completing failure
 metadata handling: 896 total projected fixture groups.
+
+Measure explicit tag/custom-ref FETCH_HEAD descriptions alongside the branch
+witness instead of guessing their spelling: 898 total projected groups.

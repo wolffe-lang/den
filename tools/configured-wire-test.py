@@ -94,6 +94,8 @@ def main():
     cases = [
         ('fetch-named-quiet', ['fetch', '-q', 'origin']),
         ('fetch-explicit-state', ['fetch', '-q', source.as_uri(), 'refs/heads/main:refs/remotes/origin/main']),
+        ('fetch-explicit-tag', ['fetch', '-q', source.as_uri(), 'refs/tags/v1:refs/tags/v1']),
+        ('fetch-explicit-custom', ['fetch', '-q', source.as_uri(), 'refs/custom/item:refs/custom/item']),
         ('fetch-default-quiet', ['fetch', '-q']),
         ('fetch-named-report', ['fetch', 'origin']),
         ('fetch-default-report', ['fetch']),
@@ -194,6 +196,10 @@ def main():
                         (source / 'git-daemon-export-ok').write_bytes(b'')
             elif name.startswith('fetch-'):
                 run([git, 'update-ref', 'refs/heads/main', second], source)
+                if name == 'fetch-explicit-tag':
+                    run([git, 'update-ref', 'refs/tags/v1', first], source)
+                if name == 'fetch-explicit-custom':
+                    run([git, 'update-ref', 'refs/custom/item', first], source)
                 if 'prune' in name:
                     run([git, 'update-ref', '-d', 'refs/heads/topic'], source)
                 if name == 'fetch-rewind-tracking':
