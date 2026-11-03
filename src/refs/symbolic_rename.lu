@@ -47,8 +47,8 @@ pub fn rename_symbolic_tracking(
         var output = fs.create_new_with_mode(log, 0o666)?
         new_log = copy log
         defer fs.close(take output) else |_| {}
-        fs.write(mut output, prior)?
-        fs.write(mut output, log_line([], [], identity, message)?)?
+        fs_write_chunk(output.fd, prior)?
+        fs_write_chunk(output.fd, log_line([], [], identity, message)?)?
         fs.sync(mut output)?
     }
     fs_rename("{next}.lock", next)?
