@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import shlex
 import subprocess
 
 
@@ -82,6 +83,11 @@ def main():
     run([git, 'config', 'gc.auto', '0'], seed)
     run([git, 'config', 'maintenance.auto', 'false'], seed)
     shutil.copytree(source, original)
+    marker = out / 'selected-service.calls'
+    upload, receive = out / 'upload-service', out / 'receive-service'
+    for path, service in ((upload, 'git-upload-pack'), (receive, 'git-receive-pack')):
+        path.write_text('#!/bin/sh\nprintf \'%s\\n\' "$@" >> ' + shlex.quote(str(marker)) + '\nexec ' + shlex.quote(str(staged / 'bin' / service)) + ' "$@"\n')
+        path.chmod(0o755)
     cases = [
         ('fetch-named-quiet', ['fetch', '-q', 'origin']),
         ('fetch-default-quiet', ['fetch', '-q']),
@@ -95,6 +101,10 @@ def main():
         ('push-u-quiet', ['push', '-q', '-u', 'origin', 'main']),
         ('push-default-report', ['push']),
         ('push-u-report', ['push', '-u', 'origin', 'main']),
+        ('fetch-service-flag', ['fetch', '-q', '--upload-pack=' + str(upload), 'origin']),
+        ('fetch-service-config', ['fetch', '-q', 'origin']),
+        ('push-service-flag', ['push', '-q', '--receive-pack=' + str(receive)]),
+        ('push-service-config', ['push', '-q']),
     ]
     lease = '--force-with-lease=refs/heads/main:'
     lease_cases = [
@@ -124,7 +134,7 @@ def main():
     reviews = json.loads(review_path.read_text()).get('records', {}) if review_path.exists() else {}
     rows = []
     for name, argv in cases:
-        outcomes, fingerprints = [], []
+        outcomes, fingerprints, selector_calls, selected_proofs = [], [], [], []
         for tool in (git, den):
             reset(source, original)
             reset(work, seed)
@@ -149,17 +159,29 @@ def main():
                 run([git, 'update-ref', 'refs/heads/main', second], work)
                 if name.startswith('push-u-'):
                     run([git, 'config', '--remove-section', 'branch.main'], work)
+            selecting = '-service-' in name
+            selected_program = upload if name.startswith('fetch-') else receive
+            if name.endswith('-service-config'):
+                key = 'remote.origin.uploadpack' if name.startswith('fetch-') else 'remote.origin.receivepack'
+                run([git, 'config', key, str(selected_program)], work)
+            marker.write_bytes(b'')
             case_input = dict(argv=argv, environment=environment, stdin='', local=snapshot(work), remote=snapshot(source),
                               global_config=Path(env['GIT_CONFIG_GLOBAL']).read_bytes().hex(),
                               oracle_sha256=oracle_digest)
+            if selecting:
+                case_input['selected_service'] = dict(path=str(selected_program), mode=selected_program.stat().st_mode & 0o777, data=selected_program.read_bytes().hex())
             fingerprint = hashlib.sha256(json.dumps(case_input, sort_keys=True).encode()).hexdigest()
             fingerprints.append(fingerprint)
             result = run([tool, *argv], work, check=False)
+            calls = marker.read_bytes()
+            if selecting:
+                selector_calls.append(calls.hex())
+                selected_proofs.append(str(source).encode() in calls.splitlines())
             outcomes.append(dict(stdout=result.stdout.hex(), stderr=result.stderr.hex(), exit=result.returncode,
                                  local=snapshot(work), remote=snapshot(source)))
         equal = outcomes[0] == outcomes[1]
         reviewed = False
-        passed = equal and fingerprints[0] == fingerprints[1]
+        passed = equal and fingerprints[0] == fingerprints[1] and all(selected_proofs)
         if name == 'lease-delete-match':
             record = reviews.get(a.tier)
             reviewed = accepted_review(record, name, fingerprints, case_input, outcomes)
@@ -167,7 +189,7 @@ def main():
             if reviewed:
                 print('REVIEW configured-lease-delete-match reason=wire-push-service-stderr', flush=True)
         rows.append(dict(name=name, parity=equal, reviewed=reviewed, passed=passed,
-                         input=case_input, input_sha256=fingerprints[0], outcomes=outcomes))
+                         input=case_input, input_sha256=fingerprints[0], outcomes=outcomes, selector_calls=selector_calls))
         if not passed:
             print('FAIL configured-' + name, flush=True)
     (out / 'summary.json').write_text(json.dumps(dict(rows=rows, zero_skips=True), indent=2) + '\n')

@@ -14,10 +14,11 @@ step() {
     printf 'END %s exit=%s secs=%s\n' "$name" "$rc" "$((SECONDS-started))"
     return "$rc"
 }
-checked_config() {
-    "$WOLF" conform-run src/config_edit_test.lu --checked --json > target/porcelain-config-checked.json || return $?
-    cat target/porcelain-config-checked.json
-    python3 -I - target/porcelain-config-checked.json <<'PY'
+checked_program() {
+    local program=$1
+    "$WOLF" conform-run "src/$program.lu" --checked --json > "target/$program-porcelain-checked.json" || return $?
+    cat "target/$program-porcelain-checked.json"
+    python3 -I - "target/$program-porcelain-checked.json" <<'PY'
 import json,sys
 rows=[json.loads(line) for line in open(sys.argv[1]) if line.startswith('{')]
 assert len(rows)==1 and rows[0]['verdict']=='exit(0)',rows
@@ -33,9 +34,13 @@ for tier in native release; do
     step "$tier-porcelain-receive-build" "$WOLF" build $flag --deny-warnings probes/receive-service/main.lu -o "target/$tier/receive-service"
     step "$tier-config-edit-build" "$WOLF" build $flag --deny-warnings src/config_edit_test.lu -o "target/$tier/config-edit-test"
     step "$tier-config-edit-unit" "target/$tier/config-edit-test"
+    step "$tier-ssh-parser-build" "$WOLF" build $flag --deny-warnings src/ssh_test.lu -o "target/$tier/ssh-test"
+    step "$tier-ssh-parser-unit" "target/$tier/ssh-test"
     step "$tier-porcelain-remotes" tools/env python3 -I tools/remote-test.py --tier "$tier"
     step "$tier-porcelain-typed-policy" tools/env python3 -I tools/wire-policy-test.py --tier "$tier" --receive-peer
     step "$tier-porcelain-configured" tools/env python3 -I tools/configured-wire-test.py --tier "$tier" --family all
+    step "$tier-porcelain-pull" tools/env python3 -I tools/pull-test.py --tier "$tier"
 done
-step actual-checked-config-edit checked_config
+step actual-checked-config-edit checked_program config_edit_test
+step actual-checked-ssh-parser checked_program ssh_test
 step porcelain-format tools/check-fmt

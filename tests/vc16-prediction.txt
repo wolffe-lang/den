@@ -52,3 +52,6 @@ a separately byte-bound reviewed row, not an exact parity pass.
 Expand the final combined failure/SSH estimate into twelve live SSH interop
 groups and twelve failure groups: 891 total projected. The SSH endpoint exports
 protocol v2 only in owned fixture wrappers; no SSH configuration is changed.
+
+Add four portable literal-service selector groups (CLI and remote config for
+upload/receive). Each proves its wrapper actually ran; 895 total projected.
