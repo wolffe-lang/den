@@ -66,6 +66,18 @@ def main():
         ('no-newline', [add]),
         ('duplicate-sections', [['set-url', 'origin', 'new']]),
         ('empty-section', [['get-url', 'origin']]),
+        ('tracking-rename', [['rename', 'origin', 'next']]),
+        ('tracking-remove', [['remove', 'origin']]),
+        ('tracking-rename-packed', [['rename', 'origin', 'next']]),
+        ('tracking-remove-packed', [['remove', 'origin']]),
+        ('tracking-rename-symbolic', [['rename', 'origin', 'next']]),
+        ('tracking-remove-symbolic', [['remove', 'origin']]),
+        ('upstream-current', [['@branch', '--set-upstream-to=origin/main']]),
+        ('upstream-named', [['@branch', '--set-upstream-to', 'origin/main', 'main']]),
+        ('upstream-short', [['@branch', '-u', 'origin/main']]),
+        ('upstream-missing', [['@branch', '--set-upstream-to=origin/missing']]),
+        ('upstream-local', [['@branch', '--set-upstream-to=other']]),
+        ('upstream-then-remove', [['@branch', '-u', 'origin/main'], ['remove', 'origin']]),
     ]
     setups = {
         'set-comment': '[remote "origin"] # header\n  url = old # trailing\n  fetch = +refs/heads/*:refs/remotes/origin/*\n',
@@ -91,11 +103,32 @@ def main():
                 (work / '.git/config.lock').write_bytes(b'foreign\n')
             if name == 'no-newline':
                 config.write_bytes(config.read_bytes().rstrip(b'\n'))
+            if name.startswith(('tracking-', 'upstream-')):
+                tree = run([git, 'mktree'], work).stdout.strip().decode()
+                commit = run([git, 'commit-tree', tree, '-m', 'base'], work).stdout.strip().decode()
+                for ref in ('refs/heads/main', 'refs/heads/other', 'refs/remotes/origin/main', 'refs/remotes/origin/topic', 'refs/remotes/unrelated/main'):
+                    assert run([git, 'update-ref', ref, commit], work).returncode == 0
+                assert run([git, 'remote', *add], work).returncode == 0
+                if name.startswith('tracking-'):
+                    assert run([git, 'branch', '-u', 'origin/main'], work).returncode == 0
+                if name.endswith('-packed'):
+                    assert run([git, 'pack-refs', '--all'], work).returncode == 0
+                if name.endswith('-symbolic'):
+                    assert run([git, 'symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/main'], work).returncode == 0
             states = []
             for command in commands:
-                r = run([tool, 'remote', *command], work)
+                argv = ['branch', *command[1:]] if command and command[0] == '@branch' else ['remote', *command]
+                r = run([tool, *argv], work)
+                refstate = {}
+                for folder in ('refs', 'logs'):
+                    for path in (work / '.git' / folder).rglob('*'):
+                        if path.is_file():
+                            refstate[str(path.relative_to(work / '.git'))] = [path.read_bytes().hex(), path.stat().st_mode & 0o777]
+                packed = work / '.git/packed-refs'
+                if packed.exists():
+                    refstate['packed-refs'] = [packed.read_bytes().hex(), packed.stat().st_mode & 0o777]
                 states.append(dict(stdout=r.stdout.hex(), stderr=r.stderr.hex(), exit=r.returncode,
-                                   config=config.read_bytes().hex(), mode=config.stat().st_mode & 0o777,
+                                   refs=refstate, config=config.read_bytes().hex(), mode=config.stat().st_mode & 0o777,
                                    lock=(work / '.git/config.lock').read_bytes().hex() if (work / '.git/config.lock').exists() else None))
             outcomes.append(states)
         equal = a.oracle_only or outcomes[0] == outcomes[1]
