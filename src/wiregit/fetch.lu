@@ -242,6 +242,18 @@ pub fn fetch_into(
     destination: str,
     force: bool,
 ) -> () ! object.StoreErrors {
+    fetch_into_context(repo, url, source, destination, force, "Den Transport <den@example.invalid> 0 +0000", "")?
+}
+
+fn fetch_into_context(
+    repo: repository.Repo,
+    url: str,
+    source: str,
+    destination: str,
+    force: bool,
+    identity: str,
+    action: str,
+) -> () ! object.StoreErrors {
     if !refs.valid(source) || !refs.valid(destination) { return invalid }
     if (repo.config["core.bare"] else "false") != "true" {
         let head = str_from_utf8(repository.read_bytes("{repo.gitdir}/HEAD", 4096)?) else |_| {
@@ -268,13 +280,23 @@ pub fn fetch_into(
                     return Unsupported("non-fast-forward fetch (use force)")
                 }
             }
+            var message = "fetch"
+            if action != "" {
+                var reason = if source.starts_with("refs/tags/") then "storing tag" else "storing head"
+                if before.len > 0 {
+                    reason = if destination.starts_with("refs/tags/") { "updating tag" }
+                    else if ancestor(repo, oid.hex(before[0])?, reference.id)? { "fast-forward" }
+                    else { "forced-update" }
+                }
+                message = "{action}: {reason}"
+            }
             refs.update(
                 repo,
                 destination,
                 before,
                 [oid.parse("sha1", reference.id)?],
-                "Den Transport <den@example.invalid> 0 +0000",
-                "fetch",
+                identity,
+                message,
                 false,
             )?
             return

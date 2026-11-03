@@ -1,5 +1,8 @@
 use std.fs
 use object
+use oid
+use refs
+use remote
 use repository
 use transport
 
@@ -88,11 +91,18 @@ fn execute(args: List[str]) -> () ! object.StoreErrors {
         if pair.len != 2 { return invalid }
         let repo = repository.discover(".")?
         write_fetch_head(repo, "")?
-        fetch_into(repo, operands[0], pair[0], pair[1], force || forced_spec) else |e| match e {
+        var action = "fetch"
+        for arg in args[1..] { action = "{action} {arg}" }
+        fetch_into_context(repo, operands[0], pair[0], pair[1], force || forced_spec, remote.reflog_identity(repo)?, action) else |e| match e {
             not_found => { return Unsupported("couldn't find remote ref {pair[0]}") },
             Unsupported(message) => { return Unsupported(message) },
             _ => { return Unsupported("fetch: {e}") },
         }
+        let id = oid.hex(refs.read(repo, pair[1])?)?
+        let description = if pair[0].starts_with("refs/heads/") { "branch '{pair[0][11..]}'" }
+            else if pair[0].starts_with("refs/tags/") { "tag '{pair[0][10..]}'" }
+            else { "'{pair[0]}'" }
+        write_fetch_head(repo, "{id}\t\t{description} of {fetch_url(operands[0])}\n")?
         return
     }
     if args[0] == "push" {
