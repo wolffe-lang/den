@@ -55,6 +55,12 @@ def main():
         ('ff-rebase-config', 'ff', [], [('pull.rebase', 'true')]),
         ('quiet-ff', 'ff', ['-q'], []),
         ('quiet-rebase', 'clean', ['-q', '--rebase'], []),
+        ('rebase-overrides-ff-only', 'clean', ['--rebase'], [('pull.ff', 'only')]),
+        ('merge-overrides-ff-only', 'clean', ['--no-rebase'], [('pull.ff', 'only')]),
+        ('ff-only-overrides-rebase', 'clean', ['--ff-only'], [('pull.rebase', 'true')]),
+        ('no-rebase-overrides-config', 'clean', ['--no-rebase'], [('pull.rebase', 'true')]),
+        ('rebase-overrides-config', 'clean', ['--rebase'], [('pull.rebase', 'false')]),
+        ('ff-true-config', 'clean', [], [('pull.ff', 'true')]),
     ]
     rows = []
     for name, kind, flags, config in cases:

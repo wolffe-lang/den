@@ -61,3 +61,6 @@ metadata handling: 896 total projected fixture groups.
 
 Measure explicit tag/custom-ref FETCH_HEAD descriptions alongside the branch
 witness instead of guessing their spelling: 898 total projected groups.
+
+Add six measured CLI/config pull precedence groups before finalizing policy:
+26 pull groups, 904 total projected.
