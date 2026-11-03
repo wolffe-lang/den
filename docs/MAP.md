@@ -18,8 +18,8 @@ not a blanket byte-parity claim.
 | M2 (partial) | `index`, `worktree`, `ignore`, `commit_format`, `commit`: implemented subset (vc03); `delta`, `rename`, `difftext`, `diffbinary`, `diff` (vc04); `walk`, `pretty`, log/show (vc05) |
 | M3 (partial) | `refs`, `refcmd`, `worktree.transition`: refs/reflogs, branch/tag/switch/checkout/reset (vc06); three-way merge/revert (vc07); rebase/cherry-pick/sequencer (vc08); `revsyntax`, `revision`, `revset`: shared bounded grammar (vc10); `blame`, `blamerange` and shared `difftext.correspondence`: bounded line attribution (vc11); `stash`, `stashlog`, `notes`, `notestree`: stash and notes (vc12) |
 | M4 (partial) | `pack`: pack-v2/idx-v2 reading (vc09), shared delta encoder and verified pair writer; `packcmd`: pack-objects, verify-pack, count-objects, bounded fsck (vc13/vc14), reachable closure and verified repack/prune-packed; gc policy remains named |
-| M5 (partial) | `pktline`, `wire`, `transport`, `wiregit`: v2 fetch/ls-refs and v0 receive-pack, file/git peers, explicit clone/fetch/push; `pack` received/thin streams and `refs.transaction` logical atomic publication (vc15); broader remotes/pull and policies remain named |
-| M6 | static build and PAX handoff (vc16, then px lane); optional `git` alias |
+| M5 (partial) | `pktline`, `wire`, `transport`, `wiregit`: v2 fetch/ls-refs and v0 receive-pack, file/git/system-SSH peers, clone/fetch/push, configured remote/tracking/leases and M3-backed pull (vc16); `pack` received/thin streams and `refs.transaction` logical atomic publication (vc15); broader configuration/transport policies remain named |
+| M6 | static build and PAX handoff (later lane); optional `git` alias |
 | Later | HTTPS beyond measured TLS profile, hooks, worktrees, sparse index, submodules, SHA-256 repositories, interactive rebase, bundles and protocol v0/v1 fetch |
 
 The MVP is M0–M3, file/git transports from M5, and M6. Pack reading is available
@@ -108,8 +108,20 @@ Outside heads/tags, unforced updates require both values to peel to commits and
 fast-forward; a changed tree/blob needs force. Heads always require a commit;
 tags reject replacements without force. The measured receiver refuses remote
 updates to `refs/stash` as `funny refname`, including forced creation; local stash
-storage is unaffected. This is not an M5 completion claim: pull and ssh work,
-additional configuration forms and failure-output parity remain separate.
+storage is unaffected. Its 770-group typed matrix compares acceptance and refs,
+not exact failure text or status; raw outputs remain retained separately.
+
+Pull reads CLI/config rebase and ff policy, performs the configured fetch and
+reuses the existing merge/replay engines, including their conflicts and named
+limits. Explicit --rebase/--no-rebase overrides configured pull.ff=only; explicit
+--ff-only still wins. Unconfigured divergence and ff-only divergence fail before
+ORIG_HEAD publication. Rewritten-upstream/fork-point rebase, octopus/refspec
+selection and existing unconfigured local-path transport remain named limits.
+There are 48 remote/tracking, 48 configured/lease/failure and 26 pull groups beside
+the typed matrix: 892 portable groups per tier, including the one reviewed
+service-output difference below. Units and review-binding mutations are separate.
+This is not an M5 completion claim; additional configuration forms, protocol v0/v1,
+HTTPS and general failure-output parity remain separate.
 
 ### SSH protocol boundary
 
@@ -119,6 +131,15 @@ fixture endpoint selects explicit upload/receive service paths under its owned
 fixture directory. Those wrappers export GIT_PROTOCOL=version=2 and exec the
 pinned services. They do not change sshd or SSH configuration, install keys, or
 provide a protocol fallback.
+
+System SSH starts with an argv vector and separately quoted literal remote
+program/path arguments. URI/scp-like paths, user/port parsing and pre-exec option
+injection/control validation share one transport boundary. IPv6 and encoded SSH
+URLs remain named limits. Twelve live Mac-to-kasumi groups cover clone, normal
+checkout, space/quote/shell-literal paths, incremental fetch, push, stale/matching
+leases and v0 refusal. Canonical objects are independently checked against the
+pinned server; Mac Git is not the oracle. CLI/config service selections are literal
+executables, never an added command-language parser.
 
 ### Named receive-service diagnostic limit
 
