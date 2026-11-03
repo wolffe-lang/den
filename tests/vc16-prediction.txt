@@ -22,6 +22,10 @@ The resulting total estimate is 636 fixture groups.
 After the original 24 remote groups passed, add twelve precommitted config-edge
 groups (36 remote groups, 648 total projected). The expanded matrix first failed
 by name for permissions, fetch-only rename, foreign locks and duplicate sections.
+After reading the 540-group table (30 mismatches), add distinct tags of the same
+commit and nested annotated tags: 770 policy groups, 878 total projected. Add
+a reverse receive-service peer per group. Predict that refs/stash updates remain
+remote refusals, including forced creations; no-op requests are still successes.
 
 Expected closures of the prior lane's named remainders: remote-name and default
 refspec forms, bounded pull forms, typed-peeling update policy outside heads/tags,
@@ -36,5 +40,6 @@ a GitHub-ssh witness: push one fixture commit to a scratch-only branch, fetch it
 and compare its canonical closure, then remove only that branch. This lane never
 uses GitHub as a fixture peer and never changes ssh configuration.
 
-Operational update: no pushes or PR until the maintainer authorizes the route.
-Local final and plant records remain required; audit needing a PR is pending.
+Operational update: no lane-branch publication or PR until an authorized route
+is available. Own-directory fixture pushes remain allowed. Local final and plant
+records remain required; audit needing a PR is pending.

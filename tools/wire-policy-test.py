@@ -13,6 +13,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--tier', default='native')
     parser.add_argument('--oracle-only', action='store_true')
+    parser.add_argument('--receive-peer', action='store_true')
     a = parser.parse_args()
     root = Path(__file__).resolve().parent.parent
     out = root / 'target/runs' / ('wire-policy-' + a.tier)
@@ -52,10 +53,15 @@ def main():
     t0 = tag(c0, 'commit', 'old')
     t1 = tag(c1, 'commit', 'new')
     tt = tag(tree, 'tree', 'tree')
-    values = dict(commit=c0, forward=c1, divergent=side, tag=t0, forward_tag=t1, tree_tag=tt, tree=tree, blob=blob, other_blob=other)
+    same = tag(c0, 'commit', 'same-commit-other-tag')
+    nested = tag(t1, 'tag', 'nested')
+    values = dict(commit=c0, forward=c1, divergent=side, tag=t0, same_commit_tag=same, forward_tag=t1, nested_tag=nested, tree_tag=tt, tree=tree, blob=blob, other_blob=other)
     target = out / 'target.git'
     failures = []
     namespaces = ('refs/heads/item', 'refs/tags/item', 'refs/notes/item', 'refs/stash', 'refs/custom/item', 'refs/remotes/item')
+    peers = [(git, [])] if a.oracle_only else [(git, []), (den, [])]
+    if a.receive_peer:
+        peers.append((git, ['--receive-pack=' + str(root / 'target' / a.tier / 'receive-service')]))
     for ref in namespaces:
         for before_name in ('absent', *values):
             for after_name, after in values.items():
@@ -68,21 +74,21 @@ def main():
                         continue
                     name = f'{ref}:{before_name}->{after_name}' + (':force' if force else '')
                     outcomes = []
-                    for tool in ([git] if a.oracle_only else [git, den]):
+                    for tool, options in peers:
                         if target.exists():
                             shutil.rmtree(target)
                         shutil.copytree(source, target)
                         if before_name != 'absent':
                             run([git, 'update-ref', ref, values[before_name]], target)
                         before = run([git, 'for-each-ref', '--format=%(refname) %(objectname)'], target).stdout
-                        p = run([tool, 'push', '-q', *(['--force'] if force else []), target.as_uri(), f'{after}:{ref}'], source, check=False)
+                        p = run([tool, 'push', '-q', *options, *(['--force'] if force else []), target.as_uri(), f'{after}:{ref}'], source, check=False)
                         after_refs = run([git, 'for-each-ref', '--format=%(refname) %(objectname)'], target).stdout
                         if p.returncode:
                             assert after_refs == before, name + ': rejection changed refs'
                         else:
                             assert run([git, 'rev-parse', ref], target).stdout.strip().decode() == after, name
                         outcomes.append(dict(exit=p.returncode, stdout=p.stdout.hex(), stderr=p.stderr.hex(), refs=after_refs.hex()))
-                    equal = a.oracle_only or ((outcomes[0]['exit'] == 0) == (outcomes[1]['exit'] == 0) and outcomes[0]['refs'] == outcomes[1]['refs'])
+                    equal = all((outcomes[0]['exit'] == 0) == (o['exit'] == 0) and outcomes[0]['refs'] == o['refs'] for o in outcomes[1:])
                     rows.append(dict(name=name, parity=equal, outcomes=outcomes))
                     if not equal:
                         failures.append(name)
