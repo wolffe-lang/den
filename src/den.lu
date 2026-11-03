@@ -52,7 +52,7 @@ fn main() -> int {
         }
         match args[0] {
             "remote" => { return remote.run(args) },
-            "clone" | "fetch" | "push" | "upload-pack" | "receive-pack" | "daemon" => {
+            "clone" | "fetch" | "push" | "pull" | "upload-pack" | "receive-pack" | "daemon" => {
                 return wiregit.run(args)
             },
             "branch" | "tag" | "switch" | "reset" | "merge" | "revert" | "cherry-pick" | "rebase" => {

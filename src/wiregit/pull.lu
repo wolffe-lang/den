@@ -1,0 +1,99 @@
+// git-pull policy selection and fetch provenance; history changes stay in M3.
+use object
+use oid
+use refcmd
+use refs
+use remote
+use repository
+
+fn pull_bool(value: str, key: str) -> bool ! object.StoreErrors {
+    match value.lower() {
+        "true" | "yes" | "on" | "1" => true,
+        "false" | "no" | "off" | "0" | "" => false,
+        _ => { return Unsupported("{key}={value}") },
+    }
+}
+
+fn pull_option(repo: repository.Repo, key: str) -> List[str] {
+    let value = repo.config[key] else { return [] }
+    [copy value]
+}
+
+fn perform_pull(args: List[str]) -> int ! object.StoreErrors {
+    let repo = repository.discover(".")?
+    let branch = remote.current_branch(repo)?
+    if branch == "" { return Unsupported("pull while detached") }
+    var action = "pull", quiet = false, rebase = "", ff = "", operands = List[str]()
+    for arg in args[1..] {
+        action = "{action} {arg}"
+        if arg == "--rebase" { rebase = "true" }
+        else if arg == "--no-rebase" { rebase = "false" }
+        else if arg == "--ff-only" { ff = "only" }
+        else if arg == "--ff" { ff = "true" }
+        else if arg == "--no-ff" { ff = "false" }
+        else if arg == "-q" || arg == "--quiet" { quiet = true }
+        else if arg == "--no-edit" {} else if arg.starts_with("-") { return Unsupported("pull option {arg}") }
+        else { (mut operands).push(copy arg) }
+    }
+    if operands.len > 2 { return Unsupported("pull octopus/refspec selection") }
+    if rebase == "" {
+        var configured = pull_option(repo, "branch.{branch}.rebase")
+        if configured.len == 0 { configured = pull_option(repo, "pull.rebase") }
+        if configured.len > 0 { rebase = if pull_bool(configured[0], "pull.rebase")? then "true" else "false" }
+    }
+    if ff == "" {
+        let configured = pull_option(repo, "pull.ff")
+        if configured.len > 0 {
+            ff = if configured[0] == "only" then "only" else if pull_bool(configured[0], "pull.ff")? then "true" else "false"
+        }
+    }
+    let known_policy = rebase != "" || ff != ""
+    let name = if operands.len > 0 then copy operands[0] else remote.default_name(repo, false)?
+    let source = if operands.len == 2 {
+        if operands[1].starts_with("refs/heads/") then copy operands[1] else "refs/heads/{operands[1]}"
+    } else { repo.config["branch.{branch}.merge"] else "" }
+    if !source.starts_with("refs/heads/") || !refs.valid(source) { return Unsupported("pull requires one branch upstream") }
+    let destination = "refs/remotes/{name}/{source[11..]}"
+    let previous = refs.optional(repo, destination)?
+    named_fetch(repo, name, action, quiet, false, if operands.len == 2 then copy source else "")?
+    let current = oid.hex(refs.read(repo, "HEAD")?)?
+    let upstream = oid.hex(refs.read(repo, destination)?)?
+    let forward = ancestor(repo, current, upstream)?
+    let up_to_date = ancestor(repo, upstream, current)?
+    let divergent = !forward && !up_to_date
+    if divergent && ff == "only" {
+        if pull_bool(repo.config["advice.diverging"] else "true", "advice.diverging")? {
+            eprint("hint: Diverging branches can't be fast-forwarded, you need to either:\nhint:\nhint: \tgit merge --no-ff\nhint:\nhint: or:\nhint:\nhint: \tgit rebase\nhint:\nhint: Disable this message with \"git config set advice.diverging false\"")
+        }
+        eprint("fatal: Not possible to fast-forward, aborting.")
+        return 128
+    }
+    if divergent && !known_policy {
+        eprint("hint: You have divergent branches and need to specify how to reconcile them.\nhint: You can do so by running one of the following commands sometime before\nhint: your next pull:\nhint:\nhint:   git config pull.rebase false  # merge\nhint:   git config pull.rebase true   # rebase\nhint:   git config pull.ff only       # fast-forward only\nhint:\nhint: You can replace \"git config\" with \"git config --global\" to set a default\nhint: preference for all repositories. You can also pass --rebase, --no-rebase,\nhint: or --ff-only on the command line to override the configured default per\nhint: invocation.")
+        eprint("fatal: Need to specify how to reconcile divergent branches.")
+        return 128
+    }
+    if rebase == "true" && divergent {
+        if previous.len > 0 && !ancestor(repo, oid.hex(previous[0])?, upstream)? {
+            return Unsupported("pull rebase rewritten upstream/fork-point selection")
+        }
+        return refcmd.run_pull(["rebase", copy upstream], action, "", quiet)
+    }
+    let url = remote.url(repo, name, false)?
+    var message = "Merge branch '{source[11..]}' of {fetch_url(url)}"
+    if branch != "main" && branch != "master" { message = "{message} into {branch}" }
+    var merge_args = ["merge", "--no-edit", "-m", message]
+    if quiet { (mut merge_args).push("-q") }
+    if rebase == "true" { (mut merge_args).push("--ff-only") }
+    else if ff == "only" { (mut merge_args).push("--ff-only") }
+    else if ff == "false" { (mut merge_args).push("--no-ff") }
+    else if ff == "true" { (mut merge_args).push("--ff") }
+    (mut merge_args).push("FETCH_HEAD")
+    refcmd.run_pull(merge_args, action, upstream, quiet)
+}
+
+/// Fetch then delegate the selected bounded merge/rebase; explicit policy
+/// refusals occur before M3 writes ORIG_HEAD or changes local history.
+pub fn pull_command(args: List[str]) -> int {
+    perform_pull(args) else |e| { eprint("den: wire: {e}"); 2 }
+}

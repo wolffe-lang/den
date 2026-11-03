@@ -29,6 +29,7 @@ fn named_fetch(
     action: str,
     quiet: bool,
     prune: bool,
+    selection: str,
 ) -> () ! object.StoreErrors {
     let url = remote.url(repo, name, false)?
     let spec = repo.config["remote.{name}.fetch"] else ""
@@ -38,12 +39,14 @@ fn named_fetch(
     }
     let identity = remote.reflog_identity(repo)?
     let branch = remote.current_branch(repo)?
-    let merge = if (repo.config["branch.{branch}.remote"] else "") == name {
+    let merge = if selection != "" {
+        copy selection
+    } else if (repo.config["branch.{branch}.remote"] else "") == name {
         repo.config["branch.{branch}.merge"] else ""
     } else {
         ""
     }
-    let advertised = fetch_view(repo, url, "refs/heads/", true)?
+    let advertised = fetch_view(repo, url, if selection == "" then "refs/heads/" else copy selection, true)?
     var available = Map[str, bool](), roots = List[str]()
     for reference in advertised {
         if reference.id == "unborn" { continue }
@@ -54,6 +57,9 @@ fn named_fetch(
         (mut roots).push(copy reference.id)
     }
     var rows = List[TransportRow]()
+    if selection != "" {
+        (mut rows).push(TransportRow { flag: "*", summary: "branch", source: selection[11..], destination: "FETCH_HEAD", reason: "" })
+    }
     if prune {
         for reference in refs.list(repo, "refs/remotes/{name}/")? {
             if refs.symbolic(repo, reference.name)? != "" { continue }
@@ -168,7 +174,7 @@ fn configured_fetch_command(args: List[str]) -> () ! object.StoreErrors {
     }
     let repo = repository.discover(".")?
     if name == "" { name = remote.default_name(repo, false)? }
-    named_fetch(repo, name, action, quiet, prune)?
+    named_fetch(repo, name, action, quiet, prune, "")?
 }
 
 fn configured_form(args: List[str]) -> bool {

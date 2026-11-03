@@ -98,6 +98,7 @@ fn execute(args: List[str]) -> () ! object.StoreErrors {
 /// Dispatch the measured bounded wire CLI; print named refusals and return 2 on any failed operation.
 pub fn run(args: List[str]) -> int {
     if args.len > 0 && args[0] == "push" { return push_command(args) }
+    if args.len > 0 && args[0] == "pull" { return pull_command(args) }
     execute(args) else |e| { eprint("den: wire: {e}"); return 2 }
     0
 }
