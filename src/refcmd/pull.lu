@@ -1,6 +1,7 @@
 // Pull delegates history changes to these existing M3 controllers, supplying
 // only command provenance, the measured merge label and quiet display policy.
 use commit
+use worktree
 
 fn pull_dispatch(args: List[str], action: str, label: str, quiet: bool) -> int ! commit.CommitErrors {
     if args.len == 0 { return Unsupported("pull missing history operation") }
@@ -18,4 +19,9 @@ pub fn run_pull(args: List[str], action: str, label: str, quiet: bool) -> int {
         Unsupported(message) => { eprint("den: not yet implemented: {message}"); 2 },
         _ => { eprint("fatal: {e}"); 128 },
     }
+}
+
+/// Refresh the index through the existing replay preflight before a rebase pull.
+pub fn refresh_pull_index() -> () ! commit.CommitErrors {
+    replay_refresh(worktree.discover(".")?)?
 }

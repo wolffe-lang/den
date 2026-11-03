@@ -54,6 +54,9 @@ fn perform_pull(args: List[str]) -> int ! object.StoreErrors {
     } else { repo.config["branch.{branch}.merge"] else "" }
     if !source.starts_with("refs/heads/") || !refs.valid(source) { return Unsupported("pull requires one branch upstream") }
     let destination = "refs/remotes/{name}/{source[11..]}"
+    if rebase == "true" {
+        refcmd.refresh_pull_index() else |e| { return Unsupported("pull rebase index refresh: {e}") }
+    }
     let previous = refs.optional(repo, destination)?
     named_fetch(repo, name, action, quiet, false, if operands.len == 2 then copy source else "")?
     let current = oid.hex(refs.read(repo, "HEAD")?)?
@@ -88,7 +91,7 @@ fn perform_pull(args: List[str]) -> int ! object.StoreErrors {
     else if ff == "only" { (mut merge_args).push("--ff-only") }
     else if ff == "false" { (mut merge_args).push("--no-ff") }
     else if ff == "true" { (mut merge_args).push("--ff") }
-    (mut merge_args).push("FETCH_HEAD")
+    (mut merge_args).push(copy upstream)
     refcmd.run_pull(merge_args, action, upstream, quiet)
 }
 
