@@ -1,0 +1,38 @@
+//! member: false
+
+use transport
+
+fn bad(url: str, expected: str) -> bool {
+    var refused = false
+    let _ = transport.ssh_endpoint(url) else |e| {
+        refused = "{e}" == expected
+        transport.SshEndpoint { host: "", port: 0, path: "" }
+    }
+    refused
+}
+
+fn main() -> int ! transport.Errors {
+    let plain = transport.ssh_endpoint("ssh://kasumi/home/user/lanes/vc16/repo.git")?
+    if plain.host != "kasumi" || plain.port != 0 || plain.path != "/home/user/lanes/vc16/repo.git" {
+        print("FAIL ssh-parser-uri"); return 1
+    }
+    let scp = transport.ssh_endpoint("kasumi:lanes/vc16/repo.git")?
+    if scp.host != "kasumi" || scp.port != 0 || scp.path != "lanes/vc16/repo.git" {
+        print("FAIL ssh-parser-scp"); return 1
+    }
+    let port = transport.ssh_endpoint("ssh://user@kasumi:22/a b'c.git")?
+    if port.host != "user@kasumi" || port.port != 22 || port.path != "/a b'c.git" {
+        print("FAIL ssh-parser-user-port"); return 1
+    }
+    if transport.ssh_quote("a b'c;$x")? != "'a b'\\''c;$x'" {
+        print("FAIL ssh-parser-quoting"); return 1
+    }
+    for url in ["ssh:///a", "ssh://-kasumi/a", "ssh://kasumi:0/a", "ssh://kasumi:65536/a", "ssh://bad host/a", "kasumi:", "ssh://kasumi/a\nnext"] {
+        if !bad(url, "invalid") { print("FAIL ssh-parser-invalid"); return 1 }
+    }
+    if !bad("ssh://kasumi/a%20b", "Unsupported(percent-encoded ssh URL)") {
+        print("FAIL ssh-parser-encoded"); return 1
+    }
+    print("ssh parser: URI/scp/user/port, literal quoting and pre-exec refusals")
+    0
+}
