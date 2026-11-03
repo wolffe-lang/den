@@ -23,7 +23,11 @@ fn fetch_view(
     let c = transport.connect(url, "upload-pack")?
     var active = true
     defer { if active { let _ = transport.close(take copy c) else 1 } }
-    let caps = wire.capabilities(transport.message(c, 65536)?) else |_| {
+    let advertisement = transport.message(c, 65536)?
+    if advertisement.len == 0 { return Unsupported("remote service unavailable") }
+    let remote_message = remote_error(advertisement)?
+    if remote_message != "" { return Unsupported(remote_message) }
+    let caps = wire.capabilities(advertisement) else |_| {
         return Unsupported("remote does not advertise protocol v2")
     }
     if !wire.supports(caps, "ls-refs") || !wire.supports(caps, "fetch") {

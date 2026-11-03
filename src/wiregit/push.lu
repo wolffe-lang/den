@@ -96,14 +96,19 @@ pub fn push_reported(
         leased_names[lease.name] = true
     }
     let c = transport.connect(url, "receive-pack")?
-    var active = true, started = false
+    var active = true, started = false, advertised = false
     defer {
         if active {
-            if !started { transport.write(c, "0000".bytes()) else |_| {} }
+            if advertised && !started { transport.write(c, "0000".bytes()) else |_| {} }
             let _ = transport.close(take copy c) else 1
         }
     }
-    let (remote, caps) = receive_advertisement(transport.message(c, 2097152)?)?
+    let advertisement = transport.message(c, 2097152)?
+    if advertisement.len == 0 { return Unsupported("remote service unavailable") }
+    let remote_message = remote_error(advertisement)?
+    if remote_message != "" { return Unsupported(remote_message) }
+    let (remote, caps) = receive_advertisement(advertisement)?
+    advertised = true
     if !wire.supports(caps, "report-status") {
         return Unsupported("push server lacks report-status")
     }
