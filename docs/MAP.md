@@ -111,6 +111,15 @@ updates to `refs/stash` as `funny refname`, including forced creation; local sta
 storage is unaffected. This is not an M5 completion claim: pull and ssh work,
 additional configuration forms and failure-output parity remain separate.
 
+### SSH protocol boundary
+
+An ordinary sshd that does not accept GIT_PROTOCOL serves protocol v0. Den does
+not speak protocol v0/v1; those remain later transport work. The local SSH
+fixture endpoint selects explicit upload/receive service paths under its owned
+fixture directory. Those wrappers export GIT_PROTOCOL=version=2 and exec the
+pinned services. They do not change sshd or SSH configuration, install keys, or
+provide a protocol fallback.
+
 ### Named receive-service diagnostic limit
 
 `wire-push-service-stderr` / `lease-delete-match`: both clients reject deletion of

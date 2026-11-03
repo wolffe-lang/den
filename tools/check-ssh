@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# Live SSH fixture leg. Caller holds the build host's lock; ssh-test reserves the
+# kasumi peer's slot and uses only its explicitly selected owned service paths.
+set -eu
+DEN_ROOT=$(cd "$(dirname "$0")/.." && pwd)
+export DEN_ROOT
+cd "$DEN_ROOT"
+. tools/lib-toolchain.sh
+step() {
+    local name=$1 started=$SECONDS rc
+    shift
+    printf 'START %s\n' "$name"
+    if "$@"; then rc=0; else rc=$?; fi
+    printf 'END %s exit=%s secs=%s\n' "$name" "$rc" "$((SECONDS-started))"
+    return "$rc"
+}
+mkdir -p target/native
+step ssh-den-build "$WOLF" build --deny-warnings src/den.lu -o target/native/den
+step ssh-service-interop tools/env python3 -I tools/ssh-test.py "$@"
