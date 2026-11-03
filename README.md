@@ -533,11 +533,14 @@ compiler reproducer tracks the returned lent-byte-view copy issue separately.
 
 ## CI and packaging
 
-`plan` selects PR/full/noop/partial tiers; `ci/tiers-test.py` checks planning and
-final verdicts. PRs run Linux; trunk/nightly/dispatch and `full-matrix` add the
-nonblocking macOS field observation. A failed nightly opens/updates a
-`nightly-red` issue. Local implementation measurements use Linux containers,
-not Mac builds.
+Unlabelled pull requests run one cheap job that reports the local-evidence
+gate. The `ci` or `full-matrix` label runs the full set: Linux and the
+nonblocking macOS field observation. Trunk pushes run that set only when
+workflows, CI, shared tools, pins or other cross-cutting paths change;
+module-only pushes run no CI. The nightly and default dispatch still run
+the full set. `ci/tiers-test.py` checks planning and final verdicts, and a
+failed nightly opens or updates a `nightly-red` issue. Local implementation
+measurements use Linux containers, not Mac builds.
 
 `packaging/den.rb` and `packaging/PKGBUILD` remain **drafts, not published**.
 They name a future v0.1.0 tag and have an unfilled source-archive digest. Do not
