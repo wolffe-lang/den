@@ -161,7 +161,7 @@ pub fn push_reported(
         if !force && !override {
             for lease in leases {
                 if lease.name != destination { continue }
-                if lease.expected != old {
+                if lease.expected != old && destination == "" {
                     reject_push(mut outcomes, "stale info")
                     return Unsupported("stale info")
                 }
