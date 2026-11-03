@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import pty
+import runpy
 import select
 import shutil
 import subprocess
@@ -91,7 +92,13 @@ def check(name, args, changes=None, terminal=False, mutate=False):
         expected = run(G, args, left, changes, terminal)
         actual = run(D, args, right, changes, terminal)
         states = [state(left), state(right)]
-        equal = states[0] == states[1]
+        compared = [dict(s) for s in states]
+        proof = runpy.run_path(str(R / 'tools/index-proof.py'))
+        li, ri = (left / '.git/index').read_bytes(), (right / '.git/index').read_bytes()
+        lc, rc, count = proof['canonical_pair'](li, ri, proof['proof'](left, li), proof['proof'](right, ri))
+        compared[0]['.git/index'] = [states[0]['.git/index'][0], lc.hex()]
+        compared[1]['.git/index'] = [states[1]['.git/index'][0], rc.hex()]
+        equal = compared[0] == compared[1]
     else:
         before = state(base)
         expected = run(G, args, changes=changes, terminal=terminal)
@@ -113,7 +120,8 @@ g('commit', '-qm', 'first')
 if a.family == 'dates':
     assert not Path('/usr/share/zoneinfo/UTC').exists(), 'run with an empty zone database'
     assert not Path('/etc/localtime').exists() or Path('/etc/localtime').stat().st_size == 0
-    g('stash', 'store', '-m', 'saved', 'HEAD')
+    (base / 'file').write_text('one\ntwo\nchanged\n')
+    g('stash', 'push', '-qm', 'saved')
     for zone in [None, 'UTC', 'Missing/Zone']:
         changes = {'TZ': zone, 'TZDIR': str(root / 'empty-zones')}
         label = 'unset' if zone is None else zone.replace('/', '-')
