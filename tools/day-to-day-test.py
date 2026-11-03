@@ -128,8 +128,78 @@ if a.family == 'dates':
         for args in [['log'], ['log', '--date=local'], ['show', '-s'], ['blame', 'file'], ['stash', 'list']]:
             check('date-no-db-' + label + '-' + args[0] + ('-local' if '--date=local' in args else ''), args, changes)
         check('date-no-db-' + label + '-commit', ['commit', '--allow-empty', '-m', 'daily'], changes, mutate=True)
-else:
-    raise AssertionError('family not yet defined')
+elif a.family == 'decorations':
+    g('branch', 'zebra')
+    g('branch', 'alpha')
+    g('tag', 'light')
+    g('tag', '-a', 'annotated', '-m', 'tag')
+    g('update-ref', 'refs/remotes/origin/main', 'HEAD')
+    g('symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/main')
+    for terminal in [False, True]:
+        stream = 'pty' if terminal else 'pipe'
+        for options in [[], ['--decorate'], ['--decorate=short'], ['--decorate=full'], ['--decorate=no'], ['--decorate=auto'], ['--no-decorate'], ['--decorate', '--no-decorate'], ['--no-decorate', '--decorate=full']]:
+            for style in [[], ['--oneline'], ['--pretty=fuller']]:
+                check('decorate-' + stream + '-' + repr(options + style), ['log', *options, *style], terminal=terminal)
+        for setting in ['auto', 'short', 'full', 'no', 'true', 'false']:
+            changes = {'GIT_CONFIG_COUNT': '1', 'GIT_CONFIG_KEY_0': 'log.decorate', 'GIT_CONFIG_VALUE_0': setting}
+            check('decorate-config-' + stream + '-' + setting, ['log', '--oneline'], changes, terminal)
+            check('decorate-override-' + stream + '-' + setting, ['log', '--oneline', '--no-decorate'], changes, terminal)
+        check('decorate-default-color-' + stream, ['log', '--oneline'], {'GIT_CONFIG_GLOBAL': '/dev/null', 'TERM': 'xterm'}, terminal)
+    g('checkout', '-q', '--detach')
+    check('decorate-detached', ['log', '--oneline', '--decorate'])
+    g('pack-refs', '--all')
+    check('decorate-packed', ['log', '--oneline', '--decorate=full'])
+elif a.family == 'config':
+    original = (base / '.git/config').read_bytes()
+    home = base / 'home'
+    home.mkdir()
+    (home / '.config/git').mkdir(parents=True)
+    changes = {'HOME': str(home), 'XDG_CONFIG_HOME': str(home / '.config'), 'GIT_CONFIG_GLOBAL': None}
+    initial = '# keep heading\n[demo]\n\tvalue = old # inline\n\tother = keep\n; final comment\n'.encode()
+    cases = [
+        ('set-existing', [], 'demo.value', ['new'], initial),
+        ('set-section', [], 'fresh.value', ['hello'], initial),
+        ('set-subsection', [], 'remote.Mixed.url', ['ssh://example.invalid/repo'], initial),
+        ('add', ['--add'], 'demo.value', ['new'], initial),
+        ('unset', ['--unset'], 'demo.value', [], initial),
+        ('unset-missing', ['--unset'], 'demo.missing', [], initial),
+        ('unset-all-missing', ['--unset-all'], 'demo.missing', [], initial),
+        ('unset-all', ['--unset-all'], 'demo.value', [], initial + b'[demo]\n\tvalue = second\n'),
+        ('replace-all', ['--replace-all'], 'demo.value', ['new'], initial + b'[demo]\n\tvalue = second\n'),
+        ('set-multiple', [], 'demo.value', ['new'], initial + b'[demo]\n\tvalue = second\n'),
+        ('unset-multiple', ['--unset'], 'demo.value', [], initial + b'[demo]\n\tvalue = second\n'),
+        ('set-no-final-lf', [], 'demo.value', ['new'], b'[demo]\nvalue=old'),
+        ('set-inline-header', [], 'demo.value', ['new'], b'[demo] value=old\n'),
+        ('set-crlf', [], 'demo.value', ['new'], b'[demo]\r\nvalue=old\r\nother=keep\r\n'),
+        ('set-continued', [], 'demo.value', ['new'], b'[demo]\nvalue=one\\\n two\nother=keep\n'),
+    ]
+    for n, value in enumerate(['', ' hello ', 'a#b;c', 'quote"slash\\', 'one\ntwo\tthree\b']):
+        cases.append(('quote-' + str(n), [], 'demo.value', [value], initial))
+    for scope in ['local', 'global', 'file']:
+        for label, op, key, values, content in cases:
+            dest = base / '.git/config' if scope == 'local' else home / '.gitconfig' if scope == 'global' else base / 'chosen.config'
+            args = ['config', '--' + scope] + (['chosen.config'] if scope == 'file' else []) + op + [key] + values
+            def restore():
+                (base / '.git/config').write_bytes(original)
+                dest.write_bytes((original if scope == 'local' else b'') + content)
+            restore()
+            expected = run(G, args, changes=changes)
+            expected_state = state(base)
+            restore()
+            actual = run(D, args, changes=changes)
+            actual_state = state(base)
+            ok = expected == actual and expected_state == actual_state
+            name = 'config-' + scope + '-' + label
+            rows.append({'name': name, 'args': args, 'input': content.hex(), 'expected': expected, 'actual': actual, 'states': [expected_state, actual_state], 'equal': ok})
+            print(('PASS' if ok else 'FAIL'), name, flush=True)
+            if not ok:
+                print('  expected', expected, 'actual', actual, flush=True)
+            dest.unlink(missing_ok=True)
+            (base / '.git/config').write_bytes(original)
+    dest = base / 'chosen.config'
+    dest.write_bytes(initial)
+    (base / 'chosen.config.lock').write_text('foreign lock\n')
+    check('config-foreign-lock', ['config', '--file', 'chosen.config', 'demo.value', 'new'])
 (root / 'captures.json').write_text(json.dumps(rows, indent=2) + '\n')
 failed = [row['name'] for row in rows if not row['equal']]
 print(f'daily {a.family}: {len(rows)-len(failed)}/{len(rows)} exact; zero skips', flush=True)
