@@ -23,11 +23,11 @@ fn perform_pull(args: List[str]) -> int ! object.StoreErrors {
     let repo = repository.discover(".")?
     let branch = remote.current_branch(repo)?
     if branch == "" { return Unsupported("pull while detached") }
-    var action = "pull", quiet = false, rebase = "", ff = "", operands = List[str]()
+    var action = "pull", quiet = false, rebase = "", ff = "", rebase_cli = false, operands = List[str]()
     for arg in args[1..] {
         action = "{action} {arg}"
-        if arg == "--rebase" { rebase = "true" }
-        else if arg == "--no-rebase" { rebase = "false" }
+        if arg == "--rebase" { rebase = "true"; rebase_cli = true }
+        else if arg == "--no-rebase" { rebase = "false"; rebase_cli = true }
         else if arg == "--ff-only" { ff = "only" }
         else if arg == "--ff" { ff = "true" }
         else if arg == "--no-ff" { ff = "false" }
@@ -44,7 +44,7 @@ fn perform_pull(args: List[str]) -> int ! object.StoreErrors {
     if ff == "" {
         let configured = pull_option(repo, "pull.ff")
         if configured.len > 0 {
-            ff = if configured[0] == "only" then "only" else if pull_bool(configured[0], "pull.ff")? then "true" else "false"
+            ff = if configured[0] == "only" { if rebase_cli then "true" else "only" } else if pull_bool(configured[0], "pull.ff")? then "true" else "false"
         }
     }
     let known_policy = rebase != "" || ff != ""
