@@ -1,0 +1,439 @@
+{
+  "source_head": "a8f85690d861d997736c90d256ed0c741e41ac34",
+  "capture_sha256": "632a950c8c925157347465745338741bbb1026d1e04ecc2f3030191512d6a774",
+  "global_config": "[user]\n\tname = Den Tester\n\temail = den@example.invalid\n[color]\n\tui = never\n[core]\n\tpager = cat\n\thooksPath = /work/den/target/environment/empty-hooks\n[init]\n\tdefaultBranch = main\n\ttemplateDir = /work/den/target/environment/empty-template\n[commit]\n\tgpgsign = false\n",
+  "original_processes": [
+    {
+      "argv": [
+        "/inputs/git/bin/git",
+        "remote",
+        "rename",
+        "origin",
+        "upstream"
+      ],
+      "environment": {
+        "HOME": "/work/den/target/environment/home",
+        "TMPDIR": "/work/den/target/tmp",
+        "PATH": "/inputs/git/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+        "DEN_GIT": "/inputs/git/bin/git",
+        "LC_ALL": "C",
+        "TZ": "UTC",
+        "GIT_CONFIG_NOSYSTEM": "1",
+        "GIT_CONFIG_GLOBAL": "/work/den/target/environment/gitconfig",
+        "GIT_AUTHOR_DATE": "1700000000 +0000",
+        "GIT_COMMITTER_DATE": "1700000000 +0000",
+        "GIT_EDITOR": "false",
+        "GIT_TERMINAL_PROMPT": "0",
+        "GIT_OPTIONAL_LOCKS": "0",
+        "DEN_EMPTY_TEMPLATE": "/work/den/target/environment/empty-template",
+        "GIT_EXEC_PATH": "/inputs/git/libexec/git-core"
+      },
+      "cwd": "/work/den/target/runs/wire-remote-native/work",
+      "stdin": "",
+      "stdout": "",
+      "stderr": "",
+      "exit": 0
+    },
+    {
+      "argv": [
+        "/inputs/git/bin/git",
+        "remote",
+        "rename",
+        "missing",
+        "upstream"
+      ],
+      "environment": {
+        "HOME": "/work/den/target/environment/home",
+        "TMPDIR": "/work/den/target/tmp",
+        "PATH": "/inputs/git/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+        "DEN_GIT": "/inputs/git/bin/git",
+        "LC_ALL": "C",
+        "TZ": "UTC",
+        "GIT_CONFIG_NOSYSTEM": "1",
+        "GIT_CONFIG_GLOBAL": "/work/den/target/environment/gitconfig",
+        "GIT_AUTHOR_DATE": "1700000000 +0000",
+        "GIT_COMMITTER_DATE": "1700000000 +0000",
+        "GIT_EDITOR": "false",
+        "GIT_TERMINAL_PROMPT": "0",
+        "GIT_OPTIONAL_LOCKS": "0",
+        "DEN_EMPTY_TEMPLATE": "/work/den/target/environment/empty-template",
+        "GIT_EXEC_PATH": "/inputs/git/libexec/git-core"
+      },
+      "cwd": "/work/den/target/runs/wire-remote-native/work",
+      "stdin": "",
+      "stdout": "",
+      "stderr": "6572726f723a204e6f20737563682072656d6f74653a20276d697373696e67270a",
+      "exit": 2
+    },
+    {
+      "argv": [
+        "/inputs/git/bin/git",
+        "remote",
+        "rename",
+        "origin",
+        "upstream"
+      ],
+      "environment": {
+        "HOME": "/work/den/target/environment/home",
+        "TMPDIR": "/work/den/target/tmp",
+        "PATH": "/inputs/git/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+        "DEN_GIT": "/inputs/git/bin/git",
+        "LC_ALL": "C",
+        "TZ": "UTC",
+        "GIT_CONFIG_NOSYSTEM": "1",
+        "GIT_CONFIG_GLOBAL": "/work/den/target/environment/gitconfig",
+        "GIT_AUTHOR_DATE": "1700000000 +0000",
+        "GIT_COMMITTER_DATE": "1700000000 +0000",
+        "GIT_EDITOR": "false",
+        "GIT_TERMINAL_PROMPT": "0",
+        "GIT_OPTIONAL_LOCKS": "0",
+        "DEN_EMPTY_TEMPLATE": "/work/den/target/environment/empty-template",
+        "GIT_EXEC_PATH": "/inputs/git/libexec/git-core"
+      },
+      "cwd": "/work/den/target/runs/wire-remote-native/work",
+      "stdin": "",
+      "stdout": "",
+      "stderr": "6572726f723a2072656d6f746520757073747265616d20616c7265616479206578697374732e0a",
+      "exit": 3
+    },
+    {
+      "argv": [
+        "/inputs/git/bin/git",
+        "remote",
+        "rename",
+        "origin",
+        "origin"
+      ],
+      "environment": {
+        "HOME": "/work/den/target/environment/home",
+        "TMPDIR": "/work/den/target/tmp",
+        "PATH": "/inputs/git/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+        "DEN_GIT": "/inputs/git/bin/git",
+        "LC_ALL": "C",
+        "TZ": "UTC",
+        "GIT_CONFIG_NOSYSTEM": "1",
+        "GIT_CONFIG_GLOBAL": "/work/den/target/environment/gitconfig",
+        "GIT_AUTHOR_DATE": "1700000000 +0000",
+        "GIT_COMMITTER_DATE": "1700000000 +0000",
+        "GIT_EDITOR": "false",
+        "GIT_TERMINAL_PROMPT": "0",
+        "GIT_OPTIONAL_LOCKS": "0",
+        "DEN_EMPTY_TEMPLATE": "/work/den/target/environment/empty-template",
+        "GIT_EXEC_PATH": "/inputs/git/libexec/git-core"
+      },
+      "cwd": "/work/den/target/runs/wire-remote-native/work",
+      "stdin": "",
+      "stdout": "",
+      "stderr": "6572726f723a2072656d6f7465206f726967696e20616c7265616479206578697374732e0a",
+      "exit": 3
+    },
+    {
+      "argv": [
+        "/inputs/git/bin/git",
+        "remote",
+        "rename",
+        "origin",
+        "next"
+      ],
+      "environment": {
+        "HOME": "/work/den/target/environment/home",
+        "TMPDIR": "/work/den/target/tmp",
+        "PATH": "/inputs/git/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+        "DEN_GIT": "/inputs/git/bin/git",
+        "LC_ALL": "C",
+        "TZ": "UTC",
+        "GIT_CONFIG_NOSYSTEM": "1",
+        "GIT_CONFIG_GLOBAL": "/work/den/target/environment/gitconfig",
+        "GIT_AUTHOR_DATE": "1700000000 +0000",
+        "GIT_COMMITTER_DATE": "1700000000 +0000",
+        "GIT_EDITOR": "false",
+        "GIT_TERMINAL_PROMPT": "0",
+        "GIT_OPTIONAL_LOCKS": "0",
+        "DEN_EMPTY_TEMPLATE": "/work/den/target/environment/empty-template",
+        "GIT_EXEC_PATH": "/inputs/git/libexec/git-core"
+      },
+      "cwd": "/work/den/target/runs/wire-remote-native/work",
+      "stdin": "",
+      "stdout": "",
+      "stderr": "",
+      "exit": 0
+    },
+    {
+      "argv": [
+        "/inputs/git/bin/git",
+        "remote",
+        "rename",
+        "origin",
+        "next"
+      ],
+      "environment": {
+        "HOME": "/work/den/target/environment/home",
+        "TMPDIR": "/work/den/target/tmp",
+        "PATH": "/inputs/git/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+        "DEN_GIT": "/inputs/git/bin/git",
+        "LC_ALL": "C",
+        "TZ": "UTC",
+        "GIT_CONFIG_NOSYSTEM": "1",
+        "GIT_CONFIG_GLOBAL": "/work/den/target/environment/gitconfig",
+        "GIT_AUTHOR_DATE": "1700000000 +0000",
+        "GIT_COMMITTER_DATE": "1700000000 +0000",
+        "GIT_EDITOR": "false",
+        "GIT_TERMINAL_PROMPT": "0",
+        "GIT_OPTIONAL_LOCKS": "0",
+        "DEN_EMPTY_TEMPLATE": "/work/den/target/environment/empty-template",
+        "GIT_EXEC_PATH": "/inputs/git/libexec/git-core"
+      },
+      "cwd": "/work/den/target/runs/wire-remote-native/work",
+      "stdin": "",
+      "stdout": "",
+      "stderr": "",
+      "exit": 0
+    },
+    {
+      "argv": [
+        "/inputs/git/bin/git",
+        "remote",
+        "rename",
+        "origin",
+        "next"
+      ],
+      "environment": {
+        "HOME": "/work/den/target/environment/home",
+        "TMPDIR": "/work/den/target/tmp",
+        "PATH": "/inputs/git/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+        "DEN_GIT": "/inputs/git/bin/git",
+        "LC_ALL": "C",
+        "TZ": "UTC",
+        "GIT_CONFIG_NOSYSTEM": "1",
+        "GIT_CONFIG_GLOBAL": "/work/den/target/environment/gitconfig",
+        "GIT_AUTHOR_DATE": "1700000000 +0000",
+        "GIT_COMMITTER_DATE": "1700000000 +0000",
+        "GIT_EDITOR": "false",
+        "GIT_TERMINAL_PROMPT": "0",
+        "GIT_OPTIONAL_LOCKS": "0",
+        "DEN_EMPTY_TEMPLATE": "/work/den/target/environment/empty-template",
+        "GIT_EXEC_PATH": "/inputs/git/libexec/git-core"
+      },
+      "cwd": "/work/den/target/runs/wire-remote-native/work",
+      "stdin": "",
+      "stdout": "",
+      "stderr": "",
+      "exit": 0
+    },
+    {
+      "argv": [
+        "/inputs/git/bin/git",
+        "remote",
+        "rename",
+        "origin",
+        "next"
+      ],
+      "environment": {
+        "HOME": "/work/den/target/environment/home",
+        "TMPDIR": "/work/den/target/tmp",
+        "PATH": "/inputs/git/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+        "DEN_GIT": "/inputs/git/bin/git",
+        "LC_ALL": "C",
+        "TZ": "UTC",
+        "GIT_CONFIG_NOSYSTEM": "1",
+        "GIT_CONFIG_GLOBAL": "/work/den/target/environment/gitconfig",
+        "GIT_AUTHOR_DATE": "1700000000 +0000",
+        "GIT_COMMITTER_DATE": "1700000000 +0000",
+        "GIT_EDITOR": "false",
+        "GIT_TERMINAL_PROMPT": "0",
+        "GIT_OPTIONAL_LOCKS": "0",
+        "DEN_EMPTY_TEMPLATE": "/work/den/target/environment/empty-template",
+        "GIT_EXEC_PATH": "/inputs/git/libexec/git-core"
+      },
+      "cwd": "/work/den/target/runs/wire-remote-native/work",
+      "stdin": "",
+      "stdout": "",
+      "stderr": "",
+      "exit": 0
+    }
+  ],
+  "original_oracle_states": [
+    {
+      "name": "tracking-rename",
+      "oracle": [
+        {
+          "stdout": "",
+          "stderr": "",
+          "exit": 0,
+          "refs": {
+            "refs/heads/main": [
+              "383534363862303931323436353737613732613138656531383532366432323735383965363563350a",
+              420
+            ],
+            "refs/heads/other": [
+              "383534363862303931323436353737613732613138656531383532366432323735383965363563350a",
+              420
+            ],
+            "refs/remotes/unrelated/main": [
+              "383534363862303931323436353737613732613138656531383532366432323735383965363563350a",
+              420
+            ],
+            "refs/remotes/next/topic": [
+              "383534363862303931323436353737613732613138656531383532366432323735383965363563350a",
+              420
+            ],
+            "refs/remotes/next/main": [
+              "383534363862303931323436353737613732613138656531383532366432323735383965363563350a",
+              420
+            ],
+            "logs/HEAD": [
+              "3030303030303030303030303030303030303030303030303030303030303030303030303030303020383534363862303931323436353737613732613138656531383532366432323735383965363563352044656e20546573746572203c64656e406578616d706c652e696e76616c69643e2031373030303030303030202b303030300a",
+              420
+            ],
+            "logs/refs/heads/main": [
+              "3030303030303030303030303030303030303030303030303030303030303030303030303030303020383534363862303931323436353737613732613138656531383532366432323735383965363563352044656e20546573746572203c64656e406578616d706c652e696e76616c69643e2031373030303030303030202b303030300a",
+              420
+            ],
+            "logs/refs/heads/other": [
+              "3030303030303030303030303030303030303030303030303030303030303030303030303030303020383534363862303931323436353737613732613138656531383532366432323735383965363563352044656e20546573746572203c64656e406578616d706c652e696e76616c69643e2031373030303030303030202b303030300a",
+              420
+            ],
+            "logs/refs/remotes/unrelated/main": [
+              "3030303030303030303030303030303030303030303030303030303030303030303030303030303020383534363862303931323436353737613732613138656531383532366432323735383965363563352044656e20546573746572203c64656e406578616d706c652e696e76616c69643e2031373030303030303030202b303030300a",
+              420
+            ],
+            "logs/refs/remotes/next/topic": [
+              "3030303030303030303030303030303030303030303030303030303030303030303030303030303020383534363862303931323436353737613732613138656531383532366432323735383965363563352044656e20546573746572203c64656e406578616d706c652e696e76616c69643e2031373030303030303030202b303030300a38353436386230393132343635373761373261313865653138353236643232373538396536356335203835343638623039313234363537376137326131386565313835323664323237353839653635633520726f6f74203c726f6f74403131353763333266353337362e286e6f6e65293e2031373030303030303030202b303030300972656d6f74653a2072656e616d656420726566732f72656d6f7465732f6f726967696e2f746f70696320746f20726566732f72656d6f7465732f6e6578742f746f7069630a",
+              420
+            ],
+            "logs/refs/remotes/next/main": [
+              "3030303030303030303030303030303030303030303030303030303030303030303030303030303020383534363862303931323436353737613732613138656531383532366432323735383965363563352044656e20546573746572203c64656e406578616d706c652e696e76616c69643e2031373030303030303030202b303030300a38353436386230393132343635373761373261313865653138353236643232373538396536356335203835343638623039313234363537376137326131386565313835323664323237353839653635633520726f6f74203c726f6f74403131353763333266353337362e286e6f6e65293e2031373030303030303030202b303030300972656d6f74653a2072656e616d656420726566732f72656d6f7465732f6f726967696e2f6d61696e20746f20726566732f72656d6f7465732f6e6578742f6d61696e0a",
+              420
+            ]
+          },
+          "config": "5b636f72655d0a097265706f7369746f7279666f726d617476657273696f6e203d20300a0966696c656d6f6465203d20747275650a0962617265203d2066616c73650a096c6f67616c6c72656675706461746573203d20747275650a5b72656d6f746520226e657874225d0a0975726c203d2066696c653a2f2f2f612f736f757263652e6769740a096665746368203d202b726566732f68656164732f2a3a726566732f72656d6f7465732f6e6578742f2a0a5b6272616e636820226d61696e225d0a0972656d6f7465203d206e6578740a096d65726765203d20726566732f68656164732f6d61696e0a",
+          "mode": 420,
+          "lock": null
+        }
+      ]
+    },
+    {
+      "name": "tracking-rename-packed",
+      "oracle": [
+        {
+          "stdout": "",
+          "stderr": "",
+          "exit": 0,
+          "refs": {
+            "refs/remotes/next/topic": [
+              "383534363862303931323436353737613732613138656531383532366432323735383965363563350a",
+              420
+            ],
+            "refs/remotes/next/main": [
+              "383534363862303931323436353737613732613138656531383532366432323735383965363563350a",
+              420
+            ],
+            "logs/HEAD": [
+              "3030303030303030303030303030303030303030303030303030303030303030303030303030303020383534363862303931323436353737613732613138656531383532366432323735383965363563352044656e20546573746572203c64656e406578616d706c652e696e76616c69643e2031373030303030303030202b303030300a",
+              420
+            ],
+            "logs/refs/heads/main": [
+              "3030303030303030303030303030303030303030303030303030303030303030303030303030303020383534363862303931323436353737613732613138656531383532366432323735383965363563352044656e20546573746572203c64656e406578616d706c652e696e76616c69643e2031373030303030303030202b303030300a",
+              420
+            ],
+            "logs/refs/heads/other": [
+              "3030303030303030303030303030303030303030303030303030303030303030303030303030303020383534363862303931323436353737613732613138656531383532366432323735383965363563352044656e20546573746572203c64656e406578616d706c652e696e76616c69643e2031373030303030303030202b303030300a",
+              420
+            ],
+            "logs/refs/remotes/unrelated/main": [
+              "3030303030303030303030303030303030303030303030303030303030303030303030303030303020383534363862303931323436353737613732613138656531383532366432323735383965363563352044656e20546573746572203c64656e406578616d706c652e696e76616c69643e2031373030303030303030202b303030300a",
+              420
+            ],
+            "logs/refs/remotes/next/topic": [
+              "3030303030303030303030303030303030303030303030303030303030303030303030303030303020383534363862303931323436353737613732613138656531383532366432323735383965363563352044656e20546573746572203c64656e406578616d706c652e696e76616c69643e2031373030303030303030202b303030300a38353436386230393132343635373761373261313865653138353236643232373538396536356335203835343638623039313234363537376137326131386565313835323664323237353839653635633520726f6f74203c726f6f74403131353763333266353337362e286e6f6e65293e2031373030303030303030202b303030300972656d6f74653a2072656e616d656420726566732f72656d6f7465732f6f726967696e2f746f70696320746f20726566732f72656d6f7465732f6e6578742f746f7069630a",
+              420
+            ],
+            "logs/refs/remotes/next/main": [
+              "3030303030303030303030303030303030303030303030303030303030303030303030303030303020383534363862303931323436353737613732613138656531383532366432323735383965363563352044656e20546573746572203c64656e406578616d706c652e696e76616c69643e2031373030303030303030202b303030300a38353436386230393132343635373761373261313865653138353236643232373538396536356335203835343638623039313234363537376137326131386565313835323664323237353839653635633520726f6f74203c726f6f74403131353763333266353337362e286e6f6e65293e2031373030303030303030202b303030300972656d6f74653a2072656e616d656420726566732f72656d6f7465732f6f726967696e2f6d61696e20746f20726566732f72656d6f7465732f6e6578742f6d61696e0a",
+              420
+            ],
+            "packed-refs": [
+              "23207061636b2d7265667320776974683a207065656c65642066756c6c792d7065656c656420736f72746564200a3835343638623039313234363537376137326131386565313835323664323237353839653635633520726566732f68656164732f6d61696e0a3835343638623039313234363537376137326131386565313835323664323237353839653635633520726566732f68656164732f6f746865720a3835343638623039313234363537376137326131386565313835323664323237353839653635633520726566732f72656d6f7465732f756e72656c617465642f6d61696e0a",
+              420
+            ]
+          },
+          "config": "5b636f72655d0a097265706f7369746f7279666f726d617476657273696f6e203d20300a0966696c656d6f6465203d20747275650a0962617265203d2066616c73650a096c6f67616c6c72656675706461746573203d20747275650a5b72656d6f746520226e657874225d0a0975726c203d2066696c653a2f2f2f612f736f757263652e6769740a096665746368203d202b726566732f68656164732f2a3a726566732f72656d6f7465732f6e6578742f2a0a5b6272616e636820226d61696e225d0a0972656d6f7465203d206e6578740a096d65726765203d20726566732f68656164732f6d61696e0a",
+          "mode": 420,
+          "lock": null
+        }
+      ]
+    },
+    {
+      "name": "tracking-rename-symbolic",
+      "oracle": [
+        {
+          "stdout": "",
+          "stderr": "",
+          "exit": 0,
+          "refs": {
+            "refs/heads/main": [
+              "383534363862303931323436353737613732613138656531383532366432323735383965363563350a",
+              420
+            ],
+            "refs/heads/other": [
+              "383534363862303931323436353737613732613138656531383532366432323735383965363563350a",
+              420
+            ],
+            "refs/remotes/unrelated/main": [
+              "383534363862303931323436353737613732613138656531383532366432323735383965363563350a",
+              420
+            ],
+            "refs/remotes/next/topic": [
+              "383534363862303931323436353737613732613138656531383532366432323735383965363563350a",
+              420
+            ],
+            "refs/remotes/next/main": [
+              "383534363862303931323436353737613732613138656531383532366432323735383965363563350a",
+              420
+            ],
+            "refs/remotes/next/HEAD": [
+              "7265663a20726566732f72656d6f7465732f6e6578742f6d61696e0a",
+              420
+            ],
+            "logs/HEAD": [
+              "3030303030303030303030303030303030303030303030303030303030303030303030303030303020383534363862303931323436353737613732613138656531383532366432323735383965363563352044656e20546573746572203c64656e406578616d706c652e696e76616c69643e2031373030303030303030202b303030300a",
+              420
+            ],
+            "logs/refs/heads/main": [
+              "3030303030303030303030303030303030303030303030303030303030303030303030303030303020383534363862303931323436353737613732613138656531383532366432323735383965363563352044656e20546573746572203c64656e406578616d706c652e696e76616c69643e2031373030303030303030202b303030300a",
+              420
+            ],
+            "logs/refs/heads/other": [
+              "3030303030303030303030303030303030303030303030303030303030303030303030303030303020383534363862303931323436353737613732613138656531383532366432323735383965363563352044656e20546573746572203c64656e406578616d706c652e696e76616c69643e2031373030303030303030202b303030300a",
+              420
+            ],
+            "logs/refs/remotes/unrelated/main": [
+              "3030303030303030303030303030303030303030303030303030303030303030303030303030303020383534363862303931323436353737613732613138656531383532366432323735383965363563352044656e20546573746572203c64656e406578616d706c652e696e76616c69643e2031373030303030303030202b303030300a",
+              420
+            ],
+            "logs/refs/remotes/next/topic": [
+              "3030303030303030303030303030303030303030303030303030303030303030303030303030303020383534363862303931323436353737613732613138656531383532366432323735383965363563352044656e20546573746572203c64656e406578616d706c652e696e76616c69643e2031373030303030303030202b303030300a38353436386230393132343635373761373261313865653138353236643232373538396536356335203835343638623039313234363537376137326131386565313835323664323237353839653635633520726f6f74203c726f6f74403131353763333266353337362e286e6f6e65293e2031373030303030303030202b303030300972656d6f74653a2072656e616d656420726566732f72656d6f7465732f6f726967696e2f746f70696320746f20726566732f72656d6f7465732f6e6578742f746f7069630a",
+              420
+            ],
+            "logs/refs/remotes/next/main": [
+              "3030303030303030303030303030303030303030303030303030303030303030303030303030303020383534363862303931323436353737613732613138656531383532366432323735383965363563352044656e20546573746572203c64656e406578616d706c652e696e76616c69643e2031373030303030303030202b303030300a38353436386230393132343635373761373261313865653138353236643232373538396536356335203835343638623039313234363537376137326131386565313835323664323237353839653635633520726f6f74203c726f6f74403131353763333266353337362e286e6f6e65293e2031373030303030303030202b303030300972656d6f74653a2072656e616d656420726566732f72656d6f7465732f6f726967696e2f6d61696e20746f20726566732f72656d6f7465732f6e6578742f6d61696e0a",
+              420
+            ],
+            "logs/refs/remotes/next/HEAD": [
+              "3030303030303030303030303030303030303030303030303030303030303030303030303030303020383534363862303931323436353737613732613138656531383532366432323735383965363563352044656e20546573746572203c64656e406578616d706c652e696e76616c69643e2031373030303030303030202b303030300a30303030303030303030303030303030303030303030303030303030303030303030303030303030203030303030303030303030303030303030303030303030303030303030303030303030303030303020726f6f74203c726f6f74403131353763333266353337362e286e6f6e65293e2031373030303030303030202b303030300972656d6f74653a2072656e616d656420726566732f72656d6f7465732f6f726967696e2f4845414420746f20726566732f72656d6f7465732f6e6578742f484541440a",
+              420
+            ]
+          },
+          "config": "5b636f72655d0a097265706f7369746f7279666f726d617476657273696f6e203d20300a0966696c656d6f6465203d20747275650a0962617265203d2066616c73650a096c6f67616c6c72656675706461746573203d20747275650a5b72656d6f746520226e657874225d0a0975726c203d2066696c653a2f2f2f612f736f757263652e6769740a096665746368203d202b726566732f68656164732f2a3a726566732f72656d6f7465732f6e6578742f2a0a5b6272616e636820226d61696e225d0a0972656d6f7465203d206e6578740a096d65726765203d20726566732f68656164732f6d61696e0a",
+          "mode": 420,
+          "lock": null
+        }
+      ]
+    }
+  ],
+  "visibility_recheck": {
+    "user.name": "file:/work/den/target/environment/gitconfig\tDen Tester\n",
+    "user.email": "file:/work/den/target/environment/gitconfig\tden@example.invalid\n"
+  },
+  "scope": "Original fixture omitted explicit author/committer identity environment overrides. HOME and GIT_CONFIG_GLOBAL paths and the retained global file are recorded. A subsequent fixture-path --show-origin probe confirms the config reader sees that file. The separate remote-identity-probe reproduces this without overrides and checks visibility immediately before/after rename; its run captures, not this older snapshot alone, establish that observation."
+}
