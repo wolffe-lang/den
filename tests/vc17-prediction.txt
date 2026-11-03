@@ -1,0 +1,29 @@
+vc17 prediction — 2026-11-03
+
+Before implementation, the named no-zone date rows should fail with fatal: invalid,
+the explicit/terminal decoration rows should refuse history decorations, and config
+write rows should refuse the unsupported action. Each family will be committed and
+run against the unchanged implementation before its fix.
+
+Dates: in a container without /usr/share/zoneinfo or /etc/localtime, compare
+TZ unset, TZ=UTC and TZ=Missing/Zone with empty TZDIR. Exercise log, show,
+commit, blame and displayed/stored reflog dates (including stash list). Expect
+UTC where a local zone is needed, preserving explicit stored commit offsets.
+
+Decorations: compare pipe and owned-PTY captures for default, --decorate,
+short/full/no/auto, --no-decorate and log.decorate, including option precedence,
+attached/detached HEAD, multiple sorted branch heads, lightweight/annotated tags,
+remote heads and symbolic remote HEAD. Measure default terminal colour separately;
+never normalize away escape bytes. Expect auto only on a terminal.
+
+Config: compare full file bytes/mode and stdout/stderr/status for set, add, unset,
+unset-all and replace-all, local/global/explicit file destinations, section and
+subsection creation, repeated sections, comments, quoting/escapes and missing or
+multiple values. An existing foreign lock must remain unchanged; successful writes
+must use an exclusive lock plus atomic rename and preserve unrelated content.
+System writes remain refused by name. Broader unmeasured options remain explicit
+limits rather than guesses.
+
+Native/release targeted matrices and the inherited full gauntlet must pass at the
+final committed head. A separate one-file/one-hunk plant on that head must fail a
+named new row locally. No production Git subprocess or implementation-source input.
