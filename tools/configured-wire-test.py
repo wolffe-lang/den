@@ -12,9 +12,10 @@ import subprocess
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--tier', default='native')
+    parser.add_argument('--family', choices=('configured', 'lease', 'all'), default='configured')
     a = parser.parse_args()
     root = Path(__file__).resolve().parent.parent
-    out = root / 'target/runs' / ('wire-configured-' + a.tier)
+    out = root / 'target/runs' / ('wire-' + a.family + '-' + a.tier)
     out.mkdir(parents=True, exist_ok=True)
     git = os.environ['DEN_GIT']
     assert hashlib.sha256(Path(git).read_bytes()).hexdigest() == 'c4848492938c4ebfffbefe1fbbaa68b9af90c86d1f6a20e76816c5ff37fcfa60'
@@ -69,6 +70,29 @@ def main():
         ('push-default-report', ['push']),
         ('push-u-report', ['push', '-u', 'origin', 'main']),
     ]
+    lease = '--force-with-lease=refs/heads/main:'
+    lease_cases = [
+        ('lease-plain-match', ['push', '--force-with-lease']),
+        ('lease-plain-stale', ['push', '-q', '--force-with-lease']),
+        ('lease-explicit-match', ['push', lease + second]),
+        ('lease-explicit-stale', ['push', lease + first]),
+        ('lease-expect-absent', ['push', lease]),
+        ('lease-create-absent', ['push', '--force-with-lease=refs/heads/new:', 'origin', 'main:refs/heads/new']),
+        ('lease-missing-tracking', ['push', '--force-with-lease']),
+        ('lease-short-ref', ['push', '--force-with-lease=main:' + second]),
+        ('lease-expect-revision', ['push', lease + 'HEAD']),
+        ('lease-noop-stale', ['push', lease + first]),
+        ('lease-force-stale', ['push', '--force', lease + first]),
+        ('lease-plus-stale', ['push', lease + first, 'origin', '+refs/heads/main:refs/heads/main']),
+        ('lease-delete-match', ['push', lease + second, 'origin', ':refs/heads/main']),
+        ('lease-delete-stale', ['push', lease + first, 'origin', ':refs/heads/main']),
+        ('lease-unrelated', ['push', '--force-with-lease=refs/heads/other:' + second]),
+        ('lease-quiet-match', ['push', '-q', '--force-with-lease']),
+    ]
+    if a.family == 'lease':
+        cases = lease_cases
+    elif a.family == 'all':
+        cases += lease_cases
     rows = []
     for name, argv in cases:
         outcomes = []
@@ -84,6 +108,14 @@ def main():
                     run([git, 'update-ref', 'refs/heads/main', first], source)
                 if name == 'fetch-different-remote':
                     run([git, 'remote', 'rename', 'origin', 'upstream'], work)
+            elif name.startswith('lease-'):
+                run([git, 'update-ref', 'refs/heads/main', second], source)
+                if name not in ('lease-plain-stale', 'lease-missing-tracking', 'lease-noop-stale'):
+                    run([git, 'update-ref', 'refs/remotes/origin/main', second], work)
+                if name == 'lease-missing-tracking':
+                    run([git, 'update-ref', '-d', 'refs/remotes/origin/main'], work)
+                if name == 'lease-noop-stale':
+                    run([git, 'update-ref', 'refs/heads/main', second], work)
             else:
                 run([git, 'update-ref', 'refs/heads/main', second], work)
                 if name.startswith('push-u-'):
