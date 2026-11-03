@@ -78,7 +78,7 @@ leaf runner-test python3 -I tools/gate-record-test.py
 leaf planner python3 -I ci/tiers-test.py
 leaf fetch-toolchain tools/fetch-toolchain
 leaf fetch-oracle tools/fetch-oracle
-if [ "$mode" != list ]; then
+if [ "$mode" != list ] && [ -z "${DEN_GATE_LEAF_RUNNER:-}" ]; then
     DEN_GIT=$(python3 -I - <<'PY'
 from pathlib import Path
 paths=list(Path('target/oracle').glob('*/root/opt/git/bin/git'))
@@ -122,4 +122,7 @@ leaf oracle-selftest tools/oracle --selftest
 leaf oracle tools/oracle
 leaf oracle-negative tools/gate-record --internal-oracle-negative
 leaf static tools/mkden target/dist
+if [ -n "${DEN_SSH_PEER_ROOT:-}" ]; then
+    leaf ssh-interop tools/check-ssh --host kasumi --peer-root "$DEN_SSH_PEER_ROOT"
+fi
 leaf collect-evidence python3 -I tools/collect-diff-evidence.py
