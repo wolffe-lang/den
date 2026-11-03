@@ -48,6 +48,7 @@ fn receive_advertisement(data: List[byte]) -> (List[wire.Ref], List[str]) ! obje
 
 /// Push fully-qualified refspecs, with local fast-forward/tag guards unless
 /// forced; honor server atomic/report-status capabilities and final status.
+/// Other-namespace updates require explicit force until typed peeling is measured.
 pub fn push(
     repo: repository.Repo,
     url: str,
@@ -104,6 +105,11 @@ pub fn push(
         if old != zero() && next != zero() && !force && !override {
             if destination.starts_with("refs/tags/") {
                 return Unsupported("push would replace tag (use --force)")
+            }
+            if !destination.starts_with("refs/heads/") {
+                return Unsupported(
+                    "custom-namespace update requires force (typed policy unmeasured)",
+                )
             }
             if destination.starts_with("refs/heads/") {
                 let _ = object.read_object(repo, oid.parse("sha1", old)?, 16777216) else |_| {
