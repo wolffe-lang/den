@@ -58,7 +58,14 @@ fn perform_pull(args: List[str]) -> int ! object.StoreErrors {
         refcmd.refresh_pull_index() else |e| { return Unsupported("pull rebase index refresh: {e}") }
     }
     let previous = refs.optional(repo, destination)?
-    named_fetch(repo, name, action, quiet, false, if operands.len == 2 then copy source else "", "")?
+    named_fetch(repo, name, action, quiet, false, if operands.len == 2 then copy source else "", "") else |e| match e {
+        not_found => {
+            if operands.len == 2 { return Unsupported("couldn't find remote ref {operands[1]}") }
+            return not_found
+        },
+        Unsupported(message) => { return Unsupported(message) },
+        _ => { return Unsupported("pull fetch: {e}") },
+    }
     let current = oid.hex(refs.read(repo, "HEAD")?)?
     let upstream = oid.hex(refs.read(repo, destination)?)?
     let forward = ancestor(repo, current, upstream)?
@@ -98,5 +105,12 @@ fn perform_pull(args: List[str]) -> int ! object.StoreErrors {
 /// Fetch then delegate the selected bounded merge/rebase; explicit policy
 /// refusals occur before M3 writes ORIG_HEAD or changes local history.
 pub fn pull_command(args: List[str]) -> int {
-    perform_pull(args) else |e| { eprint("den: wire: {e}"); 2 }
+    perform_pull(args) else |e| match e {
+        Unsupported(message) => {
+            if startup_diagnostic(message) { return 1 }
+            eprint("den: wire: Unsupported({message})")
+            2
+        },
+        _ => { eprint("den: wire: {e}"); 2 },
+    }
 }

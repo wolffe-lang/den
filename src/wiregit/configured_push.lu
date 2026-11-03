@@ -218,10 +218,15 @@ fn perform_push(args: List[str]) -> int ! object.StoreErrors {
     defer restore_service(take service_state)
     let specs = push_specs(repo, input, branch)?
     let leases = push_leases(repo, name, specs, requests)?
-    var outcomes = List[PushOutcome](), error_text = ""
-    push_reported(repo, url, specs, force, atomic, leases, mut outcomes) else |e| {
-        error_text = "{e}"
+    var outcomes = List[PushOutcome](), error_text = "", remote_failure = ""
+    push_reported(repo, url, specs, force, atomic, leases, mut outcomes) else |e| match e {
+        Unsupported(message) => {
+            if message == "remote service unavailable" || message.starts_with("remote error: ") { remote_failure = copy message }
+            error_text = "{e}"
+        },
+        _ => { error_text = "{e}" },
     }
+    if remote_failure != "" && startup_diagnostic(remote_failure) { return 128 }
     var rejected = false
     for outcome in outcomes {
         if outcome.status == "rejected" || outcome.status == "remote rejected" { rejected = true }

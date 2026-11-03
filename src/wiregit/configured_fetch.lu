@@ -51,7 +51,9 @@ fn named_fetch(
     } else {
         ""
     }
+    write_fetch_head(repo, "")?
     let advertised = fetch_view(repo, url, if selection == "" then "refs/heads/" else copy selection, true)?
+    if selection != "" && advertised.len == 0 { return not_found }
     var available = Map[str, bool](), roots = List[str]()
     for reference in advertised {
         if reference.id == "unborn" { continue }

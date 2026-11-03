@@ -87,7 +87,12 @@ fn execute(args: List[str]) -> () ! object.StoreErrors {
         let pair = spec.split(":")
         if pair.len != 2 { return invalid }
         let repo = repository.discover(".")?
-        fetch_into(repo, operands[0], pair[0], pair[1], force || forced_spec)?
+        write_fetch_head(repo, "")?
+        fetch_into(repo, operands[0], pair[0], pair[1], force || forced_spec) else |e| match e {
+            not_found => { return Unsupported("couldn't find remote ref {pair[0]}") },
+            Unsupported(message) => { return Unsupported(message) },
+            _ => { return Unsupported("fetch: {e}") },
+        }
         return
     }
     if args[0] == "push" {
@@ -102,8 +107,17 @@ fn execute(args: List[str]) -> () ! object.StoreErrors {
 
 /// Dispatch the measured bounded wire CLI; print named refusals and return 2 on any failed operation.
 pub fn run(args: List[str]) -> int {
+    let missing = absent_remote_command(args) else |e| { eprint("den: wire: {e}"); return 2 }
+    if missing >= 0 { return missing }
     if args.len > 0 && args[0] == "push" { return push_command(args) }
     if args.len > 0 && args[0] == "pull" { return pull_command(args) }
-    execute(args) else |e| { eprint("den: wire: {e}"); return 2 }
+    execute(args) else |e| match e {
+        Unsupported(message) => {
+            if startup_diagnostic(message) { return 128 }
+            eprint("den: wire: Unsupported({message})")
+            return 2
+        },
+        _ => { eprint("den: wire: {e}"); return 2 },
+    }
     0
 }
