@@ -4,8 +4,8 @@ use oid
 use pack
 use pktline
 use refs
-use revision
 use repository
+use revision
 use transport
 use wire
 

@@ -38,7 +38,10 @@ pub fn config_quote(value: str) -> str ! RepoErrors {
     if value.contains("\0") { return invalid }
     var out = value.replace("\\", "\\\\").replace("\"", "\\\"")
     out = out.replace("\n", "\\n").replace("\t", "\\t").replace("\u{8}", "\\b")
-    if value.starts_with(" ") || value.ends_with(" ") || value.contains("#") || value.contains(";") {
+    if value.starts_with(" ") ||
+        value.ends_with(" ") ||
+        value.contains("#") ||
+        value.contains(";") {
         out = "\"{out}\""
     }
     out

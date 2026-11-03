@@ -3,7 +3,9 @@ use refs
 use repository
 
 fn raw(repo: repository.Repo) -> str ! repository.RepoErrors {
-    str_from_utf8(repository.read_bytes("{repo.gitdir}/config", 1048576)?) else |_| { return invalid }
+    str_from_utf8(repository.read_bytes("{repo.gitdir}/config", 1048576)?) else |_| {
+        return invalid
+    }
 }
 
 fn names(repo: repository.Repo) -> List[str] {
@@ -43,7 +45,11 @@ fn section_end(text: str) -> str {
     if text == "" || text.ends_with("\n") { copy text } else { "{text}\n" }
 }
 
-fn replace_url(text: str, section: repository.ConfigSection, value: str) -> str ! repository.RepoErrors {
+fn replace_url(
+    text: str,
+    section: repository.ConfigSection,
+    value: str,
+) -> str ! repository.RepoErrors {
     let encoded = repository.config_quote(value)?
     var output = copy text[0..section.body], changed = false
     let lines = text[section.body..section.end].split("\n")
@@ -63,7 +69,12 @@ fn replace_url(text: str, section: repository.ConfigSection, value: str) -> str 
     "{output}{text[section.end..]}"
 }
 
-fn edit(repo: repository.Repo, operation: str, name: str, value: str) -> () ! repository.RepoErrors {
+fn edit(
+    repo: repository.Repo,
+    operation: str,
+    name: str,
+    value: str,
+) -> () ! repository.RepoErrors {
     let before = raw(repo)?
     let sections = repository.config_sections(before)?
     var after = "", found = false
@@ -97,7 +108,9 @@ fn edit(repo: repository.Repo, operation: str, name: str, value: str) -> () ! re
                         let line = lines[i]
                         if i == lines.len - 1 && line == "" { continue }
                         let entries = repository.parse_config("[remote \"item\"]\n{line}\n")?
-                        if entries.len == 1 && entries[0].key == "remote.item.fetch" && entries[0].value == old_fetch {
+                        if entries.len == 1 &&
+                            entries[0].key == "remote.item.fetch" &&
+                            entries[0].value == old_fetch {
                             body = "{body}\tfetch = {next_fetch}\n"
                         } else {
                             body = "{body}{line}\n"
@@ -119,7 +132,9 @@ fn edit(repo: repository.Repo, operation: str, name: str, value: str) -> () ! re
                 return Unsupported("remote rename/remove with branch tracking")
             }
         }
-        let tracked = refs.list(repo, "refs/remotes/{name}/") else |e| { return Unsupported("remote refs: {e}") }
+        let tracked = refs.list(repo, "refs/remotes/{name}/") else |e| {
+            return Unsupported("remote refs: {e}")
+        }
         if tracked.len > 0 { return Unsupported("remote rename/remove with tracking refs") }
     }
     repository.publish_config(repo, before, after)?
