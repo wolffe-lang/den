@@ -1,0 +1,32 @@
+vc16 prediction, committed before implementation
+
+Add remote add/remove/rename/-v/get-url/set-url, exact repository config edits,
+branch --set-upstream-to, push -u, configured fetch/push defaults, remote-tracking
+refs and prune. Add pull policy selection (CLI, pull.rebase, pull.ff), delegating
+merge and linear replay to the existing controllers, including conflict stops.
+Add plain and explicit force-with-lease and deterministic push report lines.
+Measure and implement typed push policy before removing the conservative custom
+namespace guard. Add argv-vector ssh upload/receive to kasumi only in tests.
+
+Predict 144 new named fixture groups per native/release tier: 24 remote/config,
+24 tracking/fetch/prune/default-push, 20 pull/policy/conflict, 16 lease/report,
+48 typed-policy (six namespaces times eight creation/update/type cases), and
+12 failure/ssh groups. Every process captures argv, environment, stdin, stdout,
+stderr and status; object/ref/config state checks are separate from output parity.
+Additional discovered cases increase this prediction explicitly, never hide it.
+
+Expected closures of the prior lane's named remainders: remote-name and default
+refspec forms, bounded pull forms, typed-peeling update policy outside heads/tags,
+and ssh URL transport. Deterministic output differences must remain named in MAP;
+no claim of general failure parity or M5 completion without its measured rows.
+Existing M2/M3/M4 bounds remain, as do hooks/non-bare receive, atomic reflogs,
+unadvertised wants, shallow/filter/URI/HTTPS, encoded URLs, linked worktrees and
+SHA-256 repositories.
+
+R-vc16-1: recommend the maintainer separately name a public scratch repository for
+a GitHub-ssh witness: push one fixture commit to a scratch-only branch, fetch it
+and compare its canonical closure, then remove only that branch. This lane never
+uses GitHub as a fixture peer and never changes ssh configuration.
+
+Operational update: no pushes or PR until the maintainer authorizes the route.
+Local final and plant records remain required; audit needing a PR is pending.
