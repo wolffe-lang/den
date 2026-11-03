@@ -1,0 +1,17 @@
+// Remote command reflogs share the commit identity/date boundary.
+use commit
+use commit_format
+use repository
+use worktree
+
+fn remote_identity(repo: repository.Repo) -> str ! repository.RepoErrors {
+    let ctx = if (repo.config["core.bare"] else "false") == "true" {
+        worktree.Context { repo: copy repo, root: copy repo.gitdir, cwd: copy repo.gitdir, prefix: "" }
+    } else {
+        worktree.discover(".") else |e| { return Unsupported("remote context: {e}") }
+    }
+    let identity = commit.environment_identity(ctx, "COMMITTER", "") else |e| {
+        return Unsupported("remote identity: {e}")
+    }
+    commit_format.identity_text(identity) else |e| { return Unsupported("remote identity: {e}") }
+}

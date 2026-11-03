@@ -78,7 +78,7 @@ fn edit(
     let before = raw(repo)?
     let sections = repository.config_sections(before)?
     var after = "", found = false
-    var affected = List[refs.Packed]()
+    var affected = List[refs.Packed](), rename_identity = ""
     if operation == "add" {
         after = "{section_end(before)}[remote \"{subsection(name)}\"]\n\turl = {repository.config_quote(value)?}\n\tfetch = +refs/heads/*:refs/remotes/{name}/*\n"
     } else if operation == "set-url" {
@@ -140,15 +140,45 @@ fn edit(
             return Unsupported("remote refs: {e}")
         }
         if affected.len > 0 {
-            if operation == "rename" { return Unsupported("remote rename with tracking refs") }
             let fetch = repo.config["remote.{name}.fetch"] else ""
             if fetch != "+refs/heads/*:refs/remotes/{name}/*" {
-                return Unsupported("remote removal with nondefault fetch refspec")
+                return Unsupported("remote ref update with nondefault fetch refspec")
+            }
+            if operation == "rename" {
+                rename_identity = remote_identity(repo)?
+                let prefix = "refs/remotes/{name}/"
+                for reference in affected {
+                    let to = "refs/remotes/{value}/{reference.name[prefix.len..]}"
+                    let prior = refs.optional(repo, to) else |e| { return Unsupported("remote destination: {e}") }
+                    let symbolic = refs.symbolic(repo, to) else |e| { return Unsupported("remote destination: {e}") }
+                    if prior.len > 0 || symbolic != "" { return exists }
+                    let target = refs.symbolic(repo, reference.name) else |e| { return Unsupported("remote symbolic ref: {e}") }
+                    if target != "" && !target.starts_with(prefix) {
+                        return Unsupported("remote symbolic target outside renamed namespace")
+                    }
+                }
             }
         }
     }
     repository.publish_config(repo, before, after)?
-    if operation == "remove" {
+    if operation == "rename" {
+        let prefix = "refs/remotes/{name}/"
+        for reference in affected {
+            let to = "refs/remotes/{value}/{reference.name[prefix.len..]}"
+            let message = "remote: renamed {reference.name} to {to}"
+            let target = refs.symbolic(repo, reference.name) else |e| { return Unsupported("remote symbolic ref: {e}") }
+            if target != "" {
+                refs.rename_symbolic_tracking(
+                    repo, reference.name, to, target,
+                    "refs/remotes/{value}/{target[prefix.len..]}", rename_identity, message,
+                ) else |e| { return Unsupported("rename symbolic tracking ref: {e}") }
+            } else {
+                refs.rename_ref_message(repo, reference.name, to, reference.id, [], rename_identity, message) else |e| {
+                    return Unsupported("rename tracking ref: {e}")
+                }
+            }
+        }
+    } else if operation == "remove" {
         for reference in affected {
             let target = refs.symbolic(repo, reference.name) else |e| { return Unsupported("remote symbolic ref: {e}") }
             if target != "" {

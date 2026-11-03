@@ -3,6 +3,9 @@ pkg {
     edition: "1",
     capabilities: [env, fs],
     deps: {
+        commit: {path: "../commit"},
+        commit_format: {path: "../commit_format"},
+        worktree: {path: "../worktree"},
         refs: {path: "../refs"},
         repository: {path: "../repository"},
         oid: {path: "../oid"},
