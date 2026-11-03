@@ -1,0 +1,75 @@
+// git-push OUTPUT over the structured receive-pack outcomes.
+use object
+use oid
+use repository
+use revision
+
+fn outcome_ff(repo: repository.Repo, before: str, after: str) -> bool {
+    let old = oid.parse("sha1", before) else |_| { return false }
+    let next = oid.parse("sha1", after) else |_| { return false }
+    let a = revision.peel(repo, old, "peel") else |_| { return false }
+    let b = revision.peel(repo, next, "peel") else |_| { return false }
+    if (object.read_object(repo, a, 16777216) else |_| { return false }).kind != "commit" ||
+        (object.read_object(repo, b, 16777216) else |_| { return false }).kind != "commit" {
+        return false
+    }
+    ancestor(repo, oid.hex(a) else |_| { return false }, oid.hex(b) else |_| { return false }) else false
+}
+
+fn push_report(repo: repository.Repo, url: str, outcomes: List[PushOutcome], quiet: bool) -> bool ! object.StoreErrors {
+    var rows = List[TransportRow](), failed = false, nonff = false, needs_force = false
+    for outcome in outcomes {
+        if outcome.status == "pending" || outcome.status == "up-to-date" { continue }
+        let rejected = outcome.status == "rejected" || outcome.status == "remote rejected"
+        if rejected { failed = true }
+        if quiet && !rejected { continue }
+        var flag = " ", summary = "", reason = copy outcome.reason
+        if rejected {
+            flag = "!"
+            summary = if outcome.status == "remote rejected" then "[remote rejected]" else "[rejected]"
+            if reason == "non-fast-forward" { nonff = true }
+            if reason == "needs force" { needs_force = true }
+        } else if outcome.after == zero() {
+            flag = "-"
+            summary = "[deleted]"
+        } else if outcome.before == zero() {
+            flag = "*"
+            summary = if outcome.name.starts_with("refs/heads/") then "[new branch]" else if outcome.name.starts_with("refs/tags/") then "[new tag]" else "[new reference]"
+        } else if outcome_ff(repo, outcome.before, outcome.after) {
+            summary = "{report_id(repo, outcome.before)?}..{report_id(repo, outcome.after)?}"
+        } else {
+            flag = "+"
+            summary = "{report_id(repo, outcome.before)?}...{report_id(repo, outcome.after)?}"
+            reason = "forced update"
+        }
+        let source = if outcome.source == "" {
+            if rejected && outcome.status == "rejected" then "(delete)" else ""
+        } else { short_ref(outcome.source) }
+        (mut rows).push(TransportRow { flag: flag, summary: summary, source: source, destination: short_ref(outcome.name), reason: reason })
+    }
+    if rows.len == 0 {
+        if !quiet && outcomes.len > 0 { eprint("Everything up-to-date") }
+        return failed
+    }
+    var summary_width = 17, source_width = 0
+    for row in rows {
+        if row.summary.len > summary_width { summary_width = row.summary.len }
+        if row.source.len > source_width { source_width = row.source.len }
+    }
+    eprint("To {url}")
+    for row in rows {
+        let mapping = if row.source == "" { copy row.destination } else { "{pad_report(row.source, source_width)} -> {row.destination}" }
+        let suffix = if row.reason == "" then "" else " ({row.reason})"
+        eprint(" {row.flag} {pad_report(row.summary, summary_width)} {mapping}{suffix}")
+    }
+    if failed {
+        eprint("error: failed to push some refs to '{url}'")
+        if nonff && (repo.config["advice.pushupdaterejected"] else "true") != "false" {
+            eprint("hint: Updates were rejected because the tip of your current branch is behind\nhint: its remote counterpart. If you want to integrate the remote changes,\nhint: use 'git pull' before pushing again.\nhint: See the 'Note about fast-forwards' in 'git push --help' for details.")
+        }
+        if needs_force && (repo.config["advice.pushupdaterejected"] else "true") != "false" {
+            eprint("hint: You cannot update a remote ref that points at a non-commit object,\nhint: or update a remote ref to make it point at a non-commit object,\nhint: without using the '--force' option.")
+        }
+    }
+    failed
+}
