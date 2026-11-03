@@ -42,4 +42,5 @@ for tier in native release; do
 done
 step actual-checked-wire checked wire_test
 step actual-checked-pack-stream checked pack_stream_test
+tools/check-porcelain
 echo 'wire: native/release peers, real thin/OFS/REF streams and actual checked units; zero skips'

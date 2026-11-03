@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# vc16: flat, recorder-compatible steps for configured wire porcelain.
+set -eu
+DEN_ROOT=$(cd "$(dirname "$0")/.." && pwd)
+export DEN_ROOT
+cd "$DEN_ROOT"
+. tools/lib-toolchain.sh
+mkdir -p target
+step() {
+    local name=$1 started=$SECONDS rc
+    shift
+    printf 'START %s\n' "$name"
+    if "$@"; then rc=0; else rc=$?; fi
+    printf 'END %s exit=%s secs=%s\n' "$name" "$rc" "$((SECONDS-started))"
+    return "$rc"
+}
+checked_config() {
+    "$WOLF" conform-run src/config_edit_test.lu --checked --json > target/porcelain-config-checked.json || return $?
+    cat target/porcelain-config-checked.json
+    python3 -I - target/porcelain-config-checked.json <<'PY'
+import json,sys
+rows=[json.loads(line) for line in open(sys.argv[1]) if line.startswith('{')]
+assert len(rows)==1 and rows[0]['verdict']=='exit(0)',rows
+PY
+}
+step porcelain-review-binding tools/env python3 -I tools/porcelain-review-test.py
+step porcelain-identity-visibility tools/env python3 -I tools/remote-identity-probe.py
+for tier in native release; do
+    flag=; if [ "$tier" = release ]; then flag=--release; fi
+    mkdir -p "target/$tier"
+    step "$tier-porcelain-den-build" "$WOLF" build $flag --deny-warnings src/den.lu -o "target/$tier/den"
+    step "$tier-porcelain-receive-build" "$WOLF" build $flag --deny-warnings probes/receive-service/main.lu -o "target/$tier/receive-service"
+    step "$tier-config-edit-build" "$WOLF" build $flag --deny-warnings src/config_edit_test.lu -o "target/$tier/config-edit-test"
+    step "$tier-config-edit-unit" "target/$tier/config-edit-test"
+    step "$tier-porcelain-remotes" tools/env python3 -I tools/remote-test.py --tier "$tier"
+    step "$tier-porcelain-typed-policy" tools/env python3 -I tools/wire-policy-test.py --tier "$tier" --receive-peer
+    step "$tier-porcelain-configured" tools/env python3 -I tools/configured-wire-test.py --tier "$tier" --family all
+done
+step actual-checked-config-edit checked_config
+step porcelain-format tools/check-fmt
