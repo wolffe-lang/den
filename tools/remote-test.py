@@ -21,13 +21,24 @@ def main():
     assert hashlib.sha256(Path(git).read_bytes()).hexdigest() == 'c4848492938c4ebfffbefe1fbbaa68b9af90c86d1f6a20e76816c5ff37fcfa60'
     den = root / 'target' / a.tier / 'den'
     captures, rows = [], []
+    identity_env = dict(GIT_AUTHOR_NAME='Den Tester', GIT_AUTHOR_EMAIL='den@example.invalid',
+                        GIT_COMMITTER_NAME='Den Tester', GIT_COMMITTER_EMAIL='den@example.invalid')
     environment = {k: v for k, v in os.environ.items() if k.startswith(('GIT_', 'DEN_')) or k in ('LC_ALL', 'TZ', 'HOME', 'PATH', 'TMPDIR')}
+    environment.update(identity_env)
     work = out / 'work'
     def run(argv, cwd=None):
-        r = subprocess.run(list(map(str, argv)), cwd=cwd, input=b'', capture_output=True, timeout=60)
+        r = subprocess.run(list(map(str, argv)), cwd=cwd, input=b'', capture_output=True, timeout=60,
+                           env={**os.environ, **identity_env})
         captures.append(dict(argv=list(map(str, argv)), environment=environment, cwd=str(cwd), stdin='', stdout=r.stdout.hex(), stderr=r.stderr.hex(), exit=r.returncode))
         (out / 'captures.json').write_text(json.dumps(captures, indent=2) + '\n')
         return r
+    visible = {}
+    for key in ('user.name', 'user.email'):
+        result = run([git, 'config', '--show-origin', '--get', key], root)
+        assert result.returncode == 0
+        visible[key] = result.stdout.decode()
+    (out / 'identity-inputs.json').write_text(json.dumps(dict(environment=environment, visible_global=visible,
+        global_config=Path(os.environ['GIT_CONFIG_GLOBAL']).read_bytes().hex()), indent=2) + '\n')
     add = ['add', 'origin', 'file:///a/source.git']
     cases = [
         ('empty', [[]]),
