@@ -3,6 +3,7 @@
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
 import shlex
@@ -45,13 +46,35 @@ def install(root, git, slot):
         path.write_text(text)
         path.chmod(0o755)
     holder = root / 'hold.py'
-    holder.write_text('import json,sys\nprint(json.dumps({"ready": True}),flush=True)\nwhile sys.stdin.buffer.read(4096):\n pass\n')
+    holder.write_text("import json,os,re,sys\nfrom pathlib import Path\n" +
+        "root=Path(" + repr(str(root)) + ")\n" +
+        "token=json.loads(sys.stdin.buffer.readline(4096))['token']\nassert re.fullmatch('[0-9a-f]{64}',token)\n" +
+        "pid=os.getpid()\nstart=Path('/proc/self/stat').read_text().rsplit(')',1)[1].split()[19]\n" +
+        "state=dict(token=token,pid=pid,start=start,slot=" + repr(slot) + ",boot=Path('/proc/sys/kernel/random/boot_id').read_text().strip())\n" +
+        "path=root/'active-reservation.json'\npath.write_text(json.dumps(state))\nprint(json.dumps(dict(ready=True,**state)),flush=True)\n" +
+        "try:\n while sys.stdin.buffer.read(4096):pass\nfinally:\n if path.exists() and json.loads(path.read_text()).get('token')==token:path.unlink()\n")
     reserve = '#!/usr/bin/env bash\nset -eu\nexport TMPDIR=' + shlex.quote(str(root / 'tmp')) + '\n'
     reserve += 'exec flock -w 21600 ' + shlex.quote(str(Path.home() / ('lanes/kasumi-cores-' + slot + '.lock'))) + ' timeout --foreground 7000 taskset -c ' + slot + ' python3 -I ' + shlex.quote(str(holder)) + '\n'
     path = root / 'bin/reserve'
     path.write_text(reserve)
     path.chmod(0o755)
     print(json.dumps(dict(root=str(root), slot=slot, control_sha256=hashlib.sha256((root / 'control.py').read_bytes()).hexdigest())))
+
+
+def active_reservation(root, slot):
+    try:
+        state = json.loads((root / 'active-reservation.json').read_text())
+        pid = state['pid']
+        if not isinstance(pid, int) or pid <= 0 or state['slot'] != slot:
+            return None
+        if state['boot'] != Path('/proc/sys/kernel/random/boot_id').read_text().strip():
+            return None
+        os.kill(pid, 0)
+        if state['start'] != Path(f'/proc/{pid}/stat').read_text().rsplit(')', 1)[1].split()[19]:
+            return None
+        return state
+    except (OSError, ValueError, KeyError):
+        return None
 
 
 def control():
@@ -71,6 +94,7 @@ def control():
     if request['op'] == 'hello':
         return dict(root=str(root), slot=slot, git_sha256=PIN, control_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
                     boot=Path('/proc/sys/kernel/random/boot_id').read_text().strip(),
+                    reservation=active_reservation(root, slot),
                     upload=str(root / 'bin/upload'), receive=str(root / 'bin/receive'), v0=str(root / 'bin/upload-v0'))
     relative = Path(request['repo'])
     assert not relative.is_absolute() and '..' not in relative.parts and relative.parts

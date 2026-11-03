@@ -20,6 +20,7 @@ def main():
     parser.add_argument('--host', default='kasumi')
     parser.add_argument('--peer-root', default=os.environ.get('DEN_SSH_PEER_ROOT'))
     parser.add_argument('--tier', default='native')
+    parser.add_argument('--reservation-token', default=os.environ.get('DEN_SSH_RESERVATION_TOKEN'))
     a = parser.parse_args()
     assert a.host == 'kasumi' and a.peer_root and '/lanes/vc16/' in a.peer_root
     assert a.peer_root.startswith('/') and all(c not in a.peer_root for c in (' ', "'", '\n', '\r', '\0'))
@@ -46,9 +47,18 @@ def main():
         return json.loads(result.stdout)
     @contextlib.contextmanager
     def reserve():
+        if a.reservation_token:
+            state = peer('hello')['reservation']
+            assert state and state['token'] == a.reservation_token, 'external SSH CPU reservation is not live'
+            yield
+            return
         argv = [*options, a.peer_root + '/bin/reserve']
         process = subprocess.Popen(argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         prefix = b''
+        token = os.urandom(32).hex()
+        request = (json.dumps(dict(token=token)) + '\n').encode()
+        process.stdin.write(request)
+        process.stdin.flush()
         try:
             with selectors.DefaultSelector() as selector:
                 selector.register(process.stdout, selectors.EVENT_READ)
@@ -56,14 +66,15 @@ def main():
                     assert process.poll() is None, 'SSH slot reservation exited'
                     print('WAIT ssh-peer CPU reservation', flush=True)
                 prefix = process.stdout.readline()
-            assert json.loads(prefix)['ready'], prefix
+            ready = json.loads(prefix)
+            assert ready['ready'] and ready['token'] == token, prefix
             yield
         finally:
             process.stdin.close()
             process.stdin = None
             stdout, stderr = process.communicate(timeout=30)
             result = subprocess.CompletedProcess(argv, process.returncode, prefix + stdout, stderr)
-            retain(argv, b'', result)
+            retain(argv, request, result)
             assert process.returncode == 0, (process.returncode, stderr)
     def row(name, operation):
         print('RUN ssh-' + name, flush=True)
