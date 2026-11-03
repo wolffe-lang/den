@@ -6,6 +6,19 @@ extracted for reading. No other Git implementation was consulted. The prose
 below is original, not copied from the references. Raw AsciiDoc is from the
 same signed Git 2.56.0 tarball pinned in `den-oracle.toml`.
 
+## Daily-use references (vc17)
+
+Read published Git documentation at `https://git-scm.com/docs/` before
+implementation: git-config(1), writing options, legacy set/add/unset/unset-all/
+replace-all, Files, Scopes, exit codes and configuration Syntax (section names,
+subsections, quotes, escapes and continuations); git-log(1), decoration modes,
+log.decorate and terminal-only auto; git-commit(1), deterministic date forms.
+Git v2.56.0 `Documentation/rev-list-options.adoc` supplies the documented
+original-zone versus local-zone display semantics. The missing-database UTC
+fallback and decoration ordering/colour are black-box questions for the pinned
+executable, not algorithms attributed to the manuals. No Git implementation
+source was read.
+
 ## Housekeeping and validator (vc14)
 
 Consulted versioned Git v2.56.0 documentation only, under
