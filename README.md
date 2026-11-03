@@ -38,10 +38,10 @@ oracle builds are in `notes/vc00-evidence/`.
 | Area | Commands and supported surface |
 |---|---|
 | Objects | `init`, `hash-object`, `cat-file -p/-t/-s`, `mktree`, `commit-tree`, `mktag` |
-| Wire | `clone [-q] [--bare] URL DIRECTORY`; explicit `fetch -q URL SRC:DST`; `push -q [--force] [--atomic] URL SRC:DST...`; `upload-pack`, bare `receive-pack`, and one-session loopback `daemon` within the limits below |
+| Wire | `clone [-q] [--bare] URL DIRECTORY`; explicit `fetch -q URL SRC:DST`; configured/default `fetch [--prune]` and `push`, `push -u`, plain/explicit `--force-with-lease`, `--force` and `--atomic`; `upload-pack`, bare `receive-pack`, and one-session loopback `daemon` within the limits below |
 | Packs | `pack-objects` from stdin object IDs to `objects/pack/pack`, OFS/REF deltas or no deltas; `verify-pack [-v]`; `count-objects [-v]`; bounded `fsck --full`; `repack -a -n -q [-d] [-k]` and `prune-packed [-n] [-q]` within the limits below |
 | Index | `write-tree` over nested index v2/v3/v4 entries; exclusive `index.lock` writes, stat fields, flags and TREE cache updates |
-| Config / ignore | Read-only `config --get`; `check-ignore` with provenance, negation, tracked-file bypass and `--no-index` |
+| Config / ignore | Read-only `config --get`; bounded `remote add/remove/rename/-v/get-url/set-url` and `branch --set-upstream-to`; `check-ignore` with provenance, negation, tracked-file bypass and `--no-index` |
 | Worktree | `add` paths/directories, `-A`, `-u`, `--ignore-removal`, `-f`, `-N`, `--chmod`; `rm`, `mv` and their implemented safety/force/recursive options |
 | Status | Human, short and porcelain v1, branch/unborn/detached headings, NUL output, untracked grouping and ignored paths |
 | Commit | Ordered `-m`, `-F`, `-a`, `--amend`, `--reset-author`, `--author`, fixed `--date`, cleanup modes, quiet and allow-empty options; attached/detached HEAD and loose-over-packed branch updates |
@@ -193,8 +193,10 @@ them through `add` records the original stages in REUC; unrelated higher-stage
 `rm`/`mv`/restore operations remain refused.
 
 Config parsing handles quoting, escapes, continuation and precedence, but
-`include`/`includeIf` are named refusals. There is no config writer; the command is
-read-only `config --get`. Diff implements literal, top, icase, glob and exclude
+`include`/`includeIf` are named refusals. The config command remains read-only
+`config --get`; bounded remote/tracking commands edit ordinary repository config
+under an exclusive lock and a raw-byte compare-and-swap. Continued/CRLF/BOM
+input, inline section assignments and multiple-URL editing remain named limits. Diff implements literal, top, icase, glob and exclude
 pathspecs; other commands retain their earlier literal-path limits. Attribute
 pathspecs, filters/attributes, non-false `core.autocrlf`, nonempty templates/hooks,
 signing and user editor execution remain unsupported. A requested editor is never launched; the measured
@@ -233,7 +235,7 @@ with seventeen named unsupported cases kept outside that count, fourteen indepen
 client checks, and two bounded actual-checked programs. It compares command
 output, exit status, objects, HEAD, loose/packed refs, reflogs, index and worktree
 state on native and release.
-Branch/tag listing patterns, tracking configuration, overlapping rename paths,
+Branch/tag listing patterns, tracking-aware branch display, overlapping rename paths,
 merge-mode checkout and orphan branches stay outside
 this bounded surface. Explicit unsupported cases are counted separately.
 
@@ -470,6 +472,10 @@ den clone -q git://127.0.0.1:9418/source.git destination
 den fetch -q URL refs/heads/main:refs/remotes/origin/main
 den push -q --force URL refs/heads/main:refs/heads/main
 den push -q --atomic URL HEAD:refs/heads/a HEAD:refs/heads/b
+den remote add origin file:///absolute/source.git
+den fetch --prune
+den push -u origin main
+den push --force-with-lease=refs/heads/main:EXPECTED_OID
 den daemon --enable-receive-pack /dedicated/export/base 9418
 ```
 
@@ -478,10 +484,12 @@ worktree/index transaction; bare clone preserves the selected HEAD and branch/ta
 refs. Fetch accepts one fully qualified source/destination refspec, with `+` or
 `--force` for deliberate rewrites. Push accepts explicit refspecs, deletion and
 force; local fast-forward/tag checks precede transmission, and receive-side policy
-and expected-old-id checks precede reference publication. Non-forced updates
-outside `refs/heads` and `refs/tags` are a named scope refusal until the broader
-typed commit/tag-peeling policy is measured; creations, deletes and explicit
-force remain available. Failure diagnostic text
+and expected-old-id checks precede reference publication. Outside `refs/heads` and `refs/tags`, unforced updates require both values to
+peel to commits and fast-forward; distinct tags of the same commit are allowed.
+Changed tree/blob values require force. Branches always require commits, even
+when forced; tags reject replacement without force. The measured receiver
+refuses remote updates to `refs/stash` as `funny refname`, including forced
+creation; local stash storage is unchanged. Failure diagnostic text
 and the remaining porcelain spellings are not general Git CLI parity claims.
 
 The daemon serves one connection on IPv4 loopback, requires
