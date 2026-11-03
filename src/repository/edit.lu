@@ -1,0 +1,65 @@
+// Clean-room config edits: git-config Syntax and measured remote command bytes.
+// Existing parser validates and decodes every section; unrelated blocks stay raw.
+use std.fs
+
+/// Lossless physical section ranges used by bounded configuration editors.
+pub struct ConfigSection { name: str, start: int, body: int, end: int }
+
+/// Locate ordinary whole-line sections with the existing config grammar.
+/// Continuations and inline header assignments refuse before any write.
+pub fn config_sections(text: str) -> List[ConfigSection] ! RepoErrors {
+    let _ = parse_config(text)?
+    if text.contains("\\\n") || text.contains("\r") || text.starts_with("\u{feff}") {
+        return Unsupported("config editing continued/CRLF/BOM input")
+    }
+    var out = List[ConfigSection](), pos = 0
+    while pos < text.len {
+        let start = pos
+        let rest = text[pos..]
+        let length = rest.find("\n") else rest.len
+        let end = pos + length + (if length < rest.len then 1 else 0)
+        while pos < start + length && config_space(text.bytes()[pos]) { pos += 1 }
+        if pos < start + length && text.bytes()[pos] == 91 as byte {
+            let (name, next) = config_header(text, pos) else |_| { return invalid }
+            let tail = text[next..start + length].trim()
+            if tail != "" && !tail.starts_with("#") && !tail.starts_with(";") {
+                return Unsupported("config editing inline section assignment")
+            }
+            if out.len > 0 { out[out.len - 1].end = start }
+            (mut out).push(ConfigSection { name: name, start: start, body: end, end: text.len })
+        }
+        pos = end
+    }
+    out
+}
+
+/// Encode a config value with Git's measured escaping, not shell quoting.
+pub fn config_quote(value: str) -> str ! RepoErrors {
+    if value.contains("\0") { return invalid }
+    var out = value.replace("\\", "\\\\").replace("\"", "\\\"")
+    out = out.replace("\n", "\\n").replace("\t", "\\t").replace("\u{8}", "\\b")
+    if value.starts_with(" ") || value.ends_with(" ") || value.contains("#") || value.contains(";") {
+        out = "\"{out}\""
+    }
+    out
+}
+
+/// Publish a prepared config iff its raw predecessor still matches under config.lock.
+/// An IO error after rename may leave the new complete file visible.
+pub fn publish_config(repo: Repo, before: str, after: str) -> () ! RepoErrors {
+    if after.len > 1048576 { return limit }
+    let _ = parse_config(after)?
+    let path = "{repo.gitdir}/config", lock = "{path}.lock"
+    let file = fs.create_new_with_mode(lock, 0o666)?
+    var fd = file.fd, active = true
+    defer { if fd >= 0 { fs_close(fd) else |_| {} }; if active { fs.remove(lock) else |_| {} } }
+    let current = str_from_utf8(read_bytes(path, 1048576)?) else |_| { return invalid }
+    if current != before { return Unsupported("configuration changed concurrently") }
+    fs_write_chunk(fd, after.bytes())?
+    fs_sync(fd)?
+    fs_close(fd)?
+    fd = -1
+    fs_rename(lock, path)?
+    active = false
+    fs.sync_dir(repo.gitdir)?
+}

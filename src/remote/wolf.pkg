@@ -1,0 +1,10 @@
+pkg {
+    name: "remote",
+    edition: "1",
+    capabilities: [env, fs],
+    deps: {
+        refs: {path: "../refs"},
+        repository: {path: "../repository"},
+        oid: {path: "../oid"},
+    },
+}

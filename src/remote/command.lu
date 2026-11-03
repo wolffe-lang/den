@@ -1,0 +1,168 @@
+// git-remote COMMANDS and git-config Syntax; pinned black-box rows.
+use refs
+use repository
+
+fn raw(repo: repository.Repo) -> str ! repository.RepoErrors {
+    str_from_utf8(repository.read_bytes("{repo.gitdir}/config", 1048576)?) else |_| { return invalid }
+}
+
+fn names(repo: repository.Repo) -> List[str] {
+    var out = List[str](), seen = Map[str, bool]()
+    for (key, _) in repo.config.pairs() {
+        if !key.starts_with("remote.") { continue }
+        let dot = key.rfind(".") else { continue }
+        let name = key[7..dot]
+        if name == "" || (seen[name] else false) { continue }
+        seen[name] = true
+        (mut out).push(copy name)
+    }
+    for i in 1..out.len {
+        var j = i
+        while j > 0 && out[j] < out[j - 1] {
+            let item = copy out[j - 1]
+            out[j - 1] = copy out[j]
+            out[j] = item
+            j -= 1
+        }
+    }
+    out
+}
+
+fn present(repo: repository.Repo, name: str) -> bool {
+    for item in names(repo) { if item == name { return true } }
+    false
+}
+
+fn valid_name(name: str) -> bool {
+    name != "" && !name.starts_with("-") && refs.valid("refs/remotes/{name}/item")
+}
+
+fn subsection(name: str) -> str { name.replace("\\", "\\\\").replace("\"", "\\\"") }
+
+fn section_end(text: str) -> str {
+    if text == "" || text.ends_with("\n") { copy text } else { "{text}\n" }
+}
+
+fn replace_url(text: str, section: repository.ConfigSection, value: str) -> str ! repository.RepoErrors {
+    let encoded = repository.config_quote(value)?
+    var output = copy text[0..section.body], changed = false
+    let lines = text[section.body..section.end].split("\n")
+    for i in 0..lines.len {
+        let line = lines[i]
+        if i == lines.len - 1 && line == "" { continue }
+        let parsed = repository.parse_config("[remote \"item\"]\n{line}\n")?
+        if parsed.len > 0 && parsed[0].key == "remote.item.url" {
+            if changed { return Unsupported("remote multiple URL editing") }
+            changed = true
+            output = "{output}\turl = {encoded}\n"
+        } else {
+            output = "{output}{line}\n"
+        }
+    }
+    if !changed { output = "{output}\turl = {encoded}\n" }
+    "{output}{text[section.end..]}"
+}
+
+fn edit(repo: repository.Repo, operation: str, name: str, value: str) -> () ! repository.RepoErrors {
+    let before = raw(repo)?
+    let sections = repository.config_sections(before)?
+    var after = "", found = false
+    if operation == "add" {
+        after = "{section_end(before)}[remote \"{subsection(name)}\"]\n\turl = {repository.config_quote(value)?}\n\tfetch = +refs/heads/*:refs/remotes/{name}/*\n"
+    } else if operation == "set-url" {
+        for section in sections {
+            if section.name == "remote.{name}" {
+                if found { return Unsupported("remote duplicate section editing") }
+                found = true
+                after = replace_url(before, section, value)?
+            }
+        }
+        if !found { return Unsupported("remote URL inherited outside repository config") }
+    } else {
+        var pos = 0
+        for section in sections {
+            after = "{after}{before[pos..section.start]}"
+            if section.name == "remote.{name}" {
+                found = true
+                if operation == "rename" {
+                    let old_fetch = "+refs/heads/*:refs/remotes/{name}/*"
+                    let next_fetch = "+refs/heads/*:refs/remotes/{value}/*"
+                    let body = before[section.body..section.end].replace(old_fetch, next_fetch)
+                    after = "{after}[remote \"{subsection(value)}\"]\n{body}"
+                }
+            } else {
+                after = "{after}{before[section.start..section.end]}"
+            }
+            pos = section.end
+        }
+        after = "{after}{before[pos..]}"
+        if !found { return Unsupported("remote inherited outside repository config") }
+        // Do not silently leave configured branch tracking or ref files stale.
+        // Their measured transaction is a separate follow-on step.
+        for (key, target) in repo.config.pairs() {
+            if key.starts_with("branch.") && key.ends_with(".remote") && target == name {
+                return Unsupported("remote rename/remove with branch tracking")
+            }
+        }
+        let tracked = refs.list(repo, "refs/remotes/{name}/") else |e| { return Unsupported("remote refs: {e}") }
+        if tracked.len > 0 { return Unsupported("remote rename/remove with tracking refs") }
+    }
+    repository.publish_config(repo, before, after)?
+}
+
+fn execute(args: List[str]) -> int ! repository.RepoErrors {
+    let repo = repository.discover(".")?
+    if args.len == 1 || args.len == 2 && (args[1] == "-v" || args[1] == "--verbose") {
+        for name in names(repo) {
+            if args.len == 1 { print(name); continue }
+            let url = repo.config["remote.{name}.url"] else ""
+            let push = repo.config["remote.{name}.pushurl"] else copy url
+            print("{name}\t{url} (fetch)")
+            print("{name}\t{push} (push)")
+        }
+        return 0
+    }
+    if args.len < 3 { return Unsupported("remote command arguments") }
+    let op = if args[1] == "rm" then "remove" else copy args[1]
+    let name = args[2]
+    if op == "add" || op == "rename" {
+        if args.len != 4 { return Unsupported("remote {op} arguments") }
+        let next = if op == "add" then copy name else copy args[3]
+        if present(repo, next) {
+            eprint("error: remote {next} already exists.")
+            return 3
+        }
+        if !valid_name(next) {
+            eprint("fatal: '{next}' is not a valid remote name")
+            return 128
+        }
+    }
+    if op != "add" && !present(repo, name) {
+        if op == "remove" || op == "rename" {
+            eprint("error: No such remote: '{name}'")
+        } else {
+            eprint("error: No such remote '{name}'")
+        }
+        return 2
+    }
+    if op == "get-url" {
+        if args.len != 3 { return Unsupported("remote get-url arguments") }
+        print(repo.config["remote.{name}.url"] else "")
+        return 0
+    }
+    if op == "add" || op == "rename" || op == "set-url" {
+        if args.len != 4 { return Unsupported("remote {op} arguments") }
+        edit(repo, op, name, args[3])?
+    } else if op == "remove" {
+        if args.len != 3 { return Unsupported("remote remove arguments") }
+        edit(repo, op, name, "")?
+    } else {
+        return Unsupported("remote command {op}")
+    }
+    0
+}
+
+/// Dispatch bounded remote forms; deterministic measured errors retain Git status.
+pub fn run(args: List[str]) -> int {
+    execute(args) else |e| { eprint("den: remote: {e}"); 2 }
+}
