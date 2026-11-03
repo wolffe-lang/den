@@ -11,10 +11,10 @@ use worktree
 /// Negotiate v2 for the ordinary clone view (HEAD, branches and tags), importing
 /// canonical objects and validating every selected closure before returning refs.
 pub fn fetch_objects(repo: repository.Repo, url: str) -> List[wire.Ref] ! object.StoreErrors {
-    fetch_view(repo, url, "")?
+    fetch_view(repo, url, "", true)?
 }
 
-fn fetch_view(repo: repository.Repo, url: str, source: str) -> List[wire.Ref] ! object.StoreErrors {
+fn fetch_view(repo: repository.Repo, url: str, source: str, download: bool) -> List[wire.Ref] ! object.StoreErrors {
     let c = transport.connect(url, "upload-pack")?
     var active = true
     defer { if active { let _ = transport.close(take copy c) else 1 } }
@@ -47,13 +47,20 @@ fn fetch_view(repo: repository.Repo, url: str, source: str) -> List[wire.Ref] ! 
     var advertised = List[wire.Ref]()
     for reference in received {
         let selected = if source != "" {
-            reference.name == source
+            reference.name == source || source.ends_with("/") && reference.name.starts_with(source)
         } else {
             reference.name == "HEAD" ||
                 reference.name.starts_with("refs/heads/") ||
                 reference.name.starts_with("refs/tags/")
         }
         if selected { (mut advertised).push(copy reference) }
+    }
+    if !download {
+        transport.write(c, "0000".bytes())?
+        let status = transport.close(take copy c)?
+        active = false
+        if status != 0 { return io }
+        return advertised
     }
     var wants = List[str](), haves = List[str](), wanted = Map[str, bool](), had = Map[str, bool]()
     for reference in refs.list(repo, "refs/")? {
@@ -233,7 +240,7 @@ pub fn fetch_into(
             return Unsupported("fetch into checked-out branch")
         }
     }
-    let advertised = fetch_view(repo, url, source)?
+    let advertised = fetch_view(repo, url, source, true)?
     for reference in advertised {
         if reference.name == source && reference.id != "unborn" {
             let before = refs.optional(repo, destination)?

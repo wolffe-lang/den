@@ -1,0 +1,42 @@
+// Configuration selection shared by fetch/push/pull command edges.
+use repository
+use worktree
+
+/// Current attached branch, or empty for detached HEAD; shared HEAD parsing.
+pub fn current_branch(repo: repository.Repo) -> str ! repository.RepoErrors {
+    let ctx = worktree.Context { repo: copy repo, root: copy repo.gitdir, cwd: copy repo.gitdir, prefix: "" }
+    let head = worktree.head(ctx) else |e| { return Unsupported("remote HEAD: {e}") }
+    if head.detached { return "" }
+    if !head.reference.starts_with("refs/heads/") { return Unsupported("HEAD outside local branches") }
+    copy head.branch
+}
+
+/// Resolve configured default remote in the documented push precedence order.
+pub fn default_name(repo: repository.Repo, pushing: bool) -> str ! repository.RepoErrors {
+    let branch = current_branch(repo)?
+    if pushing {
+        let override = repo.config["branch.{branch}.pushremote"] else ""
+        if override != "" { return override }
+        let fallback = repo.config["remote.pushdefault"] else ""
+        if fallback != "" { return fallback }
+    }
+    let upstream = repo.config["branch.{branch}.remote"] else ""
+    if upstream != "" { return upstream }
+    "origin"
+}
+
+/// Obtain one scalar transport URL; unsupported URL schemes remain transport errors.
+pub fn url(repo: repository.Repo, name: str, pushing: bool) -> str ! repository.RepoErrors {
+    if pushing {
+        let push_url = repo.config["remote.{name}.pushurl"] else ""
+        if push_url != "" { return push_url }
+    }
+    let value = repo.config["remote.{name}.url"] else ""
+    if value == "" { return Unsupported("missing remote {name}") }
+    value
+}
+
+/// Command reflog identity through the existing identity/date policy.
+pub fn reflog_identity(repo: repository.Repo) -> str ! repository.RepoErrors {
+    remote_identity(repo)?
+}

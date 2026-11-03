@@ -1,0 +1,50 @@
+// git-fetch/git-push OUTPUT, measured under the fixed C-locale environment.
+use history
+use object
+use oid
+use repository
+
+struct TransportRow { flag: str, summary: str, source: str, destination: str, reason: str }
+
+fn report_id(repo: repository.Repo, value: str) -> str ! object.StoreErrors {
+    let minimum = (repo.config["core.abbrev"] else "7").to_int() else |_| {
+        return Unsupported("transport core.abbrev")
+    }
+    history.abbreviate(repo, oid.parse("sha1", value)?, minimum) else |e| {
+        return Unsupported("transport abbreviation: {e}")
+    }
+}
+
+fn pad_report(text: str, width: int) -> str {
+    var out = copy text
+    while out.len < width { out = "{out} " }
+    out
+}
+
+fn short_ref(name: str) -> str {
+    if name.starts_with("refs/heads/") { return name[11..] }
+    if name.starts_with("refs/tags/") { return name[10..] }
+    if name.starts_with("refs/remotes/") { return name[13..] }
+    copy name
+}
+
+fn fetch_url(url: str) -> str {
+    var out = copy url
+    while out.ends_with("/") { out = out[0..out.len - 1] }
+    if out.ends_with(".git") { out = out[0..out.len - 4] }
+    out
+}
+
+fn fetch_report(url: str, rows: List[TransportRow]) {
+    if rows.len == 0 { return }
+    var summary_width = 17, source_width = 10
+    for row in rows {
+        if row.summary.len > summary_width { summary_width = row.summary.len }
+        if row.source.len > source_width { source_width = row.source.len }
+    }
+    eprint("From {fetch_url(url)}")
+    for row in rows {
+        let suffix = if row.reason == "" then "" else "  ({row.reason})"
+        eprint(" {row.flag} {pad_report(row.summary, summary_width)} {pad_report(row.source, source_width)} -> {row.destination}{suffix}")
+    }
+}

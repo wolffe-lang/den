@@ -9,6 +9,8 @@ pkg {
         packcmd: {path: "../packcmd"},
         pktline: {path: "../pktline"},
         refs: {path: "../refs"},
+        remote: {path: "../remote"},
+        history: {path: "../history"},
         revision: {path: "../revision"},
         repository: {path: "../repository"},
         transport: {path: "../transport"},

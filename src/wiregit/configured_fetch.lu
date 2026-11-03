@@ -1,0 +1,142 @@
+// Configured fetch over the existing v2 selection/import and ref CAS layers.
+use std.fs
+use object
+use oid
+use refs
+use remote
+use repository
+use wire
+
+fn write_fetch_head(repo: repository.Repo, text: str) -> () ! object.StoreErrors {
+    let path = refs.administrative(repo, "FETCH_HEAD", false)?
+    let existed = fs.exists(path)
+    let mode = if existed then fs.stat(path)?.mode else 0o666
+    let lock = "{path}.lock", file = fs.create_new_with_mode(lock, mode)?
+    var fd = file.fd, active = true
+    defer { if fd >= 0 { fs_close(fd) else |_| {} }; if active { fs.remove(lock) else |_| {} } }
+    if existed { fs.set_mode(lock, mode)? }
+    fs_write_chunk(fd, text.bytes())?
+    fs_sync(fd)?
+    fs_close(fd)?
+    fd = -1
+    fs_rename(lock, path)?
+    active = false
+    fs.sync_dir(repo.gitdir)?
+}
+
+fn named_fetch(
+    repo: repository.Repo,
+    name: str,
+    action: str,
+    quiet: bool,
+    prune: bool,
+) -> () ! object.StoreErrors {
+    let url = remote.url(repo, name, false)?
+    let spec = repo.config["remote.{name}.fetch"] else ""
+    if spec != "+refs/heads/*:refs/remotes/{name}/*" && spec != "refs/heads/*:refs/remotes/{name}/*" {
+        return Unsupported("configured fetch requires ordinary branch wildcard refspec")
+    }
+    let identity = remote.reflog_identity(repo)?
+    let branch = remote.current_branch(repo)?
+    let merge = if (repo.config["branch.{branch}.remote"] else "") == name {
+        repo.config["branch.{branch}.merge"] else ""
+    } else { "" }
+    let advertised = fetch_view(repo, url, "refs/heads/", true)?
+    var available = Map[str, bool](), roots = List[str]()
+    for reference in advertised {
+        if reference.id == "unborn" { continue }
+        if object.read_object(repo, oid.parse("sha1", reference.id)?, 16777216)?.kind != "commit" {
+            return Unsupported("remote branch does not name a commit")
+        }
+        available[reference.name] = true
+        (mut roots).push(copy reference.id)
+    }
+    var rows = List[TransportRow]()
+    if prune {
+        for reference in refs.list(repo, "refs/remotes/{name}/")? {
+            if refs.symbolic(repo, reference.name)? != "" { continue }
+            let prefix = "refs/remotes/{name}/"
+            let source = "refs/heads/{reference.name[prefix.len..]}"
+            if available[source] else false { continue }
+            refs.update(repo, reference.name, [copy reference.id], [], identity, action, false)?
+            (mut rows).push(TransportRow { flag: "-", summary: "[deleted]", source: "(none)", destination: short_ref(reference.name), reason: "" })
+        }
+    }
+    var fetch_head = ""
+    // FETCH_HEAD places merge candidates before not-for-merge records.
+    for selected in 0..2 {
+        for reference in advertised {
+            if reference.id == "unborn" { continue }
+            let merging = reference.name == merge
+            if merging != (selected == 0) { continue }
+            let marker = if merging then "" else "not-for-merge"
+            fetch_head = "{fetch_head}{reference.id}\t{marker}\tbranch '{reference.name[11..]}' of {fetch_url(url)}\n"
+        }
+    }
+    for reference in advertised {
+        if reference.id == "unborn" { continue }
+        let destination = "refs/remotes/{name}/{reference.name[11..]}"
+        let before = refs.optional(repo, destination)?
+        let old = if before.len == 0 then "" else oid.hex(before[0])?
+        if old == reference.id { continue }
+        var summary = "[new branch]", flag = "*", reason = "", log = "storing head"
+        if old != "" {
+            if ancestor(repo, old, reference.id)? {
+                summary = "{report_id(repo, old)?}..{report_id(repo, reference.id)?}"
+                flag = " "
+                log = "fast-forward"
+            } else {
+                summary = "{report_id(repo, old)?}...{report_id(repo, reference.id)?}"
+                flag = "+"
+                reason = "forced update"
+                log = "forced-update"
+            }
+        }
+        // A '+' ordinary remote-tracking refspec permits rewinds. Unlike local
+        // heads, other tracking namespaces accept updates without forcing too.
+        refs.update(repo, destination, before, [oid.parse("sha1", reference.id)?], identity, "{action}: {log}", false)?
+        (mut rows).push(TransportRow { flag: flag, summary: summary, source: reference.name[11..], destination: short_ref(destination), reason: reason })
+    }
+    // Auto-follow only tags whose final target is already in a fetched closure;
+    // never fetch every advertised tag merely because clone does so.
+    var reachable = Map[str, bool]()
+    for id in closure(repo, roots, [])? { reachable[id] = true }
+    for tag in fetch_view(repo, url, "refs/tags/", false)? {
+        if tag.id == "unborn" || refs.optional(repo, tag.name)?.len > 0 { continue }
+        let target = if tag.peeled == "" then copy tag.id else copy tag.peeled
+        if !(reachable[target] else false) { continue }
+        let _ = fetch_view(repo, url, tag.name, true)?
+        refs.update(repo, tag.name, [], [oid.parse("sha1", tag.id)?], identity, "{action}: storing tag", false)?
+        fetch_head = "{fetch_head}{tag.id}\tnot-for-merge\ttag '{tag.name[10..]}' of {fetch_url(url)}\n"
+        (mut rows).push(TransportRow { flag: "*", summary: "[new tag]", source: tag.name[10..], destination: tag.name[10..], reason: "" })
+    }
+    write_fetch_head(repo, fetch_head)?
+    if !quiet { fetch_report(url, rows) }
+}
+
+fn configured_fetch_command(args: List[str]) -> () ! object.StoreErrors {
+    var name = "", quiet = false, prune = false, action = "fetch"
+    for arg in args[1..] {
+        action = "{action} {arg}"
+        if arg == "-q" || arg == "--quiet" {
+            quiet = true
+        } else if arg == "--prune" || arg == "-p" {
+            prune = true
+        } else if arg == "--no-prune" {
+            prune = false
+        } else if arg.starts_with("-") || name != "" {
+            return Unsupported("configured fetch option/refspec {arg}")
+        } else { name = copy arg }
+    }
+    let repo = repository.discover(".")?
+    if name == "" { name = remote.default_name(repo, false)? }
+    named_fetch(repo, name, action, quiet, prune)?
+}
+
+fn configured_form(args: List[str]) -> bool {
+    for arg in args[1..] {
+        if arg.starts_with("-") { continue }
+        return !arg.contains("://")
+    }
+    true
+}
