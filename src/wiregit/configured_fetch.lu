@@ -5,7 +5,6 @@ use oid
 use refs
 use remote
 use repository
-use wire
 
 fn write_fetch_head(repo: repository.Repo, text: str) -> () ! object.StoreErrors {
     let path = refs.administrative(repo, "FETCH_HEAD", false)?
