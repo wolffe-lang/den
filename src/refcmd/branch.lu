@@ -38,7 +38,8 @@ fn controls(ctx: worktree.Context, command: str) -> () ! commit.CommitErrors {
     for (key, value) in ctx.repo.config.pairs() {
         if key.starts_with("branch.") &&
             key != "branch.autosetupmerge" &&
-            key != "branch.autosetuprebase" {
+            key != "branch.autosetuprebase" &&
+            !key.ends_with(".remote") && !key.ends_with(".merge") && !key.ends_with(".rebase") {
             return Unsupported("{command} branch configuration {key}")
         }
         if key == "branch.autosetupmerge" && value != "true" && value != "false" ||

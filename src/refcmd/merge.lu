@@ -51,7 +51,7 @@ fn merge_publish(
     ctx: worktree.Context,
     head: worktree.Head,
     id: oid.Oid,
-    name: str,
+    action: str,
     text: str,
 ) -> () ! commit.CommitErrors {
     commit.publish_ref(
@@ -59,7 +59,7 @@ fn merge_publish(
         head,
         id,
         commit.environment_identity(ctx, "COMMITTER", "")?,
-        "merge {name}",
+        action,
         text.bytes(),
     ) else |e| match e {
         Fatal(message) => { return Fatal("update_ref failed for ref 'HEAD': {message}") },
@@ -144,6 +144,10 @@ fn merge_stat(
 }
 
 fn merge_command(args: List[str]) -> int ! commit.CommitErrors {
+    merge_command_with(args, "", "")?
+}
+
+fn merge_command_with(args: List[str], reflog: str, label: str) -> int ! commit.CommitErrors {
     let ctx = worktree.discover(".")?
     controls(ctx, "merge")?
     if worktree.config_bool(ctx, "commit.gpgsign", false)? { return Unsupported("merge signing") }
@@ -217,6 +221,8 @@ fn merge_command(args: List[str]) -> int ! commit.CommitErrors {
         }
     }
     if name == "" { return Unsupported("merge upstream selection") }
+    let action = if reflog == "" then "merge {name}" else copy reflog
+    let display_name = if label == "" then copy name else copy label
     if fs.exists("{ctx.repo.gitdir}/MERGE_HEAD") {
         return Fatal(
             "You have not concluded your merge (MERGE_HEAD exists).\nPlease, commit your changes before you merge.",
@@ -268,7 +274,7 @@ fn merge_command(args: List[str]) -> int ! commit.CommitErrors {
             theirs,
             "HEAD",
             abbrev(ctx.repo, bases[0])?,
-            name,
+            display_name,
             style,
         )?
     }
@@ -406,7 +412,7 @@ fn merge_command(args: List[str]) -> int ! commit.CommitErrors {
     }
     if !squash {
         if fast {
-            merge_publish(ctx, head, target, name, "Fast-forward")?
+            merge_publish(ctx, head, target, action, "Fast-forward")?
         } else {
             if message == "" {
                 return Failure(
@@ -431,7 +437,7 @@ fn merge_command(args: List[str]) -> int ! commit.CommitErrors {
             let id = object.write_object(ctx.repo, "commit", body)?
             state_file(ctx, "MERGE_MSG", message.bytes())?
             if !quiet { print("Merge made by the 'ort' strategy.") }
-            merge_publish(ctx, head, id, name, "Merge made by the 'ort' strategy.")?
+            merge_publish(ctx, head, id, action, "Merge made by the 'ort' strategy.")?
         }
     }
     if stat && !quiet { merge_stat(ctx, ours, plan.files)? }

@@ -1,0 +1,21 @@
+// Pull delegates history changes to these existing M3 controllers, supplying
+// only command provenance, the measured merge label and quiet display policy.
+use commit
+
+fn pull_dispatch(args: List[str], action: str, label: str, quiet: bool) -> int ! commit.CommitErrors {
+    if args.len == 0 { return Unsupported("pull missing history operation") }
+    if args[0] == "merge" { return merge_command_with(args, action, label)? }
+    if args[0] == "rebase" { return rebase_command_with(args, action, quiet)? }
+    Unsupported("pull history operation {args[0]}")
+}
+
+/// Run a pull-selected merge or linear rebase without shell dispatch or a second
+/// tree/replay engine. All inherited M3 safety checks and scope limits remain.
+pub fn run_pull(args: List[str], action: str, label: str, quiet: bool) -> int {
+    pull_dispatch(args, action, label, quiet) else |e| match e {
+        Fatal(message) => { eprint("fatal: {message}"); 128 },
+        Failure(message) => { eprint("error: {message}"); 1 },
+        Unsupported(message) => { eprint("den: not yet implemented: {message}"); 2 },
+        _ => { eprint("fatal: {e}"); 128 },
+    }
+}

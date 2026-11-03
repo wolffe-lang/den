@@ -427,6 +427,12 @@ pub fn run_rebase(args: List[str], continuing: bool) -> int {
     command_run(args, "", !continuing, if continuing then "rebase (continue)" else "rebase (pick)")
 }
 
+/// Complete a replay step with an explicit caller-owned reflog action.
+/// The ordinary rebase entry retains its existing default action.
+pub fn run_rebase_action(args: List[str], continuing: bool, action: str) -> int {
+    command_run(args, "", !continuing, action)
+}
+
 fn command_run(args: List[str], fail: str, fast_revert: bool, replay_action: str) -> int {
     repository.check_config(".") else |e| match e {
         ConfigDiagnostic(message) => { eprint(message); return 128 },

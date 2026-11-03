@@ -187,6 +187,16 @@ fn pick_one(
     options: PickOptions,
     rebasing: bool,
 ) -> int ! commit.CommitErrors {
+    pick_one_action(ctx, item, options, rebasing, "rebase")?
+}
+
+fn pick_one_action(
+    ctx: worktree.Context,
+    item: walk.Commit,
+    options: PickOptions,
+    rebasing: bool,
+    reflog: str,
+) -> int ! commit.CommitErrors {
     let head = worktree.head(ctx)?
     let plan = replay_plan(ctx, head.commits[0], item)?
     var tx = index_start(ctx) else |e| match e {
@@ -274,7 +284,7 @@ fn pick_one(
         return 0
     }
     if rebasing {
-        return commit.run_rebase(
+        return commit.run_rebase_action(
             [
                 "commit",
                 "--no-edit",
@@ -286,6 +296,7 @@ fn pick_one(
                 "{ctx.repo.gitdir}/MERGE_MSG",
             ],
             false,
+            "{reflog} (pick)",
         )
     }
     pick_commit(ctx, item, action == "keep", true)?

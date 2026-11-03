@@ -89,7 +89,7 @@ fn rebase_remove(ctx: worktree.Context) -> () ! commit.CommitErrors {
     replay_remove(ctx, "REBASE_HEAD")?
 }
 
-fn rebase_finish(ctx: worktree.Context) -> int ! commit.CommitErrors {
+fn rebase_finish(ctx: worktree.Context, reflog: str, quiet: bool) -> int ! commit.CommitErrors {
     let branch = replay_read(ctx, "rebase-merge/head-name")?.trim()
     let orig = oid.parse("sha1", replay_read(ctx, "rebase-merge/orig-head")?.trim())?
     let onto = replay_read(ctx, "rebase-merge/onto")?.trim()
@@ -101,7 +101,7 @@ fn rebase_finish(ctx: worktree.Context) -> int ! commit.CommitErrors {
             [orig],
             head.commits,
             identity(ctx)?,
-            "rebase (finish): {branch} onto {onto}",
+            "{reflog} (finish): {branch} onto {onto}",
             false,
         ) else |e| match e {
             exists => {
@@ -119,15 +119,19 @@ fn rebase_finish(ctx: worktree.Context) -> int ! commit.CommitErrors {
             head.commits,
             head.commits,
             identity(ctx)?,
-            "rebase (finish): returning to {branch}",
+            "{reflog} (finish): returning to {branch}",
         )?
     }
     rebase_remove(ctx)?
-    eprint("Successfully rebased and updated {branch}.")
+    if !quiet { eprint("Successfully rebased and updated {branch}.") }
     0
 }
 
 fn rebase_steps(ctx: worktree.Context) -> int ! commit.CommitErrors {
+    rebase_steps_with(ctx, "rebase", false)?
+}
+
+fn rebase_steps_with(ctx: worktree.Context, reflog: str, quiet: bool) -> int ! commit.CommitErrors {
     let steps = sequencer.parse(replay_read(ctx, "rebase-merge/git-rebase-todo")?.bytes())?
     let total = replay_read(ctx, "rebase-merge/end")?.trim().to_int() else |_| { return invalid }
     let initial_done = if fs.exists("{ctx.repo.gitdir}/rebase-merge/done") {
@@ -152,12 +156,13 @@ fn rebase_steps(ctx: worktree.Context) -> int ! commit.CommitErrors {
             replay_write(ctx, "rebase-merge/git-rebase-todo", sequencer.render(steps[at + 1..])?)?
             replay_write(ctx, "rebase-merge/msgnum", "{number}\n".bytes())?
             rebase_author(ctx, item)?
-            eprint_raw("Rebasing ({number}/{total})\r")
-            let result = pick_one(
+            if !quiet { eprint_raw("Rebasing ({number}/{total})\r") }
+            let result = pick_one_action(
                 ctx,
                 item,
                 PickOptions { allow_empty: true, empty: "drop" },
                 true,
+                reflog,
             )?
             if result != 0 {
                 if fs.exists("{ctx.repo.gitdir}/HEAD.lock") &&
@@ -180,7 +185,7 @@ fn rebase_steps(ctx: worktree.Context) -> int ! commit.CommitErrors {
             replay_write(ctx, "rebase-merge/rewritten-list", rewritten.bytes())?
         }
     }
-    rebase_finish(ctx)?
+    rebase_finish(ctx, reflog, quiet)?
 }
 
 fn rebase_reset(
@@ -340,6 +345,10 @@ fn rebase_equivalence_scope(
 }
 
 fn rebase_command(args: List[str]) -> int ! commit.CommitErrors {
+    rebase_command_with(args, "rebase", false)?
+}
+
+fn rebase_command_with(args: List[str], reflog: str, quiet: bool) -> int ! commit.CommitErrors {
     let ctx = worktree.discover(".")?
     replay_controls(ctx, "rebase")?
     replay_lock_scope(ctx)?
@@ -446,7 +455,7 @@ fn rebase_command(args: List[str]) -> int ! commit.CommitErrors {
         head.commits,
         [copy onto],
         identity(ctx)?,
-        "rebase (start): checkout {onto_name}",
+        "{reflog} (start): checkout {onto_name}",
     ) else |e| match e {
         exists => {
             eprint(
@@ -472,5 +481,5 @@ fn rebase_command(args: List[str]) -> int ! commit.CommitErrors {
         "rebase-merge/git-rebase-todo.backup",
         "{str_from_utf8(todo)?}{header}{rebase_help()}".bytes(),
     )?
-    rebase_steps(ctx)?
+    rebase_steps_with(ctx, reflog, quiet)?
 }
