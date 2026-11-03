@@ -1,0 +1,90 @@
+// git-branch --set-upstream-to and branch.* in git-config; pinned row captures.
+use refs
+use repository
+
+/// Prepare both tracking keys and publish a single config compare-and-swap.
+pub fn configure_branch(
+    repo: repository.Repo,
+    branch: str,
+    remote: str,
+    merge: str,
+) -> () ! repository.RepoErrors {
+    if !refs.valid("refs/heads/{branch}") || !refs.valid(merge) { return invalid }
+    let before = raw(repo)?
+    let after = repository.config_set(before, "branch.{branch}.remote", remote)?
+    let complete = repository.config_set(after, "branch.{branch}.merge", merge)?
+    repository.publish_config(repo, before, complete)?
+}
+
+fn set_tracking(args: List[str]) -> int ! repository.RepoErrors {
+    let repo = repository.discover(".")?
+    var upstream = "", branch = "", pending = false
+    for arg in args[1..] {
+        if pending {
+            upstream = copy arg
+            pending = false
+        } else if arg == "--set-upstream-to" || arg == "-u" {
+            if upstream != "" { return invalid }
+            pending = true
+        } else if arg.starts_with("--set-upstream-to=") {
+            if upstream != "" { return invalid }
+            upstream = arg[18..]
+        } else if arg.starts_with("-") || branch != "" {
+            return Unsupported("branch tracking option")
+        } else {
+            branch = copy arg
+        }
+    }
+    if pending || upstream == "" { return invalid }
+    if branch == "" {
+        let head = str_from_utf8(repository.read_bytes("{repo.gitdir}/HEAD", 4096)?) else |_| { return invalid }
+        if !head.starts_with("ref: refs/heads/") {
+            eprint("fatal: could not set upstream of HEAD to '{upstream}' when it does not point to any branch")
+            return 128
+        }
+        branch = head[16..].trim()
+    }
+    let local = refs.optional(repo, "refs/heads/{branch}") else |e| { return Unsupported("tracking local branch: {e}") }
+    if local.len == 0 {
+        eprint("fatal: branch '{branch}' does not exist")
+        return 128
+    }
+    var remote = "", merge = "", display = copy upstream
+    let local_name = if upstream.starts_with("refs/heads/") then upstream[11..] else copy upstream
+    let local_target = refs.optional(repo, "refs/heads/{local_name}") else |e| { return Unsupported("tracking target: {e}") }
+    if local_target.len == 1 {
+        remote = "."
+        merge = "refs/heads/{local_name}"
+        display = copy local_name
+    } else {
+        let short = if upstream.starts_with("refs/remotes/") then upstream[13..] else copy upstream
+        for name in names(repo) {
+            if !short.starts_with("{name}/") || name.len <= remote.len { continue }
+            let reference = "refs/remotes/{short}"
+            let found = refs.optional(repo, reference) else |e| { return Unsupported("tracking remote ref: {e}") }
+            if found.len == 0 { continue }
+            let spec = repo.config["remote.{name}.fetch"] else ""
+            if spec != "+refs/heads/*:refs/remotes/{name}/*" && spec != "refs/heads/*:refs/remotes/{name}/*" {
+                return Unsupported("tracking requires ordinary branch fetch refspec")
+            }
+            remote = copy name
+            merge = "refs/heads/{short[name.len + 1..]}"
+            display = copy short
+        }
+    }
+    if remote == "" {
+        eprint("fatal: the requested upstream branch '{upstream}' does not exist")
+        if (repo.config["advice.setupstreamfailure"] else "true") != "false" {
+            eprint("hint:\nhint: If you are planning on basing your work on an upstream\nhint: branch that already exists at the remote, you may need to\nhint: run \"git fetch\" to retrieve it.\nhint:\nhint: If you are planning to push out a new local branch that\nhint: will track its remote counterpart, you may want to use\nhint: \"git push -u\" to set the upstream config as you push.\nhint: Disable this message with \"git config set advice.setUpstreamFailure false\"")
+        }
+        return 128
+    }
+    configure_branch(repo, branch, remote, merge)?
+    print("branch '{branch}' set up to track '{display}'.")
+    0
+}
+
+/// Set an existing local branch's upstream through measured config publication.
+pub fn set_upstream(args: List[str]) -> int {
+    set_tracking(args) else |e| { eprint("den: tracking: {e}"); 2 }
+}

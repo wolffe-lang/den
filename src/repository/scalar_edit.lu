@@ -1,0 +1,54 @@
+// Bounded scalar edits for tracking, sharing the repository parser and spans.
+
+fn edit_header(name: str) -> str {
+    let dot = name.find(".") else { return "[{name}]" }
+    let sub = name[dot + 1..].replace("\\", "\\\\").replace("\"", "\\\"")
+    "[{name[0..dot]} \"{sub}\"]"
+}
+
+/// Set one scalar in ordinary whole-line sections, preserving unrelated bytes.
+/// Repeated assignments refuse; the caller publishes all prepared edits once.
+pub fn config_set(text: str, key: str, value: str) -> str ! RepoErrors {
+    if value.len > 1048576 { return limit }
+    let canonical = config_key(key)?
+    let dot = canonical.rfind(".") else { return invalid }
+    let name = canonical[0..dot], variable = canonical[dot + 1..]
+    let header = edit_header(name), encoded = config_quote(value)?
+    let sections = config_sections(text)?
+    var selected = -1, existing = -1, count = 0
+    for i in 0..sections.len {
+        let section = copy sections[i]
+        if section.name != name { continue }
+        selected = i
+        for entry in parse_config(text[section.start..section.end])? {
+            if entry.key == canonical { existing = i; count += 1 }
+        }
+    }
+    if count > 1 { return Unsupported("config scalar edit has multiple assignments") }
+    var out = ""
+    if selected < 0 {
+        let separator = if text == "" || text.ends_with("\n") then "" else "\n"
+        out = "{text}{separator}{header}\n\t{variable} = {encoded}\n"
+    } else {
+        if existing >= 0 { selected = existing }
+        let section = copy sections[selected]
+        out = copy text[0..section.body]
+        let lines = text[section.body..section.end].split("\n")
+        var replaced = false
+        for i in 0..lines.len {
+            let line = lines[i]
+            if i == lines.len - 1 && line == "" { continue }
+            let entries = parse_config("{header}\n{line}\n")?
+            if entries.len == 1 && entries[0].key == canonical {
+                out = "{out}\t{variable} = {encoded}\n"
+                replaced = true
+            } else {
+                out = "{out}{line}\n"
+            }
+        }
+        if !replaced { out = "{out}\t{variable} = {encoded}\n" }
+        out = "{out}{text[section.end..]}"
+    }
+    if out.len > 1048576 { return limit }
+    out
+}
