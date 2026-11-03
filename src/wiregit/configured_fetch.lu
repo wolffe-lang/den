@@ -35,7 +35,7 @@ fn named_fetch(
 ) -> () ! object.StoreErrors {
     let url = remote.url(repo, name, false)?
     let program = if upload == "" {
-        (repo.config["remote.{name}.uploadpack"] else "")
+        repo.config["remote.{name}.uploadpack"] else ""
     } else {
         copy upload
     }
