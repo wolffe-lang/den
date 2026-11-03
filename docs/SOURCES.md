@@ -665,3 +665,13 @@ exercise every precommit stage through an independent package client. This is no
 an assertion about Git's filesystem implementation, a reflog transaction, crash
 lock recovery or concurrent reader snapshot isolation. Atomic capability is
 withdrawn for the named unimplemented reflog policy.
+
+The review also consulted `git-push(1)` at
+`https://git-scm.com/docs/git-push`, specifically the update rules for
+refs/heads, refs/tags and other namespaces. Other-namespace commits/tags require
+fast-forward/typed-peeling policy; tree/blob updates require force. The client
+therefore refuses non-forced other-namespace updates until that broader policy
+has a complete measurement. Creations, deletions, unchanged values and explicit
+force are retained. Its safe custom fast-forward refusal is a named scope
+boundary, not Git parity. The independent rewind regression first demonstrates
+the old unsafe acceptance against Git's default receiver.
