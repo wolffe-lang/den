@@ -1,0 +1,76 @@
+// Git URLS and gitprotocol-v2 SSH/File transport. System ssh executes the
+// service; packet/object/ref handling remains in den, without a shell parser.
+use std.env
+
+/// Parsed SSH authority and literal remote repository path; port zero uses the
+/// system client's configured/default port. IPv6/encoded URL forms remain named.
+pub struct SshEndpoint { host: str, port: int, path: str }
+
+/// Recognize URI or documented scp-like SSH syntax without executing anything.
+pub fn ssh_form(url: str) -> bool {
+    if url.starts_with("ssh://") { return true }
+    if url.contains("://") { return false }
+    let colon = url.find(":") else { return false }
+    !url[0..colon].contains("/")
+}
+
+/// Validate bounded SSH URL components before any descriptor or process exists.
+pub fn ssh_endpoint(url: str) -> SshEndpoint ! Errors {
+    if url.len > 4096 { return limit }
+    var host = "", path = "", port = 0
+    if url.starts_with("ssh://") {
+        let rest = url[6..]
+        let slash = rest.find("/") else { return invalid }
+        host = rest[0..slash]
+        path = rest[slash..]
+        if host.contains("[") || host.contains("]") { return Unsupported("SSH IPv6 URL") }
+        let colon = host.rfind(":") else -1
+        if colon >= 0 {
+            port = host[colon + 1..].to_int() else |_| { return invalid }
+            if port < 1 || port > 65535 { return invalid }
+            host = host[0..colon]
+        }
+    } else {
+        let colon = url.find(":") else { return invalid }
+        if url[0..colon].contains("/") { return invalid }
+        host = url[0..colon]
+        path = url[colon + 1..]
+    }
+    if host == "" || path == "" || host.len > 255 || host.starts_with("-") ||
+        path.contains("\0") || path.contains("\n") || path.contains("\r") { return invalid }
+    let pieces = host.split("@")
+    if pieces.len > 2 { return invalid }
+    for piece in pieces {
+        if piece == "" || piece.starts_with("-") { return invalid }
+        for b in piece.bytes() {
+            let n = b as int
+            if !(n >= 65 && n <= 90 || n >= 97 && n <= 122 || n >= 48 && n <= 57 ||
+                b == 45 as byte || b == 46 as byte || b == 95 as byte) { return invalid }
+        }
+    }
+    if path.contains("%") { return Unsupported("percent-encoded ssh URL") }
+    SshEndpoint { host: host, port: port, path: path }
+}
+
+/// Quote one remote argument for system ssh's documented remote-shell boundary.
+/// The caller still supplies a real argv vector, never a concatenated command.
+pub fn ssh_quote(text: str) -> str ! Errors {
+    if text.contains("\0") || text.contains("\n") || text.contains("\r") { return invalid }
+    let escaped = text.replace("'", "'\\''")
+    "'{escaped}'"
+}
+
+fn ssh_channel(url: str, service: str) -> Channel ! Errors {
+    let endpoint = ssh_endpoint(url)?
+    let variable = if service == "upload-pack" then "DEN_UPLOAD_PACK" else "DEN_RECEIVE_PACK"
+    let program = env.get(variable) else "git-{service}"
+    var argv = ["ssh", "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=yes",
+        "-o", "UpdateHostKeys=no", "-o", "ControlMaster=no", "-o", "ControlPath=none",
+        "-o", "ClearAllForwardings=yes", "-o", "ConnectTimeout=30", "-o", "SendEnv=GIT_PROTOCOL"]
+    if endpoint.port != 0 { (mut argv).push("-p"); (mut argv).push("{endpoint.port}") }
+    (mut argv).push("--")
+    (mut argv).push(copy endpoint.host)
+    (mut argv).push(ssh_quote(program)?)
+    (mut argv).push(ssh_quote(endpoint.path)?)
+    process_channel(argv)?
+}

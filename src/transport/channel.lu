@@ -102,7 +102,11 @@ fn file_channel(path: str, service: str) -> Channel ! Errors {
     if !path.starts_with("/") { return Unsupported("file URL requires an absolute local path") }
     let variable = if service == "upload-pack" then "DEN_UPLOAD_PACK" else "DEN_RECEIVE_PACK"
     let program = env.get(variable) else "git-{service}"
-    var command = process.from_argv([program, path])
+    process_channel([program, path])?
+}
+
+fn process_channel(argv: List[str]) -> Channel ! Errors {
+    var command = process.from_argv(argv)
     let to_child = process.pipe() else |_| { return io }
     let from_child = process.pipe() else |_| {
         fs.close(take to_child.read) else |_| {}
@@ -142,7 +146,8 @@ pub fn connect(url: str, service: str) -> Channel ! Errors {
     if service != "upload-pack" && service != "receive-pack" { return invalid }
     if url.len > 4096 { return limit }
     if url.starts_with("file://") { return file_channel(url[7..], service)? }
-    if !url.starts_with("git://") { return Unsupported("transport requires file:// or git://") }
+    if ssh_form(url) { return ssh_channel(url, service)? }
+    if !url.starts_with("git://") { return Unsupported("transport requires file://, git:// or ssh") }
     let remote = url[6..]
     let slash = remote.find("/") else |_| { return invalid }
     let host = remote[0..slash], path = remote[slash..]
