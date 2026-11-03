@@ -78,6 +78,7 @@ fn edit(
     let before = raw(repo)?
     let sections = repository.config_sections(before)?
     var after = "", found = false
+    var affected = List[refs.Packed]()
     if operation == "add" {
         after = "{section_end(before)}[remote \"{subsection(name)}\"]\n\turl = {repository.config_quote(value)?}\n\tfetch = +refs/heads/*:refs/remotes/{name}/*\n"
     } else if operation == "set-url" {
@@ -125,19 +126,40 @@ fn edit(
         }
         after = "{after}{before[pos..]}"
         if !found { return Unsupported("remote inherited outside repository config") }
-        // Do not silently leave configured branch tracking or ref files stale.
-        // Their measured transaction is a separate follow-on step.
         for (key, target) in repo.config.pairs() {
             if key.starts_with("branch.") && key.ends_with(".remote") && target == name {
-                return Unsupported("remote rename/remove with branch tracking")
+                if operation == "rename" {
+                    after = repository.config_set(after, key, value)?
+                } else {
+                    after = repository.config_unset(after, key)?
+                    after = repository.config_unset(after, "{key[0..key.len - 6]}merge")?
+                }
             }
         }
-        let tracked = refs.list(repo, "refs/remotes/{name}/") else |e| {
+        affected = refs.list(repo, "refs/remotes/{name}/") else |e| {
             return Unsupported("remote refs: {e}")
         }
-        if tracked.len > 0 { return Unsupported("remote rename/remove with tracking refs") }
+        if affected.len > 0 {
+            if operation == "rename" { return Unsupported("remote rename with tracking refs") }
+            let fetch = repo.config["remote.{name}.fetch"] else ""
+            if fetch != "+refs/heads/*:refs/remotes/{name}/*" {
+                return Unsupported("remote removal with nondefault fetch refspec")
+            }
+        }
     }
     repository.publish_config(repo, before, after)?
+    if operation == "remove" {
+        for reference in affected {
+            let target = refs.symbolic(repo, reference.name) else |e| { return Unsupported("remote symbolic ref: {e}") }
+            if target != "" {
+                refs.delete_symbolic(repo, reference.name, target) else |e| { return Unsupported("remove symbolic tracking ref: {e}") }
+            } else {
+                refs.update(repo, reference.name, [copy reference.id], [], "", "", false) else |e| {
+                    return Unsupported("remove tracking ref: {e}")
+                }
+            }
+        }
+    }
 }
 
 fn execute(args: List[str]) -> int ! repository.RepoErrors {

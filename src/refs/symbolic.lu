@@ -1,0 +1,40 @@
+// Symbolic tracking refs: read the literal target, never mutate its referent.
+use std.fs
+use oid
+use repository
+
+/// Return a validated symbolic target or empty for an absent/direct ref.
+/// Unlike read(), this boundary does not follow a dangling symbolic target.
+pub fn symbolic(repo: repository.Repo, name: str) -> str ! RefErrors {
+    if !valid(name) { return invalid_oid }
+    let path = administrative(repo, name, false)?
+    let bytes = repository.read_bytes(path, 4096) else |e| match e {
+        not_found => { return "" },
+        _ => { return Unsupported("symbolic ref read: {e}") },
+    }
+    let text = (str_from_utf8(bytes) else |_| { return invalid_oid }).trim()
+    if text.starts_with("ref: ") {
+        let target = text[5..]
+        if !valid(target) { return invalid_oid }
+        return target
+    }
+    let _ = oid.parse("sha1", text)?
+    ""
+}
+
+/// Delete one symbolic tracking ref after checking its literal target under lock.
+/// Its target ref is never touched; existing reflog bytes are removed.
+pub fn delete_symbolic(repo: repository.Repo, name: str, expected: str) -> () ! RefErrors {
+    if !name.starts_with("refs/remotes/") || expected == "" { return invalid_oid }
+    let path = administrative(repo, name, false)?, lock = "{path}.lock"
+    let file = fs.create_new_with_mode(lock, 0o666)?
+    defer { fs_close(file.fd) else |_| {}; fs.remove(lock) else |_| {} }
+    if symbolic(repo, name)? != expected { return invalid }
+    fs.remove(path)?
+    let log = "{repo.gitdir}/logs/{name}"
+    if fs.exists(log) {
+        let _ = administrative(repo, "logs/{name}", false)?
+        fs.remove(log)?
+    }
+    fs.sync_dir(fs.parent(path) else |_| { return invalid })?
+}

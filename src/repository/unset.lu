@@ -1,0 +1,36 @@
+// Scalar removal for remote-tracking config, using the existing parser/spans.
+
+/// Remove all assignments of one key; drop a section only when no keys remain.
+/// Other sections, keys and their byte spelling are preserved.
+pub fn config_unset(text: str, key: str) -> str ! RepoErrors {
+    let canonical = config_key(key)?
+    let dot = canonical.rfind(".") else { return invalid }
+    let name = canonical[0..dot], header = edit_header(name)
+    var out = "", pos = 0
+    for section in config_sections(text)? {
+        out = "{out}{text[pos..section.start]}"
+        if section.name != name {
+            out = "{out}{text[section.start..section.end]}"
+        } else {
+            var body = "", changed = false
+            let lines = text[section.body..section.end].split("\n")
+            for i in 0..lines.len {
+                let line = lines[i]
+                if i == lines.len - 1 && line == "" { continue }
+                let entries = parse_config("{header}\n{line}\n")?
+                if entries.len == 1 && entries[0].key == canonical {
+                    changed = true
+                } else {
+                    body = "{body}{line}\n"
+                }
+            }
+            if !changed {
+                out = "{out}{text[section.start..section.end]}"
+            } else if parse_config("{header}\n{body}")?.len > 0 {
+                out = "{out}{text[section.start..section.body]}{body}"
+            }
+        }
+        pos = section.end
+    }
+    "{out}{text[pos..]}"
+}
