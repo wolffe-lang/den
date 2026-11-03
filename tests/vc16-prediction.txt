@@ -19,6 +19,9 @@ nine source values (commit/forward/divergent, tags of commits/tree, tree, two
 blobs), absence plus every valid old type in six namespaces, and explicit-force
 updates from a forward commit. Heads fixture inputs remain commits only.
 The resulting total estimate is 636 fixture groups.
+After the original 24 remote groups passed, add twelve precommitted config-edge
+groups (36 remote groups, 648 total projected). The expanded matrix first failed
+by name for permissions, fetch-only rename, foreign locks and duplicate sections.
 
 Expected closures of the prior lane's named remainders: remote-name and default
 refspec forms, bounded pull forms, typed-peeling update policy outside heads/tags,
