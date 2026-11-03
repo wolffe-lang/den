@@ -4,6 +4,7 @@ use object
 use pktline
 use repository
 use transport
+use wire
 
 fn read_failure() {
     eprint("fatal: Could not read from remote repository.\n\nPlease make sure you have the correct access rights\nand the repository exists.")
@@ -22,8 +23,7 @@ fn remote_error(data: List[byte]) -> str ! object.StoreErrors {
     if data.len == 0 { return "" }
     let packet = pktline.decode(data, 0)?
     if packet.kind != 4 { return "" }
-    let text = str_from_utf8(packet.data) else |_| { return "" }
-    if !text.starts_with("ERR ") { return "" }
+    if !wire.error_payload(packet.data) { return "" }
     let line = pktline.text(packet.data)?
     "remote error: {line[4..]}"
 }
