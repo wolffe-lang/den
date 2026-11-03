@@ -97,6 +97,8 @@ for path in ("src/object/store.lu", "src/oid/oid.lu", "src/index/index.lu", "src
     say(p["tier"] == "pr" and p["jobs"] == PR, "T2 object gate path " + path)
 gate = open(os.path.join(ROOT, "tools", "gate")).read()
 say("tools/check-wire" in gate.splitlines(), "T2 wire integration gate is mandatory")
+wire_gate = open(os.path.join(ROOT, "tools", "check-wire")).read()
+say("tools/check-porcelain" in wire_gate.splitlines(), "T2 configured porcelain gate is mandatory")
 for path in ("src/pktline/pktline.lu", "src/wiregit/upload.lu", "src/refs/transaction.lu", "tools/check-wire", "probes/wire-client/main.lu"):
     p = plan([path], event="pull_request", action="synchronize")
     say(p["tier"] == "pr" and p["jobs"] == PR, "T2 wire gate path " + path)
