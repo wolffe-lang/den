@@ -111,6 +111,19 @@ updates to `refs/stash` as `funny refname`, including forced creation; local sta
 storage is unaffected. This is not an M5 completion claim: pull and ssh work,
 additional configuration forms and failure-output parity remain separate.
 
+### Named receive-service diagnostic limit
+
+`wire-push-service-stderr` / `lease-delete-match`: both clients reject deletion of
+the system service's current branch with status 1, the same per-ref status report
+and identical complete local/remote state. Git renders the service diagnostics
+with `remote: ` and side-band-64k display padding; den forwards the same service
+text directly. Negotiated push side-band-64k progress rendering remains separate.
+`tests/review/vc16-push-service-stderr.json` binds this one reviewed non-parity row
+to its exact argv, environment, stdin, input file bytes/modes, both complete
+outputs/statuses and both complete resulting states. The row fails if either
+side or its inputs change; it is reported as REVIEW, never an exact parity pass.
+Raw processes and states remain under `target/runs/wire-configured-*/`.
+
 ### Named auto-identity limit
 
 `wire-remote-auto-identity`: the no-override fixture has a visible HOME directory

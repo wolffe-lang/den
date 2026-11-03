@@ -15,10 +15,11 @@ def main():
     parser.add_argument('--family', choices=('configured', 'lease', 'all'), default='configured')
     a = parser.parse_args()
     root = Path(__file__).resolve().parent.parent
-    out = root / 'target/runs' / ('wire-' + a.family + '-' + a.tier)
+    out = root / 'target/runs' / ('wire-configured-' + a.tier)
     out.mkdir(parents=True, exist_ok=True)
     git = os.environ['DEN_GIT']
-    assert hashlib.sha256(Path(git).read_bytes()).hexdigest() == 'c4848492938c4ebfffbefe1fbbaa68b9af90c86d1f6a20e76816c5ff37fcfa60'
+    oracle_digest = hashlib.sha256(Path(git).read_bytes()).hexdigest()
+    assert oracle_digest == 'c4848492938c4ebfffbefe1fbbaa68b9af90c86d1f6a20e76816c5ff37fcfa60'
     den = root / 'target' / a.tier / 'den'
     env = dict(os.environ, GIT_AUTHOR_NAME='Den Tester', GIT_AUTHOR_EMAIL='den@example.invalid',
                GIT_COMMITTER_NAME='Den Tester', GIT_COMMITTER_EMAIL='den@example.invalid')
@@ -85,6 +86,7 @@ def main():
         ('lease-force-stale', ['push', '--force', lease + first]),
         ('lease-plus-stale', ['push', lease + first, 'origin', '+refs/heads/main:refs/heads/main']),
         ('lease-delete-match', ['push', lease + second, 'origin', ':refs/heads/main']),
+        ('lease-delete-topic-match', ['push', '--force-with-lease=refs/heads/topic:' + first, 'origin', ':refs/heads/topic']),
         ('lease-delete-stale', ['push', lease + first, 'origin', ':refs/heads/main']),
         ('lease-unrelated', ['push', '--force-with-lease=refs/heads/other:' + second]),
         ('lease-quiet-match', ['push', '-q', '--force-with-lease']),
@@ -93,9 +95,11 @@ def main():
         cases = lease_cases
     elif a.family == 'all':
         cases += lease_cases
+    review_path = root / 'tests/review/vc16-push-service-stderr.json'
+    reviews = json.loads(review_path.read_text()).get('records', {}) if review_path.exists() else {}
     rows = []
     for name, argv in cases:
-        outcomes = []
+        outcomes, fingerprints = [], []
         for tool in (git, den):
             reset(source, original)
             reset(work, seed)
@@ -120,16 +124,34 @@ def main():
                 run([git, 'update-ref', 'refs/heads/main', second], work)
                 if name.startswith('push-u-'):
                     run([git, 'config', '--remove-section', 'branch.main'], work)
+            case_input = dict(argv=argv, environment=environment, stdin='', local=snapshot(work), remote=snapshot(source),
+                              global_config=Path(env['GIT_CONFIG_GLOBAL']).read_bytes().hex(),
+                              oracle_sha256=oracle_digest)
+            fingerprint = hashlib.sha256(json.dumps(case_input, sort_keys=True).encode()).hexdigest()
+            fingerprints.append(fingerprint)
             result = run([tool, *argv], work, check=False)
             outcomes.append(dict(stdout=result.stdout.hex(), stderr=result.stderr.hex(), exit=result.returncode,
                                  local=snapshot(work), remote=snapshot(source)))
         equal = outcomes[0] == outcomes[1]
-        rows.append(dict(name=name, parity=equal, outcomes=outcomes))
-        if not equal:
+        reviewed = False
+        passed = equal and fingerprints[0] == fingerprints[1]
+        if name == 'lease-delete-match':
+            record = reviews.get(a.tier)
+            reviewed = bool(record and record.get('name') == name
+                            and record.get('input_sha256') == fingerprints[0] == fingerprints[1]
+                            and record.get('input') == case_input and record.get('outcomes') == outcomes)
+            passed = reviewed
+            if reviewed:
+                print('REVIEW configured-lease-delete-match reason=wire-push-service-stderr', flush=True)
+        rows.append(dict(name=name, parity=equal, reviewed=reviewed, passed=passed,
+                         input=case_input, input_sha256=fingerprints[0], outcomes=outcomes))
+        if not passed:
             print('FAIL configured-' + name, flush=True)
     (out / 'summary.json').write_text(json.dumps(dict(rows=rows, zero_skips=True), indent=2) + '\n')
-    failures = sum(not row['parity'] for row in rows)
-    print(f'configured: {len(rows)} rows, {failures} failures; zero skips', flush=True)
+    failures = sum(not row['passed'] for row in rows)
+    exact = sum(row['passed'] and row['parity'] for row in rows)
+    reviewed = sum(row['reviewed'] for row in rows)
+    print(f'configured: {len(rows)} rows, {exact} exact, {reviewed} reviewed, {failures} failures; zero skips', flush=True)
     return int(bool(failures))
 
 
