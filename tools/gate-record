@@ -1,0 +1,125 @@
+#!/usr/bin/env bash
+# Run tools/gate's leaves separately, stopping at the first nonzero leaf.
+# Column-zero START/END lines record the leaf's own exit status. Retain its raw
+# combined output and replay every line with exactly two leading spaces; legacy
+# child END lines remain visible but are not enclosing record metadata.
+# DEN_GATE_LEAF_RUNNER may name an argv-vector driver (for a core-locked container
+# per leaf). No command text is evaluated. --leaf supports the small runner test.
+set -eu
+root=$(cd "$(dirname "$0")/.." && pwd)
+cd "$root"
+export TMPDIR="$root/target/tmp"
+mkdir -p "$TMPDIR" target/runs
+logs=$(mktemp -d "$root/target/runs/gate-record.XXXXXX")
+mode=run
+
+binary_strict() {
+    local tier=$1 rc
+    rm -f "target/diffbinary-$tier/summary-byte-parity.json"
+    if tools/env python3 -I tools/diffbinary-oracle.py --tier "$tier"; then
+        printf 'binary strict bytes: %s exact\n' "$tier"
+    else
+        rc=$?
+        [ "$rc" = 1 ] || return "$rc"
+        python3 -I - "target/diffbinary-$tier/summary-byte-parity.json" <<'PY' || return $?
+import json,sys
+s=json.load(open(sys.argv[1]))
+assert s.get('completed') is True and s['exact'] < s['total'],s
+assert s['forward_reverse_index_apply']==s['total'] and s['corrupt_rejected']==4 and s['zero_skips'],s
+PY
+        printf 'EXPECTED RED binary strict bytes %s; capture-bound application gate is separate\n' "$tier"
+    fi
+}
+
+oracle_negative() {
+    local rc
+    if tools/oracle --filter rev-parse --strict; then
+        echo 'strict not-yet unexpectedly passed' >&2; return 1
+    else
+        rc=$?; [ "$rc" = 1 ] || return "$rc"
+    fi
+    if tools/oracle --filter no-such-case; then
+        echo 'empty selection unexpectedly passed' >&2; return 1
+    else
+        rc=$?; [ "$rc" = 1 ] || return "$rc"
+    fi
+    echo 'oracle: strict not-yet and empty-selection refusals verified'
+}
+
+leaf() {
+    local name=$1 started=$SECONDS rc log replay=0
+    shift
+    if [ "$mode" = list ]; then printf '%s\t' "$name"; printf '%q ' "$@"; printf '\n'; return 0; fi
+    case "$name" in ''|*[!A-Za-z0-9_.:/-]*) echo 'invalid leaf name' >&2; return 2;; esac
+    log="$logs/${name//\//_}.log"
+    printf 'START %s\n' "$name"
+    if [ -n "${DEN_GATE_LEAF_RUNNER:-}" ]; then
+        if "$DEN_GATE_LEAF_RUNNER" "$@" >"$log" 2>&1; then rc=0; else rc=$?; fi
+    else
+        if "$@" >"$log" 2>&1; then rc=0; else rc=$?; fi
+    fi
+    if sed 's/^/  /' "$log"; then replay=1; fi
+    # A metadata separator also puts END in column zero for unterminated output.
+    printf '\nEND %s exit=%s secs=%s\n' "$name" "$rc" "$((SECONDS-started))"
+    [ "$replay" = 1 ] || return 1
+    return "$rc"
+}
+
+case "${1:-}" in
+--leaf) shift; name=${1:?leaf name}; shift; leaf "$name" "$@"; exit $?;;
+--internal-binary-strict) binary_strict "${2:?tier}"; exit $?;;
+--internal-oracle-negative) oracle_negative; exit $?;;
+--list) mode=list;;
+'') ;;
+*) echo 'usage: tools/gate-record [--list | --leaf NAME COMMAND ARGS...]' >&2; exit 2;;
+esac
+
+leaf runner-test python3 -I tools/gate-record-test.py
+leaf planner python3 -I ci/tiers-test.py
+leaf fetch-toolchain tools/fetch-toolchain
+leaf fetch-oracle tools/fetch-oracle
+if [ "$mode" != list ]; then
+    DEN_GIT=$(python3 -I - <<'PY'
+from pathlib import Path
+paths=list(Path('target/oracle').glob('*/root/opt/git/bin/git'))
+assert len(paths)==1,paths
+print(paths[0].resolve())
+PY
+)
+    export DEN_GIT
+fi
+leaf format tools/check-fmt
+leaf build tools/build --all
+leaf wire tools/check-wire
+leaf housekeeping tools/check-housekeeping
+leaf blame tools/check-blame
+leaf stash tools/check-stash
+leaf revision tools/check-revision
+leaf history tools/check-history
+leaf refs tools/check-refs
+leaf merge tools/check-merge
+leaf replay tools/check-replay
+leaf diff-units tools/check-diff --units-only
+leaf tls-local env TLS_PROBE_LOCAL_ONLY=1 tools/probe-tls
+leaf corpus tools/corpus target/corpus --prove-twice
+leaf packed-read tools/check-pack
+leaf packed-write tools/check-pack-write
+leaf codec tools/check-codec
+leaf objects tools/check-objects
+leaf config tools/check-config
+leaf index tools/check-index
+leaf ignore tools/check-ignore
+leaf worktree tools/check-worktree
+leaf commit tools/check-commit
+leaf delta tools/check-delta
+leaf rename tools/check-rename
+leaf diff-corpus tools/check-diff --corpus-only
+leaf binary-reviewed tools/check-diffbinary --reviewed-body --with-cli
+for tier in native release; do
+    leaf "binary-strict-$tier" tools/gate-record --internal-binary-strict "$tier"
+done
+leaf oracle-selftest tools/oracle --selftest
+leaf oracle tools/oracle
+leaf oracle-negative tools/gate-record --internal-oracle-negative
+leaf static tools/mkden target/dist
+leaf collect-evidence python3 -I tools/collect-diff-evidence.py
