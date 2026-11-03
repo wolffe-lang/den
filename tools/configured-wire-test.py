@@ -93,6 +93,7 @@ def main():
         path.chmod(0o755)
     cases = [
         ('fetch-named-quiet', ['fetch', '-q', 'origin']),
+        ('fetch-explicit-state', ['fetch', '-q', source.as_uri(), 'refs/heads/main:refs/remotes/origin/main']),
         ('fetch-default-quiet', ['fetch', '-q']),
         ('fetch-named-report', ['fetch', 'origin']),
         ('fetch-default-report', ['fetch']),
