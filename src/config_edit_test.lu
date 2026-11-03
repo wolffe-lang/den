@@ -1,0 +1,42 @@
+//! member: false
+
+use repository
+
+fn equal(actual: str, expected: str, row: str) -> bool {
+    if actual == expected { return true }
+    print("FAIL config-edit-{row}")
+    false
+}
+
+fn main() -> int ! repository.RepoErrors {
+    if !equal(repository.config_quote("plain")?, "plain", "plain") { return 1 }
+    if !equal(repository.config_quote("space inside")?, "space inside", "inside-space") { return 1 }
+    if !equal(repository.config_quote(" edge ")?, "\" edge \"", "edge-space") { return 1 }
+    if !equal(repository.config_quote("a#b;c")?, "\"a#b;c\"", "comment") { return 1 }
+    if !equal(repository.config_quote("a\n\t\"\\")?, "a\\n\\t\\\"\\\\", "escapes") { return 1 }
+    let base = "# keep\n[core]\n\tbare = false\n"
+    let first = repository.config_set(base, "branch.main.remote", "origin")?
+    let second = repository.config_set(first, "branch.main.merge", "refs/heads/main")?
+    let expected = "{base}[branch \"main\"]\n\tremote = origin\n\tmerge = refs/heads/main\n"
+    if !equal(second, expected, "paired-set") { return 1 }
+    let changed = repository.config_set(second, "branch.main.remote", "next")?
+    if !equal(changed, expected.replace("remote = origin", "remote = next"), "replace") { return 1 }
+    let removed = repository.config_unset(second, "branch.main.remote")?
+    if !equal(removed, "{base}[branch \"main\"]\n\tmerge = refs/heads/main\n", "unset-one") { return 1 }
+    if !equal(repository.config_unset(removed, "branch.main.merge")?, base, "unset-section") { return 1 }
+    if !equal(repository.config_unset(base, "branch.absent.remote")?, base, "unset-absent") { return 1 }
+    var refused = false
+    let _ = repository.config_set("[branch \"main\"]\nremote=a\nremote=b\n", "branch.main.remote", "x") else |_| {
+        refused = true
+        ""
+    }
+    if !refused { print("FAIL config-edit-repeated-scalar"); return 1 }
+    refused = false
+    let _ = repository.config_sections("[core] bare=false\n") else |_| {
+        refused = true
+        []
+    }
+    if !refused { print("FAIL config-edit-inline-refusal"); return 1 }
+    print("config edit: quoting, paired scalar updates, removal and named syntax bounds")
+    0
+}

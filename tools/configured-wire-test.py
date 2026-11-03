@@ -9,6 +9,12 @@ import shutil
 import subprocess
 
 
+def accepted_review(record, name, fingerprints, case_input, outcomes):
+    return bool(record and record.get('name') == name == 'lease-delete-match'
+                and record.get('input_sha256') == fingerprints[0] == fingerprints[1]
+                and record.get('input') == case_input and record.get('outcomes') == outcomes)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--tier', default='native')
@@ -156,9 +162,7 @@ def main():
         passed = equal and fingerprints[0] == fingerprints[1]
         if name == 'lease-delete-match':
             record = reviews.get(a.tier)
-            reviewed = bool(record and record.get('name') == name
-                            and record.get('input_sha256') == fingerprints[0] == fingerprints[1]
-                            and record.get('input') == case_input and record.get('outcomes') == outcomes)
+            reviewed = accepted_review(record, name, fingerprints, case_input, outcomes)
             passed = reviewed
             if reviewed:
                 print('REVIEW configured-lease-delete-match reason=wire-push-service-stderr', flush=True)
