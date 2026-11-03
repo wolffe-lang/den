@@ -4,6 +4,7 @@ use oid
 use pack
 use pktline
 use refs
+use revision
 use repository
 use transport
 use wire
@@ -48,7 +49,7 @@ fn receive_advertisement(data: List[byte]) -> (List[wire.Ref], List[str]) ! obje
 
 /// Push fully-qualified refspecs, with local fast-forward/tag guards unless
 /// forced; honor server atomic/report-status capabilities and final status.
-/// Other-namespace updates require explicit force until typed peeling is measured.
+/// Other namespaces compare fully peeled commits; non-commit updates need force.
 pub fn push(
     repo: repository.Repo,
     url: str,
@@ -106,18 +107,22 @@ pub fn push(
             if destination.starts_with("refs/tags/") {
                 return Unsupported("push would replace tag (use --force)")
             }
-            if !destination.starts_with("refs/heads/") {
-                return Unsupported(
-                    "custom-namespace update requires force (typed policy unmeasured)",
-                )
+            let old_id = oid.parse("sha1", old)?, next_id = oid.parse("sha1", next)?
+            let _ = object.read_object(repo, old_id, 16777216) else |_| {
+                return Unsupported("push needs fetch first")
             }
-            if destination.starts_with("refs/heads/") {
-                let _ = object.read_object(repo, oid.parse("sha1", old)?, 16777216) else |_| {
-                    return Unsupported("push needs fetch first")
-                }
-                if !ancestor(repo, old, next)? {
-                    return Unsupported("non-fast-forward push (use --force)")
-                }
+            let old_tip = revision.peel(repo, old_id, "peel") else |e| {
+                return Unsupported("push old tag peel: {e}")
+            }
+            let next_tip = revision.peel(repo, next_id, "peel") else |e| {
+                return Unsupported("push new tag peel: {e}")
+            }
+            if object.read_object(repo, old_tip, 16777216)?.kind != "commit" ||
+                object.read_object(repo, next_tip, 16777216)?.kind != "commit" {
+                return Unsupported("push non-commit update requires force")
+            }
+            if !ancestor(repo, oid.hex(old_tip)?, oid.hex(next_tip)?)? {
+                return Unsupported("non-fast-forward push (use --force)")
             }
         }
         if next != zero() { (mut roots).push(copy next) }

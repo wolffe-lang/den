@@ -271,15 +271,15 @@ def main():
     run([den, 'push', '-q', '--force', custom.as_uri(), rewind_spec], fixture)
     assert run([git, 'rev-parse', 'refs/custom/item'], custom).stdout.strip() == first
     run([den, 'push', '-q', custom.as_uri(), rewind_spec], fixture)
-    before = run([git, 'show-ref'], custom).stdout
-    result = run([den, 'push', '-q', custom.as_uri(), custom_spec], fixture, ok=False)
-    assert result.returncode != 0 and b'custom-namespace update requires force' in result.stderr
-    assert run([git, 'show-ref'], custom).stdout == before
+    # The expanded typed-policy matrix measured this as an allowed commit FF.
+    result = run([den, 'push', '-q', custom.as_uri(), custom_spec], fixture)
+    assert result.stdout == b'' and result.stderr == b''
+    assert run([git, 'rev-parse', 'refs/custom/item'], custom).stdout == tip
     run([den, 'push', '-q', custom.as_uri(), '+' + custom_spec], fixture)
     assert run([git, 'rev-parse', 'refs/custom/item'], custom).stdout == tip
     run([den, 'push', '-q', custom.as_uri(), ':refs/custom/item'], fixture)
     assert run([git, 'show-ref', '--verify', '--quiet', 'refs/custom/item'], custom, ok=False).returncode != 0
-    rows.append('custom namespace creation/delete/no-op/explicit force and safe unforced policy refusal (not general parity)')
+    rows.append('custom namespace creation/delete/no-op/force, accepted commit fast-forward and refused rewind')
     self_server = out / 'den-to-den-push.git'
     if self_server.exists():
         shutil.rmtree(self_server)
