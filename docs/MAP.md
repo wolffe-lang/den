@@ -82,6 +82,51 @@ actual-checked pure programs. Complete process bytes/streams live under
 ref and checkout comparisons are separate; general failure-message/porcelain
 parity is not inferred. All inherited M2/M3/M4 refusals remain named.
 
+## Configured wire porcelain (vc16, partial)
+
+`remote` implements ordinary scalar-URL add/remove/rename/list/-v/get-url/set-url
+and `branch --set-upstream-to`. Config edits share the repository parser and
+preserve unrelated section bytes, reserve `config.lock`, compare the original
+file under that lock, preserve its mode, sync and rename. Repeated URL assignments,
+continued/CRLF/BOM config, inline header assignments, inherited-only remote
+editing and nondefault tracking mappings remain named editing limits. Tracking
+rename/remove cover loose/packed refs, moved reflogs and an in-namespace symbolic
+remote HEAD; this is not a multi-file transaction or general crash recovery.
+
+Configured fetch uses the existing v2 importer and ref CAS, writes FETCH_HEAD,
+resolves the branch remote, updates remote-tracking refs and supports prune.
+Configured push resolves ordinary branch defaults, publishes `-u` tracking keys
+and accepted remote-tracking updates. `push_reported` accepts bounded, explicit
+expected-old leases alongside its per-ref outcomes; `pending` is never an
+acceptance. Plain leases derive expected values from the configured fetch map;
+explicit values use the shared revision resolver. No-op requests bypass lease
+checks, while explicit force or a leading `+` overrides them, as measured.
+
+The typed update matrix covers commits, divergent/forward commits, distinct and
+nested annotated tags, trees and blobs in heads/tags/notes/stash/custom/remotes.
+Outside heads/tags, unforced updates require both values to peel to commits and
+fast-forward; a changed tree/blob needs force. Heads always require a commit;
+tags reject replacements without force. The measured receiver refuses remote
+updates to `refs/stash` as `funny refname`, including forced creation; local stash
+storage is unaffected. This is not an M5 completion claim: pull and ssh work,
+additional configuration forms and failure-output parity remain separate.
+
+### Named auto-identity limit
+
+`wire-remote-auto-identity`: the no-override fixture has a visible HOME directory
+and readable GIT_CONFIG_GLOBAL file. Git's `config --show-origin` sees the fixed
+name/email from that file immediately before and after `remote rename` in the
+same fixture environment. Nevertheless, the appended rename reflog line uses the
+OS-derived identity rather than those configured values. This is a bounded
+observation of the pinned binary, not an assertion about every Git environment.
+The original process/state captures are retained in
+`tests/review/vc16-remote-auto-identity.json`; the dedicated reproduction keeps
+visibility checks, raw argv/environment/results, global file bytes and both
+reflogs in `target/runs/wire-remote-identity/{captures,summary}.json`.
+Den uses its shared configured identity boundary. Exact tracking rows therefore
+pin GIT_AUTHOR_NAME/EMAIL and GIT_COMMITTER_NAME/EMAIL beside the fixed dates;
+auto-identity mode remains a named non-parity limit. No hostname is synthesized.
+
 ## Pack writing and inspection (vc13)
 
 `pack.encode_delta(before, after)` is vc04's original matcher extracted unchanged
