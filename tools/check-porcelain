@@ -25,6 +25,7 @@ assert len(rows)==1 and rows[0]['verdict']=='exit(0)',rows
 PY
 }
 step porcelain-planner python3 -I ci/tiers-test.py
+step porcelain-local-gate-routing python3 -I ci/local-gate-test.py
 step porcelain-review-binding tools/env python3 -I tools/porcelain-review-test.py
 step porcelain-identity-visibility tools/env python3 -I tools/remote-identity-probe.py
 for tier in native release; do

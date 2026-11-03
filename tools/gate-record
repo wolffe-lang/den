@@ -76,6 +76,7 @@ esac
 
 leaf runner-test python3 -I tools/gate-record-test.py
 leaf planner python3 -I ci/tiers-test.py
+leaf local-gate-routing python3 -I ci/local-gate-test.py
 leaf fetch-toolchain tools/fetch-toolchain
 leaf fetch-oracle tools/fetch-oracle
 if [ "$mode" != list ] && [ -z "${DEN_GATE_LEAF_RUNNER:-}" ]; then
@@ -100,6 +101,7 @@ leaf refs tools/check-refs
 leaf merge tools/check-merge
 leaf replay tools/check-replay
 leaf diff-units tools/check-diff --units-only
+leaf hash-checked tools/check-test
 leaf tls-local env TLS_PROBE_LOCAL_ONLY=1 tools/probe-tls
 leaf corpus tools/corpus target/corpus --prove-twice
 leaf packed-read tools/check-pack
