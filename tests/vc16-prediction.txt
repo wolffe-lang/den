@@ -43,3 +43,8 @@ uses GitHub as a fixture peer and never changes ssh configuration.
 Operational update: no lane-branch publication or PR until an authorized route
 is available. Own-directory fixture pushes remain allowed. Local final and plant
 records remain required; audit needing a PR is pending.
+
+The 16 lease groups exposed a current-branch deletion refusal, not a successful
+deletion. Retain that exact case and add one topic-deletion success group: 17
+lease groups, 879 total projected. One service-stderr formatting difference is
+a separately byte-bound reviewed row, not an exact parity pass.

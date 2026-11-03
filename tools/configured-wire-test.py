@@ -17,12 +17,31 @@ def main():
     root = Path(__file__).resolve().parent.parent
     out = root / 'target/runs' / ('wire-configured-' + a.tier)
     out.mkdir(parents=True, exist_ok=True)
-    git = os.environ['DEN_GIT']
-    oracle_digest = hashlib.sha256(Path(git).read_bytes()).hexdigest()
+    supplied_git = Path(os.environ['DEN_GIT']).resolve()
+    oracle_digest = hashlib.sha256(supplied_git.read_bytes()).hexdigest()
     assert oracle_digest == 'c4848492938c4ebfffbefe1fbbaa68b9af90c86d1f6a20e76816c5ff37fcfa60'
+    # Stable effective tool paths make the reviewed row fully byte-bound across
+    # cached/container inputs, without ignoring or normalizing any case bytes.
+    staged = root / 'target/vc16-oracle'
+    (staged / 'bin').mkdir(parents=True, exist_ok=True)
+    (staged / 'libexec').mkdir(exist_ok=True)
+    links = {staged / 'bin' / name: supplied_git.parent / name
+             for name in ('git', 'git-upload-pack', 'git-receive-pack')}
+    links[staged / 'libexec/git-core'] = supplied_git.parent.parent / 'libexec/git-core'
+    for destination, origin in links.items():
+        assert origin.exists(), origin
+        if destination.is_symlink():
+            destination.unlink()
+        assert not destination.exists(), destination
+        destination.symlink_to(origin)
+    git = str(staged / 'bin/git')
     den = root / 'target' / a.tier / 'den'
-    env = dict(os.environ, GIT_AUTHOR_NAME='Den Tester', GIT_AUTHOR_EMAIL='den@example.invalid',
+    env = {k: v for k, v in os.environ.items() if not k.startswith('DEN_')}
+    env.update(DEN_GIT=git, DEN_ROOT=str(root), PATH=str(staged / 'bin') + ':/usr/bin:/bin',
+               GIT_EXEC_PATH=str(staged / 'libexec/git-core'),
+               GIT_AUTHOR_NAME='Den Tester', GIT_AUTHOR_EMAIL='den@example.invalid',
                GIT_COMMITTER_NAME='Den Tester', GIT_COMMITTER_EMAIL='den@example.invalid')
+    os.umask(0o022)
     environment = {k: v for k, v in env.items() if k.startswith(('GIT_', 'DEN_')) or k in ('HOME', 'TZ', 'LC_ALL', 'TMPDIR', 'PATH')}
     captures = []
     def run(argv, cwd=None, check=True, data=b''):
