@@ -148,7 +148,9 @@ pub fn connect(url: str, service: str) -> Channel ! Errors {
     if url.len > 4096 { return limit }
     if url.starts_with("file://") { return file_channel(url[7..], service)? }
     if ssh_form(url) { return ssh_channel(url, service)? }
-    if !url.starts_with("git://") { return Unsupported("transport requires file://, git:// or ssh") }
+    if !url.starts_with("git://") {
+        return Unsupported("transport requires file://, git:// or ssh")
+    }
     let remote = url[6..]
     let slash = remote.find("/") else |_| { return invalid }
     let host = remote[0..slash], path = remote[slash..]

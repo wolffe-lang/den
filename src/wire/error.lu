@@ -2,6 +2,9 @@
 
 /// Recognize only the literal ERR prefix, without decoding arbitrary data as text.
 pub fn error_payload(data: List[byte]) -> bool {
-    data.len >= 4 && data[0] == 69 as byte && data[1] == 82 as byte &&
-        data[2] == 82 as byte && data[3] == 32 as byte
+    data.len >= 4 &&
+        data[0] == 69 as byte &&
+        data[1] == 82 as byte &&
+        data[2] == 82 as byte &&
+        data[3] == 32 as byte
 }

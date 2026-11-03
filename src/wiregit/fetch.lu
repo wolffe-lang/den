@@ -242,7 +242,15 @@ pub fn fetch_into(
     destination: str,
     force: bool,
 ) -> () ! object.StoreErrors {
-    fetch_into_context(repo, url, source, destination, force, "Den Transport <den@example.invalid> 0 +0000", "")?
+    fetch_into_context(
+        repo,
+        url,
+        source,
+        destination,
+        force,
+        "Den Transport <den@example.invalid> 0 +0000",
+        "",
+    )?
 }
 
 fn fetch_into_context(
@@ -282,11 +290,19 @@ fn fetch_into_context(
             }
             var message = "fetch"
             if action != "" {
-                var reason = if source.starts_with("refs/tags/") then "storing tag" else "storing head"
+                var reason = if source.starts_with("refs/tags/") {
+                    "storing tag"
+                } else {
+                    "storing head"
+                }
                 if before.len > 0 {
-                    reason = if destination.starts_with("refs/tags/") { "updating tag" }
-                    else if ancestor(repo, oid.hex(before[0])?, reference.id)? { "fast-forward" }
-                    else { "forced-update" }
+                    reason = if destination.starts_with("refs/tags/") {
+                        "updating tag"
+                    } else if ancestor(repo, oid.hex(before[0])?, reference.id)? {
+                        "fast-forward"
+                    } else {
+                        "forced-update"
+                    }
                 }
                 message = "{action}: {reason}"
             }

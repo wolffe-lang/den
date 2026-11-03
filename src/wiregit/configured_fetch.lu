@@ -34,7 +34,11 @@ fn named_fetch(
     upload: str,
 ) -> () ! object.StoreErrors {
     let url = remote.url(repo, name, false)?
-    let program = if upload == "" then (repo.config["remote.{name}.uploadpack"] else "") else copy upload
+    let program = if upload == "" {
+        (repo.config["remote.{name}.uploadpack"] else "")
+    } else {
+        copy upload
+    }
     let service_state = override_service("DEN_UPLOAD_PACK", program)?
     defer restore_service(take service_state)
     let spec = repo.config["remote.{name}.fetch"] else ""
@@ -52,7 +56,12 @@ fn named_fetch(
         ""
     }
     write_fetch_head(repo, "")?
-    let advertised = fetch_view(repo, url, if selection == "" then "refs/heads/" else copy selection, true)?
+    let advertised = fetch_view(
+        repo,
+        url,
+        if selection == "" then "refs/heads/" else copy selection,
+        true,
+    )?
     if selection != "" && advertised.len == 0 { return not_found }
     var available = Map[str, bool](), roots = List[str]()
     for reference in advertised {
@@ -65,7 +74,13 @@ fn named_fetch(
     }
     var rows = List[TransportRow]()
     if selection != "" {
-        (mut rows).push(TransportRow { flag: "*", summary: "branch", source: selection[11..], destination: "FETCH_HEAD", reason: "" })
+        (mut rows).push(TransportRow {
+            flag: "*",
+            summary: "branch",
+            source: selection[11..],
+            destination: "FETCH_HEAD",
+            reason: "",
+        })
     }
     if prune {
         for reference in refs.list(repo, "refs/remotes/{name}/")? {

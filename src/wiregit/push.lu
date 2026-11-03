@@ -140,7 +140,9 @@ pub fn push_reported(
             let id = object.resolve(repo, parts[0])?
             next = oid.hex(id)?
             let body = object.read_object(repo, id, 16777216)?
-            if destination.starts_with("refs/heads/") && body.kind != "commit" { return Unsupported("push branch target must be a commit") }
+            if destination.starts_with("refs/heads/") && body.kind != "commit" {
+                return Unsupported("push branch target must be a commit")
+            }
         } else if !wire.supports(caps, "delete-refs") {
             return Unsupported("server does not support delete-refs")
         }

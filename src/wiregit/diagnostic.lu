@@ -7,7 +7,9 @@ use transport
 use wire
 
 fn read_failure() {
-    eprint("fatal: Could not read from remote repository.\n\nPlease make sure you have the correct access rights\nand the repository exists.")
+    eprint(
+        "fatal: Could not read from remote repository.\n\nPlease make sure you have the correct access rights\nand the repository exists.",
+    )
 }
 
 fn startup_diagnostic(message: str) -> bool {
@@ -31,24 +33,41 @@ fn remote_error(data: List[byte]) -> str ! object.StoreErrors {
 // Unconfigured names can also denote local paths in Git. Diagnose a missing
 // path exactly; existing unconfigured local-path transport remains a named limit.
 fn absent_remote_command(args: List[str]) -> int ! object.StoreErrors {
-    if args.len == 0 || (args[0] != "fetch" && args[0] != "push" && args[0] != "pull") { return -1 }
+    if args.len == 0 || args[0] != "fetch" && args[0] != "push" && args[0] != "pull" { return -1 }
     var name = "", literal = false
     for arg in args[1..] {
         if !literal && arg == "--" { literal = true; continue }
         if !literal && arg.starts_with("-") {
-            if arg == "-q" || arg == "--quiet" || arg == "-f" || arg == "--force" ||
-                arg == "--atomic" || arg == "-u" || arg == "--set-upstream" ||
-                arg == "-p" || arg == "--prune" || arg == "--no-prune" ||
-                arg == "--rebase" || arg == "--no-rebase" || arg == "--no-edit" ||
-                arg == "--ff" || arg == "--no-ff" || arg == "--ff-only" ||
-                arg == "--force-with-lease" || arg == "--no-force-with-lease" ||
-                arg.starts_with("--force-with-lease=") || arg.starts_with("--upload-pack=") ||
-                arg.starts_with("--receive-pack=") { continue }
+            if arg == "-q" ||
+                arg == "--quiet" ||
+                arg == "-f" ||
+                arg == "--force" ||
+                arg == "--atomic" ||
+                arg == "-u" ||
+                arg == "--set-upstream" ||
+                arg == "-p" ||
+                arg == "--prune" ||
+                arg == "--no-prune" ||
+                arg == "--rebase" ||
+                arg == "--no-rebase" ||
+                arg == "--no-edit" ||
+                arg == "--ff" ||
+                arg == "--no-ff" ||
+                arg == "--ff-only" ||
+                arg == "--force-with-lease" ||
+                arg == "--no-force-with-lease" ||
+                arg.starts_with("--force-with-lease=") ||
+                arg.starts_with("--upload-pack=") ||
+                arg.starts_with("--receive-pack=") {
+                continue
+            }
             return -1
         }
         if name == "" { name = copy arg }
     }
-    if name == "" || name.contains("://") || transport.ssh_form(name) || fs.exists(name) { return -1 }
+    if name == "" || name.contains("://") || transport.ssh_form(name) || fs.exists(name) {
+        return -1
+    }
     let repo = repository.discover(".") else |_| { return -1 }
     if (repo.config["remote.{name}.url"] else "") != "" { return -1 }
     if args[0] == "fetch" || args[0] == "pull" { write_fetch_head(repo, "")? }

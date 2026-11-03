@@ -3,7 +3,12 @@
 use commit
 use worktree
 
-fn pull_dispatch(args: List[str], action: str, label: str, quiet: bool) -> int ! commit.CommitErrors {
+fn pull_dispatch(
+    args: List[str],
+    action: str,
+    label: str,
+    quiet: bool,
+) -> int ! commit.CommitErrors {
     if args.len == 0 { return Unsupported("pull missing history operation") }
     if args[0] == "merge" { return merge_command_with(args, action, label)? }
     if args[0] == "rebase" { return rebase_command_with(args, action, quiet)? }

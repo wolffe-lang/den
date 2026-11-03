@@ -152,7 +152,12 @@ fn publish_push_tracking(
 }
 
 fn perform_push(args: List[str]) -> int ! object.StoreErrors {
-    var quiet = false, force = false, atomic = false, upstream = false, literal = false, receive = ""
+    var quiet = false,
+        force = false,
+        atomic = false,
+        upstream = false,
+        literal = false,
+        receive = ""
     var operands = List[str](), requests = List[str]()
     for arg in args[1..] {
         if literal { (mut operands).push(copy arg); continue }
@@ -213,7 +218,13 @@ fn perform_push(args: List[str]) -> int ! object.StoreErrors {
         }
         (mut input).push("refs/heads/{branch}:{destination}")
     }
-    let program = if receive != "" { copy receive } else if name != "" { repo.config["remote.{name}.receivepack"] else "" } else { "" }
+    let program = if receive != "" {
+        copy receive
+    } else if name != "" {
+        repo.config["remote.{name}.receivepack"] else ""
+    } else {
+        ""
+    }
     let service_state = override_service("DEN_RECEIVE_PACK", program)?
     defer restore_service(take service_state)
     let specs = push_specs(repo, input, branch)?
@@ -221,7 +232,9 @@ fn perform_push(args: List[str]) -> int ! object.StoreErrors {
     var outcomes = List[PushOutcome](), error_text = "", remote_failure = ""
     push_reported(repo, url, specs, force, atomic, leases, mut outcomes) else |e| match e {
         Unsupported(message) => {
-            if message == "remote service unavailable" || message.starts_with("remote error: ") { remote_failure = copy message }
+            if message == "remote service unavailable" || message.starts_with("remote error: ") {
+                remote_failure = copy message
+            }
             error_text = "{e}"
         },
         _ => { error_text = "{e}" },
