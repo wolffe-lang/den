@@ -14,6 +14,11 @@ Predict 144 new named fixture groups per native/release tier: 24 remote/config,
 12 failure/ssh groups. Every process captures argv, environment, stdin, stdout,
 stderr and status; object/ref/config state checks are separate from output parity.
 Additional discovered cases increase this prediction explicitly, never hide it.
+Before implementation, expand the typed-policy estimate from 48 to 540 groups:
+nine source values (commit/forward/divergent, tags of commits/tree, tree, two
+blobs), absence plus every valid old type in six namespaces, and explicit-force
+updates from a forward commit. Heads fixture inputs remain commits only.
+The resulting total estimate is 636 fixture groups.
 
 Expected closures of the prior lane's named remainders: remote-name and default
 refspec forms, bounded pull forms, typed-peeling update policy outside heads/tags,
