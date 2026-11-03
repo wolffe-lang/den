@@ -53,7 +53,15 @@ pub fn rename_ref(
     replaced: List[oid.Oid],
     identity: str,
 ) -> () ! RefErrors {
-    rename_ref_message(repo, from, to, expected, replaced, identity, "Branch: renamed {from} to {to}")?
+    rename_ref_message(
+        repo,
+        from,
+        to,
+        expected,
+        replaced,
+        identity,
+        "Branch: renamed {from} to {to}",
+    )?
 }
 
 /// Rename a direct ref with caller-selected reflog text, retaining the same
@@ -77,16 +85,7 @@ pub fn rename_ref_message(
         fs_write_chunk(file.fd, "{oid.hex(expected)?}\n".bytes())?
         fs_sync(file.fd)?
         if logging(repo, from, false)? {
-            append(
-                repo,
-                from,
-                log_line(
-                    [copy expected],
-                    [copy expected],
-                    identity,
-                    message,
-                )?,
-            )?
+            append(repo, from, log_line([copy expected], [copy expected], identity, message)?)?
         }
         remove_packed(repo, from)?
         fs_rename(lock_path, "{repo.gitdir}/{from}")?
@@ -142,21 +141,14 @@ pub fn rename_ref_message(
     if fs.exists(old_path) { fs.remove(old_path)? }
     let head = str_from_utf8(repository.read_bytes("{repo.gitdir}/HEAD", 4096)?) else ""
     if head.trim() == "ref: {from}" && logging(repo, "HEAD", false)? {
-        append(
-            repo,
-            "HEAD",
-            log_line([copy expected], [], identity, message)?,
-        )?
+        append(repo, "HEAD", log_line([copy expected], [], identity, message)?)?
     }
     if had_log {
         let log = administrative(repo, "logs/{to}", true)?
         let logfd = fs_open_mode(log, 17)?
         defer fs_close(logfd) else |_| {}
         fs_write_chunk(logfd, prior)?
-        fs_write_chunk(
-            logfd,
-            log_line([copy expected], [copy expected], identity, message)?,
-        )?
+        fs_write_chunk(logfd, log_line([copy expected], [copy expected], identity, message)?)?
         fs_sync(logfd)?
         fs.remove(old_log)?
     }
@@ -164,11 +156,7 @@ pub fn rename_ref_message(
     active = false
     if current {
         if logging(repo, "HEAD", false)? {
-            append(
-                repo,
-                "HEAD",
-                log_line([], [copy expected], identity, message)?,
-            )?
+            append(repo, "HEAD", log_line([], [copy expected], identity, message)?)?
         }
         fs_write_chunk(head_fd, "ref: {to}\n".bytes())?
         fs_sync(head_fd)?

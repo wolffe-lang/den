@@ -37,21 +37,29 @@ fn set_tracking(args: List[str]) -> int ! repository.RepoErrors {
     }
     if pending || upstream == "" { return invalid }
     if branch == "" {
-        let head = str_from_utf8(repository.read_bytes("{repo.gitdir}/HEAD", 4096)?) else |_| { return invalid }
+        let head = str_from_utf8(repository.read_bytes("{repo.gitdir}/HEAD", 4096)?) else |_| {
+            return invalid
+        }
         if !head.starts_with("ref: refs/heads/") {
-            eprint("fatal: could not set upstream of HEAD to '{upstream}' when it does not point to any branch")
+            eprint(
+                "fatal: could not set upstream of HEAD to '{upstream}' when it does not point to any branch",
+            )
             return 128
         }
         branch = head[16..].trim()
     }
-    let local = refs.optional(repo, "refs/heads/{branch}") else |e| { return Unsupported("tracking local branch: {e}") }
+    let local = refs.optional(repo, "refs/heads/{branch}") else |e| {
+        return Unsupported("tracking local branch: {e}")
+    }
     if local.len == 0 {
         eprint("fatal: branch '{branch}' does not exist")
         return 128
     }
     var remote = "", merge = "", display = copy upstream
     let local_name = if upstream.starts_with("refs/heads/") then upstream[11..] else copy upstream
-    let local_target = refs.optional(repo, "refs/heads/{local_name}") else |e| { return Unsupported("tracking target: {e}") }
+    let local_target = refs.optional(repo, "refs/heads/{local_name}") else |e| {
+        return Unsupported("tracking target: {e}")
+    }
     if local_target.len == 1 {
         remote = "."
         merge = "refs/heads/{local_name}"
@@ -61,10 +69,13 @@ fn set_tracking(args: List[str]) -> int ! repository.RepoErrors {
         for name in names(repo) {
             if !short.starts_with("{name}/") || name.len <= remote.len { continue }
             let reference = "refs/remotes/{short}"
-            let found = refs.optional(repo, reference) else |e| { return Unsupported("tracking remote ref: {e}") }
+            let found = refs.optional(repo, reference) else |e| {
+                return Unsupported("tracking remote ref: {e}")
+            }
             if found.len == 0 { continue }
             let spec = repo.config["remote.{name}.fetch"] else ""
-            if spec != "+refs/heads/*:refs/remotes/{name}/*" && spec != "refs/heads/*:refs/remotes/{name}/*" {
+            if spec != "+refs/heads/*:refs/remotes/{name}/*" &&
+                spec != "refs/heads/*:refs/remotes/{name}/*" {
                 return Unsupported("tracking requires ordinary branch fetch refspec")
             }
             remote = copy name
@@ -75,7 +86,9 @@ fn set_tracking(args: List[str]) -> int ! repository.RepoErrors {
     if remote == "" {
         eprint("fatal: the requested upstream branch '{upstream}' does not exist")
         if (repo.config["advice.setupstreamfailure"] else "true") != "false" {
-            eprint("hint:\nhint: If you are planning on basing your work on an upstream\nhint: branch that already exists at the remote, you may need to\nhint: run \"git fetch\" to retrieve it.\nhint:\nhint: If you are planning to push out a new local branch that\nhint: will track its remote counterpart, you may want to use\nhint: \"git push -u\" to set the upstream config as you push.\nhint: Disable this message with \"git config set advice.setUpstreamFailure false\"")
+            eprint(
+                "hint:\nhint: If you are planning on basing your work on an upstream\nhint: branch that already exists at the remote, you may need to\nhint: run \"git fetch\" to retrieve it.\nhint:\nhint: If you are planning to push out a new local branch that\nhint: will track its remote counterpart, you may want to use\nhint: \"git push -u\" to set the upstream config as you push.\nhint: Disable this message with \"git config set advice.setUpstreamFailure false\"",
+            )
         }
         return 128
     }

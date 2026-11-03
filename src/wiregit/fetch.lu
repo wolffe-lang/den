@@ -14,7 +14,12 @@ pub fn fetch_objects(repo: repository.Repo, url: str) -> List[wire.Ref] ! object
     fetch_view(repo, url, "", true)?
 }
 
-fn fetch_view(repo: repository.Repo, url: str, source: str, download: bool) -> List[wire.Ref] ! object.StoreErrors {
+fn fetch_view(
+    repo: repository.Repo,
+    url: str,
+    source: str,
+    download: bool,
+) -> List[wire.Ref] ! object.StoreErrors {
     let c = transport.connect(url, "upload-pack")?
     var active = true
     defer { if active { let _ = transport.close(take copy c) else 1 } }

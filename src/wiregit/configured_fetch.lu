@@ -32,14 +32,17 @@ fn named_fetch(
 ) -> () ! object.StoreErrors {
     let url = remote.url(repo, name, false)?
     let spec = repo.config["remote.{name}.fetch"] else ""
-    if spec != "+refs/heads/*:refs/remotes/{name}/*" && spec != "refs/heads/*:refs/remotes/{name}/*" {
+    if spec != "+refs/heads/*:refs/remotes/{name}/*" &&
+        spec != "refs/heads/*:refs/remotes/{name}/*" {
         return Unsupported("configured fetch requires ordinary branch wildcard refspec")
     }
     let identity = remote.reflog_identity(repo)?
     let branch = remote.current_branch(repo)?
     let merge = if (repo.config["branch.{branch}.remote"] else "") == name {
         repo.config["branch.{branch}.merge"] else ""
-    } else { "" }
+    } else {
+        ""
+    }
     let advertised = fetch_view(repo, url, "refs/heads/", true)?
     var available = Map[str, bool](), roots = List[str]()
     for reference in advertised {
@@ -58,7 +61,13 @@ fn named_fetch(
             let source = "refs/heads/{reference.name[prefix.len..]}"
             if available[source] else false { continue }
             refs.update(repo, reference.name, [copy reference.id], [], identity, action, false)?
-            (mut rows).push(TransportRow { flag: "-", summary: "[deleted]", source: "(none)", destination: short_ref(reference.name), reason: "" })
+            (mut rows).push(TransportRow {
+                flag: "-",
+                summary: "[deleted]",
+                source: "(none)",
+                destination: short_ref(reference.name),
+                reason: "",
+            })
         }
     }
     var fetch_head = ""
@@ -93,8 +102,22 @@ fn named_fetch(
         }
         // A '+' ordinary remote-tracking refspec permits rewinds. Unlike local
         // heads, other tracking namespaces accept updates without forcing too.
-        refs.update(repo, destination, before, [oid.parse("sha1", reference.id)?], identity, "{action}: {log}", false)?
-        (mut rows).push(TransportRow { flag: flag, summary: summary, source: reference.name[11..], destination: short_ref(destination), reason: reason })
+        refs.update(
+            repo,
+            destination,
+            before,
+            [oid.parse("sha1", reference.id)?],
+            identity,
+            "{action}: {log}",
+            false,
+        )?
+        (mut rows).push(TransportRow {
+            flag: flag,
+            summary: summary,
+            source: reference.name[11..],
+            destination: short_ref(destination),
+            reason: reason,
+        })
     }
     // Auto-follow only tags whose final target is already in a fetched closure;
     // never fetch every advertised tag merely because clone does so.
@@ -105,9 +128,23 @@ fn named_fetch(
         let target = if tag.peeled == "" then copy tag.id else copy tag.peeled
         if !(reachable[target] else false) { continue }
         let _ = fetch_view(repo, url, tag.name, true)?
-        refs.update(repo, tag.name, [], [oid.parse("sha1", tag.id)?], identity, "{action}: storing tag", false)?
+        refs.update(
+            repo,
+            tag.name,
+            [],
+            [oid.parse("sha1", tag.id)?],
+            identity,
+            "{action}: storing tag",
+            false,
+        )?
         fetch_head = "{fetch_head}{tag.id}\tnot-for-merge\ttag '{tag.name[10..]}' of {fetch_url(url)}\n"
-        (mut rows).push(TransportRow { flag: "*", summary: "[new tag]", source: tag.name[10..], destination: tag.name[10..], reason: "" })
+        (mut rows).push(TransportRow {
+            flag: "*",
+            summary: "[new tag]",
+            source: tag.name[10..],
+            destination: tag.name[10..],
+            reason: "",
+        })
     }
     write_fetch_head(repo, fetch_head)?
     if !quiet { fetch_report(url, rows) }
@@ -125,7 +162,9 @@ fn configured_fetch_command(args: List[str]) -> () ! object.StoreErrors {
             prune = false
         } else if arg.starts_with("-") || name != "" {
             return Unsupported("configured fetch option/refspec {arg}")
-        } else { name = copy arg }
+        } else {
+            name = copy arg
+        }
     }
     let repo = repository.discover(".")?
     if name == "" { name = remote.default_name(repo, false)? }

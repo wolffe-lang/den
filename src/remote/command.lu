@@ -149,10 +149,16 @@ fn edit(
                 let prefix = "refs/remotes/{name}/"
                 for reference in affected {
                     let to = "refs/remotes/{value}/{reference.name[prefix.len..]}"
-                    let prior = refs.optional(repo, to) else |e| { return Unsupported("remote destination: {e}") }
-                    let symbolic = refs.symbolic(repo, to) else |e| { return Unsupported("remote destination: {e}") }
+                    let prior = refs.optional(repo, to) else |e| {
+                        return Unsupported("remote destination: {e}")
+                    }
+                    let symbolic = refs.symbolic(repo, to) else |e| {
+                        return Unsupported("remote destination: {e}")
+                    }
                     if prior.len > 0 || symbolic != "" { return exists }
-                    let target = refs.symbolic(repo, reference.name) else |e| { return Unsupported("remote symbolic ref: {e}") }
+                    let target = refs.symbolic(repo, reference.name) else |e| {
+                        return Unsupported("remote symbolic ref: {e}")
+                    }
                     if target != "" && !target.starts_with(prefix) {
                         return Unsupported("remote symbolic target outside renamed namespace")
                     }
@@ -166,23 +172,42 @@ fn edit(
         for reference in affected {
             let to = "refs/remotes/{value}/{reference.name[prefix.len..]}"
             let message = "remote: renamed {reference.name} to {to}"
-            let target = refs.symbolic(repo, reference.name) else |e| { return Unsupported("remote symbolic ref: {e}") }
+            let target = refs.symbolic(repo, reference.name) else |e| {
+                return Unsupported("remote symbolic ref: {e}")
+            }
             if target != "" {
                 refs.rename_symbolic_tracking(
-                    repo, reference.name, to, target,
-                    "refs/remotes/{value}/{target[prefix.len..]}", rename_identity, message,
+                    repo,
+                    reference.name,
+                    to,
+                    target,
+                    "refs/remotes/{value}/{target[prefix.len..]}",
+                    rename_identity,
+                    message,
                 ) else |e| { return Unsupported("rename symbolic tracking ref: {e}") }
             } else {
-                refs.rename_ref_message(repo, reference.name, to, reference.id, [], rename_identity, message) else |e| {
+                refs.rename_ref_message(
+                    repo,
+                    reference.name,
+                    to,
+                    reference.id,
+                    [],
+                    rename_identity,
+                    message,
+                ) else |e| {
                     return Unsupported("rename tracking ref: {e}")
                 }
             }
         }
     } else if operation == "remove" {
         for reference in affected {
-            let target = refs.symbolic(repo, reference.name) else |e| { return Unsupported("remote symbolic ref: {e}") }
+            let target = refs.symbolic(repo, reference.name) else |e| {
+                return Unsupported("remote symbolic ref: {e}")
+            }
             if target != "" {
-                refs.delete_symbolic(repo, reference.name, target) else |e| { return Unsupported("remove symbolic tracking ref: {e}") }
+                refs.delete_symbolic(repo, reference.name, target) else |e| {
+                    return Unsupported("remove symbolic tracking ref: {e}")
+                }
             } else {
                 refs.update(repo, reference.name, [copy reference.id], [], "", "", false) else |e| {
                     return Unsupported("remove tracking ref: {e}")

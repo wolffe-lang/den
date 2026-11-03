@@ -22,11 +22,21 @@ fn main() -> int ! repository.RepoErrors {
     let changed = repository.config_set(second, "branch.main.remote", "next")?
     if !equal(changed, expected.replace("remote = origin", "remote = next"), "replace") { return 1 }
     let removed = repository.config_unset(second, "branch.main.remote")?
-    if !equal(removed, "{base}[branch \"main\"]\n\tmerge = refs/heads/main\n", "unset-one") { return 1 }
-    if !equal(repository.config_unset(removed, "branch.main.merge")?, base, "unset-section") { return 1 }
-    if !equal(repository.config_unset(base, "branch.absent.remote")?, base, "unset-absent") { return 1 }
+    if !equal(removed, "{base}[branch \"main\"]\n\tmerge = refs/heads/main\n", "unset-one") {
+        return 1
+    }
+    if !equal(repository.config_unset(removed, "branch.main.merge")?, base, "unset-section") {
+        return 1
+    }
+    if !equal(repository.config_unset(base, "branch.absent.remote")?, base, "unset-absent") {
+        return 1
+    }
     var refused = false
-    let _ = repository.config_set("[branch \"main\"]\nremote=a\nremote=b\n", "branch.main.remote", "x") else |_| {
+    let _ = repository.config_set(
+        "[branch \"main\"]\nremote=a\nremote=b\n",
+        "branch.main.remote",
+        "x",
+    ) else |_| {
         refused = true
         ""
     }

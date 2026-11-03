@@ -4,10 +4,17 @@ use worktree
 
 /// Current attached branch, or empty for detached HEAD; shared HEAD parsing.
 pub fn current_branch(repo: repository.Repo) -> str ! repository.RepoErrors {
-    let ctx = worktree.Context { repo: copy repo, root: copy repo.gitdir, cwd: copy repo.gitdir, prefix: "" }
+    let ctx = worktree.Context {
+        repo: copy repo,
+        root: copy repo.gitdir,
+        cwd: copy repo.gitdir,
+        prefix: "",
+    }
     let head = worktree.head(ctx) else |e| { return Unsupported("remote HEAD: {e}") }
     if head.detached { return "" }
-    if !head.reference.starts_with("refs/heads/") { return Unsupported("HEAD outside local branches") }
+    if !head.reference.starts_with("refs/heads/") {
+        return Unsupported("HEAD outside local branches")
+    }
     copy head.branch
 }
 

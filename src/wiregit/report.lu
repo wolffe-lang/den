@@ -45,6 +45,8 @@ fn fetch_report(url: str, rows: List[TransportRow]) {
     eprint("From {fetch_url(url)}")
     for row in rows {
         let suffix = if row.reason == "" then "" else "  ({row.reason})"
-        eprint(" {row.flag} {pad_report(row.summary, summary_width)} {pad_report(row.source, source_width)} -> {row.destination}{suffix}")
+        eprint(
+            " {row.flag} {pad_report(row.summary, summary_width)} {pad_report(row.source, source_width)} -> {row.destination}{suffix}",
+        )
     }
 }

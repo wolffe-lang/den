@@ -6,7 +6,12 @@ use worktree
 
 fn remote_identity(repo: repository.Repo) -> str ! repository.RepoErrors {
     let ctx = if (repo.config["core.bare"] else "false") == "true" {
-        worktree.Context { repo: copy repo, root: copy repo.gitdir, cwd: copy repo.gitdir, prefix: "" }
+        worktree.Context {
+            repo: copy repo,
+            root: copy repo.gitdir,
+            cwd: copy repo.gitdir,
+            prefix: "",
+        }
     } else {
         worktree.discover(".") else |e| { return Unsupported("remote context: {e}") }
     }

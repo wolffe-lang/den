@@ -86,7 +86,9 @@ pub fn push_reported(
     leases: List[PushLease],
     mut outcomes: List[PushOutcome],
 ) -> () ! object.StoreErrors {
-    if specs.len == 0 || specs.len > 10000 || leases.len > 10000 || outcomes.len != 0 { return invalid }
+    if specs.len == 0 || specs.len > 10000 || leases.len > 10000 || outcomes.len != 0 {
+        return invalid
+    }
     var leased_names = Map[str, bool]()
     for lease in leases {
         if !refs.valid(lease.name) || (leased_names[lease.name] else false) { return invalid }
@@ -139,7 +141,14 @@ pub fn push_reported(
         }
         if next == zero() && old == zero() { return Unsupported("remote ref does not exist") }
         positions[destination] = outcomes.len
-        (mut outcomes).push(PushOutcome { source: copy parts[0], name: copy destination, before: copy old, after: copy next, status: if next == old then "up-to-date" else "pending", reason: "" })
+        (mut outcomes).push(PushOutcome {
+            source: copy parts[0],
+            name: copy destination,
+            before: copy old,
+            after: copy next,
+            status: if next == old then "up-to-date" else "pending",
+            reason: "",
+        })
         if next == old { continue }
         var leased = false
         if !force && !override {

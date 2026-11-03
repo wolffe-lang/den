@@ -6,18 +6,27 @@ use remote
 use repository
 use revision
 
-fn tracking_expectation(repo: repository.Repo, name: str, destination: str) -> str ! object.StoreErrors {
+fn tracking_expectation(
+    repo: repository.Repo,
+    name: str,
+    destination: str,
+) -> str ! object.StoreErrors {
     if name == "" || !destination.starts_with("refs/heads/") { return zero() }
     let spec = repo.config["remote.{name}.fetch"] else ""
     if spec == "" { return zero() }
-    if spec != "+refs/heads/*:refs/remotes/{name}/*" && spec != "refs/heads/*:refs/remotes/{name}/*" {
+    if spec != "+refs/heads/*:refs/remotes/{name}/*" &&
+        spec != "refs/heads/*:refs/remotes/{name}/*" {
         return Unsupported("plain lease with nondefault fetch mapping")
     }
     let before = refs.optional(repo, "refs/remotes/{name}/{destination[11..]}")?
     if before.len == 0 { zero() } else { oid.hex(before[0])? }
 }
 
-fn push_specs(repo: repository.Repo, input: List[str], branch: str) -> List[str] ! object.StoreErrors {
+fn push_specs(
+    repo: repository.Repo,
+    input: List[str],
+    branch: str,
+) -> List[str] ! object.StoreErrors {
     var out = List[str]()
     for raw in input {
         let plus = raw.starts_with("+")
@@ -26,21 +35,29 @@ fn push_specs(repo: repository.Repo, input: List[str], branch: str) -> List[str]
         if parts.len > 2 { return invalid }
         var source = copy parts[0], destination = if parts.len == 2 then copy parts[1] else ""
         if source != "" && source != "HEAD" && !source.starts_with("refs/") {
-            if refs.valid("refs/heads/{source}") && refs.optional(repo, "refs/heads/{source}")?.len > 0 {
+            if refs.valid("refs/heads/{source}") &&
+                refs.optional(repo, "refs/heads/{source}")?.len > 0 {
                 source = "refs/heads/{source}"
-            } else if refs.valid("refs/tags/{source}") && refs.optional(repo, "refs/tags/{source}")?.len > 0 {
+            } else if refs.valid("refs/tags/{source}") &&
+                refs.optional(repo, "refs/tags/{source}")?.len > 0 {
                 source = "refs/tags/{source}"
             }
         }
         if destination == "" && parts.len == 1 {
-            destination = if source == "HEAD" && branch != "" then "refs/heads/{branch}" else copy source
+            destination = if source == "HEAD" && branch != "" {
+                "refs/heads/{branch}"
+            } else {
+                copy source
+            }
         }
         if !destination.starts_with("refs/") {
             if source.starts_with("refs/heads/") || source == "HEAD" && branch != "" {
                 destination = "refs/heads/{destination}"
             } else if source.starts_with("refs/tags/") {
                 destination = "refs/tags/{destination}"
-            } else { return Unsupported("push destination requires full refname") }
+            } else {
+                return Unsupported("push destination requires full refname")
+            }
         }
         if !refs.valid(destination) { return invalid }
         let prefix = if plus then "+" else ""
@@ -65,7 +82,11 @@ fn push_leases(
         } else {
             let parts = request.split(":")
             if parts.len > 2 { return invalid }
-            let reference = if parts[0].starts_with("refs/") then copy parts[0] else "refs/heads/{parts[0]}"
+            let reference = if parts[0].starts_with("refs/") {
+                copy parts[0]
+            } else {
+                "refs/heads/{parts[0]}"
+            }
             if !refs.valid(reference) { return invalid }
             var expected = copy zero()
             if parts.len == 1 {
@@ -74,7 +95,9 @@ fn push_leases(
                 expected = if parts[1].len == 40 {
                     oid.hex(oid.parse("sha1", parts[1])?)?
                 } else {
-                    let id = revision.resolve(repo, parts[1]) else |e| { return Unsupported("lease expected revision: {e}") }
+                    let id = revision.resolve(repo, parts[1]) else |e| {
+                        return Unsupported("lease expected revision: {e}")
+                    }
                     oid.hex(id)?
                 }
             }
@@ -98,14 +121,19 @@ fn publish_push_tracking(
     if name == "" { return }
     let identity = remote.reflog_identity(repo)?
     let mapping = repo.config["remote.{name}.fetch"] else ""
-    let mapped = mapping == "+refs/heads/*:refs/remotes/{name}/*" || mapping == "refs/heads/*:refs/remotes/{name}/*"
+    let mapped = mapping == "+refs/heads/*:refs/remotes/{name}/*" ||
+        mapping == "refs/heads/*:refs/remotes/{name}/*"
     for outcome in outcomes {
         if outcome.status != "ok" && outcome.status != "up-to-date" { continue }
         if !outcome.name.starts_with("refs/heads/") { continue }
         if mapped {
             let destination = "refs/remotes/{name}/{outcome.name[11..]}"
             let before = refs.optional(repo, destination)?
-            let after = if outcome.after == zero() then List[oid.Oid]() else [oid.parse("sha1", outcome.after)?]
+            let after = if outcome.after == zero() {
+                List[oid.Oid]()
+            } else {
+                [oid.parse("sha1", outcome.after)?]
+            }
             refs.update(repo, destination, before, after, identity, "update by push", false)?
         }
         if upstream && outcome.after != zero() {
@@ -114,7 +142,9 @@ fn publish_push_tracking(
             if outcome.source == "HEAD" { branch = remote.current_branch(repo)? }
             if branch != "" {
                 remote.configure_branch(repo, branch, name, outcome.name)?
-                if !quiet { print("branch '{branch}' set up to track '{name}/{outcome.name[11..]}'.") }
+                if !quiet {
+                    print("branch '{branch}' set up to track '{name}/{outcome.name[11..]}'.")
+                }
             }
         }
     }
@@ -125,16 +155,27 @@ fn perform_push(args: List[str]) -> int ! object.StoreErrors {
     var operands = List[str](), requests = List[str]()
     for arg in args[1..] {
         if literal { (mut operands).push(copy arg); continue }
-        if arg == "--" { literal = true }
-        else if arg == "-q" || arg == "--quiet" { quiet = true }
-        else if arg == "--force" || arg == "-f" { force = true }
-        else if arg == "--atomic" { atomic = true }
-        else if arg == "-u" || arg == "--set-upstream" { upstream = true }
-        else if arg == "--force-with-lease" { (mut requests).push("") }
-        else if arg.starts_with("--force-with-lease=") { (mut requests).push(arg[19..]) }
-        else if arg == "--no-force-with-lease" { requests = List[str]() }
-        else if arg.starts_with("-") { return Unsupported("push option {arg}") }
-        else { (mut operands).push(copy arg) }
+        if arg == "--" {
+            literal = true
+        } else if arg == "-q" || arg == "--quiet" {
+            quiet = true
+        } else if arg == "--force" || arg == "-f" {
+            force = true
+        } else if arg == "--atomic" {
+            atomic = true
+        } else if arg == "-u" || arg == "--set-upstream" {
+            upstream = true
+        } else if arg == "--force-with-lease" {
+            (mut requests).push("")
+        } else if arg.starts_with("--force-with-lease=") {
+            (mut requests).push(arg[19..])
+        } else if arg == "--no-force-with-lease" {
+            requests = List[str]()
+        } else if arg.starts_with("-") {
+            return Unsupported("push option {arg}")
+        } else {
+            (mut operands).push(copy arg)
+        }
     }
     let repo = repository.discover(".")?
     let branch = remote.current_branch(repo)?
@@ -156,10 +197,14 @@ fn perform_push(args: List[str]) -> int ! object.StoreErrors {
         let policy = repo.config["push.default"] else "simple"
         var destination = "refs/heads/{branch}"
         if !upstream && policy != "current" {
-            if policy != "simple" && policy != "upstream" { return Unsupported("push.default={policy}") }
+            if policy != "simple" && policy != "upstream" {
+                return Unsupported("push.default={policy}")
+            }
             let merge = repo.config["branch.{branch}.merge"] else ""
             if merge == "" { return Unsupported("push branch has no upstream") }
-            if policy == "simple" && merge != destination { return Unsupported("push simple upstream name differs") }
+            if policy == "simple" && merge != destination {
+                return Unsupported("push simple upstream name differs")
+            }
             destination = merge
         }
         (mut input).push("refs/heads/{branch}:{destination}")
@@ -167,7 +212,9 @@ fn perform_push(args: List[str]) -> int ! object.StoreErrors {
     let specs = push_specs(repo, input, branch)?
     let leases = push_leases(repo, name, specs, requests)?
     var outcomes = List[PushOutcome](), error_text = ""
-    push_reported(repo, url, specs, force, atomic, leases, mut outcomes) else |e| { error_text = "{e}" }
+    push_reported(repo, url, specs, force, atomic, leases, mut outcomes) else |e| {
+        error_text = "{e}"
+    }
     var rejected = false
     for outcome in outcomes {
         if outcome.status == "rejected" || outcome.status == "remote rejected" { rejected = true }

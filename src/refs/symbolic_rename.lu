@@ -13,8 +13,13 @@ pub fn rename_symbolic_tracking(
     identity: str,
     message: str,
 ) -> () ! RefErrors {
-    if !from.starts_with("refs/remotes/") || !to.starts_with("refs/remotes/") ||
-        !valid(from) || !valid(to) || !valid(expected) || !valid(target) || from == to {
+    if !from.starts_with("refs/remotes/") ||
+        !to.starts_with("refs/remotes/") ||
+        !valid(from) ||
+        !valid(to) ||
+        !valid(expected) ||
+        !valid(target) ||
+        from == to {
         return invalid_oid
     }
     let old = administrative(repo, from, false)?, next = administrative(repo, to, true)?
