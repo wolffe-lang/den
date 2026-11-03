@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 """Configured file transport porcelain: exact output/status and complete file state."""
 import argparse
+import contextlib
 import hashlib
 import json
 import os
 from pathlib import Path
 import shutil
 import shlex
+import socket
+import time
 import subprocess
 
 
@@ -19,7 +22,7 @@ def accepted_review(record, name, fingerprints, case_input, outcomes):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--tier', default='native')
-    parser.add_argument('--family', choices=('configured', 'lease', 'all'), default='configured')
+    parser.add_argument('--family', choices=('configured', 'lease', 'failure', 'all'), default='configured')
     a = parser.parse_args()
     root = Path(__file__).resolve().parent.parent
     out = root / 'target/runs' / ('wire-configured-' + a.tier)
@@ -126,10 +129,50 @@ def main():
         ('lease-unrelated', ['push', '--force-with-lease=refs/heads/other:' + second]),
         ('lease-quiet-match', ['push', '-q', '--force-with-lease']),
     ]
-    if a.family == 'lease':
+    missing_url = (out / 'missing.git').as_uri()
+    failure_cases = [
+        ('failure-fetch-missing-remote', ['fetch', '-q', 'missing']),
+        ('failure-push-missing-remote', ['push', '-q', 'missing']),
+        ('failure-pull-missing-remote', ['pull', '-q', '--no-rebase', 'missing']),
+        ('failure-fetch-wrong-url', ['fetch', '-q']),
+        ('failure-push-wrong-url', ['push', '-q']),
+        ('failure-pull-wrong-url', ['pull', '-q', '--no-rebase']),
+        ('failure-push-nonfastforward', ['push', '-q']),
+        ('failure-fetch-missing-ref', ['fetch', '-q', source.as_uri(), 'refs/heads/missing:refs/remotes/origin/missing']),
+        ('failure-pull-missing-ref', ['pull', '-q', '--no-rebase', 'origin', 'missing']),
+        ('failure-fetch-daemon', ['fetch', '-q']),
+        ('failure-push-daemon', ['push', '-q']),
+        ('failure-pull-daemon', ['pull', '-q', '--no-rebase']),
+    ]
+    @contextlib.contextmanager
+    def daemon(enabled):
+        if not enabled:
+            yield
+            return
+        argv = [git, 'daemon', '--reuseaddr', '--listen=127.0.0.1', '--port=39416', '--base-path=' + str(out), str(out)]
+        process = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env)
+        try:
+            for _ in range(100):
+                assert process.poll() is None, 'fixture daemon exited before ready'
+                try:
+                    with socket.create_connection(('127.0.0.1', 39416), timeout=0.2):
+                        break
+                except OSError:
+                    time.sleep(0.05)
+            else:
+                raise AssertionError('fixture daemon startup timeout')
+            yield
+        finally:
+            if process.poll() is None:
+                process.terminate()
+            stdout, stderr = process.communicate(timeout=10)
+            (out / ('daemon-' + str(process.pid) + '.json')).write_text(json.dumps(dict(argv=argv, environment=environment, stdin='', stdout=stdout.hex(), stderr=stderr.hex(), exit=process.returncode, teardown='own PID only'), indent=2) + '\n')
+    if a.family == 'failure':
+        cases = failure_cases
+    elif a.family == 'lease':
         cases = lease_cases
     elif a.family == 'all':
-        cases += lease_cases
+        cases += lease_cases + failure_cases
     review_path = root / 'tests/review/vc16-push-service-stderr.json'
     reviews = json.loads(review_path.read_text()).get('records', {}) if review_path.exists() else {}
     rows = []
@@ -138,7 +181,17 @@ def main():
         for tool in (git, den):
             reset(source, original)
             reset(work, seed)
-            if name.startswith('fetch-'):
+            if name.startswith('failure-'):
+                if name.endswith('-wrong-url'):
+                    run([git, 'remote', 'set-url', 'origin', missing_url], work)
+                if name.endswith('-nonfastforward'):
+                    run([git, 'update-ref', 'refs/heads/main', second], source)
+                    run([git, 'update-ref', 'refs/remotes/origin/main', second], work)
+                if name.endswith('-daemon'):
+                    run([git, 'remote', 'set-url', 'origin', 'git://127.0.0.1:39416/remote.git'], work)
+                    if name == 'failure-push-daemon':
+                        (source / 'git-daemon-export-ok').write_bytes(b'')
+            elif name.startswith('fetch-'):
                 run([git, 'update-ref', 'refs/heads/main', second], source)
                 if 'prune' in name:
                     run([git, 'update-ref', '-d', 'refs/heads/topic'], source)
@@ -172,7 +225,8 @@ def main():
                 case_input['selected_service'] = dict(path=str(selected_program), mode=selected_program.stat().st_mode & 0o777, data=selected_program.read_bytes().hex())
             fingerprint = hashlib.sha256(json.dumps(case_input, sort_keys=True).encode()).hexdigest()
             fingerprints.append(fingerprint)
-            result = run([tool, *argv], work, check=False)
+            with daemon(name.endswith('-daemon')):
+                result = run([tool, *argv], work, check=False)
             calls = marker.read_bytes()
             if selecting:
                 selector_calls.append(calls.hex())
