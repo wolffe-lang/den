@@ -1,0 +1,28 @@
+// Explicit CLI/config service paths map to the existing literal-executable
+// transport selector. This is scoped CLI state, not a command-string parser.
+use std.env
+use object
+
+struct ServiceOverride { variable: str, previous: List[str] }
+
+fn previous_service(variable: str) -> List[str] {
+    let value = env.get(variable) else { return [] }
+    [copy value]
+}
+
+fn override_service(variable: str, program: str) -> ServiceOverride ! object.StoreErrors {
+    if program == "" { return ServiceOverride { variable: "", previous: [] } }
+    if program.contains("\0") || program.contains("\n") || program.contains("\r") { return invalid }
+    let previous = previous_service(variable)
+    env.set(variable, program) else |_| { return invalid }
+    ServiceOverride { variable: copy variable, previous: previous }
+}
+
+fn restore_service(take state: ServiceOverride) {
+    if state.variable == "" { return }
+    if state.previous.len == 0 {
+        env.unset(state.variable) else |_| {}
+    } else {
+        env.set(state.variable, state.previous[0]) else |_| {}
+    }
+}

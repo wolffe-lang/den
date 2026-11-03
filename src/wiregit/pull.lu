@@ -58,7 +58,7 @@ fn perform_pull(args: List[str]) -> int ! object.StoreErrors {
         refcmd.refresh_pull_index() else |e| { return Unsupported("pull rebase index refresh: {e}") }
     }
     let previous = refs.optional(repo, destination)?
-    named_fetch(repo, name, action, quiet, false, if operands.len == 2 then copy source else "")?
+    named_fetch(repo, name, action, quiet, false, if operands.len == 2 then copy source else "", "")?
     let current = oid.hex(refs.read(repo, "HEAD")?)?
     let upstream = oid.hex(refs.read(repo, destination)?)?
     let forward = ancestor(repo, current, upstream)?

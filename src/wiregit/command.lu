@@ -44,11 +44,14 @@ fn execute(args: List[str]) -> () ! object.StoreErrors {
         }
         return
     }
-    var quiet = false, bare = false, force = false, atomic = false, operands = List[str]()
+    var quiet = false, bare = false, force = false, atomic = false, upload = "", operands = List[str]()
     for i in 1..args.len {
         let arg = args[i]
         if arg == "-q" || arg == "--quiet" {
             quiet = true
+        } else if arg.starts_with("--upload-pack=") && (args[0] == "clone" || args[0] == "fetch") {
+            upload = arg[14..]
+            if upload == "" { return Unsupported("empty upload-pack service path") }
         } else if arg == "--bare" {
             bare = true
         } else if (arg == "--force" || arg == "-f") && (args[0] == "push" || args[0] == "fetch") {
@@ -61,6 +64,8 @@ fn execute(args: List[str]) -> () ! object.StoreErrors {
             (mut operands).push(copy arg)
         }
     }
+    let service_state = override_service("DEN_UPLOAD_PACK", upload)?
+    defer restore_service(take service_state)
     if args[0] == "clone" {
         if operands.len != 2 { return invalid }
         if !quiet {

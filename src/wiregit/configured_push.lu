@@ -5,6 +5,7 @@ use refs
 use remote
 use repository
 use revision
+use transport
 
 fn tracking_expectation(
     repo: repository.Repo,
@@ -151,7 +152,7 @@ fn publish_push_tracking(
 }
 
 fn perform_push(args: List[str]) -> int ! object.StoreErrors {
-    var quiet = false, force = false, atomic = false, upstream = false, literal = false
+    var quiet = false, force = false, atomic = false, upstream = false, literal = false, receive = ""
     var operands = List[str](), requests = List[str]()
     for arg in args[1..] {
         if literal { (mut operands).push(copy arg); continue }
@@ -161,6 +162,9 @@ fn perform_push(args: List[str]) -> int ! object.StoreErrors {
             quiet = true
         } else if arg == "--force" || arg == "-f" {
             force = true
+        } else if arg.starts_with("--receive-pack=") {
+            receive = arg[15..]
+            if receive == "" { return Unsupported("empty receive-pack service path") }
         } else if arg == "--atomic" {
             atomic = true
         } else if arg == "-u" || arg == "--set-upstream" {
@@ -181,7 +185,7 @@ fn perform_push(args: List[str]) -> int ! object.StoreErrors {
     let branch = remote.current_branch(repo)?
     var name = "", url = "", input = List[str]()
     if operands.len > 0 {
-        if operands[0].contains("://") {
+        if operands[0].contains("://") || transport.ssh_form(operands[0]) {
             url = copy operands[0]
         } else {
             name = copy operands[0]
@@ -209,6 +213,9 @@ fn perform_push(args: List[str]) -> int ! object.StoreErrors {
         }
         (mut input).push("refs/heads/{branch}:{destination}")
     }
+    let program = if receive != "" { copy receive } else if name != "" { repo.config["remote.{name}.receivepack"] else "" } else { "" }
+    let service_state = override_service("DEN_RECEIVE_PACK", program)?
+    defer restore_service(take service_state)
     let specs = push_specs(repo, input, branch)?
     let leases = push_leases(repo, name, specs, requests)?
     var outcomes = List[PushOutcome](), error_text = ""
