@@ -4,7 +4,12 @@ R=pathlib.Path(__file__).resolve().parent.parent
 G=str(next((R/'target/oracle').glob('*/root/opt/git/bin/git')))
 assert hashlib.sha256(pathlib.Path(G).read_bytes()).hexdigest()=='c4848492938c4ebfffbefe1fbbaa68b9af90c86d1f6a20e76816c5ff37fcfa60'
 os.environ['GIT_EXEC_PATH']=str(pathlib.Path(G).parent.parent/'libexec/git-core')
-GIT_SETUP=[]
+# git-config(1): gc.auto=0 disables every auto-gc heuristic; gc.autoDetach
+# controls background return. git-maintenance(1): maintenance.auto=false stops
+# porcelain-triggered maintenance; autoDetach=false also keeps any auto work joined.
+# Fresh owned repositories and joined commands mean no pre-existing writer exists.
+# These are command-scoped controls, never persistent config or snapshot exclusions.
+GIT_SETUP=['-c','gc.auto=0','-c','maintenance.auto=false','-c','gc.autoDetach=false','-c','maintenance.autoDetach=false']
 a=argparse.ArgumentParser();a.add_argument('--tier',default='native');a.add_argument('--run',default='final');a.add_argument('--proof-only',action='store_true');args=a.parse_args()
 C=R/'target'/args.tier/'housekeeping-client';W=C.with_name('pack-write-client');P=C.with_name('pack-client')
 root=R/'target'/('recovery-'+args.tier+'-'+args.run);root.mkdir();rows=[];refusals=[];contents={};states={}
