@@ -72,7 +72,7 @@ fn edit(repo: repository.Repo, operation: str, name: str, value: str) -> () ! re
     } else if operation == "set-url" {
         var selected = -1, urls = 0
         for i in 0..sections.len {
-            let section = sections[i]
+            let section = copy sections[i]
             if section.name != "remote.{name}" { continue }
             if selected < 0 { selected = i }
             for entry in repository.parse_config(before[section.start..section.end])? {
