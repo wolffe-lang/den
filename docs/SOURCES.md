@@ -669,9 +669,41 @@ withdrawn for the named unimplemented reflog policy.
 The review also consulted `git-push(1)` at
 `https://git-scm.com/docs/git-push`, specifically the update rules for
 refs/heads, refs/tags and other namespaces. Other-namespace commits/tags require
-fast-forward/typed-peeling policy; tree/blob updates require force. The client
-therefore refuses non-forced other-namespace updates until that broader policy
-has a complete measurement. Creations, deletions, unchanged values and explicit
-force are retained. Its safe custom fast-forward refusal is a named scope
-boundary, not Git parity. The independent rewind regression first demonstrates
-the old unsafe acceptance against Git's default receiver.
+fast-forward/typed-peeling policy; tree/blob updates require force. The original vc15 client conservatively refused changed, non-forced
+other-namespace values. The vc16 typed matrix replaces that boundary with measured
+peeling/fast-forward policy. Distinct and nested tags of the same commit are
+accepted outside heads/tags; changed tree/blob values need force. Heads always
+require raw commits, including force. The 770 groups cover client and receiver
+roles against the pinned executable, comparing acceptance and refs, not exact
+failure text/status. Raw process results remain retained. Remote refs/stash
+updates retain the measured funny-refname rejection; local stash is unchanged.
+
+
+## Configured wire porcelain references (vc16)
+
+Published manuals consulted at `https://git-scm.com/docs/`, with local HTML/text
+copies retained in the lane's documentation inputs:
+
+- `git-remote(1)`: Commands (add, rename, remove, set-url, get-url), Discussion,
+  Exit Status and Examples; scalar URL and tracking-ref/config effects.
+- `git-config(1)`: Syntax; remote URL/pushurl/fetch/push/uploadpack/receivepack,
+  branch remote/merge/rebase, remote.pushDefault, push.default, pull.rebase,
+  pull.ff and advice configuration. Raw config editing is an original den design,
+  not an assertion about Git's file-update implementation.
+- `git-fetch(1)`: Options (--prune, --upload-pack), configured remotes/refspecs,
+  Output, Configured Remote-tracking Branches and Pruning.
+- `git-push(1)`: namespace/type rules, --set-upstream, --force-with-lease,
+  --receive-pack, configured defaults, Output and Examples. No-op and explicit
+  force/plus interactions with leases were separately measured black-box.
+- `git-pull(1)`: Description, Options (--rebase, --no-rebase, --ff-only, --ff,
+  --no-ff), configured branch/upstream defaults and divergent-policy behavior.
+  Pull reuses den's existing measured merge/replay boundaries.
+- `gitprotocol-v2(5)`: protocol capability advertisement and ls-refs/fetch;
+  the already listed `gitprotocol-pack(5)` SSH/extra-parameter transport rules
+  and `gitprotocol-common(5)` reserved ERR framing remain the wire references.
+
+The SSH fixtures select owned wrapper executables exporting protocol v2 because
+kasumi's ordinary sshd does not accept GIT_PROTOCOL. No sshd/key configuration
+was changed and no protocol-v0 fallback was implemented. Full raw results,
+canonical object checks and exact-input-bound service stderr review remain
+separate from logical typed-policy parity. No VCS implementation source was read.
