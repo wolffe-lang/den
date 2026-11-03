@@ -54,18 +54,49 @@ def main():
         ('rename-self', [add, ['rename', 'origin', 'origin']]),
         ('name-slash', [['add', 'team/sub', 'file:///a/source.git'], ['-v']]),
         ('name-invalid', [['add', 'bad..name', 'file:///a/source.git']]),
+        ('add-space-edges', [['add', 'origin', ' leading and trailing ']]),
+        ('add-comment-value', [['add', 'origin', 'a#b;c']]),
+        ('add-control-value', [['add', 'origin', 'a\nb\tc']]),
+        ('mode-preserved', [add]),
+        ('set-comment', [['set-url', 'origin', 'new']]),
+        ('set-blank', [['set-url', 'origin', 'new']]),
+        ('remove-comment', [['remove', 'origin']]),
+        ('rename-only-fetch', [['rename', 'origin', 'next']]),
+        ('foreign-lock', [add]),
+        ('no-newline', [add]),
+        ('duplicate-sections', [['set-url', 'origin', 'new']]),
+        ('empty-section', [['get-url', 'origin']]),
     ]
+    setups = {
+        'set-comment': '[remote "origin"] # header\n  url = old # trailing\n  fetch = +refs/heads/*:refs/remotes/origin/*\n',
+        'set-blank': '[remote "origin"]\n\n  url = old\n\n  fetch = +refs/heads/*:refs/remotes/origin/*\n\n',
+        'remove-comment': '# before\n[remote "origin"]\n # inside\n url = old\n# after\n[extra]\n key = value\n',
+        'rename-only-fetch': '[remote "origin"]\n url = +refs/heads/*:refs/remotes/origin/*\n fetch = +refs/heads/*:refs/remotes/origin/*\n',
+        'duplicate-sections': '[remote "origin"]\n fetch = +refs/heads/*:refs/remotes/origin/*\n[remote "origin"]\n url = old\n',
+        'empty-section': '[remote "origin"]\n',
+    }
     for name, commands in cases:
         outcomes = []
         for tool in ([git] if a.oracle_only else [git, den]):
             if work.exists():
                 shutil.rmtree(work)
             assert run([git, 'init', '-q', work]).returncode == 0
+            config = work / '.git/config'
+            if name in setups:
+                with config.open('a') as f:
+                    f.write(setups[name])
+            if name == 'mode-preserved':
+                config.chmod(0o600)
+            if name == 'foreign-lock':
+                (work / '.git/config.lock').write_bytes(b'foreign\n')
+            if name == 'no-newline':
+                config.write_bytes(config.read_bytes().rstrip(b'\n'))
             states = []
             for command in commands:
                 r = run([tool, 'remote', *command], work)
                 states.append(dict(stdout=r.stdout.hex(), stderr=r.stderr.hex(), exit=r.returncode,
-                                   config=(work / '.git/config').read_bytes().hex()))
+                                   config=config.read_bytes().hex(), mode=config.stat().st_mode & 0o777,
+                                   lock=(work / '.git/config.lock').read_bytes().hex() if (work / '.git/config.lock').exists() else None))
             outcomes.append(states)
         equal = a.oracle_only or outcomes[0] == outcomes[1]
         rows.append(dict(name=name, parity=equal, outcomes=outcomes))
