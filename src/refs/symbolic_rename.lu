@@ -1,0 +1,59 @@
+// Remote symbolic tracking-ref rename, measured against git-remote rename.
+use std.fs
+use repository
+
+/// Move one symbolic tracking pointer and its reflog without following its target.
+/// Both pointer locks precede changes; publication is not a multi-file transaction.
+pub fn rename_symbolic_tracking(
+    repo: repository.Repo,
+    from: str,
+    to: str,
+    expected: str,
+    target: str,
+    identity: str,
+    message: str,
+) -> () ! RefErrors {
+    if !from.starts_with("refs/remotes/") || !to.starts_with("refs/remotes/") ||
+        !valid(from) || !valid(to) || !valid(expected) || !valid(target) || from == to {
+        return invalid_oid
+    }
+    let old = administrative(repo, from, false)?, next = administrative(repo, to, true)?
+    let held = fs.create_new_with_mode("{old}.lock", 0o666)?
+    defer { fs_close(held.fd) else |_| {}; fs.remove("{old}.lock") else |_| {} }
+    let file = fs.create_new_with_mode("{next}.lock", 0o666)?
+    var fd = file.fd, active = true, new_log = ""
+    defer {
+        if fd >= 0 { fs_close(fd) else |_| {} }
+        if active {
+            fs.remove("{next}.lock") else |_| {}
+            if new_log != "" { fs.remove(new_log) else |_| {} }
+        }
+    }
+    if symbolic(repo, from)? != expected { return invalid }
+    if fs.exists(next) || optional(repo, to)?.len > 0 { return exists }
+    let old_log = "{repo.gitdir}/logs/{from}"
+    let had_log = fs.exists(old_log)
+    var prior = List[byte]()
+    if had_log {
+        let _ = administrative(repo, "logs/{from}", false)?
+        prior = repository.read_bytes(old_log, 16777216)?
+    }
+    fs_write_chunk(fd, "ref: {target}\n".bytes())?
+    fs_sync(fd)?
+    fs_close(fd)?
+    fd = -1
+    if had_log {
+        let log = administrative(repo, "logs/{to}", true)?
+        var output = fs.create_new_with_mode(log, 0o666)?
+        new_log = copy log
+        defer fs.close(take output) else |_| {}
+        fs.write(mut output, prior)?
+        fs.write(mut output, log_line([], [], identity, message)?)?
+        fs.sync(mut output)?
+    }
+    fs_rename("{next}.lock", next)?
+    active = false
+    fs.remove(old)?
+    if had_log { fs.remove(old_log)? }
+    fs.sync_dir(repo.gitdir)?
+}

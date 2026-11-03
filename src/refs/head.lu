@@ -53,6 +53,20 @@ pub fn rename_ref(
     replaced: List[oid.Oid],
     identity: str,
 ) -> () ! RefErrors {
+    rename_ref_message(repo, from, to, expected, replaced, identity, "Branch: renamed {from} to {to}")?
+}
+
+/// Rename a direct ref with caller-selected reflog text, retaining the same
+/// source/destination locks and CAS checks as branch rename.
+pub fn rename_ref_message(
+    repo: repository.Repo,
+    from: str,
+    to: str,
+    expected: oid.Oid,
+    replaced: List[oid.Oid],
+    identity: str,
+    message: str,
+) -> () ! RefErrors {
     if !valid(from) || !valid(to) { return invalid_oid }
     if from == to {
         let lock_path = "{repo.gitdir}/{from}.lock"
@@ -70,7 +84,7 @@ pub fn rename_ref(
                     [copy expected],
                     [copy expected],
                     identity,
-                    "Branch: renamed {from} to {to}",
+                    message,
                 )?,
             )?
         }
@@ -131,7 +145,7 @@ pub fn rename_ref(
         append(
             repo,
             "HEAD",
-            log_line([copy expected], [], identity, "Branch: renamed {from} to {to}")?,
+            log_line([copy expected], [], identity, message)?,
         )?
     }
     if had_log {
@@ -141,7 +155,7 @@ pub fn rename_ref(
         fs_write_chunk(logfd, prior)?
         fs_write_chunk(
             logfd,
-            log_line([copy expected], [copy expected], identity, "Branch: renamed {from} to {to}")?,
+            log_line([copy expected], [copy expected], identity, message)?,
         )?
         fs_sync(logfd)?
         fs.remove(old_log)?
@@ -153,7 +167,7 @@ pub fn rename_ref(
             append(
                 repo,
                 "HEAD",
-                log_line([], [copy expected], identity, "Branch: renamed {from} to {to}")?,
+                log_line([], [copy expected], identity, message)?,
             )?
         }
         fs_write_chunk(head_fd, "ref: {to}\n".bytes())?
