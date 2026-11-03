@@ -303,6 +303,10 @@ pub fn receive(repo: repository.Repo, c: transport.Channel) -> () ! object.Store
         var reason = ""
         if unpack_error != "" {
             reason = "unpacker error"
+        } else if u.name == "refs/stash" {
+            // The pinned receive-pack refuses this single-level ref even
+            // when the client supplies force; local refs/stash is still valid.
+            reason = "funny refname"
         } else {
             let current = refs.optional(repo, u.name)?
             let actual = if current.len == 0 then zero() else oid.hex(current[0])?
