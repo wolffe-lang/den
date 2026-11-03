@@ -70,14 +70,18 @@ fn edit(repo: repository.Repo, operation: str, name: str, value: str) -> () ! re
     if operation == "add" {
         after = "{section_end(before)}[remote \"{subsection(name)}\"]\n\turl = {repository.config_quote(value)?}\n\tfetch = +refs/heads/*:refs/remotes/{name}/*\n"
     } else if operation == "set-url" {
-        for section in sections {
-            if section.name == "remote.{name}" {
-                if found { return Unsupported("remote duplicate section editing") }
-                found = true
-                after = replace_url(before, section, value)?
+        var selected = -1, urls = 0
+        for i in 0..sections.len {
+            let section = sections[i]
+            if section.name != "remote.{name}" { continue }
+            if selected < 0 { selected = i }
+            for entry in repository.parse_config(before[section.start..section.end])? {
+                if entry.key == "remote.{name}.url" { selected = i; urls += 1 }
             }
         }
-        if !found { return Unsupported("remote URL inherited outside repository config") }
+        if selected < 0 { return Unsupported("remote URL inherited outside repository config") }
+        if urls > 1 { return Unsupported("remote multiple URL editing") }
+        after = replace_url(before, sections[selected], value)?
     } else {
         var pos = 0
         for section in sections {
@@ -87,7 +91,18 @@ fn edit(repo: repository.Repo, operation: str, name: str, value: str) -> () ! re
                 if operation == "rename" {
                     let old_fetch = "+refs/heads/*:refs/remotes/{name}/*"
                     let next_fetch = "+refs/heads/*:refs/remotes/{value}/*"
-                    let body = before[section.body..section.end].replace(old_fetch, next_fetch)
+                    var body = ""
+                    let lines = before[section.body..section.end].split("\n")
+                    for i in 0..lines.len {
+                        let line = lines[i]
+                        if i == lines.len - 1 && line == "" { continue }
+                        let entries = repository.parse_config("[remote \"item\"]\n{line}\n")?
+                        if entries.len == 1 && entries[0].key == "remote.item.fetch" && entries[0].value == old_fetch {
+                            body = "{body}\tfetch = {next_fetch}\n"
+                        } else {
+                            body = "{body}{line}\n"
+                        }
+                    }
                     after = "{after}[remote \"{subsection(value)}\"]\n{body}"
                 }
             } else {
@@ -152,7 +167,16 @@ fn execute(args: List[str]) -> int ! repository.RepoErrors {
     }
     if op == "add" || op == "rename" || op == "set-url" {
         if args.len != 4 { return Unsupported("remote {op} arguments") }
-        edit(repo, op, name, args[3])?
+        edit(repo, op, name, args[3]) else |e| match e {
+            exists => {
+                if op != "add" && op != "set-url" { return exists }
+                let config = env_get("GIT_DIR") else ".git"
+                eprint("error: could not lock config file {config}/config: File exists")
+                eprint("fatal: could not set 'remote.{name}.url' to '{args[3]}'")
+                return 128
+            },
+            _ => { return Unsupported("remote {op}: {e}") },
+        }
     } else if op == "remove" {
         if args.len != 3 { return Unsupported("remote remove arguments") }
         edit(repo, op, name, "")?

@@ -50,11 +50,16 @@ pub fn publish_config(repo: Repo, before: str, after: str) -> () ! RepoErrors {
     if after.len > 1048576 { return limit }
     let _ = parse_config(after)?
     let path = "{repo.gitdir}/config", lock = "{path}.lock"
-    let file = fs.create_new_with_mode(lock, 0o666)?
+    var prior = fs.open(path)?
+    defer fs.close(take prior) else |_| {}
+    let info = fs.fstat_record(mut prior)?
+    if !fs.answered(info, 4) { return Unsupported("config mode unavailable") }
+    let file = fs.create_new_with_mode(lock, info.mode)?
     var fd = file.fd, active = true
     defer { if fd >= 0 { fs_close(fd) else |_| {} }; if active { fs.remove(lock) else |_| {} } }
     let current = str_from_utf8(read_bytes(path, 1048576)?) else |_| { return invalid }
     if current != before { return Unsupported("configuration changed concurrently") }
+    fs.set_mode(lock, info.mode)?
     fs_write_chunk(fd, after.bytes())?
     fs_sync(fd)?
     fs_close(fd)?
