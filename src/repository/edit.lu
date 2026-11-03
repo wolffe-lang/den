@@ -59,7 +59,7 @@ pub fn publish_config(repo: Repo, before: str, after: str) -> () ! RepoErrors {
     fs_sync(fd)?
     fs_close(fd)?
     fd = -1
-    fs_rename(lock, path)?
+    fs_rename(lock, path) else |_| { return io }
     active = false
     fs.sync_dir(repo.gitdir)?
 }
