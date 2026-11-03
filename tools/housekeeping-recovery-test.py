@@ -4,7 +4,8 @@ R=pathlib.Path(__file__).resolve().parent.parent
 G=str(next((R/'target/oracle').glob('*/root/opt/git/bin/git')))
 assert hashlib.sha256(pathlib.Path(G).read_bytes()).hexdigest()=='c4848492938c4ebfffbefe1fbbaa68b9af90c86d1f6a20e76816c5ff37fcfa60'
 os.environ['GIT_EXEC_PATH']=str(pathlib.Path(G).parent.parent/'libexec/git-core')
-a=argparse.ArgumentParser();a.add_argument('--tier',default='native');a.add_argument('--run',default='final');args=a.parse_args()
+GIT_SETUP=[]
+a=argparse.ArgumentParser();a.add_argument('--tier',default='native');a.add_argument('--run',default='final');a.add_argument('--proof-only',action='store_true');args=a.parse_args()
 C=R/'target'/args.tier/'housekeeping-client';W=C.with_name('pack-write-client');P=C.with_name('pack-client')
 root=R/'target'/('recovery-'+args.tier+'-'+args.run);root.mkdir();rows=[];refusals=[];contents={};states={}
 def snap(p):
@@ -13,12 +14,41 @@ def snap(p):
   data=os.fsencode(os.readlink(f)) if f.is_symlink() else f.read_bytes() if f.is_file() else b''
   key=hashlib.sha256(data).hexdigest();contents[key]=base64.b64encode(data).decode();out[str(f.relative_to(p))]=[f.lstat().st_mode,key]
  key=hashlib.sha256(json.dumps(out,sort_keys=True).encode()).hexdigest();states[key]=out;return key
-def call(p,tool,*cmd,data=None,ok=True):
- before=snap(p);q=subprocess.run([str(tool),*map(str,cmd)],cwd=p,input=data,capture_output=True)
- row=dict(args=list(map(str,(tool,*cmd))),before=before,after=snap(p),stdout=q.stdout.hex(),stderr=q.stderr.hex(),status=q.returncode);rows.append(row)
+def call(p,tool,*cmd,data=None,ok=True,setup=True,defaults=(),trace=None):
+ argv=[str(tool),*defaults,*(GIT_SETUP if str(tool)==G and setup else []),*map(str,cmd)]
+ env=dict(os.environ)
+ if trace is not None:env['GIT_TRACE2_EVENT']=str(trace.resolve())
+ before=snap(p);q=subprocess.run(argv,cwd=p,input=data,capture_output=True,env=env)
+ row=dict(args=argv,before=before,after=snap(p),stdout=q.stdout.hex(),stderr=q.stderr.hex(),status=q.returncode,
+          environment={k:v for k,v in env.items() if k.startswith(('GIT_','DEN_')) or k in ('HOME','TMPDIR','PATH','TZ','LC_ALL')});rows.append(row)
  if ok:assert q.returncode==0,row
  return q
+def auto_work_proof():
+ # git-maintenance(1): maintenance.auto=false prevents commands from invoking
+ # maintenance run --auto; it does not stop explicitly started foreign writers.
+ # Force the trigger on, with foreground completion, in a separate counterfactual
+ # repository. Trace2 proves that setup controls remove the automatic child,
+ # rather than hiding its transient lock from the complete snapshot.
+ defaults=['-c','gc.auto=1','-c','maintenance.auto=true','-c','gc.autoDetach=false','-c','maintenance.autoDetach=false']
+ observations=[]
+ for name,controlled in (('counterfactual',False),('controlled',True)):
+  p=root/('auto-'+name);p.mkdir();call(p,G,'init','-q','-b','main','--template=')
+  trace=root/('auto-'+name+'.trace.jsonl')
+  call(p,G,'commit','--allow-empty','-qm','maintenance proof',setup=controlled,defaults=defaults,trace=trace)
+  events=[json.loads(line) for line in trace.read_text().splitlines()]
+  children=[event for event in events if event.get('event')=='child_start' and 'maintenance' in event.get('argv',[]) and '--auto' in event.get('argv',[])]
+  observations.append(dict(name=name,automatic_children=children,trace=str(trace)))
+ (root/'auto-work-proof.json').write_text(json.dumps(observations,indent=2)+'\n')
+ if not observations[0]['automatic_children']:
+  print('FAIL vc14-auto-work-counterfactual',flush=True);return False
+ print('PASS vc14-auto-work-counterfactual automatic helper observed; foreground joined',flush=True)
+ if observations[1]['automatic_children']:
+  print('FAIL vc14-setup-no-automatic-maintenance',flush=True);return False
+ print('PASS vc14-setup-no-automatic-maintenance no helper started; every snapshot path retained',flush=True)
+ return True
 try:
+ if not auto_work_proof():raise SystemExit(1)
+ if args.proof_only:raise SystemExit(0)
  base=root/'base';base.mkdir();call(base,G,'init','-q','-b','main','--template=')
  for i in range(8):
   (base/'file').write_bytes((f'version {i}\n'*100).encode());call(base,G,'add','file');call(base,G,'commit','-qm',f'version {i}')
