@@ -4,7 +4,7 @@ A version control system in [wolf](https://github.com/wolffe-lang/wolf-lang),
 working toward Git-compatible repositories and wire protocols. Where a wolf
 keeps what it has.
 
-**State: loose and packed objects, index/worktree commands, bounded local history operations, and experimental file/git wire services.**
+**State: loose and packed objects, index/worktree commands, bounded local history operations, and experimental file/git/SSH wire services.**
 This is not a replacement for Git; M2, M3, M4 and M5 remain incomplete. Log/show support
 bounded loose or packed history; branches, tags, branch switching and resets share
 loose/packed ref storage. Merge, single-commit revert, cherry-pick and linear
@@ -38,7 +38,7 @@ oracle builds are in `notes/vc00-evidence/`.
 | Area | Commands and supported surface |
 |---|---|
 | Objects | `init`, `hash-object`, `cat-file -p/-t/-s`, `mktree`, `commit-tree`, `mktag` |
-| Wire | `clone [-q] [--bare] URL DIRECTORY`; explicit `fetch -q URL SRC:DST`; configured/default `fetch [--prune]` and `push`, `push -u`, plain/explicit `--force-with-lease`, `--force` and `--atomic`; `upload-pack`, bare `receive-pack`, and one-session loopback `daemon` within the limits below |
+| Wire | `clone [-q] [--bare] URL DIRECTORY`; explicit `fetch -q URL SRC:DST`; configured/default `fetch [--prune]`, `pull` merge/rebase and `push`, `push -u`, plain/explicit `--force-with-lease`, `--force` and `--atomic`; `upload-pack`, bare `receive-pack`, and one-session loopback `daemon` within the limits below |
 | Packs | `pack-objects` from stdin object IDs to `objects/pack/pack`, OFS/REF deltas or no deltas; `verify-pack [-v]`; `count-objects [-v]`; bounded `fsck --full`; `repack -a -n -q [-d] [-k]` and `prune-packed [-n] [-q]` within the limits below |
 | Index | `write-tree` over nested index v2/v3/v4 entries; exclusive `index.lock` writes, stat fields, flags and TREE cache updates |
 | Config / ignore | Read-only `config --get`; bounded `remote add/remove/rename/-v/get-url/set-url` and `branch --set-upstream-to`; `check-ignore` with provenance, negation, tracked-file bypass and `--no-index` |
@@ -105,7 +105,9 @@ tools/check-merge
 tools/check-replay
 tools/check-pack                   # after corpus and inherited client builds
 tools/check-pack-write             # after check-pack/check-stash; interop, sizes, commands and corruption
-tools/check-wire                   # file/git peers, native service clients, received streams and checked parsers
+tools/check-wire                   # file/git peers, received streams and configured porcelain
+tools/check-porcelain              # remote/tracking, typed push, leases, pull and checked units
+tools/check-ssh --host kasumi --peer-root OWNED_PINNED_FIXTURE # live system-SSH leg
 tools/check-housekeeping           # closure, verified retirement/recovery, validator and checked parser
 tools/check-delta
 tools/check-rename
@@ -177,7 +179,8 @@ steps; a peel visits at most 64 objects. Tree paths preserve raw bytes in the
 public API; OS argv remains UTF-8-limited. Numeric reflogs and `@{-N}` are read
 without mutation, including branch-aware previous checkout for switch/checkout.
 Date/message/index selectors, parent-set shorthands and upstream/push tracking
-are refused by name. Ref ambiguity warns and follows the documented search
+revision suffixes are refused by name; branch tracking configuration is supported
+through the bounded remote/push/pull commands. Ref ambiguity warns and follows the documented search
 order. Prefix disambiguation honors a consumer's object-kind requirement: a
 unique commit-ish candidate can satisfy `log` even when a blob shares its prefix.
 Untyped consumers retain the ambiguity and its candidate diagnostics.
@@ -476,6 +479,9 @@ den remote add origin file:///absolute/source.git
 den fetch --prune
 den push -u origin main
 den push --force-with-lease=refs/heads/main:EXPECTED_OID
+den pull --no-rebase
+den pull --rebase
+den clone -q --upload-pack=/owned/fixture/upload ssh://kasumi/owned/repo.git destination
 den daemon --enable-receive-pack /dedicated/export/base 9418
 ```
 
@@ -495,10 +501,14 @@ and the remaining porcelain spellings are not general Git CLI parity claims.
 The daemon serves one connection on IPv4 loopback, requires
 `git-daemon-export-ok`, checks canonical repository and administrative paths
 against its export root, and enables writes only with the explicit flag. The
-transport supports plain `file:///absolute/path` and `git://host[:port]/path` URLs
-up to 4,096 bytes; percent-escaped paths and other URL forms remain explicit
-refusals. TCP operations have 30-second deadlines; file services are child
-processes with mapped byte pipes, not shell commands.
+transport supports plain `file:///absolute/path`, `git://host[:port]/path`,
+`ssh://[user@]host[:port]/path` and scp-like `[user@]host:path` forms up to
+4,096 bytes. SSH uses the system executable and an argv vector, with separately
+quoted literal remote program/path arguments; percent-escaped paths and IPv6 SSH
+forms remain named limits. TCP operations have 30-second deadlines; local and
+SSH services use mapped byte pipes. An sshd that does not accept GIT_PROTOCOL
+serves protocol v0, which den refuses rather than falling back. The live fixture
+uses explicitly selected owned wrappers exporting protocol v2, not sshd changes.
 
 Receive-pack currently requires a bare repository. Atomic receive is advertised
 only without the unimplemented reflog policy. It locks every target and
@@ -530,6 +540,26 @@ shallow/filter/URI fetches, arbitrary unadvertised wants, hooks, non-bare receiv
 atomic reflog policy, linked worktrees, SHA-256 repositories, broader configuration
 and remaining porcelain/error-output parity are not complete. No M5-complete
 claim is made.
+
+Configured fetch/push cover ordinary scalar URLs and wildcard branch fetch maps,
+branch defaults, tracking updates/prune, `push -u` and plain/explicit leases.
+Pull selects CLI/config merge or rebase policy and reuses the existing M3 engines,
+including conflict state and their existing conservative refusals. Divergence
+without a reconciliation policy and ff-only divergence fail before ORIG_HEAD.
+Rewritten-upstream/fork-point rebase, octopus selection, broader refspec/config
+forms, multiple-URL editing and existing unconfigured local paths remain named
+limits. CLI service selectors and remote uploadpack/receivepack values select
+literal executables; they are not shell commands.
+
+The portable porcelain gate defines **892 fixture groups per native/release
+tier**: 48 remote/tracking, 770 typed update-policy, 48 configured/lease/failure
+and 26 pull groups. The typed matrix compares acceptance and resulting refs,
+not exact failure text/status; complete raw outputs are retained. Other groups
+compare full process results and repository state, with one exact-input-bound
+receive-service stderr REVIEW rather than a parity pass. Pure units, review
+binding mutations and 12 live Mac-to-kasumi SSH groups are counted separately.
+See MAP for the auto-identity and service-sideband diagnostic limits. These
+measurements do not complete M5 or remove any M3 limit.
 
 ## Loose objects and historical measurements
 
@@ -626,8 +656,9 @@ nonblocking macOS field observation. Trunk pushes run that set only when
 workflows, CI, shared tools, pins or other cross-cutting paths change;
 module-only pushes run no CI. The nightly and default dispatch still run
 the full set. `ci/tiers-test.py` checks planning and final verdicts, and a
-failed nightly opens or updates a `nightly-red` issue. Local implementation
-measurements use Linux containers, not Mac builds.
+failed nightly opens or updates a `nightly-red` issue. Portable implementation
+measurements use Linux containers. The separate live SSH leg builds on macOS
+arm64 and interoperates with pinned Git on kasumi.
 
 `packaging/den.rb` and `packaging/PKGBUILD` remain **drafts, not published**.
 They name a future v0.1.0 tag and have an unfilled source-archive digest. Do not
