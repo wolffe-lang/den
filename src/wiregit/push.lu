@@ -13,6 +13,19 @@ fn zero() -> str { "0000000000000000000000000000000000000000" }
 
 struct PushUpdate { name: str, before: str, after: str }
 
+/// Expected advertised value for one fully qualified destination; zero means absent.
+pub struct PushLease { name: str, expected: str }
+
+/// One planned/reported ref outcome. Only `ok` and `up-to-date` are successes;
+/// `pending` never establishes that the server accepted an update.
+pub struct PushOutcome { source: str, name: str, before: str, after: str, status: str, reason: str }
+
+fn reject_push(mut outcomes: List[PushOutcome], reason: str) {
+    let at = outcomes.len - 1
+    outcomes[at].status = "rejected"
+    outcomes[at].reason = copy reason
+}
+
 fn ids(text: str) -> List[oid.Oid] ! object.StoreErrors {
     if text == zero() { return List[oid.Oid]() }
     [oid.parse("sha1", text)?]
@@ -57,7 +70,29 @@ pub fn push(
     force: bool,
     atomic: bool,
 ) -> () ! object.StoreErrors {
-    if specs.len == 0 || specs.len > 10000 { return invalid }
+    var outcomes = List[PushOutcome]()
+    push_reported(repo, url, specs, force, atomic, [], mut outcomes)?
+}
+
+/// Push with checked leases and retained per-ref outcomes. The output list must
+/// start empty. Local rejections precede transmission; the wire CAS still uses
+/// the advertisement's old value, never the tracking ref's unchecked value.
+pub fn push_reported(
+    repo: repository.Repo,
+    url: str,
+    specs: List[str],
+    force: bool,
+    atomic: bool,
+    leases: List[PushLease],
+    mut outcomes: List[PushOutcome],
+) -> () ! object.StoreErrors {
+    if specs.len == 0 || specs.len > 10000 || leases.len > 10000 || outcomes.len != 0 { return invalid }
+    var leased_names = Map[str, bool]()
+    for lease in leases {
+        if !refs.valid(lease.name) || (leased_names[lease.name] else false) { return invalid }
+        let _ = oid.parse("sha1", lease.expected)?
+        leased_names[lease.name] = true
+    }
     let c = transport.connect(url, "receive-pack")?
     var active = true, started = false
     defer {
@@ -81,6 +116,7 @@ pub fn push(
     var before = Map[str, str](),
         updates = List[PushUpdate](),
         seen = Map[str, bool](),
+        positions = Map[str, int](),
         roots = List[str]()
     for reference in remote { before[reference.name] = copy reference.id }
     for raw in specs {
@@ -102,13 +138,28 @@ pub fn push(
             return Unsupported("server does not support delete-refs")
         }
         if next == zero() && old == zero() { return Unsupported("remote ref does not exist") }
+        positions[destination] = outcomes.len
+        (mut outcomes).push(PushOutcome { source: copy parts[0], name: copy destination, before: copy old, after: copy next, status: if next == old then "up-to-date" else "pending", reason: "" })
         if next == old { continue }
-        if old != zero() && next != zero() && !force && !override {
+        var leased = false
+        if !force && !override {
+            for lease in leases {
+                if lease.name != destination { continue }
+                if lease.expected != old {
+                    reject_push(mut outcomes, "stale info")
+                    return Unsupported("stale info")
+                }
+                leased = true
+            }
+        }
+        if old != zero() && next != zero() && !force && !override && !leased {
             if destination.starts_with("refs/tags/") {
+                reject_push(mut outcomes, "already exists")
                 return Unsupported("push would replace tag (use --force)")
             }
             let old_id = oid.parse("sha1", old)?, next_id = oid.parse("sha1", next)?
             let _ = object.read_object(repo, old_id, 16777216) else |_| {
+                reject_push(mut outcomes, "fetch first")
                 return Unsupported("push needs fetch first")
             }
             let old_tip = revision.peel(repo, old_id, "peel") else |e| {
@@ -119,9 +170,11 @@ pub fn push(
             }
             if object.read_object(repo, old_tip, 16777216)?.kind != "commit" ||
                 object.read_object(repo, next_tip, 16777216)?.kind != "commit" {
+                reject_push(mut outcomes, "needs force")
                 return Unsupported("push non-commit update requires force")
             }
             if !ancestor(repo, oid.hex(old_tip)?, oid.hex(next_tip)?)? {
+                reject_push(mut outcomes, "non-fast-forward")
                 return Unsupported("non-fast-forward push (use --force)")
             }
         }
@@ -169,7 +222,17 @@ pub fn push(
                 return invalid
             }
             reported[fields[1]] = true
-            if text.starts_with("ng ") { failed = true }
+            let at = positions[fields[1]] else { return invalid }
+            if outcomes[at].status != "pending" { return invalid }
+            if text.starts_with("ng ") {
+                if fields.len < 3 { return invalid }
+                failed = true
+                outcomes[at].status = "remote rejected"
+                outcomes[at].reason = text[fields[1].len + 4..]
+            } else {
+                if fields.len != 2 { return invalid }
+                outcomes[at].status = "ok"
+            }
         } else {
             return invalid
         }
