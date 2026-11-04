@@ -67,6 +67,7 @@ fn write_quote(value: str) -> str ! RepoErrors {
 /// Prepare one legacy set/add/unset/unset-all/replace-all operation without IO.
 /// Status 5 denotes a missing unset key or an ambiguous scalar; text stays raw.
 pub fn config_update(text: str, key: str, value: str, action: str) -> (str, int) ! RepoErrors {
+    if action != "set" && action != "add" && action != "unset" && action != "unset-all" && action != "replace-all" { return invalid }
     if value.len > 1048576 { return limit }
     let canonical = config_key(key)?
     let dot = canonical.rfind(".") else { return invalid }

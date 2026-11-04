@@ -69,7 +69,13 @@ fn config_write(args: List[str]) -> int ! Errors {
     }
     repository.publish_config_path(path, before, after) else |e| match e {
         exists => { eprint("error: could not lock config file {path}: File exists"); return 255 },
-        _ => { return e },
+        not_found => { return not_found },
+        denied => { return denied },
+        io => { return io },
+        invalid => { return invalid },
+        unsupported => { return unsupported },
+        limit => { return limit },
+        Unsupported(reason) => { return Unsupported(reason) },
     }
     0
 }
