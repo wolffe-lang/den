@@ -64,8 +64,9 @@ with tempfile.TemporaryDirectory(prefix='prune-runner-', dir=root/'target') as f
     child_env = dict(env, PATH=str(bindir)+os.pathsep+env.get('PATH',''))
     result = subprocess.run(['python3','-I',str(root/'tools/gate-prune.py'),str(target),
                              'tools/check-diffbinary',str(planned)], cwd=root,env=child_env,capture_output=True)
-    if result.returncode or not client.exists():
-        print('FAIL runner-prune-future-input',result.returncode,result.stderr.decode(errors='replace'),flush=True)
+    assert result.returncode == 0, ('prune harness failed', result.stdout, result.stderr)
+    if not client.exists():
+        print('FAIL runner-prune-future-input: binary-reviewed removed the later strict-report input',flush=True)
         raise SystemExit(1)
     assert client.read_bytes()==b'required later, never executed\n'
     assert not (target/'native/diffbinary-test').exists()

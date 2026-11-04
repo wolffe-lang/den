@@ -9,7 +9,8 @@ import resource
 import subprocess
 import sys
 
-resource.setrlimit(resource.RLIMIT_AS, (2 * 1024**3, 2 * 1024**3))
+if sys.platform.startswith('linux'):
+    resource.setrlimit(resource.RLIMIT_AS, (2 * 1024**3, 2 * 1024**3))
 target = Path(sys.argv[1]).resolve()
 leaf = sys.argv[2]
 assert target.name == 'target' and (target.parent / 'src/den.lu').is_file()
