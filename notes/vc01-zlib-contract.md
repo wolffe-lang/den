@@ -7,7 +7,7 @@ need, clean-room from RFC 1950/1951. No VCS porcelain in this lane.
 
 ## Preconditions
 
-Read `wolf/sprints/vcs/index.md`, RULES §§1–10, vc00's MAP, FORMATS and SOURCES,
+Follow the project directives; read vc00's MAP, FORMATS and SOURCES,
 the wolf guide, den README and licences. Re-derive the toolchain and oracle
 pins; read release archive digests twice. The exact toolchain is wolf 0.2.35,
 lupin 0.1.56 and bundled std 2386522e unless the adopted contract names a new

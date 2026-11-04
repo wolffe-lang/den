@@ -1,5 +1,5 @@
 vc13 prediction, before implementation and oracle observations
-Base: 1d64bb7f. Contract: wolf/sprints/vcs/vc13-pack-writing.md.
+Base: 1d64bb7f.
 
 P1. Pack v2 plus idx v2 can be written without changing the vc09 reader:
     raw object headers, network-order count/offset tables, entry CRC32,

@@ -1,6 +1,6 @@
 vc04 prediction, before implementation
 
-Base: fd42d7ff (origin/trunk). Contract: wolf/sprints/vcs/vc04-the-diff.md.
+Base: fd42d7ff (origin/trunk).
 Clean room: Git documentation and pinned binary only; no VCS/diff-library source.
 
 Predictions, not measurements:
