@@ -106,17 +106,26 @@ assert not client_accepts('satoyama','/mnt/space/lanes/vc17/../vc18/ssh-fixture'
 assert client_accepts('kasumi','/home/test/lanes/vc16/ssh-fixture')
 print('PASS runner-ssh-owned-plan: planned host/root accepted, foreign/escaping roots refused, legacy default retained')
 # Guards around the plan, named: a host the plan did not name, a host with no
-# plan, an escaping planned root, an option-shaped host, and vc16's recorded
-# invocation (a planned root with the fallback host).
+# plan, an escaping planned root, a shell-shaped host, and vc16's recorded
+# invocation (a planned root with the fallback host). argparse already refuses
+# an option-shaped --host value, so that name goes to the preflight directly.
 escaping='/mnt/space/lanes/vc17/../vc18/ssh-fixture'
 legacy='/home/test/lanes/vc16/ssh-fixture'
 for label, args, expected in [
         ('host-not-planned', ('kasumi',planned,'satoyama',planned), False),
         ('host-without-plan', ('satoyama',planned), False),
         ('escaping-planned-root', ('satoyama',escaping,'satoyama',escaping), False),
-        ('option-shaped-host', ('-oProxyCommand=true',planned,'-oProxyCommand=true',planned), False),
+        ('shell-shaped-host', ('satoyama;true',planned,'satoyama;true',planned), False),
         ('vc16-recorded-invocation', ('kasumi',legacy,None,legacy), True)]:
     if client_accepts(*args) != expected:
         print('FAIL runner-ssh-plan-guards: '+label,flush=True)
         raise SystemExit(1)
-print('PASS runner-ssh-plan-guards: unplanned and option-shaped hosts and escaping planned roots refused; vc16 recorded invocation accepted')
+option='-oProxyCommand=true'
+try:
+    client_module['planned_peer'](option,planned,dict(DEN_SSH_HOST=option,DEN_SSH_PEER_ROOT=planned))
+except ValueError:
+    pass
+else:
+    print('FAIL runner-ssh-plan-guards: option-shaped-host',flush=True)
+    raise SystemExit(1)
+print('PASS runner-ssh-plan-guards: unplanned, shell- and option-shaped hosts and escaping planned roots refused; vc16 recorded invocation accepted')
