@@ -1,0 +1,24 @@
+vc19 everyday census prediction (before implementation)
+
+No den command changes. Add tools/census-everyday, a self-testing black-box
+measurement tool. Run the same ordered week checkpoints against Git 2.56.0,
+den 13bc2ca, den 584b18a and den 554aa44. Every checkpoint begins from the
+same oracle-produced input at the same path; only Git advances the week.
+This prevents an early refusal hiding every later command. It is not an
+uninterrupted end-to-end den session and must be reported as such.
+
+Expect no-zone dates and config writes to improve at 554aa44; terminal
+history decorations need a PTY checkpoint. Expect upstream status refusal
+at every den revision. Expect configured remotes to improve between 13bc2ca
+and 584b18a. Local path clone/fetch/push may refuse while file:// succeeds.
+Record both spellings, never silently substitute one for the other.
+
+Every output byte, exit and file byte/mode is retained. Exact raw state is
+strict: index inode/time fields and loose-object compression differences
+remain differences, not normalized passes. Report process equality and
+changed state paths separately so representation noise cannot hide refusals.
+
+Self-tests must catch refusal-as-same, changed stderr/status/state, incomplete
+columns, timeout, duplicate row names and missing required scenario families.
+One local one-hunk plant changes refusal classification and must fail the
+named refusal-is-not-parity row. No production verb or CI/pin changes.
