@@ -93,7 +93,7 @@ leaf planner python3 -I ci/tiers-test.py
 leaf local-gate-routing python3 -I ci/local-gate-test.py
 leaf fetch-toolchain tools/fetch-toolchain
 leaf fetch-oracle tools/fetch-oracle
-if [ "$mode" != list ] && [ -z "${DEN_GATE_LEAF_RUNNER:-}" ]; then
+if [ "$mode" = run ] && [ -z "${DEN_GATE_LEAF_RUNNER:-}" ]; then
     DEN_GIT=$(python3 -I - <<'PY'
 from pathlib import Path
 paths=list(Path('target/oracle').glob('*/root/opt/git/bin/git'))
