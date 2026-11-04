@@ -261,9 +261,22 @@ fn summary_date(date: commit_format.Date) -> str ! CommitErrors {
     let minutes = zone[cut..].to_int() else |_| { return invalid_date }
     let magnitude = hours * 3600 + minutes * 60
     let offset = if zone.starts_with("-") then -magnitude else magnitude
-    let local = time.local_in("UTC", date.seconds + offset) else |_| { return invalid_date }
+    let local = time.local_in("UTC0", date.seconds + offset) else |_| { return invalid_date }
     let civil = time.format(local, "%a %b %-d %H:%M:%S %Y") else |_| { return invalid_date }
     "{civil} {zone}"
+}
+
+/// UTC spellings or an unresolvable zone use UTC; valid non-UTC zones retain
+/// their existing named refusal. UTC0 itself needs no zone-database file.
+pub fn utc_timezone(zone: str) -> bool ! {io} {
+    if zone == "" || zone == "UTC" || zone == "UTC0" || zone == "Etc/UTC" || zone == "GMT" {
+        return true
+    }
+    let _ = time.offset_at(zone, 0) else |e| match e {
+        zone => { return true },
+        io => { return io },
+    }
+    false
 }
 
 fn hooks_empty(ctx: worktree.Context) -> () ! CommitErrors {
@@ -275,7 +288,7 @@ fn hooks_empty(ctx: worktree.Context) -> () ! CommitErrors {
     if worktree.config_bool(ctx, "commit.gpgsign", false)? { return Unsupported("commit signing") }
     if (env_get("GIT_INDEX_FILE") else "") != "" { return Unsupported("commit GIT_INDEX_FILE") }
     let zone = env_get("TZ") else "UTC"
-    if zone != "" && zone != "UTC" && zone != "UTC0" && zone != "Etc/UTC" && zone != "GMT" {
+    if !utc_timezone(zone)? {
         return Unsupported("commit implicit local timezone {zone}")
     }
 }

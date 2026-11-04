@@ -41,7 +41,7 @@ pub fn date(seconds: int, zone: str, style: str) -> str ! worktree.WorkErrors {
         let numeric = zone.to_int() else 0
         return Fatal("Timestamp before Unix epoch: {seconds} {numeric}")
     }
-    let civil = time.local_in("UTC", seconds + offset) else |_| { return invalid }
+    let civil = time.local_in("UTC0", seconds + offset) else |_| { return invalid }
     let format = match kind {
         "default" => "%a %b %-d %H:%M:%S %Y",
         "short" => "%Y-%m-%d",

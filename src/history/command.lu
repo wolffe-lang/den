@@ -1,5 +1,6 @@
 // Git 2.56.0 git-log/git-show/pretty-formats documentation and binary witnesses.
 use std.fs
+use commit
 use diff
 use notes
 use object
@@ -193,7 +194,7 @@ fn dispatch(args: List[str]) -> int ! worktree.WorkErrors {
     }
     if date_style == "local" || date_style.ends_with("-local") {
         let tz = env_get("TZ") else "UTC"
-        if tz != "UTC" && tz != "UTC0" && tz != "Etc/UTC" && tz != "GMT" {
+        if !commit.utc_timezone(tz)? {
             return Unsupported("history local timezone {tz}")
         }
     }
