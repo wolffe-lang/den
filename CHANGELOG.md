@@ -4,6 +4,8 @@
 
 - Plan remaining generated inputs before pruning, with a red-first runner
   regression for clients shared by reviewed and strict reports.
+- Check the live SSH leg's host and fixture root against the explicit plan
+  before any network access, keeping the earlier default when none is planned.
 - Render fixed dates without a zone database and fall back to UTC for missing
   zones, preserving explicit stored offsets.
 - Add short/full/no/terminal-auto history decorations, `log.decorate`, HEAD
