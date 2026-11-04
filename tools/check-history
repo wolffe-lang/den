@@ -6,6 +6,8 @@ export DEN_ROOT
 cd "$DEN_ROOT"
 . tools/lib-toolchain.sh
 mkdir -p target/runs/vc05-evidence
+zone_requirement=
+if [ "${DEN_REQUIRE_NO_DATABASE:-0}" = 1 ]; then zone_requirement=--require-no-database; fi
 trap 'status=$?; for f in target/history-*.json target/history-*.log target/pretty-checked.json target/walk-checked.json; do [ ! -f "$f" ] || cp "$f" target/runs/vc05-evidence/; done; exit "$status"' EXIT
 for tier in native release; do
     flag=
@@ -16,7 +18,7 @@ for tier in native release; do
     done
     "$WOLF" build $flag --deny-warnings probes/history-client/main.lu -o "target/$tier/history-client"
     tools/env python3 -I tools/history-test.py --tier "$tier"
-    tools/env python3 -I tools/day-to-day-test.py --tier "$tier" --family dates
+    tools/env python3 -I tools/day-to-day-test.py --tier "$tier" --family dates $zone_requirement
     tools/env python3 -I tools/day-to-day-test.py --tier "$tier" --family decorations
 done
 for unit in pretty walk; do
