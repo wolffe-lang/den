@@ -1,0 +1,490 @@
+#!/usr/bin/env python3
+"""Replay first-week checkpoints; only the pinned Git advances the fixture.
+
+Run in the oracle container with no network or zone database. Every candidate
+gets the identical raw input, at the identical pathname. This is an isolated
+checkpoint census, not an uninterrupted den session. No byte normalization:
+index stat words, compressed objects and incidental state remain differences.
+Use --self-test without binaries. --output must be a new lane-owned directory.
+"""
+import argparse
+import base64
+import hashlib
+import json
+import os
+from pathlib import Path
+import pty
+import re
+import shutil
+import stat
+import subprocess
+import sys
+import time
+
+PINS = {"pax": "13bc2ca", "trunk": "584b18a", "vc17": "554aa44"}
+GIT_SHA256 = "c4848492938c4ebfffbefe1fbbaa68b9af90c86d1f6a20e76816c5ff37fcfa60"
+COLUMNS = ("pax", "trunk", "vc17", "git")
+FAMILIES = {"init", "identity", "add", "commit", "log", "show", "status",
+            "diff", "branch", "checkout", "switch", "merge", "tag", "stash",
+            "reset", "restore", "rm", "mv", "rebase", "cherry-pick", "ignore",
+            "config", "remote", "clone", "fetch", "pull", "push", "blame"}
+
+
+def sha(data):
+    return hashlib.sha256(data).hexdigest()
+
+
+def encode(data):
+    return base64.b64encode(data).decode("ascii")
+
+
+def result(code=0, out=b"", err=b""):
+    return {"exit": code, "stdout_b64": encode(out), "stderr_b64": encode(err)}
+
+
+def diagnostic(process):
+    return (base64.b64decode(process["stdout_b64"]) +
+            base64.b64decode(process["stderr_b64"])).decode("utf-8", "backslashreplace")
+
+
+def classify(actual, expected, state, expected_state):
+    message = diagnostic(actual)
+    if (re.search(r"not (?:yet )?implemented|unsupported", message, re.I) or
+            (actual["exit"] != 0 and expected["exit"] == 0)):
+        return "refused"
+    return "same" if actual == expected and state == expected_state else "differs"
+
+
+def capture(argv, cwd, env, terminal=False, timeout=90):
+    started = time.monotonic()
+    if not terminal:
+        completed = subprocess.run(argv, cwd=cwd, env=env, stdin=subprocess.DEVNULL,
+                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                   timeout=timeout, check=False)
+        process = result(completed.returncode, completed.stdout, completed.stderr)
+    else:
+        # Only stdout is a terminal, so stderr stays independently byte-exact.
+        master, slave = pty.openpty()
+        import termios
+        attrs = termios.tcgetattr(slave)
+        attrs[1] &= ~termios.OPOST
+        termios.tcsetattr(slave, termios.TCSANOW, attrs)
+        import tempfile
+        with tempfile.TemporaryFile(dir=env["TMPDIR"]) as errors:
+            child = subprocess.Popen(argv, cwd=cwd, env=env, stdin=subprocess.DEVNULL,
+                                     stdout=slave, stderr=errors)
+            os.close(slave)
+            import select
+            output = bytearray()
+            try:
+                while True:
+                    if time.monotonic() - started > timeout:
+                        raise subprocess.TimeoutExpired(argv, timeout)
+                    if select.select([master], [], [], 0.2)[0]:
+                        try:
+                            chunk = os.read(master, 65536)
+                        except OSError as exc:
+                            import errno
+                            if exc.errno != errno.EIO:
+                                raise
+                            break
+                        if not chunk:
+                            break
+                        output.extend(chunk)
+                child.wait(timeout=max(0.1, timeout - (time.monotonic() - started)))
+                errors.seek(0)
+                process = result(child.returncode, bytes(output), errors.read())
+            finally:
+                os.close(master)
+                if child.poll() is None:
+                    child.kill()  # Only the child this invocation started.
+                    child.wait()
+    if process["exit"] < 0:
+        raise RuntimeError(f"command died by signal: {argv!r}: {process['exit']}")
+    return process, round(time.monotonic() - started, 6)
+
+
+class Census:
+    def __init__(self, output, binaries):
+        self.output = output
+        output.mkdir(parents=True, exist_ok=False)
+        self.world = output / "world"
+        self.saved = output / "input"
+        self.blobs = output / "blobs"
+        self.blobs.mkdir()
+        self.world.mkdir()
+        self.binaries = binaries
+        self.rows = []
+        self.names = set()
+        self.clock = 1700000000
+        self.tmp = output / "tmp"
+        self.tmp.mkdir()
+        for name in ("home", "xdg", "empty", "zones", "repo"):
+            (self.world / name).mkdir()
+        self.system = self.world / "system.gitconfig"
+        self.system.write_bytes(b"")
+
+    def environment(self, identity=True):
+        # Deliberately do not inherit EMAIL, TZ, GIT_*, HOME or user config.
+        env = {"PATH": os.environ["PATH"], "LC_ALL": "C", "LANG": "C",
+               "HOME": str(self.world / "home"),
+               "XDG_CONFIG_HOME": str(self.world / "xdg"),
+               "TMPDIR": str(self.tmp), "TZDIR": str(self.world / "zones"),
+               "GIT_CONFIG_SYSTEM": str(self.system),
+               "GIT_AUTHOR_DATE": f"{self.clock} +0000",
+               "GIT_COMMITTER_DATE": f"{self.clock} +0000",
+               "GIT_PAGER": "cat", "PAGER": "cat", "TERM": "dumb",
+               "GIT_EDITOR": "false", "GIT_SEQUENCE_EDITOR": "false",
+               "GIT_TERMINAL_PROMPT": "0", "GIT_PROTOCOL": "version=2",
+               "GIT_EXEC_PATH": str(Path(self.binaries["git"]).parent.parent /
+                                    "libexec/git-core"),
+               "GIT_CONFIG_COUNT": "6",
+               "GIT_CONFIG_KEY_0": "init.templateDir",
+               "GIT_CONFIG_VALUE_0": str(self.world / "empty"),
+               "GIT_CONFIG_KEY_1": "init.defaultBranch", "GIT_CONFIG_VALUE_1": "main",
+               "GIT_CONFIG_KEY_2": "color.ui", "GIT_CONFIG_VALUE_2": "never",
+               "GIT_CONFIG_KEY_3": "commit.gpgsign", "GIT_CONFIG_VALUE_3": "false",
+               "GIT_CONFIG_KEY_4": "core.hooksPath",
+               "GIT_CONFIG_VALUE_4": str(self.world / "empty"),
+               "GIT_CONFIG_KEY_5": "gc.auto", "GIT_CONFIG_VALUE_5": "0"}
+        if identity:
+            for role in ("AUTHOR", "COMMITTER"):
+                env[f"GIT_{role}_NAME"] = "Everyday User"
+                env[f"GIT_{role}_EMAIL"] = "everyday@example.invalid"
+        return env
+
+    def snapshot(self):
+        state = {}
+        for path in sorted(self.world.rglob("*")):
+            info = path.lstat()
+            rel = path.relative_to(self.world).as_posix()
+            if stat.S_ISDIR(info.st_mode):
+                state[rel] = {"kind": "directory", "mode": stat.S_IMODE(info.st_mode)}
+                continue
+            if stat.S_ISLNK(info.st_mode):
+                data = os.fsencode(os.readlink(path))
+                kind = "symlink"
+            elif stat.S_ISREG(info.st_mode):
+                data = path.read_bytes()
+                kind = "file"
+            else:
+                raise RuntimeError(f"unhandled state kind: {rel}")
+            digest = sha(data)
+            blob = self.blobs / digest
+            if not blob.exists():
+                blob.write_bytes(data)
+            state[rel] = {"kind": kind, "mode": stat.S_IMODE(info.st_mode),
+                          "sha256": digest, "size": len(data)}
+        return state
+
+    def write(self, path, data):
+        target = self.world / path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(data.encode())
+
+    def step(self, day, name, family, *args, cwd="repo", identity=True,
+             terminal=False, expected_exit=0):
+        if name in self.names:
+            raise ValueError(f"duplicate row: {name}")
+        self.names.add(name)
+        self.clock += 60
+        if self.saved.exists():
+            shutil.rmtree(self.saved)
+        shutil.copytree(self.world, self.saved, symlinks=True)
+        env = self.environment(identity)
+        row = {"day": day, "step": name, "family": family, "argv": list(args),
+               "cwd": cwd, "terminal_stdout": terminal, "environment": env,
+               "input": self.snapshot(), "columns": {}}
+        # Run the oracle first, retain its post-state, restore the same input for
+        # each den; restore oracle post-state at the end to advance the week.
+        oracle_post = self.output / "oracle-post"
+        if oracle_post.exists():
+            shutil.rmtree(oracle_post)
+        for column in ("git", "pax", "trunk", "vc17"):
+            shutil.rmtree(self.world)
+            shutil.copytree(self.saved, self.world, symlinks=True)
+            process, elapsed = capture([self.binaries[column], *args],
+                                       self.world / cwd, env, terminal)
+            state = self.snapshot()
+            entry = {"process": process, "state": state, "seconds": elapsed}
+            row["columns"][column] = entry
+            if column == "git":
+                if process["exit"] != expected_exit:
+                    raise RuntimeError(f"oracle setup failed {name}: {diagnostic(process)}")
+                shutil.copytree(self.world, oracle_post, symlinks=True)
+            oracle = row["columns"]["git"]
+            entry["verdict"] = ("same" if column == "git" else
+                                classify(process, oracle["process"], state, oracle["state"]))
+            entry["process_same"] = process == oracle["process"]
+            entry["state_differences"] = [p for p in sorted(set(state) | set(oracle["state"]))
+                                          if state.get(p) != oracle["state"].get(p)]
+            entry["message"] = diagnostic(process) if entry["verdict"] == "refused" else ""
+            entry["milestone"] = re.findall(r"\bM[0-9]+\b", entry["message"])
+            print(f"ROW day={day} step={name} column={column} "
+                  f"verdict={entry['verdict']} exit={process['exit']}", flush=True)
+        shutil.rmtree(self.world)
+        shutil.copytree(oracle_post, self.world, symlinks=True)
+        self.rows.append(row)
+        # Persist after every checkpoint: a timeout never looks like completion.
+        self.save(False)
+
+    def save(self, complete):
+        payload = {"schema": 1, "complete": complete, "pins": PINS,
+                   "binaries": {k: {"path": v, "sha256": sha(Path(v).read_bytes())}
+                                for k, v in self.binaries.items()},
+                   "comparison": "exact raw files/modes including index and compression",
+                   "continuity": "oracle-advanced isolated checkpoints", "rows": self.rows}
+        (self.output / "census.json").write_text(json.dumps(payload, indent=2) + "\n")
+
+    def run(self):
+        s = self.step
+        s(1, "init", "init", "init")
+        self.write("repo/readme.txt", "one\ntwo\nthree\n")
+        s(1, "add-first-file", "add", "add", "readme.txt")
+        s(1, "commit-env-identity", "identity", "commit", "-m", "Start the project")
+        # Each standard config location supplies identity, without EMAIL or
+        # GIT_AUTHOR/COMMITTER_NAME/EMAIL. GIT_CONFIG_SYSTEM selects an owned file
+        # containing exactly the bytes otherwise read from /etc/gitconfig.
+        for location, path in (("repository", "repo/.git/config"),
+                               ("home", "home/.gitconfig"),
+                               ("xdg", "xdg/git/config"),
+                               ("system", "system.gitconfig")):
+            target = self.world / path
+            old = target.read_bytes() if target.exists() else None
+            self.write(path, (old or b"").decode() +
+                       "\n[user]\n\tname = Config User\n\temail = config@example.invalid\n")
+            s(1, f"identity-{location}", "identity", "commit", "--allow-empty", "-m",
+              f"Identity from {location}", identity=False)
+            if old is None:
+                target.unlink()
+            else:
+                target.write_bytes(old)
+        s(1, "log-pipe", "log", "log", "-1")
+        s(1, "log-terminal", "log", "log", "-1", terminal=True)
+        s(1, "log-decorate", "log", "log", "-1", "--decorate")
+        s(1, "show-first-week", "show", "show", "HEAD")
+        s(1, "status-clean", "status", "status")
+        self.write("repo/readme.txt", "one\nsecond\nthree\n")
+        s(1, "diff-worktree", "diff", "diff")
+        s(1, "add-edit", "add", "add", "readme.txt")
+        s(1, "diff-staged", "diff", "diff", "--cached")
+        s(1, "commit-edit", "commit", "commit", "-m", "Improve the readme")
+        s(2, "branch-create", "branch", "branch", "topic")
+        s(2, "branch-list", "branch", "branch")
+        s(2, "checkout-topic", "checkout", "checkout", "topic")
+        self.write("repo/topic.txt", "A small feature\n")
+        s(2, "add-feature", "add", "add", "topic.txt")
+        s(2, "commit-feature", "commit", "commit", "-m", "Add a feature")
+        s(2, "switch-main", "switch", "switch", "main")
+        s(2, "merge-fast-forward", "merge", "merge", "topic")
+        s(2, "switch-side", "switch", "switch", "-c", "side")
+        self.write("repo/side.txt", "Side work\n")
+        s(2, "add-side", "add", "add", "side.txt")
+        s(2, "commit-side", "commit", "commit", "-m", "Do side work")
+        s(2, "checkout-main", "checkout", "checkout", "main")
+        self.write("repo/main.txt", "Main work\n")
+        s(2, "add-main", "add", "add", "main.txt")
+        s(2, "commit-main", "commit", "commit", "-m", "Do main work")
+        s(2, "merge-three-way", "merge", "merge", "--no-edit", "side")
+        s(2, "show-merge", "show", "show", "HEAD")
+        s(3, "branch-conflict", "switch", "switch", "-c", "conflict")
+        self.write("repo/readme.txt", "one\nconflict side\nthree\n")
+        s(3, "add-conflict-side", "add", "add", "readme.txt")
+        s(3, "commit-conflict-side", "commit", "commit", "-m", "Change side wording")
+        s(3, "switch-main-again", "switch", "switch", "main")
+        self.write("repo/readme.txt", "one\nmain side\nthree\n")
+        s(3, "add-conflict-main", "add", "add", "readme.txt")
+        s(3, "commit-conflict-main", "commit", "commit", "-m", "Change main wording")
+        s(3, "merge-conflict", "merge", "merge", "--no-edit", "conflict", expected_exit=1)
+        s(3, "status-conflict", "status", "status")
+        self.write("repo/readme.txt", "one\nresolved wording\nthree\n")
+        s(3, "add-resolution", "add", "add", "readme.txt")
+        s(3, "commit-resolution", "commit", "commit", "-m", "Resolve the conflict")
+        s(3, "tag-lightweight", "tag", "tag", "v0.1")
+        s(3, "tag-annotated", "tag", "tag", "-a", "v0.2", "-m", "First week")
+        s(3, "tag-list", "tag", "tag")
+        self.write("repo/readme.txt", "one\nwork in progress\nthree\n")
+        s(3, "stash-push", "stash", "stash", "push", "-m", "Pause work")
+        s(3, "stash-list", "stash", "stash", "list")
+        s(3, "stash-pop", "stash", "stash", "pop")
+        s(3, "restore-worktree", "restore", "restore", "readme.txt")
+        s(3, "rename-file", "mv", "mv", "topic.txt", "feature.txt")
+        s(3, "reset-staging", "reset", "reset")
+        s(3, "reset-hard", "reset", "reset", "--hard", "HEAD")
+        # The unstaged rename target survived reset --hard as an untracked file.
+        (self.world / "repo/feature.txt").unlink()
+        s(3, "remove-file", "rm", "rm", "side.txt")
+        s(3, "restore-staged", "restore", "restore", "--staged", "side.txt")
+        s(3, "restore-removed", "restore", "restore", "side.txt")
+        s(4, "switch-replay", "switch", "switch", "-c", "replay")
+        self.write("repo/replay.txt", "Replay work\n")
+        s(4, "add-replay", "add", "add", "replay.txt")
+        s(4, "commit-replay", "commit", "commit", "-m", "Prepare replay")
+        s(4, "switch-main-replay", "switch", "switch", "main")
+        self.write("repo/base.txt", "Updated main\n")
+        s(4, "add-new-base", "add", "add", "base.txt")
+        s(4, "commit-new-base", "commit", "commit", "-m", "Advance main")
+        s(4, "switch-replay-again", "switch", "switch", "replay")
+        s(4, "rebase-explicit", "rebase", "rebase", "main")
+        s(4, "switch-main-pick", "switch", "switch", "main")
+        s(4, "cherry-pick", "cherry-pick", "cherry-pick", "replay")
+        self.write("repo/.gitignore", "build/\n*.scratch\n")
+        self.write("repo/build/cache", "ignored\n")
+        self.write("repo/draft.scratch", "ignored\n")
+        s(4, "ignore-status", "ignore", "status", "--short")
+        s(4, "ignore-check", "ignore", "check-ignore", "build/cache", "draft.scratch")
+        s(4, "add-ignore", "add", "add", ".gitignore")
+        s(4, "commit-ignore", "commit", "commit", "-m", "Ignore build output")
+        s(4, "config-write-local", "config", "config", "user.name", "Everyday User")
+        s(4, "config-write-email", "config", "config", "user.email", "everyday@example.invalid")
+        s(4, "config-get", "config", "config", "--get", "user.name")
+        s(4, "config-list", "config", "config", "--list")
+        s(4, "config-write-global", "config", "config", "--global", "user.name", "Everyday User")
+        s(4, "config-write-global-email", "config", "config", "--global", "user.email", "everyday@example.invalid")
+        s(5, "init-bare-peer", "init", "init", "--bare", "peer.git", cwd=".")
+        url = "file://" + str(self.world / "peer.git")
+        s(5, "remote-add", "remote", "remote", "add", "origin", url)
+        s(5, "remote-verbose", "remote", "remote", "-v")
+        s(5, "remote-set-url", "remote", "remote", "set-url", "origin", url)
+        s(5, "push-upstream", "push", "push", "-u", "origin", "main")
+        s(5, "status-upstream", "status", "status")
+        s(5, "clone-local-path", "clone", "clone", str(self.world / "peer.git"), "path-clone", cwd=".")
+        s(5, "clone-file-url", "clone", "clone", url, "clone", cwd=".")
+        s(5, "status-after-clone", "status", "status", cwd="clone")
+        s(5, "fetch-local-path", "fetch", "fetch", str(self.world / "peer.git"), cwd="clone")
+        s(5, "fetch-configured", "fetch", "fetch", cwd="clone")
+        self.write("repo/shared.txt", "Share work\n")
+        s(5, "add-shared", "add", "add", "shared.txt")
+        s(5, "commit-shared", "commit", "commit", "-m", "Share another change")
+        s(5, "push-configured", "push", "push")
+        s(5, "pull-configured", "pull", "pull", "--no-rebase", cwd="clone")
+        s(5, "status-after-pull", "status", "status", cwd="clone")
+        s(5, "blame-clean", "blame", "blame", "readme.txt", cwd="clone")
+        s(5, "log-week-end", "log", "log", "--oneline", "-5", terminal=True)
+        validate_rows(self.rows)
+        self.save(True)
+        print(f"PASS census-complete rows={len(self.rows)} columns=4", flush=True)
+
+
+def validate_rows(rows):
+    names = [r["step"] for r in rows]
+    if len(names) != len(set(names)):
+        raise ValueError("duplicate row")
+    if {r["family"] for r in rows} != FAMILIES:
+        raise ValueError("missing scenario families")
+    for row in rows:
+        if set(row["columns"]) != set(COLUMNS):
+            raise ValueError("missing columns")
+        oracle = row["columns"]["git"]
+        for column, entry in row["columns"].items():
+            expected = ("same" if column == "git" else
+                        classify(entry["process"], oracle["process"], entry["state"], oracle["state"]))
+            if entry["verdict"] != expected:
+                raise ValueError(f"changed verdict: {row['step']}/{column}")
+
+
+def self_test():
+    failures = []
+
+    def check(name, condition):
+        print(f"{'PASS' if condition else 'FAIL'} {name}", flush=True)
+        if not condition:
+            failures.append(name)
+
+    plain = result()
+    refused = result(2, err=b"den: not yet implemented: status upstream tracking\n")
+    check("refusal-is-not-parity", classify(refused, plain, {}, {}) == "refused")
+    check("fatal-error-is-refusal", classify(result(128, err=b"fatal: invalid\n"), plain, {}, {}) == "refused")
+    check("expected-conflict-is-not-refusal", classify(result(1), result(1), {}, {}) == "same")
+    check("stderr-is-compared", classify(result(err=b"warning\n"), plain, {}, {}) == "differs")
+    check("exit-is-compared", classify(result(), result(1), {}, {}) == "differs")
+    check("stdout-is-compared", classify(result(out=b"changed"), plain, {}, {}) == "differs")
+    check("state-is-compared", classify(plain, plain, {"index": "changed"}, {}) == "differs")
+    check("exact-is-same", classify(plain, plain, {"file": "bytes"}, {"file": "bytes"}) == "same")
+    sample = [{"step": family, "family": family, "columns": {
+        c: {"process": plain, "state": {}, "verdict": "same"} for c in COLUMNS}}
+              for family in sorted(FAMILIES)]
+    validate_rows(sample)
+    check("complete-table-accepted", True)
+    for name, rows in (("duplicate-row-rejected", sample + [sample[0]]),
+                       ("missing-family-rejected", sample[1:])):
+        try:
+            validate_rows(rows)
+        except ValueError:
+            check(name, True)
+        else:
+            check(name, False)
+    import copy
+    incomplete = copy.deepcopy(sample)
+    del incomplete[0]["columns"]["pax"]
+    try:
+        validate_rows(incomplete)
+    except ValueError:
+        check("missing-column-rejected", True)
+    else:
+        check("missing-column-rejected", False)
+    mutated = copy.deepcopy(sample)
+    mutated[0]["columns"]["pax"]["verdict"] = "differs"
+    try:
+        validate_rows(mutated)
+    except ValueError:
+        check("changed-verdict-rejected", True)
+    else:
+        check("changed-verdict-rejected", False)
+    try:
+        capture([sys.executable, "-I", "-c", "import time; time.sleep(2)"],
+                Path.cwd(), dict(os.environ), timeout=0.05)
+    except subprocess.TimeoutExpired:
+        check("timeout-is-not-a-verdict", True)
+    else:
+        check("timeout-is-not-a-verdict", False)
+    return bool(failures)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--self-test", action="store_true")
+    parser.add_argument("--output", type=Path)
+    parser.add_argument("--verify", type=Path)
+    for column in COLUMNS:
+        parser.add_argument("--" + column, type=Path)
+    args = parser.parse_args()
+    if args.self_test:
+        return self_test()
+    if args.verify:
+        payload = json.loads(args.verify.read_text())
+        if payload.get("complete") is not True:
+            raise ValueError("incomplete census")
+        validate_rows(payload["rows"])
+        blobs = args.verify.parent / "blobs"
+        for row in payload["rows"]:
+            for state in [row["input"], *(e["state"] for e in row["columns"].values())]:
+                for entry in state.values():
+                    if "sha256" in entry and sha((blobs / entry["sha256"]).read_bytes()) != entry["sha256"]:
+                        raise ValueError("changed state blob")
+        print(f"PASS census-evidence-verified rows={len(payload['rows'])}")
+        return 0
+    if args.output is None or any(getattr(args, c) is None for c in COLUMNS):
+        parser.error("--output and all four binary columns are required")
+    if sys.platform != "linux" or os.environ.get("DEN_IN_CONTAINER") != "1":
+        parser.error("measurement requires the Linux oracle container")
+    if any(Path(p).exists() for p in ("/usr/share/zoneinfo/UTC", "/etc/localtime")):
+        # /etc/localtime may be an empty regular bind mount, never a database.
+        if Path("/usr/share/zoneinfo/UTC").exists() or Path("/etc/localtime").stat().st_size:
+            parser.error("zone database must be absent")
+    binaries = {c: str(getattr(args, c).resolve()) for c in COLUMNS}
+    if sha(Path(binaries["git"]).read_bytes()) != GIT_SHA256:
+        raise ValueError("oracle binary pin mismatch")
+    version = subprocess.check_output([binaries["git"], "--version"], text=True).strip()
+    if version != "git version 2.56.0":
+        raise ValueError("oracle version mismatch")
+    Census(args.output.resolve(), binaries).run()
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except (ValueError, RuntimeError, OSError, subprocess.SubprocessError) as exc:
+        print(f"FAIL census-infrastructure {exc}", file=sys.stderr)
+        sys.exit(1)
