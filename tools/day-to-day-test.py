@@ -213,6 +213,55 @@ def suite():
                     print('  expected', expected, 'actual', actual, flush=True)
                 dest.unlink(missing_ok=True)
                 (base / '.git/config').write_bytes(original)
+        def special(name, args, prepare):
+            prepare()
+            input_state = state(base)
+            expected = run(G, args, changes=changes)
+            expected_state = state(base)
+            prepare()
+            actual = run(D, args, changes=changes)
+            actual_state = state(base)
+            ok = expected == actual and expected_state == actual_state
+            rows.append({'name': name, 'args': args, 'environment': changes,
+                         'input_state': input_state, 'expected': expected, 'actual': actual,
+                         'states': [expected_state, actual_state], 'equal': ok})
+            print(('PASS' if ok else 'FAIL'), name, flush=True)
+            if not ok:
+                print('  expected', expected, 'actual', actual, flush=True)
+
+        def clear_special():
+            for path in [base / 'chosen.config', base / 'target.config', base / 'alias.config', home / '.gitconfig']:
+                path.unlink(missing_ok=True)
+            (base / '.git/config').write_bytes(original)
+
+        for destination, options in [(base / 'chosen.config', ['--file', 'chosen.config']), (home / '.gitconfig', ['--global'])]:
+            special('config-new-' + ('global' if '--global' in options else 'file'),
+                    ['config', *options, 'demo.value', 'new'], clear_special)
+
+        def default_local():
+            clear_special()
+            (base / '.git/config').write_bytes(original + initial)
+        special('config-default-local', ['config', 'demo.value', 'new'], default_local)
+
+        def regular():
+            clear_special()
+            (base / 'chosen.config').write_bytes(initial)
+        def linked():
+            regular()
+            (base / 'alias.config').hardlink_to(base / 'chosen.config')
+        special('config-atomic-hardlink', ['config', '--file', 'chosen.config', 'demo.value', 'new'], linked)
+
+        def symlinked():
+            clear_special()
+            (base / 'target.config').write_bytes(initial)
+            (base / 'chosen.config').symlink_to('target.config')
+        special('config-symlink-target', ['config', '--file', 'chosen.config', 'demo.value', 'new'], symlinked)
+
+        def private_mode():
+            regular()
+            (base / 'chosen.config').chmod(0o600)
+        special('config-private-mode', ['config', '--file', 'chosen.config', 'demo.value', 'new'], private_mode)
+        clear_special()
         dest = base / 'chosen.config'
         dest.write_bytes(initial)
         (base / 'chosen.config.lock').write_text('foreign lock\n')

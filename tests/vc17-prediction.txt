@@ -27,3 +27,8 @@ limits rather than guesses.
 Native/release targeted matrices and the inherited full gauntlet must pass at the
 final committed head. A separate one-file/one-hunk plant on that head must fail a
 named new row locally. No production Git subprocess or implementation-source input.
+
+Supplement before the config path fix: the current publisher is expected to
+fail config-symlink-target by replacing the link instead of editing its target.
+New-file, default-local, private-mode and hardlink-atomicity rows are controls;
+the hardlink must retain old bytes after replacement of the selected file.
