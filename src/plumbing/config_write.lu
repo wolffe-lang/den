@@ -50,7 +50,8 @@ fn config_write(args: List[str]) -> int ! Errors {
             override
         } else {
             let home = env_get("HOME") else "."
-            let xdg = env_get("XDG_CONFIG_HOME") else "{home}/.config"
+            var xdg = env_get("XDG_CONFIG_HOME") else ""
+            if xdg == "" { xdg = "{home}/.config" }
             if !fs.exists("{home}/.gitconfig") && fs.exists("{xdg}/git/config") {
                 "{xdg}/git/config"
             } else {
