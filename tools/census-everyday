@@ -114,6 +114,8 @@ class Census:
         self.blobs.mkdir()
         self.world.mkdir()
         self.binaries = binaries
+        self.binary_identity = {k: {"path": v, "sha256": sha(Path(v).read_bytes())}
+                                for k, v in binaries.items()}
         self.rows = []
         self.names = set()
         self.clock = 1700000000
@@ -230,8 +232,7 @@ class Census:
 
     def save(self, complete):
         payload = {"schema": 1, "complete": complete, "pins": PINS,
-                   "binaries": {k: {"path": v, "sha256": sha(Path(v).read_bytes())}
-                                for k, v in self.binaries.items()},
+                   "binaries": self.binary_identity,
                    "comparison": "exact raw files/modes including index and compression",
                    "continuity": "oracle-advanced isolated checkpoints", "rows": self.rows}
         (self.output / "census.json").write_text(json.dumps(payload, indent=2) + "\n")
@@ -438,6 +439,37 @@ def self_test():
         check("timeout-is-not-a-verdict", True)
     else:
         check("timeout-is-not-a-verdict", False)
+    import tempfile
+    scratch = Path(os.environ.get("TMPDIR", "target/census-self-test"))
+    scratch.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="everyday-", dir=scratch) as directory:
+        fixture = Census(Path(directory) / "snapshot", {})
+        fixture.write("repo/file", "raw bytes\n")
+        before = fixture.snapshot()
+        fixture.write("repo/file", "different bytes\n")
+        after = fixture.snapshot()
+        check("filesystem-bytes-are-compared", before != after)
+        check("state-blobs-retain-raw-bytes",
+              (fixture.blobs / after["repo/file"]["sha256"]).read_bytes() == b"different bytes\n")
+        (fixture.world / "repo/file").chmod(0o755)
+        check("filesystem-modes-are-compared", fixture.snapshot() != after)
+        (fixture.world / "repo/link").symlink_to("file")
+        link = fixture.snapshot()["repo/link"]
+        check("symlinks-are-not-followed", link["kind"] == "symlink" and
+              (fixture.blobs / link["sha256"]).read_bytes() == b"file")
+        env = dict(os.environ, TMPDIR=str(scratch.resolve()))
+        command = [sys.executable, "-I", "-c",
+                   "import os; os.write(1,b'out\\n'); os.write(2,b'err\\n')"]
+        pipe, _ = capture(command, Path.cwd(), env)
+        terminal, _ = capture(command, Path.cwd(), env, terminal=True)
+        check("pty-preserves-stdout-stderr", pipe == terminal == result(0, b"out\n", b"err\n"))
+        try:
+            capture([sys.executable, "-I", "-c", "import time; time.sleep(2)"],
+                    Path.cwd(), env, terminal=True, timeout=0.05)
+        except subprocess.TimeoutExpired:
+            check("pty-timeout-is-not-a-verdict", True)
+        else:
+            check("pty-timeout-is-not-a-verdict", False)
     return bool(failures)
 
 
