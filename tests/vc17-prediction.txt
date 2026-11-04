@@ -59,3 +59,8 @@ Pruning dependency supplement, before the plan-driven fix: runner-prune-future-i
 recreates binary-reviewed followed by binary-strict-native. The planner names
 the required diffbinary-client; the current prune ignores that remaining-input
 list and should delete the client, producing this named red before the fix.
+
+Relocated client supplement: runner-ssh-owned-plan reaches only a mocked first
+network boundary. The old client must be red because it refuses the explicit
+satoyama/vc17 plan. The fix must accept that plan, reject foreign/escaping roots,
+and preserve the legacy kasumi/vc16 default without opening a network connection.

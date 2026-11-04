@@ -79,3 +79,29 @@ if ssh_leaf['argv'][ssh_leaf['argv'].index('--host')+1] != 'satoyama':
     print('FAIL runner-planned-ssh-host',flush=True)
     raise SystemExit(1)
 print('PASS runner-planned-ssh-host')
+# Exercise client preflight to the first network boundary, never performing SSH.
+import runpy
+import sys
+from unittest import mock
+client_module = runpy.run_path(str(root/'tools/ssh-test.py'))
+class NetworkBoundary(Exception):
+    pass
+
+def client_accepts(host, peer_root, planned_host=None, planned_root=None):
+    configured = {k:v for k,v in env.items() if k not in ('DEN_SSH_HOST','DEN_SSH_PEER_ROOT')}
+    if planned_host is not None: configured['DEN_SSH_HOST']=planned_host
+    if planned_root is not None: configured['DEN_SSH_PEER_ROOT']=planned_root
+    args=['ssh-test.py','--host',host,'--peer-root',peer_root,'--reservation-token','0'*64]
+    with mock.patch.dict(os.environ,configured,clear=True), mock.patch.object(sys,'argv',args), mock.patch.object(subprocess,'run',side_effect=NetworkBoundary):
+        try: client_module['main']()
+        except NetworkBoundary: return True
+        except (AssertionError,ValueError): return False
+    return False
+planned='/mnt/space/lanes/vc17/ssh-fixture'
+if not client_accepts('satoyama',planned,'satoyama',planned):
+    print('FAIL runner-ssh-owned-plan: client refuses the explicit satoyama fixture',flush=True)
+    raise SystemExit(1)
+assert not client_accepts('satoyama','/mnt/space/lanes/vc18/ssh-fixture','satoyama',planned)
+assert not client_accepts('satoyama','/mnt/space/lanes/vc17/../vc18/ssh-fixture','satoyama',planned)
+assert client_accepts('kasumi','/home/test/lanes/vc16/ssh-fixture')
+print('PASS runner-ssh-owned-plan: planned host/root accepted, foreign/escaping roots refused, legacy default retained')
