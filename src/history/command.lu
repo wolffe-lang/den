@@ -96,6 +96,7 @@ fn dispatch(args: List[str]) -> int ! worktree.WorkErrors {
         explicit_patch = false
     var mailmap = true, show_notes = true, explicit_notes = false, format_given = false
     var decoration = ctx.repo.config["log.decorate"] else "auto"
+    var color_mode = ctx.repo.config["color.log"] else (ctx.repo.config["color.ui"] else "auto")
     let root_diff = worktree.config_bool(ctx, "log.showroot", true)?
     var count = 100000, skip = 0, minimum = display.abbreviate
     var revisions = List[str](), i = 1
@@ -175,6 +176,10 @@ fn dispatch(args: List[str]) -> int ! worktree.WorkErrors {
             count = number(arg[1..])?
         } else if arg == "--" {
             if i + 1 < args.len { return Unsupported("history path limiting") }
+        } else if arg == "--decorate" {
+            decoration = "short"
+        } else if arg.starts_with("--decorate=") {
+            decoration = arg[11..]
         } else if arg == "--no-decorate" {
             decoration = "no"
         } else if arg == "--no-notes" {
@@ -185,7 +190,9 @@ fn dispatch(args: List[str]) -> int ! worktree.WorkErrors {
             explicit_notes = true
         } else if arg == "--no-mailmap" {
             mailmap = false
-        } else if arg == "--no-color" || arg == "--color=never" {} else if arg.starts_with("-") {
+        } else if arg == "--no-color" || arg == "--color=never" {
+            color_mode = "never"
+        } else if arg.starts_with("-") {
             return Unsupported("{args[0]} option {arg}")
         } else {
             (mut revisions).push(arg)
@@ -198,10 +205,19 @@ fn dispatch(args: List[str]) -> int ! worktree.WorkErrors {
             return Unsupported("history local timezone {tz}")
         }
     }
-    if decoration != "no" && decoration != "false" && decoration != "auto" ||
-        decoration == "auto" && (os_isatty(fs.stdout().fd) else false) {
-        return Unsupported("history decorations")
+    let terminal = os_isatty(fs.stdout().fd) else false
+    decoration = match decoration.lower() {
+        "true" | "yes" | "on" | "1" => "short",
+        "false" | "off" | "0" | "no" => "no",
+        "auto" => if terminal then "short" else "no",
+        "short" => "short",
+        "full" => "full",
+        _ => { return Fatal("invalid value for 'log.decorate': {decoration}") },
     }
+    let color = color_mode == "always" || color_mode == "true" || color_mode == "1" ||
+        color_mode == "auto" && terminal && (env_get("TERM") else "dumb") != "dumb"
+    var labels = List[Decoration]()
+    if decoration != "no" { labels = decorations(ctx.repo)? }
     if worktree.config_bool(ctx, "log.showsignature", false)? {
         return Unsupported("history signatures")
     }
@@ -338,7 +354,7 @@ fn dispatch(args: List[str]) -> int ! worktree.WorkErrors {
             Unsupported(feature) => { return Unsupported(feature) },
             _ => { return invalid },
         }
-        add(mut out, formatted)
+        add(mut out, history_header(formatted, value.id, format, labels, decoration == "full", color)?)
         if displayed && notes.find(annotations, value.id).len > 0 {
             if format != "medium" { return Unsupported("history notes in {format} format") }
             if display.patch && display.stat {
