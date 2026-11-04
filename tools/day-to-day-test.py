@@ -217,7 +217,7 @@ def suite():
                 actual_state = state(base)
                 ok = expected == actual and expected_state == actual_state
                 name = 'config-' + scope + '-' + label
-                rows.append({'name': name, 'args': args, 'environment': changes, 'input': content.hex(), 'input_state': input_state, 'expected': expected, 'actual': actual, 'states': [expected_state, actual_state], 'equal': ok})
+                rows.append({'name': name, 'args': args, 'environment': dict(changes), 'input': content.hex(), 'input_state': input_state, 'expected': expected, 'actual': actual, 'states': [expected_state, actual_state], 'equal': ok})
                 print(('PASS' if ok else 'FAIL'), name, flush=True)
                 if not ok:
                     print('  expected', expected, 'actual', actual, flush=True)
@@ -232,7 +232,7 @@ def suite():
             actual = run(D, args, changes=changes)
             actual_state = state(base)
             ok = expected == actual and expected_state == actual_state
-            rows.append({'name': name, 'args': args, 'environment': changes,
+            rows.append({'name': name, 'args': args, 'environment': dict(changes),
                          'input_state': input_state, 'expected': expected, 'actual': actual,
                          'states': [expected_state, actual_state], 'equal': ok})
             print(('PASS' if ok else 'FAIL'), name, flush=True)
@@ -240,13 +240,31 @@ def suite():
                 print('  expected', expected, 'actual', actual, flush=True)
 
         def clear_special():
-            for path in [base / 'chosen.config', base / 'target.config', base / 'alias.config', home / '.gitconfig']:
+            for path in [base / 'chosen.config', base / 'target.config', base / 'alias.config', home / '.gitconfig', home / '.config/git/config']:
                 path.unlink(missing_ok=True)
             (base / '.git/config').write_bytes(original)
 
         for destination, options in [(base / 'chosen.config', ['--file', 'chosen.config']), (home / '.gitconfig', ['--global'])]:
             special('config-new-' + ('global' if '--global' in options else 'file'),
                     ['config', *options, 'demo.value', 'new'], clear_special)
+
+        def new_local():
+            clear_special()
+            (base / '.git/config').unlink()
+        special('config-new-local', ['config', '--local', 'demo.value', 'new'], new_local)
+
+        def xdg_only():
+            clear_special()
+            (home / '.config/git/config').write_bytes(initial)
+        changes['XDG_CONFIG_HOME'] = ''
+        special('config-global-empty-xdg', ['config', '--global', 'demo.value', 'new'], xdg_only)
+        changes['XDG_CONFIG_HOME'] = str(home / '.config')
+
+        def unrelated_bad_local():
+            clear_special()
+            (base / '.git/config').write_bytes(original + b'[broken\n')
+            (base / 'chosen.config').write_bytes(initial)
+        special('config-file-ignores-local', ['config', '--file', 'chosen.config', 'demo.value', 'new'], unrelated_bad_local)
 
         def default_local():
             clear_special()

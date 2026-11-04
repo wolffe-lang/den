@@ -39,3 +39,12 @@ and named mismatch/escape refusals should fail against the current helper.
 Synthetic test homes and every installed fixture stay below this checkout's
 owned target directory and are removed after the row. No service is executed
 by these scope units; the live leg independently verifies the real Git pin.
+
+Full-gauntlet follow-up: strict no-database revision ambiguity diagnostics are
+red in both loose/packed commit/tag collision rows because their hint renderer
+still requests the database name UTC. Switching that civil lookup to UTC0
+should preserve the hint bytes and restore the intended exit 128.
+Before the scope follow-up, config-new-local, config-global-empty-xdg and
+config-file-ignores-local are expected to expose discovery/preflight/default
+selection gaps. Their inputs and scoped environment must remain captured;
+reference behavior is measured before changing those paths.
