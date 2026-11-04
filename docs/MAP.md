@@ -27,6 +27,51 @@ beneath object lookup; pack construction is separate from housekeeping and trans
 OID design keeps an algorithm and a byte list from the start, never a fixed
 20-byte public type. SHA-256 is available in the hash adapter already.
 
+## Daily history and configuration
+
+UTC civil rendering uses the explicit POSIX zone `UTC0`, not a zone-database
+lookup for `UTC`. Stored numeric offsets are still applied explicitly. Missing
+TZ data falls back to UTC for history-local dates and commit summaries; valid
+non-UTC local zones retain their existing named refusal. The command/ref/reflog
+identity boundaries remain shared, with no new reflog-management verb.
+
+History supports `--decorate`, `--decorate=short|full|no|auto`, `--no-decorate`
+and `log.decorate`. Auto is enabled only for terminal stdout. HEAD comes first,
+with its attached branch folded into the arrow; other allowed refs use the
+measured reverse-refname order. Tags peel through the existing object parser.
+The command edge adds decoration and the measured default terminal palette;
+`pretty.render` keeps its existing pure signature. Custom filters/palettes and
+the inherited history limits remain outside this surface. Ref enumeration is
+bounded by the shared 4,096-ref limit, tag depth by 64 and tag-read payload by
+128 MiB; these are operation bounds, not peak-RSS promises.
+
+`repository.config_update(text, key, value, action)` prepares legacy set/add/
+unset/unset-all/replace-all edits, returning owned text and status 0 or 5.
+The raw-span scanner shares the existing config grammar, preserving comments,
+unrelated assignments and section bytes, including mixed CRLF and continued
+values. Quoting follows the measured writer bytes; the parser's backspace
+escape and the writer's literal backspace are deliberately distinct.
+`publish_config_path` reserves an exclusive lock, rechecks the original bytes,
+preserves modes, syncs the complete file, atomically renames and syncs its parent.
+A post-rename sync error can leave the complete new file visible. Files remain
+bounded at 1 MiB. Remote/tracking edits retain their separate earlier limits.
+
+The config command writes local (default), global and explicit files. Global
+selection observes HOME, XDG and the explicit global override. Missing unsets
+and multiple scalar assignments return 5, with measured multiple-value warning
+bytes. System writes, worktree scope and value-pattern/regexp operations remain
+named unsupported options; includes retain their existing refusal.
+
+`tools/day-to-day-test.py` retains process bytes/status, complete input/output
+file states and independent index-stat proofs. `check-history` and `check-config`
+run the native/release rows alongside the inherited gates; pure config-writer
+units also run on the actual checked machine. Date captures explicitly record
+whether the system zone database is absent. The dedicated container pass sets
+`DEN_REQUIRE_NO_DATABASE=1` (or `--require-no-database`) and mounts empty zone
+data plus an empty localtime file. The ordinary CI empty-TZDIR rows do not
+substitute for that physical no-database measurement. There are no skipped rows
+or normalizations of ANSI bytes, config bytes or unproven index differences.
+
 ## Wire API boundaries
 
 - `pktline.header`, `encode`, `decode`, `text`: binary framing with the 65,520-byte
@@ -860,7 +905,7 @@ by distinct names. Repo.config remains a last-value scalar map (implicit=true);
 `config --get` preserves raw implicit output as an empty line. The
 `configuration_diagnostics`/`check_config` boundary carries contextual CLI
 errors without changing object APIs' RepoErrors. Files are capped at 1 MiB and
-runtime pairs at 65,536. This is a reader, not a general config editor.
+runtime pairs at 65,536. The reader feeds the bounded config writer described above.
 
 Keys currently consulted (canonical matching is case-insensitive except quoted
 subsections); entries marked refusal controls do not imply feature support:
