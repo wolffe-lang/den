@@ -41,7 +41,7 @@ fn decorations(repo: repository.Repo) -> List[Decoration] ! worktree.WorkErrors 
     }
     let names = refs.list(repo, "refs/")?
     for n in 0..names.len {
-        let record = names[names.len - 1 - n]
+        let record = copy names[names.len - 1 - n]
         if !origin.detached && record.name == origin.reference { continue }
         let kind = if record.name.starts_with("refs/tags/") {
             "tag"
