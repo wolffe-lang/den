@@ -33534,8 +33534,7 @@
               "kind": "real-content"
             },
             "clone/.git/logs/refs/remotes/origin/main": {
-              "kind": "clone-storage-layout-unproved",
-              "note": "Loose versus packed storage observed; no namespace-equivalence proof claimed."
+              "kind": "real-content"
             },
             "clone/.git/objects/00": {
               "kind": "directory-layout"
@@ -34904,8 +34903,7 @@
               "kind": "real-content"
             },
             "clone/.git/logs/refs/remotes/origin/main": {
-              "kind": "clone-storage-layout-unproved",
-              "note": "Loose versus packed storage observed; no namespace-equivalence proof claimed."
+              "kind": "real-content"
             },
             "clone/.git/objects/00": {
               "kind": "directory-layout"
@@ -38836,8 +38834,8 @@
     "directory-layout": 80,
     "index-stat-fields-only": 152,
     "compressed-bytes-equal-inflated": 102,
-    "real-content": 9,
+    "real-content": 11,
     "config-quoting-equal-value": 2,
-    "clone-storage-layout-unproved": 90
+    "clone-storage-layout-unproved": 88
   }
 }
