@@ -54,3 +54,8 @@ also matched: both tools reject the malformed repository config with exit 128;
 its label is now config-file-bad-local-preflight, not an isolation promise.
 Only the empty-XDG row was red (same quiet success, different destination bytes),
 so only the empty-XDG fallback required a scope implementation change.
+
+Pruning dependency supplement, before the plan-driven fix: runner-prune-future-input
+recreates binary-reviewed followed by binary-strict-native. The planner names
+the required diffbinary-client; the current prune ignores that remaining-input
+list and should delete the client, producing this named red before the fix.

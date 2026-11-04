@@ -49,7 +49,20 @@ oracle_negative() {
 leaf() {
     local name=$1 started=$SECONDS rc log replay=0
     shift
+    local inputs=
+    while [ "${1:-}" = --input ]; do
+        inputs="${inputs}${2}"$'\n'
+        shift 2
+    done
+    if [ "${1:-}" = -- ]; then shift; fi
     if [ "$mode" = list ]; then printf '%s\t' "$name"; printf '%q ' "$@"; printf '\n'; return 0; fi
+    if [ "$mode" = plan ]; then
+        python3 -I - "$name" "$inputs" "$@" <<'PLAN'
+import json,sys
+print(json.dumps(dict(name=sys.argv[1],inputs=['target/native/den','target/release/den','target/oracle/**','.wolf-bin/**']+sys.argv[2].splitlines(),argv=sys.argv[3:])))
+PLAN
+        return 0
+    fi
     case "$name" in ''|*[!A-Za-z0-9_.:/-]*) echo 'invalid leaf name' >&2; return 2;; esac
     log="$logs/${name//\//_}.log"
     printf 'START %s\n' "$name"
@@ -70,8 +83,9 @@ case "${1:-}" in
 --internal-binary-strict) binary_strict "${2:?tier}"; exit $?;;
 --internal-oracle-negative) oracle_negative; exit $?;;
 --list) mode=list;;
+--plan) mode=plan;;
 '') ;;
-*) echo 'usage: tools/gate-record [--list | --leaf NAME COMMAND ARGS...]' >&2; exit 2;;
+*) echo 'usage: tools/gate-record [--list | --plan | --leaf NAME COMMAND ARGS...]' >&2; exit 2;;
 esac
 
 leaf runner-test python3 -I tools/gate-record-test.py
@@ -104,9 +118,9 @@ leaf diff-units tools/check-diff --units-only
 leaf hash-checked tools/check-test
 leaf tls-local env TLS_PROBE_LOCAL_ONLY=1 tools/probe-tls
 leaf corpus tools/corpus target/corpus --prove-twice
-leaf packed-read tools/check-pack
-leaf packed-write tools/check-pack-write
-leaf codec tools/check-codec
+leaf packed-read --input 'target/native/*-client' --input 'target/release/*-client' -- tools/check-pack
+leaf packed-write --input target/stash-native/fixtures --input target/stash-release/fixtures --input target/pack-interop-native --input target/pack-interop-release -- tools/check-pack-write
+leaf codec --input target/corpus -- tools/check-codec
 leaf objects tools/check-objects
 leaf config tools/check-config
 leaf index tools/check-index
@@ -118,13 +132,13 @@ leaf rename tools/check-rename
 leaf diff-corpus tools/check-diff --corpus-only
 leaf binary-reviewed tools/check-diffbinary --reviewed-body --with-cli
 for tier in native release; do
-    leaf "binary-strict-$tier" tools/gate-record --internal-binary-strict "$tier"
+    leaf "binary-strict-$tier" --input "target/$tier/diffbinary-client" -- tools/gate-record --internal-binary-strict "$tier"
 done
-leaf oracle-selftest tools/oracle --selftest
-leaf oracle tools/oracle
-leaf oracle-negative tools/gate-record --internal-oracle-negative
-leaf static tools/mkden target/dist
+leaf oracle-selftest --input target/corpus -- tools/oracle --selftest
+leaf oracle --input target/corpus -- tools/oracle
+leaf oracle-negative --input target/corpus -- tools/gate-record --internal-oracle-negative
+leaf static --input target/corpus -- tools/mkden target/dist
 if [ -n "${DEN_SSH_PEER_ROOT:-}" ]; then
     leaf ssh-interop tools/check-ssh --host kasumi --peer-root "$DEN_SSH_PEER_ROOT"
 fi
-leaf collect-evidence python3 -I tools/collect-diff-evidence.py
+leaf collect-evidence --input 'target/**/*.json' --input 'target/**/*.record' --input 'target/**/*.log' --input target/diffbinary-native --input target/diffbinary-release --input target/runs -- python3 -I tools/collect-diff-evidence.py
