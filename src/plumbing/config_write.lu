@@ -3,20 +3,20 @@ use std.fs
 use repository
 
 fn config_write(args: List[str]) -> int ! Errors {
-    var action = "set", scope = "local", explicit_file = "", i = 1
+    var action = "set", destination_scope = "local", explicit_file = "", i = 1
     while i < args.len && args[i].starts_with("-") {
         let arg = args[i]
-        if arg == "--local" { scope = "local" }
-        else if arg == "--global" { scope = "global" }
+        if arg == "--local" { destination_scope = "local" }
+        else if arg == "--global" { destination_scope = "global" }
         else if arg == "--system" { return Unsupported("config --system writes") }
         else if arg == "--file" || arg == "-f" {
             i += 1
             if i >= args.len { return Unsupported("config options") }
             explicit_file = args[i]
-            scope = "file"
+            destination_scope = "file"
         } else if arg.starts_with("--file=") {
             explicit_file = arg[7..]
-            scope = "file"
+            destination_scope = "file"
         } else if arg == "--add" { action = "add" }
         else if arg == "--unset" { action = "unset" }
         else if arg == "--unset-all" { action = "unset-all" }
@@ -32,10 +32,10 @@ fn config_write(args: List[str]) -> int ! Errors {
         return 1
     }
     let value = if unset then "" else args[i + 1]
-    let path = if scope == "file" {
+    let path = if destination_scope == "file" {
         if explicit_file == "" { return Unsupported("config empty --file") }
         explicit_file
-    } else if scope == "global" {
+    } else if destination_scope == "global" {
         let override = env_get("GIT_CONFIG_GLOBAL") else ""
         if override != "" { override } else {
             let home = env_get("HOME") else "."
