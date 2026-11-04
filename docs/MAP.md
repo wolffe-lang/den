@@ -534,6 +534,13 @@ is needed beyond referring to the equivalent `DeflateErrors` alias.
 
 ## Harness, evidence and CI
 
+`tools/gate-record --plan` declares each leaf's generated-file inputs. Completed
+workspace pruning consumes the remaining plan and refuses to guess when that
+plan is missing; required files and directories survive until their last
+consumer. The runner regression reproduces the reviewed/strict binary-report
+boundary and retains its client. The live SSH host is explicit in the plan.
+
+
 `tools/corpus` defines 16 repositories: the original nine object/history
 fixtures plus ignore, staged rename, modes/symlink, unborn, amend, index-v4 and
 edited-rename states. The original nine builders remain unchanged. The two

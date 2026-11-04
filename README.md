@@ -133,6 +133,8 @@ History has a separate exact command/state matrix on native and release,
 bounded actual-checked units and an independent package client. The inherited
 diff exceptions remain separately counted. Module/prose changes use final-head local gauntlet and plant evidence;
 cross-cutting changes retain the labelled CI gate described below.
+The gauntlet also publishes a generated-input plan; operational pruning retains
+every input named by a remaining leaf, including the strict binary-report client.
 Object, pack and protocol algorithms have no Git, Python, zlib or OpenSSL
 implementation dependency. The file transport starts the selected remote service
 executable: Git's service by default, or native den service probes through
