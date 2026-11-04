@@ -573,6 +573,11 @@ binding mutations and 12 live Mac-to-kasumi SSH groups are counted separately.
 See MAP for the auto-identity and service-sideband diagnostic limits. These
 measurements do not complete M5 or remove any M3 limit.
 
+Owned SSH fixtures accept an explicit `ssh-peer.py --lane` owner; the default
+retains the earlier fixture contract. Mismatched owners and paths escaping their
+lane directory are refused before fixture writes. This changes only the test
+endpoint, not SSH configuration, keys or the supported wire protocols.
+
 ## Loose objects and historical measurements
 
 Objects own their binary data and algorithm-tagged IDs. Reads validate zlib,
