@@ -180,6 +180,11 @@ fixture directory. Those wrappers export GIT_PROTOCOL=version=2 and exec the
 pinned services. They do not change sshd or SSH configuration, install keys, or
 provide a protocol fallback.
 
+The fixture installer accepts `--lane` (legacy default `vc16`). Its root guard
+checks the declared owner and resolves symlinks before writing; mismatches and
+path escapes fail by name. Default fixture config/service bytes are regression
+tested, and scope units use synthetic homes confined to their own checkout.
+
 System SSH starts with an argv vector and separately quoted literal remote
 program/path arguments. URI/scp-like paths, user/port parsing and pre-exec option
 injection/control validation share one transport boundary. IPv6 and encoded SSH
