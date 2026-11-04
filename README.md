@@ -107,7 +107,7 @@ tools/check-pack                   # after corpus and inherited client builds
 tools/check-pack-write             # after check-pack/check-stash; interop, sizes, commands and corruption
 tools/check-wire                   # file/git peers, received streams and configured porcelain
 tools/check-porcelain              # remote/tracking, typed push, leases, pull and checked units
-tools/check-ssh --host kasumi --peer-root OWNED_PINNED_FIXTURE # live system-SSH leg
+tools/check-ssh --host PEER --peer-root OWNED_PINNED_FIXTURE # live system-SSH leg
 tools/check-housekeeping           # closure, verified retirement/recovery, validator and checked parser
 tools/check-delta
 tools/check-rename
@@ -571,14 +571,16 @@ and 26 pull groups. The typed matrix compares acceptance and resulting refs,
 not exact failure text/status; complete raw outputs are retained. Other groups
 compare full process results and repository state, with one exact-input-bound
 receive-service stderr REVIEW rather than a parity pass. Pure units, review
-binding mutations and 12 live Mac-to-kasumi SSH groups are counted separately.
+binding mutations and 12 live Mac-to-peer SSH groups are counted separately.
 See MAP for the auto-identity and service-sideband diagnostic limits. These
 measurements do not complete M5 or remove any M3 limit.
 
 Owned SSH fixtures accept an explicit `ssh-peer.py --lane` owner; the default
 retains the earlier fixture contract. Mismatched owners and paths escaping their
-lane directory are refused before fixture writes. This changes only the test
-endpoint, not SSH configuration, keys or the supported wire protocols.
+lane directory are refused before fixture writes. The live client takes its
+host and fixture root from the plan (`DEN_SSH_HOST`, `DEN_SSH_PEER_ROOT`) and
+refuses any other before network access. This changes only the test endpoint,
+not SSH configuration, keys or the supported wire protocols.
 
 ## Loose objects and historical measurements
 
