@@ -17,6 +17,8 @@ R = Path(__file__).resolve().parent.parent
 p = argparse.ArgumentParser()
 p.add_argument('--tier', default='native')
 p.add_argument('--family', choices=['dates', 'decorations', 'config'], required=True)
+p.add_argument('--require-no-database', action='store_true',
+               help='require the dedicated container with no system zone files')
 a = p.parse_args()
 G = Path(os.environ['DEN_GIT'])
 D = R / 'target' / a.tier / 'den'
@@ -28,6 +30,7 @@ base = root / 'base'
 base.mkdir()
 env = dict(os.environ)
 rows = []
+zone_fixture = {}
 
 def run(exe, args, cwd=base, changes=None, terminal=False, data=None):
     e = dict(env)
@@ -119,7 +122,8 @@ def check(name, args, changes=None, terminal=False, mutate=False):
     ok = expected == actual and equal
     rows.append({'name': name, 'args': args, 'environment': changes, 'terminal': terminal,
                  'expected': expected, 'actual': actual, 'states': states, 'input_state': input_state,
-                 'index_proofs': index_proofs, 'index_proof_error': proof_error, 'equal': ok})
+                 'index_proofs': index_proofs, 'index_proof_error': proof_error,
+                 'zone_fixture': dict(zone_fixture), 'equal': ok})
     print(('PASS' if ok else 'FAIL'), name, flush=True)
     if not ok:
         print('  expected', expected, 'actual', actual, 'state-equal', equal,
@@ -132,8 +136,14 @@ def suite():
     g('add', 'file')
     g('commit', '-qm', 'first')
     if a.family == 'dates':
-        assert not Path('/usr/share/zoneinfo/UTC').exists(), 'run with an empty zone database'
-        assert not Path('/etc/localtime').exists() or Path('/etc/localtime').stat().st_size == 0
+        no_database = (not Path('/usr/share/zoneinfo/UTC').exists() and
+                       (not Path('/etc/localtime').exists() or Path('/etc/localtime').stat().st_size == 0))
+        if a.require_no_database:
+            assert no_database, 'dedicated no-database container required'
+        (root / 'empty-zones').mkdir()
+        zone_fixture.update(system_zone_database_absent=no_database,
+                            empty_tzdir=str(root / 'empty-zones'), required=a.require_no_database)
+        print('date fixture: empty TZDIR; system_zone_database_absent=' + str(no_database), flush=True)
         (base / 'file').write_text('one\ntwo\nchanged\n')
         g('stash', 'push', '-qm', 'saved')
         for zone in [None, 'UTC', 'Missing/Zone']:

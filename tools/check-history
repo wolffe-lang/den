@@ -16,6 +16,8 @@ for tier in native release; do
     done
     "$WOLF" build $flag --deny-warnings probes/history-client/main.lu -o "target/$tier/history-client"
     tools/env python3 -I tools/history-test.py --tier "$tier"
+    tools/env python3 -I tools/day-to-day-test.py --tier "$tier" --family dates
+    tools/env python3 -I tools/day-to-day-test.py --tier "$tier" --family decorations
 done
 for unit in pretty walk; do
     "$WOLF" conform-run "src/${unit}_test.lu" --checked --json > "target/${unit}-checked.json"

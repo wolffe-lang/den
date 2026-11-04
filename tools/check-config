@@ -1,5 +1,5 @@
 #!/bin/sh
-# Focused config gate, no Git invocation. Run only in the assigned Linux container.
+# Parser/writer units and exact scoped config command/state comparisons.
 set -eu
 DEN_ROOT=$(cd "$(dirname "$0")/.." && pwd)
 export DEN_ROOT
@@ -10,6 +10,8 @@ for tier in native release; do
     if [ "$tier" = release ]; then flag=--release; else flag=; fi
     "$WOLF" build $flag --deny-warnings src/config_test.lu -o "target/config/test-$tier"
     "target/config/test-$tier"
+    "$WOLF" build $flag --deny-warnings src/config_write_test.lu -o "target/config/write-$tier"
+    "target/config/write-$tier"
 done
 "$WOLF" conform-run src/config_test.lu --checked --json >target/config/checked.json
 cat target/config/checked.json
@@ -18,8 +20,16 @@ import json, sys
 rows = [json.loads(line) for line in open(sys.argv[1]) if line.startswith('{')]
 assert len(rows) == 1 and rows[0]['verdict'] == 'exit(0)', rows
 PY
+"$WOLF" conform-run src/config_write_test.lu --checked --json >target/config/write-checked.json
+cat target/config/write-checked.json
+python3 -I - target/config/write-checked.json <<'PYUNIT'
+import json, sys
+rows = [json.loads(line) for line in open(sys.argv[1]) if line.startswith('{')]
+assert len(rows) == 1 and rows[0]['verdict'] == 'exit(0)', rows
+PYUNIT
 tools/build --all
 for tier in native release; do
     python3 -I tools/config-test.py --tier "$tier"
+    tools/env python3 -I tools/day-to-day-test.py --tier "$tier" --family config
 done
-echo 'config: native/release parser and CLI, checked parser; no oracle measurements'
+echo 'config: native/release parser/writer and exact scoped writes; actual checked units; zero skips'

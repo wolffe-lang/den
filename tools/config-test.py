@@ -196,6 +196,8 @@ escaped = "a\\nb\\tc\\b\\"\\\\z"
                     ['config', '--get'], ['config', '--get', 'test.priority', 'extra']]:
         run(command, expected=2, error=b'config options')
 
+    run(['config', '--system', 'demo.value', 'blocked'], expected=2, error=b'config --system writes')
+
     # Existing M1 init consumes the same scalar API; command scope wins globally.
     created = root / 'created'
     e = dict(env, GIT_CONFIG_COUNT='1', GIT_CONFIG_KEY_0='init.defaultBranch',
