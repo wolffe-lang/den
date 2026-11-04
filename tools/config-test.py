@@ -192,9 +192,9 @@ escaped = "a\\nb\\tc\\b\\"\\\\z"
     assert result.stderr == b'error: key does not contain a section: bad\n'
     for key in ['.key', 'user.', 'user.1key', 'user.bad_key']:
         run(['config', '--get', key], expected=1, error=b'invalid config key')
-    for command in [['config'], ['config', 'user.name', 'write'], ['config', '--set', 'user.name', 'write'],
+    for command in [['config'], ['config', '--set', 'user.name', 'write'],
                     ['config', '--get'], ['config', '--get', 'test.priority', 'extra']]:
-        run(command, expected=2, error=b'only --get')
+        run(command, expected=2, error=b'config options')
 
     # Existing M1 init consumes the same scalar API; command scope wins globally.
     created = root / 'created'

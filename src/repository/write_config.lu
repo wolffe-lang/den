@@ -1,0 +1,143 @@
+// Lossless general config assignment edits, measured against git-config(1).
+use std.fs
+
+struct WriteSpan { key: str, start: int, end: int, section: int, inline: bool }
+struct WriteLayout { sections: List[ConfigSection], entries: List[WriteSpan] }
+
+fn write_layout(text: str) -> WriteLayout ! RepoErrors {
+    let _ = parse_config(text)?
+    var sections = List[ConfigSection](), entries = List[WriteSpan]()
+    var pos = if text.starts_with("\u{feff}") then 3 else 0
+    while pos < text.len {
+        let start = pos
+        while pos < text.len && config_space(text.bytes()[pos]) { pos += 1 }
+        if pos == text.len { break }
+        var begin = start, inline = false
+        if text.bytes()[pos] == 91 as byte {
+            let (name, next) = config_header(text, pos) else |_| { return invalid }
+            if sections.len > 0 { sections[sections.len - 1].end = start }
+            var line_end = next
+            while line_end < text.len && text.bytes()[line_end] != 10 as byte { line_end += 1 }
+            if line_end < text.len { line_end += 1 }
+            (mut sections).push(ConfigSection { name: name, start: start, body: line_end, end: text.len })
+            pos = next
+            begin = next
+            inline = true
+            while pos < text.len && config_space(text.bytes()[pos]) { pos += 1 }
+        }
+        if pos == text.len { break }
+        let b = text.bytes()[pos]
+        if b == 10 as byte || b == 13 as byte || b == 35 as byte || b == 59 as byte {
+            while pos < text.len && text.bytes()[pos] != 10 as byte { pos += 1 }
+            if pos < text.len { pos += 1 }
+            continue
+        }
+        if sections.len == 0 { return invalid }
+        let variable_start = pos
+        while pos < text.len && (config_alnum(text.bytes()[pos]) || text.bytes()[pos] == 45 as byte) { pos += 1 }
+        let variable = text[variable_start..pos].lower()
+        var quoted = false, comment = false
+        while pos < text.len {
+            let c = text.bytes()[pos]
+            if c == 10 as byte { pos += 1; break }
+            if !comment && c == 92 as byte {
+                pos += 1
+                if pos < text.len && text.bytes()[pos] == 13 as byte && pos + 1 < text.len && text.bytes()[pos + 1] == 10 as byte { pos += 1 }
+                if pos < text.len { pos += 1 }
+                continue
+            }
+            if !comment && c == 34 as byte { quoted = !quoted }
+            if !quoted && (c == 35 as byte || c == 59 as byte) { comment = true }
+            pos += 1
+        }
+        let section = sections.len - 1
+        (mut entries).push(WriteSpan { key: "{sections[section].name}.{variable}", start: begin, end: pos, section: section, inline: inline })
+    }
+    WriteLayout { sections: sections, entries: entries }
+}
+
+fn write_quote(value: str) -> str ! RepoErrors {
+    if value.contains("\0") { return invalid }
+    // Git writes BS literally, unlike the reader's supported \\b escape.
+    var out = value.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\t", "\\t")
+    if value.starts_with(" ") || value.ends_with(" ") || value.contains("#") || value.contains(";") { out = "\"{out}\"" }
+    out
+}
+
+/// Prepare one legacy set/add/unset/unset-all/replace-all operation without IO.
+/// Status 5 denotes a missing unset key or an ambiguous scalar; text stays raw.
+pub fn config_update(text: str, key: str, value: str, action: str) -> (str, int) ! RepoErrors {
+    if value.len > 1048576 { return limit }
+    let canonical = config_key(key)?
+    let dot = canonical.rfind(".") else { return invalid }
+    let name = canonical[0..dot], variable = canonical[dot + 1..]
+    let layout = write_layout(text)?
+    var matches = 0, last = -1
+    for i in 0..layout.entries.len {
+        if layout.entries[i].key == canonical { matches += 1; last = i }
+    }
+    let unset = action == "unset" || action == "unset-all"
+    if unset && matches == 0 || matches > 1 && (action == "set" || action == "unset") { return (copy text, 5) }
+    let line = if unset then "" else "\t{variable} = {write_quote(value)?}\n"
+    if matches > 0 && action != "add" {
+        var out = "", pos = 0
+        for i in 0..layout.entries.len {
+            let entry = copy layout.entries[i]
+            if entry.key != canonical { continue }
+            out += text[pos..entry.start]
+            if entry.inline { out += "\n" }
+            if !unset && i == last { out += line }
+            pos = entry.end
+        }
+        out += text[pos..]
+        if out.len > 1048576 { return limit }
+        return (out, 0)
+    }
+    var selected = -1
+    for i in 0..layout.sections.len { if layout.sections[i].name == name { selected = i } }
+    var out = ""
+    if selected < 0 {
+        let separator = if text == "" || text.ends_with("\n") then "" else "\n"
+        out = "{text}{separator}{edit_header(name)}\n{line}"
+    } else {
+        var at = layout.sections[selected].body
+        for entry in layout.entries { if entry.section == selected { at = entry.end } }
+        let separator = if at > 0 && text.bytes()[at - 1] != 10 as byte then "\n" else ""
+        out = "{text[0..at]}{separator}{line}{text[at..]}"
+    }
+    if out.len > 1048576 { return limit }
+    (out, 0)
+}
+
+/// Exclusive lock, predecessor comparison, full write/sync and atomic rename.
+/// Existing modes survive; a new file uses the ordinary creation umask.
+pub fn publish_config_path(path: str, before: str, after: str) -> () ! RepoErrors {
+    if after.len > 1048576 { return limit }
+    let _ = parse_config(after)?
+    let lock = "{path}.lock"
+    let file = fs.create_new_with_mode(lock, 0o666)?
+    var fd = file.fd, active = true
+    defer { if fd >= 0 { fs_close(fd) else |_| {} }; if active { fs.remove(lock) else |_| {} } }
+    let bytes = read_bytes(path, 1048576) else |e| match e {
+        not_found => List[byte](),
+        denied => { return denied }, io => { return io }, invalid => { return invalid },
+        exists => { return exists }, unsupported => { return unsupported }, limit => { return limit },
+        Unsupported(reason) => { return Unsupported(reason) },
+    }
+    let current = str_from_utf8(bytes) else |_| { return invalid }
+    if current != before { return Unsupported("configuration changed concurrently") }
+    if fs.exists(path) {
+        var prior = fs.open(path)?
+        defer fs.close(take prior) else |_| {}
+        let info = fs.fstat_record(mut prior)?
+        if !fs.answered(info, 4) { return Unsupported("config mode unavailable") }
+        fs.set_mode(lock, info.mode)?
+    }
+    fs_write_chunk(fd, after.bytes())?
+    fs_sync(fd)?
+    fs_close(fd)?
+    fd = -1
+    fs_rename(lock, path) else |_| { return io }
+    active = false
+    fs.sync_dir(fs.parent(path) else ".")?
+}

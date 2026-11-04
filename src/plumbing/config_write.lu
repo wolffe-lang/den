@@ -1,0 +1,75 @@
+// Legacy git-config writes, with a single explicitly selected destination file.
+use std.fs
+use repository
+
+fn config_write(args: List[str]) -> int ! Errors {
+    var action = "set", scope = "local", explicit_file = "", i = 1
+    while i < args.len && args[i].starts_with("-") {
+        let arg = args[i]
+        if arg == "--local" { scope = "local" }
+        else if arg == "--global" { scope = "global" }
+        else if arg == "--system" { return Unsupported("config --system writes") }
+        else if arg == "--file" || arg == "-f" {
+            i += 1
+            if i >= args.len { return Unsupported("config options") }
+            explicit_file = args[i]
+            scope = "file"
+        } else if arg.starts_with("--file=") {
+            explicit_file = arg[7..]
+            scope = "file"
+        } else if arg == "--add" { action = "add" }
+        else if arg == "--unset" { action = "unset" }
+        else if arg == "--unset-all" { action = "unset-all" }
+        else if arg == "--replace-all" { action = "replace-all" }
+        else { return Unsupported("config options") }
+        i += 1
+    }
+    let unset = action == "unset" || action == "unset-all"
+    if args.len - i != (if unset then 1 else 2) { return Unsupported("config options") }
+    let raw_key = args[i]
+    let key = repository.config_key(raw_key) else |_| {
+        eprint(repository.config_key_error(raw_key))
+        return 1
+    }
+    let value = if unset then "" else args[i + 1]
+    let path = if scope == "file" {
+        if explicit_file == "" { return Unsupported("config empty --file") }
+        explicit_file
+    } else if scope == "global" {
+        let override = env_get("GIT_CONFIG_GLOBAL") else ""
+        if override != "" { override } else {
+            let home = env_get("HOME") else "."
+            let xdg = env_get("XDG_CONFIG_HOME") else "{home}/.config"
+            if !fs.exists("{home}/.gitconfig") && fs.exists("{xdg}/git/config") {
+                "{xdg}/git/config"
+            } else { "{home}/.gitconfig" }
+        }
+    } else {
+        let repo = repository.discover(".")?
+        if fs.is_dir(".git") then ".git/config" else "{repo.gitdir}/config"
+    }
+    let bytes = repository.read_bytes(path, 1048576) else |e| match e {
+        not_found => List[byte](),
+        denied => { return denied }, io => { return io }, invalid => { return invalid },
+        exists => { return exists }, unsupported => { return unsupported }, limit => { return limit },
+        Unsupported(reason) => { return Unsupported(reason) },
+    }
+    let before = str_from_utf8(bytes)?
+    let (after, status) = repository.config_update(before, key, value, action)?
+    if status != 0 {
+        var matches = 0
+        for entry in repository.parse_config(before)? { if entry.key == key { matches += 1 } }
+        if matches > 1 {
+            eprint("warning: {raw_key} has multiple values")
+            if action == "set" {
+                eprint("error: cannot overwrite multiple values with a single value\n       Use a regexp, --add or --replace-all to change {raw_key}.")
+            }
+        }
+        return status
+    }
+    repository.publish_config_path(path, before, after) else |e| match e {
+        exists => { eprint("error: could not lock config file {path}: File exists"); return 255 },
+        _ => { return e },
+    }
+    0
+}

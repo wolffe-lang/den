@@ -494,11 +494,9 @@ fn mktree(args: List[str]) -> int ! Errors {
     0
 }
 
-// Read-only harness surface. No set/unset/edit spelling ever reaches a writer.
+// The existing unscoped --get reader keeps its original raw/implicit semantics.
 fn config(args: List[str]) -> int ! Errors {
-    if args.len != 3 || args[1] != "--get" {
-        return Unsupported("config (only --get <key> is supported)")
-    }
+    if args.len != 3 || args[1] != "--get" { return config_write(args)? }
     let key = repository.config_key(args[2]) else |_| {
         eprint(repository.config_key_error(args[2]))
         return 1
