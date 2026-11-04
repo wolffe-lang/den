@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Live SSH fixture leg. Caller holds the build host's lock; ssh-test reserves the
-# kasumi peer's slot and uses only its explicitly selected owned service paths.
+# planned peer's slot and uses only its explicitly selected owned service paths.
 set -eu
 DEN_ROOT=$(cd "$(dirname "$0")/.." && pwd)
 export DEN_ROOT

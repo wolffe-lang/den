@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Mac-to-kasumi SSH interop with an explicitly selected, pinned Git service.
-No Mac Git is an oracle here: expected canonical bodies/refs come from the pinned
-server, independently checked with zlib/SHA-1. A reservation owns its CPU slot.
+"""Mac-to-peer SSH interop with an explicitly planned host, owned root and pinned
+Git service. No Mac Git is an oracle here: expected canonical bodies/refs come
+from the pinned server, independently checked with zlib/SHA-1. A reservation
+owns its CPU slot.
 """
 import argparse
 import contextlib
@@ -9,21 +10,54 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import posixpath
+import re
 import selectors
 import shutil
 import subprocess
+import sys
 import zlib
+
+# vc16's recorded peer, and tools/gate-record's fallback host. The host applies
+# only when the plan names none (DEN_SSH_HOST); the owner check only when the
+# plan names no root (DEN_SSH_PEER_ROOT).
+LEGACY_HOST, LEGACY_OWNER = 'kasumi', '/lanes/vc16/'
+
+
+def planned_peer(host, peer_root, environ):
+    """Refuse, before any network access, a peer the explicit plan did not name."""
+    planned_host = environ.get('DEN_SSH_HOST') or LEGACY_HOST
+    planned_root = environ.get('DEN_SSH_PEER_ROOT') or None
+    if not isinstance(host, str) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9.-]*', host):
+        raise ValueError('ssh peer plan: invalid host')
+    if host != planned_host:
+        raise ValueError('ssh peer plan mismatch: host is not the planned host')
+    if not peer_root or not peer_root.startswith('/') or any(c in peer_root for c in (' ', "'", '\n', '\r', '\0')):
+        raise ValueError('ssh peer plan: unsafe root')
+    if posixpath.normpath(peer_root) != peer_root or peer_root.startswith('//'):
+        raise ValueError('ssh peer owner escape: root is not normalized')
+    parts = peer_root.split('/')[1:]
+    if not any(part == 'lanes' and re.fullmatch(r'[a-z][a-z0-9_-]*', parts[i + 1]) for i, part in enumerate(parts[:-2])):
+        raise ValueError('ssh peer owner escape: root is not inside a lane')
+    if planned_root is None:
+        if LEGACY_OWNER not in peer_root:
+            raise ValueError('ssh peer plan mismatch: no planned root, and root is not the vc16 default')
+    elif peer_root != planned_root:
+        raise ValueError('ssh peer plan mismatch: root is not the planned root')
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--host', default='kasumi')
+    parser.add_argument('--host', default=os.environ.get('DEN_SSH_HOST') or LEGACY_HOST)
     parser.add_argument('--peer-root', default=os.environ.get('DEN_SSH_PEER_ROOT'))
     parser.add_argument('--tier', default='native')
     parser.add_argument('--reservation-token', default=os.environ.get('DEN_SSH_RESERVATION_TOKEN'))
     a = parser.parse_args()
-    assert a.host == 'kasumi' and a.peer_root and '/lanes/vc16/' in a.peer_root
-    assert a.peer_root.startswith('/') and all(c not in a.peer_root for c in (' ', "'", '\n', '\r', '\0'))
+    try:
+        planned_peer(a.host, a.peer_root, os.environ)
+    except ValueError as error:
+        print('ssh-test: ' + str(error), file=sys.stderr, flush=True)
+        return 2
     root = Path(__file__).resolve().parent.parent
     out = root / 'target/runs' / ('wire-ssh-' + a.tier)
     out.mkdir(parents=True, exist_ok=True)
