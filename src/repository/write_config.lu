@@ -2,6 +2,7 @@
 use std.fs
 
 struct WriteSpan { key: str, start: int, end: int, section: int, inline: bool }
+
 struct WriteLayout { sections: List[ConfigSection], entries: List[WriteSpan] }
 
 fn write_layout(text: str) -> WriteLayout ! RepoErrors {
@@ -19,7 +20,12 @@ fn write_layout(text: str) -> WriteLayout ! RepoErrors {
             var line_end = next
             while line_end < text.len && text.bytes()[line_end] != 10 as byte { line_end += 1 }
             if line_end < text.len { line_end += 1 }
-            (mut sections).push(ConfigSection { name: name, start: start, body: line_end, end: text.len })
+            (mut sections).push(ConfigSection {
+                name: name,
+                start: start,
+                body: line_end,
+                end: text.len,
+            })
             pos = next
             begin = next
             inline = true
@@ -34,7 +40,8 @@ fn write_layout(text: str) -> WriteLayout ! RepoErrors {
         }
         if sections.len == 0 { return invalid }
         let variable_start = pos
-        while pos < text.len && (config_alnum(text.bytes()[pos]) || text.bytes()[pos] == 45 as byte) { pos += 1 }
+        while pos < text.len &&
+            (config_alnum(text.bytes()[pos]) || text.bytes()[pos] == 45 as byte) { pos += 1 }
         let variable = text[variable_start..pos].lower()
         var quoted = false, comment = false
         while pos < text.len {
@@ -42,7 +49,12 @@ fn write_layout(text: str) -> WriteLayout ! RepoErrors {
             if c == 10 as byte { pos += 1; break }
             if !comment && c == 92 as byte {
                 pos += 1
-                if pos < text.len && text.bytes()[pos] == 13 as byte && pos + 1 < text.len && text.bytes()[pos + 1] == 10 as byte { pos += 1 }
+                if pos < text.len &&
+                    text.bytes()[pos] == 13 as byte &&
+                    pos + 1 < text.len &&
+                    text.bytes()[pos + 1] == 10 as byte {
+                    pos += 1
+                }
                 if pos < text.len { pos += 1 }
                 continue
             }
@@ -51,7 +63,13 @@ fn write_layout(text: str) -> WriteLayout ! RepoErrors {
             pos += 1
         }
         let section = sections.len - 1
-        (mut entries).push(WriteSpan { key: "{sections[section].name}.{variable}", start: begin, end: pos, section: section, inline: inline })
+        (mut entries).push(WriteSpan {
+            key: "{sections[section].name}.{variable}",
+            start: begin,
+            end: pos,
+            section: section,
+            inline: inline,
+        })
     }
     WriteLayout { sections: sections, entries: entries }
 }
@@ -59,15 +77,29 @@ fn write_layout(text: str) -> WriteLayout ! RepoErrors {
 fn write_quote(value: str) -> str ! RepoErrors {
     if value.contains("\0") { return invalid }
     // Git writes BS literally, unlike the reader's supported \\b escape.
-    var out = value.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\t", "\\t")
-    if value.starts_with(" ") || value.ends_with(" ") || value.contains("#") || value.contains(";") { out = "\"{out}\"" }
+    var out = value.replace(
+        "\\",
+        "\\\\",
+    ).replace("\"", "\\\"").replace("\n", "\\n").replace("\t", "\\t")
+    if value.starts_with(" ") ||
+        value.ends_with(" ") ||
+        value.contains("#") ||
+        value.contains(";") {
+        out = "\"{out}\""
+    }
     out
 }
 
 /// Prepare one legacy set/add/unset/unset-all/replace-all operation without IO.
 /// Status 5 denotes a missing unset key or an ambiguous scalar; text stays raw.
 pub fn config_update(text: str, key: str, value: str, action: str) -> (str, int) ! RepoErrors {
-    if action != "set" && action != "add" && action != "unset" && action != "unset-all" && action != "replace-all" { return invalid }
+    if action != "set" &&
+        action != "add" &&
+        action != "unset" &&
+        action != "unset-all" &&
+        action != "replace-all" {
+        return invalid
+    }
     if value.len > 1048576 { return limit }
     let canonical = config_key(key)?
     let dot = canonical.rfind(".") else { return invalid }
@@ -78,7 +110,9 @@ pub fn config_update(text: str, key: str, value: str, action: str) -> (str, int)
         if layout.entries[i].key == canonical { matches += 1; last = i }
     }
     let unset = action == "unset" || action == "unset-all"
-    if unset && matches == 0 || matches > 1 && (action == "set" || action == "unset") { return (copy text, 5) }
+    if unset && matches == 0 || matches > 1 && (action == "set" || action == "unset") {
+        return (copy text, 5)
+    }
     let line = if unset then "" else "\t{variable} = {write_quote(value)?}\n"
     if matches > 0 && action != "add" {
         var out = "", pos = 0
@@ -121,8 +155,12 @@ pub fn publish_config_path(path: str, before: str, after: str) -> () ! RepoError
     defer { if fd >= 0 { fs_close(fd) else |_| {} }; if active { fs.remove(lock) else |_| {} } }
     let bytes = read_bytes(path, 1048576) else |e| match e {
         not_found => List[byte](),
-        denied => { return denied }, io => { return io }, invalid => { return invalid },
-        exists => { return exists }, unsupported => { return unsupported }, limit => { return limit },
+        denied => { return denied },
+        io => { return io },
+        invalid => { return invalid },
+        exists => { return exists },
+        unsupported => { return unsupported },
+        limit => { return limit },
         Unsupported(reason) => { return Unsupported(reason) },
     }
     let current = str_from_utf8(bytes) else |_| { return invalid }

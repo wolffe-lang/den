@@ -8,7 +8,11 @@ use worktree
 
 struct Decoration { name: str, id: oid.Oid, kind: str }
 
-fn tag_target(repo: repository.Repo, original: oid.Oid, mut charged: int) -> List[oid.Oid] ! worktree.WorkErrors {
+fn tag_target(
+    repo: repository.Repo,
+    original: oid.Oid,
+    mut charged: int,
+) -> List[oid.Oid] ! worktree.WorkErrors {
     var id = copy original
     for _ in 0..64 {
         let value = object.read_object(repo, id, 16777216)?
@@ -51,8 +55,14 @@ fn decorations(repo: repository.Repo) -> List[Decoration] ! worktree.WorkErrors 
             "branch"
         } else if record.name == "refs/stash" {
             "stash"
-        } else { continue }
-        let targets = if kind == "tag" then tag_target(repo, record.id, mut charged)? else [copy record.id]
+        } else {
+            continue
+        }
+        let targets = if kind == "tag" {
+            tag_target(repo, record.id, mut charged)?
+        } else {
+            [copy record.id]
+        }
         if targets.len > 0 {
             (mut out).push(Decoration { name: record.name, id: copy targets[0], kind: kind })
         }
@@ -73,14 +83,22 @@ fn decorated_name(name: str, full: bool) -> str {
     name
 }
 
-fn decoration_text(values: List[Decoration], id: oid.Oid, full: bool, color: bool) -> str ! worktree.WorkErrors {
+fn decoration_text(
+    values: List[Decoration],
+    id: oid.Oid,
+    full: bool,
+    color: bool,
+) -> str ! worktree.WorkErrors {
     var out = "", count = 0
     for value in values {
         if !oid.equal(value.id, id) { continue }
         if count > 0 { out += painted(", ", "33", color) }
         let name = decorated_name(value.name, full)
         out += match value.kind {
-            "head" => painted("HEAD", "1;36", color) + painted(" -> ", "33", color) + painted(name, "1;32", color),
+            "head" =>
+                painted("HEAD", "1;36", color) +
+                    painted(" -> ", "33", color) +
+                    painted(name, "1;32", color),
             "detached" => painted("HEAD", "1;36", color),
             "tag" => painted("tag: ", "1;33", color) + painted(name, "1;33", color),
             "remote" => painted(name, "1;31", color),
@@ -93,12 +111,21 @@ fn decoration_text(values: List[Decoration], id: oid.Oid, full: bool, color: boo
     painted(" (", "33", color) + out + painted(")", "33", color)
 }
 
-fn history_header(formatted: List[byte], id: oid.Oid, format: str, values: List[Decoration], full: bool, color: bool) -> List[byte] ! worktree.WorkErrors {
+fn history_header(
+    formatted: List[byte],
+    id: oid.Oid,
+    format: str,
+    values: List[Decoration],
+    full: bool,
+    color: bool,
+) -> List[byte] ! worktree.WorkErrors {
     // pretty.render stays a pure API with its existing signature. Only the
     // command edge replaces its first ID/header, preserving every body byte.
     var end = 0
     if format == "oneline" {
-        while end < formatted.len && formatted[end] != 32 as byte && formatted[end] != 10 as byte { end += 1 }
+        while end < formatted.len && formatted[end] != 32 as byte && formatted[end] != 10 as byte {
+            end += 1
+        }
     } else {
         while end < formatted.len && formatted[end] != 10 as byte { end += 1 }
     }

@@ -214,7 +214,9 @@ fn dispatch(args: List[str]) -> int ! worktree.WorkErrors {
         "full" => "full",
         _ => { return Fatal("invalid value for 'log.decorate': {decoration}") },
     }
-    let color = color_mode == "always" || color_mode == "true" || color_mode == "1" ||
+    let color = color_mode == "always" ||
+        color_mode == "true" ||
+        color_mode == "1" ||
         color_mode == "auto" && terminal && (env_get("TERM") else "dumb") != "dumb"
     var labels = List[Decoration]()
     if decoration != "no" { labels = decorations(ctx.repo)? }
@@ -354,7 +356,10 @@ fn dispatch(args: List[str]) -> int ! worktree.WorkErrors {
             Unsupported(feature) => { return Unsupported(feature) },
             _ => { return invalid },
         }
-        add(mut out, history_header(formatted, value.id, format, labels, decoration == "full", color)?)
+        add(
+            mut out,
+            history_header(formatted, value.id, format, labels, decoration == "full", color)?,
+        )
         if displayed && notes.find(annotations, value.id).len > 0 {
             if format != "medium" { return Unsupported("history notes in {format} format") }
             if display.patch && display.stat {

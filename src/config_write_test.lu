@@ -2,7 +2,15 @@
 
 use repository
 
-fn row(name: str, input: str, key: str, value: str, action: str, expected: str, code: int) -> bool ! repository.RepoErrors {
+fn row(
+    name: str,
+    input: str,
+    key: str,
+    value: str,
+    action: str,
+    expected: str,
+    code: int,
+) -> bool ! repository.RepoErrors {
     let (actual, status) = repository.config_update(input, key, value, action)?
     if actual == expected && status == code { return true }
     print("FAIL {name}")
@@ -10,26 +18,226 @@ fn row(name: str, input: str, key: str, value: str, action: str, expected: str, 
 }
 
 fn main() -> int ! repository.RepoErrors {
-    if !row("config-file-set-existing", "# keep heading\n[demo]\n\tvalue = old # inline\n\tother = keep\n; final comment\n", "demo.value", "new", "set", "# keep heading\n[demo]\n\tvalue = new\n\tother = keep\n; final comment\n", 0)? { return 1 }
-    if !row("config-file-set-section", "# keep heading\n[demo]\n\tvalue = old # inline\n\tother = keep\n; final comment\n", "fresh.value", "hello", "set", "# keep heading\n[demo]\n\tvalue = old # inline\n\tother = keep\n; final comment\n[fresh]\n\tvalue = hello\n", 0)? { return 1 }
-    if !row("config-file-set-subsection", "# keep heading\n[demo]\n\tvalue = old # inline\n\tother = keep\n; final comment\n", "remote.Mixed.url", "ssh://example.invalid/repo", "set", "# keep heading\n[demo]\n\tvalue = old # inline\n\tother = keep\n; final comment\n[remote \"Mixed\"]\n\turl = ssh://example.invalid/repo\n", 0)? { return 1 }
-    if !row("config-file-add", "# keep heading\n[demo]\n\tvalue = old # inline\n\tother = keep\n; final comment\n", "demo.value", "new", "add", "# keep heading\n[demo]\n\tvalue = old # inline\n\tother = keep\n\tvalue = new\n; final comment\n", 0)? { return 1 }
-    if !row("config-file-unset", "# keep heading\n[demo]\n\tvalue = old # inline\n\tother = keep\n; final comment\n", "demo.value", "", "unset", "# keep heading\n[demo]\n\tother = keep\n; final comment\n", 0)? { return 1 }
-    if !row("config-file-unset-missing", "# keep heading\n[demo]\n\tvalue = old # inline\n\tother = keep\n; final comment\n", "demo.missing", "", "unset", "# keep heading\n[demo]\n\tvalue = old # inline\n\tother = keep\n; final comment\n", 5)? { return 1 }
-    if !row("config-file-unset-all-missing", "# keep heading\n[demo]\n\tvalue = old # inline\n\tother = keep\n; final comment\n", "demo.missing", "", "unset-all", "# keep heading\n[demo]\n\tvalue = old # inline\n\tother = keep\n; final comment\n", 5)? { return 1 }
-    if !row("config-file-unset-all", "# keep heading\n[demo]\n\tvalue = old # inline\n\tother = keep\n; final comment\n[demo]\n\tvalue = second\n", "demo.value", "", "unset-all", "# keep heading\n[demo]\n\tother = keep\n; final comment\n[demo]\n", 0)? { return 1 }
-    if !row("config-file-replace-all", "# keep heading\n[demo]\n\tvalue = old # inline\n\tother = keep\n; final comment\n[demo]\n\tvalue = second\n", "demo.value", "new", "replace-all", "# keep heading\n[demo]\n\tother = keep\n; final comment\n[demo]\n\tvalue = new\n", 0)? { return 1 }
-    if !row("config-file-set-multiple", "# keep heading\n[demo]\n\tvalue = old # inline\n\tother = keep\n; final comment\n[demo]\n\tvalue = second\n", "demo.value", "new", "set", "# keep heading\n[demo]\n\tvalue = old # inline\n\tother = keep\n; final comment\n[demo]\n\tvalue = second\n", 5)? { return 1 }
-    if !row("config-file-unset-multiple", "# keep heading\n[demo]\n\tvalue = old # inline\n\tother = keep\n; final comment\n[demo]\n\tvalue = second\n", "demo.value", "", "unset", "# keep heading\n[demo]\n\tvalue = old # inline\n\tother = keep\n; final comment\n[demo]\n\tvalue = second\n", 5)? { return 1 }
-    if !row("config-file-set-no-final-lf", "[demo]\nvalue=old", "demo.value", "new", "set", "[demo]\n\tvalue = new\n", 0)? { return 1 }
-    if !row("config-file-set-inline-header", "[demo] value=old\n", "demo.value", "new", "set", "[demo]\n\tvalue = new\n", 0)? { return 1 }
-    if !row("config-file-set-crlf", "[demo]\r\nvalue=old\r\nother=keep\r\n", "demo.value", "new", "set", "[demo]\r\n\tvalue = new\nother=keep\r\n", 0)? { return 1 }
-    if !row("config-file-set-continued", "[demo]\nvalue=one\\\n two\nother=keep\n", "demo.value", "new", "set", "[demo]\n\tvalue = new\nother=keep\n", 0)? { return 1 }
-    if !row("config-file-quote-0", "# keep heading\n[demo]\n\tvalue = old # inline\n\tother = keep\n; final comment\n", "demo.value", "", "set", "# keep heading\n[demo]\n\tvalue = \n\tother = keep\n; final comment\n", 0)? { return 1 }
-    if !row("config-file-quote-1", "# keep heading\n[demo]\n\tvalue = old # inline\n\tother = keep\n; final comment\n", "demo.value", " hello ", "set", "# keep heading\n[demo]\n\tvalue = \" hello \"\n\tother = keep\n; final comment\n", 0)? { return 1 }
-    if !row("config-file-quote-2", "# keep heading\n[demo]\n\tvalue = old # inline\n\tother = keep\n; final comment\n", "demo.value", "a#b;c", "set", "# keep heading\n[demo]\n\tvalue = \"a#b;c\"\n\tother = keep\n; final comment\n", 0)? { return 1 }
-    if !row("config-file-quote-3", "# keep heading\n[demo]\n\tvalue = old # inline\n\tother = keep\n; final comment\n", "demo.value", "quote\"slash\\", "set", "# keep heading\n[demo]\n\tvalue = quote\\\"slash\\\\\n\tother = keep\n; final comment\n", 0)? { return 1 }
-    if !row("config-file-quote-4", "# keep heading\n[demo]\n\tvalue = old # inline\n\tother = keep\n; final comment\n", "demo.value", "one\ntwo\tthree\u{8}", "set", "# keep heading\n[demo]\n\tvalue = one\\ntwo\\tthree\u{8}\n\tother = keep\n; final comment\n", 0)? { return 1 }
+    if !row(
+        "config-file-set-existing",
+        "# keep heading\n[demo]\n\tvalue = old # inline\n\tother = keep\n; final comment\n",
+        "demo.value",
+        "new",
+        "set",
+        "# keep heading\n[demo]\n\tvalue = new\n\tother = keep\n; final comment\n",
+        0,
+    )? {
+        return 1
+    }
+    if !row(
+        "config-file-set-section",
+        "# keep heading\n[demo]\n\tvalue = old # inline\n\tother = keep\n; final comment\n",
+        "fresh.value",
+        "hello",
+        "set",
+        "# keep heading\n[demo]\n\tvalue = old # inline\n\tother = keep\n; final comment\n[fresh]\n\tvalue = hello\n",
+        0,
+    )? {
+        return 1
+    }
+    if !row(
+        "config-file-set-subsection",
+        "# keep heading\n[demo]\n\tvalue = old # inline\n\tother = keep\n; final comment\n",
+        "remote.Mixed.url",
+        "ssh://example.invalid/repo",
+        "set",
+        "# keep heading\n[demo]\n\tvalue = old # inline\n\tother = keep\n; final comment\n[remote \"Mixed\"]\n\turl = ssh://example.invalid/repo\n",
+        0,
+    )? {
+        return 1
+    }
+    if !row(
+        "config-file-add",
+        "# keep heading\n[demo]\n\tvalue = old # inline\n\tother = keep\n; final comment\n",
+        "demo.value",
+        "new",
+        "add",
+        "# keep heading\n[demo]\n\tvalue = old # inline\n\tother = keep\n\tvalue = new\n; final comment\n",
+        0,
+    )? {
+        return 1
+    }
+    if !row(
+        "config-file-unset",
+        "# keep heading\n[demo]\n\tvalue = old # inline\n\tother = keep\n; final comment\n",
+        "demo.value",
+        "",
+        "unset",
+        "# keep heading\n[demo]\n\tother = keep\n; final comment\n",
+        0,
+    )? {
+        return 1
+    }
+    if !row(
+        "config-file-unset-missing",
+        "# keep heading\n[demo]\n\tvalue = old # inline\n\tother = keep\n; final comment\n",
+        "demo.missing",
+        "",
+        "unset",
+        "# keep heading\n[demo]\n\tvalue = old # inline\n\tother = keep\n; final comment\n",
+        5,
+    )? {
+        return 1
+    }
+    if !row(
+        "config-file-unset-all-missing",
+        "# keep heading\n[demo]\n\tvalue = old # inline\n\tother = keep\n; final comment\n",
+        "demo.missing",
+        "",
+        "unset-all",
+        "# keep heading\n[demo]\n\tvalue = old # inline\n\tother = keep\n; final comment\n",
+        5,
+    )? {
+        return 1
+    }
+    if !row(
+        "config-file-unset-all",
+        "# keep heading\n[demo]\n\tvalue = old # inline\n\tother = keep\n; final comment\n[demo]\n\tvalue = second\n",
+        "demo.value",
+        "",
+        "unset-all",
+        "# keep heading\n[demo]\n\tother = keep\n; final comment\n[demo]\n",
+        0,
+    )? {
+        return 1
+    }
+    if !row(
+        "config-file-replace-all",
+        "# keep heading\n[demo]\n\tvalue = old # inline\n\tother = keep\n; final comment\n[demo]\n\tvalue = second\n",
+        "demo.value",
+        "new",
+        "replace-all",
+        "# keep heading\n[demo]\n\tother = keep\n; final comment\n[demo]\n\tvalue = new\n",
+        0,
+    )? {
+        return 1
+    }
+    if !row(
+        "config-file-set-multiple",
+        "# keep heading\n[demo]\n\tvalue = old # inline\n\tother = keep\n; final comment\n[demo]\n\tvalue = second\n",
+        "demo.value",
+        "new",
+        "set",
+        "# keep heading\n[demo]\n\tvalue = old # inline\n\tother = keep\n; final comment\n[demo]\n\tvalue = second\n",
+        5,
+    )? {
+        return 1
+    }
+    if !row(
+        "config-file-unset-multiple",
+        "# keep heading\n[demo]\n\tvalue = old # inline\n\tother = keep\n; final comment\n[demo]\n\tvalue = second\n",
+        "demo.value",
+        "",
+        "unset",
+        "# keep heading\n[demo]\n\tvalue = old # inline\n\tother = keep\n; final comment\n[demo]\n\tvalue = second\n",
+        5,
+    )? {
+        return 1
+    }
+    if !row(
+        "config-file-set-no-final-lf",
+        "[demo]\nvalue=old",
+        "demo.value",
+        "new",
+        "set",
+        "[demo]\n\tvalue = new\n",
+        0,
+    )? {
+        return 1
+    }
+    if !row(
+        "config-file-set-inline-header",
+        "[demo] value=old\n",
+        "demo.value",
+        "new",
+        "set",
+        "[demo]\n\tvalue = new\n",
+        0,
+    )? {
+        return 1
+    }
+    if !row(
+        "config-file-set-crlf",
+        "[demo]\r\nvalue=old\r\nother=keep\r\n",
+        "demo.value",
+        "new",
+        "set",
+        "[demo]\r\n\tvalue = new\nother=keep\r\n",
+        0,
+    )? {
+        return 1
+    }
+    if !row(
+        "config-file-set-continued",
+        "[demo]\nvalue=one\\\n two\nother=keep\n",
+        "demo.value",
+        "new",
+        "set",
+        "[demo]\n\tvalue = new\nother=keep\n",
+        0,
+    )? {
+        return 1
+    }
+    if !row(
+        "config-file-quote-0",
+        "# keep heading\n[demo]\n\tvalue = old # inline\n\tother = keep\n; final comment\n",
+        "demo.value",
+        "",
+        "set",
+        "# keep heading\n[demo]\n\tvalue = \n\tother = keep\n; final comment\n",
+        0,
+    )? {
+        return 1
+    }
+    if !row(
+        "config-file-quote-1",
+        "# keep heading\n[demo]\n\tvalue = old # inline\n\tother = keep\n; final comment\n",
+        "demo.value",
+        " hello ",
+        "set",
+        "# keep heading\n[demo]\n\tvalue = \" hello \"\n\tother = keep\n; final comment\n",
+        0,
+    )? {
+        return 1
+    }
+    if !row(
+        "config-file-quote-2",
+        "# keep heading\n[demo]\n\tvalue = old # inline\n\tother = keep\n; final comment\n",
+        "demo.value",
+        "a#b;c",
+        "set",
+        "# keep heading\n[demo]\n\tvalue = \"a#b;c\"\n\tother = keep\n; final comment\n",
+        0,
+    )? {
+        return 1
+    }
+    if !row(
+        "config-file-quote-3",
+        "# keep heading\n[demo]\n\tvalue = old # inline\n\tother = keep\n; final comment\n",
+        "demo.value",
+        "quote\"slash\\",
+        "set",
+        "# keep heading\n[demo]\n\tvalue = quote\\\"slash\\\\\n\tother = keep\n; final comment\n",
+        0,
+    )? {
+        return 1
+    }
+    if !row(
+        "config-file-quote-4",
+        "# keep heading\n[demo]\n\tvalue = old # inline\n\tother = keep\n; final comment\n",
+        "demo.value",
+        "one\ntwo\tthree\u{8}",
+        "set",
+        "# keep heading\n[demo]\n\tvalue = one\\ntwo\\tthree\u{8}\n\tother = keep\n; final comment\n",
+        0,
+    )? {
+        return 1
+    }
     var invalid_action = false
     let _ = repository.config_update("[demo]\nvalue=x\n", "demo.value", "y", "unknown") else |_| {
         invalid_action = true
