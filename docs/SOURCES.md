@@ -222,9 +222,9 @@ examples are black-box measurements, not prose-derived goldens.
 
 ## Organisation-owned references
 
-- `wolf/sprints/vcs/{index.md,vc00-the-map.md}`, `sprints/RULES.md` §§1–10,
-  `AN_AGENTS_GUIDE_TO_WRITING_GOOD_WOLF.md` in full: contract, clean room,
-  milestones, report and checked-machine commands.
+- Project directives and the language contributor guide: clean-room boundaries,
+  milestones, reporting and checked-machine commands. Internal directive paths
+  are not part of the public source record.
 - aspen `476edee3`, `tools/{lib-toolchain.sh,fetch-toolchain,build,check-fmt}`,
   `ci/{tiers.py,tiers-test.py,nightly-red.sh}` and workflow: scaffold shape.
   The local aspen checkout was initially `5f99a37`, whose scaffold had been
