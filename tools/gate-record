@@ -139,6 +139,6 @@ leaf oracle --input target/corpus -- tools/oracle
 leaf oracle-negative --input target/corpus -- tools/gate-record --internal-oracle-negative
 leaf static --input target/corpus -- tools/mkden target/dist
 if [ -n "${DEN_SSH_PEER_ROOT:-}" ]; then
-    leaf ssh-interop tools/check-ssh --host kasumi --peer-root "$DEN_SSH_PEER_ROOT"
+    leaf ssh-interop tools/check-ssh --host "${DEN_SSH_HOST:-kasumi}" --peer-root "$DEN_SSH_PEER_ROOT"
 fi
 leaf collect-evidence --input 'target/**/*.json' --input 'target/**/*.record' --input 'target/**/*.log' --input target/diffbinary-native --input target/diffbinary-release --input target/runs -- python3 -I tools/collect-diff-evidence.py
