@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Remove only completed generated fixtures, preserving evidence at its path."""
 import getpass
+import fnmatch
 import hashlib
 import json
 import os
@@ -14,6 +15,27 @@ if sys.platform.startswith('linux'):
 target = Path(sys.argv[1]).resolve()
 leaf = sys.argv[2]
 assert target.name == 'target' and (target.parent / 'src/den.lu').is_file()
+# The planner is authoritative: absent or invalid input data is a refusal to
+# prune, not permission to guess that a generated file is finished.
+plan_file = Path(sys.argv[3])
+plan = json.loads(plan_file.read_text())
+assert isinstance(plan.get('remaining'), list), 'remaining input plan required'
+future_inputs = []
+for remaining in plan['remaining']:
+    assert isinstance(remaining.get('inputs'), list)
+    for pattern in remaining['inputs']:
+        assert isinstance(pattern, str) and not Path(pattern).is_absolute() and '..' not in Path(pattern).parts
+        future_inputs.append(pattern.rstrip('/'))
+
+def needed(path):
+    relative = path.relative_to(target.parent).as_posix()
+    return any(fnmatch.fnmatchcase(relative, pattern) or relative.startswith(pattern + '/')
+               for pattern in future_inputs)
+
+def needed_directory(path):
+    relative = path.relative_to(target.parent).as_posix()
+    return needed(path) or any(pattern.startswith(relative + '/') for pattern in future_inputs)
+
 fixed = {
  'tools/check-housekeeping': ['housekeeping-native-final','housekeeping-release-final'],
  'tools/check-blame': ['blame-native','blame-release'],
@@ -74,31 +96,32 @@ protected = {}
 for p in paths:
     files = p.rglob('*') if p.is_dir() and not p.is_symlink() else [p]
     for f in files:
-        if f.is_file() and not f.is_symlink() and f.suffix in {'.json','.log','.record'}:
+        if f.is_file() and not f.is_symlink() and (f.suffix in {'.json','.log','.record'} or needed(f)):
             protected[str(f)] = digest(f)
 for path in paths:
     if path.is_symlink() or path.is_file():
-        if str(path) not in protected:
+        if str(path) not in protected and not needed(path):
             path.unlink()
         continue
     for current, dirs, files in os.walk(path, topdown=False, followlinks=False):
         here = Path(current)
         for name in files:
             p = here / name
-            if str(p) not in protected:
+            if str(p) not in protected and not needed(p):
                 p.unlink()
         for name in dirs:
             p = here / name
             if p.is_symlink():
-                p.unlink()
-            else:
+                if not needed(p): p.unlink()
+            elif not needed_directory(p):
                 try: p.rmdir()
                 except OSError: pass
-    try: path.rmdir()
-    except OSError: pass
+    if not needed_directory(path):
+        try: path.rmdir()
+        except OSError: pass
 for name, expected in protected.items():
     assert digest(Path(name)) == expected, name
-entry = dict(leaf=leaf, finished_paths=[str(p) for p in paths], preserved_text_files=len(protected))
+entry = dict(leaf=leaf, finished_paths=[str(p) for p in paths], preserved_files=len(protected), remaining_plan=str(plan_file), retained_plan_inputs=future_inputs)
 with (target.parent.parent / 'prune-events.jsonl').open('a') as out:
     out.write(json.dumps(entry) + '\n')
 if leaf == 'tools/check-pack': (target.parent.parent / 'packed-read.finished').write_text('passed\n')
