@@ -184,11 +184,16 @@ The fixture installer accepts `--lane` (legacy default `vc16`). Its root guard
 checks the declared owner and resolves symlinks before writing; mismatches and
 path escapes fail by name. Default fixture config/service bytes are regression
 tested, and scope units use synthetic homes confined to their own checkout.
+The live client checks its host and fixture root against the plan
+(`DEN_SSH_HOST`, `DEN_SSH_PEER_ROOT`) before any network access: the root must be
+normalized, inside a lane and equal to the planned root. With nothing planned it
+keeps the vc16 default host and owner check. The installer still writes the vc16
+host's reservation lock name; a fixture on another host keeps its own wrapper.
 
 System SSH starts with an argv vector and separately quoted literal remote
 program/path arguments. URI/scp-like paths, user/port parsing and pre-exec option
 injection/control validation share one transport boundary. IPv6 and encoded SSH
-URLs remain named limits. Twelve live Mac-to-kasumi groups cover clone, normal
+URLs remain named limits. Twelve live Mac-to-peer groups cover clone, normal
 checkout, space/quote/shell-literal paths, incremental fetch, push, stale/matching
 leases and v0 refusal. Canonical objects are independently checked against the
 pinned server; Mac Git is not the oracle. CLI/config service selections are literal
@@ -538,7 +543,8 @@ is needed beyond referring to the equivalent `DeflateErrors` alias.
 workspace pruning consumes the remaining plan and refuses to guess when that
 plan is missing; required files and directories survive until their last
 consumer. The runner regression reproduces the reviewed/strict binary-report
-boundary and retains its client. The live SSH host is explicit in the plan.
+boundary and retains its client. The live SSH host and fixture root are explicit
+in the plan, and the client refuses any other.
 
 
 `tools/corpus` defines 16 repositories: the original nine object/history
