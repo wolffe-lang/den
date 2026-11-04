@@ -71,3 +71,11 @@ with tempfile.TemporaryDirectory(prefix='prune-runner-', dir=root/'target') as f
     assert client.read_bytes()==b'required later, never executed\n'
     assert not (target/'native/diffbinary-test').exists()
 print('PASS runner-prune-future-input: remaining-plan consumer retains diffbinary-client')
+host_env = dict(env, DEN_SSH_PEER_ROOT='OWNED_FIXTURE', DEN_SSH_HOST='satoyama')
+host_plan = subprocess.run([str(root/'tools/gate-record'),'--plan'],cwd=root,env=host_env,
+                           capture_output=True,text=True,check=True)
+ssh_leaf = next(row for row in map(json.loads,host_plan.stdout.splitlines()) if row['name']=='ssh-interop')
+if ssh_leaf['argv'][ssh_leaf['argv'].index('--host')+1] != 'satoyama':
+    print('FAIL runner-planned-ssh-host',flush=True)
+    raise SystemExit(1)
+print('PASS runner-planned-ssh-host')
