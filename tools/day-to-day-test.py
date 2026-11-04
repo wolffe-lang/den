@@ -84,6 +84,7 @@ def state(path):
 def check(name, args, changes=None, terminal=False, mutate=False):
     proof_error = None
     index_proofs = []
+    input_state = state(base)
     if mutate:
         left, right = root / 'git', root / 'den'
         for path in [left, right]:
@@ -117,7 +118,7 @@ def check(name, args, changes=None, terminal=False, mutate=False):
         equal = states[0] == states[1] == states[2]
     ok = expected == actual and equal
     rows.append({'name': name, 'args': args, 'environment': changes, 'terminal': terminal,
-                 'expected': expected, 'actual': actual, 'states': states,
+                 'expected': expected, 'actual': actual, 'states': states, 'input_state': input_state,
                  'index_proofs': index_proofs, 'index_proof_error': proof_error, 'equal': ok})
     print(('PASS' if ok else 'FAIL'), name, flush=True)
     if not ok:
@@ -198,6 +199,7 @@ def suite():
                     (base / '.git/config').write_bytes(original)
                     dest.write_bytes((original if scope == 'local' else b'') + content)
                 restore()
+                input_state = state(base)
                 expected = run(G, args, changes=changes)
                 expected_state = state(base)
                 restore()
@@ -205,7 +207,7 @@ def suite():
                 actual_state = state(base)
                 ok = expected == actual and expected_state == actual_state
                 name = 'config-' + scope + '-' + label
-                rows.append({'name': name, 'args': args, 'input': content.hex(), 'expected': expected, 'actual': actual, 'states': [expected_state, actual_state], 'equal': ok})
+                rows.append({'name': name, 'args': args, 'environment': changes, 'input': content.hex(), 'input_state': input_state, 'expected': expected, 'actual': actual, 'states': [expected_state, actual_state], 'equal': ok})
                 print(('PASS' if ok else 'FAIL'), name, flush=True)
                 if not ok:
                     print('  expected', expected, 'actual', actual, flush=True)
