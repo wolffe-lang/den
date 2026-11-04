@@ -61,7 +61,8 @@ fn config_write(args: List[str]) -> int ! Errors {
         let repo = repository.discover(".")?
         if fs.is_dir(".git") then ".git/config" else "{repo.gitdir}/config"
     }
-    let bytes = repository.read_bytes(path, 1048576) else |e| match e {
+    let destination = repository.config_destination(path)?
+    let bytes = repository.read_bytes(destination, 1048576) else |e| match e {
         not_found => List[byte](),
         denied => { return denied },
         io => { return io },
@@ -86,7 +87,7 @@ fn config_write(args: List[str]) -> int ! Errors {
         }
         return status
     }
-    repository.publish_config_path(path, before, after) else |e| match e {
+    repository.publish_config_path(destination, before, after) else |e| match e {
         exists => { eprint("error: could not lock config file {path}: File exists"); return 255 },
         not_found => { return not_found },
         denied => { return denied },

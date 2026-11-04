@@ -198,6 +198,17 @@ escaped = "a\\nb\\tc\\b\\"\\\\z"
 
     run(['config', '--system', 'demo.value', 'blocked'], expected=2, error=b'config --system writes')
 
+    dangling = repo / 'dangling.config'
+    dangling.symlink_to('missing-target.config')
+    run(['config', '--file', 'dangling.config', 'demo.value', 'blocked'],
+        expected=2, error=b'config dangling symlink')
+    assert dangling.is_symlink() and not (repo / 'missing-target.config').exists()
+    directory = repo / 'directory.config'
+    directory.mkdir()
+    run(['config', '--file', 'directory.config', 'demo.value', 'blocked'],
+        expected=2, error=b'config nonregular destination')
+    assert directory.is_dir() and not list(directory.iterdir())
+
     # Existing M1 init consumes the same scalar API; command scope wins globally.
     created = root / 'created'
     e = dict(env, GIT_CONFIG_COUNT='1', GIT_CONFIG_KEY_0='init.defaultBranch',

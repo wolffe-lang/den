@@ -144,16 +144,33 @@ pub fn config_update(text: str, key: str, value: str, action: str) -> (str, int)
     (out, 0)
 }
 
+/// Resolve an existing regular destination before reading/locking it. A config
+/// symlink keeps its identity; publication replaces the referent, not the link.
+/// Dangling links and nonregular destinations are named refusals.
+pub fn config_destination(path: str) -> str ! RepoErrors {
+    let info = fs.lstat(path) else |e| match e {
+        not_found => { return copy path },
+        denied => { return denied },
+        io => { return io },
+    }
+    if info.kind != 0 && info.kind != 3 { return Unsupported("config nonregular destination") }
+    if info.kind == 3 && !fs.exists(path) { return Unsupported("config dangling symlink") }
+    let target = fs.realpath(path)?
+    if fs.lstat(target)?.kind != 0 { return Unsupported("config nonregular destination") }
+    target
+}
+
 /// Exclusive lock, predecessor comparison, full write/sync and atomic rename.
 /// Existing modes survive; a new file uses the ordinary creation umask.
 pub fn publish_config_path(path: str, before: str, after: str) -> () ! RepoErrors {
+    let target = config_destination(path)?
     if after.len > 1048576 { return limit }
     let _ = parse_config(after)?
-    let lock = "{path}.lock"
+    let lock = "{target}.lock"
     let file = fs.create_new_with_mode(lock, 0o666)?
     var fd = file.fd, active = true
     defer { if fd >= 0 { fs_close(fd) else |_| {} }; if active { fs.remove(lock) else |_| {} } }
-    let bytes = read_bytes(path, 1048576) else |e| match e {
+    let bytes = read_bytes(target, 1048576) else |e| match e {
         not_found => List[byte](),
         denied => { return denied },
         io => { return io },
@@ -165,8 +182,8 @@ pub fn publish_config_path(path: str, before: str, after: str) -> () ! RepoError
     }
     let current = str_from_utf8(bytes) else |_| { return invalid }
     if current != before { return Unsupported("configuration changed concurrently") }
-    if fs.exists(path) {
-        var prior = fs.open(path)?
+    if fs.exists(target) {
+        var prior = fs.open(target)?
         defer fs.close(take prior) else |_| {}
         let info = fs.fstat_record(mut prior)?
         if !fs.answered(info, 4) { return Unsupported("config mode unavailable") }
@@ -176,7 +193,7 @@ pub fn publish_config_path(path: str, before: str, after: str) -> () ! RepoError
     fs_sync(fd)?
     fs_close(fd)?
     fd = -1
-    fs_rename(lock, path) else |_| { return io }
+    fs_rename(lock, target) else |_| { return io }
     active = false
-    fs.sync_dir(fs.parent(path) else ".")?
+    fs.sync_dir(fs.parent(target) else ".")?
 }
