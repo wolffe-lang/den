@@ -15,5 +15,6 @@ step() {
     return "$rc"
 }
 mkdir -p target/native
+step ssh-peer-scope python3 -I tools/ssh-peer-test.py
 step ssh-den-build "$WOLF" build --deny-warnings src/den.lu -o target/native/den
 step ssh-service-interop tools/env python3 -I tools/ssh-test.py "$@"

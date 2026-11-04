@@ -14,15 +14,36 @@ import sys
 PIN = 'c4848492938c4ebfffbefe1fbbaa68b9af90c86d1f6a20e76816c5ff37fcfa60'
 
 
-def install(root, git, slot):
-    root, git = root.resolve(), git.resolve()
-    assert root.is_relative_to(Path.home() / 'lanes/vc16'), root
+def owned_root(root, lane):
+    if not isinstance(lane, str) or not re.fullmatch(r'[a-z][a-z0-9_-]*', lane):
+        raise ValueError('ssh peer owner escape: invalid lane')
+    base = (Path.home() / 'lanes').resolve()
+    raw = Path(os.path.abspath(root))
+    if not raw.is_relative_to(base):
+        raise ValueError('ssh peer owner escape: root outside lanes')
+    parts = raw.relative_to(base).parts
+    if len(parts) < 2 or parts[0] != lane:
+        raise ValueError('ssh peer owner mismatch: root does not belong to lane')
+    boundary = base / lane
+    if boundary.resolve() != boundary:
+        raise ValueError('ssh peer owner escape: aliased lane directory')
+    resolved = Path(root).resolve()
+    if resolved == boundary or not resolved.is_relative_to(boundary):
+        raise ValueError('ssh peer owner escape: resolved root outside lane')
+    return resolved
+
+
+def install(root, git, slot, lane='vc16'):
+    root, git = owned_root(root, lane), git.resolve()
     assert slot in ('4-7', '8-11')
     assert hashlib.sha256(git.read_bytes()).hexdigest() == PIN
     root.mkdir(parents=True, exist_ok=True)
     for name in ('bin', 'home', 'empty-template', 'empty-hooks', 'repos', 'tmp'):
         (root / name).mkdir(exist_ok=True)
-    (root / 'peer.json').write_text(json.dumps(dict(git=str(git), slot=slot)) + '\n')
+    config = dict(git=str(git), slot=slot)
+    if lane != 'vc16':
+        config['lane'] = lane
+    (root / 'peer.json').write_text(json.dumps(config) + '\n')
     (root / 'gitconfig').write_text('[user]\n\tname = Den Tester\n\temail = den@example.invalid\n[core]\n\thooksPath = ' + str(root / 'empty-hooks') + '\n[init]\n\tdefaultBranch = main\n\ttemplateDir = ' + str(root / 'empty-template') + '\n')
     shutil.copyfile(__file__, root / 'control.py')
     fixed = dict(GIT_CONFIG_NOSYSTEM='1', GIT_CONFIG_GLOBAL=str(root / 'gitconfig'),
@@ -79,8 +100,10 @@ def active_reservation(root, slot):
 
 def control():
     root = Path(__file__).resolve().parent
-    assert root.is_relative_to(Path.home() / 'lanes/vc16'), root
+    if not root.is_relative_to((Path.home() / 'lanes').resolve()):
+        raise ValueError('ssh peer owner escape: control outside lanes')
     config = json.loads((root / 'peer.json').read_text())
+    root = owned_root(root, config.get('lane', 'vc16'))
     git, slot = Path(config['git']), config['slot']
     assert slot in ('4-7', '8-11') and hashlib.sha256(git.read_bytes()).hexdigest() == PIN
     env = dict(PATH=str(git.parent) + ':/usr/bin:/bin')
@@ -152,9 +175,14 @@ if __name__ == '__main__':
     parser.add_argument('--install', type=Path)
     parser.add_argument('--git', type=Path)
     parser.add_argument('--slot', choices=('4-7', '8-11'))
+    parser.add_argument('--lane', default='vc16')
     args = parser.parse_args()
-    if args.install:
-        assert args.git and args.slot
-        install(args.install, args.git, args.slot)
-    else:
-        print(json.dumps(control()), flush=True)
+    try:
+        if args.install:
+            assert args.git and args.slot
+            install(args.install, args.git, args.slot, lane=args.lane)
+        else:
+            print(json.dumps(control()), flush=True)
+    except ValueError as error:
+        print('ssh-peer: ' + str(error), file=sys.stderr)
+        raise SystemExit(2)
