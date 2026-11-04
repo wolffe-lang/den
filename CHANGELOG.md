@@ -1,5 +1,18 @@
 # Changes
 
+## Unreleased — daily use
+
+- Render fixed dates without a zone database and fall back to UTC for missing
+  zones, preserving explicit stored offsets.
+- Add short/full/no/terminal-auto history decorations, `log.decorate`, HEAD
+  arrows, tags and remote-tracking refs in measured order, with the default
+  terminal colour palette.
+- Add local/global/file config set, add, unset, unset-all and replace-all,
+  preserving unrelated bytes and modes under an exclusive atomic lock/rename.
+  Keep system writes and unimplemented option families named refusals.
+- Gate retained config bytes, terminal/pipe output, no-database containers and
+  actual-checked config-writer units alongside the inherited regression suite.
+
 ## Unreleased — M1 loose objects
 
 - Pin wolf 0.2.36, lupin 0.1.58 and the bundled std `78b9d3cb`;
