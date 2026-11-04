@@ -41,12 +41,12 @@ oracle builds are in `notes/vc00-evidence/`.
 | Wire | `clone [-q] [--bare] URL DIRECTORY`; explicit `fetch -q URL SRC:DST`; configured/default `fetch [--prune]`, `pull` merge/rebase and `push`, `push -u`, plain/explicit `--force-with-lease`, `--force` and `--atomic`; `upload-pack`, bare `receive-pack`, and one-session loopback `daemon` within the limits below |
 | Packs | `pack-objects` from stdin object IDs to `objects/pack/pack`, OFS/REF deltas or no deltas; `verify-pack [-v]`; `count-objects [-v]`; bounded `fsck --full`; `repack -a -n -q [-d] [-k]` and `prune-packed [-n] [-q]` within the limits below |
 | Index | `write-tree` over nested index v2/v3/v4 entries; exclusive `index.lock` writes, stat fields, flags and TREE cache updates |
-| Config / ignore | Read-only `config --get`; bounded `remote add/remove/rename/-v/get-url/set-url` and `branch --set-upstream-to`; `check-ignore` with provenance, negation, tracked-file bypass and `--no-index` |
+| Config / ignore | `config --get`, set/`--add`/`--unset`/`--unset-all`/`--replace-all` with local/global/file destinations; bounded `remote add/remove/rename/-v/get-url/set-url` and `branch --set-upstream-to`; `check-ignore` with provenance, negation, tracked-file bypass and `--no-index` |
 | Worktree | `add` paths/directories, `-A`, `-u`, `--ignore-removal`, `-f`, `-N`, `--chmod`; `rm`, `mv` and their implemented safety/force/recursive options |
 | Status | Human, short and porcelain v1, branch/unborn/detached headings, NUL output, untracked grouping and ignored paths |
 | Commit | Ordered `-m`, `-F`, `-a`, `--amend`, `--reset-author`, `--author`, fixed `--date`, cleanup modes, quiet and allow-empty options; attached/detached HEAD and loose-over-packed branch updates |
 | Diff | Worktree/index, `--cached`, two commits/trees or blobs; unified context, final-newline markers, modes, binary patches, stat/name forms, rename/copy detection and common pathspec magic |
-| History | `log` default/oneline/short/full/fuller, `-n`, `--skip`, `--reverse`, `--first-parent`, fixed date formats, patch/stat; `show` commits, trees, blobs, annotated tags and `REV:path`; default-format display of `refs/notes/commits` notes |
+| History | `log` default/oneline/short/full/fuller, `-n`, `--skip`, `--reverse`, `--first-parent`, fixed date formats, patch/stat, short/full/no/terminal-auto decorations; `show` commits, trees, blobs, annotated tags and `REV:path`; default-format display of `refs/notes/commits` notes |
 | Restore | Index-to-worktree `restore`, `--staged`, `--worktree`, `--source`; `checkout -- <paths>` |
 | Refs | Loose and packed refs with peeled tag records; branch list/create/force/delete/rename, lightweight and message-supplied annotated tags, command reflogs |
 | Branch worktree | `switch` and branch `checkout`, `-c`/`-b` creation, explicit and implicit detached HEAD, dirty-worktree protection; `reset --soft/--mixed/--hard` |
@@ -196,10 +196,14 @@ them through `add` records the original stages in REUC; unrelated higher-stage
 `rm`/`mv`/restore operations remain refused.
 
 Config parsing handles quoting, escapes, continuation and precedence, but
-`include`/`includeIf` are named refusals. The config command remains read-only
-`config --get`; bounded remote/tracking commands edit ordinary repository config
-under an exclusive lock and a raw-byte compare-and-swap. Continued/CRLF/BOM
-input, inline section assignments and multiple-URL editing remain named limits. Diff implements literal, top, icase, glob and exclude
+`include`/`includeIf` are named refusals. Config supports `--get` and legacy
+set, `--add`, `--unset`, `--unset-all` and `--replace-all`, with `--local`
+(the default), `--global` through HOME and `--file`. It preserves unrelated
+comments/lines and modes, writes an exclusive lock, rechecks the original bytes,
+syncs and atomically renames. System writes, worktree scope and value-pattern/
+regexp edits remain named unsupported options. Remote/tracking editing retains
+its separate continued/CRLF/BOM, inline-assignment and multiple-URL limits.
+Diff implements literal, top, icase, glob and exclude
 pathspecs; other commands retain their earlier literal-path limits. Attribute
 pathspecs, filters/attributes, non-false `core.autocrlf`, nonempty templates/hooks,
 signing and user editor execution remain unsupported. A requested editor is never launched; the measured
@@ -231,7 +235,13 @@ revision limiting, show ranges, history path simplification, graph/topological o
 custom formats, relative/human dates, non-UTC local zones, message transcoding,
 mailmaps and tabs after non-ASCII text remain named unsupported surfaces.
 Fixed dates include default, short, raw, unix, ISO, strict ISO and RFC forms;
-UTC-local variants are measured. None of these limitations is a parity pass.
+UTC-local variants are measured. UTC rendering needs no zone database; missing
+zones fall back to UTC without changing stored numeric offsets. `--decorate`,
+`--decorate=short|full|no|auto`, `--no-decorate` and `log.decorate` render HEAD,
+branches, tags and remote-tracking refs. Auto decorates only at a terminal;
+the default terminal colour palette and colour-free output are measured.
+Custom decoration filters/palettes remain outside this bounded surface.
+None of the remaining limitations is a parity pass.
 
 The refs gate separately compares 632 command/state rows per native tier,
 with seventeen named unsupported cases kept outside that count, fourteen independent
