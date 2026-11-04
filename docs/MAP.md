@@ -53,6 +53,9 @@ values. Quoting follows the measured writer bytes; the parser's backspace
 escape and the writer's literal backspace are deliberately distinct.
 `publish_config_path` reserves an exclusive lock, rechecks the original bytes,
 preserves modes, syncs the complete file, atomically renames and syncs its parent.
+`config_destination` resolves existing file symlinks before IO, preserving the
+link while replacing its referent; dangling/nonregular destinations refuse by
+name. Hardlink observers retain the old bytes after atomic replacement.
 A post-rename sync error can leave the complete new file visible. Files remain
 bounded at 1 MiB. Remote/tracking edits retain their separate earlier limits.
 

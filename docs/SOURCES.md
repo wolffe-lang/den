@@ -17,7 +17,9 @@ Git v2.56.0 `Documentation/rev-list-options.adoc` supplies the documented
 original-zone versus local-zone display semantics. The missing-database UTC
 fallback and decoration ordering/colour are black-box questions for the pinned
 executable, not algorithms attributed to the manuals. No Git implementation
-source was read.
+source was read. Existing-file symlink targets, hardlink observers, creation
+modes and missing-file behavior were separately measured on the pinned binary;
+they are not claims about Git's internal write algorithm.
 
 ## Housekeeping and validator (vc14)
 

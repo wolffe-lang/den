@@ -200,7 +200,9 @@ Config parsing handles quoting, escapes, continuation and precedence, but
 set, `--add`, `--unset`, `--unset-all` and `--replace-all`, with `--local`
 (the default), `--global` through HOME and `--file`. It preserves unrelated
 comments/lines and modes, writes an exclusive lock, rechecks the original bytes,
-syncs and atomically renames. System writes, worktree scope and value-pattern/
+syncs and atomically renames. Existing file symlinks keep the link and update
+their referent; dangling links and nonregular destinations are refused by name.
+System writes, worktree scope and value-pattern/
 regexp edits remain named unsupported options. Remote/tracking editing retains
 its separate continued/CRLF/BOM, inline-assignment and multiple-URL limits.
 Diff implements literal, top, icase, glob and exclude
