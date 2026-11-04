@@ -153,7 +153,7 @@ fn hint_date(value: List[byte]) -> str ! RevisionErrors {
     }
     let local = seconds + (hours * 60 + minutes) * (if zone.starts_with("-") then -60 else 60)
     if local < 0 { return Unsupported("revision hint date range") }
-    time.format(time.local_in("UTC", local) else { return invalid_header }, "%Y-%m-%d") else {
+    time.format(time.local_in("UTC0", local) else { return invalid_header }, "%Y-%m-%d") else {
         return invalid_header
     }
 }
