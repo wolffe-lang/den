@@ -48,3 +48,9 @@ Before the scope follow-up, config-new-local, config-global-empty-xdg and
 config-file-ignores-local are expected to expose discovery/preflight/default
 selection gaps. Their inputs and scoped environment must remain captured;
 reference behavior is measured before changing those paths.
+
+Scope observation: new-local creation already matched. The explicit-file row
+also matched: both tools reject the malformed repository config with exit 128;
+its label is now config-file-bad-local-preflight, not an isolation promise.
+Only the empty-XDG row was red (same quiet success, different destination bytes),
+so only the empty-XDG fallback required a scope implementation change.

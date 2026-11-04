@@ -264,7 +264,7 @@ def suite():
             clear_special()
             (base / '.git/config').write_bytes(original + b'[broken\n')
             (base / 'chosen.config').write_bytes(initial)
-        special('config-file-ignores-local', ['config', '--file', 'chosen.config', 'demo.value', 'new'], unrelated_bad_local)
+        special('config-file-bad-local-preflight', ['config', '--file', 'chosen.config', 'demo.value', 'new'], unrelated_bad_local)
 
         def default_local():
             clear_special()
