@@ -27,8 +27,10 @@ env = dict(os.environ)
 
 def state():
     files = {}
-    for f in sorted(base.rglob('*')):
-        name = f.relative_to(base).as_posix()
+    for f in sorted(root.rglob('*')):
+        name = f.relative_to(root).as_posix()
+        if name in ('held-input', 'held-output'):
+            continue  # Explicit process stream captures, not repository paths.
         if f.is_symlink():
             files[name] = ['symlink', os.readlink(f)]
         elif f.is_file():
@@ -48,6 +50,10 @@ def run(exe, args, changes=None, data=None, inherited=False):
     if inherited:
         # The runner is container root; the actual tools run without privilege.
         assert os.geteuid() == 0, 'descriptor rows require container root for uid drop'
+        count = int(e.get('GIT_CONFIG_COUNT', '0'))
+        e['GIT_CONFIG_COUNT'] = str(count + 1)
+        e['GIT_CONFIG_KEY_' + str(count)] = 'safe.directory'
+        e['GIT_CONFIG_VALUE_' + str(count)] = str(base)
         out = root / 'held-output'
         inp = root / 'held-input'
         out.write_bytes(b'')
