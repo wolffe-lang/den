@@ -39,5 +39,15 @@ with tempfile.TemporaryDirectory(dir=root/'target', prefix='prune-proc-') as tem
     ok = checked.returncode == 0 and b'PASS prune-open-files-preflight' in checked.stdout
     print(('PASS ' if ok else 'FAIL ') + 'runner-prune-preflight', flush=True)
     if not ok: failed.append('runner-prune-preflight')
+    # The macOS backend must fail by name at preflight, not raise FileNotFoundError
+    # after workloads have completed. Mock only platform selection, not the tool.
+    script = ('import runpy,sys; from unittest import mock; '
+              'path=sys.argv[1]; sys.argv=[path,"--preflight"]; '
+              '\nwith mock.patch.object(sys,"platform","darwin"): runpy.run_path(path,run_name="__main__")')
+    checked = subprocess.run([sys.executable, '-I', '-c', script, str(root/'tools/gate-prune.py')],
+                             env=env, capture_output=True)
+    ok = checked.returncode != 0 and b'FAIL prune-open-files-unavailable: lsof' in checked.stderr and b'Traceback' not in checked.stderr
+    print(('PASS ' if ok else 'FAIL ') + 'runner-prune-missing-backend', flush=True)
+    if not ok: failed.append('runner-prune-missing-backend')
 if failed:
     raise SystemExit(', '.join(failed))
