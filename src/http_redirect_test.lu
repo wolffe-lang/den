@@ -32,8 +32,8 @@ fn advertised(data: List[byte], want: List[byte], row: str) -> bool {
     true
 }
 
-fn advertisement_refused(data: str, service: str, expected: str, row: str) -> bool {
-    let _ = transport.http_advertisement(data.bytes(), service) else |e| {
+fn advertisement_refused(data: List[byte], service: str, expected: str, row: str) -> bool {
+    let _ = transport.http_advertisement(data, service) else |e| {
         if "{e}" == expected {
             print("PASS {row}")
             return true
@@ -83,7 +83,20 @@ fn advertisement_rows() -> int {
         ["{banner}{v2}", "receive-pack", "Unsupported(HTTP wrong service advertisement)", "http-receive-upload-banner"],
     ]
     for row in rows {
-        if !advertisement_refused(row[0], row[1], row[2], row[3]) { failed = failed + 1 }
+        if !advertisement_refused(row[0].bytes(), row[1], row[2], row[3]) { failed = failed + 1 }
+    }
+    // A v0 server's first ref line carries its capabilities after a NUL; it
+    // is still a server without v2, not a malformed text line.
+    var capabilities = "004a1111111111111111111111111111111111111111 HEAD".bytes()
+    (mut capabilities).push(0 as byte)
+    for b in "multi_ack side-band-64k\n0000".bytes() { (mut capabilities).push(b) }
+    var wrapped = banner.bytes()
+    for b in capabilities { (mut wrapped).push(b) }
+    if !advertisement_refused(capabilities, "upload-pack", refused, "http-direct-v0-capabilities") {
+        failed = failed + 1
+    }
+    if !advertisement_refused(wrapped, "upload-pack", refused, "http-wrapped-v0-capabilities") {
+        failed = failed + 1
     }
     failed
 }
