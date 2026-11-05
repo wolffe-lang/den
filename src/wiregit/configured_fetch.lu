@@ -147,6 +147,9 @@ fn named_fetch(
             reason: reason,
         })
     }
+    if transport.local_path(url) {
+        local_remote_head(repo, name, url)?
+    }
     let followed = fetch_tags(repo, url, roots, identity, action, mut rows)?
     fetch_head = "{fetch_head}{followed}"
     write_fetch_head(repo, fetch_head)?

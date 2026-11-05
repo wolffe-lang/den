@@ -173,6 +173,7 @@ fn clone_mode(url: str, destination: str, bare: bool, local: bool) -> () ! objec
     let advertised = if plain && local then clone_local_objects(repo, url)? else fetch_objects(repo, url)?
     var selected = wire.Ref { name: "HEAD", id: "unborn", target: "", peeled: "" }
     for reference in advertised { if reference.name == "HEAD" { selected = copy reference } }
+    var packed = List[refs.Packed]()
     for reference in advertised {
         if reference.name == "HEAD" || reference.id == "unborn" { continue }
         var name = copy reference.name
@@ -181,7 +182,23 @@ fn clone_mode(url: str, destination: str, bare: bool, local: bool) -> () ! objec
             if body.kind != "commit" { return invalid }
         }
         if !bare && name.starts_with("refs/heads/") { name = "refs/remotes/origin/{name[11..]}" }
-        update(repo, name, reference.id)?
+        if plain {
+            (mut packed).push(refs.Packed {
+                name: name, id: oid.parse("sha1", reference.id)?,
+                peeled: if reference.peeled == "" then List[oid.Oid]() else [oid.parse("sha1", reference.peeled)?],
+            })
+        } else {
+            update(repo, name, reference.id)?
+        }
+    }
+    if plain && packed.len > 0 {
+        var file = fs.create_new_with_mode("{repo.gitdir}/packed-refs", 0o666)?
+        defer fs.close(take file) else |_| {}
+        fs.write_chunk(mut file, refs.packed_bytes(packed, "peeled fully-peeled")?)?
+        fs.sync(mut file)?
+    }
+    if plain && fs.is_dir("{repo.gitdir}/hooks") && fs.entries("{repo.gitdir}/hooks")?.len == 0 {
+        fs.remove_dir("{repo.gitdir}/hooks")?
     }
     if !bare && selected.id != "unborn" && selected.target != "" {
         if !selected.target.starts_with("refs/heads/") {

@@ -1,0 +1,26 @@
+use std.fs
+use object
+use refs
+use repository
+
+// Git's ordinary configured local fetch creates remote HEAD when it is absent.
+// Existing symbolic heads and explicit never policy remain untouched.
+fn local_remote_head(repo: repository.Repo, name: str, url: str) -> () ! object.StoreErrors {
+    let policy = repo.config["remote.{name}.followremotehead"] else "create"
+    if policy == "never" { return }
+    if policy != "create" { return Unsupported("local fetch remote.followRemoteHEAD policy") }
+    let reference = "refs/remotes/{name}/HEAD"
+    if fs.exists("{repo.gitdir}/{reference}") || refs.optional(repo, reference)?.len > 0 { return }
+    for record in fetch_view(repo, url, "HEAD", false)? {
+        if record.name != "HEAD" || !record.target.starts_with("refs/heads/") { continue }
+        let target = "refs/remotes/{name}/{record.target[11..]}"
+        if refs.optional(repo, target)?.len == 0 { continue }
+        let path = refs.administrative(repo, reference, true)?
+        var file = fs.create_new_with_mode(path, 0o666)?
+        defer fs.close(take file) else |_| {}
+        fs.write(mut file, "ref: {target}\n")?
+        fs.sync(mut file)?
+        fs.sync_dir(fs.parent(path) else |_| { return invalid })?
+        return
+    }
+}
