@@ -1,0 +1,48 @@
+use revision
+
+fn status_upstream(snapshot: Snapshot, counts: bool) -> revision.Upstream ! WorkErrors {
+    revision.upstream(snapshot.context.repo,
+        if snapshot.head.detached then "" else snapshot.head.branch,
+        snapshot.head.commits, counts)?
+}
+
+fn upstream_summary(tracking: revision.Upstream) -> str {
+    if tracking.ids.len == 0 { return "gone" }
+    if tracking.ahead > 0 && tracking.behind > 0 {
+        return "ahead {tracking.ahead}, behind {tracking.behind}"
+    }
+    if tracking.ahead > 0 { return "ahead {tracking.ahead}" }
+    if tracking.behind > 0 { return "behind {tracking.behind}" }
+    ""
+}
+
+fn tracking_short(snapshot: Snapshot) -> str ! WorkErrors {
+    let tracking = status_upstream(snapshot, true)?
+    if tracking.reference == "" { return "" }
+    let summary = upstream_summary(tracking)
+    "...{tracking.name}{if summary == "" then "" else " [{summary}]"}"
+}
+
+fn tracking_long(mut out: List[byte], snapshot: Snapshot, hints: bool) -> () ! WorkErrors {
+    if snapshot.head.commits.len == 0 { return }
+    let tracking = status_upstream(snapshot, true)?
+    if tracking.reference == "" { return }
+    let name = tracking.name, ahead = tracking.ahead, behind = tracking.behind
+    if tracking.ids.len == 0 {
+        line(mut out, "Your branch is based on '{name}', but the upstream is gone.")
+        if hints { line(mut out, "  (use \"git branch --unset-upstream\" to fixup)") }
+    } else if ahead == 0 && behind == 0 {
+        line(mut out, "Your branch is up to date with '{name}'.")
+    } else if behind == 0 {
+        line(mut out, "Your branch is ahead of '{name}' by {ahead} {if ahead == 1 then "commit" else "commits"}.")
+        if hints { line(mut out, "  (use \"git push\" to publish your local commits)") }
+    } else if ahead == 0 {
+        line(mut out, "Your branch is behind '{name}' by {behind} {if behind == 1 then "commit" else "commits"}, and can be fast-forwarded.")
+        if hints { line(mut out, "  (use \"git pull\" to update your local branch)") }
+    } else {
+        line(mut out, "Your branch and '{name}' have diverged,")
+        line(mut out, "and have {ahead} and {behind} different commits each, respectively.")
+        if hints { line(mut out, "  (use \"git pull\" if you want to integrate the remote branch with yours)") }
+    }
+    line(mut out, "")
+}

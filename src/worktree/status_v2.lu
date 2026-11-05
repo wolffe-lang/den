@@ -1,0 +1,98 @@
+use object
+use oid
+use index
+use rename
+
+fn v2_mode(mode: int) -> str ! WorkErrors {
+    if mode == 0 then "000000" else object.mode_text(mode)?
+}
+
+fn v2_name(id: List[oid.Oid]) -> str ! WorkErrors {
+    if id.len == 0 then "0000000000000000000000000000000000000000" else oid.hex(id[0])?
+}
+
+fn v2_path(path: List[byte], options: StatusOptions) -> List[byte] {
+    if options.nul then owned_bytes(path) else quote(path, options.quote_path, false)
+}
+
+fn v2_line(mut out: List[byte], text: str, options: StatusOptions) {
+    bytes_add(mut out, text.bytes())
+    (mut out).push(if options.nul then 0 as byte else 10 as byte)
+}
+
+fn v2_score(snapshot: Snapshot, row: StatusRow) -> int ! WorkErrors {
+    let old = flat_at(snapshot.head_entries, row.original_path)
+    let added = index_at(snapshot.index.entries, row.path)
+    if old < 0 || added < 0 { return invalid }
+    let before = snapshot.head_entries[old], after = snapshot.index.entries[added]
+    if oid.equal(before.id, after.id) { return 100 }
+    var source = rename_candidate(before.path, before.mode, before.id, false)
+    var target = rename_candidate(after.path, after.stat[6], after.id, false)
+    source.data = rename_body(snapshot.context, before.id)?
+    target.data = rename_body(snapshot.context, after.id)?
+    let pairs = rename.pair([source], [target], rename.defaults())?
+    if pairs.len != 1 { return invalid }
+    pairs[0].percent
+}
+
+/// Porcelain-v2 reuses the exact scanner/rename decisions, adding documented
+/// modes/OIDs and full branch headers without changing the existing v1 API.
+pub fn render_status_v2(snapshot: Snapshot, options: StatusOptions) -> List[byte] ! WorkErrors {
+    var out = List[byte]()
+    if options.branch {
+        let current = if snapshot.head.commits.len == 0 then "(initial)" else oid.hex(snapshot.head.commits[0])?
+        let branch = if snapshot.head.detached then "(detached)" else snapshot.head.branch
+        v2_line(mut out, "# branch.oid {current}", options)
+        v2_line(mut out, "# branch.head {branch}", options)
+        let tracking = status_upstream(snapshot, true)?
+        if tracking.reference != "" {
+            v2_line(mut out, "# branch.upstream {tracking.name}", options)
+            if tracking.ids.len != 0 && snapshot.head.commits.len != 0 {
+                v2_line(mut out, "# branch.ab +{tracking.ahead} -{tracking.behind}", options)
+            }
+        }
+    }
+    for row in grouped(snapshot, renames(snapshot, options)?, options) {
+        if row.untracked || row.ignored {
+            bytes_add(mut out, "{if row.ignored then "!" else "?"} ".bytes())
+            bytes_add(mut out, v2_path(row.path, options))
+            (mut out).push(if options.nul then 0 as byte else 10 as byte)
+            continue
+        }
+        let xy = "{if row.x == " " then "." else row.x}{if row.y == " " then "." else row.y}"
+        let disk = file_at(snapshot.files, row.path)
+        let wm = if disk < 0 then "000000" else v2_mode(snapshot.files[disk].mode)?
+        if conflict_row(row) {
+            var modes = ["000000", "000000", "000000"]
+            var names = [v2_name([])?, v2_name([])?, v2_name([])?]
+            for entry in snapshot.index.entries {
+                if compare(entry.path, row.path) != 0 { continue }
+                let stage = index.stage(entry)
+                if stage > 0 {
+                    modes[stage - 1] = v2_mode(entry.stat[6])?
+                    names[stage - 1] = oid.hex(entry.id)?
+                }
+            }
+            bytes_add(mut out, "u {xy} N... {modes[0]} {modes[1]} {modes[2]} {wm} {names[0]} {names[1]} {names[2]} ".bytes())
+        } else {
+            let old = flat_at(snapshot.head_entries,
+                if row.original_path.len == 0 then row.path else row.original_path)
+            let added = index_at(snapshot.index.entries, row.path)
+            let intent = added >= 0 && snapshot.index.entries[added].extended & 0x2000 != 0
+            let hm = if old < 0 then "000000" else v2_mode(snapshot.head_entries[old].mode)?
+            let im = if added < 0 || intent then "000000" else v2_mode(snapshot.index.entries[added].stat[6])?
+            let hn = if old < 0 then v2_name([])? else oid.hex(snapshot.head_entries[old].id)?
+            let name = if added < 0 || intent then v2_name([])? else oid.hex(snapshot.index.entries[added].id)?
+            let kind = if row.original_path.len == 0 then "1" else "2"
+            bytes_add(mut out, "{kind} {xy} N... {hm} {im} {wm} {hn} {name} ".bytes())
+            if row.original_path.len != 0 { bytes_add(mut out, "{row.x}{v2_score(snapshot, row)?} ".bytes()) }
+        }
+        bytes_add(mut out, v2_path(row.path, options))
+        if row.original_path.len != 0 {
+            (mut out).push(if options.nul then 0 as byte else 9 as byte)
+            bytes_add(mut out, v2_path(row.original_path, options))
+        }
+        (mut out).push(if options.nul then 0 as byte else 10 as byte)
+    }
+    out
+}

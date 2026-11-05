@@ -15,10 +15,16 @@ fn emit_ignore_warnings(warnings: List[str]) {
 fn status_command(ctx: Context, args: List[str]) -> int ! WorkErrors {
     var options = status_options(ctx)?
     var literal = false
-    var format = false
+    var format = false, version2 = false
     for arg in args {
         if !literal && arg == "--" { literal = true; continue }
-        if !literal && (arg == "--porcelain" || arg == "--porcelain=1" || arg == "--porcelain=v1") {
+        if !literal && (arg == "--porcelain=2" || arg == "--porcelain=v2") {
+            options.porcelain = true
+            options.short = true
+            format = true
+            version2 = true
+        } else if !literal && (arg == "--porcelain" || arg == "--porcelain=1" || arg == "--porcelain=v1") {
+            version2 = false
             options.porcelain = true
             options.short = true
             format = true
@@ -34,6 +40,7 @@ fn status_command(ctx: Context, args: List[str]) -> int ! WorkErrors {
         } else if !literal && arg == "-z" {
             options.nul = true
         } else if !literal && arg == "--long" {
+            version2 = false
             options.short = false
             options.porcelain = false
             format = true
@@ -74,7 +81,7 @@ fn status_command(ctx: Context, args: List[str]) -> int ! WorkErrors {
     var warnings = List[str]()
     defer emit_ignore_warnings(warnings)
     let snapshot = scan_with_warnings(ctx, options.untracked != "no", mut warnings)?
-    let bytes = render_status(snapshot, options)?
+    let bytes = if version2 then render_status_v2(snapshot, options)? else render_status(snapshot, options)?
     var output = fs.stdout()
     fs.write_chunk(mut output, bytes)?
     0
