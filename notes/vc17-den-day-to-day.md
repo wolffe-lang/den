@@ -18,7 +18,8 @@ The work is clean-room. Its inputs were Git's published manuals (git-config(1), 
 |---|---|---|
 | nomad | Apple silicon laptop, macOS arm64, 48 GB | targeted builds and oracle rows on macOS, the live SSH client |
 | kasumi | CachyOS desktop, i9-11900K, 31 GiB | the red takes, the components take and the first five full takes, on CPUs 4–7 |
-| satoyama | EndeavourOS laptop, i7-10870H (8 cores, 16 threads), 31 GB | the last full takes, the plant and the live SSH peer, on CPUs 0–3 and 8–11 with the host to itself |
+| satoyama | EndeavourOS laptop, i7-10870H (8 cores, 16 threads), 31 GB | the last full takes and the live SSH peer, on CPUs 0–3 and 8–11 with the host to itself |
+| hasu | NixOS desktop, i7-12700KF, 46 GiB | the plant, on block A (CPUs 0–5) with both of its locks |
 
 Linux leaves run in the `r41-toolchain` image under a 12 GiB cap, with taskset inside the container, no network and read-only pin mounts. `/usr/share/zoneinfo` and `/etc/localtime` are mounted empty, so the no-database rows have no database to find. satoyama throttles at 100 °C, and its CPU temperatures are logged beside every leaf; its timings are compared only with its own.
 
@@ -46,7 +47,7 @@ The scope stays bounded. There is no reflog-management verb, no system or worktr
 
 Per native and release tier the gate holds 18 date rows, 82 decoration rows and 70 config rows. Each row keeps the complete argv, environment, stdin, stdout, stderr, exit status and the resulting repository or file state. Terminal rows run in an owned pty, and default ANSI bytes are compared, never stripped. An index difference that neither side's own stat proof explains stays a named failure. Symlink and hardlink witnesses tell an edit of the target apart from a replacement of the link.
 
-Every family was red by name before its code:
+Every family was red by name before its code, the three families first at `a4f11f5`:
 
 | Rows | Red at | Green at |
 |---|---|---|
