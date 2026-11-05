@@ -8,9 +8,14 @@ fn main() -> int {
     var connection = http.open(url) else |e| { eprint("{e}"); return 1 }
     defer http.close(mut connection)
     for i in 0..count {
-        let response = http.request(mut connection, "GET", "/probe", "", List[byte]()) else |e| {
-            eprint("{e}")
-            return 1
+        let service = env_get("DEN_TEST_HTTP_DISCOVER") else ""
+        let response = if service != "" {
+            http.discover(mut connection, service) else |e| { eprint("{e}"); return 1 }
+        } else {
+            http.request(mut connection, "GET", "/probe", "", List[byte]()) else |e| {
+                eprint("{e}")
+                return 1
+            }
         }
         print("status={response.status} bytes={response.body.len} round={i}")
         fs_write_chunk(1, response.body) else |_| { return 2 }
