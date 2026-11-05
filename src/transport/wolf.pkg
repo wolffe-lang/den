@@ -5,5 +5,6 @@ pkg {
     deps: {
         pktline: {path: "../pktline"},
         wire: {path: "../wire"},
+        http: {path: "../http"},
     },
 }

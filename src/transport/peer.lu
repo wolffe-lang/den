@@ -1,0 +1,130 @@
+// Git HTTP is stateless RPC, not a byte-stream Channel. Keep framing, pack
+// construction, leases and publication shared with existing stream peers.
+use http
+use pktline
+
+/// One owned peer: exactly one stream channel or one HTTP connection.
+pub struct Peer { stream: List[Channel], web: List[http.Connection], service: str }
+
+/// Recognize HTTP URLs without treating another scheme as an HTTP fallback.
+pub fn http_form(url: str) -> bool {
+    let lower = url.lower()
+    lower.starts_with("http://") || lower.starts_with("https://")
+}
+
+/// Refuse unsupported HTTP credential/configuration policy before network IO.
+/// Config values and URL-scoped key names are never echoed in diagnostics.
+pub fn check_http_configuration(url: str, config: Map[str, str]) -> () ! Errors {
+    if !http_form(url) { return }
+    let _ = http.endpoint(url)?
+    for (key, value) in config.pairs() {
+        if key.starts_with("credential.") && key.ends_with(".helper") {
+            return Unsupported("HTTP credential.helper")
+        }
+        if key.starts_with("http.") && !(key == "http.followredirects" && value == "initial") {
+            return Unsupported("HTTP configuration")
+        }
+    }
+}
+
+/// Open one transport peer; HTTP discovery is a separate operation.
+pub fn peer(url: str, service: str) -> Peer ! Errors {
+    if service != "upload-pack" && service != "receive-pack" { return invalid }
+    if http_form(url) {
+        return Peer { stream: List[Channel](), web: [http.open(url)?], service: copy service }
+    }
+    Peer { stream: [connect(url, service)?], web: List[http.Connection](), service: copy service }
+}
+
+fn http_status(status: int, rpc: bool) -> () ! Errors {
+    if status == 200 { return }
+    if status == 401 { return Unsupported("HTTP authentication failed") }
+    if status == 403 { return Unsupported("HTTP forbidden") }
+    if status == 404 || status == 410 { return Unsupported("HTTP repository not found") }
+    if status >= 300 && status < 400 && rpc { return Unsupported("HTTP RPC redirect") }
+    Unsupported("HTTP status {status}")
+}
+
+/// Validate the smart-HTTP advertisement envelope without interpreting object
+/// bodies. V2 upload discovery starts directly with version 2, receive-pack
+/// requires its service announcement and the separating flush.
+pub fn http_advertisement(data: List[byte], service: str) -> List[byte] ! Errors {
+    let first = pktline.decode(data, 0)?
+    if first.kind != 4 { return invalid }
+    if service == "upload-pack" {
+        if pktline.text(first.data)? != "version 2" {
+            return Unsupported("remote does not advertise protocol v2")
+        }
+        return copy data
+    }
+    if service != "receive-pack" { return invalid }
+    if pktline.text(first.data)? != "# service=git-receive-pack" {
+        return Unsupported("HTTP wrong service advertisement")
+    }
+    let flush = pktline.decode(data, first.next)?
+    if flush.kind != 0 { return invalid }
+    copy data[flush.next..]
+}
+
+/// Fetch a complete capability/ref advertisement. Dumb HTTP is refused by name.
+pub fn advertisement(mut p: Peer, cap: int) -> List[byte] ! Errors {
+    if p.stream.len == 1 { return message(p.stream[0], cap)? }
+    if p.web.len != 1 { return invalid }
+    var c = copy p.web[0]
+    defer { p.web[0] = c }
+    let response = http.discover(mut c, "git-{p.service}")?
+    http_status(response.status, false)?
+    if response.content_type.lower() != "application/x-git-{p.service}-advertisement" {
+        return Unsupported("dumb HTTP protocol")
+    }
+    if response.body.len > cap { return limit }
+    http_advertisement(response.body, p.service)?
+}
+
+/// Send a complete command (including the raw pack for receive-pack), then
+/// receive exactly one HTTP RPC response or one stream message. Never redirect
+/// or retry an RPC except the HTTP client's single explicit 401 challenge.
+pub fn exchange(mut p: Peer, request: List[byte], cap: int) -> List[byte] ! Errors {
+    if p.stream.len == 1 {
+        write(p.stream[0], request)?
+        return message(p.stream[0], cap)?
+    }
+    if p.web.len != 1 { return invalid }
+    var c = copy p.web[0]
+    defer { p.web[0] = c }
+    let response = http.request_capped(mut c, "POST", "{c.endpoint.path}/git-{p.service}", "git-{p.service}", request, cap)?
+    http_status(response.status, true)?
+    if response.content_type.lower() != "application/x-git-{p.service}-result" {
+        return Unsupported("HTTP RPC content type")
+    }
+    let body = response.body
+    if body.len >= 4 && (str_from_utf8(body[body.len - 4..]) else "") == "0002" {
+        if p.service != "upload-pack" || body.len < 8 ||
+            (str_from_utf8(body[body.len - 8..body.len - 4]) else "") != "0000" { return invalid }
+        return copy body[0..body.len - 4]
+    }
+    copy body
+}
+
+/// Empty stream request ends a session; HTTP has no corresponding empty POST.
+pub fn end_peer(p: Peer) -> () ! Errors {
+    if p.stream.len == 1 { write(p.stream[0], "0000".bytes())? }
+}
+
+/// Close/reap the owned peer and invalidate its handles, including on refusal.
+pub fn close_peer(mut p: Peer) -> int ! Errors {
+    if p.stream.len == 1 {
+        let c = copy p.stream[0]
+        p.stream = List[Channel]()
+        return close(take c)?
+    }
+    if p.web.len == 1 {
+        var c = copy p.web[0]
+        http.close(mut c)
+        p.web = List[http.Connection]()
+    }
+    0
+}
+
+/// Credential-aware textual diagnostic boundary; never apply to pack bytes.
+pub fn redact(text: str) -> str { http.redact(text) }
