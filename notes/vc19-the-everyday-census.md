@@ -12,14 +12,14 @@ No den verb changed. Git was used only as a black-box oracle in the Linux contai
 - Git 2.56.0, binary SHA-256 `c4848492938c4ebfffbefe1fbbaa68b9af90c86d1f6a20e76816c5ff37fcfa60`. Its installed services, not the container's distribution Git, were first on `PATH`.
 - Wolf 0.2.36, Lupin 0.1.58, bundled std `78b9d3cbc41d51db44d18c40b6694403644d1c83`. Copied compiler/runtime/oracle identities were read twice and matched their source inputs.
 - Den's Ubuntu oracle image `f59d9fe871ff769948fb33a83d9eb8e16bea271b17a6c2a10f50043a314d928e`, from the pinned Ubuntu base `534baea6a22c03a63003dbc8dbe78fe34bc0d7e595d9a9dc9834884ff530eb55`; 12-GiB memory cap, both core-block locks, CPUs 6–11 pinned inside the container, and a 7,100-second bound after lock acquisition.
-- Source census tool `b4ac03733af1b637ca3794417c6b8a0a0f399c8c`. The completed capture contains **92 checkpoints × four columns**, with raw stdout/stderr/exit, full before/after file-byte/mode manifests, and retained content-addressed bytes.
+- Census script blob `bb72ef3ba4d194e176d7f1b2ea91859d8d6ff37a`, unchanged by the rebase onto `067b373`. The measured candidate column remains pinned at `554aa44`; it is not a rerun against the new trunk. The completed capture contains **92 checkpoints × four columns**, with raw stdout/stderr/exit, full before/after file-byte/mode manifests, and retained content-addressed bytes.
 
 Selected commits:
-- `a4f6fb7`: predict checkpoints and strict byte comparisons before implementation.
-- `322f630`: add the single scenario script, `tools/census-everyday`.
-- `b4ac037`: exercise filesystem snapshots, PTY streams and timeouts.
-- `8bfc66c`: record the machine table and byte-difference diagnoses.
-- `4646f78`: distinguish missing reflogs from packed-ref storage layout.
+- `e89b0bf`: predict checkpoints and strict byte comparisons before implementation.
+- `61dd1be`: add the single scenario script, `tools/census-everyday`.
+- `949794b`: exercise filesystem snapshots, PTY streams and timeouts.
+- `18ea06a`: record the machine table and byte-difference diagnoses.
+- `18c6b13`: distinguish missing reflogs from packed-ref storage layout.
 
 ## Prediction
 
@@ -217,16 +217,16 @@ This is a recommendation, not an allocation. Ranking uses remaining refusals and
 
 | Priority | Draft scope | Evidence and issue association |
 |---|---|---|
-| 0 | Deliver the existing dates/decorations/config-write work, then update the PAX pin in its own rollout | The candidate reduces PAX's 28 refused checkpoints to 7. All day-1 log/show refusals disappear, as do both tag refusals and the cherry-pick date failure. Config writes and configured file-URL remotes work. Existing associations: #45 and #46. The PAX pin update is outside this den change. |
+| 0 | Update the PAX pin in its own rollout now that the existing dates/decorations/config-write work has landed | The candidate reduces PAX's 28 refused checkpoints to 7. All day-1 log/show refusals disappear, as do both tag refusals and the cherry-pick date failure. Config writes and configured file-URL remotes work. Existing associations: #45 and #46. The PAX pin update is outside this den change. |
 | 1 | Finish the already-scoped upstream-status work and its performance gate | Three repeated refusals after push, clone and pull, including the first `status` in the clone. Existing associations: #49 and #50. This census witnesses #49, not the 454-file performance claim in #50. |
-| 2 | Complete config inspection with `config --list` | One day-4 refusal remains despite working config writes/`--get`; scope ordering, duplicate values, implicit values and exact output against the oracle. No matching open issue was found; requires a new issue before a future implementation lane. |
-| 3 | Accept ordinary local repository paths in clone/fetch | Two day-5 refusals: absolute bare-path clone and explicit bare-path fetch. Scope absolute/relative paths and remote-name disambiguation, with existing `file://` behavior unchanged. No matching open issue was found. This narrow scope would not settle the broader wire backlog in #48. |
-| 4 | Implement default merge inspection | Day-2 `show HEAD` after a true merge still refuses combined merge diff. Scope documented combined display, differing-parent paths and exact headers/hunks; preserve existing `show -s`. No matching open issue was found. Earlier than the wire refusals, but one inspection failure rather than repeated repository-status blockage. |
-| 5 | Match conflicted-status recovery guidance | One day-3 user-visible difference per column, no command refusal: restore the missing conflict-resolution and merge-abort preamble. Keep separate from the upstream/performance claim unless explicitly included in that work's scope. No matching open issue was found. |
+| 2 | Complete config inspection with `config --list` | One day-4 refusal remains despite working config writes/`--get`; scope ordering, duplicate values, implicit values and exact output against the oracle. Issue association: #51. |
+| 3 | Accept ordinary local repository paths in clone/fetch | Two day-5 refusals: absolute bare-path clone and explicit bare-path fetch. Scope absolute/relative paths and remote-name disambiguation, with existing `file://` behavior unchanged. Issue association: #52. This narrow scope would not settle the broader wire backlog in #48. |
+| 4 | Implement default merge inspection | Day-2 `show HEAD` after a true merge still refuses combined merge diff. Scope documented combined display, differing-parent paths and exact headers/hunks; preserve existing `show -s`. Issue association: #53. Earlier than the wire refusals, but one inspection failure rather than repeated repository-status blockage. |
+| 5 | Match conflicted-status recovery guidance | One day-3 user-visible difference per column, no command refusal: restore the missing conflict-resolution and merge-abort preamble. Issue association: #54; its output/advice checks remain distinct from upstream counting and performance checks. |
 
 Separately, propose a **metadata-fidelity** lane for clone reflog identity/date/messages and remote-reflog creation differences, plus a narrowly isolated stale-`AUTO_MERGE` cleanup row. These are real state discrepancies, not representation-only findings, but no extra onboarding blocker was observed here. No current issue is claimed resolved by this measurement PR. No issue was filed, labeled or closed.
 
-Recommend the order above, leaving #48's HTTPS/protocol/shallow/filter/progress scope intact; the draft scopes without an issue need one before implementation. The decision remains open.
+The measured scopes above are now consolidated into the vc18 follow-on covering #49, #50, #51, #52, #53, #54, #55 and #58, with #48's HTTPS/protocol/shallow/filter/progress scope left intact. This census does not witness #55's descriptor-permission setup, and its sole branch-listing row precedes upstream creation, so it does not witness #58. Their absence here is a coverage limit, not evidence of low priority. Recommend treating the reported upstream branch refusal (#58) and descriptor failure (#55) alongside the upstream-status blocker (#49), before inspection polish. The small-fixture timings cannot rank #50's performance work.
 
 ### Verification and handoff
 
