@@ -1,16 +1,16 @@
 // Bounded request/response IO over std.net. HTTP bodies are not pkt-line
 // streams: all declared framing is consumed before the caller sees a body.
 use std.net
+use std.x.tls.client
 
 /// Owned connection, explicitly closed once. A response with close semantics
 /// releases its descriptor; the next request may open a new connection.
-pub struct Connection { endpoint: Endpoint, fd: int, buffer: List[byte], cursor: int }
+pub struct Connection { endpoint: Endpoint, fd: int, buffer: List[byte], cursor: int, tls: List[client.Client] }
 
 /// One complete response, with metadata separate from its binary body.
 pub struct Response { status: int, content_type: str, location: str, basic: bool, body: List[byte] }
 
 fn dial(mut c: Connection) -> () ! Errors {
-    if c.endpoint.scheme != "http" { return Unsupported("HTTP TLS client not implemented") }
     let address = if c.endpoint.host == "::1" {
         "[::1]:{c.endpoint.port}"
     } else {
@@ -22,31 +22,44 @@ fn dial(mut c: Connection) -> () ! Errors {
         return io
     }
     c.fd = socket.fd
+    var ready = false
+    defer { if !ready { close(mut c) } }
+    if c.endpoint.scheme == "https" { c.tls = [secure(c.fd, c.endpoint.host)?] }
     c.buffer = List[byte]()
     c.cursor = 0
+    ready = true
 }
 
 /// Validate the URL and open a deadline-armed connection. No HTTP bytes are
 /// written by open, and no credentials are read by this framing layer.
 pub fn open(url: str) -> Connection ! Errors {
-    var c = Connection { endpoint: endpoint(url)?, fd: -1, buffer: List[byte](), cursor: 0 }
+    var c = Connection { endpoint: endpoint(url)?, fd: -1, buffer: List[byte](), cursor: 0, tls: List[client.Client]() }
     dial(mut c)?
     c
 }
 
 /// Close and invalidate this owned connection, including after a partial read.
 pub fn close(mut c: Connection) {
-    if c.fd >= 0 { net_close(c.fd) else |_| {}; c.fd = -1 }
+    if c.fd >= 0 {
+        if c.tls.len == 1 { client.close(take copy c.tls[0]) else |_| {} }
+        else { net_close(c.fd) else |_| {} }
+        c.fd = -1
+    }
+    c.tls = List[client.Client]()
     c.buffer = List[byte]()
     c.cursor = 0
 }
 
 fn refill(mut c: Connection) -> bool ! Errors {
     if c.cursor < c.buffer.len { return true }
-    c.buffer = net_read_bytes(c.fd, 65536) else |e| match e {
-        closed => List[byte](),
-        timeout => { return Unsupported("HTTP read timeout") },
-        _ => { return io },
+    if c.tls.len == 1 {
+        c.buffer = read_secure(mut c)?
+    } else {
+        c.buffer = net_read_bytes(c.fd, 65536) else |e| match e {
+            closed => List[byte](),
+            timeout => { return Unsupported("HTTP read timeout") },
+            _ => { return io },
+        }
     }
     c.cursor = 0
     c.buffer.len > 0
@@ -152,6 +165,9 @@ fn receive(mut c: Connection, cap: int) -> Response ! Errors {
     } else if h.length >= 0 {
         body_exact(mut c, mut body, h.length, cap)?
     } else {
+        if c.tls.len == 1 {
+            return Unsupported("HTTPS close-delimited body (wolf-std#133)")
+        }
         while refill(mut c)? {
             let amount = c.buffer.len - c.cursor
             body_exact(mut c, mut body, amount, cap)?
@@ -171,7 +187,7 @@ fn receive(mut c: Connection, cap: int) -> Response ! Errors {
 }
 
 fn send_request(
-    c: Connection,
+    mut c: Connection,
     method: str,
     target: str,
     service: str,
@@ -195,8 +211,8 @@ fn send_request(
         text = "{text}Accept: */*\r\n"
     }
     text = "{text}\r\n"
-    net_write_bytes(c.fd, text.bytes()) else |_| { return io }
-    if body.len != 0 { net_write_bytes(c.fd, body) else |_| { return io } }
+    write_bytes(mut c, text.bytes())?
+    if body.len != 0 { write_bytes(mut c, body)? }
 }
 
 /// Complete one bounded HTTP transaction. No implicit retries, including POST;
@@ -213,7 +229,7 @@ pub fn request_capped(
     if c.fd < 0 { dial(mut c)? }
     var complete = false
     defer { if !complete { close(mut c) } }
-    send_request(c, method, target, service, body)?
+    send_request(mut c, method, target, service, body)?
     let response = receive(mut c, cap)?
     complete = true
     response

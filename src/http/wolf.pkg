@@ -1,5 +1,5 @@
 pkg {
     name: "http",
     edition: "1",
-    capabilities: [net],
+    capabilities: [net, fs, env],
 }

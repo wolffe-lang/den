@@ -1,0 +1,82 @@
+// wolf-std d4a4d4c public-PKI client: caller-owned entropy, roots, UTC and
+// descriptor cleanup. No external TLS implementation or insecure fallback.
+use std.fs
+use std.net
+use std.time
+use std.x.tls.cert
+use std.x.tls.client
+
+fn root_bundle() -> List[byte] ! Errors {
+    let path = env_get("DEN_TLS_ROOTS") else { return Unsupported("TLS roots required (DEN_TLS_ROOTS)") }
+    if path == "" { return Unsupported("TLS roots required (DEN_TLS_ROOTS)") }
+    var file = fs.open(path) else |_| { return Unsupported("TLS roots unreadable") }
+    defer fs.close(take file) else |_| {}
+    var out = List[byte]()
+    loop {
+        let bytes = fs.read_chunk(mut file, 65536) else |e| match e {
+            eof => { break },
+            _ => { return io },
+        }
+        if bytes.len == 0 { break }
+        if bytes.len > 2097152 - out.len { return limit }
+        append(mut out, bytes)
+    }
+    if out.len == 0 { return Unsupported("TLS empty root bundle") }
+    out
+}
+
+fn entropy() -> List[byte] ! Errors {
+    // Bounded device reads, never a stored scalar/random file. PAX needs its
+    // entropy device as well as roots, clock and resolver support.
+    var file = fs.open("/dev/urandom") else |_| { return Unsupported("TLS host entropy unavailable") }
+    defer fs.close(take file) else |_| {}
+    var out = List[byte]()
+    while out.len < 64 {
+        let bytes = fs.read_chunk(mut file, 64 - out.len) else |_| {
+            return Unsupported("TLS host entropy unavailable")
+        }
+        if bytes.len == 0 { return Unsupported("TLS host entropy unavailable") }
+        append(mut out, bytes)
+    }
+    out
+}
+
+fn secure(fd: int, host: str) -> client.Client ! Errors {
+    let roots = root_bundle()?
+    let clock = time.local_in("UTC0", time.unix_ms() / 1000) else |_| {
+        return Unsupported("TLS UTC clock unavailable")
+    }
+    let now = cert.timestamp(clock.year, clock.month, clock.day, clock.hour, clock.minute, clock.second)
+    let random = entropy()?
+    let pending = client.begin(take net.Socket { fd: fd }, host, roots, now, random[0..32], random[32..64]) else |e| {
+        return Unsupported("TLS {e}")
+    }
+    client.complete(take pending) else |e| { return Unsupported("TLS {e}") }
+}
+
+fn read_secure(mut c: Connection) -> List[byte] ! Errors {
+    var tls = copy c.tls[0]
+    loop {
+        let data = client.read(mut tls) else |e| match e {
+            closed => { c.tls[0] = tls; return List[byte]() },
+            _ => { return Unsupported("TLS {e}") },
+        }
+        if data.len == 0 { continue }
+        c.tls[0] = tls
+        return data
+    }
+}
+
+fn write_bytes(mut c: Connection, data: List[byte]) -> () ! Errors {
+    if c.tls.len == 0 {
+        net_write_bytes(c.fd, data) else |_| { return io }
+        return
+    }
+    var tls = copy c.tls[0], at = 0
+    while at < data.len {
+        let end = if data.len - at > 16384 then at + 16384 else data.len
+        client.write(mut tls, data[at..end]) else |e| { return Unsupported("TLS {e}") }
+        at = end
+    }
+    c.tls[0] = tls
+}
