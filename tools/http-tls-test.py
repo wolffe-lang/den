@@ -46,20 +46,23 @@ def main():
     openssl('x509', '-req', '-in', root / 'leaf.csr', '-CA', root / 'ca.pem',
             '-CAkey', root / 'ca.key', '-CAcreateserial', '-days', '1', '-sha256',
             '-extfile', extensions, '-out', root / 'leaf.pem')
+    (root / 'probe').write_bytes(b'HTTP/1.1 200 OK\r\nContent-Length: 3\r\nConnection: close\r\n\r\nTLS')
     results = []
     failures = []
     for name, roots, expected in [('http-tls-trusted', 'ca.der', None),
-                                   ('http-tls-unknown-root', 'wrong-ca.der', b'issuer_mismatch')]:
+                                   ('http-tls-unknown-root', 'wrong-ca.der', b'issuer_mismatch'),
+                                   ('http-tls-unframed', 'ca.der', b'wolf-std#133')]:
         with socket.socket() as reservation:
             reservation.bind(('127.0.0.1', 0))
             port = reservation.getsockname()[1]
-        # -www waits for a request and produces a complete HTTP/1.0 reply.
-        # Its body is public fixture data, never captured client credentials.
+        # -HTTP serves the complete framed response file. Only the dedicated
+        # wolf-std#133 refusal row uses -www's close-delimited response.
         with (root / (name + '-server.log')).open('wb') as log:
             server = subprocess.Popen(['/usr/bin/openssl', 's_server', '-accept', str(port),
                                        '-cert', str(root / 'leaf.pem'), '-key', str(root / 'leaf.key'),
                                        '-tls1_3', '-ciphersuites', 'TLS_CHACHA20_POLY1305_SHA256',
-                                       '-www', '-naccept', '1'], stdout=subprocess.PIPE, stderr=log)
+                                       '-www' if name == 'http-tls-unframed' else '-HTTP', '-naccept', '1'],
+                                      cwd=root, stdout=subprocess.PIPE, stderr=log)
             try:
                 ready = selectors.DefaultSelector()
                 ready.register(server.stdout, selectors.EVENT_READ)
