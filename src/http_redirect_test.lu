@@ -27,6 +27,12 @@ fn checks() -> () ! http.Errors {
     let v2 = "000eversion 2\n000cls-refs\n000afetch\n0000".bytes()
     let got = transport.http_advertisement(v2, "upload-pack")?
     assert(got.len == v2.len)
+    var wrapped = "001e# service=git-upload-pack\n0000".bytes()
+    for b in v2 { (mut wrapped).push(b) }
+    let unwrapped = transport.http_advertisement(wrapped, "upload-pack")?
+    assert(unwrapped.len == v2.len, "http-wrapped-v2")
+    for i in 0..v2.len { assert(unwrapped[i] == v2[i], "http-wrapped-v2-bytes") }
+    print("PASS http-wrapped-v2")
     let receive = "001f# service=git-receive-pack\n00000000".bytes()
     assert(transport.http_advertisement(receive, "receive-pack")?.len == 4)
     var rejected = false
