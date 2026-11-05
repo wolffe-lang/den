@@ -127,13 +127,15 @@ def suite():
         g('checkout', '-q', '--detach', first)
         other = commit('other', 'other\ntwo\nthree\n')
         g('checkout', '-q', 'main')
+        merge = g('commit-tree', g('rev-parse', 'main^{tree}'), '-p', second, '-p', other,
+                  data=b'ordered merge\n')
         forms = [['status'], ['status', '-sb'], ['status', '--porcelain', '-b'],
                  ['status', '--porcelain=v2', '--branch'], ['status', '--porcelain=v2', '--branch', '-z'],
                  ['status', '--porcelain'], ['branch'], ['branch', '-v'], ['branch', '-vv'],
                  ['branch', '-a'], ['branch', '-r'], ['branch', '-avv'], ['branch', '-rvv']]
         for label, local, remote in [('equal', first, first), ('ahead', second, first),
                                      ('behind', first, second), ('diverged', second, other),
-                                     ('gone', second, None)]:
+                                     ('merge-full-dag', merge, second), ('gone', second, None)]:
             g('reset', '--hard', local)
             if remote:
                 g('update-ref', 'refs/remotes/origin/main', remote)
@@ -141,6 +143,15 @@ def suite():
                 g('update-ref', '-d', 'refs/remotes/origin/main')
             for n, args in enumerate(forms):
                 check('upstream-' + label + '-' + str(n) + '-' + args[0], args)
+        g('update-ref', 'refs/remotes/origin/main', first)
+        (base / 'file').write_text('unstaged\n')
+        (base / 'added').write_text('staged\n')
+        (base / 'untracked').write_text('untracked\n')
+        g('add', 'added')
+        check('upstream-v2-dirty', ['status', '--porcelain=v2', '--branch'])
+        check('upstream-v2-dirty-nul', ['status', '--porcelain=v2', '--branch', '-z'])
+        g('reset', '--hard', 'HEAD')
+        (base / 'untracked').unlink()
         g('config', 'branch.main.remote', '.')
         g('config', 'branch.main.merge', 'refs/heads/other')
         g('update-ref', 'refs/heads/other', first)
