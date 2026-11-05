@@ -49,6 +49,7 @@ fn execute(args: List[str]) -> () ! object.StoreErrors {
     }
     var quiet = false,
         bare = false,
+        local = true,
         force = false,
         atomic = false,
         upload = "",
@@ -60,6 +61,10 @@ fn execute(args: List[str]) -> () ! object.StoreErrors {
         } else if arg.starts_with("--upload-pack=") && (args[0] == "clone" || args[0] == "fetch") {
             upload = arg[14..]
             if upload == "" { return Unsupported("empty upload-pack service path") }
+        } else if arg == "--no-local" && args[0] == "clone" {
+            local = false
+        } else if arg == "--local" && args[0] == "clone" {
+            local = true
         } else if arg == "--bare" {
             bare = true
         } else if (arg == "--force" || arg == "-f") && (args[0] == "push" || args[0] == "fetch") {
@@ -83,10 +88,14 @@ fn execute(args: List[str]) -> () ! object.StoreErrors {
                 eprint("Cloning into '{operands[1]}'...")
             }
         }
-        clone_repository(operands[0], operands[1], bare)?
+        clone_mode(operands[0], operands[1], bare, local)?
         return
     }
     if args[0] == "fetch" {
+        if operands.len > 0 && transport.local_path(operands[0]) {
+            local_fetch_command(operands, quiet, force)?
+            return
+        }
         if !quiet || bare || operands.len != 2 {
             return Unsupported("fetch requires -q URL SRC:DST")
         }

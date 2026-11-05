@@ -147,8 +147,16 @@ fn named_fetch(
             reason: reason,
         })
     }
-    // Auto-follow only tags whose final target is already in a fetched closure;
-    // never fetch every advertised tag merely because clone does so.
+    fetch_head = "{fetch_head}{fetch_tags(repo, url, roots, identity, action, mut rows)?}"
+    write_fetch_head(repo, fetch_head)?
+    if !quiet { fetch_report(url, rows) }
+}
+
+fn fetch_tags(
+    repo: repository.Repo, url: str, roots: List[str], identity: str, action: str,
+    mut rows: List[TransportRow],
+) -> str ! object.StoreErrors {
+    var extra = ""
     var reachable = Map[str, bool]()
     for id in closure(repo, roots, [])? { reachable[id] = true }
     for tag in fetch_view(repo, url, "refs/tags/", false)? {
@@ -165,7 +173,7 @@ fn named_fetch(
             "{action}: storing tag",
             false,
         )?
-        fetch_head = "{fetch_head}{tag.id}\tnot-for-merge\ttag '{tag.name[10..]}' of {fetch_url(url)}\n"
+        extra = "{extra}{tag.id}\tnot-for-merge\ttag '{tag.name[10..]}' of {fetch_url(url)}\n"
         (mut rows).push(TransportRow {
             flag: "*",
             summary: "[new tag]",
@@ -174,8 +182,7 @@ fn named_fetch(
             reason: "",
         })
     }
-    write_fetch_head(repo, fetch_head)?
-    if !quiet { fetch_report(url, rows) }
+    extra
 }
 
 fn configured_fetch_command(args: List[str]) -> () ! object.StoreErrors {
@@ -205,6 +212,10 @@ fn configured_fetch_command(args: List[str]) -> () ! object.StoreErrors {
 fn configured_form(args: List[str]) -> bool {
     for arg in args[1..] {
         if arg.starts_with("-") { continue }
+        if transport.local_path(arg) && fs.exists(arg) {
+            let repo = repository.discover(".") else { return false }
+            return (repo.config["remote.{arg}.url"] else "") != ""
+        }
         return !arg.contains("://") && !transport.ssh_form(arg)
     }
     true

@@ -142,10 +142,21 @@ fn process_channel(argv: List[str]) -> Channel ! Errors {
     }
 }
 
+/// Plain paths are distinct from URL schemes and scp-like SSH spellings.
+pub fn local_path(url: str) -> bool {
+    url != "" && !url.contains("://") && !ssh_form(url)
+}
+
 /// Open a file service subprocess or git TCP session; no shell, no protocol fallback, 30-second TCP deadlines.
 pub fn connect(url: str, service: str) -> Channel ! Errors {
     if service != "upload-pack" && service != "receive-pack" { return invalid }
     if url.len > 4096 { return limit }
+    if local_path(url) {
+        if url.contains("\0") { return invalid }
+        let variable = if service == "upload-pack" then "DEN_UPLOAD_PACK" else "DEN_RECEIVE_PACK"
+        let program = env.get(variable) else "git-{service}"
+        return process_channel([program, url])?
+    }
     if url.starts_with("file://") { return file_channel(url[7..], service)? }
     if ssh_form(url) { return ssh_channel(url, service)? }
     if !url.starts_with("git://") {

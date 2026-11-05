@@ -161,11 +161,16 @@ fn checkout_clone(repo: repository.Repo, root: str, id: oid.Oid) -> () ! worktre
 /// selected HEAD through the shared worktree/index transaction, never a second
 /// checkout implementation. Existing destination directories are refused.
 pub fn clone_repository(url: str, destination: str, bare: bool) -> () ! object.StoreErrors {
+    clone_mode(url, destination, bare, true)?
+}
+
+fn clone_mode(url: str, destination: str, bare: bool, local: bool) -> () ! object.StoreErrors {
     if url.contains("\n") || url.contains("\r") { return invalid }
     if fs.exists(destination) { return exists }
     fs.create_dir(destination)?
     let (repo, _) = repository.init(destination, bare, "main")?
-    let advertised = fetch_objects(repo, url)?
+    let plain = transport.local_path(url)
+    let advertised = if plain && local then clone_local_objects(repo, url)? else fetch_objects(repo, url)?
     var selected = wire.Ref { name: "HEAD", id: "unborn", target: "", peeled: "" }
     for reference in advertised { if reference.name == "HEAD" { selected = copy reference } }
     for reference in advertised {
@@ -214,8 +219,17 @@ pub fn clone_repository(url: str, destination: str, bare: bool) -> () ! object.S
     )?
     var config = fs.open_append("{repo.gitdir}/config")?
     defer fs.close(take config) else |_| {}
-    let quoted = url.replace("\\", "\\\\").replace("\"", "\\\"")
-    fs.write(mut config, "[remote \"origin\"]\n\turl = \"{quoted}\"\n")?
+    let configured_url = if plain && !url.starts_with("/") {
+        "{fs.realpath(".")?}/{url}"
+    } else {
+        copy url
+    }
+    let quoted = if plain {
+        repository.config_quote(configured_url)?
+    } else {
+        "\"{configured_url.replace("\\", "\\\\").replace("\"", "\\\"")}\""
+    }
+    fs.write(mut config, "[remote \"origin\"]\n\turl = {quoted}\n")?
     if !bare {
         fs.write(mut config, "\tfetch = +refs/heads/*:refs/remotes/origin/*\n")?
         if selected.target.starts_with("refs/heads/") {
