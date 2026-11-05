@@ -113,9 +113,14 @@ fn trailers(data: List[byte]) -> () ! Errors {
         if colon == 0 { return invalid }
         for b in field[0..colon].bytes() { if !token_byte(b) { return invalid } }
         let name = field[0..colon].lower()
-        if name == "content-length" || name == "transfer-encoding" || name == "content-encoding" ||
-            name == "content-type" || name == "connection" || name == "location" ||
-            name == "www-authenticate" || name == "authorization" {
+        if name == "content-length" ||
+            name == "transfer-encoding" ||
+            name == "content-encoding" ||
+            name == "content-type" ||
+            name == "connection" ||
+            name == "location" ||
+            name == "www-authenticate" ||
+            name == "authorization" {
             return Unsupported("HTTP forbidden trailer")
         }
     }
@@ -157,13 +162,20 @@ fn receive(mut c: Connection, cap: int) -> Response ! Errors {
     if c.cursor != c.buffer.len { return Unsupported("HTTP trailing response bytes") }
     if h.close { close(mut c) }
     Response {
-        status: h.status, content_type: h.content_type, location: h.location,
-        basic: h.basic, body: body,
+        status: h.status,
+        content_type: h.content_type,
+        location: h.location,
+        basic: h.basic,
+        body: body,
     }
 }
 
 fn send_request(
-    c: Connection, method: str, target: str, service: str, body: List[byte],
+    c: Connection,
+    method: str,
+    target: str,
+    service: str,
+    body: List[byte],
 ) -> () ! Errors {
     if method != "GET" && method != "POST" { return invalid }
     if body.len > 140000000 || target.len > 8192 { return limit }
@@ -172,7 +184,9 @@ fn send_request(
     for b in target.bytes() {
         if b as int <= 32 || b as int >= 127 || b == 35 as byte { return invalid }
     }
-    if service != "" && service != "git-upload-pack" && service != "git-receive-pack" { return invalid }
+    if service != "" && service != "git-upload-pack" && service != "git-receive-pack" {
+        return invalid
+    }
     var text = "{method} {target} HTTP/1.1\r\nHost: {c.endpoint.authority}\r\nAccept-Encoding: identity\r\n"
     if service == "git-upload-pack" { text = "{text}Git-Protocol: version=2\r\n" }
     if method == "POST" {
@@ -188,7 +202,12 @@ fn send_request(
 /// Complete one bounded HTTP transaction. No implicit retries, including POST;
 /// failure closes the connection before returning. No protocol status is hidden.
 pub fn request_capped(
-    mut c: Connection, method: str, target: str, service: str, body: List[byte], cap: int,
+    mut c: Connection,
+    method: str,
+    target: str,
+    service: str,
+    body: List[byte],
+    cap: int,
 ) -> Response ! Errors {
     if cap < 0 || cap > 140000000 { return limit }
     if c.fd < 0 { dial(mut c)? }
@@ -202,7 +221,11 @@ pub fn request_capped(
 
 /// Request with the inherited maximum wire-body cap, for importing clients.
 pub fn request(
-    mut c: Connection, method: str, target: str, service: str, body: List[byte],
+    mut c: Connection,
+    method: str,
+    target: str,
+    service: str,
+    body: List[byte],
 ) -> Response ! Errors {
     request_capped(mut c, method, target, service, body, 140000000)?
 }

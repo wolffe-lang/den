@@ -83,14 +83,22 @@ pub fn head(data: List[byte], body_cap: int) -> Head ! Errors {
     let lines = header_lines(data)?
     if lines.len == 0 { return invalid }
     let status = lines[0]
-    if status.len < 13 || !(status.starts_with("HTTP/1.1 ") || status.starts_with("HTTP/1.0 ")) ||
-        status[12..13] != " " { return invalid }
+    if status.len < 13 ||
+        !(status.starts_with("HTTP/1.1 ") || status.starts_with("HTTP/1.0 ")) ||
+        status[12..13] != " " {
+        return invalid
+    }
     let code = decimal(status[9..12], 999)?
     if code < 100 || code > 599 { return invalid }
     if code == 101 { return Unsupported("HTTP protocol upgrade") }
     var result = Head {
-        status: code, length: -1, chunked: false, close: false,
-        content_type: "", location: "", basic: false,
+        status: code,
+        length: -1,
+        chunked: false,
+        close: false,
+        content_type: "",
+        location: "",
+        basic: false,
     }
     var connection = "", transfer = false, have_type = false, have_location = false
     for line in lines[1..] {

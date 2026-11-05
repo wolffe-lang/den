@@ -1,4 +1,5 @@
 //! member: false
+
 use http
 
 fn main() -> int {
@@ -8,7 +9,8 @@ fn main() -> int {
     defer http.close(mut connection)
     for i in 0..count {
         let response = http.request(mut connection, "GET", "/probe", "", List[byte]()) else |e| {
-            eprint("{e}"); return 1
+            eprint("{e}")
+            return 1
         }
         print("status={response.status} bytes={response.body.len} round={i}")
         fs_write_chunk(1, response.body) else |_| { return 2 }

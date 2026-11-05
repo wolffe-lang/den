@@ -40,7 +40,9 @@ fn path_valid(path: str) -> () ! Errors {
             if decoded < 32 || decoded == 127 { return invalid }
             at = at + 3
         } else {
-            let ok = n >= 65 && n <= 90 || n >= 97 && n <= 122 || n >= 48 && n <= 57 ||
+            let ok = n >= 65 && n <= 90 ||
+                n >= 97 && n <= 122 ||
+                n >= 48 && n <= 57 ||
                 "-._~!$&'()*+,;=:@/".contains(str_from_utf8([b]) else " ")
             if !ok { return invalid }
             at = at + 1
