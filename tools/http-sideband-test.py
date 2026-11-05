@@ -127,6 +127,8 @@ try:
     cases=[
         ('http-sideband-progress', pkt(b'\x02error: denied\n')+pkt(b'\x01'+report)+b'0000', None),
         ('http-sideband-split-lines', pkt(b'\x02one')+pkt(b'\x02 line\nsecond\rthird')+pkt(b'\x01'+report)+b'0000', None),
+        ('http-sideband-empty-lines', pkt(b'\x02\n\r\n')+pkt(b'\x01'+report)+b'0000', None),
+        ('http-sideband-band3-after-progress', pkt(b'\x02working')+pkt(b'\x03fatal: stop')+b'0000', None),
         ('http-sideband-unknown-band', pkt(b'\x04unexpected')+b'0000', b'HTTP unknown sideband'),
         ('http-sideband-band3-mid-pack', pkt(b'\x01'+report[:8])+pkt(b'\x03fatal: deliberate stop\n')+b'0000', None),
         ('http-sideband-truncated-frame', b'0010\x02short', b'HTTP truncated sideband'),
