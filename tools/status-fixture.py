@@ -95,8 +95,10 @@ assert abs(before['pack_bytes'] - 19_000_000) <= 95_000, before['pack_bytes']
 copy = root / 'case'
 subprocess.run(['cp', '-a', str(source), str(copy)], check=True)
 pre_refresh = inspect(copy)
+(root / 'cold.index').write_bytes((copy / '.git/index').read_bytes())
 git('update-index', '--refresh', cwd=copy)
 post_refresh = inspect(copy)
+(root / 'warm.index').write_bytes((copy / '.git/index').read_bytes())
 assert all(row['own_stat_equal'] for row in post_refresh['index_proof'])
 assert post_refresh['extensions'] == ['TREE']
 summary = dict(source=before, copied_before_refresh=pre_refresh, copied_after_refresh=post_refresh,
