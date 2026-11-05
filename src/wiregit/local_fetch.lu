@@ -64,7 +64,8 @@ fn local_fetch_command(operands: List[str], quiet: bool, force: bool) -> () ! ob
         })
     }
     if source != "HEAD" {
-        fetch_head = "{fetch_head}{fetch_tags(repo, url, [id], identity, action, mut rows)?}"
+        let followed = fetch_tags(repo, url, [id], identity, action, mut rows)?
+        fetch_head = "{fetch_head}{followed}"
     }
     write_fetch_head(repo, fetch_head)?
     if !quiet { fetch_report(url, rows) }
