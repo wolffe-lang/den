@@ -20,10 +20,11 @@ fn fetch_view(
     source: str,
     download: bool,
 ) -> List[wire.Ref] ! object.StoreErrors {
-    let c = transport.connect(url, "upload-pack")?
+    transport.check_http_configuration(url, repo.config)?
+    var p = transport.peer(url, "upload-pack")?
     var active = true
-    defer { if active { let _ = transport.close(take copy c) else 1 } }
-    let advertisement = transport.message(c, 65536)?
+    defer { if active { let _ = transport.close_peer(mut p) else 1 } }
+    let advertisement = transport.advertisement(mut p, 65536)?
     if advertisement.len == 0 { return Unsupported("remote service unavailable") }
     let remote_message = remote_error(advertisement)?
     if remote_message != "" { return Unsupported(remote_message) }
@@ -53,8 +54,7 @@ fn fetch_view(
     } else {
         (mut args).push("ref-prefix {source}")
     }
-    transport.write(c, wire.request("ls-refs", args)?)?
-    let received = wire.parse_refs(transport.message(c, 2097152)?)?
+    let received = wire.parse_refs(transport.exchange(mut p, wire.request("ls-refs", args)?, 2097152)?)?
     var advertised = List[wire.Ref]()
     for reference in received {
         let selected = if source != "" {
@@ -67,8 +67,8 @@ fn fetch_view(
         if selected { (mut advertised).push(copy reference) }
     }
     if !download {
-        transport.write(c, "0000".bytes())?
-        let status = transport.close(take copy c)?
+        transport.end_peer(p)?
+        let status = transport.close_peer(mut p)?
         active = false
         if status != 0 { return io }
         return advertised
@@ -113,8 +113,7 @@ fn fetch_view(
         }
     }
     if wants.len > 0 {
-        transport.write(c, wire.fetch_request(wants, haves, true)?)?
-        let bytes = wire.parse_pack(transport.message(c, 140000000)?)?
+        let bytes = wire.parse_pack(transport.exchange(mut p, wire.fetch_request(wants, haves, true)?, 140000000)?)?
         import_pack(repo, bytes)?
     }
     var roots = List[str]()
@@ -122,8 +121,8 @@ fn fetch_view(
         if reference.id != "unborn" { (mut roots).push(copy reference.id) }
     }
     let _ = closure(repo, roots, [])?
-    transport.write(c, "0000".bytes())?
-    let code = transport.close(take copy c)?
+    transport.end_peer(p)?
+    let code = transport.close_peer(mut p)?
     active = false
     if code != 0 { return io }
     advertised

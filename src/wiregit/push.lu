@@ -95,15 +95,16 @@ pub fn push_reported(
         let _ = oid.parse("sha1", lease.expected)?
         leased_names[lease.name] = true
     }
-    let c = transport.connect(url, "receive-pack")?
+    transport.check_http_configuration(url, repo.config)?
+    var p = transport.peer(url, "receive-pack")?
     var active = true, started = false, advertised = false
     defer {
         if active {
-            if advertised && !started { transport.write(c, "0000".bytes()) else |_| {} }
-            let _ = transport.close(take copy c) else 1
+            if advertised && !started { transport.end_peer(p) else |_| {} }
+            let _ = transport.close_peer(mut p) else 1
         }
     }
-    let advertisement = transport.message(c, 2097152)?
+    let advertisement = transport.advertisement(mut p, 2097152)?
     if advertisement.len == 0 { return Unsupported("remote service unavailable") }
     let remote_message = remote_error(advertisement)?
     if remote_message != "" { return Unsupported(remote_message) }
@@ -199,9 +200,9 @@ pub fn push_reported(
     }
     if updates.len == 0 {
         started = true
-        transport.write(c, "0000".bytes())?
+        transport.end_peer(p)?
         active = false
-        let status = transport.close(take copy c)?
+        let status = transport.close_peer(mut p)?
         if status != 0 { return io }
         return
     }
@@ -218,9 +219,8 @@ pub fn push_reported(
     }
     wire.append(mut request, "0000".bytes())
     started = true
-    transport.write(c, request)?
-    if roots.len > 0 { transport.write(c, pack_for(repo, roots, [], "ofs")?)? }
-    let response = transport.message(c, 2097152)?
+    if roots.len > 0 { wire.append(mut request, pack_for(repo, roots, [], "ofs")?) }
+    let response = transport.exchange(mut p, request, 2097152)?
     var pos = 0, unpacked = false, reported = Map[str, bool](), failed = false
     while pos < response.len {
         let p = pktline.decode(response, pos)?
@@ -255,7 +255,7 @@ pub fn push_reported(
     }
     for u in updates { if !(reported[u.name] else false) { return truncated } }
     active = false
-    let status = transport.close(take copy c)?
+    let status = transport.close_peer(mut p)?
     if failed { return Unsupported("remote rejected push") }
     if !unpacked || status != 0 { return io }
 }
