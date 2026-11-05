@@ -1,0 +1,204 @@
+// Bounded request/response IO over std.net. HTTP bodies are not pkt-line
+// streams: all declared framing is consumed before the caller sees a body.
+use std.net
+
+/// Owned connection, explicitly closed once. A response with close semantics
+/// releases its descriptor; the next request may open a new connection.
+pub struct Connection { endpoint: Endpoint, fd: int, buffer: List[byte], cursor: int }
+
+/// One complete response, with metadata separate from its binary body.
+pub struct Response { status: int, content_type: str, location: str, basic: bool, body: List[byte] }
+
+fn dial(mut c: Connection) -> () ! Errors {
+    if c.endpoint.scheme != "http" { return Unsupported("HTTP TLS client not implemented") }
+    let address = if c.endpoint.host == "::1" {
+        "[::1]:{c.endpoint.port}"
+    } else {
+        "{c.endpoint.host}:{c.endpoint.port}"
+    }
+    var socket = net.connect(address) else |_| { return io }
+    net.set_deadline(mut socket, 30000) else |_| {
+        net.close(take socket) else |_| {}
+        return io
+    }
+    c.fd = socket.fd
+    c.buffer = List[byte]()
+    c.cursor = 0
+}
+
+/// Validate the URL and open a deadline-armed connection. No HTTP bytes are
+/// written by open, and no credentials are read by this framing layer.
+pub fn open(url: str) -> Connection ! Errors {
+    var c = Connection { endpoint: endpoint(url)?, fd: -1, buffer: List[byte](), cursor: 0 }
+    dial(mut c)?
+    c
+}
+
+/// Close and invalidate this owned connection, including after a partial read.
+pub fn close(mut c: Connection) {
+    if c.fd >= 0 { net_close(c.fd) else |_| {}; c.fd = -1 }
+    c.buffer = List[byte]()
+    c.cursor = 0
+}
+
+fn refill(mut c: Connection) -> bool ! Errors {
+    if c.cursor < c.buffer.len { return true }
+    c.buffer = net_read_bytes(c.fd, 65536) else |e| match e {
+        closed => List[byte](),
+        timeout => { return Unsupported("HTTP read timeout") },
+        _ => { return io },
+    }
+    c.cursor = 0
+    c.buffer.len > 0
+}
+
+fn octet(mut c: Connection) -> byte ! Errors {
+    if !refill(mut c)? { return truncated }
+    let b = c.buffer[c.cursor]
+    c.cursor = c.cursor + 1
+    b
+}
+
+fn append(mut out: List[byte], data: List[byte]) {
+    for b in data { (mut out).push(b) }
+}
+
+fn line(mut c: Connection) -> List[byte] ! Errors {
+    var out = List[byte]()
+    loop {
+        let b = octet(mut c)?
+        if b == 13 as byte {
+            if octet(mut c)? != 10 as byte { return invalid }
+            return out
+        }
+        if b == 10 as byte { return invalid }
+        if out.len >= 8192 { return limit }
+        (mut out).push(b)
+    }
+}
+
+fn headers(mut c: Connection) -> List[byte] ! Errors {
+    var out = List[byte](), count = 0
+    loop {
+        let bytes = line(mut c)?
+        if bytes.len + 2 > 65536 - out.len { return limit }
+        append(mut out, bytes)
+        append(mut out, "\r\n".bytes())
+        if bytes.len == 0 { return out }
+        count = count + 1
+        if count > 257 { return limit }
+    }
+}
+
+fn body_exact(mut c: Connection, mut out: List[byte], count: int, cap: int) -> () ! Errors {
+    if count < 0 || count > cap - out.len { return limit }
+    var left = count
+    while left > 0 {
+        if !refill(mut c)? { return truncated }
+        let available = c.buffer.len - c.cursor
+        let amount = if left < available then left else available
+        append(mut out, c.buffer[c.cursor..c.cursor + amount])
+        c.cursor = c.cursor + amount
+        left = left - amount
+    }
+}
+
+fn trailers(data: List[byte]) -> () ! Errors {
+    // Validate syntax independently, never merge trailers into header metadata.
+    var block = "HTTP/1.1 200 OK\r\n".bytes()
+    append(mut block, data)
+    let lines = header_lines(block)?
+    for field in lines[1..] {
+        let colon = field.find(":") else { return invalid }
+        if colon == 0 { return invalid }
+        for b in field[0..colon].bytes() { if !token_byte(b) { return invalid } }
+        let name = field[0..colon].lower()
+        if name == "content-length" || name == "transfer-encoding" || name == "content-encoding" ||
+            name == "content-type" || name == "connection" || name == "location" ||
+            name == "www-authenticate" || name == "authorization" {
+            return Unsupported("HTTP forbidden trailer")
+        }
+    }
+}
+
+fn receive(mut c: Connection, cap: int) -> Response ! Errors {
+    var info = 0
+    var h = head(headers(mut c)?, cap)?
+    while h.status < 200 {
+        info = info + 1
+        if info > 8 { return limit }
+        h = head(headers(mut c)?, cap)?
+    }
+    var body = List[byte]()
+    if h.chunked {
+        var count = 0, metadata = 0
+        loop {
+            let size_line = line(mut c)?
+            if size_line.len + 2 > 1048576 - metadata { return limit }
+            metadata = metadata + size_line.len + 2
+            let text = str_from_utf8(size_line) else |_| { return invalid }
+            let size = chunk_size(text, cap - body.len)?
+            if size == 0 { trailers(headers(mut c)?)?; break }
+            count = count + 1
+            if count > 1000000 { return limit }
+            body_exact(mut c, mut body, size, cap)?
+            if octet(mut c)? != 13 as byte || octet(mut c)? != 10 as byte { return invalid }
+        }
+    } else if h.length >= 0 {
+        body_exact(mut c, mut body, h.length, cap)?
+    } else {
+        while refill(mut c)? {
+            let amount = c.buffer.len - c.cursor
+            body_exact(mut c, mut body, amount, cap)?
+        }
+    }
+    // No pipelining: any already-buffered byte beyond this response is invalid,
+    // never accepted as the next response to a request not yet written.
+    if c.cursor != c.buffer.len { return Unsupported("HTTP trailing response bytes") }
+    if h.close { close(mut c) }
+    Response {
+        status: h.status, content_type: h.content_type, location: h.location,
+        basic: h.basic, body: body,
+    }
+}
+
+fn send_request(
+    mut c: Connection, method: str, target: str, service: str, body: List[byte],
+) -> () ! Errors {
+    if method != "GET" && method != "POST" { return invalid }
+    if body.len > 140000000 || target.len > 8192 { return limit }
+    if method == "GET" && body.len != 0 { return invalid }
+    if !target.starts_with("/") { return invalid }
+    for b in target.bytes() {
+        if b as int <= 32 || b as int >= 127 || b == 35 as byte { return invalid }
+    }
+    if service != "" && service != "git-upload-pack" && service != "git-receive-pack" { return invalid }
+    var text = "{method} {target} HTTP/1.1\r\nHost: {c.endpoint.authority}\r\nAccept-Encoding: identity\r\n"
+    if service == "git-upload-pack" { text = "{text}Git-Protocol: version=2\r\n" }
+    if method == "POST" {
+        text = "{text}Content-Type: application/x-{service}-request\r\nAccept: application/x-{service}-result\r\nContent-Length: {body.len}\r\n"
+    } else {
+        text = "{text}Accept: */*\r\n"
+    }
+    text = "{text}\r\n"
+    net_write_bytes(c.fd, text.bytes()) else |_| { return io }
+    if body.len != 0 { net_write_bytes(c.fd, body) else |_| { return io } }
+}
+
+/// Complete one bounded HTTP transaction. No implicit retries, including POST;
+/// failure closes the connection before returning. No protocol status is hidden.
+pub fn request_capped(
+    mut c: Connection, method: str, target: str, service: str, body: List[byte], cap: int,
+) -> Response ! Errors {
+    if cap < 0 || cap > 140000000 { return limit }
+    if c.fd < 0 { dial(mut c)? }
+    send_request(mut c, method, target, service, body) else |e| { close(mut c); return e }
+    receive(mut c, cap) else |e| { close(mut c); return e }
+}
+
+/// Request with the inherited maximum wire-body cap, for importing clients.
+pub fn request(
+    mut c: Connection, method: str, target: str, service: str, body: List[byte],
+) -> Response ! Errors {
+    request_capped(mut c, method, target, service, body, 140000000)?
+}
