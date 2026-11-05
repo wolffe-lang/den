@@ -229,15 +229,22 @@ fn perform_push(args: List[str]) -> int ! object.StoreErrors {
     defer restore_service(take service_state)
     let specs = push_specs(repo, input, branch)?
     let leases = push_leases(repo, name, specs, requests)?
-    var outcomes = List[PushOutcome](), error_text = "", remote_failure = ""
+    var outcomes = List[PushOutcome](), error_text = "", remote_failure = "", http_fatal = false
     push_reported(repo, url, specs, force, atomic, leases, mut outcomes) else |e| match e {
         Unsupported(message) => {
+            if message == "HTTP receive-pack fatal" { http_fatal = true }
             if message == "remote service unavailable" || message.starts_with("remote error: ") {
                 remote_failure = copy message
             }
             error_text = "{e}"
         },
         _ => { error_text = "{e}" },
+    }
+    if http_fatal {
+        eprint("fatal: the remote end hung up unexpectedly\nfatal: the remote end hung up unexpectedly")
+        let safe_url = transport.redact(url)
+        eprint("error: failed to push some refs to '{safe_url}'")
+        return 1
     }
     if remote_failure != "" && startup_diagnostic(remote_failure) { return 128 }
     var rejected = false
