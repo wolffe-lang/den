@@ -3,6 +3,7 @@ use object
 use oid
 use repository
 use revision
+use transport
 
 fn outcome_ff(repo: repository.Repo, before: str, after: str) -> bool {
     let old = oid.parse("sha1", before) else |_| { return false }
@@ -32,7 +33,7 @@ fn push_report(
         let rejected = outcome.status == "rejected" || outcome.status == "remote rejected"
         if rejected { failed = true }
         if quiet && !rejected { continue }
-        var flag = " ", summary = "", reason = copy outcome.reason
+        var flag = " ", summary = "", reason = transport.redact(outcome.reason)
         if rejected {
             flag = "!"
             summary = if outcome.status == "remote rejected" {

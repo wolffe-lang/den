@@ -254,5 +254,5 @@ fn perform_push(args: List[str]) -> int ! object.StoreErrors {
 /// Push porcelain keeps deterministic local rejection status separate from
 /// unmeasured transport/IO diagnostics, which remain named refusals.
 pub fn push_command(args: List[str]) -> int {
-    perform_push(args) else |e| { eprint("den: wire: {e}"); 2 }
+    perform_push(args) else |e| { eprint("den: wire: {transport.redact("{e}")}"); 2 }
 }

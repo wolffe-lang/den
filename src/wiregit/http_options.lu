@@ -1,0 +1,23 @@
+// Transport-only option handling: keep root paths out of fetch action/reflog
+// text, and restore the prior environment after this one command completes.
+
+/// Dispatch wire porcelain with a caller-supplied concatenated-DER TLS bundle.
+/// --tls-roots=PATH overrides DEN_TLS_ROOTS for this invocation only.
+pub fn run(args: List[str]) -> int {
+    var roots = "", filtered = List[str](), literal = false
+    for arg in args {
+        if arg == "--" { literal = true }
+        if !literal && arg.starts_with("--tls-roots=") {
+            roots = arg[12..]
+            if roots == "" { eprint("den: wire: Unsupported(empty TLS roots option)"); return 2 }
+        } else {
+            (mut filtered).push(copy arg)
+        }
+    }
+    let state = override_service("DEN_TLS_ROOTS", roots) else |_| {
+        eprint("den: wire: Unsupported(TLS roots option)")
+        return 2
+    }
+    defer restore_service(take state)
+    run_inner(filtered)
+}
