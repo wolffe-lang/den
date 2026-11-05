@@ -1,0 +1,49 @@
+vc18 prediction, before implementation
+
+The pinned Git 2.56.0 executable in a Linux container is the only porcelain
+oracle; only published documentation is an implementation reference.
+
+At the starting revision, exact rows should be red for upstream status (human,
+short/v1 and v2 branch headers), branch listings after tracking configuration,
+config list/origin/scope/name-only, absolute/relative local clone/fetch, merge
+show default/--cc/-c, merge-conflict recovery advice, and inherited stdout whose
+file cannot be reopened. Each family's failing rows are committed and measured
+before its implementation. Complete process bytes/status and repository state
+remain captured; representation-only differences are not parity passes.
+
+Tracking should resolve the configured remote fetch mapping, including local
+remote '.', and count set differences over the full parent DAG, not timestamps
+or first parents. Gone upstreams, equal tips, ahead, behind and divergence need
+independent rows. Listing without verbosity must not inspect unnecessary objects.
+
+Config enumeration should preserve file/scope order, duplicate keys, implicit
+values versus explicit empty values and exact origin/scope separators. The reader
+should supply provenance rather than reconstruct it from the scalar map.
+
+Plain paths should use local IO/service transport with no shell interpretation.
+The local-clone strategy must be stated explicitly; no hardlink requirement.
+Absolute and relative paths, no-local, configured remotes and explicit fetch
+refspecs need independent object/ref/config checks.
+
+Combined merge display should reuse existing object/tree/diff line boundaries;
+only paths modified against every parent are shown. Dense combined suppresses
+uninteresting parent-choice hunks; -c retains them. Conflict-resolved content,
+parent-only paths, mode changes, removals and more than two parents need rows.
+
+Status performance is measured before code with phase timing and syscall/CPU
+observations where tools are available. Hypotheses: repeated packed-store full
+checksums, unnecessary blob hashing, untracked content reads and linear Map/path
+lookups. A clean stat cache can only skip content reads under an explicit
+metadata/racy-index check. Other mutation consumers must retain full snapshots.
+A 454-tracked/42-untracked packed synthetic repository and ignored build tree
+will expose the dominant costs without using personal repositories. The target
+is den/Git <= 5 on the same permitted CPU block, using minimum interleaved child
+CPU samples above timer grain and an explicit stated measurement margin.
+
+Inherited fd 1/fd 0 must be used without closing them or reopening /dev/stdout
+or /dev/stdin. Non-root descriptor-permission rows must prove the setup itself
+actually denies reopening and still permits inherited writes.
+
+No final gauntlet record is valid before the census merges and an explicit
+coordinator notice. Final records follow one rebase. One upstream plant is one
+commit/file/hunk off the final green line, pushed without a PR and red by name.
