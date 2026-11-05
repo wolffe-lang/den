@@ -76,7 +76,7 @@ pub fn render_status_v2(snapshot: Snapshot, options: StatusOptions) -> List[byte
             bytes_add(mut out, "u {xy} N... {modes[0]} {modes[1]} {modes[2]} {wm} {names[0]} {names[1]} {names[2]} ".bytes())
         } else {
             let old = flat_at(snapshot.head_entries,
-                if row.original_path.len == 0 then row.path else row.original_path)
+                if row.original_path.len == 0 then copy row.path else copy row.original_path)
             let added = index_at(snapshot.index.entries, row.path)
             let intent = added >= 0 && snapshot.index.entries[added].extended & 0x2000 != 0
             let hm = if old < 0 then "000000" else v2_mode(snapshot.head_entries[old].mode)?

@@ -62,11 +62,11 @@ fn tracking_reachable(repo: repository.Repo, tip: oid.Oid) -> Map[str, bool] ! R
             let id = (mut pending).pop() else |_| { return invalid }
             let name = oid.hex(id)?
             if seen[name] else false { continue }
-            if visited >= 10000 { return Unsupported("upstream ancestry limit") }
+            if visited >= 10000 { return limit }
             visited += 1
-            seen[name] = true
+            seen[copy name] = true
             for parent in commit_ids(repo, id, "parent", mut used)? {
-                if pending.len >= 10000 { return Unsupported("upstream ancestry frontier limit") }
+                if pending.len >= 10000 { return limit }
                 (mut pending).push(copy parent)
             }
         }
