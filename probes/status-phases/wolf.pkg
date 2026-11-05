@@ -1,0 +1,6 @@
+pkg {
+    name: "status-phases",
+    edition: "1",
+    capabilities: [env, fs],
+    deps: {worktree: {path: "../../src/worktree"}},
+}

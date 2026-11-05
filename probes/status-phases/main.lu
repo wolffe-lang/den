@@ -1,0 +1,36 @@
+// Measure public read-only boundaries without changing production status.
+use std.time
+use worktree
+
+fn measured(root: str, untracked: bool) -> () ! worktree.WorkErrors {
+    var start = time.monotonic_ns()
+    let ctx = worktree.discover(root)?
+    print("discover_ns={time.monotonic_ns() - start}")
+    start = time.monotonic_ns()
+    let value = worktree.read_index(ctx)?
+    print("index_ns={time.monotonic_ns() - start} entries={value.entries.len}")
+    start = time.monotonic_ns()
+    let head = worktree.head(ctx)?
+    print("head_ns={time.monotonic_ns() - start}")
+    start = time.monotonic_ns()
+    if head.commits.len == 1 {
+        let entries = worktree.flatten_tree(ctx.repo, head.commits[0])?
+        print("tree_ns={time.monotonic_ns() - start} entries={entries.len}")
+    }
+    // scan_index repeats head/tree itself. Its inclusive span is intentionally
+    // not added to the separate index/head/tree measurements above.
+    start = time.monotonic_ns()
+    var warnings = List[str]()
+    let snapshot = worktree.scan_index_with_warnings(ctx, value, untracked, mut warnings)?
+    print("scan_inclusive_ns={time.monotonic_ns() - start} files={snapshot.files.len}")
+    start = time.monotonic_ns()
+    let bytes = worktree.render_status(snapshot, worktree.status_options(ctx)?)?
+    print("render_ns={time.monotonic_ns() - start} bytes={bytes.len}")
+}
+
+fn main() -> int {
+    let args = env_args()
+    if args.len < 1 { eprint("usage: status-phases ROOT [no-untracked]"); return 2 }
+    measured(args[0], args.len == 1) else |error| { eprint("phase failure: {error}"); return 1 }
+    0
+}
