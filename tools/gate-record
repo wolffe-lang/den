@@ -88,6 +88,8 @@ case "${1:-}" in
 *) echo 'usage: tools/gate-record [--list | --plan | --leaf NAME COMMAND ARGS...]' >&2; exit 2;;
 esac
 
+leaf prune-preflight python3 -I tools/gate-prune.py --preflight
+leaf prune-test python3 -I tools/gate-prune-test.py
 leaf runner-test python3 -I tools/gate-record-test.py
 leaf planner python3 -I ci/tiers-test.py
 leaf local-gate-routing python3 -I ci/local-gate-test.py

@@ -10,8 +10,53 @@ import resource
 import subprocess
 import sys
 
+def open_files():
+    """Own-uid descriptors only; disappearing processes/fds are normal races.
+
+    This is a quiescent-workspace guard, not protection against a concurrent
+    process opening a file after the snapshot. Unknown visibility fails closed.
+    """
+    if sys.platform.startswith('linux'):
+        names = []
+        for process in Path('/proc').iterdir():
+            if not process.name.isdecimal():
+                continue
+            try:
+                if process.stat().st_uid != os.geteuid():
+                    continue
+                descriptors = list((process / 'fd').iterdir())
+            except (FileNotFoundError, ProcessLookupError):
+                continue
+            for descriptor in descriptors:
+                try:
+                    name = os.readlink(descriptor)
+                except (FileNotFoundError, ProcessLookupError):
+                    continue
+                if name.endswith(' (deleted)'):
+                    name = name[:-10]
+                names.append(name)
+        return names
+    opened = subprocess.run(['lsof', '-nP', '-u', getpass.getuser(), '-Fn'],
+                            capture_output=True, text=True)
+    if opened.returncode not in (0, 1):
+        raise OSError('lsof returned a failure')
+    return [line[1:] for line in opened.stdout.splitlines() if line.startswith('n')]
+
+
+def checked_open_files():
+    try:
+        return open_files()
+    except OSError as exc:
+        backend = 'procfs' if sys.platform.startswith('linux') else 'lsof'
+        raise SystemExit('FAIL prune-open-files-unavailable: ' + backend + ': ' + str(exc)) from None
+
+
 if sys.platform.startswith('linux'):
     resource.setrlimit(resource.RLIMIT_AS, (2 * 1024**3, 2 * 1024**3))
+if sys.argv[1:] == ['--preflight']:
+    checked_open_files()
+    print('PASS prune-open-files-preflight')
+    raise SystemExit(0)
 target = Path(sys.argv[1]).resolve()
 leaf = sys.argv[2]
 assert target.name == 'target' and (target.parent / 'src/den.lu').is_file()
@@ -77,12 +122,7 @@ if not paths:
     raise SystemExit(0)
 for p in paths:
     assert p.is_relative_to(target) and p != target
-opened = subprocess.run(['lsof','-nP','-u',getpass.getuser(),'-Fn'], capture_output=True, text=True)
-assert opened.returncode in (0,1), opened.stderr
-for line in opened.stdout.splitlines():
-    if not line.startswith('n'):
-        continue
-    name = line[1:]
+for name in checked_open_files():
     assert not any(name == str(p) or name.startswith(str(p) + '/') for p in paths), 'open workspace file: ' + name
 
 def digest(path):
