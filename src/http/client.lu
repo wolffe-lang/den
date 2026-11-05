@@ -163,7 +163,7 @@ fn receive(mut c: Connection, cap: int) -> Response ! Errors {
 }
 
 fn send_request(
-    mut c: Connection, method: str, target: str, service: str, body: List[byte],
+    c: Connection, method: str, target: str, service: str, body: List[byte],
 ) -> () ! Errors {
     if method != "GET" && method != "POST" { return invalid }
     if body.len > 140000000 || target.len > 8192 { return limit }
@@ -192,8 +192,12 @@ pub fn request_capped(
 ) -> Response ! Errors {
     if cap < 0 || cap > 140000000 { return limit }
     if c.fd < 0 { dial(mut c)? }
-    send_request(mut c, method, target, service, body) else |e| { close(mut c); return e }
-    receive(mut c, cap) else |e| { close(mut c); return e }
+    var complete = false
+    defer { if !complete { close(mut c) } }
+    send_request(c, method, target, service, body)?
+    let response = receive(mut c, cap)?
+    complete = true
+    response
 }
 
 /// Request with the inherited maximum wire-body cap, for importing clients.
