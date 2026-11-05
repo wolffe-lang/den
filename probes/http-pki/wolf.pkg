@@ -1,0 +1,5 @@
+pkg {
+    name: "http-pki",
+    edition: "1",
+    capabilities: [net],
+}

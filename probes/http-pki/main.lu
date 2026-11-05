@@ -1,0 +1,13 @@
+//! member: false
+// Pin compatibility: compile the actual public-PKI client, not an unused import.
+use std.x.tls.client
+
+fn main() {
+    let schemes = client.signature_schemes()
+    assert(schemes.len == 6, "http-pki-signature-schemes")
+    assert(schemes[2] == 1283, "http-pki-p384")
+    assert(schemes[3] == 2052, "http-pki-rsa-pss-sha256")
+    assert(schemes[4] == 2053, "http-pki-rsa-pss-sha384")
+    assert(schemes[5] == 2054, "http-pki-rsa-pss-sha512")
+    print("PASS http-pki-signature-schemes")
+}
