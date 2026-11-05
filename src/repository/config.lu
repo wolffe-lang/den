@@ -321,29 +321,13 @@ fn config_runtime(mut entries: List[ConfigEntry]) -> () ! ConfigReadErrors {
     }
 }
 
-fn config_globals(mut entries: List[ConfigEntry]) -> () ! ConfigReadErrors {
-    let explicit = env_get("GIT_CONFIG_GLOBAL") else |_| {
-        let home = env_get("HOME") else "."
-        var xdg = env_get("XDG_CONFIG_HOME") else ""
-        if xdg == "" { xdg = "{home}/.config" }
-        config_file("{xdg}/git/config", true, mut entries)?
-        config_file("{home}/.gitconfig", true, mut entries)?
-        return
-    }
-    // An explicitly empty override suppresses both default global files.
-    if explicit != "" { config_file(explicit, true, mut entries)? }
-}
-
 /// Read system, global, optional repository, then command-scope environment.
 /// Empty gitdir means no repository. Files are bounded; includes never opened.
 pub fn configuration_diagnostics(gitdir: str) -> List[ConfigEntry] ! ConfigReadErrors {
     var entries = List[ConfigEntry]()
-    if !config_nosystem()? {
-        config_file(env_get("GIT_CONFIG_SYSTEM") else "/etc/gitconfig", true, mut entries)?
+    for record in configuration_records(gitdir, "", "")? {
+        (mut entries).push(copy record.entry)
     }
-    config_globals(mut entries)?
-    if gitdir != "" { config_file("{gitdir}/config", false, mut entries)? }
-    config_runtime(mut entries)?
     entries
 }
 

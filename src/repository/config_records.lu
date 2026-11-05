@@ -1,0 +1,71 @@
+// Ordered config inspection retains source provenance beside parsed entries.
+
+/// A source is deliberately not folded into Repo.config's last-value map.
+pub struct ConfigRecord { entry: ConfigEntry, scope: str, origin: str }
+struct ConfigSource { path: str, scope: str }
+
+fn config_sources(gitdir: str) -> List[ConfigSource] ! ConfigReadErrors {
+    var sources = List[ConfigSource]()
+    if !config_nosystem()? {
+        (mut sources).push(ConfigSource {
+            path: env_get("GIT_CONFIG_SYSTEM") else "/etc/gitconfig", scope: "system",
+        })
+    }
+    let explicit = env_get("GIT_CONFIG_GLOBAL") else "\0"
+    if explicit == "\0" {
+        let home = env_get("HOME") else "."
+        var xdg = env_get("XDG_CONFIG_HOME") else ""
+        if xdg == "" { xdg = "{home}/.config" }
+        (mut sources).push(ConfigSource { path: "{xdg}/git/config", scope: "global" })
+        (mut sources).push(ConfigSource { path: "{home}/.gitconfig", scope: "global" })
+    } else if explicit != "" {
+        (mut sources).push(ConfigSource { path: explicit, scope: "global" })
+    }
+    if gitdir != "" {
+        (mut sources).push(ConfigSource {
+            path: if gitdir == "." then "config" else "{gitdir}/config", scope: "local",
+        })
+    }
+    sources
+}
+
+/// Enumerate exactly the reader's ordered sources, or one selected scope/file.
+/// File scope is command, as specified for explicitly selected config files.
+pub fn configuration_records(
+    gitdir: str,
+    scope: str,
+    file: str,
+) -> List[ConfigRecord] ! ConfigReadErrors {
+    var sources = if scope == "file" {
+        [ConfigSource { path: file, scope: "command" }]
+    } else {
+        config_sources(gitdir)?
+    }
+    // Explicit system selection ignores NOSYSTEM, unlike implicit discovery.
+    if scope == "system" {
+        sources = [ConfigSource {
+            path: env_get("GIT_CONFIG_SYSTEM") else "/etc/gitconfig", scope: "system",
+        }]
+    }
+    var records = List[ConfigRecord]()
+    for source in sources {
+        if scope != "" && scope != "file" && source.scope != scope { continue }
+        var entries = List[ConfigEntry]()
+        config_file(source.path, source.scope != "local" && scope != "file", mut entries)?
+        for entry in entries {
+            (mut records).push(ConfigRecord {
+                entry: copy entry, scope: source.scope, origin: "file:{source.path}",
+            })
+        }
+    }
+    if scope == "" {
+        var runtime = List[ConfigEntry]()
+        config_runtime(mut runtime)?
+        for entry in runtime {
+            (mut records).push(ConfigRecord {
+                entry: copy entry, scope: "command", origin: "command line:",
+            })
+        }
+    }
+    records
+}

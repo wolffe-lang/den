@@ -1,0 +1,74 @@
+use std.fs
+use repository
+
+fn config_listing(args: List[str]) -> bool {
+    var file_operand = false
+    for arg in args[1..] {
+        if file_operand { file_operand = false; continue }
+        if arg == "--file" || arg == "-f" { file_operand = true; continue }
+        if arg == "--list" || arg == "-l" { return true }
+    }
+    false
+}
+
+fn config_list(args: List[str]) -> int ! Errors {
+    var scope = "", file = "", origin = false, show_scope = false, name_only = false
+    var i = 1
+    while i < args.len {
+        let arg = args[i]
+        if arg == "--list" || arg == "-l" {} else if arg == "--show-origin" {
+            origin = true
+        } else if arg == "--show-scope" {
+            show_scope = true
+        } else if arg == "--name-only" {
+            name_only = true
+        } else if arg == "--local" || arg == "--global" || arg == "--system" {
+            scope = arg[2..]
+        } else if arg == "--file" || arg == "-f" {
+            i += 1
+            if i >= args.len { return Unsupported("config options") }
+            file = args[i]
+            scope = "file"
+        } else if arg.starts_with("--file=") {
+            file = arg[7..]
+            scope = "file"
+        } else {
+            return Unsupported("config list option {arg}")
+        }
+        i += 1
+    }
+    let repo = repository.discover(".") else |e| match e {
+        not_found => repository.Repo { gitdir: "", config: Map[str, str]() },
+        _ => { return Unsupported("config repository: {e}") },
+    }
+    let gitdir = if fs.is_dir(".git") {
+        ".git"
+    } else if fs.is_file("HEAD") && fs.is_dir("objects") {
+        "."
+    } else {
+        repo.gitdir
+    }
+    let records = repository.configuration_records(gitdir, scope, file) else |e| match e {
+        ConfigDiagnostic(message) => { eprint(message); return 128 },
+        not_found => { return not_found },
+        denied => { return denied },
+        io => { return io },
+        invalid => { return invalid },
+        exists => { return exists },
+        unsupported => { return unsupported },
+        limit => { return limit },
+        Unsupported(feature) => { return Unsupported(feature) },
+    }
+    for record in records {
+        let entry = record.entry
+        var prefix = ""
+        if show_scope { prefix = "{record.scope}\t" }
+        if origin { prefix = "{prefix}{record.origin}\t" }
+        if name_only || entry.implicit {
+            print("{prefix}{entry.key}")
+        } else {
+            print("{prefix}{entry.key}={entry.value}")
+        }
+    }
+    0
+}
