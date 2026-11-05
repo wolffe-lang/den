@@ -1,0 +1,124 @@
+vc22: smart HTTP over public-PKI TLS
+Base: ef0bb0caf277ad553513cc4f525412ba53a24e5a
+Prediction committed before implementation; observations do not replace it.
+
+Sources read: Git v2.56.0 documentation, gitprotocol-http (URL Format,
+Authentication, Session State, General Request Processing, discovery,
+upload-pack and receive-pack); gitprotocol-v2 (HTTP, capabilities, requests,
+ls-refs and fetch); gitprotocol-common (pkt-line); gitprotocol-pack (push
+requests, pack transfer); git-clone/fetch/push (description and transport
+options); git-http-backend (services and CGI environment); git-config,
+config/http and config/remote (redirect policy and remote URLs).
+RFC 9110: HTTP(S) origin and userinfo, redirection and credentials.
+RFC 9112: message/request/status/header framing, Content-Length precedence,
+chunk coding/extensions/trailers, incomplete messages and persistence.
+RFC 7617: Basic challenge, user-pass encoding and control-character refusal.
+RFC 3986: authority, path, query, fragment and relative references.
+Own code: den pktline/wire/transport/wiregit and vc16's note;
+wolf-std d4a4d4cab358e1e8c174f0206f9e13ad5cfe6c61 client,
+signature_schemes, validate_path and net, plus sc79's public-PKI note.
+No Git, curl, HTTP-library or TLS-library implementation source consulted.
+
+P1. The existing wolf 0.2.36/lupin 0.1.58 pair should compile den with std
+at d4a4d4c: sc79 itself used that pair. A compatibility probe must exercise
+the actual new TLS import, not merely unchanged den. If it does not compile,
+retain the error and decide the published 0.2.37 pair from two metadata reads
+and two archive hashes, never silently use a PATH compiler. Every existing
+native/release/checked gate remains required across the std move.
+
+P2. Implement HTTP as a bounded request/response exchange, not a fake stream
+with hidden mutable global handles. Preserve the existing stream transport
+for file/git/SSH and server roles. Reuse all wire, pack, closure, lease,
+status and ref-publication code. HTTP receives complete responses before
+passing bodies to the existing parsers. Push sends one POST containing both
+command pkt-lines and the pack; a flush inside that request is not its end.
+
+P3. HTTP/1.1 requests use origin-form, Host, Accept, Content-Type on POST,
+Content-Length for known request bytes, and Git-Protocol: version=2 for
+upload-pack discovery and commands. No cookies, cache or content compression
+is needed. Discovery is GET /info/refs?service=git-SERVICE after stripping
+trailing slash. V2 discovery begins directly with version 2 (no v0 service
+banner); receive discovery requires the matching service banner and flush.
+ls-refs and fetch are separate stateless POSTs. An optional stateless end
+packet belongs only at the HTTP boundary, not on stream transports.
+No-op/lease rejection sends no receive POST. Successful push consumes and
+checks every report-status record; pending never means accepted.
+
+P4. Responses accept HTTP/1.0 and 1.1 with strict bounded octet framing.
+Header and trailer blocks cap at 64 KiB, lines at 8 KiB, counts at 256;
+bodies retain the existing 140,000,000-byte wire cap, with smaller caller
+caps for discovery and refs. Numeric accumulation checks before multiply.
+Decode Content-Length and chunked bodies, including ignored extensions and
+separate trailers. Reject conflicting length/transfer fields, mismatched
+lengths, unsupported codings, malformed syntax and truncation by name.
+Handle informational responses with a bounded count; refuse protocol upgrade.
+Reclaim per-chunk scratch rather than repeatedly copying the whole body.
+Keep a connection when framing and Connection permit it; close on any error.
+Never retry a receive POST after bytes may have reached the peer.
+
+P5. Follow at most five initial discovery redirects, resolve their Location
+relative to the current request, and derive the new repository base only
+when the discovery suffix remains intact. Same scheme only; refuse scheme
+changes and subsequent RPC redirects by name. Credentials remain bound to
+the original origin, never cross an origin boundary. Relative/absolute,
+loop, cross-origin and downgrade rows inspect the actual request sequence.
+Unsupported URL forms, including userinfo, query-bearing repository URLs,
+fragments and invalid escapes, refuse without echoing untrusted URL data.
+Plain HTTP is limited to literal loopback addresses; a DNS name that happens
+to resolve locally does not satisfy this guard.
+
+P6. TLS uses std.x.tls.client.begin/complete/read/write/close, real host
+entropy, SNI and the parsed authority hostname, a caller-supplied concatenated
+DER root bundle, and the host UTC clock converted to cert.timestamp's form.
+Expose --tls-roots=PATH and DEN_TLS_ROOTS with the option taking precedence.
+No insecure switch or certificate-verification bypass. All named TLS failures
+survive as static diagnostics; an unknown root is issuer_mismatch. No claims
+about the peer's chain: sc79 does not expose it (R-sc79-10). Its unsent
+signature_algorithms_cert is an inherited limitation (R-sc79-7).
+
+P7. Basic authentication takes DEN_HTTP_USER (default x-access-token) and
+DEN_HTTP_TOKEN, or a no-echo terminal prompt. Tokens never enter argv, config,
+files, reflogs, captured environments, traces or diagnostics. Refuse configured
+credential.helper without executing it. Refuse URL userinfo before any URL
+can be displayed or persisted. Challenge retry is bounded; Basic is the only
+scheme. A fresh synthetic token exists only in consuming process environments
+and memory; scan all recorded outputs and logs for its literal and encoded
+forms before accepting the secrecy row. Do not record request Authorization.
+
+Rows, committed failing before each production fix:
+- http-url: parsing, control injection, loopback guard, authority/path bounds.
+- http-framing: Content-Length, chunked, mixed-case fields, extensions,
+  trailers, empty bodies, one-byte segmentation, close-delimited control.
+- http-hostile: truncated header/chunk/length, wrong chunk CRLF, conflicting
+  lengths, oversize headers/body/chunk numerals, unsupported encoding.
+- http-redirect: initial same-scheme and relative, suffix/base rebasing,
+  loop cap, scheme change, RPC redirect, no cross-origin Authorization.
+- http-discovery: v2 capabilities, receive banner, wrong MIME/banner,
+  dumb refusal, missing v2, unavailable/forbidden/unauthorized HTTP statuses.
+- http-clone/fetch: normal/bare checkout, HEAD/symrefs/tags, incremental
+  wants/haves and thin pack, no-op, native/release; same refs and canonical
+  object bodies as pinned Git, exact supported porcelain bytes/status.
+- http-push: create/update/delete, server rejection, matching/stale explicit
+  and tracking leases, atomic negotiated/unavailable, no-op, failed response.
+- http-tls: trusted local CA succeeds, wrong root/name/time and corrupted
+  certificate refuse; pinned OpenSSL TLS terminator and Git http-backend in
+  the oracle container only. Log binary/library identity first.
+- http-auth: absent/wrong/correct credentials, no-echo prompt, helper refusal,
+  rejection without ref mutation, token absent from every retained artifact.
+- http-live-read: named SKIP without explicit row variables; otherwise den
+  and Git clone the same public ref with distribution roots and compare.
+- http-live-push: SKIP by name until DEN_LIVE_HTTPS_URL and
+  DEN_LIVE_HTTPS_TOKEN are supplied; never name the fixture publicly.
+
+P8. New pure parser units run on the actual checked machine. Real network
+interop runs natively and in release with the pinned Git/OpenSSL binaries
+inside the oracle container, never host binaries as oracles. All comparisons
+retain full nonsecret outputs, exit statuses and state evidence. Differences
+stop for an explicit reviewed decision, not normalized expected bytes.
+
+P9. Final records wait for the preceding lane's merge and one instructed
+rebase. Full gauntlet chunks hold locks no longer than two hours. One final
+one-file/one-hunk plant drops a decoded chunk byte and must fail a named
+smart-HTTP row; it stays off the implementation line, pushed without a PR.
+PAX handoff must name the final den commit and needs an image root store,
+a correct clock (pax#293) and resolver support (wolf-lang#831).
