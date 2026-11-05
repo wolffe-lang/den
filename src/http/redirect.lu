@@ -1,0 +1,72 @@
+// RFC 3986 reference resolution; git-config http.followRedirects=initial.
+// The discovery suffix must survive rebasing. No RPC POST is redirected.
+
+fn normalize_path(path: str) -> str {
+    var pieces = List[str]()
+    let input = path.split("/")
+    for part in input[1..] {
+        if part == "." { continue }
+        if part == ".." {
+            if pieces.len > 0 { pieces = copy pieces[0..pieces.len - 1] }
+        } else {
+            (mut pieces).push(copy part)
+        }
+    }
+    var out = ""
+    for part in pieces { out = "{out}/{part}" }
+    if out == "" then "/" else out
+}
+
+/// Resolve one Location against a smart-discovery request, retaining only a
+/// same-scheme repository base. Userinfo/fragment/query restrictions still apply.
+pub fn redirect_endpoint(base: Endpoint, location: str, service: str) -> Endpoint ! Errors {
+    if location == "" { return Unsupported("HTTP redirect without Location") }
+    if location.len > 8192 { return limit }
+    if service != "git-upload-pack" && service != "git-receive-pack" { return invalid }
+    let suffix = "/info/refs?service={service}"
+    var target = ""
+    if location.contains("://") {
+        let colon = location.find(":") else { return invalid }
+        if location[0..colon].lower() != base.scheme {
+            return Unsupported("HTTP redirect changes scheme")
+        }
+        target = copy location
+    } else if location.starts_with("//") {
+        target = "{base.scheme}:{location}"
+    } else if location.starts_with("/") {
+        target = "{base.scheme}://{base.authority}{location}"
+    } else if location.starts_with("?") {
+        target = "{base.scheme}://{base.authority}{base.path}/info/refs{location}"
+    } else {
+        target = "{base.scheme}://{base.authority}{base.path}/info/{location}"
+    }
+    if !target.ends_with(suffix) { return Unsupported("HTTP redirect changes discovery suffix") }
+    var next = endpoint(target[0..target.len - suffix.len])?
+    if next.scheme != base.scheme { return Unsupported("HTTP redirect changes scheme") }
+    if next.path != "" { next.path = normalize_path(next.path) }
+    next
+}
+
+fn same_origin(a: Endpoint, b: Endpoint) -> bool {
+    a.scheme == b.scheme && a.host == b.host && a.port == b.port
+}
+
+/// Follow at most five initial redirects. An origin change permanently drops
+/// credential eligibility for this exchange, including environment/prompt lookup.
+pub fn discover(mut c: Connection, service: str) -> Response ! Errors {
+    var redirects = 0
+    loop {
+        let response = request_capped(mut c, "GET", "{c.endpoint.path}/info/refs?service={service}", service, List[byte](), 2097152)?
+        if response.status != 301 && response.status != 302 && response.status != 303 &&
+            response.status != 307 && response.status != 308 { return response }
+        if redirects >= 5 { return Unsupported("HTTP redirect limit") }
+        let next = redirect_endpoint(c.endpoint, response.location, service)?
+        if !same_origin(c.endpoint, next) {
+            close(mut c)
+            c.authorization = ""
+            c.credentials_allowed = false
+        }
+        c.endpoint = next
+        redirects = redirects + 1
+    }
+}

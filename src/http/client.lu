@@ -5,7 +5,7 @@ use std.x.tls.client
 
 /// Owned connection, explicitly closed once. A response with close semantics
 /// releases its descriptor; the next request may open a new connection.
-pub struct Connection { endpoint: Endpoint, fd: int, buffer: List[byte], cursor: int, tls: List[client.Client], authorization: str }
+pub struct Connection { endpoint: Endpoint, fd: int, buffer: List[byte], cursor: int, tls: List[client.Client], authorization: str, credentials_allowed: bool }
 
 /// One complete response, with metadata separate from its binary body.
 pub struct Response { status: int, content_type: str, location: str, basic: bool, body: List[byte] }
@@ -33,7 +33,7 @@ fn dial(mut c: Connection) -> () ! Errors {
 /// Validate the URL and open a deadline-armed connection. No HTTP bytes are
 /// written by open, and no credentials are read by this framing layer.
 pub fn open(url: str) -> Connection ! Errors {
-    var c = Connection { endpoint: endpoint(url)?, fd: -1, buffer: List[byte](), cursor: 0, tls: List[client.Client](), authorization: "" }
+    var c = Connection { endpoint: endpoint(url)?, fd: -1, buffer: List[byte](), cursor: 0, tls: List[client.Client](), authorization: "", credentials_allowed: true }
     dial(mut c)?
     c
 }
@@ -233,6 +233,7 @@ pub fn request_capped(
     send_request(mut c, method, target, service, body)?
     var response = receive(mut c, cap)?
     if response.status == 401 && c.authorization == "" {
+        if !c.credentials_allowed { return Unsupported("HTTP cross-origin authentication refused") }
         if !response.basic { return Unsupported("HTTP authentication scheme") }
         c.authorization = credentials()?
         if c.fd < 0 { dial(mut c)? }
