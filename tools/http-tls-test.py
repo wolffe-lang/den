@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """TLS exchange rows against the pinned OpenSSL binary, never library source."""
 import argparse
+import base64
 import hashlib
 import json
 import os
@@ -46,12 +47,27 @@ def main():
     openssl('x509', '-req', '-in', root / 'leaf.csr', '-CA', root / 'ca.pem',
             '-CAkey', root / 'ca.key', '-CAcreateserial', '-days', '1', '-sha256',
             '-extfile', extensions, '-out', root / 'leaf.pem')
+    wrong_extensions = root / 'wrong-name.cnf'
+    wrong_extensions.write_text(extensions.read_text().replace('DNS:localhost', 'DNS:wrong.localhost'))
+    for leaf, days, ext in [('expired.pem', '-1', extensions), ('wrong-name.pem', '1', wrong_extensions)]:
+        openssl('x509', '-req', '-in', root / 'leaf.csr', '-CA', root / 'ca.pem',
+                '-CAkey', root / 'ca.key', '-CAcreateserial', '-days', days, '-sha256',
+                '-extfile', ext, '-out', root / leaf)
+    openssl('x509', '-in', root / 'leaf.pem', '-outform', 'DER', '-out', root / 'leaf.der')
+    broken = bytearray((root / 'leaf.der').read_bytes()); broken[-1] ^= 1
+    encoded = base64.b64encode(broken)
+    (root / 'bad-signature.pem').write_bytes(b'-----BEGIN CERTIFICATE-----\n' +
+        b'\n'.join(encoded[i:i+64] for i in range(0, len(encoded), 64)) + b'\n-----END CERTIFICATE-----\n')
     (root / 'probe').write_bytes(b'HTTP/1.1 200 OK\r\nContent-Length: 3\r\nConnection: close\r\n\r\nTLS')
     results = []
     failures = []
-    for name, roots, expected in [('http-tls-trusted', 'ca.der', None),
-                                   ('http-tls-unknown-root', 'wrong-ca.der', b'issuer_mismatch'),
-                                   ('http-tls-unframed', 'ca.der', b'wolf-std#133')]:
+    for name, roots, leaf, expected in [('http-tls-trusted', 'ca.der', 'leaf.pem', None),
+                                   ('http-tls-utc', 'ca.der', 'leaf.pem', None),
+                                   ('http-tls-unknown-root', 'wrong-ca.der', 'leaf.pem', b'issuer_mismatch'),
+                                   ('http-tls-wrong-name', 'ca.der', 'wrong-name.pem', b'name_mismatch'),
+                                   ('http-tls-expired', 'ca.der', 'expired.pem', b'expired'),
+                                   ('http-tls-bad-signature', 'ca.der', 'bad-signature.pem', b'bad_signature'),
+                                   ('http-tls-unframed', 'ca.der', 'leaf.pem', b'wolf-std#133')]:
         with socket.socket() as reservation:
             reservation.bind(('127.0.0.1', 0))
             port = reservation.getsockname()[1]
@@ -59,7 +75,7 @@ def main():
         # wolf-std#133 refusal row uses -www's close-delimited response.
         with (root / (name + '-server.log')).open('wb') as log:
             server = subprocess.Popen(['/usr/bin/openssl', 's_server', '-accept', str(port),
-                                       '-cert', str(root / 'leaf.pem'), '-key', str(root / 'leaf.key'),
+                                       '-cert', str(root / leaf), '-key', str(root / 'leaf.key'),
                                        '-tls1_3', '-ciphersuites', 'TLS_CHACHA20_POLY1305_SHA256',
                                        '-www' if name == 'http-tls-unframed' else '-HTTP', '-naccept', '1'],
                                       cwd=root, stdout=subprocess.PIPE, stderr=log)
@@ -76,6 +92,7 @@ def main():
                     greeting += chunk
                 env = {**os.environ, 'DEN_TEST_HTTP_URL': f'https://localhost:{port}',
                        'DEN_TLS_ROOTS': str(root / roots), 'DEN_TEST_HTTP_COUNT': '1'}
+                if name == 'http-tls-utc': env['TZ'] = 'UTC+12'
                 result = subprocess.run([args.client], env=env, capture_output=True, timeout=60)
                 ok = result.returncode == 0 and result.stdout.startswith(b'status=200 bytes=') if expected is None else (
                     result.returncode != 0 and expected in result.stderr)
