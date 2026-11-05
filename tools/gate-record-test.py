@@ -30,6 +30,11 @@ listed = subprocess.run([str(root / 'tools/gate-record'), '--list'], cwd=root,
                         env=env, capture_output=True, text=True, timeout=30)
 assert listed.returncode == 0, listed.stderr
 commands = [shlex.split(line.split('\t', 1)[1]) for line in listed.stdout.splitlines()]
+if commands[0] != ['python3', '-I', 'tools/gate-prune.py', '--preflight']:
+    print('FAIL runner-prune-preflight-first', flush=True)
+    raise SystemExit(1)
+assert ['python3', '-I', 'tools/gate-prune-test.py'] in commands
+print('PASS runner-prune-preflight-first')
 position = 0
 for line in (root / 'tools/gate').read_text().splitlines():
     if not line.startswith('tools/'):
