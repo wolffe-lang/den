@@ -1,3 +1,4 @@
+use std.fs
 use index
 use repository
 
@@ -74,9 +75,8 @@ fn status_command(ctx: Context, args: List[str]) -> int ! WorkErrors {
     defer emit_ignore_warnings(warnings)
     let snapshot = scan_with_warnings(ctx, options.untracked != "no", mut warnings)?
     let bytes = render_status(snapshot, options)?
-    let output = fs_open_mode("/dev/stdout", 2)?
-    defer fs_close(output) else |_| {}
-    fs_write_chunk(output, bytes)?
+    var output = fs.stdout()
+    fs.write_chunk(mut output, bytes)?
     0
 }
 

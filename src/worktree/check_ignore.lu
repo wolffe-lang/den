@@ -1,3 +1,4 @@
+use std.fs
 use ignore
 use index
 
@@ -67,8 +68,7 @@ pub fn query_ignore_with_warnings(
 }
 
 fn ignore_stdin(nul: bool) -> List[str] ! WorkErrors {
-    let fd = fs_open_mode("/dev/stdin", 0)?
-    defer fs_close(fd) else |_| {}
+    let fd = fs.stdin().fd
     var data = List[byte]()
     loop {
         region chunk {
@@ -153,9 +153,8 @@ fn check_ignore_command(ctx: Context, args: List[str]) -> int ! WorkErrors {
         }
     }
     if !quiet && out.len > 0 {
-        let output = fs_open_mode("/dev/stdout", 2)?
-        defer fs_close(output) else |_| {}
-        fs_write_chunk(output, out)?
+        var output = fs.stdout()
+        fs.write_chunk(mut output, out)?
     }
     if any then 0 else 1
 }
