@@ -194,7 +194,8 @@ fn clone_mode(url: str, destination: str, bare: bool, local: bool) -> () ! objec
     if plain && packed.len > 0 {
         var file = fs.create_new_with_mode("{repo.gitdir}/packed-refs", 0o666)?
         defer fs.close(take file) else |_| {}
-        fs.write_chunk(mut file, refs.packed_bytes(packed, "peeled fully-peeled")?)?
+        let bytes = refs.packed_bytes(packed, "peeled fully-peeled")?
+        fs.write_chunk(mut file, bytes)?
         fs.sync(mut file)?
     }
     if plain && fs.is_dir("{repo.gitdir}/hooks") && fs.entries("{repo.gitdir}/hooks")?.len == 0 {
