@@ -6,6 +6,32 @@ extracted for reading. No other Git implementation was consulted. The prose
 below is original, not copied from the references. Raw AsciiDoc is from the
 same signed Git 2.56.0 tarball pinned in `den-oracle.toml`.
 
+## Everyday porcelain references (vc18)
+
+Read versioned Git v2.56.0 documentation only, under
+`https://raw.githubusercontent.com/git/git/v2.56.0/Documentation/`:
+
+- `git-status.adoc`: Description, branch/ahead-behind options, short and
+  porcelain-v1/v2 formats, branch headers, background refresh and untracked
+  performance. Conflict advice text is a black-box output question.
+- `git-branch.adoc`: listing modes, remote/all listings, verbose/double-verbose
+  relationship displays and upstream configuration.
+- `git-config.adoc`: list, name-only, show-origin, show-scope, Files and Scopes;
+  `config/core.adoc`, core.checkStat and core.trustctime defaults.
+- `git-clone.adoc`: local/no-local, no-hardlinks, local-path safety and copying;
+  `git-fetch.adoc`, configured remote-tracking branches, refspecs and output;
+  `urls.adoc`, `urls-remotes.adoc` and `pull-fetch-param.adoc` for local paths
+  and remote-name disambiguation.
+- `git-show.adoc` and `git-diff.adoc`, diff formatting; the included
+  `diff-generate-patch.adoc` combined headers, columns and ranges, and
+  `diff-options.adoc` combined versus dense-combined hunk selection.
+
+No implementation source was read. The existing own object/header, refs,
+index/stat, worktree and diff boundaries are the implementation references.
+Performance fixtures are deterministic generated inputs, not user repositories.
+Their copied inode/ctime mismatch and explicitly refreshed stat cache are
+retained separately; `cp -a` is not assumed to preserve inode or ctime.
+
 ## Daily-use references (vc17)
 
 Read published Git documentation at `https://git-scm.com/docs/` before
