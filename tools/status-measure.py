@@ -85,8 +85,8 @@ try:
                     print('SAMPLE', sample, label, name, 'runs=' + str(len(results)),
                           'cpu=%.6f' % (elapsed / len(results)), flush=True)
         for label in ['cold', 'warm']:
-            left = [x for x in rows if x['state'] == label and x['tool'] == 'git']
-            right = [x for x in rows if x['state'] == label and x['tool'] == 'den']
+            left = [x for x in rows if x.get('state') == label and x['tool'] == 'git']
+            right = [x for x in rows if x.get('state') == label and x['tool'] == 'den']
             valid = all(x['cpu_floor_reached'] and all(q['status'] == 0 for q in x['results'])
                         for x in left + right)
             expected = {(q['status'], q['stdout'], q['stderr']) for x in left for q in x['results']}
