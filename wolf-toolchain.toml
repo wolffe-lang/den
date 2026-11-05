@@ -24,4 +24,4 @@ aarch64-unknown-linux-gnu = "00e40fa22d99046b28357f56092075cdb3e3e36a21cc44bf04d
 
 [std]
 repo = "wolffe-lang/wolf-std"
-rev = "78b9d3cbc41d51db44d18c40b6694403644d1c83"
+rev = "d4a4d4cab358e1e8c174f0206f9e13ad5cfe6c61"
