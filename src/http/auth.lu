@@ -1,0 +1,60 @@
+// RFC 7617 Basic credentials. Neither plaintext nor encoded credentials enter
+// a path, an argv, a diagnostic, a repository file, or a captured request log.
+use std.base64
+use std.fs
+use std.term
+
+fn prompt_token() -> str ! Errors {
+    if !(os_isatty(0) else false) { return Unsupported("HTTP authentication required") }
+    let input = fs.stdin()
+    let saved = term.mode(input) else |_| { return Unsupported("HTTP terminal mode unavailable") }
+    term.restore_at_exit(input, saved, List[byte]()) else |_| { return io }
+    var hidden = term.raw(saved)
+    hidden.signals = false
+    term.set_mode(input, hidden) else |_| { return io }
+    defer { term.set_mode(input, saved) else |_| {}; fs_write_chunk(2, "\n".bytes()) else |_| {} }
+    fs_write_chunk(2, "Token: ".bytes()) else |_| { return io }
+    var bytes = List[byte]()
+    loop {
+        let data = fs_read_chunk(0, 1) else |_| { return Unsupported("HTTP authentication cancelled") }
+        if data.len != 1 { return Unsupported("HTTP authentication cancelled") }
+        let b = data[0]
+        if b == 3 as byte || b == 4 as byte { return Unsupported("HTTP authentication cancelled") }
+        if b == 10 as byte || b == 13 as byte { break }
+        if b == 127 as byte || b == 8 as byte {
+            if bytes.len > 0 { bytes = copy bytes[0..bytes.len - 1] }
+            continue
+        }
+        if bytes.len >= 4096 { return Unsupported("HTTP credential limit") }
+        (mut bytes).push(b)
+    }
+    let token = str_from_utf8(bytes) else |_| { return Unsupported("HTTP credential encoding") }
+    // Keep a prompted token only in this consuming process's environment, so
+    // subsequent exchanges and diagnostic redaction share the same secret.
+    env_set("DEN_HTTP_TOKEN", token) else |_| { return io }
+    token
+}
+
+fn credentials() -> str ! Errors {
+    let token = env_get("DEN_HTTP_TOKEN") else prompt_token()?
+    let user = env_get("DEN_HTTP_USER") else "x-access-token"
+    if token.len == 0 || token.len > 4096 || user.len == 0 || user.len > 256 {
+        return Unsupported("HTTP credential limit")
+    }
+    if user.contains(":") { return Unsupported("HTTP credential username") }
+    for value in [user, token] {
+        for b in value.bytes() {
+            if b as int < 32 || b == 127 as byte { return Unsupported("HTTP credential characters") }
+        }
+    }
+    base64.encode("{user}:{token}".bytes())
+}
+
+/// Strip known credentials from textual diagnostics only, never object data.
+pub fn redact(text: str) -> str {
+    let token = env_get("DEN_HTTP_TOKEN") else { return copy text }
+    if token == "" { return copy text }
+    let user = env_get("DEN_HTTP_USER") else "x-access-token"
+    let encoded = base64.encode("{user}:{token}".bytes())
+    text.replace(token, "[redacted]").replace(encoded, "[redacted]")
+}

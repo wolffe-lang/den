@@ -5,7 +5,7 @@ use std.x.tls.client
 
 /// Owned connection, explicitly closed once. A response with close semantics
 /// releases its descriptor; the next request may open a new connection.
-pub struct Connection { endpoint: Endpoint, fd: int, buffer: List[byte], cursor: int, tls: List[client.Client] }
+pub struct Connection { endpoint: Endpoint, fd: int, buffer: List[byte], cursor: int, tls: List[client.Client], authorization: str }
 
 /// One complete response, with metadata separate from its binary body.
 pub struct Response { status: int, content_type: str, location: str, basic: bool, body: List[byte] }
@@ -33,7 +33,7 @@ fn dial(mut c: Connection) -> () ! Errors {
 /// Validate the URL and open a deadline-armed connection. No HTTP bytes are
 /// written by open, and no credentials are read by this framing layer.
 pub fn open(url: str) -> Connection ! Errors {
-    var c = Connection { endpoint: endpoint(url)?, fd: -1, buffer: List[byte](), cursor: 0, tls: List[client.Client]() }
+    var c = Connection { endpoint: endpoint(url)?, fd: -1, buffer: List[byte](), cursor: 0, tls: List[client.Client](), authorization: "" }
     dial(mut c)?
     c
 }
@@ -210,6 +210,7 @@ fn send_request(
     } else {
         text = "{text}Accept: */*\r\n"
     }
+    if c.authorization != "" { text = "{text}Authorization: Basic {c.authorization}\r\n" }
     text = "{text}\r\n"
     write_bytes(mut c, text.bytes())?
     if body.len != 0 { write_bytes(mut c, body)? }
@@ -230,7 +231,14 @@ pub fn request_capped(
     var complete = false
     defer { if !complete { close(mut c) } }
     send_request(mut c, method, target, service, body)?
-    let response = receive(mut c, cap)?
+    var response = receive(mut c, cap)?
+    if response.status == 401 && c.authorization == "" {
+        if !response.basic { return Unsupported("HTTP authentication scheme") }
+        c.authorization = credentials()?
+        if c.fd < 0 { dial(mut c)? }
+        send_request(mut c, method, target, service, body)?
+        response = receive(mut c, cap)?
+    }
     complete = true
     response
 }
