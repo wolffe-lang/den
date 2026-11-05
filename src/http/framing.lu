@@ -1,0 +1,204 @@
+// Original response framing from RFC 9112 sections 2, 4-8 and 9.3.
+// Parsing is byte-delimited before any text conversion. No response body or
+// credential is included in an error; numeric bounds precede multiplication.
+
+/// Response metadata. length=-1 is absent; chunked takes precedence only when
+/// Content-Length is absent. Unknown fields and trailers are never merged here.
+pub struct Head {
+    status: int,
+    length: int,
+    chunked: bool,
+    close: bool,
+    content_type: str,
+    location: str,
+    basic: bool,
+}
+
+fn token_byte(b: byte) -> bool {
+    let n = b as int
+    if n >= 48 && n <= 57 || n >= 65 && n <= 90 || n >= 97 && n <= 122 { return true }
+    for c in "!#$%&'*+-.^_`|~".bytes() { if b == c { return true } }
+    false
+}
+
+fn ows(text: str) -> str {
+    var start = 0, end = text.len
+    while start < end && (text[start..start + 1] == " " || text[start..start + 1] == "\t") {
+        start = start + 1
+    }
+    while end > start && (text[end - 1..end] == " " || text[end - 1..end] == "\t") {
+        end = end - 1
+    }
+    text[start..end]
+}
+
+fn comma_has(text: str, token: str) -> bool {
+    for item in text.split(",") { if ows(item).lower() == token { return true } }
+    false
+}
+
+fn header_lines(data: List[byte]) -> List[str] ! Errors {
+    if data.len > 65536 { return limit }
+    var out = List[str](), pos = 0, start = 0
+    while pos < data.len {
+        let b = data[pos]
+        if b == 13 as byte {
+            if data.len - pos < 2 { return truncated }
+            if data[pos + 1] != 10 as byte { return invalid }
+            if pos - start > 8192 { return limit }
+            // HTTP octets are delimited first; invalid text in a field value is
+            // a named profile refusal, never lossy UTF-8 repair.
+            let line = str_from_utf8(data[start..pos]) else |_| {
+                return Unsupported("HTTP non-UTF-8 header")
+            }
+            pos = pos + 2
+            start = pos
+            if line == "" {
+                if pos != data.len { return invalid }
+                return out
+            }
+            if (line.starts_with(" ") || line.starts_with("\t")) && out.len > 1 {
+                // RFC 9112 5.2 requires user agents to unfold obs-fold.
+                let i = out.len - 1
+                out[i] = "{out[i]} {ows(line)}"
+            } else {
+                if out.len >= 257 { return limit }
+                (mut out).push(line)
+            }
+        } else {
+            if b == 10 as byte || b as int < 32 && b != 9 as byte || b == 127 as byte {
+                return invalid
+            }
+            pos = pos + 1
+            if pos - start > 8192 { return limit }
+        }
+    }
+    truncated
+}
+
+/// Parse one complete header block, capped at 64 KiB, 256 fields and 8 KiB
+/// physical lines. body_cap is inclusive and cannot exceed the wire payload cap.
+pub fn head(data: List[byte], body_cap: int) -> Head ! Errors {
+    if body_cap < 0 || body_cap > 140000000 { return limit }
+    let lines = header_lines(data)?
+    if lines.len == 0 { return invalid }
+    let status = lines[0]
+    if status.len < 13 || !(status.starts_with("HTTP/1.1 ") || status.starts_with("HTTP/1.0 ")) ||
+        status[12..13] != " " { return invalid }
+    let code = decimal(status[9..12], 999)?
+    if code < 100 || code > 599 { return invalid }
+    if code == 101 { return Unsupported("HTTP protocol upgrade") }
+    var result = Head {
+        status: code, length: -1, chunked: false, close: false,
+        content_type: "", location: "", basic: false,
+    }
+    var connection = "", transfer = false, have_type = false, have_location = false
+    for line in lines[1..] {
+        let colon = line.find(":") else { return invalid }
+        if colon == 0 { return invalid }
+        for b in line[0..colon].bytes() { if !token_byte(b) { return invalid } }
+        let name = line[0..colon].lower(), value = ows(line[colon + 1..])
+        if name == "content-length" {
+            for item in value.split(",") {
+                let n = decimal(ows(item), body_cap)?
+                if result.length >= 0 && result.length != n {
+                    return Unsupported("HTTP conflicting Content-Length")
+                }
+                result.length = n
+            }
+        } else if name == "transfer-encoding" {
+            if transfer || value.lower() != "chunked" { return Unsupported("HTTP transfer coding") }
+            transfer = true
+            result.chunked = true
+        } else if name == "content-encoding" {
+            if value.lower() != "identity" { return Unsupported("HTTP content encoding") }
+        } else if name == "connection" {
+            connection = "{connection},{value}"
+        } else if name == "content-type" {
+            if have_type { return invalid }
+            have_type = true
+            result.content_type = copy value
+        } else if name == "location" {
+            if have_location { return invalid }
+            have_location = true
+            result.location = copy value
+        } else if name == "www-authenticate" {
+            if value.lower().starts_with("basic ") { result.basic = true }
+        }
+    }
+    if transfer && result.length >= 0 { return Unsupported("HTTP ambiguous framing") }
+    result.close = comma_has(connection, "close") ||
+        status.starts_with("HTTP/1.0 ") && !comma_has(connection, "keep-alive")
+    if code < 200 || code == 204 || code == 304 {
+        result.length = 0
+        result.chunked = false
+    } else if result.length < 0 && !result.chunked {
+        result.close = true
+    }
+    result
+}
+
+fn skip_space(bytes: List[byte], start: int) -> int {
+    var pos = start
+    while pos < bytes.len && (bytes[pos] == 32 as byte || bytes[pos] == 9 as byte) {
+        pos = pos + 1
+    }
+    pos
+}
+
+fn extensions(bytes: List[byte], start: int) -> () ! Errors {
+    var pos = start
+    while pos < bytes.len {
+        pos = skip_space(bytes, pos)
+        if pos >= bytes.len || bytes[pos] != 59 as byte { return invalid }
+        pos = skip_space(bytes, pos + 1)
+        let begin = pos
+        while pos < bytes.len && token_byte(bytes[pos]) { pos = pos + 1 }
+        if pos == begin { return invalid }
+        pos = skip_space(bytes, pos)
+        if pos < bytes.len && bytes[pos] == 61 as byte {
+            pos = skip_space(bytes, pos + 1)
+            if pos >= bytes.len { return invalid }
+            if bytes[pos] == 34 as byte {
+                pos = pos + 1
+                var ended = false
+                while pos < bytes.len {
+                    let b = bytes[pos]
+                    pos = pos + 1
+                    if b == 34 as byte { ended = true; break }
+                    if b == 92 as byte {
+                        if pos >= bytes.len { return invalid }
+                        let escaped = bytes[pos] as int
+                        if escaped < 32 && escaped != 9 || escaped == 127 { return invalid }
+                        pos = pos + 1
+                    } else if b as int < 32 && b != 9 as byte || b == 127 as byte {
+                        return invalid
+                    }
+                }
+                if !ended { return invalid }
+            } else {
+                let value_start = pos
+                while pos < bytes.len && token_byte(bytes[pos]) { pos = pos + 1 }
+                if pos == value_start { return invalid }
+            }
+        }
+    }
+}
+
+/// Decode a chunk-size line (without CRLF), validating ignored extensions.
+/// Refuse overflow/over-budget sizes before any allocation or network read.
+pub fn chunk_size(line: str, remaining: int) -> int ! Errors {
+    if line.len > 8192 || remaining < 0 || remaining > 140000000 { return limit }
+    let bytes = line.bytes()
+    var at = 0, n = 0
+    while at < bytes.len {
+        let d = hex_digit(bytes[at])
+        if d < 0 { break }
+        if d > remaining || n > (remaining - d) / 16 { return limit }
+        n = n * 16 + d
+        at = at + 1
+    }
+    if at == 0 { return invalid }
+    extensions(bytes, at)?
+    n
+}

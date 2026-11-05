@@ -1,0 +1,98 @@
+// Original bounded URI parsing from RFC 3986 sections 3.2-3.5 and
+// RFC 9110 sections 4.2-4.3. Credentials never belong in a repository URL.
+
+/// HTTP parsing/IO failures; payload refusals contain static names, not peer data.
+pub error Errors = {invalid, truncated, limit, io, Unsupported(str)}
+
+/// Validated HTTP repository origin and path, without credentials/query/fragment.
+pub struct Endpoint { scheme: str, host: str, port: int, authority: str, path: str }
+
+fn hex_digit(b: byte) -> int {
+    let c = b as int
+    if c >= 48 && c <= 57 { return c - 48 }
+    if c >= 65 && c <= 70 { return c - 55 }
+    if c >= 97 && c <= 102 { return c - 87 }
+    -1
+}
+
+fn decimal(text: str, cap: int) -> int ! Errors {
+    if text == "" || cap < 0 { return invalid }
+    var n = 0
+    for b in text.bytes() {
+        let d = b as int - 48
+        if d < 0 || d > 9 { return invalid }
+        if d > cap || n > (cap - d) / 10 { return limit }
+        n = n * 10 + d
+    }
+    n
+}
+
+fn path_valid(path: str) -> () ! Errors {
+    let bytes = path.bytes()
+    var at = 0
+    while at < bytes.len {
+        let b = bytes[at], n = b as int
+        if b == 37 as byte {
+            if bytes.len - at < 3 { return invalid }
+            let a = hex_digit(bytes[at + 1]), z = hex_digit(bytes[at + 2])
+            if a < 0 || z < 0 { return invalid }
+            let decoded = a * 16 + z
+            if decoded < 32 || decoded == 127 { return invalid }
+            at = at + 3
+        } else {
+            let ok = n >= 65 && n <= 90 || n >= 97 && n <= 122 || n >= 48 && n <= 57 ||
+                "-._~!$&'()*+,;=:@/".contains(str_from_utf8([b]) else " ")
+            if !ok { return invalid }
+            at = at + 1
+        }
+    }
+}
+
+/// Parse an absolute HTTP(S) repository URL before any network or publication.
+/// Plaintext is restricted to literal 127.0.0.1 or [::1], not resolver aliases.
+pub fn endpoint(url: str) -> Endpoint ! Errors {
+    if url.len > 4096 { return limit }
+    for b in url.bytes() { if b as int <= 32 || b as int >= 127 { return invalid } }
+    let delimiter = url.find("://") else { return invalid }
+    let scheme = url[0..delimiter].lower()
+    if scheme != "http" && scheme != "https" { return Unsupported("HTTP URL scheme") }
+    let rest = url[delimiter + 3..]
+    if rest.contains("#") { return Unsupported("HTTP URL fragment") }
+    if rest.contains("?") { return Unsupported("HTTP repository query") }
+    let slash = rest.find("/") else rest.len
+    let authority = rest[0..slash].lower()
+    if authority.contains("@") { return Unsupported("HTTP URL userinfo") }
+    var host = copy authority, port = if scheme == "https" then 443 else 80
+    if authority.starts_with("[") {
+        if !authority.starts_with("[::1]") { return Unsupported("HTTP IPv6 authority") }
+        host = "::1"
+        if authority.len > 5 {
+            if !authority[5..].starts_with(":") { return invalid }
+            port = decimal(authority[6..], 65535) else |_| { return invalid }
+        }
+    } else {
+        let colon = authority.find(":") else authority.len
+        if colon < authority.len {
+            port = decimal(authority[colon + 1..], 65535) else |_| { return invalid }
+            host = authority[0..colon]
+        }
+        if host == "" || host.len > 253 { return invalid }
+        for label in host.split(".") {
+            if label == "" || label.len > 63 || label.starts_with("-") || label.ends_with("-") {
+                return invalid
+            }
+            for b in label.bytes() {
+                let n = b as int
+                if !(n >= 97 && n <= 122 || n >= 48 && n <= 57 || n == 45) { return invalid }
+            }
+        }
+    }
+    if port == 0 { return invalid }
+    if scheme == "http" && host != "127.0.0.1" && host != "::1" {
+        return Unsupported("HTTP requires literal loopback")
+    }
+    var path = rest[slash..]
+    path_valid(path)?
+    while path.ends_with("/") { path = path[0..path.len - 1] }
+    Endpoint { scheme: scheme, host: host, port: port, authority: authority, path: path }
+}

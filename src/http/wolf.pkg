@@ -1,0 +1,4 @@
+pkg {
+    name: "http",
+    edition: "1",
+}
