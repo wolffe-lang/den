@@ -1,0 +1,99 @@
+// Upstream display uses documented branch/remote fetch mapping and full DAG sets.
+use oid
+use refs
+use repository
+
+/// Empty reference means no mapping; empty ids means a configured, gone upstream.
+pub struct Upstream {
+    reference: str, name: str, ids: List[oid.Oid], ahead: int, behind: int,
+}
+
+fn tracking_name(repo: repository.Repo, reference: str) -> str ! RevisionErrors {
+    var choices = List[str]()
+    for prefix in ["refs/heads/", "refs/remotes/", "refs/tags/", "refs/"] {
+        if reference.starts_with(prefix) { (mut choices).push(reference[prefix.len..]) }
+    }
+    for choice in choices {
+        var found = 0, selected = false
+        for prefix in ["refs/", "refs/tags/", "refs/heads/", "refs/remotes/"] {
+            let full = "{prefix}{choice}"
+            if refs.optional(repo, full)?.len > 0 {
+                found += 1
+                if full == reference { selected = true }
+            }
+        }
+        // A gone upstream still has its usual short name unless another ref
+        // occupies that spelling; do not invent an object to test absence.
+        if found == 0 || found == 1 && selected { return copy choice }
+    }
+    reference
+}
+
+fn tracking_reference(repo: repository.Repo, branch: str) -> str ! RevisionErrors {
+    let remote = repo.config["branch.{branch}.remote"] else ""
+    let merge = repo.config["branch.{branch}.merge"] else ""
+    if remote == "" || merge == "" { return "" }
+    if !refs.valid(merge) { return invalid }
+    if remote == "." { return merge }
+    let raw = repo.config["remote.{remote}.fetch"] else ""
+    let spec = if raw.starts_with("+") then raw[1..] else raw
+    let pair = spec.split(":")
+    if pair.len != 2 { return "" }
+    let source = pair[0].split("*"), destination = pair[1].split("*")
+    if source.len == 1 && destination.len == 1 {
+        if pair[0] == merge && refs.valid(pair[1]) { return copy pair[1] }
+        return ""
+    }
+    if source.len != 2 || destination.len != 2 {
+        return Unsupported("upstream fetch refspec")
+    }
+    if !merge.starts_with(source[0]) || !merge.ends_with(source[1]) ||
+        merge.len < source[0].len + source[1].len { return "" }
+    let matched = merge[source[0].len..merge.len - source[1].len]
+    let reference = "{destination[0]}{matched}{destination[1]}"
+    if !refs.valid(reference) { return invalid }
+    reference
+}
+
+fn tracking_reachable(repo: repository.Repo, tip: oid.Oid) -> Map[str, bool] ! RevisionErrors {
+    var seen = Map[str, bool](), pending = [copy tip], used = 0, visited = 0
+    while pending.len > 0 {
+        region node {
+            let id = (mut pending).pop() else |_| { return invalid }
+            let name = oid.hex(id)?
+            if seen[name] else false { continue }
+            if visited >= 10000 { return Unsupported("upstream ancestry limit") }
+            visited += 1
+            seen[name] = true
+            for parent in commit_ids(repo, id, "parent", mut used)? {
+                if pending.len >= 10000 { return Unsupported("upstream ancestry frontier limit") }
+                (mut pending).push(copy parent)
+            }
+        }
+    }
+    seen
+}
+
+/// Count full-parent reachability differences, never timestamp or first-parent
+/// approximations. The shared revision decoder validates/charges commit bodies.
+pub fn upstream(
+    repo: repository.Repo,
+    branch: str,
+    tips: List[oid.Oid],
+    counts: bool,
+) -> Upstream ! RevisionErrors {
+    if tips.len > 1 { return invalid }
+    let reference = if branch == "" then "" else tracking_reference(repo, branch)?
+    var result = Upstream { reference: reference, name: "", ids: [], ahead: 0, behind: 0 }
+    if reference == "" { return result }
+    result.name = tracking_name(repo, reference)?
+    result.ids = refs.optional(repo, reference)?
+    if !counts || tips.len == 0 || result.ids.len == 0 || oid.equal(tips[0], result.ids[0]) {
+        return result
+    }
+    let local = tracking_reachable(repo, tips[0])?
+    let remote = tracking_reachable(repo, result.ids[0])?
+    for (id, _) in local.pairs() { if !(remote[id] else false) { result.ahead += 1 } }
+    for (id, _) in remote.pairs() { if !(local[id] else false) { result.behind += 1 } }
+    result
+}
