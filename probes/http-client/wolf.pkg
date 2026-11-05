@@ -1,0 +1,6 @@
+pkg {
+    name: "http-client",
+    edition: "1",
+    capabilities: [net, fs, env],
+    deps: {http: {path: "../../src/http"}},
+}
