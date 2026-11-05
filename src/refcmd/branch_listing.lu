@@ -1,0 +1,105 @@
+use std.fs
+use commit
+use oid
+use refs
+use revision
+use walk
+use worktree
+
+struct BranchDisplay { full: str, name: str, id: oid.Oid, local: bool, symbolic: str }
+
+fn listing_flags(text: str) -> bool {
+    for b in text.bytes() {
+        if b != 97 as byte && b != 114 as byte && b != 118 as byte { return false }
+    }
+    text.len > 0
+}
+
+fn branch_selected(name: str, names: List[str]) -> bool {
+    if names.len == 0 { return true }
+    for wanted in names { if wanted == name { return true } }
+    false
+}
+
+fn branch_text(mut out: List[byte], text: str) {
+    for b in text.bytes() { (mut out).push(b) }
+}
+
+fn branch_listing(
+    ctx: worktree.Context,
+    head: worktree.Head,
+    names: List[str],
+    local: bool,
+    remote: bool,
+    verbose: int,
+) -> int ! commit.CommitErrors {
+    var rows = List[BranchDisplay]()
+    if local && head.detached && names.len == 0 {
+        let short = abbrev(ctx.repo, head.commits[0])?
+        var name = "(no branch)"
+        if head.checkout.len > 0 {
+            let origin = head.checkout[0]
+            let relation = if oid.equal(origin.id, head.commits[0]) then "at" else "from"
+            name = "(HEAD detached {relation} {if origin.label == "" then short else origin.label})"
+        }
+        (mut rows).push(BranchDisplay {
+            full: "", name: name, id: copy head.commits[0], local: false, symbolic: "",
+        })
+    }
+    for prefix in ["refs/heads/", "refs/remotes/"] {
+        if prefix == "refs/heads/" && !local || prefix == "refs/remotes/" && !remote { continue }
+        for record in refs.list(ctx.repo, prefix)? {
+            let name = if prefix == "refs/heads/" {
+                record.name[11..]
+            } else if local {
+                record.name[5..]
+            } else {
+                record.name[13..]
+            }
+            if !branch_selected(name, names) { continue }
+            (mut rows).push(BranchDisplay {
+                full: copy record.name, name: name, id: copy record.id,
+                local: prefix == "refs/heads/", symbolic: refs.symbolic(ctx.repo, record.name)?,
+            })
+        }
+    }
+    var width = 0
+    for row in rows { if row.name.len > width { width = row.name.len } }
+    var out = List[byte]()
+    for row in rows {
+        let current = row.full == head.reference || row.full == "" && head.detached
+        branch_text(mut out, "{if current then "*" else " "} {row.name}")
+        if row.symbolic != "" {
+            let target = if row.symbolic.starts_with("refs/remotes/") then row.symbolic[13..] else row.symbolic
+            branch_text(mut out, " -> {target}")
+        } else if verbose > 0 {
+            for _ in row.name.len..width { (mut out).push(32 as byte) }
+            branch_text(mut out, " {abbrev(ctx.repo, row.id)?} ")
+            if row.local {
+                let tracking = revision.upstream(ctx.repo, row.full[11..], [copy row.id], true)?
+                if tracking.reference != "" {
+                    var summary = ""
+                    if tracking.ids.len == 0 {
+                        summary = "gone"
+                    } else if tracking.ahead > 0 && tracking.behind > 0 {
+                        summary = "ahead {tracking.ahead}, behind {tracking.behind}"
+                    } else if tracking.ahead > 0 {
+                        summary = "ahead {tracking.ahead}"
+                    } else if tracking.behind > 0 {
+                        summary = "behind {tracking.behind}"
+                    }
+                    if verbose > 1 {
+                        summary = "{tracking.name}{if summary == "" then "" else ": {summary}"}"
+                    }
+                    if summary != "" { branch_text(mut out, "[{summary}] ") }
+                }
+            }
+            let value = walk.read(ctx.repo, row.id)?
+            for b in commit.subject(value.headers.message)? { (mut out).push(b) }
+        }
+        (mut out).push(10 as byte)
+    }
+    var stdout = fs.stdout()
+    fs.write_chunk(mut stdout, out)?
+    0
+}

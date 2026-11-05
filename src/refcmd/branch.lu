@@ -19,6 +19,10 @@ fn context() -> worktree.Context ! commit.CommitErrors {
 }
 
 fn controls(ctx: worktree.Context, command: str) -> () ! commit.CommitErrors {
+    controls_tracking(ctx, command, false)?
+}
+
+fn controls_tracking(ctx: worktree.Context, command: str, listing: bool) -> () ! commit.CommitErrors {
     if command == "branch" ||
         command == "switch" ||
         command == "checkout" ||
@@ -40,7 +44,7 @@ fn controls(ctx: worktree.Context, command: str) -> () ! commit.CommitErrors {
             key != "branch.autosetupmerge" &&
             key != "branch.autosetuprebase" &&
             !(
-                (command == "merge" || command == "rebase") &&
+                (command == "merge" || command == "rebase" || listing) &&
                     (
                         key.ends_with(".remote") ||
                             key.ends_with(".merge") ||
@@ -90,11 +94,10 @@ fn write_ref(
 
 fn branch(args: List[str]) -> int ! commit.CommitErrors {
     let ctx = context()?
-    controls(ctx, "branch")?
     let head = worktree.head(ctx)?
     var names = List[str]()
     var list = false, current = false, force = false, deleting = false, quiet = false, log = false
-    var moving = false
+    var moving = false, include_local = true, include_remote = false, verbose = 0
     for arg in args[1..] {
         if arg == "--list" || arg == "-l" {
             list = true
@@ -118,6 +121,21 @@ fn branch(args: List[str]) -> int ! commit.CommitErrors {
             log = true
         } else if arg == "--no-create-reflog" {
             log = false
+        } else if arg == "--verbose" {
+            verbose += 1
+        } else if arg == "--all" {
+            include_local = true
+            include_remote = true
+        } else if arg == "--remotes" {
+            include_local = false
+            include_remote = true
+        } else if arg.len > 1 && arg.starts_with("-") && !arg.starts_with("--") &&
+            listing_flags(arg[1..]) {
+            for flag in arg[1..].bytes() {
+                if flag == 118 as byte { verbose += 1 }
+                if flag == 97 as byte { include_local = true; include_remote = true }
+                if flag == 114 as byte { include_local = false; include_remote = true }
+            }
         } else if arg == "--no-track" || arg == "--no-color" || arg == "--no-column" {} else if arg.
             starts_with("-") {
             return Unsupported("branch {arg}")
@@ -125,6 +143,7 @@ fn branch(args: List[str]) -> int ! commit.CommitErrors {
             (mut names).push(arg)
         }
     }
+    controls_tracking(ctx, "branch", !moving && !deleting && (list || current || names.len == 0))?
     if moving { return move_branch(ctx, head, names, force)? }
     if current { if !head.detached { print(head.branch) }; return 0 }
     if list || names.len == 0 {
@@ -133,26 +152,7 @@ fn branch(args: List[str]) -> int ! commit.CommitErrors {
                 return Unsupported("branch list patterns")
             }
         }
-        if head.detached && names.len == 0 {
-            let short = abbrev(ctx.repo, head.commits[0])?
-            if head.checkout.len == 0 {
-                print("* (no branch)")
-            } else {
-                let origin = head.checkout[0]
-                let at = if oid.equal(origin.id, head.commits[0]) then "at" else "from"
-                print("* (HEAD detached {at} {if origin.label == "" then short else origin.label})")
-            }
-        }
-        for record in refs.list(ctx.repo, "refs/heads/")? {
-            let name = record.name[11..]
-            if names.len > 0 {
-                var include = false
-                for wanted in names { if wanted == name { include = true } }
-                if !include { continue }
-            }
-            print("{if record.name == head.reference then "*" else " "} {name}")
-        }
-        return 0
+        return branch_listing(ctx, head, names, include_local, include_remote, verbose)?
     }
     if deleting {
         var result = 0
