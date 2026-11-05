@@ -1,0 +1,43 @@
+//! member: false
+use http
+use transport
+
+fn refused(base: http.Endpoint, location: str, expected: str) {
+    let _ = http.redirect_endpoint(base, location, "git-upload-pack") else |e| {
+        assert("{e}" == expected, "http-redirect-refusal")
+        return
+    }
+    assert(false, "http-redirect-accepted-invalid")
+}
+
+fn checks() -> () ! http.Errors {
+    let base = http.endpoint("https://example.com/old/repo.git")?
+    let a = http.redirect_endpoint(base, "../moved.git/info/refs?service=git-upload-pack", "git-upload-pack")?
+    assert(a.path == "/old/repo.git/moved.git")
+    let b = http.redirect_endpoint(base, "/new.git/info/refs?service=git-upload-pack", "git-upload-pack")?
+    assert(b.host == "example.com" && b.path == "/new.git")
+    let c = http.redirect_endpoint(base, "//other.example/new.git/info/refs?service=git-upload-pack", "git-upload-pack")?
+    assert(c.host == "other.example" && c.scheme == "https")
+    let d = http.redirect_endpoint(base, "?service=git-upload-pack", "git-upload-pack")?
+    assert(d.path == base.path)
+    refused(base, "http://127.0.0.1/new.git/info/refs?service=git-upload-pack", "Unsupported(HTTP redirect changes scheme)")
+    refused(base, "https://example.com/new.git/info/refs?service=git-receive-pack", "Unsupported(HTTP redirect changes discovery suffix)")
+    refused(base, "https://secret@example.com/new.git/info/refs?service=git-upload-pack", "Unsupported(HTTP URL userinfo)")
+    print("PASS http-redirect-resolution")
+    let v2 = "000eversion 2\n000cls-refs\n000afetch\n0000".bytes()
+    let got = transport.http_advertisement(v2, "upload-pack")?
+    assert(got.len == v2.len)
+    let receive = "001f# service=git-receive-pack\n00000000".bytes()
+    assert(transport.http_advertisement(receive, "receive-pack")?.len == 4)
+    var rejected = false
+    let _ = transport.http_advertisement("001e# service=git-upload-pack\n00000000".bytes(), "receive-pack") else |_| {
+        rejected = true; List[byte]()
+    }
+    assert(rejected)
+    print("PASS http-advertisement-envelope")
+}
+
+fn main() -> int {
+    checks() else |e| { eprint("FAIL http-redirect: {e}"); return 1 }
+    0
+}
