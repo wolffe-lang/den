@@ -10,6 +10,84 @@ fn refused(base: http.Endpoint, location: str, expected: str) {
     assert(false, "http-redirect-accepted-invalid")
 }
 
+// R-vc22-4: gitprotocol-http(5) smart discovery may wrap a v2 advertisement in
+// the matching service banner and a flush; direct v2 stays accepted. Each row
+// reports by name so every red is visible, not only the first.
+fn advertised(data: List[byte], want: List[byte], row: str) -> bool {
+    let got = transport.http_advertisement(data, "upload-pack") else |e| {
+        eprint("FAIL {row}: {e}")
+        return false
+    }
+    if got.len != want.len {
+        eprint("FAIL {row}: {got.len} bytes, want {want.len}")
+        return false
+    }
+    for i in 0..want.len {
+        if got[i] != want[i] {
+            eprint("FAIL {row}: byte {i} differs")
+            return false
+        }
+    }
+    print("PASS {row}")
+    true
+}
+
+fn advertisement_refused(data: str, service: str, expected: str, row: str) -> bool {
+    let _ = transport.http_advertisement(data.bytes(), service) else |e| {
+        if "{e}" == expected {
+            print("PASS {row}")
+            return true
+        }
+        eprint("FAIL {row}: {e}, want {expected}")
+        return false
+    }
+    eprint("FAIL {row}: accepted, want {expected}")
+    false
+}
+
+fn tail(data: List[byte], start: int) -> List[byte] { copy data[start..] }
+
+fn advertisement_rows() -> int {
+    let banner = "001e# service=git-upload-pack\n0000"
+    let v2 = "000eversion 2\n000cls-refs\n000afetch\n0000"
+    var failed = 0
+    if !advertised(v2.bytes(), v2.bytes(), "http-direct-v2") { failed = failed + 1 }
+    if !advertised("{banner}{v2}".bytes(), v2.bytes(), "http-wrapped-v2") { failed = failed + 1 }
+    // GitHub's 191-byte discovery body for a public repository, captured
+    // 2026-11-05 (sha256 52c327cc1b229b18168e049bf4deef179aff22aa917b64fbbc737981a1867be9).
+    let parts = [
+        "001e# service=git-upload-pack\n0000000eversion 2\n",
+        "0028agent=git/github-f6e509caf74d-Linux\n0013ls-refs=unborn\n",
+        "0027fetch=shallow wait-for-done filter\n0012server-option\n",
+        "0017object-format=sha1\n0000",
+    ]
+    var github = List[byte]()
+    for part in parts { for b in part.bytes() { (mut github).push(b) } }
+    if github.len != 191 {
+        eprint("FAIL http-github-wrapped-v2: fixture is {github.len} bytes")
+        failed = failed + 1
+    } else if !advertised(github, tail(github, 34), "http-github-wrapped-v2") {
+        failed = failed + 1
+    }
+    let v0 = "003d1111111111111111111111111111111111111111 refs/heads/main\n0000"
+    let refused = "Unsupported(remote does not advertise protocol v2)"
+    let rows = [
+        ["001f# service=git-receive-pack\n0000{v2}", "upload-pack", "Unsupported(HTTP wrong service advertisement)", "http-wrapped-wrong-service"],
+        ["001e# service=git-upload-pack\n{v2}", "upload-pack", "invalid", "http-wrapped-no-flush"],
+        ["001e# service=git-upload-pack\n", "upload-pack", "truncated", "http-wrapped-banner-only"],
+        [banner, "upload-pack", "truncated", "http-wrapped-no-advertisement"],
+        ["{banner}{v0}", "upload-pack", refused, "http-wrapped-v0"],
+        ["{banner}000eversion 1\n{v0}", "upload-pack", refused, "http-wrapped-v1"],
+        ["{banner}{banner}{v2}", "upload-pack", refused, "http-wrapped-twice"],
+        [v0, "upload-pack", refused, "http-direct-v0"],
+        ["{banner}{v2}", "receive-pack", "Unsupported(HTTP wrong service advertisement)", "http-receive-upload-banner"],
+    ]
+    for row in rows {
+        if !advertisement_refused(row[0], row[1], row[2], row[3]) { failed = failed + 1 }
+    }
+    failed
+}
+
 fn checks() -> () ! http.Errors {
     let base = http.endpoint("https://example.com/old/repo.git")?
     let a = http.redirect_endpoint(base, "../moved.git/info/refs?service=git-upload-pack", "git-upload-pack")?
@@ -24,15 +102,6 @@ fn checks() -> () ! http.Errors {
     refused(base, "https://example.com/new.git/info/refs?service=git-receive-pack", "Unsupported(HTTP redirect changes discovery suffix)")
     refused(base, "https://secret@example.com/new.git/info/refs?service=git-upload-pack", "Unsupported(HTTP URL userinfo)")
     print("PASS http-redirect-resolution")
-    let v2 = "000eversion 2\n000cls-refs\n000afetch\n0000".bytes()
-    let got = transport.http_advertisement(v2, "upload-pack")?
-    assert(got.len == v2.len)
-    var wrapped = "001e# service=git-upload-pack\n0000".bytes()
-    for b in v2 { (mut wrapped).push(b) }
-    let unwrapped = transport.http_advertisement(wrapped, "upload-pack")?
-    assert(unwrapped.len == v2.len, "http-wrapped-v2")
-    for i in 0..v2.len { assert(unwrapped[i] == v2[i], "http-wrapped-v2-bytes") }
-    print("PASS http-wrapped-v2")
     let receive = "001f# service=git-receive-pack\n00000000".bytes()
     assert(transport.http_advertisement(receive, "receive-pack")?.len == 4)
     var rejected = false
@@ -44,6 +113,11 @@ fn checks() -> () ! http.Errors {
 }
 
 fn main() -> int {
+    let failed = advertisement_rows()
     checks() else |e| { eprint("FAIL http-redirect: {e}"); return 1 }
+    if failed > 0 {
+        eprint("FAIL http-advertisement: {failed} rows")
+        return 1
+    }
     0
 }
