@@ -104,12 +104,29 @@ or normalizations of ANSI bytes, config bytes or unproven index differences.
   bases, so missing local copies are not by themselves errors. Decode resolves
   all entries or rejects unresolved/cyclic bases. Counts cap at 10,000, bodies at
   16 MiB, charged stream/reconstruction payload at 128 MiB and depth at 64.
-  These are not streaming or peak-RSS promises.
+  These are not streaming or peak-RSS promises; fetch no longer uses them.
+- `pack.receive_begin`, `receive_write`, `receive_abort`, `received_index`,
+  `received_install`, `received_body`, `received_rank`, `received_discard`
+  (vc23): a received pack streams into an exclusive `objects/pack/tmp_pack_den_*`
+  and is indexed there. Pass 1 reads each entry by offset into a window sized
+  from its declared size, inflates it into a reserved buffer, and checks the
+  CRC-32 and the trailer over the same bytes. Pass 2 resolves deltas depth-first
+  with a 96 MiB path bound, revisiting deeper subtrees from a fresh rebuild.
+  The idx v2 (`idx_bytes`) is byte-identical to the writer's for the same pack.
+  Install reads the idx back through the unchanged reader before publishing
+  `pack-<checksum>.pack` then `.idx`. `object_limit()` is 512 MiB (R-vc23-2);
+  counts cap at 400,000, depth at 64. `transport.begin_stream`,
+  `stream_packet`, `end_stream` read one response a pkt-line at a time, over a
+  stream channel or an HTTP body (`http.request_streamed`, `body_read`,
+  `body_take`, `body_end`).
 - `wiregit.fetch_objects`, `fetch_into`, `clone_repository`, `push`, `upload`,
   `receive`, `serve`: the public peer/data boundaries behind the bounded CLI.
   Clone filters the ordinary HEAD/branch/tag view and uses the existing
-  worktree/index transaction. Received streams decode completely before loose
-  publication; selected typed closures validate before refs change. The shared
+  worktree/index transaction. Received packs stream to disk and are indexed
+  there (`receive_pack`); a clone keeps the pack, a fetch keeps one of 100
+  objects or more and makes a smaller one loose (`publish_received`);
+  selected typed closures validate before refs change (`closure_received`
+  types blobs from the received table). The shared
   validator's `packcmd.Link` / `links` provide typed graph edges. Ancestry uses
   the same canonical commit-header parser, not a second revision grammar.
 - `refs.AtomicUpdate`, `transaction`, `transaction_injected`: bare, no-reflog
@@ -265,9 +282,9 @@ Limits by name: close-delimited HTTPS bodies (wolf-std#133); credential
 helpers; `http.*` configuration other than `http.followRedirects=initial`;
 cookies, proxies, content codings, HTTP/2 and protocol upgrade; protocol v0/v1
 advertisements; RPC redirects; side-band push messages over ssh and `git://`
-(den#60's). den's own repository is larger than the 140,000,000-byte wire cap
-and the 128 MiB pack payload cap, so it cannot be cloned over any transport yet;
-the live row records the refusal (den#61).
+(den#60's). A fetch response streams with no whole-body cap, so den clones its
+own repository, a pack over 300 MB; the live row compares it with Git's clone
+(den#61, vc23).
 
 ## Pack writing and inspection (vc13)
 
@@ -744,9 +761,10 @@ program; full filesystem pack scans are native/release witnesses, not checked
 memory measurements.
 
 File reads and pack hashing use reclaimed 64-KiB offset windows. Index bytes are
-bounded at 16 MiB/400,000 entries; compressed entries at 17,000,000 bytes;
-inflated entries and bodies at 16 MiB. Reconstruction charges cumulative encoded,
-inflated and target sizes against 128 MiB and allows 64 delta links. These are
+bounded at 16 MiB/400,000 entries; inflated entries and bodies at
+`object_limit()`, 512 MiB since vc23 (it was 16 MiB); compressed entries at that
+plus a sixteenth and 64 KiB. Reconstruction charges cumulative encoded,
+inflated and target sizes against three objects' worth and allows 64 delta links. These are
 payload accounting bounds, not peak-RSS guarantees: owned copies and codec
 scratch add memory. Directory scanning caps 8,192 entries and 256 pack indexes.
 There is no persistent verification cache: candidate pack checksums are scanned
