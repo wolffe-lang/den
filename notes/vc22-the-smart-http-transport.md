@@ -10,7 +10,7 @@ Clean room: git's documentation, the RFCs, and the pinned Git and OpenSSL run as
 
 ## Inputs verified
 
-- **Base:** den trunk `ef0bb0c`, branch `vc22`.
+- **Base:** den trunk `ef0bb0c`, branch `vc22`, rebased once onto trunk `ce939e2` (vc18's merge). The rebase had no textual conflict; the one semantic one is under R-vc22-6.
 - **Toolchain:** wolf 0.2.36 (`5adf3d91`; binary `f7b73fba…`), lupin 0.1.58 (binary `47c646a6…`), unchanged. The std pin moves from `78b9d3cb` to wolf-std `d4a4d4c` (`5cfd023`), after a red row requiring its public-PKI signature schemes (`7bfcc2e`). 0.2.36 builds against it, so no toolchain re-pin was needed.
 - **Oracle:** Git 2.56.0, executable `c4848492…`; OpenSSL 3.0.13 from the oracle image, `/usr/bin/openssl` `b4f547c0…`, `libssl.so.3` `a40e7b67…`, `libcrypto.so.3` `6866ed71…`, each read twice before a TLS row runs.
 - **Roots for the live rows:** the image's distribution bundle, 120 certificates, 128,549 bytes of concatenated DER, sha256 `98a12f1a…`, decoded from PEM per RFC 7468 by the harness.
@@ -121,7 +121,7 @@ den now sends a plain program word (letters, digits and `._/+-`) bare and quotes
 - [x] Interop against the pinned `git-http-backend` behind the pinned OpenSSL, den and Git compared.
 - [x] The live read; the over-limit row.
 - [ ] The live push (waits for its variables).
-- [ ] The final gauntlet, the plant and the audit, after vc18 merges and one rebase.
+- [ ] The final gauntlet, the plant and the audit at the rebased head; their records and every END line are in the PR body.
 
 ### Applied R-list
 
@@ -130,7 +130,7 @@ den now sends a plain program word (letters, digits and `._/+-`) bare and quotes
 - **R-vc22-3 — applied:** the truncated side-band frame is an explicit ORACLE-TIMEOUT non-parity row, Git reaped and no strays; den's refusal holds with its state unchanged.
 - **R-vc22-4 — applied:** discovery accepts direct v2 or exactly the matching banner, flush and v2. A mismatched banner, a missing flush, v0 (with or without the banner, including a NUL capability line) and v1 are refused by name. Lines are compared as bytes, not text, so a v0 capability line reads as "not v2" rather than malformed.
 - **R-vc22-5 — accepted, applied:** the over-limit refusal stays den's existing `den: wire: limit`, exit 2; the row bounds it at 600 s and 1 GiB peak RSS, and the shared limits are not relaxed. Each read runs in its own region and appends to one long-lived buffer. Options: (A) as built; (B) stream bodies to the pack parser instead of buffering whole responses, a larger change touching every transport. A was accepted; streaming bodies is den#61's.
-- **R-vc22-6 — accepted, applied:** a failed clone removes the directory it created, for every transport, as the pinned Git does (measured black-box: a new directory is removed, an existing empty one kept). den already refuses an existing destination, so it never removes anything it did not create in that command. Options: (A) as built; (B) leave partial clones and file an issue. A was accepted. The cleanup is one small commit (`ec20219`), a `defer` around clone.
+- **R-vc22-6 — accepted, applied:** a failed clone removes the directory it created, for every transport, as the pinned Git does (measured black-box: a new directory is removed, an existing empty one kept). den already refuses an existing destination, so it never removes anything it did not create in that command. Options: (A) as built; (B) leave partial clones and file an issue. A was accepted. The cleanup is one small commit (`c74788e` after the rebase), a `defer` around clone. On the rebase, vc18 had split clone into `clone_mode`, which creates the destination and gained a local-path flag. Git applied the hunk there without a conflict, but the moved body no longer saw that flag, so the commit itself now passes it through. Both intents hold: vc18's local-path clone, and the removal of a failed clone's directory on every path.
 - **R-bw03-7 = (a) — applied:** a plain program word goes bare, as Git sends it; any other is quoted; the path stays quoted. Red first (`a5b774e`, `8e47a1e`), then `5110cf7`.
 
 ### Remaining limits
