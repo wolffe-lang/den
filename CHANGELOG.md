@@ -19,6 +19,9 @@
   prompt, bound to the original origin; `credential.helper` and other `http.*`
   settings refused. Discovery follows up to five same-scheme redirects.
 - A failed clone removes the directory it created, as Git does.
+- ssh sends a plain program word bare, as Git does (`git-upload-pack '/path'`),
+  so services that parse the command, such as GitHub's, accept it; any other
+  `--upload-pack=`/`--receive-pack=` value stays quoted as a literal executable.
 - `tools/check-http` joins the gate after the wire gate, with live github.com
   rows that SKIP by name without network.
 
