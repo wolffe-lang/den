@@ -2,6 +2,7 @@ use std.fs
 use index
 use object
 use oid
+use pack
 use refs
 use repository
 use transport
@@ -11,7 +12,7 @@ use worktree
 /// Negotiate v2 for the ordinary clone view (HEAD, branches and tags), importing
 /// canonical objects and validating every selected closure before returning refs.
 pub fn fetch_objects(repo: repository.Repo, url: str) -> List[wire.Ref] ! object.StoreErrors {
-    fetch_view(repo, url, "", true)?
+    fetch_selected(repo, url, "", true, true)?
 }
 
 fn fetch_view(
@@ -19,6 +20,18 @@ fn fetch_view(
     url: str,
     source: str,
     download: bool,
+) -> List[wire.Ref] ! object.StoreErrors {
+    fetch_selected(repo, url, source, download, false)?
+}
+
+// keep: a clone keeps the received pack whatever its size; a fetch keeps it
+// at 100 objects or more (publish_received).
+fn fetch_selected(
+    repo: repository.Repo,
+    url: str,
+    source: str,
+    download: bool,
+    keep: bool,
 ) -> List[wire.Ref] ! object.StoreErrors {
     transport.check_http_configuration(url, repo.config)?
     var p = transport.peer(url, "upload-pack")?
@@ -114,17 +127,24 @@ fn fetch_view(
             Unsupported(text) => { return Unsupported(text) },
         }
     }
-    if wants.len > 0 {
-        let request = wire.fetch_request(wants, haves, true)?
-        let response = transport.exchange(mut p, request, 140000000)?
-        let bytes = wire.parse_pack(response)?
-        import_pack(repo, bytes)?
-    }
     var roots = List[str]()
     for reference in advertised {
         if reference.id != "unborn" { (mut roots).push(copy reference.id) }
     }
-    let _ = closure(repo, roots, [])?
+    if wants.len > 0 {
+        // vc23 (den#61): the response streams to disk and is indexed there,
+        // never held. No thin-pack: the received pack is self-contained, so
+        // it is installed as it arrived (git-index-pack(1) appends bases).
+        let request = wire.fetch_request(wants, haves, false)?
+        var stream = transport.begin_stream(mut p, request)?
+        let received = receive_pack(repo, mut stream)?
+        defer pack.received_discard(received)
+        transport.end_stream(mut p, take stream)?
+        publish_received(repo, received, keep)?
+        closure_received(repo, roots, received)?
+    } else {
+        let _ = closure(repo, roots, [])?
+    }
     transport.end_peer(p)?
     let code = transport.close_peer(mut p)?
     active = false
