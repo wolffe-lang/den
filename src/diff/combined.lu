@@ -1,0 +1,552 @@
+// Combined (-c) and dense combined (--cc) merge diffs, written from git-diff(1)
+// "COMBINED DIFF FORMAT", diff-options --cc/-c and black-box runs of the pinned
+// Git (vc18 rows). No VCS implementation source was consulted.
+use delta
+use difftext
+use object
+use oid
+use worktree
+
+/// A parent line missing from the result, kept before the result line it precedes.
+struct Lost { text: List[byte], mask: int }
+
+/// Changed result position: [start, end) in result lines; zero width for removals only.
+struct Span { start: int, end: int }
+
+/// Removal coalescing compares lines without one trailing LF (measured:
+/// eol-coalesce rows), unlike the per-parent line diff itself.
+fn same_line(a: List[byte], b: List[byte]) -> bool {
+    var x = a.len, y = b.len
+    if x > 0 && a[x - 1] == 10 as byte { x -= 1 }
+    if y > 0 && b[y - 1] == 10 as byte { y -= 1 }
+    if x != y { return false }
+    for i in 0..x { if a[i] != b[i] { return false } }
+    true
+}
+
+fn same_side(a: List[File], b: List[File]) -> bool {
+    if a.len != b.len { return false }
+    if a.len == 0 { return true }
+    a[0].mode == b[0].mode && oid.equal(a[0].id, b[0].id)
+}
+
+fn mode_word(files: List[File]) -> str ! worktree.WorkErrors {
+    if files.len == 0 { return "000000" }
+    object.mode_text(files[0].mode)?
+}
+
+fn slice(data: List[byte], line: difftext.Line) -> List[byte] {
+    var out = List[byte]()
+    for i in line.start..line.end { (mut out).push(data[i]) }
+    out
+}
+
+/// Fold one parent's removed run into the coalesced list: a longest common
+/// subsequence by text, walked backward; on equal lengths the incoming parent's
+/// line is taken first. Measured: lost-tie and lost-many rows.
+fn merge_lost(
+    existing: List[Lost],
+    incoming: List[List[byte]],
+    bit: int,
+) -> List[Lost] ! worktree.WorkErrors {
+    if incoming.len == 0 { return copy existing }
+    var backward = List[Lost]()
+    var i = existing.len, j = incoming.len
+    // Equal trailing lines pair first in the backward walk whatever the table holds.
+    while i > 0 && j > 0 && same_line(existing[i - 1].text, incoming[j - 1]) {
+        (mut backward).push(Lost {
+            text: copy existing[i - 1].text,
+            mask: existing[i - 1].mask | bit,
+        })
+        i -= 1
+        j -= 1
+    }
+    if i > 0 && j > 0 {
+        if i * j > 4000000 { return Unsupported("combined diff removed-line limit") }
+        let width = j + 1
+        var table = List[int]()
+        for _ in 0..(i + 1) * width { (mut table).push(0) }
+        for x in 1..=i {
+            for y in 1..=j {
+                table[x * width + y] = if same_line(existing[x - 1].text, incoming[y - 1]) {
+                    table[(x - 1) * width + y - 1] + 1
+                } else if table[(x - 1) * width + y] >= table[x * width + y - 1] {
+                    table[(x - 1) * width + y]
+                } else {
+                    table[x * width + y - 1]
+                }
+            }
+        }
+        while i > 0 && j > 0 {
+            if same_line(existing[i - 1].text, incoming[j - 1]) {
+                (mut backward).push(Lost {
+                    text: copy existing[i - 1].text,
+                    mask: existing[i - 1].mask | bit,
+                })
+                i -= 1
+                j -= 1
+            } else if table[(i - 1) * width + j] > table[i * width + j - 1] {
+                (mut backward).push(copy existing[i - 1])
+                i -= 1
+            } else {
+                (mut backward).push(Lost { text: copy incoming[j - 1], mask: bit })
+                j -= 1
+            }
+        }
+    }
+    while i > 0 {
+        (mut backward).push(copy existing[i - 1])
+        i -= 1
+    }
+    while j > 0 {
+        (mut backward).push(Lost { text: copy incoming[j - 1], mask: bit })
+        j -= 1
+    }
+    var out = List[Lost]()
+    var pos = backward.len
+    while pos > 0 {
+        pos -= 1
+        (mut out).push(copy backward[pos])
+    }
+    out
+}
+
+fn push_text(mut out: List[byte], text: List[byte]) {
+    add(mut out, text)
+    if text.len == 0 || text[text.len - 1] != 10 as byte { (mut out).push(10 as byte) }
+}
+
+fn space(b: byte) -> bool {
+    b == 32 as byte ||
+        b == 9 as byte ||
+        b == 10 as byte ||
+        b == 11 as byte ||
+        b == 12 as byte ||
+        b == 13 as byte
+}
+
+/// Hunk heading: the nearest earlier result line that begins with a letter, _ or
+/// $, searched no further back than the previous shown hunk; at most 40 bytes,
+/// trailing blanks trimmed, then one more byte dropped (measured, heading rows).
+fn heading(data: List[byte], rows: List[difftext.Line], start: int, low: int) -> List[byte] {
+    var k = start
+    while k > low {
+        k -= 1
+        let row = copy rows[k]
+        let first = data[row.start] as int
+        if first >= 65 && first <= 90 || first >= 97 && first <= 122 || first == 95 || first == 36 {
+            var end = row.end
+            if data[end - 1] == 10 as byte { end -= 1 }
+            if end - row.start > 40 { end = row.start + 40 }
+            while end > row.start && space(data[end - 1]) { end -= 1 }
+            if end > row.start { end -= 1 }
+            if end == row.start { return List[byte]() }
+            var out = [32 as byte]
+            for i in row.start..end { (mut out).push(data[i]) }
+            return out
+        }
+    }
+    List[byte]()
+}
+
+/// A dense group is boring when some parent is untouched there and every touched
+/// parent shows the same marks: only two variants, and the result kept one.
+fn interesting(flags: List[int], lost: List[List[Lost]], spans: List[Span], all: int) -> bool {
+    var dirty = 0
+    for span in spans {
+        for k in span.start..span.end { dirty = dirty | flags[k] }
+        for item in lost[span.start] { dirty = dirty | item.mask }
+    }
+    if dirty & all == all { return true }
+    for span in spans {
+        for k in span.start..span.end {
+            let seen = flags[k] & dirty
+            if seen != 0 && seen != dirty { return true }
+        }
+        for item in lost[span.start] {
+            let seen = item.mask & dirty
+            if seen != 0 && seen != dirty { return true }
+        }
+    }
+    false
+}
+
+fn counted_text(value: int, lower: bool) -> str {
+    if !lower { return "{value}" }
+    if value == 0 { return "18446744073709551615" }
+    "{value - 1}"
+}
+
+/// A removal-only position touches the next line: at -U0 the two still meet.
+fn touching(left: Span, right: Span) -> bool {
+    left.start == left.end && right.start == left.end + 1
+}
+
+fn joined(left: Span, right: Span, context: int) -> bool {
+    let gap = right.start - left.end
+    gap == 0 || gap < context || touching(left, right)
+}
+
+/// Combined hunks for one path; empty when nothing remains to show.
+fn combined_hunks(
+    parents: List[List[byte]],
+    result: List[byte],
+    context: int,
+    indent: bool,
+    dense: bool,
+) -> List[byte] ! worktree.WorkErrors {
+    let rows = difftext.lines(result)?
+    let count = rows.len
+    let n = parents.len
+    var flags = List[int]()
+    for _ in 0..count { (mut flags).push(0) }
+    var lost = List[List[Lost]]()
+    for _ in 0..count + 1 { (mut lost).push(List[Lost]()) }
+    for j in 0..n {
+        let before = copy parents[j]
+        let left = difftext.lines(before)?
+        let edits = if indent {
+            difftext.aligned(before, result)?
+        } else {
+            difftext.compact(before, result)?
+        }
+        for edit in edits {
+            for k in edit.new_start..edit.new_start + edit.new_count {
+                flags[k] = flags[k] | 1 << j
+            }
+            if edit.old_count > 0 {
+                var incoming = List[List[byte]]()
+                for i in edit.old_start..edit.old_start + edit.old_count {
+                    (mut incoming).push(slice(before, left[i]))
+                }
+                lost[edit.new_start] = merge_lost(copy lost[edit.new_start], incoming, 1 << j)?
+            }
+        }
+    }
+    var spans = List[Span]()
+    for k in 0..=count {
+        let flagged = k < count && flags[k] != 0
+        if flagged || lost[k].len > 0 {
+            (mut spans).push(Span { start: k, end: if flagged then k + 1 else k })
+        }
+    }
+    var chosen = List[Span]()
+    if !dense {
+        chosen = spans
+    } else {
+        let all = (1 << n) - 1
+        var at = 0
+        while at < spans.len {
+            var group = [copy spans[at]]
+            var next = at + 1
+            while next < spans.len && joined(spans[next - 1], spans[next], context) {
+                (mut group).push(copy spans[next])
+                next += 1
+            }
+            if interesting(flags, lost, group, all) {
+                for span in group { (mut chosen).push(copy span) }
+            }
+            at = next
+        }
+    }
+    var out = List[byte]()
+    var marks = List[byte]()
+    for _ in 0..n + 1 { (mut marks).push(64 as byte) }
+    // Parent line counters before position `cursor`, advanced monotonically.
+    var seen = List[int]()
+    for _ in 0..n { (mut seen).push(0) }
+    var cursor = 0, previous = 0, at = 0, counted = -1
+    while at < chosen.len {
+        var last = at
+        while last + 1 < chosen.len &&
+            (
+                chosen[last + 1].start - chosen[last].end <= 2 * context ||
+                    touching(chosen[last], chosen[last + 1])
+            ) {
+            last += 1
+        }
+        let start = if chosen[at].start > context then chosen[at].start - context else 0
+        let stop = if chosen[last].end + context < count then chosen[last].end + context else count
+        while cursor < start {
+            if cursor != counted {
+                for item in lost[cursor] {
+                    for j in 0..n { if item.mask & 1 << j != 0 { seen[j] += 1 } }
+                }
+            }
+            for j in 0..n { if flags[cursor] & 1 << j == 0 { seen[j] += 1 } }
+            cursor += 1
+        }
+        // Header counts follow the printed lines; the running counters `seen`
+        // advance over every line. Measured: at -U0 a touching removal's own
+        // line is not printed, and removals at the first position print only
+        // when that position is a chosen change (start-lost rows), though counted.
+        var inside = List[int](), advance = List[int]()
+        for _ in 0..n { (mut inside).push(0); (mut advance).push(0) }
+        var printed = 0
+        // Removals at `stop` belong to this hunk only when they are its last
+        // chosen change; a dropped group's removals there (end of file
+        // included) are neither printed nor counted (end-lost, seeded rows).
+        let tail = if chosen[last].start == stop && chosen[last].end == stop {
+            stop + 1
+        } else {
+            stop
+        }
+        for k in start..tail {
+            for item in lost[k] {
+                for j in 0..n {
+                    if item.mask & 1 << j != 0 { inside[j] += 1; advance[j] += 1 }
+                }
+            }
+            if k < stop {
+                let shown = context > 0 || flags[k] != 0
+                if shown { printed += 1 }
+                for j in 0..n {
+                    if flags[k] & 1 << j == 0 {
+                        advance[j] += 1
+                        if shown { inside[j] += 1 }
+                    }
+                }
+            }
+        }
+        // Measured (eof-* rows): at -U0 a hunk carrying end-of-file removals
+        // reports every count one lower; zero reads as 2^64 - 1.
+        let lower = context == 0 && tail == count + 1 && lost[count].len > 0
+        add(mut out, marks)
+        for j in 0..n { add(mut out, " -{seen[j] + 1},{counted_text(inside[j], lower)}".bytes()) }
+        add(mut out, " +{start + 1},{counted_text(printed, lower)} ".bytes())
+        add(mut out, marks)
+        add(mut out, heading(result, rows, start, previous))
+        (mut out).push(10 as byte)
+        for k in start..tail {
+            if k != start || chosen[at].start == start {
+                for item in lost[k] {
+                    for j in 0..n {
+                        (mut out).push(if item.mask & 1 << j != 0 then 45 as byte else 32 as byte)
+                    }
+                    push_text(mut out, item.text)
+                }
+            }
+            if k < stop && (context > 0 || flags[k] != 0) {
+                for j in 0..n {
+                    (mut out).push(if flags[k] & 1 << j != 0 then 43 as byte else 32 as byte)
+                }
+                push_text(mut out, slice(result, rows[k]))
+            }
+        }
+        for j in 0..n { seen[j] += advance[j] }
+        cursor = stop
+        counted = if tail > stop then stop else -1
+        // A removal-only hunk at -U0 still owns the line it precedes for the
+        // next heading search (measured, seeded rows).
+        previous = if chosen[last].start == chosen[last].end && chosen[last].end + 1 > stop {
+            chosen[last].end + 1
+        } else {
+            stop
+        }
+        at = last + 1
+    }
+    out
+}
+
+fn side_of(entries: List[worktree.FlatEntry], path: List[byte]) -> List[File] {
+    var low = 0, high = entries.len
+    while low < high {
+        let mid = (low + high) / 2
+        let order = compare(entries[mid].path, path)
+        if order == 0 {
+            return [
+                File {
+                    path: copy entries[mid].path,
+                    mode: entries[mid].mode,
+                    id: copy entries[mid].id,
+                    data: List[byte](),
+                },
+            ]
+        }
+        if order < 0 { low = mid + 1 } else { high = mid }
+    }
+    List[File]()
+}
+
+fn sorted_union(mut paths: List[List[byte]], entries: List[worktree.FlatEntry]) {
+    var merged = List[List[byte]]()
+    var i = 0, j = 0
+    while i < paths.len || j < entries.len {
+        if j >= entries.len || i < paths.len && compare(paths[i], entries[j].path) < 0 {
+            (mut merged).push(copy paths[i])
+            i += 1
+        } else if i >= paths.len || compare(paths[i], entries[j].path) > 0 {
+            (mut merged).push(copy entries[j].path)
+            j += 1
+        } else {
+            (mut merged).push(copy paths[i])
+            i += 1
+            j += 1
+        }
+    }
+    paths = merged
+}
+
+fn loaded(
+    ctx: worktree.Context,
+    files: List[File],
+    mut total: int,
+) -> List[File] ! worktree.WorkErrors {
+    if files.len == 0 { return List[File]() }
+    let value = object.read_object(ctx.repo, files[0].id, 16777216)?
+    if value.kind != "blob" { return invalid_tree }
+    if value.data.len > 134217728 - total { return limit }
+    total += value.data.len
+    [
+        File {
+            path: copy files[0].path,
+            mode: files[0].mode,
+            id: copy files[0].id,
+            data: copy value.data,
+        },
+    ]
+}
+
+/// Every path whose result differs from each parent (mode or blob), in path
+/// order, as -c (dense false) or --cc (dense true). Renames are not detected.
+pub fn combined(
+    ctx: worktree.Context,
+    parents: List[oid.Oid],
+    result: oid.Oid,
+    options: Options,
+    dense: bool,
+) -> List[byte] ! worktree.WorkErrors {
+    if parents.len < 2 || parents.len > 30 {
+        return Unsupported("combined diff of {parents.len} parents")
+    }
+    if options.context < 0 ||
+        options.context > 200000 ||
+        options.abbreviate < 4 ||
+        options.abbreviate > 40 {
+        return invalid
+    }
+    let after = worktree.flatten_tree(ctx.repo, result)?
+    var trees = List[List[worktree.FlatEntry]]()
+    for parent in parents { (mut trees).push(worktree.flatten_tree(ctx.repo, parent)?) }
+    var paths = List[List[byte]]()
+    sorted_union(mut paths, after)
+    for tree in trees { sorted_union(mut paths, tree) }
+    for path in paths {
+        let name = text(path)?
+        if name == ".gitattributes" || name.ends_with("/.gitattributes") {
+            return Unsupported("diff attributes")
+        }
+    }
+    let label = if dense then "cc" else "combined"
+    var out = List[byte](), total = 0
+    for path in paths {
+        let target = side_of(after, path)
+        var sides = List[List[File]]()
+        var everywhere = true
+        for tree in trees {
+            let side = side_of(tree, path)
+            if same_side(side, target) { everywhere = false }
+            (mut sides).push(side)
+        }
+        if !everywhere { continue }
+        for side in sides {
+            for file in side {
+                if file.mode == 0o160000 { return Unsupported("history submodule diff") }
+            }
+        }
+        for file in target {
+            if file.mode == 0o160000 { return Unsupported("history submodule diff") }
+        }
+        region path_scratch {
+            var head = List[byte]()
+            add(mut head, "diff --{label} ".bytes())
+            add(mut head, quoted(path, options))
+            add(mut head, "\nindex ".bytes())
+            for j in 0..sides.len {
+                if j > 0 { (mut head).push(44 as byte) }
+                let short = abbreviation(ctx, sides[j], options)?
+                add(mut head, short.bytes())
+            }
+            let short = abbreviation(ctx, target, options)?
+            add(mut head, "..{short}\n".bytes())
+            var created = true
+            for side in sides { if side.len > 0 { created = false } }
+            let deleted = target.len == 0
+            var mode_line = created || deleted
+            if created {
+                add(mut head, "new file mode {mode_word(target)?}\n".bytes())
+            } else if deleted {
+                add(mut head, "deleted file mode ".bytes())
+                for j in 0..sides.len {
+                    if j > 0 { (mut head).push(44 as byte) }
+                    let word = mode_word(sides[j])?
+                    add(mut head, word.bytes())
+                }
+                (mut head).push(10 as byte)
+            } else {
+                var differ = false
+                let wanted = mode_word(target)?
+                for side in sides {
+                    let word = mode_word(side)?
+                    if word != wanted { differ = true }
+                }
+                if differ {
+                    mode_line = true
+                    add(mut head, "mode ".bytes())
+                    for j in 0..sides.len {
+                        if j > 0 { (mut head).push(44 as byte) }
+                        let word = mode_word(sides[j])?
+                        add(mut head, word.bytes())
+                    }
+                    add(mut head, "..{wanted}\n".bytes())
+                }
+            }
+            let shown = loaded(ctx, target, mut total)?
+            var bodies = List[List[byte]]()
+            var binary = shown.len > 0 && delta.binary(shown[0].data)
+            for side in sides {
+                let value = loaded(ctx, side, mut total)?
+                if value.len > 0 && delta.binary(value[0].data) { binary = true }
+                (mut bodies).push(if value.len > 0 then copy value[0].data else List[byte]())
+            }
+            if binary {
+                add(mut out, head)
+                add(mut out, "Binary files differ\n".bytes())
+            } else {
+                let result_data = if shown.len > 0 then copy shown[0].data else List[byte]()
+                let body = combined_hunks(
+                    bodies,
+                    result_data,
+                    options.context,
+                    options.indent,
+                    dense,
+                )?
+                if body.len > 0 || mode_line || !dense {
+                    add(mut out, head)
+                    add(mut out, "--- ".bytes())
+                    add(
+                        mut out,
+                        if created {
+                            owned("/dev/null".bytes())
+                        } else {
+                            quoted(prefixed("a/", path), options)
+                        },
+                    )
+                    add(mut out, "\n+++ ".bytes())
+                    add(
+                        mut out,
+                        if deleted {
+                            owned("/dev/null".bytes())
+                        } else {
+                            quoted(prefixed("b/", path), options)
+                        },
+                    )
+                    (mut out).push(10 as byte)
+                    add(mut out, body)
+                }
+            }
+            if out.len > 134217728 { return limit }
+        }
+    }
+    out
+}
