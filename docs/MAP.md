@@ -264,7 +264,7 @@ cookies, proxies, content codings, HTTP/2 and protocol upgrade; protocol v0/v1
 advertisements; RPC redirects; side-band push messages over ssh and `git://`
 (den#60's). den's own repository is larger than the 140,000,000-byte wire cap
 and the 128 MiB pack payload cap, so it cannot be cloned over any transport yet;
-the live row records the refusal.
+the live row records the refusal (den#61).
 
 ## Pack writing and inspection (vc13)
 
