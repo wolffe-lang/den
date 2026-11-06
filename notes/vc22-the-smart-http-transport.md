@@ -76,12 +76,14 @@ Clean room: git's documentation, the RFCs, and the pinned Git and OpenSSL run as
 
 ### The over-limit refusal (R-vc22-5)
 
-den's repository is a 311,900,659-byte pack (297.4 MiB, measured by the pinned Git's clone), beyond den's 140,000,000-byte wire cap. den refuses with exactly `den: wire: limit` and exit 2.
+den's repository is a 311,900,659-byte pack (297.4 MiB, measured by the pinned Git's clone), beyond den's 140,000,000-byte wire cap. den refuses with exactly `den: wire: limit` and exit 2. den#61 tracks the limit itself.
 
 | head | tier | elapsed | peak RSS | partial clone |
 |---|---|---|---|---|
 | `3ca92a3` (before the fixes) | release | 102.2 s | 6,279,204 KiB | left (an initialised skeleton) |
 | `3ca92a3` (before the fixes) | native | 97.0 s | 6,270,644 KiB | left |
+| `28639d3` (after both fixes) | release | 82.8 s | 422,676 KiB | none |
+| `28639d3` (after both fixes) | native | 115.8 s | 423,484 KiB | none |
 
 The 6 GiB peak was the light container's cap, so den was near an out-of-memory kill. On loopback, one 32,000,000-byte body measured:
 
@@ -92,7 +94,7 @@ The 6 GiB peak was the light container's cap, so den was near an out-of-memory k
 
 ### The live read
 
-den and the pinned Git cloned the same public repository at the same ref (284 objects), with identical refs, HEAD, reachable canonical objects, worktree and remote configuration; Git's `fsck --full` and `status` are clean on den's clone. At `3ca92a3`: den 7.27 s and 85,252 KiB in release, 10.22 s and 86,356 KiB natively; Git 0.50–0.55 s and about 38,000 KiB.
+den and the pinned Git cloned the same public repository at the same ref (284 objects), with identical refs, HEAD, reachable canonical objects, worktree and remote configuration; Git's `fsck --full` and `status` are clean on den's clone. At `3ca92a3`: den 7.27 s and 85,252 KiB in release, 10.22 s and 86,356 KiB natively; Git 0.50–0.55 s and about 38,000 KiB. Later reads of the same repository (480 objects, as it grew) took den 8–69 s, against Git's 0.5 s. A TCP relay timeline (encrypted byte counts only) put the whole exchange, discovery, `ls-refs` and the pack, on one reused connection, done at 1.63 s. den then sat for about 9 s, with about 0.3 s of CPU, before its TLS close: local I/O wait in the fetch import every transport shares, not HTTP. den#62 tracks it.
 
 ## Done-when
 
@@ -113,12 +115,12 @@ den and the pinned Git cloned the same public repository at the same ref (284 ob
 - **R-vc22-2 — applied:** side-band-64k push messages are HTTP-only here; ssh and `git://` are den#60's.
 - **R-vc22-3 — applied:** the truncated side-band frame is an explicit ORACLE-TIMEOUT non-parity row, Git reaped and no strays; den's refusal holds with its state unchanged.
 - **R-vc22-4 — applied:** discovery accepts direct v2 or exactly the matching banner, flush and v2. A mismatched banner, a missing flush, v0 (with or without the banner, including a NUL capability line) and v1 are refused by name. Lines are compared as bytes, not text, so a v0 capability line reads as "not v2" rather than malformed.
-- **R-vc22-5 — applied, recommended:** the over-limit refusal stays den's existing `den: wire: limit`, exit 2; the row bounds it at 600 s and 1 GiB peak RSS, and the shared limits are not relaxed. Each read runs in its own region and appends to one long-lived buffer. Options: (A) as built; (B) stream bodies to the pack parser instead of buffering whole responses, a larger change touching every transport. **Recommended: A** now, with B as follow-on work if den is to clone its own repository.
-- **R-vc22-6 — applied, recommended:** a failed clone removes the directory it created, for every transport, as the pinned Git does (measured black-box: a new directory is removed, an existing empty one kept). den already refuses an existing destination, so it never removes anything it did not create in that command. Options: (A) as built; (B) leave partial clones and file an issue. **Recommended: A**, since the ruled live row requires it.
+- **R-vc22-5 — accepted, applied:** the over-limit refusal stays den's existing `den: wire: limit`, exit 2; the row bounds it at 600 s and 1 GiB peak RSS, and the shared limits are not relaxed. Each read runs in its own region and appends to one long-lived buffer. Options: (A) as built; (B) stream bodies to the pack parser instead of buffering whole responses, a larger change touching every transport. A was accepted; streaming bodies is den#61's.
+- **R-vc22-6 — accepted, applied:** a failed clone removes the directory it created, for every transport, as the pinned Git does (measured black-box: a new directory is removed, an existing empty one kept). den already refuses an existing destination, so it never removes anything it did not create in that command. Options: (A) as built; (B) leave partial clones and file an issue. A was accepted. The cleanup is one small commit (`ec20219`), a `defer` around clone.
 
 ### Remaining limits
 
-Credential helpers, cookies, proxies, content codings, HTTP/2, protocol upgrade, close-delimited HTTPS bodies, protocol v0/v1 advertisements, RPC redirects, `http.*` configuration beyond `http.followRedirects=initial`, and side-band push messages over ssh and `git://` remain named limits. den cannot clone its own repository over any transport until its 140,000,000-byte wire cap and 128 MiB pack payload cap allow it, or until bodies stream. The live push waits for its variables.
+Credential helpers, cookies, proxies, content codings, HTTP/2, protocol upgrade, close-delimited HTTPS bodies, protocol v0/v1 advertisements, RPC redirects, `http.*` configuration beyond `http.followRedirects=initial`, and side-band push messages over ssh and `git://` remain named limits. den cannot clone its own repository over any transport until its 140,000,000-byte wire cap and 128 MiB pack payload cap allow it, or until bodies stream (den#61). A small clone waits on local I/O after the network exchange ends (den#62). The live push waits for its variables.
 
 ### For PAX
 
