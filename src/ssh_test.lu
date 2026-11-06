@@ -35,9 +35,17 @@ fn command_rows() -> int {
     let rows = [
         ["git-receive-pack", "git-receive-pack {path}", "ssh-command-receive-plain"],
         ["git-upload-pack", "git-upload-pack {path}", "ssh-command-upload-plain"],
-        ["/opt/git/bin/git-upload-pack", "/opt/git/bin/git-upload-pack {path}", "ssh-command-override-plain"],
+        [
+            "/opt/git/bin/git-upload-pack",
+            "/opt/git/bin/git-upload-pack {path}",
+            "ssh-command-override-plain",
+        ],
         ["Git_2.56+x/up-load", "Git_2.56+x/up-load {path}", "ssh-command-plain-word-set"],
-        ["/opt/my git/git-upload-pack", "'/opt/my git/git-upload-pack' {path}", "ssh-command-override-space"],
+        [
+            "/opt/my git/git-upload-pack",
+            "'/opt/my git/git-upload-pack' {path}",
+            "ssh-command-override-space",
+        ],
         ["it's", "'it'\\''s' {path}", "ssh-command-override-quote"],
         ["git-upload-pack;id", "'git-upload-pack;id' {path}", "ssh-command-override-shell"],
         ["", "'' {path}", "ssh-command-override-empty"],
@@ -46,7 +54,12 @@ fn command_rows() -> int {
     for row in rows {
         if !command_is(url, row[0], row[1], row[2]) { failed = failed + 1 }
     }
-    if !command_is("example.invalid:srv/repo.git", "git-upload-pack", "git-upload-pack 'srv/repo.git'", "ssh-command-scp") {
+    if !command_is(
+        "example.invalid:srv/repo.git",
+        "git-upload-pack",
+        "git-upload-pack 'srv/repo.git'",
+        "ssh-command-scp",
+    ) {
         failed = failed + 1
     }
     failed

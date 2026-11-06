@@ -84,8 +84,14 @@ pub fn ssh_program(text: str) -> str ! Errors {
     if text.len == 0 { return ssh_quote(text)? }
     for b in text.bytes() {
         let c = b as int
-        let plain = (c >= 48 && c <= 57) || (c >= 65 && c <= 90) || (c >= 97 && c <= 122) ||
-            c == 46 || c == 95 || c == 47 || c == 43 || c == 45
+        let plain = c >= 48 && c <= 57 ||
+            c >= 65 && c <= 90 ||
+            c >= 97 && c <= 122 ||
+            c == 46 ||
+            c == 95 ||
+            c == 47 ||
+            c == 43 ||
+            c == 45
         if !plain { return ssh_quote(text)? }
     }
     copy text
