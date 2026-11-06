@@ -18,9 +18,9 @@ not a blanket byte-parity claim.
 | M2 (partial) | `index`, `worktree`, `ignore`, `commit_format`, `commit`: implemented subset (vc03); `delta`, `rename`, `difftext`, `diffbinary`, `diff` (vc04); `walk`, `pretty`, log/show (vc05) |
 | M3 (partial) | `refs`, `refcmd`, `worktree.transition`: refs/reflogs, branch/tag/switch/checkout/reset (vc06); three-way merge/revert (vc07); rebase/cherry-pick/sequencer (vc08); `revsyntax`, `revision`, `revset`: shared bounded grammar (vc10); `blame`, `blamerange` and shared `difftext.correspondence`: bounded line attribution (vc11); `stash`, `stashlog`, `notes`, `notestree`: stash and notes (vc12) |
 | M4 (partial) | `pack`: pack-v2/idx-v2 reading (vc09), shared delta encoder and verified pair writer; `packcmd`: pack-objects, verify-pack, count-objects, bounded fsck (vc13/vc14), reachable closure and verified repack/prune-packed; gc policy remains named |
-| M5 (partial) | `pktline`, `wire`, `transport`, `wiregit`: v2 fetch/ls-refs and v0 receive-pack, file/git/system-SSH peers, clone/fetch/push, configured remote/tracking/leases and M3-backed pull (vc16); `pack` received/thin streams and `refs.transaction` logical atomic publication (vc15); broader configuration/transport policies remain named |
+| M5 (partial) | `pktline`, `wire`, `transport`, `wiregit`: v2 fetch/ls-refs and v0 receive-pack, file/git/system-SSH peers, clone/fetch/push, configured remote/tracking/leases and M3-backed pull (vc16); `http`: smart HTTP and HTTPS clone/fetch/push with Basic tokens over the standard library's public-PKI TLS (vc22); `pack` received/thin streams and `refs.transaction` logical atomic publication (vc15); broader configuration/transport policies remain named |
 | M6 | static build and PAX handoff (later lane); optional `git` alias |
-| Later | HTTPS beyond measured TLS profile, hooks, worktrees, sparse index, submodules, SHA-256 repositories, interactive rebase, bundles and protocol v0/v1 fetch |
+| Later | credential helpers, cookies, proxies, HTTP/2, close-delimited HTTPS bodies (wolf-std#133), hooks, worktrees, sparse index, submodules, SHA-256 repositories, interactive rebase, bundles and protocol v0/v1 fetch |
 
 The MVP is M0–M3, file/git transports from M5, and M6. Pack reading is available
 beneath object lookup; pack construction is separate from housekeeping and transports.
@@ -168,8 +168,8 @@ selection and existing unconfigured local-path transport remain named limits.
 There are 48 remote/tracking, 48 configured/lease/failure and 26 pull groups beside
 the typed matrix: 892 portable groups per tier, including the one reviewed
 service-output difference below. Units and review-binding mutations are separate.
-This is not an M5 completion claim; additional configuration forms, protocol v0/v1,
-HTTPS and general failure-output parity remain separate.
+This is not an M5 completion claim; additional configuration forms, protocol v0/v1
+and general failure-output parity remain separate. Smart HTTP is vc22's, below.
 
 ### SSH protocol boundary
 
@@ -227,6 +227,42 @@ reflogs in `target/runs/wire-remote-identity/{captures,summary}.json`.
 Den uses its shared configured identity boundary. Exact tracking rows therefore
 pin GIT_AUTHOR_NAME/EMAIL and GIT_COMMITTER_NAME/EMAIL beside the fixed dates;
 auto-identity mode remains a named non-parity limit. No hostname is synthesized.
+
+## Smart HTTP transport (vc22)
+
+| Module | Owns |
+|---|---|
+| `src/http/url.lu` | RFC 3986 `http`/`https` origins: host, port, path; refuses userinfo, queries, fragments, bad escapes and control bytes without echoing them; plain `http` only for literal loopback |
+| `src/http/framing.lu` | RFC 9112 response heads (status line, fields, obs-fold unfolding, Content-Length and chunked framing, chunk sizes and extensions), each bound named |
+| `src/http/client.lu` | one owned connection: request writing, response reading, persistent connections, informational responses, trailers, the single Basic challenge retry; one long-lived read buffer refilled per read |
+| `src/http/tls.lu` | the standard library's TLS 1.3 client: roots from `--tls-roots`/`DEN_TLS_ROOTS`, `/dev/urandom` entropy, the UTC clock; each record read in its own region |
+| `src/http/auth.lu` | Basic credentials from `DEN_HTTP_USER`/`DEN_HTTP_TOKEN` or a no-echo prompt; diagnostic redaction |
+| `src/http/redirect.lu` | initial same-scheme discovery redirects, at most five, rebased on the discovery suffix |
+| `src/transport/peer.lu` | one peer type over a stream channel or an HTTP connection; discovery envelopes (direct v2 or the matching banner, flush and v2), RPC status and content types |
+| `src/transport/http_sideband.lu` | receive-pack side-band-64k demultiplexing for HTTP push |
+| `src/wiregit/http_options.lu` | `--tls-roots=PATH` for one command |
+
+Fetch and push share every wire, pack, closure, lease, status-report and
+ref-publication path with the stream transports; HTTP only changes how a
+request and its response travel. A response is received whole, within the
+caller's cap, before the existing parsers see it. Push sends commands and
+pack in one POST and is never retried. Every read appends to the connection's
+one buffer inside a scratch region (wolf's `[mem.region.outer-write]`): a
+replaced buffer, and the TLS client's per-record temporaries, would otherwise
+live until the connection ends. Measured on one 32,000,000-byte body, peak RSS
+went from 5.1x the body (plain) and 65.5x (TLS) to 3.1x and 3.3x.
+
+The rows are `tools/check-http`'s, listed in the vc22 note. The live rows reach
+github.com only; their SKIP is by name when github.com:443 does not connect or
+when no distribution root bundle exists. A SKIP is not a pass.
+
+Limits by name: close-delimited HTTPS bodies (wolf-std#133); credential
+helpers; `http.*` configuration other than `http.followRedirects=initial`;
+cookies, proxies, content codings, HTTP/2 and protocol upgrade; protocol v0/v1
+advertisements; RPC redirects; side-band push messages over ssh and `git://`
+(den#60's). den's own repository is larger than the 140,000,000-byte wire cap
+and the 128 MiB pack payload cap, so it cannot be cloned over any transport yet;
+the live row records the refusal.
 
 ## Pack writing and inspection (vc13)
 
@@ -443,7 +479,7 @@ measurements use hasu CPUs 0–5; diff uses CPUs 6–11 with the same pinned too
 | Non-UTF-8 paths | `std.fs.entries`/read_link preserve bytes, but path arguments are `str`; `str_from_utf8([255])` raises utf8 | `paths`: native + checked. wolf-lang#687/#912. Partial surface, not a byte-path API; unsupported input remains named, never silently transcoded |
 | Processes / pipes | `os_pipe`, `os_spawn_fds`, `os_wait`; std.process's pipe, set_stdin/set_stdout/start/wait wrappers | `process`: native + checked, bytes “both ways”, wait 7; no host process targeted. Spawn helper is lane-owned shell text |
 | TCP | `std.net.connect/listen_with/port/accept/read_bytes/write_bytes/set_deadline/close` (`listen` is the simple wrapper) | `tcp`: native + checked, loopback ephemeral port, binary 00 ff 0a round trip in both directions |
-| TLS | `std.x.tls.client.begin/complete/read/write/close`, explicit concatenated DER roots and caller entropy; TLS 1.3 ChaCha20/X25519 profile | `tls`: native local OpenSSL handshake + 3,853 application bytes; GitHub:443 returns unsupported_alg with system roots. Actual checked verdict is unsupported (step budget exhausted during mem), not a handshake. No blanket “TLS absent” claim |
+| TLS | `std.x.tls.client.begin/complete/read/write/close`, explicit concatenated DER roots and caller entropy; TLS 1.3 ChaCha20/X25519 profile | `tls`: native local OpenSSL handshake + 3,853 application bytes; GitHub:443 returns unsupported_alg with system roots. Actual checked verdict is unsupported (step budget exhausted during mem), not a handshake. No blanket “TLS absent” claim. vc22, std `d4a4d4c`: RSA, RSA-PSS and P-256/P-384 chains validate to a supplied root set, and github.com:443 completes with a distribution's roots |
 | Dates | `std.time.local`, `std.time.format` (both files are one module), format `%a %b %e %H:%M:%S %Y %z` | `time`: native + checked: Tue Nov 14 22:13:20 2023 +0000. Offset is explicit; zone names not inferred |
 | Terminal / pager | `os_isatty`, `std.term.group`; term mode/size APIs exist | `term`: native + checked under redirected streams; pinned pager is cat, colour off. No interactive TTY session claimed |
 | Regex | No `std.regex` | `regex`: E0301 native + checked; existing wolf-std#99. Vendor scent only when log --grep/-G needs it |
@@ -460,7 +496,7 @@ separates standard-library wrappers from language builtins.
 
 ### Gaps to send upstream (not filed by this lane)
 
-- wolf-std: the TLS client cannot complete the observed GitHub chain;
+- wolf-std (resolved by its public-PKI client at `d4a4d4c`, pinned in vc22): the TLS client could not complete the observed GitHub chain;
   `tls-github-native.log` returns `complete=unsupported_alg`, with explicit
   system roots. The deterministic local RSA-signed certificate reproduces
   `complete=unsupported_alg` (`tls-local-rsa-native.log`); an Ed25519 local
