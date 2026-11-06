@@ -4,8 +4,9 @@
 # body's memory, redirects, Basic authentication, transport refusals,
 # discovery and RPC refusals with failed-clone cleanup, receive-pack
 # side-band, smart-git interop against the pinned git-http-backend over
-# plain and authenticated TLS, and the live github.com rows (a named SKIP
-# without network). Every output directory must be fresh.
+# plain and authenticated TLS, the live github.com rows (a named SKIP
+# without network), and vc23's packs over 128 MiB on every transport.
+# Every output directory must be fresh.
 set -eu
 DEN_ROOT=$(cd "$(dirname "$0")/.." && pwd)
 export DEN_ROOT
@@ -53,7 +54,8 @@ for tier in native release; do
     step "$tier-http-plain-git" tools/env python3 -I tools/http-git-test.py --tier "$tier" --transport plain
     step "$tier-http-tls-git" tools/env python3 -I tools/http-git-test.py --tier "$tier" --transport tls --auth
     step "$tier-http-live" tools/env python3 -I tools/http-live-test.py --tier "$tier"
+    step "$tier-large-pack" tools/env python3 -I tools/large-pack-test.py --tier "$tier"
 done
 step actual-checked-http checked http_test
 step actual-checked-http-advertisement checked http_redirect_test
-echo 'http: native/release units, peers, TLS, memory, refusals, smart-git interop and live rows; checked units'
+echo 'http: native/release units, peers, TLS, memory, refusals, smart-git interop, live and large-pack rows; checked units'
