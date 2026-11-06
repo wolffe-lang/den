@@ -56,9 +56,21 @@ fn same_origin(a: Endpoint, b: Endpoint) -> bool {
 pub fn discover(mut c: Connection, service: str) -> Response ! Errors {
     var redirects = 0
     loop {
-        let response = request_capped(mut c, "GET", "{c.endpoint.path}/info/refs?service={service}", service, List[byte](), 2097152)?
-        if response.status != 301 && response.status != 302 && response.status != 303 &&
-            response.status != 307 && response.status != 308 { return response }
+        let response = request_capped(
+            mut c,
+            "GET",
+            "{c.endpoint.path}/info/refs?service={service}",
+            service,
+            List[byte](),
+            2097152,
+        )?
+        if response.status != 301 &&
+            response.status != 302 &&
+            response.status != 303 &&
+            response.status != 307 &&
+            response.status != 308 {
+            return response
+        }
         if redirects >= 5 { return Unsupported("HTTP redirect limit") }
         let next = redirect_endpoint(c.endpoint, response.location, service)?
         if !same_origin(c.endpoint, next) {

@@ -14,7 +14,12 @@ fn diagnostic_append(mut out: List[byte], data: List[byte]) -> () ! Errors {
     wire.append(mut out, data)
 }
 
-fn progress_line(mut out: List[byte], pending: List[byte], ending: byte, terminated: bool) -> () ! Errors {
+fn progress_line(
+    mut out: List[byte],
+    pending: List[byte],
+    ending: byte,
+    terminated: bool,
+) -> () ! Errors {
     diagnostic_append(mut out, "remote: ".bytes())?
     diagnostic_append(mut out, pending)?
     if terminated && pending.len > 0 { diagnostic_append(mut out, "        ".bytes())? }

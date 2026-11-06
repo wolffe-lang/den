@@ -241,7 +241,9 @@ fn perform_push(args: List[str]) -> int ! object.StoreErrors {
         _ => { error_text = "{e}" },
     }
     if http_fatal {
-        eprint("fatal: the remote end hung up unexpectedly\nfatal: the remote end hung up unexpectedly")
+        eprint(
+            "fatal: the remote end hung up unexpectedly\nfatal: the remote end hung up unexpectedly",
+        )
         let safe_url = transport.redact(url)
         eprint("error: failed to push some refs to '{safe_url}'")
         return 1

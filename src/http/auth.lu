@@ -16,7 +16,9 @@ fn prompt_token() -> str ! Errors {
     fs_write_chunk(2, "Token: ".bytes()) else |_| { return io }
     var bytes = List[byte]()
     loop {
-        let data = fs_read_chunk(0, 1) else |_| { return Unsupported("HTTP authentication cancelled") }
+        let data = fs_read_chunk(0, 1) else |_| {
+            return Unsupported("HTTP authentication cancelled")
+        }
         if data.len != 1 { return Unsupported("HTTP authentication cancelled") }
         let b = data[0]
         if b == 3 as byte || b == 4 as byte { return Unsupported("HTTP authentication cancelled") }
@@ -44,7 +46,9 @@ fn credentials() -> str ! Errors {
     if user.contains(":") { return Unsupported("HTTP credential username") }
     for value in [user, token] {
         for b in value.bytes() {
-            if b as int < 32 || b == 127 as byte { return Unsupported("HTTP credential characters") }
+            if b as int < 32 || b == 127 as byte {
+                return Unsupported("HTTP credential characters")
+            }
         }
     }
     base64.encode("{user}:{token}".bytes())

@@ -118,15 +118,25 @@ pub fn exchange(mut p: Peer, request: List[byte], cap: int) -> List[byte] ! Erro
     if p.web.len != 1 { return invalid }
     var c = copy p.web[0]
     defer { p.web[0] = c }
-    let response = http.request_capped(mut c, "POST", "{c.endpoint.path}/git-{p.service}", "git-{p.service}", request, cap)?
+    let response = http.request_capped(
+        mut c,
+        "POST",
+        "{c.endpoint.path}/git-{p.service}",
+        "git-{p.service}",
+        request,
+        cap,
+    )?
     http_status(response.status, true)?
     if response.content_type.lower() != "application/x-git-{p.service}-result" {
         return Unsupported("HTTP RPC content type")
     }
     let body = response.body
     if body.len >= 4 && (str_from_utf8(body[body.len - 4..]) else "") == "0002" {
-        if p.service != "upload-pack" || body.len < 8 ||
-            (str_from_utf8(body[body.len - 8..body.len - 4]) else "") != "0000" { return invalid }
+        if p.service != "upload-pack" ||
+            body.len < 8 ||
+            (str_from_utf8(body[body.len - 8..body.len - 4]) else "") != "0000" {
+            return invalid
+        }
         return copy body[0..body.len - 4]
     }
     copy body
