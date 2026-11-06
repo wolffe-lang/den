@@ -1,0 +1,271 @@
+#!/usr/bin/env python3
+"""Live smart-HTTP rows against github.com: read-only, never credentials.
+
+http-live-read: den and the pinned Git clone the same small public repository
+over https, each against the distribution's root bundle; process bytes and
+status, refs, HEAD, reachable canonical objects, worktree and remote config
+are compared, and the pinned Git checks den's clone (fsck, status).
+
+http-live-limit: den's own public repository, whose pack exceeds den's
+140,000,000-byte wire limit, must refuse by name within bounded time and
+memory and leave no partial clone. The shared limits are never relaxed.
+
+Both rows SKIP by name when github.com:443 is unreachable or when no
+distribution root bundle exists. Run through tools/env in the oracle
+container. PEM is decoded per RFC 7468 here; no TLS library is used.
+"""
+import argparse
+import base64
+import hashlib
+import json
+import os
+from pathlib import Path
+import shutil
+import signal
+import socket
+import subprocess
+import time
+
+GIT_SHA256 = 'c4848492938c4ebfffbefe1fbbaa68b9af90c86d1f6a20e76816c5ff37fcfa60'
+READ_URL = 'https://github.com/wolffe-lang/burrow.git'
+LIMIT_URL = 'https://github.com/wolffe-lang/den.git'
+WIRE_LIMIT = 140000000
+# R-vc22-5: den's named refusal and its bounds for a pack beyond the limit.
+LIMIT_STDERR = b'den: wire: limit\n'
+LIMIT_SECONDS = 600
+LIMIT_RSS_KIB = 1024 * 1024
+READ_SECONDS = 300
+SECRETS = ('DEN_HTTP_TOKEN', 'DEN_HTTP_USER', 'DEN_LIVE_HTTPS_URL', 'DEN_LIVE_HTTPS_TOKEN',
+           'GIT_ASKPASS', 'SSH_ASKPASS', 'DEN_TLS_ROOTS', 'GIT_SSL_CAINFO', 'GIT_SSL_CAPATH')
+
+
+def pem_roots(path):
+    """Concatenated DER from a PEM bundle, strictly per RFC 7468 section 2."""
+    text = path.read_bytes()
+    begin, end = b'-----BEGIN CERTIFICATE-----', b'-----END CERTIFICATE-----'
+    out, count, pos = bytearray(), 0, 0
+    while True:
+        start = text.find(begin, pos)
+        if start < 0:
+            break
+        stop = text.find(end, start)
+        if stop < 0:
+            raise ValueError('unterminated PEM certificate')
+        body = b''.join(text[start + len(begin):stop].split())
+        der = base64.b64decode(body, validate=True)
+        if len(der) < 2 or der[0] != 0x30:
+            raise ValueError('PEM block is not a DER SEQUENCE')
+        out.extend(der)
+        count += 1
+        pos = stop + len(end)
+    if not count:
+        raise ValueError('no certificates in bundle')
+    return bytes(out), count
+
+
+def reachable(host, port, timeout=10):
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return ''
+    except OSError as exc:
+        return type(exc).__name__
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--tier', choices=('native', 'release'), default='native')
+    parser.add_argument('--rows', default='read,limit')
+    parser.add_argument('--measure-oracle', action='store_true',
+                        help="also clone den's repository with the pinned Git to record its pack size")
+    args = parser.parse_args()
+    rows = args.rows.split(',')
+    assert set(rows) <= {'read', 'limit'} and rows, 'rows'
+    root = Path(__file__).resolve().parent.parent
+    git = str(Path(os.environ['DEN_GIT']).resolve())
+    assert hashlib.sha256(Path(git).read_bytes()).hexdigest() == GIT_SHA256, 'pinned Git digest'
+    den = root / 'target' / args.tier / 'den'
+    if not den.is_file():
+        raise SystemExit('FAIL http-live-input: build target/' + args.tier + '/den first')
+    names = {'read': 'http-live-read', 'limit': 'http-live-limit'}
+    pem = Path(os.environ.get('DEN_LIVE_ROOTS_PEM', '/etc/ssl/certs/ca-certificates.crt'))
+    if not pem.is_file():
+        for row in rows:
+            print('SKIP ' + names[row] + ' reason=no distribution root bundle', flush=True)
+        return
+    unreachable = reachable('github.com', 443)
+    if unreachable:
+        for row in rows:
+            print('SKIP ' + names[row] + ' reason=no network (github.com:443 ' + unreachable + ')', flush=True)
+        return
+    out = root / 'target/runs' / ('http-live-' + args.tier)
+    if out.exists():
+        raise SystemExit('FAIL http-live-fresh-output: select a fresh build directory')
+    out.mkdir(parents=True)
+    der, count = pem_roots(pem)
+    roots = out / 'roots.der'
+    roots.write_bytes(der)
+    print('ROOTS certificates=%d bytes=%d sha256=%s' % (count, len(der), hashlib.sha256(der).hexdigest()), flush=True)
+
+    env = {key: value for key, value in os.environ.items() if key not in SECRETS}
+    env.update(GIT_TERMINAL_PROMPT='0', GIT_CONFIG_COUNT='1',
+               GIT_CONFIG_KEY_0='protocol.version', GIT_CONFIG_VALUE_0='2')
+    tools = {'git': dict(GIT_SSL_CAINFO=str(pem)), 'den': dict(DEN_TLS_ROOTS=str(roots))}
+    captures = []
+
+    def record():
+        (out / 'captures.json').write_text(json.dumps(captures, indent=2) + '\n')
+
+    def run(argv, cwd, label, timeout, tool='git'):
+        # Output goes to files and the child is reaped by wait4, so its own
+        # rusage (max RSS, CPU) is measured and no pipe can stall it.
+        index = len(captures)
+        paths = out / ('%03d.stdout' % index), out / ('%03d.stderr' % index)
+        started = time.monotonic()
+        with open(paths[0], 'wb') as stdout, open(paths[1], 'wb') as stderr:
+            child = subprocess.Popen(list(map(str, argv)), cwd=cwd, env={**env, **tools[tool]},
+                                     stdin=subprocess.DEVNULL, stdout=stdout, stderr=stderr)
+        terminate_at, kill_at, timed_out = started + timeout, None, False
+        while True:
+            pid, status, usage = os.wait4(child.pid, os.WNOHANG)
+            if pid:
+                break
+            now = time.monotonic()
+            if not timed_out and now >= terminate_at:
+                timed_out, kill_at = True, now + 10
+                os.kill(child.pid, signal.SIGTERM)  # This child's pid only, never a group.
+            elif kill_at is not None and now >= kill_at:
+                os.kill(child.pid, signal.SIGKILL)
+                kill_at = None
+            time.sleep(0.05)
+        child.returncode = os.waitstatus_to_exitcode(status)
+        elapsed = time.monotonic() - started
+        capture = dict(label=label, argv=list(map(str, argv)), exit=child.returncode, timed_out=timed_out,
+                       elapsed=round(elapsed, 2), maxrss_kib=usage.ru_maxrss,
+                       user=round(usage.ru_utime, 2), system=round(usage.ru_stime, 2),
+                       stdout=paths[0].read_bytes().hex(), stderr=paths[1].read_bytes().hex())
+        captures.append(capture)
+        record()
+        return capture
+
+    def git_out(repo, *argv):
+        result = subprocess.run([git, '-C', str(repo), *argv], env=env, capture_output=True, timeout=120)
+        if result.returncode:
+            raise AssertionError('pinned Git ' + argv[0] + ' failed in ' + repo.name + ': ' +
+                                 result.stderr.decode(errors='replace').strip())
+        return result.stdout
+
+    def state(repo):
+        refs = git_out(repo, 'for-each-ref', '--format=%(refname) %(objectname) %(symref)')
+        ids = sorted({line.split()[0] for line in git_out(repo, 'rev-list', '--objects', '--all').splitlines()})
+        objects = subprocess.run([git, '-C', str(repo), 'cat-file', '--batch'], env=env,
+                                 input=b'\n'.join(ids) + b'\n', capture_output=True, timeout=120,
+                                 check=True).stdout
+        config = subprocess.run([git, '-C', str(repo), 'config', '--local', '--get-regexp', r'^(remote|branch)\.'],
+                                env=env, capture_output=True, timeout=60).stdout
+        files = {}
+        for path in sorted(repo.rglob('*')):
+            relative = path.relative_to(repo).as_posix()
+            if relative == '.git' or relative.startswith('.git/'):
+                continue
+            if path.is_symlink():
+                files[relative] = 'link:' + os.readlink(path)
+            elif path.is_file():
+                files[relative] = '%o:%s' % (path.stat().st_mode & 0o777, hashlib.sha256(path.read_bytes()).hexdigest())
+        return dict(refs=refs.decode(), head=(repo / '.git/HEAD').read_bytes().hex(), objects=len(ids),
+                    objects_sha256=hashlib.sha256(objects).hexdigest(), config=config.decode(), worktree=files)
+
+    failed = []
+    results = {}
+    if 'read' in rows:
+        name = names['read']
+        ok, why = False, ''
+        for attempt in range(2):
+            before = run([git, 'ls-remote', READ_URL], out, name + '-ls-remote-before', 120)
+            den_dir, git_dir = out / ('read-den-%d' % attempt), out / ('read-git-%d' % attempt)
+            candidate = run([den, 'clone', '-q', READ_URL, den_dir], out, name + '-den', READ_SECONDS, 'den')
+            oracle = run([git, 'clone', '-q', READ_URL, git_dir], out, name + '-git', READ_SECONDS)
+            after = run([git, 'ls-remote', READ_URL], out, name + '-ls-remote-after', 120)
+            if before['exit'] or after['exit'] or oracle['exit']:
+                why = 'pinned Git could not read the public repository'
+                break
+            if before['stdout'] != after['stdout']:
+                why = 'public refs moved during the row'
+                continue
+            fields = [field for field in ('exit', 'stdout', 'stderr') if candidate[field] != oracle[field]]
+            if fields:
+                why = 'process ' + '/'.join(fields) + ' differ: den exit %d stderr %r' % (
+                    candidate['exit'], bytes.fromhex(candidate['stderr'])[:400])
+                break
+            ours, theirs = state(den_dir), state(git_dir)
+            differ = [key for key in ours if ours[key] != theirs[key]]
+            git_out(den_dir, 'fsck', '--full', '--no-reflogs')
+            dirty = git_out(den_dir, 'status', '--porcelain')
+            results[name] = dict(den=ours, git=theirs, differ=differ, status=dirty.decode(),
+                                 den_elapsed=candidate['elapsed'], den_maxrss_kib=candidate['maxrss_kib'],
+                                 git_elapsed=oracle['elapsed'], git_maxrss_kib=oracle['maxrss_kib'])
+            if differ or dirty:
+                why = 'state differs: ' + ', '.join(differ) + (' (den worktree dirty)' if dirty else '')
+                break
+            ok = True
+            print('LIVE %s head=%s objects=%d den=%.2fs/%sKiB git=%.2fs/%sKiB' % (
+                name, ours['refs'].split('\n')[0], ours['objects'], candidate['elapsed'],
+                candidate['maxrss_kib'], oracle['elapsed'], oracle['maxrss_kib']), flush=True)
+            break
+        print(('PASS ' if ok else 'FAIL ') + name + ('' if ok else ': ' + why), flush=True)
+        if not ok:
+            failed.append(name)
+
+    if 'limit' in rows:
+        name = names['limit']
+        target = out / 'limit-den'
+        result = run([den, 'clone', '-q', LIMIT_URL, target], out, name + '-den', LIMIT_SECONDS, 'den')
+        stderr = bytes.fromhex(result['stderr'])
+        partial = target.exists()
+        problems = []
+        if result['timed_out']:
+            problems.append('no refusal within %d s' % LIMIT_SECONDS)
+        if result['exit'] != 2:
+            problems.append('exit %s, want 2' % result['exit'])
+        if stderr != LIMIT_STDERR:
+            problems.append('stderr %r, want %r' % (stderr[:400], LIMIT_STDERR))
+        if result['stdout']:
+            problems.append('stdout not empty')
+        if partial:
+            problems.append('partial clone left')
+        if result['maxrss_kib'] > LIMIT_RSS_KIB:
+            problems.append('max RSS %d KiB over %d' % (result['maxrss_kib'], LIMIT_RSS_KIB))
+        measured = dict(exit=result['exit'], stderr=stderr.decode(errors='replace'), elapsed=result['elapsed'],
+                        maxrss_kib=result['maxrss_kib'], user=result['user'], system=result['system'],
+                        partial_clone_left=partial, wire_limit=WIRE_LIMIT)
+        if partial:
+            measured['partial_entries'] = sorted(p.relative_to(target).as_posix() for p in target.rglob('*'))[:50]
+        if args.measure_oracle:
+            oracle_dir = out / 'limit-git'
+            oracle = run([git, 'clone', '-q', '--bare', LIMIT_URL, oracle_dir], out, name + '-git', 1800)
+            packs = sorted((oracle_dir / 'objects/pack').glob('*.pack')) if oracle['exit'] == 0 else []
+            measured.update(git_exit=oracle['exit'], git_elapsed=oracle['elapsed'],
+                            git_pack_bytes=[p.stat().st_size for p in packs])
+            if oracle_dir.exists():
+                shutil.rmtree(oracle_dir)
+        results[name] = measured
+        print('LIVE ' + name + ' ' + json.dumps(measured, sort_keys=True), flush=True)
+        print(('PASS ' if not problems else 'FAIL ') + name + ('' if not problems else ': ' + '; '.join(problems)),
+              flush=True)
+        if problems:
+            failed.append(name)
+        if target.exists():
+            shutil.rmtree(target)
+
+    (out / 'results.json').write_text(json.dumps(results, indent=2, sort_keys=True) + '\n')
+    for path in out.glob('read-*'):
+        shutil.rmtree(path)
+    if failed:
+        raise SystemExit('FAIL http-live: ' + ', '.join(failed))
+    print('http-live: ' + args.tier + ' ' + ','.join(rows) + '; zero skips', flush=True)
+
+
+if __name__ == '__main__':
+    try:
+        main()
+    except (AssertionError, OSError, ValueError, subprocess.SubprocessError) as exc:
+        raise SystemExit('FAIL http-live-harness: ' + str(exc))
