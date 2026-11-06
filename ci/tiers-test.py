@@ -113,6 +113,8 @@ say("tools/check-revision" in gate, "T2 shared revision grammar gate is mandator
 say("tools/check-history" in gate, "T2 inherited history gate remains mandatory")
 say("tools/check-refs" in gate, "T2 refs integration gate is mandatory")
 say("tools/check-merge" in gate, "T2 merge integration gate is mandatory")
+say("tools/check-everyday" in gate.splitlines(), "T2 everyday exact-row gate is mandatory")
+say("tools/check-status-speed" in gate.splitlines(), "T2 status ratio row is mandatory")
 say("tools/check-replay" in gate, "T2 replay integration gate is mandatory")
 say("tools/check-pack-write" in gate, "T2 pack writer R4c gate is mandatory")
 say("tools/check-pack" in gate, "T2 packed storage and packed regression gate is mandatory")

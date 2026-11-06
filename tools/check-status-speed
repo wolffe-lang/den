@@ -1,0 +1,20 @@
+#!/bin/sh
+# den#50's ratio row: status within 5x of the pinned git's child CPU on the
+# 454-file fixture, cold and warm, with a 1.10 guardband (status-measure.py).
+# Timed rows need an exclusive performance block: DEN_PERF_ROWS=1 declares
+# one. Without it this row is not measured and says so; it is never a pass.
+set -eu
+DEN_ROOT=$(cd "$(dirname "$0")/.." && pwd)
+export DEN_ROOT
+cd "$DEN_ROOT"
+. tools/lib-toolchain.sh
+if [ "${DEN_PERF_ROWS:-0}" != 1 ]; then
+    echo 'status-speed: NOT MEASURED (no performance block declared; DEN_PERF_ROWS=1)'
+    exit 0
+fi
+tools/build --native
+rm -rf target/status-shape
+tools/env python3 -I tools/status-fixture.py --root "$DEN_ROOT/target/status-shape"
+tools/env python3 -I tools/status-measure.py --fixture target/status-shape \
+    --den target/native/den --output target/runs/status-ratio.json --samples 5
+echo 'status-speed: cold and warm ratios within 5x with a 1.10 guardband, process bytes identical'

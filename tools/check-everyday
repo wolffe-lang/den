@@ -1,0 +1,16 @@
+#!/bin/sh
+# vc18 exact everyday rows against the pinned git: upstream tracking, config
+# listing, merge guidance and show, inherited descriptors and local paths.
+set -eu
+DEN_ROOT=$(cd "$(dirname "$0")/.." && pwd)
+export DEN_ROOT
+cd "$DEN_ROOT"
+. tools/lib-toolchain.sh
+tools/build --all
+for tier in native release; do
+    for family in upstream config merge descriptors; do
+        tools/env python3 -I tools/everyday-test.py --tier "$tier" --family "$family"
+    done
+    tools/env python3 -I tools/local-path-test.py --tier "$tier"
+done
+echo 'everyday: native/release exact upstream/config/merge/descriptor rows; local paths exact or named; zero skips'
