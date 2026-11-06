@@ -10,6 +10,7 @@ import json
 import os
 from pathlib import Path
 import re
+import runpy
 import shutil
 import subprocess
 import zlib
@@ -29,6 +30,7 @@ source = root / 'source'
 source.mkdir()
 world = root / 'world'
 rows = []
+proof = runpy.run_path(str(R / 'tools/index-proof.py'))
 LOOSE = re.compile(r'(^|/)objects/[0-9a-f]{2}/[0-9a-f]{38}$')
 # R-vc18-1: --no-local is git's file transport. Git keeps the received pack;
 # den installs the same objects loose (its wire import). Storage form is a
@@ -119,10 +121,28 @@ def compare(name, args, cwd='.', target='clone.git'):
         inventory = None
         if q['status'] == 0:
             inventory = objects(world / target)
-        outcomes.append(dict(result=q, before=before, after=after, objects=inventory))
+        held = world / target / '.git/index'
+        raw = held.read_bytes() if held.is_file() else None
+        rows_proof = proof['proof'](world / target, raw) if raw is not None else None
+        outcomes.append(dict(result=q, before=before, after=after, objects=inventory,
+                             index=raw, index_proof=rows_proof))
     left, right = outcomes
     assert left['before'] == right['before']
-    ok = left['result'] == right['result'] and left['after'] == right['after']
+    index_error = None
+    if left['index'] is not None and right['index'] is not None:
+        # A checkout's index holds its own inode/ctime words; normalize only
+        # the six timing/identity words both sides prove against their files.
+        key = target + '/.git/index'
+        try:
+            lc, rc, _ = proof['canonical_pair'](left['index'], right['index'],
+                                                left['index_proof'], right['index_proof'])
+            left['after'][key] = [left['after'][key][0], lc.hex()]
+            right['after'][key] = [right['after'][key][0], rc.hex()]
+        except ValueError as error:
+            index_error = str(error)
+    for side in (left, right):
+        side['index'] = side['index'].hex() if side['index'] is not None else None
+    ok = left['result'] == right['result'] and left['after'] == right['after'] and index_error is None
     object_equal = left['objects'] == right['objects'] and left['objects'] is not None
     reviewed = not ok and name in REVIEWED and storage_review(left, right, target)
     rows.append(dict(name=name, argv=args, cwd=cwd, environment=dict(os.environ),
@@ -134,7 +154,8 @@ def compare(name, args, cwd='.', target='clone.git'):
     if not ok and not reviewed:
         paths = sorted(k for k in left['after'].keys() | right['after'].keys()
                        if left['after'].get(k) != right['after'].get(k))
-        print('  expected', left['result'], 'actual', right['result'], 'differing_paths', paths, flush=True)
+        print('  expected', left['result'], 'actual', right['result'], 'differing_paths', paths,
+              'index_error', index_error, flush=True)
 
 
 try:
@@ -155,6 +176,8 @@ try:
         compare('local-clone-bare-' + label, ['clone', '-q', '--bare', url, 'clone.git'])
         compare('local-clone-no-local-' + label,
                 ['clone', '-q', '--bare', '--no-local', url, 'clone.git'])
+        compare('local-clone-worktree-' + label, ['clone', '-q', url, 'clone'], target='clone')
+        compare('local-clone-worktree-loud-' + label, ['clone', url, 'clone'], target='clone')
     for label, url in [('absolute', str(world / 'peer.git')), ('relative', '../peer.git')]:
         compare('local-fetch-explicit-' + label,
                 ['fetch', '-q', url, 'refs/heads/main:refs/heads/fetched'],
