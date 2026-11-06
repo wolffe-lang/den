@@ -296,3 +296,46 @@ pub fn prefix(gitdir: str, prefix: str) -> List[str] ! PackErrors {
     out
 }
 
+/// Indexes parsed once for a batch of reads (a tree walk, a history walk).
+/// Every pack is structure- and binding-checked when the session loads, as
+/// read_object checks each pack it passes; each read reopens its pack and
+/// re-checks those bounds, so a replaced or truncated pack is never misread.
+pub struct Session { gitdir: str, paths: List[str], indexes: List[Index], loaded: bool }
+
+/// An unloaded session; indexes are listed and checked on the first read.
+pub fn session(gitdir: str) -> Session {
+    Session { gitdir: copy gitdir, paths: List[str](), indexes: List[Index](), loaded: false }
+}
+
+fn load_session(mut s: Session) -> () ! PackErrors {
+    for path in indexes(s.gitdir)? {
+        let index = load_index(path)?
+        let fd = open_pack("{path[0..path.len - 4]}.pack")?
+        defer fs_close(fd) else |_| {}
+        let _ = bounds(fd, index)?
+        (mut s.paths).push(copy path)
+        (mut s.indexes).push(index)
+    }
+    s.loaded = true
+}
+
+/// read_object's answer through the session's parsed indexes.
+pub fn session_read(mut s: Session, name: str, cap: int) -> Body ! PackErrors {
+    if !s.loaded { load_session(mut s)? }
+    for i in 0..s.paths.len {
+        let slot = s.indexes[i].by_name[name] else -1
+        if slot < 0 { continue }
+        var result = Body { kind: "", data: List[byte]() }
+        region candidate {
+            let fd = open_pack("{s.paths[i][0..s.paths[i].len - 4]}.pack")?
+            defer fs_close(fd) else |_| {}
+            let end = bounds(fd, s.indexes[i])?
+            var seen = Map[int, bool](), total: int = 0
+            let value = unpack(fd, end, s.indexes[i], slot, mut seen, mut total, 0)?
+            result = copy value
+        }
+        if result.data.len > cap { return Unsupported("pack object size limit") }
+        return result
+    }
+    not_found
+}
