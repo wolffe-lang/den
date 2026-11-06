@@ -84,3 +84,5 @@ else
     echo "gate: empty selection rejected as intended"
 fi
 tools/mkden target/dist
+# CI uploads target/runs as the runner user: every collected file readable, no keys.
+python3 -I tools/evidence-modes.py
