@@ -160,6 +160,39 @@ def suite():
         g('checkout', '-q', '--detach')
         check('upstream-detached-status', ['status', '--porcelain=v2', '--branch'])
         check('upstream-detached-branch', ['branch', '-avv'])
+        # A configured clone of a local bare peer, then push and fetch move the
+        # tracking ref; every state is read by both tools from the same tree.
+        def gx(cwd, *args):
+            q = subprocess.run([str(G), *args], cwd=cwd, env=env, capture_output=True, timeout=120)
+            assert q.returncode == 0, (args, q.stderr)
+        shutil.rmtree(base)
+        origin, seed = root / 'origin.git', root / 'seed'
+        gx(root, 'init', '-q', '--bare', '-b', 'main', str(origin))
+        gx(root, 'clone', '-q', str(origin), str(seed))
+        (seed / 'file').write_text('seed\n')
+        gx(seed, 'add', 'file')
+        gx(seed, 'commit', '-qm', 'seed')
+        gx(seed, 'push', '-q', 'origin', 'main')
+        gx(root, 'clone', '-q', str(origin), str(base))
+        tracked = [['status'], ['status', '-sb'], ['status', '--porcelain=v2', '--branch'],
+                   ['branch', '-vv'], ['branch', '-avv']]
+        def states(label):
+            for n, args in enumerate(tracked):
+                check('upstream-clone-' + label + '-' + str(n) + '-' + args[0], args)
+        states('fresh')
+        commit('local ahead', 'local\n')
+        states('ahead')
+        gx(base, 'push', '-q')
+        states('pushed')
+        gx(seed, 'pull', '-q', '--rebase')
+        (seed / 'peer').write_text('peer\n')
+        gx(seed, 'add', 'peer')
+        gx(seed, 'commit', '-qm', 'peer moves')
+        gx(seed, 'push', '-q', 'origin', 'main')
+        gx(base, 'fetch', '-q')
+        states('fetched-behind')
+        commit('local diverges', 'diverged\n')
+        states('fetched-diverged')
     elif a.family == 'config':
         home = root / 'home'
         (home / '.config/git').mkdir(parents=True)
