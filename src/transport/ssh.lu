@@ -75,6 +75,22 @@ pub fn ssh_quote(text: str) -> str ! Errors {
     "'{escaped}'"
 }
 
+/// The remote command's program word. A plain word (letters, digits and
+/// `._/+-`) is sent bare, as Git sends it (measured black-box): a service
+/// that parses the command itself, as GitHub's does, refuses a quoted
+/// program. Any other override is a literal executable and stays quoted;
+/// a POSIX shell gives the far side the same argv either way.
+pub fn ssh_program(text: str) -> str ! Errors {
+    if text.len == 0 { return ssh_quote(text)? }
+    for b in text.bytes() {
+        let c = b as int
+        let plain = (c >= 48 && c <= 57) || (c >= 65 && c <= 90) || (c >= 97 && c <= 122) ||
+            c == 46 || c == 95 || c == 47 || c == 43 || c == 45
+        if !plain { return ssh_quote(text)? }
+    }
+    copy text
+}
+
 fn ssh_channel(url: str, service: str) -> Channel ! Errors {
     let variable = if service == "upload-pack" then "DEN_UPLOAD_PACK" else "DEN_RECEIVE_PACK"
     let program = env.get(variable) else "git-{service}"
@@ -107,7 +123,7 @@ pub fn ssh_argv(url: str, program: str) -> List[str] ! Errors {
     if endpoint.port != 0 { (mut argv).push("-p"); (mut argv).push("{endpoint.port}") }
     (mut argv).push("--")
     (mut argv).push(copy endpoint.host)
-    (mut argv).push(ssh_quote(program)?)
+    (mut argv).push(ssh_program(program)?)
     (mut argv).push(ssh_quote(endpoint.path)?)
     argv
 }
