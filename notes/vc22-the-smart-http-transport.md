@@ -72,7 +72,7 @@ Clean room: git's documentation, the RFCs, and the pinned Git and OpenSSL run as
 | discovery and RPC refusals, clone cleanup | `tools/http-discovery-test.py` | 13 |
 | receive-pack side-band | `tools/http-sideband-test.py` | as inherited, with one ORACLE-TIMEOUT non-parity row (R-vc22-3) |
 | smart-git interop, plain and authenticated TLS | `tools/http-git-test.py` | 8 + 8, and token secrecy |
-| live github.com | `tools/http-live-test.py` | 2, or 2 named SKIPs without network |
+| live github.com | `tools/http-live-test.py` | 3: read and limit (named SKIPs without network), and push (a named SKIP without its variables) |
 
 ### The over-limit refusal (R-vc22-5)
 
