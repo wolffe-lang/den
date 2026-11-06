@@ -190,8 +190,11 @@ normalized, inside a lane and equal to the planned root. With nothing planned it
 keeps the vc16 default host and owner check. The installer still writes the vc16
 host's reservation lock name; a fixture on another host keeps its own wrapper.
 
-System SSH starts with an argv vector and separately quoted literal remote
-program/path arguments. URI/scp-like paths, user/port parsing and pre-exec option
+System SSH starts with an argv vector. The remote command's program word goes
+bare when it is plain (letters, digits and `._/+-`), as the pinned Git sends it
+(measured with a recording ssh), and is quoted as a literal executable otherwise;
+the path is always single-quoted. A POSIX shell gives the far side the same argv
+either way (`tools/ssh-argv-test.py`); GitHub's ssh service refuses the quoted form. URI/scp-like paths, user/port parsing and pre-exec option
 injection/control validation share one transport boundary. IPv6 and encoded SSH
 URLs remain named limits. Twelve live Mac-to-peer groups cover clone, normal
 checkout, space/quote/shell-literal paths, incremental fetch, push, stale/matching
