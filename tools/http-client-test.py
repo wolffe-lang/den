@@ -107,6 +107,27 @@ def main():
     row('http-oversize-header', [b'HTTP/1.1 200 OK\r\nX-Pad: ' + b'x' * 8193 + b'\r\n\r\n'], error='limit')
     row('http-conflicting-length', [b'HTTP/1.1 200 OK\r\nContent-Length: 1\r\nContent-Length: 2\r\n\r\nxx'], error='conflicting Content-Length')
     row('http-chunk-overflow', [b'HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\nFFFFFFFFFFFFFFFFFFFFFFFF\r\n'], error='limit')
+    # Broader hostile peers: header count and block caps, line endings,
+    # folding (RFC 9112 5.2: a user agent unfolds), trailers, status lines.
+    row('http-too-many-headers', [b'HTTP/1.1 200 OK\r\n' + b''.join(b'X-%d: y\r\n' % i for i in range(300)) +
+                                  b'Content-Length: 0\r\n\r\n'], error='limit')
+    row('http-header-block-limit', [b'HTTP/1.1 200 OK\r\n' + b''.join(b'X-%d: %s\r\n' % (i, b'y' * 8000) for i in range(9)) +
+                                    b'Content-Length: 0\r\n\r\n'], error='limit')
+    row('http-obs-fold', [b'HTTP/1.1 200 OK\r\nX-Folded: a\r\n b\r\nContent-Length: 1\r\n\r\nz'],
+        b'status=200 bytes=1 round=0\nz')
+    row('http-bare-lf', [b'HTTP/1.1 200 OK\nContent-Length: 0\n\n'], error='invalid')
+    row('http-forbidden-trailer', [b'HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n1\r\na\r\n0\r\n'
+                                   b'Content-Length: 1\r\n\r\n'], error='HTTP forbidden trailer')
+    row('http-informational-flood', [b'HTTP/1.1 100 Continue\r\n\r\n' * 9 + b'HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n'],
+        error='limit')
+    row('http-trailing-bytes', [b'HTTP/1.1 200 OK\r\nContent-Length: 1\r\n\r\naEXTRA'], error='HTTP trailing response bytes')
+    row('http-body-over-cap', [b'HTTP/1.1 200 OK\r\nContent-Length: 140000001\r\n\r\n'], error='limit')
+    row('http-version-2', [b'HTTP/2 200 OK\r\nContent-Length: 0\r\n\r\n'], error='invalid')
+    row('http-status-out-of-range', [b'HTTP/1.1 600 Odd\r\nContent-Length: 0\r\n\r\n'], error='invalid')
+    row('http-upgrade', [b'HTTP/1.1 101 Switching Protocols\r\nUpgrade: h2c\r\n\r\n'], error='HTTP protocol upgrade')
+    row('http-unterminated-extension', [b'HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n1; a="x\r\nb\r\n0\r\n\r\n'],
+        error='invalid')
+    row('http-non-utf8-header', [b'HTTP/1.1 200 OK\r\nX-Bin: \xff\r\nContent-Length: 0\r\n\r\n'], error='HTTP non-UTF-8 header')
     if failures:
         raise SystemExit('failed rows: ' + ', '.join(failures))
 
