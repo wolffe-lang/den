@@ -59,6 +59,7 @@ Shas name the commits as rebased onto `ce939e2`. A row measured before the rebas
 - `7474c7b`, `a0bfa42`, `3c3badc`, `c1b2987` hostile peer, policy and certificate rows.
 - `a0b1944` formatting with the pinned compiler; then the README, MAP, SOURCES and CHANGELOG.
 - `e21de88`, `d2c78f8`, `8a84516`, `c3b3aa7`, `fbf5637` the ssh program word (R-bw03-7): the argv as a pure function, the unit and recording-ssh rows red, a plain word sent bare, then formatting.
+- `78651de`, `1ca1c2c`, `876db7e`, `2471362`, `45ed608`, `fad50a5` the evidence upload: the readable-and-keyless check, red, then each row's fixture PKI out of `target/runs` and the recorder's log directory readable.
 
 ### Rows (`tools/check-http`, native and release unless marked)
 
@@ -111,6 +112,12 @@ den now sends a plain program word (letters, digits and `._/+-`) bare and quotes
 | `ssh-cli-*` against the pinned Git and `sh -c`, both tiers | 4 red (`clone-plain`, `clone-override-plain`, `push-plain`, `push-override-plain`), `clone-override-space` green | 5/5 in both tiers |
 
 `ssh-cli-*` also runs each command through `/bin/sh -c` with recording service programs: the far side receives the same argv for den's command as for the fully quoted form, so den's existing sshd rows see no difference. At `fbf5637`, `ssh-peer-scope` and every `tools/check-porcelain` step, including the format check, end with exit 0.
+
+### The evidence upload
+
+The PR's labelled run (`42204935504`) failed only at the linux job's last step, which uploads `target/runs` and the other listed paths: `EACCES: permission denied, open '…/target/runs/http-git-tls-native-auth/pki/ca.key'`. CI's gate runs in a container as root, so everything it writes is root-owned, and the upload reads as the runner user. OpenSSL writes a private key as mode 0600 even under umask 0022 (measured in the oracle image: every `*.key` `600 root:root`, every file Python writes `644`), so the runner could not read the test CA's key. The recorder's own leaf-log directory, from `mktemp -d`, was 0700 for the same reason.
+
+`tools/evidence-modes.py` reads the upload's path list from the workflow and refuses, by name, any collected file without the others-read bit, any directory without others-read and others-search, and any PEM private key; it runs last in `tools/gate` and as the last leaf of `tools/gate-record`. Red at `1ca1c2c` (`FAIL evidence-modes: 9 unreadable, 9 private keys in the upload`), and read as uid 1001 over a read-only mount, the runner's view, nine `EACCES` among 74 collected files. The fix keeps every row's fixture PKI out of the uploaded tree: the TLS, memory and smart-git harnesses generate it under `target/pki/<row>`, which no upload path names, and remove it when the row ends; the recorder makes its log directory 0755. The upload step is unchanged. Green at `fad50a5`: `PASS evidence-modes`, and as uid 1001 none of the 21 collected files denied.
 
 ## Done-when
 
