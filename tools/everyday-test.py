@@ -9,7 +9,7 @@ import subprocess
 
 P = argparse.ArgumentParser()
 P.add_argument('--tier', default='native')
-P.add_argument('--family', choices=['upstream', 'config', 'merge', 'descriptors'], required=True)
+P.add_argument('--family', choices=['upstream', 'config', 'merge', 'combined', 'descriptors'], required=True)
 a = P.parse_args()
 R = Path(__file__).resolve().parent.parent
 G = Path(os.environ['DEN_GIT'])
@@ -40,7 +40,7 @@ def state():
     return files
 
 
-def run(exe, args, changes=None, data=None, inherited=False):
+def run(exe, args, changes=None, data=None, inherited=False, cwd=None):
     e = dict(env)
     for key, value in (changes or {}).items():
         if value is None:
@@ -82,7 +82,7 @@ def run(exe, args, changes=None, data=None, inherited=False):
         out.chmod(0o600)
         inp.chmod(0o600)
         return result
-    q = subprocess.run([str(exe), *args], cwd=base, env=e, input=data, capture_output=True, timeout=120)
+    q = subprocess.run([str(exe), *args], cwd=cwd or base, env=e, input=data, capture_output=True, timeout=120)
     return {'status': q.returncode, 'stdout': q.stdout.hex(), 'stderr': q.stderr.hex()}
 
 
@@ -92,11 +92,11 @@ def g(*args, data=None):
     return bytes.fromhex(q['stdout']).decode().strip()
 
 
-def check(name, args, changes=None, data=None, inherited=False):
+def check(name, args, changes=None, data=None, inherited=False, cwd=None):
     before = state()
-    left = run(G, args, changes, data, inherited)
+    left = run(G, args, changes, data, inherited, cwd)
     middle = state()
-    right = run(D, args, changes, data, inherited)
+    right = run(D, args, changes, data, inherited, cwd)
     after = state()
     ok = left == right and before == middle == after
     rows.append(dict(name=name, argv=args, environment=changes or {}, stdin=(data or b'').hex(),
@@ -231,11 +231,177 @@ def suite():
         g('commit', '-qm', 'resolved merge')
         for flags in [[], ['--cc'], ['-c'], ['-s']]:
             check('show-merge-' + ('default' if not flags else flags[0]), ['show', *flags])
+    elif a.family == 'combined':
+        combined()
     else:
         (base / '.gitignore').write_text('ignored\n')
         check('fd-status-inherited', ['status'], inherited=True)
         check('fd-check-ignore-inherited', ['check-ignore', '-v', 'ignored'], inherited=True)
         check('fd-check-ignore-stdin-inherited', ['check-ignore', '--stdin'], data=b'ignored\n', inherited=True)
+
+
+def combined():
+    """Merges built by the pinned Git; each shown with dense (default, --cc) and -c."""
+    import runpy
+    L = lambda *xs: ''.join(x + '\n' for x in xs)
+    n = ['line %d' % i for i in range(1, 41)]
+
+    def sub(lines, changes):
+        out = list(lines)
+        for i, v in sorted(changes.items(), reverse=True):
+            if v is None:
+                del out[i]
+            elif isinstance(v, list):
+                out[i:i + 1] = v
+            else:
+                out[i] = v
+        return L(*out)
+
+    def gx(repo, *args, data=None, ok=(0,)):
+        q = subprocess.run([str(G), *args], cwd=repo, env=env, input=data, capture_output=True, timeout=120)
+        assert q.returncode in ok, (args, q)
+        return q.stdout.decode().strip()
+
+    def put(repo, files):
+        for k, v in files.items():
+            path = repo / k
+            if v is None:
+                if path.exists():
+                    path.unlink()
+                continue
+            mode = None
+            if isinstance(v, tuple):
+                v, mode = v
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(v.encode() if isinstance(v, str) else v)
+            path.chmod(mode or 0o644)
+        gx(repo, 'add', '-A')
+
+    def merge(name, base_files, parents, result):
+        repo = root / ('m-' + name)
+        repo.mkdir()
+        gx(repo, 'init', '-q', '-b', 'main')
+        put(repo, base_files)
+        gx(repo, 'commit', '-q', '--allow-empty', '-m', 'base')
+        tips = []
+        for k, files in enumerate(parents):
+            gx(repo, 'checkout', '-q', '--detach', 'main')
+            put(repo, files)
+            gx(repo, 'commit', '-q', '--allow-empty', '-m', 'parent %d' % k)
+            tips.append(gx(repo, 'rev-parse', 'HEAD'))
+        gx(repo, 'checkout', '-q', 'main')
+        gx(repo, 'reset', '-q', '--hard', tips[0])
+        put(repo, result)
+        tree = gx(repo, 'write-tree')
+        argv = ['commit-tree', tree]
+        for tip in tips:
+            argv += ['-p', tip]
+        tip = gx(repo, *argv, data=('merge ' + name + '\n').encode())
+        gx(repo, 'reset', '-q', '--hard', tip)
+        return repo
+
+    def rows(name, repo, extra=()):
+        for flags in [[], ['--cc'], ['-c'], *extra]:
+            label = 'default' if not flags else '_'.join(f.lstrip('-') for f in flags)
+            check('combined-' + name + '-' + label, ['show', *flags], cwd=repo)
+
+    def two(name, base_files, left, right, result, extra=()):
+        rows(name, merge(name, base_files, [left, right], result), extra)
+
+    f = L(*n)
+    two('clean-two-sides', {'f': f}, {'f': sub(n, {1: 'LEFT 2'})}, {'f': sub(n, {25: 'RIGHT 26'})},
+        {'f': sub(n, {1: 'LEFT 2', 25: 'RIGHT 26'})})
+    two('pick-and-resolve', {'f': f}, {'f': sub(n, {1: 'LEFT 2', 20: 'LEFT 21'})},
+        {'f': sub(n, {1: 'RIGHT 2', 20: 'RIGHT 21'})}, {'f': sub(n, {1: 'LEFT 2', 20: 'BOTH 21'})})
+    two('one-side-and-evil', {'f': f, 'g': L('g1', 'g2', 'g3')}, {'f': sub(n, {3: 'LEFT 4'})}, {},
+        {'g': L('g1', 'EVIL', 'g3')})
+    two('new-and-delete', {'f': f, 'gone': L('x', 'y')},
+        {'f': sub(n, {0: 'L1'}), 'gone': L('x', 'y', 'left')},
+        {'f': sub(n, {29: 'R30'}), 'gone': L('right', 'x', 'y')}, {'new': L('n1', 'n2'), 'gone': None})
+    two('removals', {'f': f}, {'f': sub(n, {5: None, 9: 'L10'})}, {'f': sub(n, {5: None, 9: 'R10'})},
+        {'f': sub(n, {5: None, 9: ['M10a', 'M10b']})})
+    two('several-hunks', {'f': f}, {'f': sub(n, {2: 'L3', 15: 'L16', 33: 'L34'})},
+        {'f': sub(n, {2: 'R3', 15: 'R16', 33: 'R34'})}, {'f': sub(n, {2: 'M3', 15: 'L16', 33: 'M34'})})
+    two('noeol', {'f': 'a\nb\nc'}, {'f': 'a\nb\nleft'}, {'f': 'a\nb\nright'}, {'f': 'a\nb\nboth'})
+    two('eol-mixed', {'f': 'a\nb\n'}, {'f': 'a\nleft'}, {'f': 'a\nb\nright\n'}, {'f': 'a\nb\nboth\n'})
+    two('eol-same', {'f': 'a\nb\n'}, {'f': 'a\nb'}, {'f': 'a\nb\nr\n'}, {'f': 'a\nb\nm\n'})
+    two('mode', {'f': L('a', 'b', 'c')}, {'f': L('main', 'b', 'c')}, {'f': (L('a', 'b', 'side'), 0o755)},
+        {'f': (L('main', 'b', 'merged'), 0o755)})
+    two('mode-only', {'f': L('a', 'b', 'c')}, {'f': L('main', 'b', 'c')}, {'f': (L('a', 'b', 'side'), 0o755)},
+        {'f': (L('a', 'b', 'side'), 0o644)})
+    two('added-side', {'f': L('a')}, {'f': L('a', 'left')}, {'n': L('n1', 'n2', 'n3')},
+        {'n': L('n1', 'N2', 'n3')})
+    two('delete-modify', {'f': L('a'), 'd': L('d1', 'd2')}, {'f': L('a', 'l'), 'd': None},
+        {'d': L('d1', 'D2')}, {'f': L('a', 'l'), 'd': None})
+    two('gap6', {'f': f}, {'f': sub(n, {2: 'L3', 9: 'L10'})}, {'f': sub(n, {2: 'R3', 9: 'R10'})},
+        {'f': sub(n, {2: 'M3', 9: 'M10'})})
+    two('gap7', {'f': f}, {'f': sub(n, {2: 'L3', 10: 'L11'})}, {'f': sub(n, {2: 'R3', 10: 'R11'})},
+        {'f': sub(n, {2: 'M3', 10: 'M11'})}, extra=(['-U1'], ['-c', '-U0']))
+    two('zero-insert', {'f': f}, {'f': sub(n, {15: 'L16'})}, {'f': sub(n, {15: 'R16'})},
+        {'f': sub(n, {15: 'L16', 7: ['line 8', 'NEW']})}, extra=(['-c', '-U0'], ['--cc', '-U0']))
+    two('zero-delete', {'f': f}, {'f': sub(n, {15: 'L16'})}, {'f': sub(n, {15: 'R16'})},
+        {'f': sub(n, {15: 'L16', 7: None})}, extra=(['-c', '-U0'], ['--cc', '-U0']))
+    for gap in (2, 3, 4):
+        p, r = 4, 4 + gap + 1
+        two('dense-gap%d' % gap, {'f': f}, {'f': sub(n, {p: 'LP', r: 'LR'})}, {'f': sub(n, {p: 'RP', r: 'RR'})},
+            {'f': sub(n, {p: 'LP', r: 'MR'})}, extra=(['--cc', '-U1'], ['--cc', '-U5']))
+        two('dense-gap%d-after' % gap, {'f': f}, {'f': sub(n, {r: 'LP', p: 'LR'})}, {'f': sub(n, {r: 'RP', p: 'RR'})},
+            {'f': sub(n, {r: 'LP', p: 'MR'})})
+    for gap in (0, 2, 3):
+        two('picks-gap%d' % gap, {'f': f}, {'f': sub(n, {4: 'LA'})}, {'f': sub(n, {5 + gap: 'RB'})},
+            {'f': sub(n, {4: 'LA', 5 + gap: 'RB'})}, extra=(['--cc', '-U0'],))
+    two('chain', {'f': f}, {'f': sub(n, {10: 'LA', 13: 'LB', 16: 'LC'})}, {'f': sub(n, {10: 'RA', 13: 'RB', 16: 'RC'})},
+        {'f': sub(n, {10: 'LA', 13: 'RB', 16: 'MC'})})
+    two('lost-chunk', {'f': f}, {'f': sub(n, {5: 'LP', 9: None})}, {'f': sub(n, {5: 'RP', 9: None})},
+        {'f': sub(n, {5: 'LP', 9: None, 10: None})})
+    two('lost-end', {'f': L(*n[:10])}, {'f': L(*(n[:9] + ['L10']))}, {'f': L(*(n[:9] + ['R10']))}, {'f': L(*n[:8])})
+    two('lost-tie', {'f': L('s', 'x', 'e')}, {'f': L('s', 'a', 'b', 'e')}, {'f': L('s', 'b', 'a', 'e')},
+        {'f': L('s', 'M', 'e')})
+    two('lost-many', {'f': L('s', 'x', 'e')}, {'f': L('s', 'a', 'b', 'c', 'd', 'e')},
+        {'f': L('s', 'c', 'q', 'a', 'd', 'e')}, {'f': L('s', 'M', 'e')})
+    ind = lambda tag, k: ['  %s%d' % (tag, i) for i in range(k)]
+    t = ['func_a'] + ind('a', 9) + ['  plain'] + ind('b', 19)
+    two('heading-result', {'f': L(*t)}, {'f': sub(t, {25: '  L'})}, {'f': sub(t, {25: '  R'})},
+        {'f': sub(t, {10: 'resfn', 25: '  M'})}, extra=(['--cc', '-U1'],))
+    two('heading-boundary', {'f': L(*t)}, {'f': sub(t, {10: 'leftfn', 25: '  L'})}, {'f': sub(t, {25: '  R'})},
+        {'f': sub(t, {10: 'leftfn', 25: '  M'})})
+    for size in (39, 41):
+        t = ['h' * size] + ind('c', 12)
+        two('heading-cap%d' % size, {'f': L(*t)}, {'f': sub(t, {10: '  L'})}, {'f': sub(t, {10: '  R'})},
+            {'f': sub(t, {10: '  M'})})
+    t = ['h' * 38 + '    tail', '$dollar   '] + ind('c', 12)
+    two('heading-trim', {'f': L(*t)}, {'f': sub(t, {6: '  L', 12: '  L'})}, {'f': sub(t, {6: '  R', 12: '  R'})},
+        {'f': sub(t, {6: '  M', 12: '  M'})}, extra=(['-U1'],))
+    two('heading-crlf', {'f': 'crfn\r\n' + L(*ind('e', 10))}, {'f': 'crfn\r\n' + sub(ind('e', 10), {7: 'L'})},
+        {'f': 'crfn\r\n' + sub(ind('e', 10), {7: 'R'})}, {'f': 'crfn\r\n' + sub(ind('e', 10), {7: '  M'})})
+    two('space path', {'s p': L('a', 'b')}, {'s p': L('l', 'b')}, {'s p': L('r', 'b')}, {'s p': L('m', 'b')})
+    two('binary', {'b.bin': 'a\0b\n'}, {'b.bin': 'l\0b\n'}, {'b.bin': 'r\0b\n'}, {'b.bin': 'm\0b\n'})
+    two('disjoint', {'f': L('a'), 'g': L('b')}, {'f': L('a', 'l')}, {'g': L('b', 'r')}, {'f': L('a', 'l'), 'g': L('b', 'r')})
+    m = ['line %d' % i for i in range(1, 31)]
+    rows('octopus', merge('octopus', {'f': L(*m[:10]), 'a': L('a')}, [{'b1': L('b1')}, {'b2': L('b2')}, {'b3': L('b3')}],
+                          {'f': sub(m[:10], {4: 'OCTO'}), 'b1': L('b1', 'more'), 'b2': L('b2'), 'b3': L('b3')}))
+    for label, versions, result in [('2v-pick-a', 'ABA', 'A'), ('2v-pick-b', 'ABA', 'B'),
+                                    ('3v-pick-a', 'ABC', 'A'), ('2v-new', 'ABA', 'M')]:
+        rows('octopus-' + label, merge('octopus-' + label, {'f': L(*m), 'g': L('g')},
+             [{'f': sub(m, {2: 'P%d' % k, 20: v}), 'g': L('g', str(k))} for k, v in enumerate(versions)],
+             {'f': sub(m, {2: 'NEW', 20: result}), 'g': L('g', 'M')}))
+    rows('octopus-deleted', merge('octopus-deleted', {'f': L('a', 'b')},
+         [{'f': L('a', 'b', '1')}, {'f': L('a', 'b', '2')}, {'f': L('3')}], {'f': None}))
+    nonmerge = root / 'm-nonmerge'
+    nonmerge.mkdir()
+    gx(nonmerge, 'init', '-q', '-b', 'main')
+    put(nonmerge, {'f': L('a', 'b')})
+    gx(nonmerge, 'commit', '-qm', 'one')
+    put(nonmerge, {'f': L('a', 'c')})
+    gx(nonmerge, 'commit', '-qm', 'two')
+    rows('nonmerge', nonmerge)
+    # The corpus's own merge fixture (tools/corpus.py: two disjoint additions).
+    corpus = runpy.run_path(str(R / 'tools/corpus.py'))
+    corpus['build'](root / 'corpus')
+    rows('corpus-merge', root / 'corpus' / 'merge')
+    for flags in [['-s'], ['--cc', '-s'], ['HEAD^1'], ['HEAD^2']]:
+        check('combined-corpus-merge-' + '_'.join(f.lstrip('-') for f in flags), ['show', *flags],
+              cwd=root / 'corpus' / 'merge')
 
 
 try:
