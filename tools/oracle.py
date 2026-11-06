@@ -103,7 +103,7 @@ def one(case,base,den,git):
     for key,value in replacements.items():args=[arg.replace('{'+key+'}',value) for arg in args]
     stdin=bytes.fromhex(case.get('stdin_hex',''))
     needs_proof = case.get('comparison') == 'index-stat-proven'
-    restore(); expected=capture([git,*args],repo,stdin,needs_proof)
+    restore(); expected=capture([git,*ORACLE_GIT_OPTIONS,*args],repo,stdin,needs_proof)
     restore(); before=snapshot(repo); before_worktree=worktree_snapshot(repo)
     (root/'before.json').write_text(json.dumps({'repository':before,'worktree':before_worktree},sort_keys=True)+'\n')
     actual=capture([den,*args],repo,stdin,needs_proof)
@@ -164,11 +164,38 @@ def selftest():
     print('selftest: loose-object-raw accepts representation changes; checksum/oid/trailing and non-object bytes remain gated')
     print('selftest: actual classifier rejects planted one-byte version; stdout/repository plants rejected; exact review binding passes')
 
+# den#66: Git's automatic maintenance after a command must not outlive it, or
+# the snapshot can catch the detached child's objects/maintenance.lock (the
+# Homebrew leg's m2-commit-paragraphs FAIL). git-config(1) and
+# git-maintenance(1): maintenance.autoDetach=false joins it to the command.
+# The oracle's own Git runs take these options.
+ORACLE_GIT_OPTIONS=[]
+
+def joined_maintenance():
+    """Read the oracle's Git invocation's trace2 child_start events: its
+    automatic maintenance child must be --no-detach, or refuse (den#66)."""
+    root=R/'target/maintenance-probe'
+    if root.exists():shutil.rmtree(root)
+    root.mkdir(parents=True);git=os.environ['DEN_GIT'];trace=root/'trace.json'
+    subprocess.run([git,'init','-q',str(root/'r')],check=True,capture_output=True,timeout=60)
+    subprocess.run([git,*ORACLE_GIT_OPTIONS,'commit','-q','--allow-empty','-m','probe'],cwd=root/'r',check=True,
+                   capture_output=True,timeout=60,env={**os.environ,'GIT_TRACE2_EVENT':str(trace)})
+    events=[json.loads(line) for line in trace.read_text().splitlines() if line.strip()]
+    children=[e.get('argv',[]) for e in events if e.get('event')=='child_start' and 'maintenance' in e.get('argv',[])]
+    shutil.rmtree(root)
+    detached=[argv for argv in children if '--no-detach' not in argv]
+    if not children or detached:
+        sys.exit('oracle: automatic maintenance is not joined to its command: '+' '.join((detached or [['no','child']])[0])+' (den#66)')
+    print('oracle: automatic maintenance joins its command (%d child, --no-detach)'%len(children),flush=True)
+
 def main():
     ap=argparse.ArgumentParser();ap.add_argument('--filter',default='');ap.add_argument('--selftest',action='store_true')
     ap.add_argument('--strict',action='store_true');ap.add_argument('--den',default=os.environ.get('DEN_BIN',str(R/'target/native/den')))
+    ap.add_argument('--maintenance-probe',action='store_true')
     ap.add_argument('--corpus',default=str(R/'target/corpus'));a=ap.parse_args()
     if a.selftest:selftest();return
+    joined_maintenance()
+    if a.maintenance_probe:return
     cases=[c for c in json.loads((R/'tests/cases.json').read_text()) if a.filter in c['name']]
     if not cases:sys.exit('oracle: filter selected no cases')
     counts={}
