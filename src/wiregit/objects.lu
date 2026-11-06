@@ -2,7 +2,9 @@ use object
 use oid
 use pack
 use packcmd
+use pktline
 use repository
+use transport
 
 /// Typed closure rooted only at explicitly requested objects. Shared validator
 /// parsers enforce link types; excluded objects are validated separately first.
@@ -14,7 +16,7 @@ pub fn closure(
     var pending = List[packcmd.Link](), seen = Map[str, str](), omit = Map[str, bool]()
     for name in excluded { omit[name] = true }
     for name in roots { (mut pending).push(packcmd.Link { name: copy name, kind: "" }) }
-    var pos = 0, total = 0, out = List[str]()
+    var pos = 0, out = List[str]()
     while pos < pending.len {
         let link = copy pending[pos]
         pos += 1
@@ -25,13 +27,21 @@ pub fn closure(
             continue
         }
         if out.len >= 10000 || pending.len > 100000 { return limit }
+        // vc23: each body lives in its own region, so no aggregate cap; the
+        // per-object cap is the pack reader's. A link to an object already
+        // seen is type-checked here, not queued again.
         region body_read {
-            let body = object.read_object(repo, oid.parse("sha1", link.name)?, 16777216)?
+            let body = object.read_object(repo, oid.parse("sha1", link.name)?, pack.object_limit())?
             if link.kind != "" && link.kind != body.kind { return invalid }
-            if body.data.len > 134217728 - total { return limit }
-            total += body.data.len
             seen[link.name] = copy body.kind
-            for child in packcmd.links(body)? { (mut pending).push(copy child) }
+            for child in packcmd.links(body)? {
+                let known = seen[child.name] else ""
+                if known != "" {
+                    if child.kind != "" && child.kind != known { return invalid }
+                    continue
+                }
+                (mut pending).push(copy child)
+            }
         }
         (mut out).push(copy link.name)
     }
@@ -113,4 +123,129 @@ pub fn ancestor(repo: repository.Repo, older: str, newer: str) -> bool ! object.
         }
     }
     false
+}
+
+/// vc23: stream a fetch response's packfile section into a temporary under
+/// objects/pack and index it there; progress is dropped, a fatal band
+/// refuses, and nothing of the pack is held in memory (den#61).
+pub fn receive_pack(
+    repo: repository.Repo,
+    mut s: transport.Stream,
+) -> pack.Indexed ! object.StoreErrors {
+    var receiver = pack.receive_begin(repo.gitdir)?
+    defer pack.receive_abort(mut receiver)
+    let first = transport.stream_packet(mut s)?
+    if first.kind != 4 || pktline.text(first.data)? != "packfile" { return invalid }
+    var finished = false
+    while !finished {
+        region packet {
+            finished = receive_packet(mut s, mut receiver)?
+        }
+    }
+    pack.received_index(mut receiver)?
+}
+
+// One packet of the packfile section: band 1 to the temporary, band 2
+// dropped, band 3 fatal. True at the section's flush.
+fn receive_packet(
+    mut s: transport.Stream,
+    mut receiver: pack.Receiver,
+) -> bool ! object.StoreErrors {
+    let p = transport.stream_packet(mut s)?
+    if p.kind == 0 { return true }
+    if p.kind != 4 || p.data.len == 0 { return invalid }
+    if p.data[0] == 1 as byte {
+        pack.receive_write(mut receiver, p.data[1..])?
+    } else if p.data[0] == 3 as byte {
+        return Unsupported("remote fatal sideband")
+    } else if p.data[0] != 2 as byte {
+        return invalid
+    }
+    false
+}
+
+/// Install a received pack as Git does: a clone keeps it, and so does a
+/// fetch of at least 100 objects (git-config(1): fetch.unpackLimit, by
+/// default transfer.unpackLimit, 100); a smaller fetch becomes loose
+/// objects, one rebuilt at a time. The temporary never outlives the call.
+pub fn publish_received(
+    repo: repository.Repo,
+    ix: pack.Indexed,
+    keep: bool,
+) -> () ! object.StoreErrors {
+    defer pack.received_discard(ix)
+    if keep || pack.received_count(ix) >= 100 {
+        let _ = pack.received_install(ix)?
+        return
+    }
+    for slot in 0..pack.received_count(ix) {
+        region one {
+            let body = pack.received_body(ix, slot)?
+            let _ = object.write_object(repo, body.kind, body.data)?
+        }
+    }
+}
+
+/// The typed closure check after a received pack, without the aggregate
+/// body cap: commits, trees and tags are read one at a time and their links
+/// followed; a link into the received pack is typed from its table, so a
+/// blob there is never read. Objects outside it are read and typed.
+pub fn closure_received(
+    repo: repository.Repo,
+    roots: List[str],
+    ix: pack.Indexed,
+) -> () ! object.StoreErrors {
+    let reader = object.reader_open(repo)?
+    var seen = List[bool]()
+    for _ in 0..pack.received_count(ix) { (mut seen).push(false) }
+    var other = Map[str, str](), pending = List[packcmd.Link](), pos = 0
+    for name in roots { (mut pending).push(packcmd.Link { name: copy name, kind: "" }) }
+    while pos < pending.len {
+        let link = copy pending[pos]
+        pos += 1
+        let rank = pack.received_rank(ix, link.name)?
+        var kind = ""
+        if rank >= 0 {
+            kind = pack.received_rank_kind(ix, rank)
+            if link.kind != "" && link.kind != kind { return invalid }
+            if seen[rank] { continue }
+            seen[rank] = true
+            if kind == "blob" { continue }
+        } else {
+            let prior = other[link.name] else ""
+            if prior != "" {
+                if link.kind != "" && link.kind != prior { return invalid }
+                continue
+            }
+            if other.len >= 10000 { return limit }
+        }
+        region body_read {
+            follow(reader, ix, link, rank, kind, seen, mut other, mut pending)?
+        }
+    }
+}
+
+// Read one closure object, check its type, and queue its unseen links.
+fn follow(
+    reader: object.Reader,
+    ix: pack.Indexed,
+    link: packcmd.Link,
+    rank: int,
+    kind: str,
+    seen: List[bool],
+    mut other: Map[str, str],
+    mut pending: List[packcmd.Link],
+) -> () ! object.StoreErrors {
+    let body = object.read_loaded(reader, oid.parse("sha1", link.name)?, pack.object_limit())?
+    if link.kind != "" && link.kind != body.kind { return invalid }
+    if rank >= 0 && body.kind != kind { return invalid }
+    if rank < 0 { other[link.name] = copy body.kind }
+    for child in packcmd.links(body)? {
+        let at = pack.received_rank(ix, child.name)?
+        if at >= 0 {
+            if child.kind != "" && child.kind != pack.received_rank_kind(ix, at) { return invalid }
+            if seen[at] { continue }
+        }
+        (mut pending).push(copy child)
+    }
 }
