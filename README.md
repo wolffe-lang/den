@@ -552,11 +552,69 @@ phases and actual-checked pure parsers. A separate received-stream family has fo
 real Git pack modes and thirteen malformed/strict-input cases; it retains complete
 process bytes, canonical object comparisons, refs, fsck results and raw streams
 under `target/runs/wire-*` and `target/runs/wire-pack-*`. The original 16-repository
-main corpus and its 190-case classification remain separately counted. HTTPS,
-shallow/filter/URI fetches, arbitrary unadvertised wants, hooks, non-bare receive,
+main corpus and its 190-case classification remain separately counted.
+Shallow/filter/URI fetches, arbitrary unadvertised wants, hooks, non-bare receive,
 atomic reflog policy, linked worktrees, SHA-256 repositories, broader configuration
 and remaining porcelain/error-output parity are not complete. No M5-complete
 claim is made.
+
+### Smart HTTP and HTTPS
+
+```sh
+DEN_TLS_ROOTS=/path/roots.der den clone -q https://github.com/OWNER/REPO.git destination
+den clone -q --tls-roots=/path/roots.der https://host/repo.git destination
+DEN_HTTP_TOKEN=... den push -q https://host/repo.git refs/heads/main:refs/heads/main
+den clone -q http://127.0.0.1:8080/repo.git destination
+```
+
+Clone, fetch and push speak Git's smart HTTP protocol (`gitprotocol-http(5)`):
+discovery is `GET …/info/refs?service=git-upload-pack` or `git-receive-pack`,
+followed by stateless POSTs. Fetch uses protocol v2 (`Git-Protocol: version=2`,
+`ls-refs`, then `fetch` with want/have). Discovery may start with `version 2` or
+with exactly the matching `# service=` banner and a flush before it, as GitHub
+sends it. Push uses receive-pack with the status report, leases and atomic
+pushes where the server advertises them, and side-band-64k demultiplexing.
+The dumb protocol, protocol v0/v1 advertisements, mismatched service banners
+and unexpected RPC content types are refused by name.
+
+HTTPS runs over the wolf standard library's TLS 1.3 client. The trusted roots
+are a file of concatenated DER certificates, named by `--tls-roots=PATH` or by
+`DEN_TLS_ROOTS` (the option wins). Nothing else is read: no system store,
+`GIT_SSL_CAINFO`, `GIT_SSL_NO_VERIFY` or `http.sslVerify`. A PEM bundle converts
+to this form with `openssl x509 -outform DER` per certificate, concatenated.
+Certificates are checked against the host clock in UTC, the URL's host name
+(SNI and subject alternative names), key usage and the issuer path. A bad
+certificate or an unknown root fails with the client's own name for it
+(`issuer_mismatch`, `name_mismatch`, `expired`, `not_yet_valid`, `not_ca`,
+`bad_usage`, `bad_signature`, …). There is no insecure mode. Plain `http://` is
+accepted only for literal loopback addresses, for tests.
+
+Authentication is HTTP Basic. The user is `DEN_HTTP_USER` (default
+`x-access-token`), and the token is `DEN_HTTP_TOKEN`, or is read without echo from
+the terminal when stdin is one. Credentials are bound to the original origin and
+never follow a redirect to another. They are never written to a file, a reflog,
+a diagnostic or the recorded rows. A configured `credential.helper` and every
+`http.*` setting except `http.followRedirects=initial` are refused, and no
+helper is executed. Discovery follows at most five same-scheme redirects; a
+scheme change, a changed discovery suffix and any redirect of an RPC are
+refused.
+
+Responses are HTTP/1.0 or 1.1 with Content-Length or chunked framing.
+Header blocks are capped at 64 KiB, header lines at 8 KiB and fields at 256.
+Bodies keep the wire layer's 140,000,000-byte cap. Each read's buffers and
+TLS records are freed when the read ends, so a body's peak memory is about
+three times its size. A close-delimited HTTPS body is refused until the
+standard library can tell a clean close from truncation (wolf-std#133).
+A failed clone removes the directory it created, as Git does.
+
+`tools/check-http` runs the HTTP units natively, in release and on the
+checked machine. It also runs raw-peer and hostile-input rows, TLS rows against
+the pinned OpenSSL, memory, redirect, authentication and refusal rows, and
+clone, fetch and push against the pinned `git-http-backend` over plain HTTP
+and authenticated TLS. Two live rows read from github.com:
+a small public repository compared with Git's clone, and den's own repository,
+whose pack is larger than the wire cap and must be refused by name within
+bounded time and memory. Both are named SKIPs without network.
 
 Configured fetch/push cover ordinary scalar URLs and wildcard branch fetch maps,
 branch defaults, tracking updates/prune, `push -u` and plain/explicit leases.
@@ -659,10 +717,10 @@ not a new performance result for the current changes.
 ## Measured platform gaps
 
 The full stat record supplies every index word. TCP and subprocess pipes were
-observed on native and the actual checked machine. TLS completed a local
-Ed25519 handshake, but the tested RSA/GitHub chain returned `unsupported_alg`;
-the checked TLS program exhausted its mem-phase budget before a handshake.
-HTTPS remains deferred. Non-UTF-8 OS paths, non-creating writable opens,
+observed on native and the actual checked machine. Since the standard library's
+public-PKI client (RSA, RSA-PSS, ECDSA P-256/P-384 and path validation to a
+root set), HTTPS completes against github.com with a distribution's roots; the
+checked machine runs den's HTTP parsers, not a handshake. Non-UTF-8 OS paths, non-creating writable opens,
 regex and mmap have the specific limitations listed in MAP; argv[0] is
 available since wolf 0.2.36 and den does not read it yet.
 
