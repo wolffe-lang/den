@@ -222,10 +222,19 @@ fn compressed(
     }
 }
 
-fn decode(src: List[byte], start: int, cap: int, window: int) -> Inflated ! InflateErrors {
+fn decode(
+    src: List[byte],
+    start: int,
+    cap: int,
+    window: int,
+    reserve: int,
+) -> Inflated ! InflateErrors {
     if cap < 0 { return invalid }
     var r = Bits { pos: start, bit: 0 }
     var out = List[byte]()
+    // A caller that knows the exact size reserves it once, so the output never
+    // regrows (each regrowth would leave its old buffer in the caller's region).
+    if reserve > 0 { (mut out).reserve(reserve) }
     var final_block = 0
     while final_block == 0 {
         final_block = bits(src, mut r, 1)?
@@ -261,7 +270,7 @@ fn decode(src: List[byte], start: int, cap: int, window: int) -> Inflated ! Infl
 /// Decode one RFC 1951 stream, leaving following whole bytes untouched.
 /// max_output is inclusive; negative is invalid. All output owns storage.
 pub fn inflate_raw(src: List[byte], max_output: int) -> Inflated ! InflateErrors {
-    decode(src, 0, max_output, 32768)?
+    decode(src, 0, max_output, 32768, 0)?
 }
 
 /// Decode one RFC 1950 stream; refuse dictionaries and validate Adler-32.
@@ -273,12 +282,32 @@ pub fn inflate(src: List[byte], max_output: int) -> Inflated ! InflateErrors {
     let flg = src[1] as int
     if cmf & 15 != 8 || cmf >> 4 > 7 || (cmf * 256 + flg) % 31 != 0 { return bad_header }
     if flg & 32 != 0 { return dictionary }
-    var result = decode(src, 2, max_output, 1 << (cmf >> 4) + 8)?
+    var result = decode(src, 2, max_output, 1 << (cmf >> 4) + 8, 0)?
     if src.len - result.consumed < 4 { return truncated }
     var expected: int = 0
     for i in 0..4 { expected = expected * 256 + src[result.consumed + i] as int }
     if expected != adler32(result.data) { return checksum }
     result.consumed += 4
+    result
+}
+
+/// One RFC 1950 stream of at most size bytes that begins at src[start], its
+/// output reserved to size once; the caller compares the length it expects.
+/// consumed counts from start through the checksum. Truncated means the
+/// stream runs past src's end: a caller reading a window may extend it.
+pub fn inflate_sized(src: List[byte], start: int, size: int) -> Inflated ! InflateErrors {
+    if size < 0 || start < 0 { return invalid }
+    if src.len - start < 2 { return truncated }
+    let cmf = src[start] as int
+    let flg = src[start + 1] as int
+    if cmf & 15 != 8 || cmf >> 4 > 7 || (cmf * 256 + flg) % 31 != 0 { return bad_header }
+    if flg & 32 != 0 { return dictionary }
+    var result = decode(src, start + 2, size, 1 << (cmf >> 4) + 8, size)?
+    if src.len - result.consumed < 4 { return truncated }
+    var expected: int = 0
+    for i in 0..4 { expected = expected * 256 + src[result.consumed + i] as int }
+    if expected != adler32(result.data) { return checksum }
+    result.consumed = result.consumed + 4 - start
     result
 }
 
