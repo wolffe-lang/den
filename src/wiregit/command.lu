@@ -89,6 +89,8 @@ fn execute(args: List[str]) -> () ! object.StoreErrors {
             }
         }
         clone_mode(operands[0], operands[1], bare, local)?
+        // The local copy reports its completion; the transport path does not.
+        if !quiet && local && transport.local_path(operands[0]) { eprint("done.") }
         return
     }
     if args[0] == "fetch" {
