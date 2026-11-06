@@ -11,15 +11,20 @@ http-live-self: den and the pinned Git clone den's own public repository
 compare as the read row does, within the time and the peak RSS predicted in
 tests/vc23-prediction.txt; the pinned Git checks den's clone.
 
-http-live-push: with DEN_LIVE_HTTPS_URL and DEN_LIVE_HTTPS_TOKEN, den clones
-that repository with the token, pushes a fresh disposable branch, the pinned
-Git sees it, den deletes it and the pinned Git sees it gone. The token lives
-only in the environments of the processes that use it; the URL is never
-printed or recorded; every retained output is scanned for the token.
+http-live-push: with DEN_LIVE_HTTPS_URL and DEN_LIVE_HTTPS_TOKEN, den fetches
+that repository with the token through a remote named only in GIT_CONFIG_*
+after `den init`, pushes a fresh disposable branch, the server's own ref
+advertisement (read by the pinned OpenSSL client) shows it, den deletes it and
+the advertisement shows it gone. The token lives only in the environments of
+the processes that use it, and the request carrying it on the OpenSSL
+client's stdin; the URL is never printed or recorded, and never on a child's
+argv: http-live-argv reads every descendant's /proc/<pid>/cmdline while the
+row runs, with a control argv it must see. Every retained output is scanned
+for the token.
 
 Every row SKIPs by name when github.com:443 is unreachable or when no
 distribution root bundle exists; the push row also without its variables. Run through tools/env in the oracle
-container. PEM is decoded per RFC 7468 here; no TLS library is used.
+container. PEM is decoded per RFC 7468 here; no TLS library is imported.
 """
 import argparse
 import base64
@@ -27,6 +32,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import runpy
 import secrets
 import shutil
 import signal
@@ -371,43 +377,92 @@ def main():
 
     if 'push' in rows:
         name = names['push']
-        den_auth = {'DEN_HTTP_TOKEN': live_token, 'DEN_HTTP_USER': user}
-        git_auth = {'GIT_CONFIG_COUNT': '2', 'GIT_CONFIG_KEY_1': 'http.extraHeader',
-                    'GIT_CONFIG_VALUE_1': 'Authorization: Basic ' + basic.decode()}
+        # R-vc22b-1 (a), R-vc23-3: the fixture's URL never reaches a child's
+        # argv. den takes it from a remote named in GIT_CONFIG_* after `den
+        # init`; Git would pass it to git-remote-https on argv
+        # (gitremote-helpers(7), measured), so the pushed branch is read from
+        # the server's own ref advertisement by the pinned OpenSSL client,
+        # the request and its credential written on that client's stdin.
+        den_auth = {'DEN_HTTP_TOKEN': live_token, 'DEN_HTTP_USER': user,
+                    'GIT_CONFIG_COUNT': '3', 'GIT_CONFIG_KEY_1': 'remote.live.url', 'GIT_CONFIG_VALUE_1': live_url,
+                    'GIT_CONFIG_KEY_2': 'remote.live.fetch', 'GIT_CONFIG_VALUE_2': '+refs/heads/*:refs/remotes/live/*'}
         work = out / 'push-den'
         branch = 'refs/heads/den-live-push-' + secrets.token_hex(6)
         problems, pushed = [], False
+        pins = runpy.run_path(str(root / 'tools/http-git-test.py'))['OPENSSL_PINS']
+        assert hashlib.sha256(Path('/usr/bin/openssl').read_bytes()).hexdigest() == pins['/usr/bin/openssl'], \
+            'pinned OpenSSL digest'
+        target = live_url.removeprefix('https://github.com')
+
+        def advertisement():
+            """The server's upload-pack refs (v0 discovery) through `openssl s_client`."""
+            request = ('GET ' + target + '/info/refs?service=git-upload-pack HTTP/1.1\r\nHost: github.com\r\n'
+                       'User-Agent: git/den-live-row\r\nAccept: */*\r\nAuthorization: Basic ' + basic.decode() +
+                       '\r\nConnection: close\r\n\r\n').encode()
+            result = subprocess.run(['/usr/bin/openssl', 's_client', '-quiet', '-verify_return_error',
+                                     '-CAfile', str(pem), '-servername', 'github.com', '-connect', 'github.com:443'],
+                                    env=env, input=request, capture_output=True, timeout=120)
+            response = hidden(result.stdout)
+            hidden(result.stderr)
+            head, _, body = response.partition(b'\r\n\r\n')
+            if not head.startswith(b'HTTP/1.1 200 '):
+                raise AssertionError('server advertisement status %r' % head.split(b'\r\n')[0][:40])
+            if b'transfer-encoding: chunked' in head.lower():
+                joined, pos = bytearray(), 0
+                while True:
+                    eol = body.index(b'\r\n', pos)
+                    size = int(body[pos:eol].split(b';')[0], 16)
+                    if size == 0:
+                        break
+                    joined += body[eol + 2:eol + 2 + size]
+                    pos = eol + 2 + size + 2
+                body = bytes(joined)
+            refs, pos = {}, 0
+            while pos < len(body):
+                length = int(body[pos:pos + 4], 16)
+                if length < 4:
+                    pos += 4
+                    continue
+                line = body[pos + 4:pos + length].split(b'\0')[0].rstrip(b'\n')
+                pos += length
+                if line.startswith(b'#'):
+                    continue
+                oid, _, ref = line.partition(b' ')
+                refs[ref.decode()] = oid.decode()
+            return refs
 
         def remote_ref():
-            listed = run([git, 'ls-remote', live_url, branch], out, name + '-ls-remote', 120, extra=git_auth)
-            if listed['exit']:
-                problems.append('pinned Git ls-remote exit %d' % listed['exit'])
-            return bytes.fromhex(listed['stdout']).split(b'\t')[0].decode() if listed['stdout'] else ''
+            return advertisement().get(branch, '')
 
         fixture_path = live_url.removeprefix('https://github.com').removesuffix('.git').encode()
         watch = ArgvWatch([live_url.encode(), live_url.removesuffix('.git').encode(), fixture_path,
                            live_token.encode(), basic]).__enter__()
-        clone = run([den, 'clone', '-q', live_url, work], out, name + '-clone', READ_SECONDS, 'den', den_auth)
-        if clone['exit']:
-            problems.append('den clone exit %d: %r' % (clone['exit'], bytes.fromhex(clone['stderr'])[:300]))
+        init = run([den, 'init', '-q', work], out, name + '-init', 60, 'den')
+        fetched = run([den, 'fetch', '-q', 'live'], work, name + '-fetch', READ_SECONDS, 'den', den_auth) \
+            if init['exit'] == 0 else init
+        if fetched['exit']:
+            problems.append('den init or fetch exit %d: %r' % (fetched['exit'], bytes.fromhex(fetched['stderr'])[:300]))
         else:
-            head = subprocess.run([git, '-C', str(work), 'rev-parse', '--verify', '-q', 'HEAD'], env=env,
-                                  capture_output=True, timeout=60).stdout.strip().decode()
+            # The server's HEAD as the parent, when den's fetch brought it.
+            head = advertisement().get('HEAD', '')
+            if head and subprocess.run([git, '-C', str(work), 'cat-file', '-e', head + '^{commit}'], env=env,
+                                       capture_output=True, timeout=60).returncode:
+                head = ''
             blob = git_out(work, 'hash-object', '-w', '--stdin', data=secrets.token_hex(8).encode()).strip()
             tree = git_out(work, 'mktree', data=b'100644 blob ' + blob + b'\tden-live-push\n').strip().decode()
             commit = git_out(work, 'commit-tree', tree, *(['-p', head] if head else []), '-m', 'den live push row').strip().decode()
             git_out(work, 'update-ref', 'refs/heads/den-live-push', commit)
             try:
-                push = run([den, 'push', '-q', live_url, 'refs/heads/den-live-push:' + branch], work, name + '-push',
+                push = run([den, 'push', '-q', 'live', 'refs/heads/den-live-push:' + branch], work, name + '-push',
                            READ_SECONDS, 'den', den_auth)
                 pushed = push['exit'] == 0
                 if not pushed:
                     problems.append('den push exit %d: %r' % (push['exit'], bytes.fromhex(push['stderr'])[:300]))
                 elif remote_ref() != commit:
-                    problems.append('pinned Git does not see the pushed branch at the pushed commit')
+                    problems.append('the server does not advertise the pushed branch at the pushed commit')
             finally:
                 if pushed:
-                    delete = run([den, 'push', '-q', live_url, ':' + branch], work, name + '-delete', READ_SECONDS,
+                    delete = run([den, 'push', '-q', 'live', ':' + branch], work, name + '-delete', READ_SECONDS,
                                  'den', den_auth)
                     if delete['exit']:
                         problems.append('den delete exit %d: %r' % (delete['exit'], bytes.fromhex(delete['stderr'])[:300]))
