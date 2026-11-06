@@ -198,7 +198,8 @@ fn receive(mut c: Connection, cap: int) -> Response ! Errors {
             if size == 0 { trailers(headers(mut c)?)?; break }
             count = count + 1
             if count > 1000000 { return limit }
-            body_exact(mut c, mut body, size, cap)?
+            body_exact(mut c, mut body, size - 1, cap)?
+            let _ = octet(mut c)?
             if octet(mut c)? != 13 as byte || octet(mut c)? != 10 as byte { return invalid }
         }
     } else if h.length >= 0 {
