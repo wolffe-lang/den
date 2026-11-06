@@ -10,8 +10,14 @@ http-live-limit: den's own public repository, whose pack exceeds den's
 140,000,000-byte wire limit, must refuse by name within bounded time and
 memory and leave no partial clone. The shared limits are never relaxed.
 
-Both rows SKIP by name when github.com:443 is unreachable or when no
-distribution root bundle exists. Run through tools/env in the oracle
+http-live-push: with DEN_LIVE_HTTPS_URL and DEN_LIVE_HTTPS_TOKEN, den clones
+that repository with the token, pushes a fresh disposable branch, the pinned
+Git sees it, den deletes it and the pinned Git sees it gone. The token lives
+only in the environments of the processes that use it; the URL is never
+printed or recorded; every retained output is scanned for the token.
+
+Every row SKIPs by name when github.com:443 is unreachable or when no
+distribution root bundle exists; the push row also without its variables. Run through tools/env in the oracle
 container. PEM is decoded per RFC 7468 here; no TLS library is used.
 """
 import argparse
@@ -20,6 +26,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import secrets
 import shutil
 import signal
 import socket
@@ -74,19 +81,28 @@ def reachable(host, port, timeout=10):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--tier', choices=('native', 'release'), default='native')
-    parser.add_argument('--rows', default='read,limit')
+    parser.add_argument('--rows', default='read,limit,push')
     parser.add_argument('--measure-oracle', action='store_true',
                         help="also clone den's repository with the pinned Git to record its pack size")
     args = parser.parse_args()
     rows = args.rows.split(',')
-    assert set(rows) <= {'read', 'limit'} and rows, 'rows'
+    assert set(rows) <= {'read', 'limit', 'push'} and rows, 'rows'
     root = Path(__file__).resolve().parent.parent
     git = str(Path(os.environ['DEN_GIT']).resolve())
     assert hashlib.sha256(Path(git).read_bytes()).hexdigest() == GIT_SHA256, 'pinned Git digest'
     den = root / 'target' / args.tier / 'den'
     if not den.is_file():
         raise SystemExit('FAIL http-live-input: build target/' + args.tier + '/den first')
-    names = {'read': 'http-live-read', 'limit': 'http-live-limit'}
+    names = {'read': 'http-live-read', 'limit': 'http-live-limit', 'push': 'http-live-push'}
+    live_url = os.environ.get('DEN_LIVE_HTTPS_URL', '')
+    live_token = os.environ.get('DEN_LIVE_HTTPS_TOKEN', '')
+    if 'push' in rows and not (live_url and live_token):
+        print('SKIP http-live-push reason=DEN_LIVE_HTTPS_URL and DEN_LIVE_HTTPS_TOKEN not both set', flush=True)
+        rows = [row for row in rows if row != 'push']
+        if not rows:
+            return
+    if 'push' in rows and not live_url.startswith('https://'):
+        raise SystemExit('FAIL http-live-push: DEN_LIVE_HTTPS_URL must be an https URL (value withheld)')
     pem = Path(os.environ.get('DEN_LIVE_ROOTS_PEM', '/etc/ssl/certs/ca-certificates.crt'))
     if not pem.is_file():
         for row in rows:
@@ -111,18 +127,31 @@ def main():
                GIT_CONFIG_KEY_0='protocol.version', GIT_CONFIG_VALUE_0='2')
     tools = {'git': dict(GIT_SSL_CAINFO=str(pem)), 'den': dict(DEN_TLS_ROOTS=str(roots))}
     captures = []
+    user = os.environ.get('DEN_LIVE_HTTPS_USER', 'x-access-token')
+    basic = base64.b64encode((user + ':' + live_token).encode()) if live_token else b''
+    forbidden = [live_token.encode(), basic, live_token.encode().hex().encode(), basic.hex().encode()] if live_token else []
+
+    def hidden(data):
+        # The fixture is never named in a retained output, and the token never
+        # reaches one: replace the URL, then refuse any trace of the token.
+        if live_url:
+            data = data.replace(live_url.encode(), b'<DEN_LIVE_HTTPS_URL>')
+            data = data.replace(live_url.rstrip('/').removesuffix('.git').encode(), b'<DEN_LIVE_HTTPS_URL>')
+        if any(secret and secret in data for secret in forbidden):
+            raise SecretLeak()
+        return data
 
     def record():
         (out / 'captures.json').write_text(json.dumps(captures, indent=2) + '\n')
 
-    def run(argv, cwd, label, timeout, tool='git'):
+    def run(argv, cwd, label, timeout, tool='git', extra=None):
         # Output goes to files and the child is reaped by wait4, so its own
         # rusage (max RSS, CPU) is measured and no pipe can stall it.
         index = len(captures)
         paths = out / ('%03d.stdout' % index), out / ('%03d.stderr' % index)
         started = time.monotonic()
         with open(paths[0], 'wb') as stdout, open(paths[1], 'wb') as stderr:
-            child = subprocess.Popen(list(map(str, argv)), cwd=cwd, env={**env, **tools[tool]},
+            child = subprocess.Popen(list(map(str, argv)), cwd=cwd, env={**env, **tools[tool], **(extra or {})},
                                      stdin=subprocess.DEVNULL, stdout=stdout, stderr=stderr)
         terminate_at, kill_at, timed_out = started + timeout, None, False
         while True:
@@ -139,16 +168,19 @@ def main():
             time.sleep(0.05)
         child.returncode = os.waitstatus_to_exitcode(status)
         elapsed = time.monotonic() - started
-        capture = dict(label=label, argv=list(map(str, argv)), exit=child.returncode, timed_out=timed_out,
-                       elapsed=round(elapsed, 2), maxrss_kib=usage.ru_maxrss,
+        outputs = [hidden(path.read_bytes()) for path in paths]
+        for path, data in zip(paths, outputs):
+            path.write_bytes(data)
+        capture = dict(label=label, argv=[hidden(str(a).encode()).decode() for a in argv], exit=child.returncode,
+                       timed_out=timed_out, elapsed=round(elapsed, 2), maxrss_kib=usage.ru_maxrss,
                        user=round(usage.ru_utime, 2), system=round(usage.ru_stime, 2),
-                       stdout=paths[0].read_bytes().hex(), stderr=paths[1].read_bytes().hex())
+                       stdout=outputs[0].hex(), stderr=outputs[1].hex())
         captures.append(capture)
         record()
         return capture
 
-    def git_out(repo, *argv):
-        result = subprocess.run([git, '-C', str(repo), *argv], env=env, capture_output=True, timeout=120)
+    def git_out(repo, *argv, data=None):
+        result = subprocess.run([git, '-C', str(repo), *argv], env=env, input=data, capture_output=True, timeout=120)
         if result.returncode:
             raise AssertionError('pinned Git ' + argv[0] + ' failed in ' + repo.name + ': ' +
                                  result.stderr.decode(errors='replace').strip())
@@ -256,6 +288,58 @@ def main():
         if target.exists():
             shutil.rmtree(target)
 
+    if 'push' in rows:
+        name = names['push']
+        den_auth = {'DEN_HTTP_TOKEN': live_token, 'DEN_HTTP_USER': user}
+        git_auth = {'GIT_CONFIG_COUNT': '2', 'GIT_CONFIG_KEY_1': 'http.extraHeader',
+                    'GIT_CONFIG_VALUE_1': 'Authorization: Basic ' + basic.decode()}
+        work = out / 'push-den'
+        branch = 'refs/heads/den-live-push-' + secrets.token_hex(6)
+        problems, pushed = [], False
+
+        def remote_ref():
+            listed = run([git, 'ls-remote', live_url, branch], out, name + '-ls-remote', 120, extra=git_auth)
+            if listed['exit']:
+                problems.append('pinned Git ls-remote exit %d' % listed['exit'])
+            return bytes.fromhex(listed['stdout']).split(b'\t')[0].decode() if listed['stdout'] else ''
+
+        clone = run([den, 'clone', '-q', live_url, work], out, name + '-clone', READ_SECONDS, 'den', den_auth)
+        if clone['exit']:
+            problems.append('den clone exit %d: %r' % (clone['exit'], bytes.fromhex(clone['stderr'])[:300]))
+        else:
+            head = subprocess.run([git, '-C', str(work), 'rev-parse', '--verify', '-q', 'HEAD'], env=env,
+                                  capture_output=True, timeout=60).stdout.strip().decode()
+            blob = git_out(work, 'hash-object', '-w', '--stdin', data=secrets.token_hex(8).encode()).strip()
+            tree = git_out(work, 'mktree', data=b'100644 blob ' + blob + b'\tden-live-push\n').strip().decode()
+            commit = git_out(work, 'commit-tree', tree, *(['-p', head] if head else []), '-m', 'den live push row').strip().decode()
+            git_out(work, 'update-ref', 'refs/heads/den-live-push', commit)
+            try:
+                push = run([den, 'push', '-q', live_url, 'refs/heads/den-live-push:' + branch], work, name + '-push',
+                           READ_SECONDS, 'den', den_auth)
+                pushed = push['exit'] == 0
+                if not pushed:
+                    problems.append('den push exit %d: %r' % (push['exit'], bytes.fromhex(push['stderr'])[:300]))
+                elif remote_ref() != commit:
+                    problems.append('pinned Git does not see the pushed branch at the pushed commit')
+            finally:
+                if pushed:
+                    delete = run([den, 'push', '-q', live_url, ':' + branch], work, name + '-delete', READ_SECONDS,
+                                 'den', den_auth)
+                    if delete['exit']:
+                        problems.append('den delete exit %d: %r' % (delete['exit'], bytes.fromhex(delete['stderr'])[:300]))
+                    elif remote_ref():
+                        problems.append('the disposable branch is still on the remote')
+        for path in out.rglob('*'):
+            if path.is_file():
+                hidden(path.read_bytes())
+        print('PASS http-token-secrecy-live', flush=True)
+        print(('PASS ' if not problems else 'FAIL ') + name + ('' if not problems else ': ' + '; '.join(problems)),
+              flush=True)
+        if problems:
+            failed.append(name)
+        if work.exists():
+            shutil.rmtree(work)
+
     (out / 'results.json').write_text(json.dumps(results, indent=2, sort_keys=True) + '\n')
     for path in out.glob('read-*'):
         shutil.rmtree(path)
@@ -264,8 +348,14 @@ def main():
     print('http-live: ' + args.tier + ' ' + ','.join(rows) + '; zero skips', flush=True)
 
 
+class SecretLeak(Exception):
+    pass
+
+
 if __name__ == '__main__':
     try:
         main()
+    except SecretLeak:
+        raise SystemExit('FAIL http-token-secrecy-live: output withheld')
     except (AssertionError, OSError, ValueError, subprocess.SubprocessError) as exc:
         raise SystemExit('FAIL http-live-harness: ' + str(exc))
