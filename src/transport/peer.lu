@@ -45,24 +45,50 @@ fn http_status(status: int, rpc: bool) -> () ! Errors {
     Unsupported("HTTP status {status}")
 }
 
+/// Compare a data packet's payload with one text line, its LF optional
+/// (gitprotocol-common(5)). Bytes, not text: a v0 ref line carries a NUL.
+fn packet_is(p: pktline.Packet, line: str) -> bool {
+    if p.kind != 4 { return false }
+    let want = line.bytes()
+    var n = p.data.len
+    if n > 0 && p.data[n - 1] == 10 as byte { n = n - 1 }
+    if n != want.len { return false }
+    for i in 0..n { if p.data[i] != want[i] { return false } }
+    true
+}
+
+fn packet_starts(p: pktline.Packet, prefix: str) -> bool {
+    let want = prefix.bytes()
+    if p.kind != 4 || p.data.len < want.len { return false }
+    for i in 0..want.len { if p.data[i] != want[i] { return false } }
+    true
+}
+
 /// Validate the smart-HTTP advertisement envelope without interpreting object
-/// bodies. V2 upload discovery starts directly with version 2, receive-pack
-/// requires its service announcement and the separating flush.
+/// bodies (R-vc22-4). Upload discovery is either v2 directly, as
+/// git-http-backend sends it, or exactly the matching `# service=` banner, a
+/// flush, and then v2, as gitprotocol-http(5) documents and GitHub sends it.
+/// Receive-pack requires its banner and the separating flush. A mismatched
+/// banner and any v0/v1 advertisement are refused by name.
 pub fn http_advertisement(data: List[byte], service: str) -> List[byte] ! Errors {
+    if service != "upload-pack" && service != "receive-pack" { return invalid }
     let first = pktline.decode(data, 0)?
     if first.kind != 4 { return invalid }
-    if service == "upload-pack" {
-        if pktline.text(first.data)? != "version 2" {
-            return Unsupported("remote does not advertise protocol v2")
+    if service == "upload-pack" && packet_is(first, "version 2") { return copy data }
+    if !packet_is(first, "# service=git-{service}") {
+        if packet_starts(first, "# service=") || service == "receive-pack" {
+            return Unsupported("HTTP wrong service advertisement")
         }
-        return copy data
-    }
-    if service != "receive-pack" { return invalid }
-    if pktline.text(first.data)? != "# service=git-receive-pack" {
-        return Unsupported("HTTP wrong service advertisement")
+        return Unsupported("remote does not advertise protocol v2")
     }
     let flush = pktline.decode(data, first.next)?
     if flush.kind != 0 { return invalid }
+    if service == "receive-pack" { return copy data[flush.next..] }
+    let version = pktline.decode(data, flush.next)?
+    if version.kind != 4 { return invalid }
+    if !packet_is(version, "version 2") {
+        return Unsupported("remote does not advertise protocol v2")
+    }
     copy data[flush.next..]
 }
 
