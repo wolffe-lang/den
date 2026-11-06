@@ -799,3 +799,36 @@ Black boxes: the pinned Git 2.56.0 and its `git-http-backend`, and OpenSSL
 3.0.13 (`s_server`, `req`, `x509`, `ca`) from the oracle container, each
 checked by digest before use. github.com is reached only by the live rows.
 No Git, libcurl, HTTP-library or TLS-library implementation source was read.
+
+## Streamed packs and the live rows' argv (vc23)
+
+Git 2.56.0 documentation, read as published text:
+
+- `gitformat-pack(5)`: pack and idx version 2 (header, object entries, the
+  size and type encoding, OFS_DELTA offsets and REF_DELTA names, the
+  deltified representation, the trailer, the fan-out, CRC-32 and 64-bit
+  offset tables, the idx checksum).
+- `git-index-pack(1)`: what indexing a received pack produces, `--fix-thin`
+  (why den asks for no thin pack instead) and `--max-input-size`.
+- `gitprotocol-v2(5)`: `fetch` arguments (`thin-pack`, `ofs-delta`,
+  `no-progress`, `done`) and the packfile section's side-band bands.
+- `gitprotocol-pack(5)` and `gitprotocol-http(5)`: the pack transfer and the
+  smart RPC response a fetch streams through.
+- `git-clone(1)`, `git-fetch(1)`; `git-config(1)`: `core.bigFileThreshold`
+  (R-vc23-2's per-object cap), `core.deltaBaseCacheLimit` (the resolution
+  path's bound), `fetch.unpackLimit` and `transfer.unpackLimit` (a small fetch
+  goes loose), `maintenance.autoDetach` (den#66), `remote.<name>.url`, and
+  `GIT_CONFIG_COUNT`.
+- `gitremote-helpers(7)`: a remote helper is started with the remote's name
+  and its URL as arguments, which is why the live push row reads the server's
+  advertisement itself rather than through Git.
+- `git-maintenance(1)`: automatic maintenance after a command, and its
+  detached form.
+
+Black boxes: the pinned Git 2.56.0 (clone, fetch, daemon, http-backend,
+repack, verify-pack, fsck, and `GIT_TRACE`/`GIT_TRACE2_EVENT` for its
+children's argv), a field Git 2.56.0 from Homebrew, and the pinned OpenSSL
+3.0.13 (`s_server` for the fixture, `s_client` for the live advertisement).
+Organisation-owned: the wolf book's chapters on lists (a list slice is a copy)
+and regions, and wolf-std's `fs` (`read_at`, `read_into`). No Git, libgit2,
+JGit or other implementation source was read.
