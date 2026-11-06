@@ -16,7 +16,7 @@ fn local_objects(source: str, destination: str) -> () ! object.StoreErrors {
         return Unsupported("local clone repository owned by another user; use --no-local")
     }
     var pending = [LocalDirectory { source: source, destination: destination }]
-    var count = 0, total = 0
+    var count = 0
     while pending.len > 0 {
         let directory = (mut pending).pop() else |_| { return invalid }
         for entry in fs.entries(directory.source)? {
@@ -42,8 +42,8 @@ fn local_objects(source: str, destination: str) -> () ! object.StoreErrors {
                             eof => { break },
                             io => { return io },
                         }
-                        if data.len > 134217728 - total { return limit }
-                        total += data.len
+                        // R-vc23-1: no aggregate cap; each 64 KiB chunk is
+                        // its own region and a failed write refuses.
                         fs.write_chunk(mut output, data)?
                     }
                 }
