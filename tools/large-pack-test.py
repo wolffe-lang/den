@@ -40,6 +40,7 @@ import shutil
 import signal
 import socket
 import subprocess
+import sys
 import threading
 import time
 
@@ -71,11 +72,120 @@ exec /bin/sh -c "$*"
 '''
 
 
+def build_large(git, env, out, path):
+    """The large fixture, built in its own process so the harness stays small:
+    a child's peak RSS starts at its parent's (an exec keeps the high-water
+    mark), and den's must be den's own."""
+
+    def git_out(repo, *argv, data=None, timeout=600):
+        result = subprocess.run([git, '-C', str(repo), *argv], env=env, input=data, capture_output=True,
+                                timeout=timeout)
+        if result.returncode:
+            raise AssertionError('pinned Git ' + argv[0] + ' failed: ' +
+                                 result.stderr.decode(errors='replace').strip()[-400:])
+        return result.stdout
+
+    git_out(out, 'init', '-q', '--bare', str(path))
+    git_out(path, 'symbolic-ref', 'HEAD', 'refs/heads/main')
+    for key, value in (('gc.auto', '0'), ('maintenance.auto', 'false')):
+        git_out(path, 'config', key, value)
+    rng = random.Random(61)
+    words = [''.join(rng.choice('abcdefghijklmnopqrstuvwxyz') for _ in range(rng.randint(2, 9)))
+             for _ in range(4096)]
+    lines = [' '.join(rng.choice(words) for _ in range(12)) for _ in range(16384)]
+    big, parent, commits = [], None, []
+    for i in range(40):
+        for _ in range(64):
+            lines[rng.randrange(len(lines))] = ' '.join(rng.choice(words) for _ in range(12))
+        text = ('\n'.join(lines) + '\n').encode()
+        blob = git_out(path, 'hash-object', '-w', '--stdin', data=text).strip()
+        if i in (10, 25, 39):
+            data = rng.randbytes(BIG)
+            big.append(git_out(path, 'hash-object', '-w', '--stdin', data=data).strip())
+        readme = git_out(path, 'hash-object', '-w', '--stdin', data=b'fixture %d\n' % i).strip()
+        data_tree = None
+        if big:
+            data_tree = git_out(path, 'mktree', data=b''.join(
+                b'100644 blob ' + name + b'\tbig-%d.bin\n' % k for k, name in enumerate(big))).strip()
+        top = [b'100644 blob ' + readme + b'\tREADME\n']
+        if data_tree:
+            top.append(b'040000 tree ' + data_tree + b'\tdata\n')
+        top.append(b'100644 blob ' + blob + b'\tnotes.txt\n')
+        tree = git_out(path, 'mktree', data=b''.join(top)).strip().decode()
+        argv = ['commit-tree', tree, '-m', 'fixture %d' % i] + (['-p', parent] if parent else [])
+        parent = git_out(path, *argv).strip().decode()
+        commits.append(parent)
+    git_out(path, 'update-ref', 'refs/heads/main', commits[-1])
+    git_out(path, 'update-ref', 'refs/heads/side', commits[20])
+    git_out(path, 'update-ref', 'refs/heads/early', commits[5])
+    git_out(path, 'tag', '-a', 'v1', '-m', 'fixture tag', commits[30])
+    # No bitmap: den refuses one by name (a named limit outside this lane),
+    # and a plain local path clone copies the object directory as it is.
+    git_out(path, '-c', 'pack.threads=1', '-c', 'core.bigFileThreshold=16m', '-c', 'repack.writeBitmaps=false',
+            'repack', '-a', '-d', '-f', '-q', '--depth=50', '--window=10', timeout=1200)
+    packs = sorted((path / 'objects/pack').glob('*.pack'))
+    assert len(packs) == 1, 'fixture: one pack'
+    size = packs[0].stat().st_size
+    assert size > OLD_PAYLOAD_CAP, 'fixture: pack over 128 MiB'
+    verify = git_out(path, 'verify-pack', '-v', str(packs[0].with_suffix('.idx')), timeout=1200).decode()
+    depths = [int(f.split()[5]) for f in verify.splitlines()
+              if len(f.split()) >= 7 and f.split()[1] in ('commit', 'tree', 'blob', 'tag')]
+    info = dict(pack_bytes=size, objects=git_out(path, 'count-objects', '-v').decode(),
+                deltas=len(depths), deepest=max(depths) if depths else 0, largest=BIG)
+    return info
+
+
+def serve_https(git, env, out):
+    """The pinned OpenSSL terminator in front of git-http-backend for out's
+    remote.git (http-git-test.py's Server), with a fresh test CA; one JSON
+    line when ready, one when stdin closes and the fixture has stopped."""
+    root = Path(__file__).resolve().parent.parent
+    fixture = runpy.run_path(str(root / 'tools/http-git-test.py'))
+    for path, digest in fixture['OPENSSL_PINS'].items():
+        for _ in range(2):
+            assert hashlib.sha256(Path(path).read_bytes()).hexdigest() == digest, 'pinned TLS oracle digest'
+    pki = root / 'target/pki' / out.name
+    shutil.rmtree(pki, ignore_errors=True)
+    pki.mkdir(parents=True)
+
+    def openssl(*argv):
+        result = subprocess.run(['/usr/bin/openssl', *map(str, argv)], env=env, capture_output=True, timeout=120)
+        assert result.returncode == 0, 'fixture openssl ' + str(argv[0])
+
+    openssl('req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-sha256', '-days', '2',
+            '-subj', '/CN=Large pack fixture root', '-addext', 'basicConstraints=critical,CA:TRUE',
+            '-addext', 'keyUsage=critical,keyCertSign,cRLSign', '-keyout', pki / 'ca.key', '-out', pki / 'ca.pem')
+    openssl('x509', '-in', pki / 'ca.pem', '-outform', 'DER', '-out', pki / 'ca.der')
+    (pki / 'leaf.cnf').write_text('basicConstraints=critical,CA:FALSE\nkeyUsage=critical,digitalSignature\n'
+                                  'extendedKeyUsage=serverAuth\nsubjectAltName=DNS:localhost\n')
+    openssl('req', '-new', '-newkey', 'rsa:2048', '-nodes', '-subj', '/CN=localhost',
+            '-keyout', pki / 'leaf.key', '-out', pki / 'leaf.csr')
+    openssl('x509', '-req', '-in', pki / 'leaf.csr', '-CA', pki / 'ca.pem', '-CAkey', pki / 'ca.key',
+            '-CAcreateserial', '-days', '1', '-sha256', '-extfile', pki / 'leaf.cnf', '-out', pki / 'leaf.pem')
+    server = fixture['Server'](out, git, env, 'tls', pki, '', lambda data: None)
+    try:
+        print(json.dumps(dict(url=server.url, ca_pem=str(pki / 'ca.pem'), ca_der=str(pki / 'ca.der'))), flush=True)
+        sys.stdin.read()
+    finally:
+        server.close()
+        shutil.rmtree(pki, ignore_errors=True)
+    print(json.dumps(dict(errors=server.errors)), flush=True)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--tier', choices=('native', 'release'), default='native')
     parser.add_argument('--rows', default=','.join(ROWS))
+    parser.add_argument('--build-fixture', help=argparse.SUPPRESS)
+    parser.add_argument('--serve-https', help=argparse.SUPPRESS)
     args = parser.parse_args()
+    if args.serve_https:
+        serve_https(os.environ['DEN_GIT'], dict(os.environ), Path(args.serve_https))
+        return
+    if args.build_fixture:
+        target = Path(args.build_fixture)
+        print(json.dumps(build_large(os.environ['DEN_GIT'], dict(os.environ), target.parent, target)))
+        return
     rows = args.rows.split(',')
     assert rows and set(rows) <= set(ROWS), 'rows'
     root = Path(__file__).resolve().parent.parent
@@ -182,56 +292,6 @@ def main():
         return dict(refs=refs.decode(), head=(Path(repo) / '.git/HEAD').read_bytes().hex(), objects=len(ids),
                     objects_sha256=batch_digest(repo, ids), config=config.decode(), worktree=files)
 
-    def build_large(path):
-        git_out(out, 'init', '-q', '--bare', str(path))
-        git_out(path, 'symbolic-ref', 'HEAD', 'refs/heads/main')
-        for key, value in (('gc.auto', '0'), ('maintenance.auto', 'false')):
-            git_out(path, 'config', key, value)
-        rng = random.Random(61)
-        words = [''.join(rng.choice('abcdefghijklmnopqrstuvwxyz') for _ in range(rng.randint(2, 9)))
-                 for _ in range(4096)]
-        lines = [' '.join(rng.choice(words) for _ in range(12)) for _ in range(16384)]
-        big, parent, commits = [], None, []
-        for i in range(40):
-            for _ in range(64):
-                lines[rng.randrange(len(lines))] = ' '.join(rng.choice(words) for _ in range(12))
-            text = ('\n'.join(lines) + '\n').encode()
-            blob = git_out(path, 'hash-object', '-w', '--stdin', data=text).strip()
-            if i in (10, 25, 39):
-                data = rng.randbytes(BIG)
-                big.append(git_out(path, 'hash-object', '-w', '--stdin', data=data).strip())
-            readme = git_out(path, 'hash-object', '-w', '--stdin', data=b'fixture %d\n' % i).strip()
-            data_tree = None
-            if big:
-                data_tree = git_out(path, 'mktree', data=b''.join(
-                    b'100644 blob ' + name + b'\tbig-%d.bin\n' % k for k, name in enumerate(big))).strip()
-            top = [b'100644 blob ' + readme + b'\tREADME\n']
-            if data_tree:
-                top.append(b'040000 tree ' + data_tree + b'\tdata\n')
-            top.append(b'100644 blob ' + blob + b'\tnotes.txt\n')
-            tree = git_out(path, 'mktree', data=b''.join(top)).strip().decode()
-            argv = ['commit-tree', tree, '-m', 'fixture %d' % i] + (['-p', parent] if parent else [])
-            parent = git_out(path, *argv).strip().decode()
-            commits.append(parent)
-        git_out(path, 'update-ref', 'refs/heads/main', commits[-1])
-        git_out(path, 'update-ref', 'refs/heads/side', commits[20])
-        git_out(path, 'update-ref', 'refs/heads/early', commits[5])
-        git_out(path, 'tag', '-a', 'v1', '-m', 'fixture tag', commits[30])
-        git_out(path, '-c', 'pack.threads=1', '-c', 'core.bigFileThreshold=16m', 'repack', '-a', '-d', '-f', '-q',
-                '--depth=50', '--window=10', timeout=1200)
-        packs = sorted((path / 'objects/pack').glob('*.pack'))
-        assert len(packs) == 1, 'fixture: one pack'
-        size = packs[0].stat().st_size
-        assert size > OLD_PAYLOAD_CAP, 'fixture: pack over 128 MiB'
-        verify = git_out(path, 'verify-pack', '-v', str(packs[0].with_suffix('.idx')), timeout=1200).decode()
-        depths = [int(f.split()[5]) for f in verify.splitlines()
-                  if len(f.split()) >= 7 and f.split()[1] in ('commit', 'tree', 'blob', 'tag')]
-        info = dict(pack_bytes=size, objects=git_out(path, 'count-objects', '-v').decode(),
-                    deltas=len(depths), deepest=max(depths) if depths else 0, largest=BIG)
-        print('FIXTURE large ' + json.dumps(dict(pack_bytes=size, deltas=info['deltas'],
-                                                  deepest=info['deepest'])), flush=True)
-        return info
-
     def compare(name, oracle, candidate, ours, theirs, problems):
         for field in ('exit', 'stdout', 'stderr'):
             if candidate[field] != oracle[field]:
@@ -273,11 +333,17 @@ def main():
             problems.append(str(exc))
             return None
 
+    # A child's peak RSS starts at the harness's own; record that floor.
+    results['spawn_floor_kib'] = run([den, '--version'], out, 'spawn-floor', 60)['maxrss_kib']
     remote = out / 'remote.git'
-    large = None
     if set(rows) - {'object-limit'}:
-        large = build_large(remote)
-        results['fixture'] = large
+        built = subprocess.run([sys.executable, '-I', str(Path(__file__).resolve()), '--build-fixture', str(remote)],
+                               env=env, capture_output=True, timeout=1800)
+        if built.returncode:
+            raise AssertionError('fixture build: ' + built.stderr.decode(errors='replace')[-400:])
+        results['fixture'] = json.loads(built.stdout)
+        print('FIXTURE large ' + json.dumps({key: results['fixture'][key] for key in ('pack_bytes', 'deltas', 'deepest')}),
+              flush=True)
 
     def clone_row(label, url, extra=None):
         name = 'large-pack-' + label
@@ -301,6 +367,23 @@ def main():
         for path in (den_dir, git_dir):
             shutil.rmtree(path, ignore_errors=True)
 
+    if 'memory' in rows:
+        name = 'large-pack-memory'
+        problems = []
+        target = out / 'den-memory'
+        candidate = run(['prlimit', '--as=%d' % MEMORY_BOUND, '--', den, 'clone', '-q', remote.as_uri(), target],
+                        out, name)
+        if candidate['exit'] != 0:
+            problems.append('den clone under a %d-byte address-space cap: exit %d, stderr %r' % (
+                MEMORY_BOUND, candidate['exit'], bytes.fromhex(candidate['stderr'])[-300:]))
+        else:
+            checked_clone(target, problems)
+        if candidate['maxrss_kib'] * 1024 > MEMORY_BOUND:
+            problems.append('peak RSS %d KiB over the bound' % candidate['maxrss_kib'])
+        measured = measured_of(candidate)
+        measured.update(bound_bytes=MEMORY_BOUND, largest_object=BIG)
+        verdict(name, problems, measured)
+        shutil.rmtree(target, ignore_errors=True)
     if 'local' in rows:
         clone_row('local', str(remote))
     if 'file' in rows:
@@ -329,43 +412,29 @@ def main():
     if 'ssh' in rows:
         clone_row('ssh', 'ssh://localhost' + str(remote))
     if 'https' in rows:
-        fixture = runpy.run_path(str(root / 'tools/http-git-test.py'))
-        for path, digest in fixture['OPENSSL_PINS'].items():
-            for _ in range(2):
-                assert hashlib.sha256(Path(path).read_bytes()).hexdigest() == digest, 'pinned TLS oracle digest'
-        pki = root / 'target/pki' / out.name
-        shutil.rmtree(pki, ignore_errors=True)
-        pki.mkdir(parents=True)
-
-        def openssl(*argv):
-            result = subprocess.run(['/usr/bin/openssl', *map(str, argv)], env=env, capture_output=True, timeout=120)
-            assert result.returncode == 0, 'fixture openssl ' + str(argv[0])
-
-        openssl('req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-sha256', '-days', '2',
-                '-subj', '/CN=Large pack fixture root', '-addext', 'basicConstraints=critical,CA:TRUE',
-                '-addext', 'keyUsage=critical,keyCertSign,cRLSign', '-keyout', pki / 'ca.key', '-out', pki / 'ca.pem')
-        openssl('x509', '-in', pki / 'ca.pem', '-outform', 'DER', '-out', pki / 'ca.der')
-        (pki / 'leaf.cnf').write_text('basicConstraints=critical,CA:FALSE\nkeyUsage=critical,digitalSignature\n'
-                                      'extendedKeyUsage=serverAuth\nsubjectAltName=DNS:localhost\n')
-        openssl('req', '-new', '-newkey', 'rsa:2048', '-nodes', '-subj', '/CN=localhost',
-                '-keyout', pki / 'leaf.key', '-out', pki / 'leaf.csr')
-        openssl('x509', '-req', '-in', pki / 'leaf.csr', '-CA', pki / 'ca.pem', '-CAkey', pki / 'ca.key',
-                '-CAcreateserial', '-days', '1', '-sha256', '-extfile', pki / 'leaf.cnf', '-out', pki / 'leaf.pem')
-        server = fixture['Server'](out, git, env, 'tls', pki, '', lambda data: None)
+        # The TLS fixture runs in its own process: it holds each response
+        # whole, and a child's peak RSS starts at its parent's.
+        server = subprocess.Popen([sys.executable, '-I', str(Path(__file__).resolve()), '--serve-https', str(out)],
+                                  env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
         try:
-            clone_row('https', server.url, dict(GIT_SSL_CAINFO=str(pki / 'ca.pem'), DEN_TLS_ROOTS=str(pki / 'ca.der')))
-            if server.errors:
-                failed.append('large-pack-https-fixture')
-                print('FAIL large-pack-https-fixture: ' + ', '.join(server.errors), flush=True)
+            ready = json.loads(server.stdout.readline())
+            clone_row('https', ready['url'], dict(GIT_SSL_CAINFO=ready['ca_pem'], DEN_TLS_ROOTS=ready['ca_der']))
         finally:
-            server.close()
-            shutil.rmtree(pki, ignore_errors=True)
+            server.stdin.close()
+            closing = json.loads(server.stdout.readline() or '{"errors": ["no report"]}')
+            server.wait(timeout=60)
+        if closing['errors']:
+            failed.append('large-pack-https-fixture')
+            print('FAIL large-pack-https-fixture: ' + ', '.join(closing['errors']), flush=True)
     if 'fetch' in rows:
         name = 'large-pack-fetch'
         problems = []
         seed = out / 'fetch-seed'
         git_out(out, 'clone', '-q', '--no-local', '--single-branch', '--branch=early', remote.as_uri(), str(seed))
         git_out(seed, 'config', 'remote.origin.fetch', '+refs/heads/*:refs/remotes/origin/*')
+        # git-config(1): a fetch creates refs/remotes/origin/HEAD by default;
+        # den's configured fetch does not (outside this lane), so neither may.
+        git_out(seed, 'config', 'remote.origin.followRemoteHEAD', 'never')
         outcomes = {}
         for tool, binary in (('git', git), ('den', str(den))):
             work = out / ('fetch-' + tool)
@@ -384,29 +453,14 @@ def main():
                                   git_out(work, 'rev-list', '--objects', '--remotes').splitlines()})
                     views[tool] = dict(refs=refs.decode(), objects=len(ids), objects_sha256=batch_digest(work, ids))
                 if views['git'] != views['den']:
-                    problems.append('remote-tracking refs or their objects differ')
+                    problems.append('remote-tracking refs or their objects differ: git %r den %r' % (
+                        {k: v for k, v in views['git'].items() if k != 'refs'} | dict(refs=views['git']['refs'].split()),
+                        {k: v for k, v in views['den'].items() if k != 'refs'} | dict(refs=views['den']['refs'].split())))
             except AssertionError as exc:
                 problems.append(str(exc))
         verdict(name, problems, measured_of(candidate, oracle))
         for path in (seed, out / 'fetch-git', out / 'fetch-den'):
             shutil.rmtree(path, ignore_errors=True)
-    if 'memory' in rows:
-        name = 'large-pack-memory'
-        problems = []
-        target = out / 'den-memory'
-        candidate = run(['prlimit', '--as=%d' % MEMORY_BOUND, '--', den, 'clone', '-q', remote.as_uri(), target],
-                        out, name)
-        if candidate['exit'] != 0:
-            problems.append('den clone under a %d-byte address-space cap: exit %d, stderr %r' % (
-                MEMORY_BOUND, candidate['exit'], bytes.fromhex(candidate['stderr'])[-300:]))
-        else:
-            checked_clone(target, problems)
-        if candidate['maxrss_kib'] * 1024 > MEMORY_BOUND:
-            problems.append('peak RSS %d KiB over the bound' % candidate['maxrss_kib'])
-        measured = measured_of(candidate)
-        measured.update(bound_bytes=MEMORY_BOUND, largest_object=BIG)
-        verdict(name, problems, measured)
-        shutil.rmtree(target, ignore_errors=True)
     if 'object-limit' in rows:
         name = 'large-pack-object-limit'
         problems = []
