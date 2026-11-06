@@ -105,8 +105,11 @@ fn verify(fd: int, index: Index) -> int ! PackErrors {
     size - 20
 }
 
+// R-vc23-2: a read reconstructs at most three objects' worth along a chain.
+fn reconstruction_limit() -> int { 3 * object_limit() }
+
 fn charge(mut total: int, count: int) -> () ! PackErrors {
-    if count < 0 || count > 134217728 - total {
+    if count < 0 || count > reconstruction_limit() - total {
         return Unsupported("pack reconstruction memory limit")
     }
     total += count
@@ -127,7 +130,9 @@ fn unpack(
     seen[offset] = true
     let next = next_offset(index, offset, end)
     let length = next - offset
-    if length > 17000000 { return Unsupported("pack compressed entry size limit") }
+    if length > object_limit() + object_limit() / 16 + 65536 {
+        return Unsupported("pack compressed entry size limit")
+    }
     charge(mut total, length)?
     let bytes = range_bytes(fd, offset, length)?
     if crc32(bytes) != index.entries[slot].crc { return Unsupported("pack entry CRC") }
@@ -138,14 +143,16 @@ fn unpack(
         if pos == bytes.len { return Unsupported("pack entry header") }
         byte0 = bytes[pos] as int
         pos += 1
-        if byte0 & 127 > (16777216 - size) / scale { return Unsupported("pack object size limit") }
+        if byte0 & 127 > (object_limit() - size) / scale {
+            return Unsupported("pack object size limit")
+        }
         size += (byte0 & 127) * scale
         if byte0 >= 128 {
-            if scale > 16777216 / 128 { return Unsupported("pack object size limit") }
+            if scale > object_limit() / 128 { return Unsupported("pack object size limit") }
             scale *= 128
         }
     }
-    if size > 16777216 { return Unsupported("pack object size limit") }
+    if size > object_limit() { return Unsupported("pack object size limit") }
     var base_slot: int = -1
     if kind == 6 {
         if pos == bytes.len { return Unsupported("pack OFS_DELTA offset") }
@@ -175,7 +182,9 @@ fn unpack(
         return Unsupported("pack object type")
     }
     charge(mut total, size)?
-    let inflated = zlib.inflate(bytes[pos..], size) else |e| { return Unsupported("pack zlib {e}") }
+    let inflated = zlib.inflate_sized(bytes, pos, size) else |e| {
+        return Unsupported("pack zlib {e}")
+    }
     if inflated.consumed != bytes.len - pos || inflated.data.len != size {
         return Unsupported("pack entry size or trailing bytes")
     }
@@ -189,9 +198,9 @@ fn unpack(
         let target_size = variable(inflated.data, mut delta_pos) else |_| {
             return Unsupported("pack delta invalid")
         }
-        if target_size > 16777216 { return Unsupported("pack object size limit") }
+        if target_size > object_limit() { return Unsupported("pack object size limit") }
         charge(mut total, target_size)?
-        let data = apply_delta(base.data, inflated.data, 16777216) else |e| {
+        let data = apply_delta(base.data, inflated.data, object_limit()) else |e| {
             return Unsupported("pack delta {e}")
         }
         result = Body { kind: base.kind, data: data }
@@ -314,6 +323,35 @@ fn load_session(mut s: Session) -> () ! PackErrors {
         (mut s.indexes).push(index)
     }
     s.loaded = true
+}
+
+/// A session whose indexes are listed and checked now, for reads that must
+/// not grow it (session_peek), such as reads inside a caller's region.
+pub fn session_open(gitdir: str) -> Session ! PackErrors {
+    var s = session(gitdir)
+    load_session(mut s)?
+    s
+}
+
+/// read_object's answer through an opened session's indexes, unchanged.
+pub fn session_peek(s: Session, name: str, cap: int) -> Body ! PackErrors {
+    if !s.loaded { return Unsupported("pack session not opened") }
+    for i in 0..s.paths.len {
+        let slot = slot_named(s.indexes[i], name)
+        if slot < 0 { continue }
+        var result = Body { kind: "", data: List[byte]() }
+        region candidate {
+            let fd = open_pack("{s.paths[i][0..s.paths[i].len - 4]}.pack")?
+            defer fs_close(fd) else |_| {}
+            let end = bounds(fd, s.indexes[i])?
+            var seen = Map[int, bool](), total: int = 0
+            let value = unpack(fd, end, s.indexes[i], slot, mut seen, mut total, 0)?
+            result = copy value
+        }
+        if result.data.len > cap { return Unsupported("pack object size limit") }
+        return result
+    }
+    not_found
 }
 
 /// read_object's answer through the session's parsed indexes.
