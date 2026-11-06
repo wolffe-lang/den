@@ -77,9 +77,9 @@ fn header_lines(data: List[byte]) -> List[str] ! Errors {
 }
 
 /// Parse one complete header block, capped at 64 KiB, 256 fields and 8 KiB
-/// physical lines. body_cap is inclusive and cannot exceed the wire payload cap.
+/// physical lines. body_cap is inclusive: the caller's cap (a streamed body passes its own).
 pub fn head(data: List[byte], body_cap: int) -> Head ! Errors {
-    if body_cap < 0 || body_cap > 140000000 { return limit }
+    if body_cap < 0 { return limit }
     let lines = header_lines(data)?
     if lines.len == 0 { return invalid }
     let status = lines[0]
@@ -196,7 +196,7 @@ fn extensions(bytes: List[byte], start: int) -> () ! Errors {
 /// Decode a chunk-size line (without CRLF), validating ignored extensions.
 /// Refuse overflow/over-budget sizes before any allocation or network read.
 pub fn chunk_size(line: str, remaining: int) -> int ! Errors {
-    if line.len > 8192 || remaining < 0 || remaining > 140000000 { return limit }
+    if line.len > 8192 || remaining < 0 { return limit }
     let bytes = line.bytes()
     var at = 0, n = 0
     while at < bytes.len {

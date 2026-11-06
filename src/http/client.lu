@@ -13,6 +13,9 @@ pub struct Connection {
     tls: List[client.Client],
     authorization: str,
     credentials_allowed: bool,
+    body_mode: int,
+    body_left: int,
+    body_close: bool,
 }
 
 /// One complete response, with metadata separate from its binary body.
@@ -49,9 +52,28 @@ pub fn open(url: str) -> Connection ! Errors {
         tls: List[client.Client](),
         authorization: "",
         credentials_allowed: true,
+        body_mode: 0,
+        body_left: 0,
+        body_close: false,
     }
     dial(mut c)?
     c
+}
+
+/// A connection that was never opened: a placeholder for a stream transport.
+pub fn idle() -> Connection {
+    Connection {
+        endpoint: Endpoint { scheme: "", host: "", port: 0, authority: "", path: "" },
+        fd: -1,
+        buffer: List[byte](),
+        cursor: 0,
+        tls: List[client.Client](),
+        authorization: "",
+        credentials_allowed: false,
+        body_mode: 0,
+        body_left: 0,
+        body_close: false,
+    }
 }
 
 /// Close and invalidate this owned connection, including after a partial read.
@@ -292,4 +314,139 @@ pub fn request(
     body: List[byte],
 ) -> Response ! Errors {
     request_capped(mut c, method, target, service, body, 140000000)?
+}
+
+// vc23: streamed response bodies. A fetch response is read a pkt-line at a
+// time, never whole, so a pack of any size crosses the connection's one
+// reused 64 KiB buffer. Framing checks are those of receive above.
+
+/// A streamed response's metadata; its body is read with body_read.
+pub struct Streamed { status: int, content_type: str, location: str, basic: bool }
+
+// The largest Content-Length or chunk a streamed body accepts: any size a
+// signed 64-bit count holds (R-vc23-1: no whole-body cap).
+fn stream_cap() -> int { 4611686018427387903 }
+
+fn stream_head(mut c: Connection) -> Head ! Errors {
+    var info = 0
+    var h = head(headers(mut c)?, stream_cap())?
+    while h.status < 200 {
+        info = info + 1
+        if info > 8 { return limit }
+        h = head(headers(mut c)?, stream_cap())?
+    }
+    c.body_close = h.close
+    c.body_left = 0
+    if h.chunked {
+        c.body_mode = 2
+    } else if h.length >= 0 {
+        c.body_mode = 1
+        c.body_left = h.length
+    } else {
+        if c.tls.len == 1 { return Unsupported("HTTPS close-delimited body (wolf-std#133)") }
+        c.body_mode = 3
+    }
+    h
+}
+
+/// At most max (1..65536) bytes of the current body; empty at its end.
+pub fn body_read(mut c: Connection, max: int) -> List[byte] ! Errors {
+    var out = List[byte]()
+    if max < 1 || max > 65536 { return invalid }
+    if c.body_mode == 2 && c.body_left == 0 {
+        let size_line = line(mut c)?
+        let text = str_from_utf8(size_line) else |_| { return invalid }
+        let size = chunk_size(text, stream_cap())?
+        if size == 0 {
+            trailers(headers(mut c)?)?
+            c.body_mode = 0
+            return out
+        }
+        c.body_left = size
+    }
+    if c.body_mode == 1 && c.body_left == 0 { c.body_mode = 0 }
+    if c.body_mode == 0 { return out }
+    if !refill(mut c)? {
+        if c.body_mode == 3 { c.body_mode = 0; return out }
+        return truncated
+    }
+    let available = c.buffer.len - c.cursor
+    var amount = if max < available then max else available
+    if c.body_mode != 3 && c.body_left < amount { amount = c.body_left }
+    for i in c.cursor..c.cursor + amount { (mut out).push(c.buffer[i]) }
+    c.cursor = c.cursor + amount
+    if c.body_mode != 3 { c.body_left = c.body_left - amount }
+    if c.body_mode == 2 && c.body_left == 0 {
+        if octet(mut c)? != 13 as byte || octet(mut c)? != 10 as byte { return invalid }
+    }
+    out
+}
+
+/// Exactly count bytes of the current body (a pkt-line's header or payload).
+pub fn body_take(mut c: Connection, count: int) -> List[byte] ! Errors {
+    var out = List[byte]()
+    if count < 0 || count > 65536 { return limit }
+    while out.len < count {
+        region part {
+            let more = body_read(mut c, count - out.len)?
+            if more.len == 0 { return truncated }
+            for b in more { (mut out).push(b) }
+        }
+    }
+    out
+}
+
+/// After a streamed body: every byte consumed, nothing pipelined behind it,
+/// and a closing response's connection closed.
+pub fn body_end(mut c: Connection) -> () ! Errors {
+    if c.body_mode != 0 { return Unsupported("HTTP body not consumed") }
+    if c.cursor != c.buffer.len { return Unsupported("HTTP trailing response bytes") }
+    if c.body_close { close(mut c) }
+}
+
+fn drain(mut c: Connection, cap: int) -> () ! Errors {
+    var total = 0
+    loop {
+        var more = 0
+        region part {
+            more = body_read(mut c, 65536)?.len
+        }
+        if more == 0 { return }
+        total = total + more
+        if total > cap { return limit }
+    }
+}
+
+/// Send one request and read its status line and headers; the body streams
+/// through body_read. The single explicit 401 challenge is answered as
+/// request_capped answers it (its small body drained first). Failure closes.
+pub fn request_streamed(
+    mut c: Connection,
+    method: str,
+    target: str,
+    service: str,
+    body: List[byte],
+) -> Streamed ! Errors {
+    if c.fd < 0 { dial(mut c)? }
+    var complete = false
+    defer { if !complete { close(mut c) } }
+    send_request(mut c, method, target, service, body)?
+    var h = stream_head(mut c)?
+    if h.status == 401 && c.authorization == "" {
+        if !c.credentials_allowed { return Unsupported("HTTP cross-origin authentication refused") }
+        if !h.basic { return Unsupported("HTTP authentication scheme") }
+        drain(mut c, 1048576)?
+        body_end(mut c)?
+        c.authorization = credentials()?
+        if c.fd < 0 { dial(mut c)? }
+        send_request(mut c, method, target, service, body)?
+        h = stream_head(mut c)?
+    }
+    complete = true
+    Streamed {
+        status: h.status,
+        content_type: h.content_type,
+        location: h.location,
+        basic: h.basic,
+    }
 }
