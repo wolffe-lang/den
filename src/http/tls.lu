@@ -54,17 +54,33 @@ fn secure(fd: int, host: str) -> client.Client ! Errors {
     client.complete(take pending) else |e| { return Unsupported("TLS {e}") }
 }
 
-fn read_secure(mut c: Connection) -> List[byte] ! Errors {
-    var tls = copy c.tls[0]
-    loop {
-        let data = client.read(mut tls) else |e| match e {
-            closed => { c.tls[0] = tls; return List[byte]() },
-            _ => { return Unsupported("TLS {e}") },
+/// One TLS application-data read appended to the connection's own buffer.
+/// The record, its plaintext and every temporary of client.read live in
+/// this read's scratch region and die with it (wolf s255,
+/// [mem.region.outer-write]); only plaintext bytes and a copy of the small
+/// cipher state reach the long-lived connection. 0 is data or the peer's
+/// close; otherwise a read_code naming the client's refusal.
+fn fill_secure(mut c: Connection) -> int {
+    var code = -1
+    region scratch {
+        var tls = copy c.tls[0]
+        while code == -1 {
+            let data = client.read(mut tls) else |e| match e {
+                closed => { code = 0; List[byte]() },
+                timeout => { code = 1; List[byte]() },
+                bad_record_mac => { code = 2; List[byte]() },
+                decode_error => { code = 3; List[byte]() },
+                unexpected_message => { code = 4; List[byte]() },
+                io => { code = 5; List[byte]() },
+            }
+            if data.len > 0 {
+                for b in data { (mut c.buffer).push(b) }
+                code = 0
+            }
         }
-        if data.len == 0 { continue }
-        c.tls[0] = tls
-        return data
+        c.tls[0] = copy tls
     }
+    code
 }
 
 fn write_bytes(mut c: Connection, data: List[byte]) -> () ! Errors {

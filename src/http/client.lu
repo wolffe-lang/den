@@ -25,7 +25,7 @@ fn dial(mut c: Connection) -> () ! Errors {
     var ready = false
     defer { if !ready { close(mut c) } }
     if c.endpoint.scheme == "https" { c.tls = [secure(c.fd, c.endpoint.host)?] }
-    c.buffer = List[byte]()
+    (mut c.buffer).reset()
     c.cursor = 0
     ready = true
 }
@@ -46,22 +46,41 @@ pub fn close(mut c: Connection) {
         c.fd = -1
     }
     c.tls = List[client.Client]()
-    c.buffer = List[byte]()
+    (mut c.buffer).reset()
     c.cursor = 0
 }
 
+/// One socket read appended to the connection's own buffer, its temporary
+/// dying with the read's scratch region (see fill_secure).
+fn fill_plain(mut c: Connection) -> int {
+    var code = 0
+    region scratch {
+        let data = net_read_bytes(c.fd, 65536) else |e| match e {
+            closed => List[byte](),
+            timeout => { code = 1; List[byte]() },
+            _ => { code = 5; List[byte]() },
+        }
+        for b in data { (mut c.buffer).push(b) }
+    }
+    code
+}
+
+/// Refill the one long-lived read buffer: reset and refilled, never
+/// replaced, since a replaced List keeps its old buffer until the
+/// connection's region ends.
 fn refill(mut c: Connection) -> bool ! Errors {
     if c.cursor < c.buffer.len { return true }
-    if c.tls.len == 1 {
-        c.buffer = read_secure(mut c)?
-    } else {
-        c.buffer = net_read_bytes(c.fd, 65536) else |e| match e {
-            closed => List[byte](),
-            timeout => { return Unsupported("HTTP read timeout") },
-            _ => { return io },
-        }
-    }
+    (mut c.buffer).reset()
     c.cursor = 0
+    let secure = c.tls.len == 1
+    let code = if secure then fill_secure(mut c) else fill_plain(mut c)
+    if code == 1 && !secure { return Unsupported("HTTP read timeout") }
+    if code == 5 && !secure { return io }
+    if code == 1 { return Unsupported("TLS timeout") }
+    if code == 2 { return Unsupported("TLS bad_record_mac") }
+    if code == 3 { return Unsupported("TLS decode_error") }
+    if code == 4 { return Unsupported("TLS unexpected_message") }
+    if code == 5 { return Unsupported("TLS io") }
     c.buffer.len > 0
 }
 
@@ -110,7 +129,8 @@ fn body_exact(mut c: Connection, mut out: List[byte], count: int, cap: int) -> (
         if !refill(mut c)? { return truncated }
         let available = c.buffer.len - c.cursor
         let amount = if left < available then left else available
-        append(mut out, c.buffer[c.cursor..c.cursor + amount])
+        // By index: a slice would be one more copy held for the request.
+        for i in c.cursor..c.cursor + amount { (mut out).push(c.buffer[i]) }
         c.cursor = c.cursor + amount
         left = left - amount
     }
