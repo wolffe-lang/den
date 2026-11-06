@@ -450,7 +450,8 @@ NUL, ordered-parent and tag/tree observations. `tools/history-test.py` construct
 raw commits independently through the pinned executable, including tied/skewed
 DAG clocks, without loading any Git implementation source. Native/release
 results bind complete stdout/stderr/status and immutable repository/worktree
-state. Non-ASCII tab widths and combined merge diffs are refused, not guessed.
+state. Non-ASCII tab widths are refused, not guessed; combined merge diffs
+followed in vc18 (`src/diff/combined.lu`).
 
 ## Refs and branch transitions (vc06)
 

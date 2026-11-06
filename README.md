@@ -8,7 +8,7 @@ keeps what it has.
 This is not a replacement for Git; M2, M3, M4 and M5 remain incomplete. Log/show support
 bounded loose or packed history; branches, tags, branch switching and resets share
 loose/packed ref storage. Merge, single-commit revert, cherry-pick and linear
-rebase cover the measured subsets below. Combined merge display, full replay
+rebase cover the measured subsets below. Full replay
 semantics, gc policy and wider transport policies remain unfinished. Text diff has
 two recorded equal-cost alignment differences; binary patches reconstruct the
 exact blobs but do not always use Git's byte representation. `den --version`
@@ -233,8 +233,11 @@ History caps each object at 16 MiB, discovered commit data and rendered output
 at 128 MiB, and the CLI walk at 10,000 commits. The public walker accepts an
 explicit node budget. It is a bounded whole-history reader, not a streaming walk.
 
-Default `log -p` omits merge patches as Git does. Combined merge `show` is a
-named refusal; `show -s` renders its ordered parents and message. Show-specific
+Default `log -p` omits merge patches as Git does. `show` of a merge prints the
+dense combined diff (`--cc`, the default) or `-c`, with `-U<n>`; `show -s`
+renders its ordered parents and message. Combined `--stat`, other pretty formats,
+`--binary`, attributes, `-m`, `--diff-merges`, `--combined-all-paths`,
+`--remerge-diff` and `log -c`/`--cc` stay named refusals. Show-specific
 revision limiting, show ranges, history path simplification, graph/topological order,
 custom formats, relative/human dates, non-UTC local zones, message transcoding,
 mailmaps and tabs after non-ASCII text remain named unsupported surfaces.
@@ -278,8 +281,8 @@ refusals. Recursive virtual bases for criss-cross histories, rename topology,
 modify/delete and binary conflicts, nonregular tree entries, unborn merges,
 annotated-tag messages and dirty/staged true-merge recovery are also refused.
 Fast-forward dirty/untracked safety remains measured. `revert -m`, sequences,
-`--continue`/`--skip` and revert abort are not implemented. Merge editor execution,
-combined merge show and the previously named history limits remain open.
+`--continue`/`--skip` and revert abort are not implemented. Merge editor execution
+and the previously named history limits remain open.
 
 The replay gate compares **96 exact complete-state scenarios** and **20 named
 scope captures** on each native/release tier, including multi-process resolution

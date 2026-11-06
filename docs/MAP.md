@@ -4,7 +4,7 @@ The codec, owned OIDs, bounded loose/packed store and binary parsers underpin th
 index/worktree/commit interface and diff. The dispatcher routes the implemented
 porcelain, plumbing, diff, bounded log/show, ref commands, merge/revert, replay,
 blame, stash, notes, bounded pack commands and the explicit wire commands.
-Combined merge show, recursive/complex merges, full replay semantics, gc policy and wider transport policies
+Recursive/complex merges, full replay semantics, gc policy and wider transport policies
 remain separate work; M2, M3, M4 and M5 are not complete. Diff's known hunk
 alignment differences and binary representation exceptions are explicit below,
 not a blanket byte-parity claim.
@@ -1124,7 +1124,7 @@ scope rows separately from exact comparisons. A foreign index lock and dirty
 worktree are present throughout. The two named hunk witnesses and capture-bound
 binary representation policy remain unchanged and are not history parity.
 
-Remaining M2 surfaces: combined merge show, show revision limiting, history
+Remaining M2 surfaces: show revision limiting, history
 path simplification, graph/topological order, custom pretty formats,
 relative/human dates and non-UTC local zones. ASCII tab rendering is supported;
 non-ASCII prefixes before tabs require a future display-width surface. Revision grammar is shared below; these remaining display/path limits do not
@@ -1365,7 +1365,7 @@ is the distinct diff interpretation, requiring one best base for three-dot.
 | Consumer | Objects and selectors | Commit sets |
 |---|---|---|
 | log | Shared atoms; commit-ish prefix preference | Multiple inclusions, `^REV`, two-/three-dot; count/skip after exclusion |
-| show | Each explicit operand is one shared atom, including literal paths | Named refusal; show limiting/combined display remain separate |
+| show | Each explicit operand is one shared atom, including literal paths | Named refusal; show limiting remains separate (combined merge display: vc18) |
 | diff CLI | Shared atoms; normalized endpoint pairs | Standalone dotted endpoints only; mixed range operands and multiple bases refuse |
 | branch/tag/reset/switch/branch checkout | Shared single-object resolution; previous-checkout branch spelling where applicable | Named refusal; switch's branch-only mode retains its branch restriction |
 | restore --source | Shared tree-ish atom | Named refusal; explicit path operands remain the worktree layer |
