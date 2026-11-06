@@ -758,3 +758,44 @@ kasumi's ordinary sshd does not accept GIT_PROTOCOL. No sshd/key configuration
 was changed and no protocol-v0 fallback was implemented. Full raw results,
 canonical object checks and exact-input-bound service stderr review remain
 separate from logical typed-policy parity. No VCS implementation source was read.
+
+## Smart HTTP transport references (vc22)
+
+Git 2.56.0 documentation, read as published text:
+
+- `gitprotocol-http(5)`: URL Format, Authentication, Session State, General
+  Request Processing, Smart Clients (the `info/refs?service=` discovery, the
+  first-pkt-line check, the `# service=` banner and its flush), Smart Service
+  git-upload-pack and Smart Service git-receive-pack.
+- `gitprotocol-v2(5)`: HTTP transport (the `Git-Protocol: version=2` header,
+  stateless requests), capability advertisement, `ls-refs`, `fetch`, and the
+  response-end packet.
+- `gitprotocol-common(5)`: pkt-line, the optional LF, and flush, delimiter and
+  response-end packets.
+- `gitprotocol-pack(5)`: push requests, report-status and side-band-64k.
+- `git-clone(1)`, `git-fetch(1)`, `git-push(1)`: description and transport
+  options; `git-http-backend(1)`: services, `http.receivepack` and the CGI
+  environment; `git-config(1)`: `http.*`, `credential.helper` and `remote.*.url`.
+
+Specifications:
+
+- RFC 9110: origins, userinfo, redirection, authentication challenges, status
+  codes and content types.
+- RFC 9112: message, request and status-line framing, field syntax and obs-fold,
+  Content-Length precedence, chunked transfer coding with extensions and trailers,
+  incomplete messages and persistence.
+- RFC 7617: the Basic scheme, user-pass encoding and control-character refusal.
+- RFC 3986: authority, path, query, fragment, percent-encoding and relative
+  references.
+- RFC 7468: the PEM certificate form, decoded by the live rows' harness to the
+  DER bundle den reads.
+- RFC 5280: UTCTime through 2049, used for the not-yet-valid fixture.
+
+Organisation-owned code read: wolf-std `d4a4d4c` (`std/x/tls/client`,
+`std/x/tls/cert`, `std/net`, `std/fs`, and its public-PKI note), and wolf's
+memory-region note for `[mem.region.outer-write]`.
+
+Black boxes: the pinned Git 2.56.0 and its `git-http-backend`, and OpenSSL
+3.0.13 (`s_server`, `req`, `x509`, `ca`) from the oracle container, each
+checked by digest before use. github.com is reached only by the live rows.
+No Git, libcurl, HTTP-library or TLS-library implementation source was read.
