@@ -1,5 +1,27 @@
 # Changes
 
+## Unreleased — smart HTTP
+
+- Clone, fetch and push over smart HTTP and HTTPS: `info/refs` discovery,
+  protocol v2 `ls-refs` and `fetch` POSTs, receive-pack push with the status
+  report, leases, atomic pushes and side-band-64k. Accept discovery as direct
+  v2 or as the matching `# service=` banner, flush and v2; refuse the dumb
+  protocol, v0/v1 advertisements and mismatched banners by name.
+- A bounded HTTP/1.1 client: Content-Length and chunked bodies, trailers,
+  informational responses, persistent connections and named caps on header
+  lines, blocks, fields and bodies. Each read's buffers and TLS records are
+  freed when the read ends, so a body peaks at about three times its size.
+- HTTPS over the standard library's public-PKI TLS client, pinned at wolf-std
+  `d4a4d4c`: roots from `--tls-roots=PATH` or `DEN_TLS_ROOTS` (concatenated
+  DER), host entropy, the UTC clock, SNI and name checks. No insecure mode;
+  plain `http://` only for literal loopback addresses.
+- Basic authentication from `DEN_HTTP_USER`/`DEN_HTTP_TOKEN` or a no-echo
+  prompt, bound to the original origin; `credential.helper` and other `http.*`
+  settings refused. Discovery follows up to five same-scheme redirects.
+- A failed clone removes the directory it created, as Git does.
+- `tools/check-http` joins the gate after the wire gate, with live github.com
+  rows that SKIP by name without network.
+
 ## Unreleased — daily use
 
 - Plan remaining generated inputs before pruning, with a red-first runner
