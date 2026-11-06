@@ -358,10 +358,12 @@ struct PendingTree { path: List[byte], id: oid.Oid, ancestors: List[oid.Oid] }
 
 /// Flatten a tree/commit/tag into unsigned full-path order, retaining raw names.
 /// Detect cycles and reject .git entries before any consumer can reach disk.
+/// One pack session serves every tree of the walk; one stable sort orders it.
 pub fn flatten_tree(repo: repository.Repo, id: oid.Oid) -> List[FlatEntry] ! WorkErrors {
     var pending = [
         PendingTree { path: List[byte](), id: tree_id(repo, id)?, ancestors: List[oid.Oid]() },
     ]
+    var reader = object.reader(repo)
     var entries = List[FlatEntry]()
     while pending.len > 0 {
         let next = (mut pending).pop() else |_| { return invalid_tree }
@@ -369,7 +371,7 @@ pub fn flatten_tree(repo: repository.Repo, id: oid.Oid) -> List[FlatEntry] ! Wor
         var ancestors = copy next.ancestors
         (mut ancestors).push(copy next.id)
         if ancestors.len > 1024 { return limit }
-        let stored = object.read_object(repo, next.id, 1000000000)?
+        let stored = object.read_with(mut reader, next.id, 1000000000)?
         if stored.kind != "tree" { return invalid_tree }
         let children = object.parse_tree(stored.data, "sha1")?
         for child in children {
@@ -384,31 +386,94 @@ pub fn flatten_tree(repo: repository.Repo, id: oid.Oid) -> List[FlatEntry] ! Wor
                     ancestors: copy ancestors,
                 })
             } else {
-                let entry = FlatEntry { path: path, mode: child.mode, id: copy child.id }
-                (mut entries).push(copy entry)
-                var pos = entries.len - 1
-                while pos > 0 && compare(entries[pos - 1].path, entry.path) > 0 {
-                    entries[pos] = copy entries[pos - 1]
-                    pos -= 1
-                }
-                entries[pos] = entry
+                (mut entries).push(FlatEntry { path: path, mode: child.mode, id: copy child.id })
             }
         }
     }
-    entries
+    var paths = List[List[byte]]()
+    for entry in entries { (mut paths).push(copy entry.path) }
+    var sorted = List[FlatEntry]()
+    for i in path_order(paths) { (mut sorted).push(copy entries[i]) }
+    sorted
+}
+
+/// Stable bottom-up merge sort of positions by unsigned path order: the
+/// order the former per-insert insertion sorts produced, in O(n log n).
+fn path_order(paths: List[List[byte]]) -> List[int] {
+    var order = List[int]()
+    for i in 0..paths.len { (mut order).push(i) }
+    var scratch = copy order
+    var width = 1
+    while width < order.len {
+        var lo = 0
+        while lo < order.len {
+            let mid = if lo + width < order.len then lo + width else order.len
+            let hi = if lo + 2 * width < order.len then lo + 2 * width else order.len
+            var i = lo, j = mid, k = lo
+            while i < mid && j < hi {
+                if compare(paths[order[j]], paths[order[i]]) < 0 {
+                    scratch[k] = order[j]
+                    j += 1
+                } else {
+                    scratch[k] = order[i]
+                    i += 1
+                }
+                k += 1
+            }
+            while i < mid { scratch[k] = order[i]; i += 1; k += 1 }
+            while j < hi { scratch[k] = order[j]; j += 1; k += 1 }
+            lo = hi
+        }
+        order = copy scratch
+        width *= 2
+    }
+    order
+}
+
+// Lookups over path-sorted lists (the index is validated in path/stage order;
+// flattened trees and walked files are sorted by path_order): the first
+// position whose path equals path, as the former linear scans answered.
+fn index_lower(entries: List[index.Entry], path: List[byte]) -> int {
+    var lo = 0, hi = entries.len
+    while lo < hi {
+        let mid = (lo + hi) / 2
+        if compare(entries[mid].path, path) < 0 { lo = mid + 1 } else { hi = mid }
+    }
+    lo
 }
 
 fn index_at(entries: List[index.Entry], path: List[byte]) -> int {
-    for i in 0..entries.len { if compare(entries[i].path, path) == 0 { return i } }
+    let at = index_lower(entries, path)
+    if at < entries.len && compare(entries[at].path, path) == 0 { return at }
     -1
 }
 
+/// Whether any index entry is path itself or lies beneath it.
+fn tracked_under(entries: List[index.Entry], path: List[byte]) -> bool {
+    if path.len == 0 { return entries.len > 0 }
+    if index_at(entries, path) >= 0 { return true }
+    var prefix = copy path
+    (mut prefix).push(47 as byte)
+    let at = index_lower(entries, prefix)
+    at < entries.len && under(entries[at].path, path)
+}
+
 fn flat_at(entries: List[FlatEntry], path: List[byte]) -> int {
-    for i in 0..entries.len { if compare(entries[i].path, path) == 0 { return i } }
+    var lo = 0, hi = entries.len
+    while lo < hi {
+        let mid = (lo + hi) / 2
+        if compare(entries[mid].path, path) < 0 { lo = mid + 1 } else { hi = mid }
+    }
+    if lo < entries.len && compare(entries[lo].path, path) == 0 { return lo }
     -1
 }
 
 fn file_at(entries: List[FileState], path: List[byte]) -> int {
-    for i in 0..entries.len { if compare(entries[i].path, path) == 0 { return i } }
+    var lo = 0, hi = entries.len
+    while lo < hi {
+        let mid = (lo + hi) / 2
+        if compare(entries[mid].path, path) < 0 { lo = mid + 1 } else { hi = mid }
+    }
+    if lo < entries.len && compare(entries[lo].path, path) == 0 { return lo }
     -1
 }
