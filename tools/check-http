@@ -1,0 +1,59 @@
+#!/bin/sh
+# vc22: smart HTTP. Pure units (native, release and the actual checked
+# machine), the raw-peer client, TLS against the pinned OpenSSL, one large
+# body's memory, redirects, Basic authentication, transport refusals,
+# discovery and RPC refusals with failed-clone cleanup, receive-pack
+# side-band, smart-git interop against the pinned git-http-backend over
+# plain and authenticated TLS, and the live github.com rows (a named SKIP
+# without network). Every output directory must be fresh.
+set -eu
+DEN_ROOT=$(cd "$(dirname "$0")/.." && pwd)
+export DEN_ROOT
+cd "$DEN_ROOT"
+. tools/lib-toolchain.sh
+step() {
+    label=$1
+    shift
+    set +e
+    "$@"
+    rc=$?
+    set -e
+    echo "END $label exit=$rc"
+    [ "$rc" = 0 ]
+}
+checked() {
+    program=$1
+    "$WOLF" conform-run "src/$program.lu" --checked --json > "target/$program-checked.json" || return $?
+    cat "target/$program-checked.json"
+    python3 -I - "target/$program-checked.json" <<'PY'
+import json,sys
+rows=[json.loads(x) for x in open(sys.argv[1]) if x.startswith('{')]
+assert len(rows)==1 and rows[0]['verdict']=='exit(0)', rows
+PY
+}
+mkdir -p target/runs
+for tier in native release; do
+    flag=
+    [ "$tier" != release ] || flag=--release
+    mkdir -p "target/$tier"
+    [ -x "target/$tier/den" ] || { echo "check-http: build target/$tier/den first (tools/build --all)" >&2; exit 1; }
+    step "$tier-http-unit-build" "$WOLF" build $flag --deny-warnings src/http_test.lu -o "target/$tier/http-test"
+    step "$tier-http-unit" "target/$tier/http-test"
+    step "$tier-http-advertisement-build" "$WOLF" build $flag --deny-warnings src/http_redirect_test.lu -o "target/$tier/http-redirect-test"
+    step "$tier-http-advertisement" "target/$tier/http-redirect-test"
+    step "$tier-http-client-build" "$WOLF" build $flag --deny-warnings probes/http-client/main.lu -o "target/$tier/http-client"
+    step "$tier-http-client-peers" python3 -I tools/http-client-test.py --client "target/$tier/http-client" --output "target/runs/http-client-$tier.json"
+    step "$tier-http-tls" python3 -I tools/http-tls-test.py --client "target/$tier/http-client" --output "target/runs/http-tls-$tier"
+    step "$tier-http-memory" python3 -I tools/http-memory-test.py --client "target/$tier/http-client" --output "target/runs/http-memory-$tier"
+    step "$tier-http-redirect" python3 -I tools/http-redirect-test.py "target/$tier/http-client" "target/runs/http-redirect-$tier"
+    step "$tier-http-auth" python3 -I tools/http-auth-test.py "target/$tier/http-client" "target/runs/http-auth-$tier"
+    step "$tier-http-refusals" tools/env python3 -I tools/http-refusal-test.py "target/$tier/den" "target/runs/http-refusals-$tier"
+    step "$tier-http-discovery" tools/env python3 -I tools/http-discovery-test.py "target/$tier/den" "target/runs/http-discovery-$tier"
+    step "$tier-http-sideband" tools/env python3 -I tools/http-sideband-test.py "$tier"
+    step "$tier-http-plain-git" tools/env python3 -I tools/http-git-test.py --tier "$tier" --transport plain
+    step "$tier-http-tls-git" tools/env python3 -I tools/http-git-test.py --tier "$tier" --transport tls --auth
+    step "$tier-http-live" tools/env python3 -I tools/http-live-test.py --tier "$tier"
+done
+step actual-checked-http checked http_test
+step actual-checked-http-advertisement checked http_redirect_test
+echo 'http: native/release units, peers, TLS, memory, refusals, smart-git interop and live rows; checked units'
