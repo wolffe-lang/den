@@ -56,6 +56,7 @@ Clean room: git's documentation, the RFCs, and the pinned Git and OpenSSL run as
 - `819db8a`, `0a8da97` the planner's smart-HTTP gate assertion, then the gate wiring.
 - `5abe6ab`, `3b208b3`, `772af53`, `28639d3` hostile peer, policy and certificate rows.
 - `3577148` formatting with the pinned compiler; then the README, MAP, SOURCES and CHANGELOG.
+- `1f7a72e`, `a5b774e`, `8e47a1e`, `5110cf7`, `b28fa76` the ssh program word (R-bw03-7): the argv as a pure function, the unit and recording-ssh rows red, a plain word sent bare, then formatting.
 
 ### Rows (`tools/check-http`, native and release unless marked)
 
@@ -96,6 +97,19 @@ The 6 GiB peak was the light container's cap, so den was near an out-of-memory k
 
 den and the pinned Git cloned the same public repository at the same ref (284 objects), with identical refs, HEAD, reachable canonical objects, worktree and remote configuration; Git's `fsck --full` and `status` are clean on den's clone. At `3ca92a3`: den 7.27 s and 85,252 KiB in release, 10.22 s and 86,356 KiB natively; Git 0.50–0.55 s and about 38,000 KiB. Later reads of the same repository (480 objects, as it grew) took den 8–69 s, against Git's 0.5 s. A TCP relay timeline (encrypted byte counts only) put the whole exchange, discovery, `ls-refs` and the pack, on one reused connection, done at 1.63 s. den then sat for about 9 s, with about 0.3 s of CPU, before its TLS close: local I/O wait in the fetch import every transport shares, not HTTP. den#62 tracks it.
 
+### The ssh program word (R-bw03-7)
+
+A live row against GitHub found den sending `'git-receive-pack' 'owner/repo.git'`. A POSIX shell accepts that, but GitHub's ssh service parses the command itself and refuses it (`Invalid command`, exit 128 after a successful key login). The pinned Git, run with a recording `ssh` through `GIT_SSH`, sends one remote-command word: the program bare and the path single-quoted, `git-upload-pack '/srv/a b'\''c.git'`, with overrides inserted raw.
+
+den now sends a plain program word (letters, digits and `._/+-`) bare and quotes any other as a literal executable; the path stays quoted. This covers `upload-pack`, `receive-pack` and their `--upload-pack=`/`--receive-pack=` overrides. Sources: `gitprotocol-pack(5)` (ssh transport) and `git-shell(1)` (the commands it accepts), and the black-box argv; no Git source.
+
+| row | at `8e47a1e` | at `b28fa76` |
+|---|---|---|
+| `ssh-command-*` units, native, release and checked | 5 red (`receive-plain`, `upload-plain`, `override-plain`, `plain-word-set`, `scp`), 4 non-plain guards green; checked `exit(1)` | 9/9 in both tiers; checked `exit(0)` |
+| `ssh-cli-*` against the pinned Git and `sh -c`, both tiers | 4 red (`clone-plain`, `clone-override-plain`, `push-plain`, `push-override-plain`), `clone-override-space` green | 5/5 in both tiers |
+
+`ssh-cli-*` also runs each command through `/bin/sh -c` with recording service programs: the far side receives the same argv for den's command as for the fully quoted form, so den's existing sshd rows see no difference. At `b28fa76`, `ssh-peer-scope` and every `tools/check-porcelain` step, including the format check, end with exit 0.
+
 ## Done-when
 
 - [x] Prediction first.
@@ -117,6 +131,7 @@ den and the pinned Git cloned the same public repository at the same ref (284 ob
 - **R-vc22-4 — applied:** discovery accepts direct v2 or exactly the matching banner, flush and v2. A mismatched banner, a missing flush, v0 (with or without the banner, including a NUL capability line) and v1 are refused by name. Lines are compared as bytes, not text, so a v0 capability line reads as "not v2" rather than malformed.
 - **R-vc22-5 — accepted, applied:** the over-limit refusal stays den's existing `den: wire: limit`, exit 2; the row bounds it at 600 s and 1 GiB peak RSS, and the shared limits are not relaxed. Each read runs in its own region and appends to one long-lived buffer. Options: (A) as built; (B) stream bodies to the pack parser instead of buffering whole responses, a larger change touching every transport. A was accepted; streaming bodies is den#61's.
 - **R-vc22-6 — accepted, applied:** a failed clone removes the directory it created, for every transport, as the pinned Git does (measured black-box: a new directory is removed, an existing empty one kept). den already refuses an existing destination, so it never removes anything it did not create in that command. Options: (A) as built; (B) leave partial clones and file an issue. A was accepted. The cleanup is one small commit (`ec20219`), a `defer` around clone.
+- **R-bw03-7 = (a) — applied:** a plain program word goes bare, as Git sends it; any other is quoted; the path stays quoted. Red first (`a5b774e`, `8e47a1e`), then `5110cf7`.
 
 ### Remaining limits
 
