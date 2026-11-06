@@ -1,0 +1,671 @@
+// Received-pack indexing, the job git-index-pack(1) describes, from Git 2.56.0
+// gitformat-pack(5) (pack and idx v2, object entries, deltified
+// representation). The stream goes to an exclusive temporary under
+// objects/pack as it arrives and is never held in memory; entries are read
+// back by offset and inflated one at a time; deltas resolve depth-first from
+// disk with the bodies on the walk's path bounded. No implementation source.
+use std.fs
+use hash
+use oid
+use zlib
+
+/// R-vc23-2: the largest object den indexes, reads or resolves: 512 MiB,
+/// git-config(1)'s core.bigFileThreshold default.
+pub fn object_limit() -> int { 536870912 }
+
+/// The bodies a resolution path may hold before a subtree is revisited from
+/// its own reconstruction: 96 MiB, git-config(1)'s core.deltaBaseCacheLimit.
+fn base_window() -> int { 100663296 }
+
+/// The object count den indexes, the idx reader's own limit.
+fn count_limit() -> int { 400000 }
+
+/// A pack being received: an exclusive temporary under objects/pack and the
+/// bytes written to it so far. Close with received_index or receive_abort.
+pub struct Receiver { dir: str, path: str, fd: int, written: int }
+
+/// Create the temporary that a received pack streams into.
+pub fn receive_begin(gitdir: str) -> Receiver ! PackErrors {
+    let dir = "{gitdir}/objects/pack"
+    fs.create_dir_all(dir) else |_| { return io }
+    for serial in 0..1024 {
+        let path = "{dir}/tmp_pack_den_{serial}"
+        let file = fs.create_new_with_mode(path, 0o444) else |e| match e {
+            exists => { continue },
+            _ => { return Unsupported("pack temporary") },
+        }
+        return Receiver { dir: dir, path: path, fd: file.fd, written: 0 }
+    }
+    Unsupported("pack temporary")
+}
+
+/// Append received pack bytes. R-vc23-1: there is no whole-pack cap; a failed
+/// write (a full disk) refuses by name, and the caller removes the temporary.
+pub fn receive_write(mut r: Receiver, data: List[byte]) -> () ! PackErrors {
+    if r.fd < 0 { return Unsupported("pack receiver closed") }
+    fs_write_chunk(r.fd, data) else |_| { return Unsupported("pack write failed") }
+    r.written += data.len
+}
+
+/// Close and remove the temporary; safe to call on any failure path.
+pub fn receive_abort(mut r: Receiver) {
+    if r.fd >= 0 { fs_close(r.fd) else |_| {} }
+    r.fd = -1
+    if r.path != "" { fs.remove(r.path) else |_| {} }
+    r.path = ""
+}
+
+// Per-entry tables in pack order. kinds holds the entry type (1-4 whole, 6
+// OFS, 7 REF); types the resolved object type; bases the base slot (OFS from
+// the scan, REF once its base is named); refs the REF base names, 20 bytes a
+// slot; names the object names, 20 bytes a slot once resolved.
+struct Table {
+    offsets: List[int],
+    ends: List[int],
+    headers: List[int],
+    crcs: List[int],
+    kinds: List[int],
+    sizes: List[int],
+    targets: List[int],
+    bases: List[int],
+    depths: List[int],
+    types: List[int],
+    done: List[bool],
+    refs: List[byte],
+    names: List[byte],
+    child_start: List[int],
+    child_list: List[int],
+    ref_order: List[int],
+}
+
+/// An indexed received pack: its temporary, its trailer checksum, the idx
+/// bytes for it, and every object's name and type. Install or discard it.
+pub struct Indexed {
+    dir: str,
+    path: str,
+    sum: List[byte],
+    index: List[byte],
+    table: Table,
+    order: List[int],
+}
+
+fn empty_table() -> Table {
+    Table {
+        offsets: List[int](),
+        ends: List[int](),
+        headers: List[int](),
+        crcs: List[int](),
+        kinds: List[int](),
+        sizes: List[int](),
+        targets: List[int](),
+        bases: List[int](),
+        depths: List[int](),
+        types: List[int](),
+        done: List[bool](),
+        refs: List[byte](),
+        names: List[byte](),
+        child_start: List[int](),
+        child_list: List[int](),
+        ref_order: List[int](),
+    }
+}
+
+// Append count bytes of fd from start onto out, reading at most 1 MiB a call.
+fn append_range(fd: int, mut out: List[byte], start: int, count: int) -> () ! PackErrors {
+    var pos: int = 0
+    while pos < count {
+        region chunk {
+            let want = if count - pos > 1048576 then 1048576 else count - pos
+            let bytes = read_window(fd, start + pos, want)?
+            for b in bytes { (mut out).push(b) }
+            pos += bytes.len
+        }
+    }
+}
+
+fn kind_name(kind: int) -> str {
+    match kind {
+        1 => "commit",
+        2 => "tree",
+        3 => "blob",
+        _ => "tag",
+    }
+}
+
+// The object name of a body of the given type, pushed as 20 bytes at slot.
+fn name_body(mut t: Table, slot: int, kind: int, data: List[byte]) {
+    var digest = hash.new1()
+    hash.update1(mut digest, "{kind_name(kind)} {data.len}\0".bytes())
+    hash.update1(mut digest, data)
+    let sum = hash.final1(take digest)
+    for i in 0..20 { t.names[slot * 20 + i] = sum[i] }
+}
+
+// Compare the 20-byte name at slot in names with key[0..20].
+fn compare_name(names: List[byte], slot: int, key: List[byte], at: int) -> int {
+    for i in 0..20 {
+        let a = names[slot * 20 + i] as int, b = key[at + i] as int
+        if a != b { return if a < b then -1 else 1 }
+    }
+    0
+}
+
+/// The resolved object's name in hex.
+fn slot_hex(t: Table, slot: int) -> str ! PackErrors {
+    var raw = List[byte]()
+    for i in 0..20 { (mut raw).push(t.names[slot * 20 + i]) }
+    let id = oid.from_bytes("sha1", raw) else |_| { return Unsupported("pack object identity") }
+    oid.hex(id) else |_| { return Unsupported("pack object identity") }
+}
+
+// Pass 1: every entry's extent, CRC-32, type and size; whole objects named;
+// deltas' bases and declared target sizes recorded. The trailer is checked
+// against the SHA-1 of every byte before it.
+fn scan(path: str, mut t: Table) -> List[byte] ! PackErrors {
+    let fd = open_pack(path)?
+    defer fs_close(fd) else |_| {}
+    let size = file_size(fd)?
+    if size < 32 { return Unsupported("pack truncated") }
+    let head = range_bytes(fd, 0, 12)?
+    if !same(head[0..4], "PACK".bytes()) || be32(head, 4) != 2 {
+        return Unsupported("pack version (requires v2)")
+    }
+    let count = be32(head, 8)
+    if count > count_limit() { return Unsupported("pack object count limit") }
+    let table = crc32_table()
+    var digest = hash.new1()
+    hash.update1(mut digest, head)
+    let end = size - 20
+    var pos: int = 12
+    for slot in 0..count {
+        if pos >= end { return Unsupported("pack truncated") }
+        region entry {
+            pos += scan_entry(fd, mut t, mut digest, table, slot, pos, end)?
+        }
+    }
+    if pos != end { return Unsupported("pack trailing bytes") }
+    let trailer = range_bytes(fd, end, 20)?
+    let sum = hash.final1(take digest)
+    if !same(sum, trailer) { return Unsupported("pack checksum") }
+    if file_size(fd)? != size { return Unsupported("pack changed") }
+    sum
+}
+
+// One entry of pass 1 at pos: its extent, CRC-32 and SHA-1 contribution,
+// header fields and (for a whole object) its name. Returns its length.
+fn scan_entry(
+    fd: int,
+    mut t: Table,
+    mut digest: hash.Digest,
+    table: List[int],
+    slot: int,
+    pos: int,
+    end: int,
+) -> int ! PackErrors {
+    let peek = range_bytes(fd, pos, if end - pos < 32 then end - pos else 32)?
+    var b = peek[0] as int, at: int = 1, length: int = b & 15, scale: int = 16
+    let kind = b >> 4 & 7
+    while b >= 128 {
+        if at == peek.len { return Unsupported("pack entry header") }
+        b = peek[at] as int
+        at += 1
+        if b & 127 > (object_limit() - length) / scale {
+            return Unsupported("pack object size limit")
+        }
+        length += (b & 127) * scale
+        if b >= 128 {
+            if scale > object_limit() / 128 { return Unsupported("pack object size limit") }
+            scale *= 128
+        }
+    }
+    var base = -1
+    if kind == 6 {
+        if at == peek.len { return Unsupported("pack OFS_DELTA offset") }
+        b = peek[at] as int
+        at += 1
+        var distance: int = b & 127
+        while b >= 128 {
+            if at == peek.len || distance >= pos / 128 {
+                return Unsupported("pack OFS_DELTA offset")
+            }
+            b = peek[at] as int
+            at += 1
+            distance = (distance + 1) * 128 + (b & 127)
+        }
+        if distance <= 0 || distance > pos - 12 { return Unsupported("pack OFS_DELTA offset") }
+        base = offset_slot(t, pos - distance)
+        if base < 0 { return Unsupported("pack OFS_DELTA base boundary") }
+        for _ in 0..20 { (mut t.refs).push(0 as byte) }
+    } else if kind == 7 {
+        if peek.len - at < 20 { return Unsupported("pack REF_DELTA name") }
+        for i in 0..20 { (mut t.refs).push(peek[at + i]) }
+        at += 20
+    } else if kind < 1 || kind > 4 {
+        return Unsupported("pack object type")
+    } else {
+        for _ in 0..20 { (mut t.refs).push(0 as byte) }
+    }
+    // The window is sized from the declared size: deflate output for
+    // incompressible data stays well inside size + size / 16 + 64.
+    let room = end - pos
+    let guess = at + length + length / 16 + 64
+    var window = List[byte]()
+    (mut window).reserve(if guess < room then guess else room)
+    append_range(fd, mut window, pos, if guess < room then guess else room)?
+    var consumed: int = -1
+    var data = List[byte]()
+    while consumed < 0 {
+        let attempt = zlib.inflate_sized(window, at, length) else |e| match e {
+            truncated => {
+                if window.len >= room { return Unsupported("pack truncated") }
+                let more = if window.len < room - window.len then window.len else room - window.len
+                append_range(fd, mut window, pos + window.len, more)?
+                continue
+            },
+            _ => { return Unsupported("pack zlib {e}") },
+        }
+        consumed = attempt.consumed
+        data = attempt.data
+    }
+    if data.len != length { return Unsupported("pack entry size or trailing bytes") }
+    let span = at + consumed
+    hash.update1_prefix(mut digest, window, span)
+    (mut t.offsets).push(pos)
+    (mut t.ends).push(pos + span)
+    (mut t.headers).push(at)
+    (mut t.crcs).push(crc32_update(table, 0, window, span))
+    (mut t.kinds).push(kind)
+    (mut t.sizes).push(length)
+    (mut t.bases).push(base)
+    (mut t.depths).push(0)
+    for _ in 0..20 { (mut t.names).push(0 as byte) }
+    if kind < 5 {
+        (mut t.targets).push(length)
+        (mut t.types).push(kind)
+        (mut t.done).push(true)
+        name_body(mut t, slot, kind, data)
+    } else {
+        let target = delta_target_size(data) else |_| { return Unsupported("pack delta invalid") }
+        if target > object_limit() { return Unsupported("pack object size limit") }
+        (mut t.targets).push(target)
+        (mut t.types).push(0)
+        (mut t.done).push(false)
+    }
+    span
+}
+
+// The slot whose entry starts at offset (entries are in increasing offset).
+fn offset_slot(t: Table, offset: int) -> int {
+    var lo = 0, hi = t.offsets.len
+    while lo < hi {
+        let mid = (lo + hi) / 2
+        if t.offsets[mid] < offset { lo = mid + 1 } else { hi = mid }
+    }
+    if lo < t.offsets.len && t.offsets[lo] == offset { return lo }
+    -1
+}
+
+// Slots ordered by a 20-byte key list (bottom-up merge sort, stable).
+fn order_by(keys: List[byte], slots: List[int]) -> List[int] {
+    var order = copy slots
+    var scratch = copy slots
+    var width = 1
+    while width < order.len {
+        var lo = 0
+        while lo < order.len {
+            let mid = if lo + width < order.len then lo + width else order.len
+            let hi = if lo + 2 * width < order.len then lo + 2 * width else order.len
+            var i = lo, j = mid, k = lo
+            while i < mid && j < hi {
+                if compare_name(keys, order[j], keys, order[i] * 20) < 0 {
+                    scratch[k] = order[j]
+                    j += 1
+                } else {
+                    scratch[k] = order[i]
+                    i += 1
+                }
+                k += 1
+            }
+            while i < mid {
+                scratch[k] = order[i]
+                i += 1
+                k += 1
+            }
+            while j < hi {
+                scratch[k] = order[j]
+                j += 1
+                k += 1
+            }
+            lo = hi
+        }
+        for n in 0..order.len { order[n] = scratch[n] }
+        width *= 2
+    }
+    order
+}
+
+// OFS children as a compressed sparse row by base slot; REF deltas ordered
+// by their base name, for a binary search once each base is named.
+fn link(mut t: Table) {
+    let n = t.kinds.len
+    for _ in 0..n + 1 { (mut t.child_start).push(0) }
+    for slot in 0..n { if t.kinds[slot] == 6 { t.child_start[t.bases[slot] + 1] += 1 } }
+    for slot in 0..n { t.child_start[slot + 1] += t.child_start[slot] }
+    var fill = copy t.child_start
+    for _ in 0..t.child_start[n] { (mut t.child_list).push(0) }
+    for slot in 0..n {
+        if t.kinds[slot] == 6 {
+            let base = t.bases[slot]
+            t.child_list[fill[base]] = slot
+            fill[base] += 1
+        }
+    }
+    var refs = List[int]()
+    for slot in 0..n { if t.kinds[slot] == 7 { (mut refs).push(slot) } }
+    t.ref_order = order_by(t.refs, refs)
+}
+
+// The REF deltas whose base is slot's object, in ref_order.
+fn ref_children(t: Table, slot: int) -> List[int] {
+    var out = List[int]()
+    if t.ref_order.len == 0 { return out }
+    var lo = 0, hi = t.ref_order.len
+    while lo < hi {
+        let mid = (lo + hi) / 2
+        if compare_name(t.refs, t.ref_order[mid], t.names, slot * 20) < 0 {
+            lo = mid + 1
+        } else {
+            hi = mid
+        }
+    }
+    while lo < t.ref_order.len && compare_name(t.refs, t.ref_order[lo], t.names, slot * 20) == 0 {
+        (mut out).push(t.ref_order[lo])
+        lo += 1
+    }
+    out
+}
+
+fn children(t: Table, slot: int) -> List[int] {
+    var out = List[int]()
+    for i in t.child_start[slot]..t.child_start[slot + 1] { (mut out).push(t.child_list[i]) }
+    for child in ref_children(t, slot) { (mut out).push(child) }
+    out
+}
+
+// One entry's own data (an object or a delta), from its exact extent.
+fn entry_data(fd: int, t: Table, slot: int) -> List[byte] ! PackErrors {
+    var window = List[byte]()
+    let span = t.ends[slot] - t.offsets[slot]
+    (mut window).reserve(span)
+    append_range(fd, mut window, t.offsets[slot], span)?
+    let inflated = zlib.inflate_sized(window, t.headers[slot], t.sizes[slot]) else |e| {
+        return Unsupported("pack zlib {e}")
+    }
+    if inflated.data.len != t.sizes[slot] {
+        return Unsupported("pack entry size or trailing bytes")
+    }
+    inflated.data
+}
+
+// A resolved delta: named, typed, its base and depth recorded.
+fn settle(mut t: Table, slot: int, base: int, data: List[byte]) -> () ! PackErrors {
+    if data.len != t.targets[slot] { return Unsupported("pack delta invalid") }
+    t.bases[slot] = base
+    t.depths[slot] = t.depths[base] + 1
+    if t.depths[slot] > 64 { return Unsupported("pack delta depth limit") }
+    t.types[slot] = t.types[base]
+    name_body(mut t, slot, t.types[slot], data)
+    t.done[slot] = true
+}
+
+// Depth-first over slot's children with slot's body in hand. A child whose
+// body would carry the path past base_window waits in deferred, named but
+// with its own subtree unvisited.
+fn visit(
+    fd: int,
+    mut t: Table,
+    slot: int,
+    body: List[byte],
+    held: int,
+    mut deferred: List[int],
+) -> () ! PackErrors {
+    for child in children(t, slot) {
+        if t.done[child] { continue }
+        region step {
+            visit_child(fd, mut t, slot, body, held, child, mut deferred)?
+        }
+    }
+}
+
+fn visit_child(
+    fd: int,
+    mut t: Table,
+    slot: int,
+    body: List[byte],
+    held: int,
+    child: int,
+    mut deferred: List[int],
+) -> () ! PackErrors {
+    let delta = entry_data(fd, t, child)?
+    var out = List[byte]()
+    apply_delta_into(body, delta, object_limit(), mut out) else |e| {
+        return Unsupported("pack delta {e}")
+    }
+    settle(mut t, child, slot, out)?
+    if t.child_start[child + 1] > t.child_start[child] || ref_children(t, child).len > 0 {
+        if held + out.len <= base_window() {
+            visit(fd, mut t, child, out, held + out.len, mut deferred)?
+        } else {
+            (mut deferred).push(child)
+        }
+    }
+}
+
+// A body rebuilt from disk: at most its base, its delta and itself at once.
+fn rebuild(fd: int, t: Table, slot: int, depth: int) -> List[byte] ! PackErrors {
+    if depth > 64 { return Unsupported("pack delta depth limit") }
+    if t.kinds[slot] < 5 { return entry_data(fd, t, slot)? }
+    var out = List[byte]()
+    region step {
+        rebuild_into(fd, t, slot, depth, mut out)?
+    }
+    out
+}
+
+fn rebuild_into(fd: int, t: Table, slot: int, depth: int, mut out: List[byte]) -> () ! PackErrors {
+    let base = rebuild(fd, t, t.bases[slot], depth + 1)?
+    let delta = entry_data(fd, t, slot)?
+    apply_delta_into(base, delta, object_limit(), mut out) else |e| {
+        return Unsupported("pack delta {e}")
+    }
+}
+
+// Visit slot's subtree from a fresh body: a whole object's own data, or a
+// deferred delta rebuilt from disk.
+fn visit_from(fd: int, mut t: Table, slot: int, mut deferred: List[int]) -> () ! PackErrors {
+    let body = rebuild(fd, t, slot, 0)?
+    visit(fd, mut t, slot, body, body.len, mut deferred)?
+}
+
+// Pass 2: resolve every delta from the whole objects outward.
+fn resolve(path: str, mut t: Table) -> () ! PackErrors {
+    let fd = open_pack(path)?
+    defer fs_close(fd) else |_| {}
+    link(mut t)
+    var deferred = List[int]()
+    for slot in 0..t.kinds.len {
+        if t.kinds[slot] > 4 { continue }
+        if t.child_start[slot + 1] == t.child_start[slot] && ref_children(t, slot).len == 0 {
+            continue
+        }
+        region root {
+            visit_from(fd, mut t, slot, mut deferred)?
+        }
+    }
+    var next = 0
+    while next < deferred.len {
+        let slot = deferred[next]
+        next += 1
+        region again {
+            visit_from(fd, mut t, slot, mut deferred)?
+        }
+    }
+    for slot in 0..t.kinds.len {
+        if !t.done[slot] { return Unsupported("pack delta base missing") }
+    }
+}
+
+// gitformat-pack(5) idx v2: fanout, names, CRC-32s, offsets (31-bit, or an
+// index into the 64-bit table), the pack checksum and the idx checksum.
+fn idx_bytes(t: Table, order: List[int], sum: List[byte]) -> List[byte] {
+    var out = [255 as byte, 116 as byte, 79 as byte, 99 as byte]
+    put32(mut out, 2)
+    var count = 0
+    for bucket in 0..256 {
+        while count < order.len && t.names[order[count] * 20] as int <= bucket { count += 1 }
+        put32(mut out, count)
+    }
+    for slot in order { for i in 0..20 { (mut out).push(t.names[slot * 20 + i]) } }
+    for slot in order { put32(mut out, t.crcs[slot]) }
+    var large = List[int]()
+    for slot in order {
+        if t.offsets[slot] < 2147483648 {
+            put32(mut out, t.offsets[slot])
+        } else {
+            put32(mut out, 2147483648 + large.len)
+            (mut large).push(t.offsets[slot])
+        }
+    }
+    for offset in large {
+        put32(mut out, offset / 4294967296)
+        put32(mut out, offset % 4294967296)
+    }
+    for b in sum { (mut out).push(b) }
+    let check = hash.sum1(out)
+    for b in check { (mut out).push(b) }
+    out
+}
+
+/// Close the received temporary, verify and index it: every entry's CRC-32,
+/// the trailer, every object's name; deltas resolved. The idx is built in
+/// memory (28 bytes an object). On failure the caller aborts the receiver.
+pub fn received_index(mut r: Receiver) -> Indexed ! PackErrors {
+    if r.fd < 0 { return Unsupported("pack receiver closed") }
+    fs_sync(r.fd) else |_| { return Unsupported("pack write failed") }
+    fs_close(r.fd) else |_| { return Unsupported("pack write failed") }
+    r.fd = -1
+    var t = empty_table()
+    let sum = scan(r.path, mut t)?
+    resolve(r.path, mut t)?
+    var slots = List[int]()
+    for slot in 0..t.kinds.len { (mut slots).push(slot) }
+    let order = order_by(t.names, slots)
+    for i in 1..order.len {
+        if compare_name(t.names, order[i], t.names, order[i - 1] * 20) == 0 {
+            return Unsupported("pack duplicate object")
+        }
+    }
+    let index = idx_bytes(t, order, sum)
+    let path = copy r.path
+    r.path = ""
+    Indexed { dir: copy r.dir, path: path, sum: sum, index: index, table: t, order: order }
+}
+
+/// The number of objects in an indexed pack.
+pub fn received_count(ix: Indexed) -> int { ix.order.len }
+
+/// A named object's rank in an indexed pack's name order, or -1.
+pub fn received_rank(ix: Indexed, name: str) -> int ! PackErrors {
+    let id = oid.parse("sha1", name) else |_| { return Unsupported("pack object identity") }
+    var lo = 0, hi = ix.order.len
+    while lo < hi {
+        let mid = (lo + hi) / 2
+        if compare_name(ix.table.names, ix.order[mid], id.bytes, 0) < 0 {
+            lo = mid + 1
+        } else {
+            hi = mid
+        }
+    }
+    if lo < ix.order.len && compare_name(ix.table.names, ix.order[lo], id.bytes, 0) == 0 {
+        return lo
+    }
+    -1
+}
+
+/// The type of the object at a rank from received_rank.
+pub fn received_rank_kind(ix: Indexed, rank: int) -> str {
+    kind_name(ix.table.types[ix.order[rank]])
+}
+
+/// One object of an indexed pack rebuilt from the temporary (slot in pack
+/// order), for loose installation of a small fetch.
+pub fn received_body(ix: Indexed, slot: int) -> Body ! PackErrors {
+    if slot < 0 || slot >= ix.order.len || ix.path == "" {
+        return Unsupported("pack received slot")
+    }
+    let fd = open_pack(ix.path)?
+    defer fs_close(fd) else |_| {}
+    let data = rebuild(fd, ix.table, slot, 0)?
+    Body { kind: kind_name(ix.table.types[slot]), data: data }
+}
+
+/// Remove an indexed pack's temporary without installing it.
+pub fn received_discard(ix: Indexed) {
+    if ix.path != "" { fs.remove(ix.path) else |_| {} }
+}
+
+/// Publish the received pack as pack-<checksum>.pack, then its idx, both
+/// read-only, each synced before its rename and the directory after. An
+/// existing pair of the same name is kept and the temporaries removed.
+pub fn received_install(ix: Indexed) -> str ! PackErrors {
+    let id = oid.from_bytes("sha1", ix.sum) else |_| { return Unsupported("pack identity") }
+    let name = oid.hex(id) else |_| { return Unsupported("pack identity") }
+    let stem = "{ix.dir}/pack-{name}"
+    var idx_path = ""
+    for serial in 0..1024 {
+        let candidate = "{ix.dir}/tmp_idx_den_{serial}"
+        let file = fs.create_new_with_mode(candidate, 0o444) else |e| match e {
+            exists => { continue },
+            _ => { return Unsupported("pack temporary") },
+        }
+        idx_path = candidate
+        var written = false
+        defer { if !written { fs.remove(candidate) else |_| {} } }
+        fs_write_chunk(file.fd, ix.index) else |_| {
+            fs_close(file.fd) else |_| {}
+            return Unsupported("pack write failed")
+        }
+        fs_sync(file.fd) else |_| {
+            fs_close(file.fd) else |_| {}
+            return Unsupported("pack write failed")
+        }
+        fs_close(file.fd) else |_| { return Unsupported("pack write failed") }
+        written = true
+        break
+    }
+    if idx_path == "" { return Unsupported("pack temporary") }
+    var idx_owned = true
+    defer { if idx_owned { fs.remove(idx_path) else |_| {} } }
+    // The idx must read back through the unchanged reader before publication.
+    let check = load_index(idx_path)?
+    if check.entries.len != ix.order.len || !same(check.pack_sum, ix.sum) {
+        return Unsupported("pack index readback")
+    }
+    if fs.exists("{stem}.pack") {
+        if !fs.exists("{stem}.idx") {
+            fs.move_file(idx_path, "{stem}.idx") else |_| { return io }
+            idx_owned = false
+        }
+        fs.remove(ix.path) else |_| {}
+        fs.sync_dir(ix.dir) else |_| { return io }
+        return name
+    }
+    fs.move_file(ix.path, "{stem}.pack") else |_| { return io }
+    var published = false
+    defer { if !published { fs.remove("{stem}.pack") else |_| {} } }
+    fs.move_file(idx_path, "{stem}.idx") else |_| { return io }
+    idx_owned = false
+    published = true
+    fs.sync_dir(ix.dir) else |_| { return io }
+    name
+}
