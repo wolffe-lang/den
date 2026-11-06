@@ -24,6 +24,8 @@
   `--upload-pack=`/`--receive-pack=` value stays quoted as a literal executable.
 - `tools/check-http` joins the gate after the wire gate, with live github.com
   rows that SKIP by name without network.
+- Keep test PKI out of the uploaded evidence, and check at the end of both gates
+  that every uploaded file is readable by another user and holds no private key.
 
 ## Unreleased — daily use
 
