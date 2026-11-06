@@ -34,6 +34,12 @@ pub fn cached_trees(value: Index) -> List[oid.Oid] ! IndexErrors {
 /// so a valid root covers every entry, all at stage zero and none intent-to-add.
 pub fn cached_root(value: Index) -> List[oid.Oid] ! IndexErrors {
     validate_cache_spans(value)?
+    parsed_root(value)?
+}
+
+/// cached_root for an index that index.parse has just validated, spans
+/// included, so the span check is not repeated.
+pub fn parsed_root(value: Index) -> List[oid.Oid] ! IndexErrors {
     var out = List[oid.Oid]()
     for extension in value.extensions {
         if extension.signature != "TREE" { continue }

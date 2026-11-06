@@ -331,8 +331,10 @@ pub fn head(ctx: Context) -> Head ! WorkErrors {
 
 fn tree_id(repo: repository.Repo, id: oid.Oid) -> oid.Oid ! WorkErrors {
     var current = copy id
+    // One reader for the chain (commit or tag, then the tree): one idx parse.
+    var reader = object.reader(repo)
     for _ in 0..64 {
-        let stored = object.read_object(repo, current, 1000000000)?
+        let stored = object.read_with(mut reader, current, 1000000000)?
         if stored.kind == "tree" { return current }
         if stored.kind != "commit" && stored.kind != "tag" { return invalid_tree }
         let headers = if stored.kind == "commit" {

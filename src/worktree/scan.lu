@@ -138,11 +138,12 @@ fn hash_file(
     }
 }
 
-/// HEAD's flattened tree for status. When the index's valid cache-tree root
+/// HEAD's flattened tree for status (value straight from read_index). When the index's valid cache-tree root
 /// names HEAD's own tree, HEAD holds exactly the index's entries, so no tree
 /// object is read; otherwise the full walk.
 fn head_flat(ctx: Context, value: index.Index, commit: oid.Oid) -> List[FlatEntry] ! WorkErrors {
-    let root = index.cached_root(value)?
+    // status passes the index read_index just parsed and validated.
+    let root = index.parsed_root(value)?
     if root.len == 1 && oid.equal(root[0], tree_id(ctx.repo, commit)?) {
         var out = List[FlatEntry]()
         for entry in value.entries {
@@ -323,7 +324,8 @@ fn walk_mode(
                     mode: mode,
                     id: copy empty,
                     data: List[byte](),
-                    stat: copy info,
+                    // status renders paths and modes only; full walks keep the record.
+                    stat: if status then List[int]() else copy info,
                     kind: info[0],
                 }
                 if status && info[0] == 0 && at < 0 {
