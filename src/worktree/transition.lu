@@ -26,6 +26,40 @@ pub fn merge_check(ctx: Context, value: index.Index, target: List[FlatEntry]) ->
     transition_mode(ctx, mut scratch, target, "merge", true)?
 }
 
+// Install one target path (unless mixed) and return its index entry, stat
+// data refreshed from the written file when it matches the target.
+fn transition_path(
+    ctx: Context,
+    snapshot: Snapshot,
+    previous: index.Index,
+    at: int,
+    target: FlatEntry,
+    path: List[byte],
+    mode: str,
+) -> index.Entry ! WorkErrors {
+    let desired = copy target
+    var prior = List[index.Entry]()
+    if at >= 0 { (mut prior).push(copy previous.entries[at]) }
+    var entry = cached_entry(desired, prior)
+    if mode != "mixed" {
+        let disk = file_at(snapshot.files, path)
+        if disk < 0 ||
+            snapshot.files[disk].mode != desired.mode ||
+            !oid.equal(snapshot.files[disk].id, desired.id) {
+            install(ctx, desired)?
+        }
+    }
+    let file = read_file(ctx, path, [copy entry]) else |e| match e {
+        not_found => { return entry },
+        _ => { return Unsupported("tree transition unreadable path {text(path)?}: {e}") },
+    }
+    if file.mode == desired.mode && oid.equal(file.id, desired.id) {
+        entry = entry_for(file, [copy entry], add_options())?
+        entry.stat[6] = desired.mode
+    }
+    entry
+}
+
 fn transition_mode(
     ctx: Context,
     mut value: index.Index,
@@ -50,8 +84,12 @@ fn transition_mode(
     for entry in target {
         if entry.mode == 0o160000 { return Unsupported("submodule tree transition") }
         if !dry {
-            let data = object.read_object(ctx.repo, entry.id, 1000000000)?
-            if data.kind != "blob" { return bad_oid }
+            // One blob at a time (vc23): a clone's checkout holds one file's
+            // body, never the whole worktree's.
+            region verify {
+                let data = object.read_object(ctx.repo, entry.id, 1000000000)?
+                if data.kind != "blob" { return bad_oid }
+            }
         }
     }
     var paths = List[List[byte]]()
@@ -130,27 +168,11 @@ fn transition_mode(
             continue
         }
         if next < 0 { continue }
-        let desired = copy target[next]
-        var prior = List[index.Entry]()
-        if at >= 0 { (mut prior).push(copy previous.entries[at]) }
-        var entry = cached_entry(desired, prior)
-        if mode != "mixed" {
-            let disk = file_at(snapshot.files, path)
-            if disk < 0 ||
-                snapshot.files[disk].mode != desired.mode ||
-                !oid.equal(snapshot.files[disk].id, desired.id) {
-                install(ctx, desired)?
-            }
+        // Each path's blob, written file and read-back live in one region.
+        region one {
+            let entry = transition_path(ctx, snapshot, previous, at, target[next], path, mode)?
+            (mut entries).push(copy entry)
         }
-        let file = read_file(ctx, path, [copy entry]) else |e| match e {
-            not_found => { (mut entries).push(entry); continue },
-            _ => { return Unsupported("tree transition unreadable path {text(path)?}: {e}") },
-        }
-        if file.mode == desired.mode && oid.equal(file.id, desired.id) {
-            entry = entry_for(file, [copy entry], add_options())?
-            entry.stat[6] = desired.mode
-        }
-        (mut entries).push(entry)
     }
     // Preserve the index's unsigned pathname order independent of target order.
     for i in 1..entries.len {
