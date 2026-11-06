@@ -8,9 +8,9 @@ cd "$DEN_ROOT"
 . tools/lib-toolchain.sh
 tools/build --all
 for tier in native release; do
-    for family in upstream config merge descriptors; do
+    for family in upstream config merge combined descriptors; do
         tools/env python3 -I tools/everyday-test.py --tier "$tier" --family "$family"
     done
     tools/env python3 -I tools/local-path-test.py --tier "$tier"
 done
-echo 'everyday: native/release exact upstream/config/merge/descriptor rows; local paths exact or named; zero skips'
+echo 'everyday: native/release exact upstream/config/merge/combined/descriptor rows (combined fuzz rows inheriting a two-tree alignment are reviewed); local paths exact or named; zero skips'
