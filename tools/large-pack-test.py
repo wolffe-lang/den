@@ -283,8 +283,10 @@ def main():
         name = 'large-pack-' + label
         problems = []
         den_dir, git_dir = out / ('den-' + label), out / ('git-' + label)
-        candidate = run([den, 'clone', '-q', url, den_dir], out, name + '-den', extra=extra)
+        # Git first: the TLS fixture's terminator is one byte stream, and a
+        # client that stops reading early leaves the rest for the next one.
         oracle = run([git, 'clone', '-q', url, git_dir], out, name + '-git', extra=extra)
+        candidate = run([den, 'clone', '-q', url, den_dir], out, name + '-den', extra=extra)
         theirs = None
         if oracle['exit']:
             problems.append('pinned Git clone exit %d' % oracle['exit'])
