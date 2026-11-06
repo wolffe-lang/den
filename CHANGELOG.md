@@ -1,5 +1,32 @@
 # Changes
 
+## Unreleased — den clones itself
+
+- Clone and fetch stream the fetch response to a temporary under
+  `objects/pack` and index it there, as `git index-pack` does: no response,
+  HTTP body or pack is held in memory, so a pack of any size crosses the wire
+  (den#61). Deltas resolve depth-first from disk with the bodies on the walk's
+  path bounded at 96 MiB; peak memory follows the largest object, not the pack.
+- The whole-pack wire cap is gone (R-vc23-1); a failed write refuses by name
+  and removes the temporary. Objects cap at 512 MiB (R-vc23-2), refused by name
+  as `pack object size limit`, and the pack reader's per-object cap rises from
+  16 MiB to the same value, so a clone checks out what it indexed.
+- A clone keeps the received pack, as Git does, and so does a fetch of 100
+  objects or more; a smaller fetch becomes loose objects. The fetch asks for no
+  thin pack, so every installed pack is self-contained. A plain local path
+  clone loses its 128 MiB copy cap.
+- A checkout holds one file's body at a time.
+- `tools/large-pack-test.py` clones a pack over 128 MiB on every transport,
+  under a hard address-space cap, and refuses an object over the cap; the
+  live rows clone den's own repository and compare it with Git's.
+- The live push row keeps the fixture's URL off every child's argv, checked
+  against `/proc/<pid>/cmdline`: den reads a remote named in the environment,
+  and the server's own advertisement replaces `git ls-remote`.
+- The oracle runs its Git with `maintenance.autoDetach=false` and refuses an
+  invocation whose automatic maintenance detaches: the field leg's
+  intermittent commit rows were a snapshot catching the detached child's
+  `objects/maintenance.lock` (den#66). The pinned environment is unchanged.
+
 ## Unreleased — smart HTTP
 
 - Clone, fetch and push over smart HTTP and HTTPS: `info/refs` discovery,
