@@ -445,10 +445,20 @@ fn status_rows(
         }
     }
     var rows = List[StatusRow]()
+    // paths, tree, index entries and files are all in path order: one cursor
+    // each finds the first equal position, as index_at/flat_at/file_at did.
+    var ti = 0, ni = 0, fi = 0
     for path in paths {
-        let staged = index_at(value.entries, path)
-        let old = flat_at(tree, path)
-        let disk = file_at(files, path)
+        while ti < tree.len && compare(tree[ti].path, path) < 0 { ti += 1 }
+        while ni < value.entries.len && compare(value.entries[ni].path, path) < 0 { ni += 1 }
+        while fi < files.len && compare(files[fi].path, path) < 0 { fi += 1 }
+        let staged = if ni < value.entries.len && compare(value.entries[ni].path, path) == 0 {
+            ni
+        } else {
+            -1
+        }
+        let old = if ti < tree.len && compare(tree[ti].path, path) == 0 then ti else -1
+        let disk = if fi < files.len && compare(files[fi].path, path) == 0 then fi else -1
         if staged < 0 { (mut rows).push(status_row(path, "D", " ")); continue }
         let entry = copy value.entries[staged]
         if index.stage(entry) != 0 {
