@@ -369,12 +369,16 @@ def main():
             raise AssertionError('fixture command failed; see nonsecret capture ' + str(len(captures) - 1))
         return result
 
-    pki = out / 'pki'
+    # The fixture's keys stay out of target/runs, which CI uploads as evidence,
+    # and are removed when the row ends.
+    pki = root / 'target/pki' / out.name
     if args.transport == 'tls':
         for path, digest in OPENSSL_PINS.items():
             for _ in range(2):
                 assert hashlib.sha256(Path(path).read_bytes()).hexdigest() == digest, 'pinned TLS oracle digest'
-        pki.mkdir()
+        if pki.exists():
+            shutil.rmtree(pki)
+        pki.mkdir(parents=True)
         openssl = lambda *argv: run(['/usr/bin/openssl', *argv])
         openssl('req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-sha256', '-days', '2',
                 '-subj', '/CN=Smart HTTP fixture root', '-addext', 'basicConstraints=critical,CA:TRUE',
@@ -543,6 +547,7 @@ def main():
             raise AssertionError('non-parity rows: ' + ', '.join(failed))
     finally:
         server.close()
+        shutil.rmtree(pki, ignore_errors=True)
         write_json(out/'server.json', dict(requests=server.requests, backend=server.backend_results, errors=server.errors))
     if token:
         for path in out.rglob('*'):
