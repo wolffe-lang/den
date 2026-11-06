@@ -37,6 +37,7 @@ for tier in native release; do
     step "$tier-config-edit-unit" "target/$tier/config-edit-test"
     step "$tier-ssh-parser-build" "$WOLF" build $flag --deny-warnings src/ssh_test.lu -o "target/$tier/ssh-test"
     step "$tier-ssh-parser-unit" "target/$tier/ssh-test"
+    step "$tier-ssh-argv" tools/env python3 -I tools/ssh-argv-test.py "target/$tier/den" "target/runs/ssh-argv-$tier"
     step "$tier-porcelain-remotes" tools/env python3 -I tools/remote-test.py --tier "$tier"
     step "$tier-porcelain-typed-policy" tools/env python3 -I tools/wire-policy-test.py --tier "$tier" --receive-peer
     step "$tier-porcelain-configured" tools/env python3 -I tools/configured-wire-test.py --tier "$tier" --family all
