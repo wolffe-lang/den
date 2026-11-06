@@ -2,7 +2,7 @@
 use std.time
 use worktree
 
-fn measured(root: str, untracked: bool) -> () ! worktree.WorkErrors {
+fn measured(root: str, untracked: bool, full: bool) -> () ! worktree.WorkErrors {
     var start = time.monotonic_ns()
     let ctx = worktree.discover(root)?
     print("discover_ns={time.monotonic_ns() - start}")
@@ -17,20 +17,30 @@ fn measured(root: str, untracked: bool) -> () ! worktree.WorkErrors {
         let entries = worktree.flatten_tree(ctx.repo, head.commits[0])?
         print("tree_ns={time.monotonic_ns() - start} entries={entries.len}")
     }
-    // scan_index repeats head/tree itself. Its inclusive span is intentionally
-    // not added to the separate index/head/tree measurements above.
-    start = time.monotonic_ns()
+    // Each scan repeats index/head/tree itself; its inclusive span is not
+    // added to the separate measurements above.
     var warnings = List[str]()
-    let snapshot = worktree.scan_index_with_warnings(ctx, value, untracked, mut warnings)?
-    print("scan_inclusive_ns={time.monotonic_ns() - start} files={snapshot.files.len}")
+    if full {
+        start = time.monotonic_ns()
+        let snapshot = worktree.scan_index_with_warnings(ctx, value, untracked, mut warnings)?
+        print("full_scan_inclusive_ns={time.monotonic_ns() - start} files={snapshot.files.len}")
+    }
     start = time.monotonic_ns()
-    let bytes = worktree.render_status(snapshot, worktree.status_options(ctx)?)?
+    let status = worktree.scan_status(ctx, untracked, false, mut warnings)?
+    print("status_scan_inclusive_ns={time.monotonic_ns() - start} files={status.files.len} rows={status.rows.len}")
+    start = time.monotonic_ns()
+    let bytes = worktree.render_status(status, worktree.status_options(ctx)?)?
     print("render_ns={time.monotonic_ns() - start} bytes={bytes.len}")
 }
 
 fn main() -> int {
     let args = env_args()
-    if args.len < 1 { eprint("usage: status-phases ROOT [no-untracked]"); return 2 }
-    measured(args[0], args.len == 1) else |error| { eprint("phase failure: {error}"); return 1 }
+    if args.len < 1 { eprint("usage: status-phases ROOT [no-untracked] [full]"); return 2 }
+    var untracked = true, full = false
+    for i in 1..args.len {
+        if args[i] == "no-untracked" { untracked = false }
+        if args[i] == "full" { full = true }
+    }
+    measured(args[0], untracked, full) else |error| { eprint("phase failure: {error}"); return 1 }
     0
 }
