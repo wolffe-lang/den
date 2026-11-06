@@ -65,7 +65,7 @@ fn structure(fd: int, index: Index) -> int ! PackErrors {
         return Unsupported("pack version (requires v2)")
     }
     if be32(header, 8) != index.entries.len { return Unsupported("pack object count") }
-    if index.entries.len > 0 && (index.by_offset[12] else -1) == -1 {
+    if index.entries.len > 0 && slot_at(index, 12) == -1 {
         return Unsupported("pack index offsets")
     }
     if index.entries.len == 0 && size != 32 { return Unsupported("pack index offsets") }
@@ -125,10 +125,7 @@ fn unpack(
     let offset = index.entries[slot].offset
     if seen[offset] else false { return Unsupported("pack delta cycle") }
     seen[offset] = true
-    var next = end
-    for entry in index.entries {
-        if entry.offset > offset && entry.offset < next { next = entry.offset }
-    }
+    let next = next_offset(index, offset, end)
     let length = next - offset
     if length > 17000000 { return Unsupported("pack compressed entry size limit") }
     charge(mut total, length)?
@@ -163,7 +160,7 @@ fn unpack(
             distance = (distance + 1) * 128 + (b & 127)
         }
         if distance <= 0 || distance > offset - 12 { return Unsupported("pack OFS_DELTA offset") }
-        base_slot = index.by_offset[offset - distance] else -1
+        base_slot = slot_at(index, offset - distance)
         if base_slot < 0 { return Unsupported("pack OFS_DELTA base boundary") }
     } else if kind == 7 {
         if bytes.len - pos < 20 { return Unsupported("pack REF_DELTA name") }
@@ -171,7 +168,7 @@ fn unpack(
             return Unsupported("pack REF_DELTA name")
         }
         let name = oid.hex(id) else |_| { return Unsupported("pack REF_DELTA name") }
-        base_slot = index.by_name[name] else -1
+        base_slot = slot_named(index, name)
         if base_slot < 0 { return Unsupported("thin pack REF_DELTA base") }
         pos += 20
     } else if kind < 1 || kind > 4 {
@@ -258,7 +255,7 @@ pub fn read_object(gitdir: str, name: str, cap: int) -> Body ! PackErrors {
             let fd = open_pack("{path[0..path.len - 4]}.pack")?
             defer fs_close(fd) else |_| {}
             let end = bounds(fd, index)?
-            let slot = index.by_name[name] else -1
+            let slot = slot_named(index, name)
             if slot >= 0 {
                 var seen = Map[int, bool](), total: int = 0
                 let value = unpack(fd, end, index, slot, mut seen, mut total, 0)?
@@ -323,7 +320,7 @@ fn load_session(mut s: Session) -> () ! PackErrors {
 pub fn session_read(mut s: Session, name: str, cap: int) -> Body ! PackErrors {
     if !s.loaded { load_session(mut s)? }
     for i in 0..s.paths.len {
-        let slot = s.indexes[i].by_name[name] else -1
+        let slot = slot_named(s.indexes[i], name)
         if slot < 0 { continue }
         var result = Body { kind: "", data: List[byte]() }
         region candidate {

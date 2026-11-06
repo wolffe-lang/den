@@ -55,13 +55,13 @@ fn entry_meta(fd: int, end: int, index: Index, slot: int, depth: int) -> (
             pos += 1
             distance = (distance + 1) * 128 + (b & 127)
         }
-        base = index.by_offset[offset - distance] else -1
+        base = slot_at(index, offset - distance)
     } else if kind == 7 {
         if bytes.len - pos < 20 { return Unsupported("pack REF_DELTA name") }
         let id = oid.from_bytes("sha1", bytes[pos..pos + 20]) else |_| {
             return Unsupported("pack REF_DELTA name")
         }
-        base = index.by_name[oid.hex(id) else ""] else -1
+        base = slot_named(index, oid.hex(id) else "")
     }
     if kind == 6 || kind == 7 {
         if base < 0 { return Unsupported("thin pack REF_DELTA base") }

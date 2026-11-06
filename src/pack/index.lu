@@ -8,11 +8,84 @@ struct Entry {
     crc: int,
 }
 
+/// entries are in the idx's validated name order; by_offset holds the same
+/// slots in increasing offset order. Lookups are binary searches (the
+/// runtime Map is a linear scan, which made every idx parse quadratic).
 struct Index {
     entries: List[Entry],
-    by_offset: Map[int, int],
-    by_name: Map[str, int],
+    by_offset: List[int],
     pack_sum: List[byte],
+}
+
+/// The slot named name, or -1.
+fn slot_named(index: Index, name: str) -> int {
+    var lo = 0, hi = index.entries.len
+    while lo < hi {
+        let mid = (lo + hi) / 2
+        if index.entries[mid].name < name { lo = mid + 1 } else { hi = mid }
+    }
+    if lo < index.entries.len && index.entries[lo].name == name { return lo }
+    -1
+}
+
+/// The first rank in by_offset whose entry starts at or after offset.
+fn offset_rank(index: Index, offset: int) -> int {
+    var lo = 0, hi = index.by_offset.len
+    while lo < hi {
+        let mid = (lo + hi) / 2
+        if index.entries[index.by_offset[mid]].offset < offset { lo = mid + 1 } else { hi = mid }
+    }
+    lo
+}
+
+/// The slot whose entry starts exactly at offset, or -1.
+fn slot_at(index: Index, offset: int) -> int {
+    let rank = offset_rank(index, offset)
+    if rank < index.by_offset.len && index.entries[index.by_offset[rank]].offset == offset {
+        return index.by_offset[rank]
+    }
+    -1
+}
+
+/// The next entry's offset after offset, or end when none follows.
+fn next_offset(index: Index, offset: int, end: int) -> int {
+    let rank = offset_rank(index, offset + 1)
+    if rank < index.by_offset.len && index.entries[index.by_offset[rank]].offset < end {
+        return index.entries[index.by_offset[rank]].offset
+    }
+    end
+}
+
+/// Slots ordered by offset: a stable bottom-up merge sort.
+fn offset_order(entries: List[Entry]) -> List[int] {
+    var order = List[int]()
+    for i in 0..entries.len { (mut order).push(i) }
+    var scratch = copy order
+    var width = 1
+    while width < order.len {
+        var lo = 0
+        while lo < order.len {
+            let mid = if lo + width < order.len then lo + width else order.len
+            let hi = if lo + 2 * width < order.len then lo + 2 * width else order.len
+            var i = lo, j = mid, k = lo
+            while i < mid && j < hi {
+                if entries[order[j]].offset < entries[order[i]].offset {
+                    scratch[k] = order[j]
+                    j += 1
+                } else {
+                    scratch[k] = order[i]
+                    i += 1
+                }
+                k += 1
+            }
+            while i < mid { scratch[k] = order[i]; i += 1; k += 1 }
+            while j < hi { scratch[k] = order[j]; j += 1; k += 1 }
+            lo = hi
+        }
+        order = copy scratch
+        width *= 2
+    }
+    order
 }
 
 fn be32(data: List[byte], pos: int) -> int {
@@ -46,7 +119,7 @@ fn parse_index(data: List[byte]) -> Index ! PackErrors {
         if n < previous || n > count { return Unsupported("pack index fanout") }
         previous = n
     }
-    var entries = List[Entry](), by_offset = Map[int, int](), by_name = Map[str, int]()
+    var entries = List[Entry]()
     var bucket = 0, name_before = ""
     var large_used = Map[int, bool]()
     for i in 0..count {
@@ -74,11 +147,7 @@ fn parse_index(data: List[byte]) -> Index ! PackErrors {
             if high > 2147483647 { return Unsupported("pack offset range") }
             offset = high * 4294967296 + be32(data, start + 4)
         }
-        if offset < 12 || (by_offset[offset] else -1) != -1 {
-            return Unsupported("pack index offsets")
-        }
-        by_offset[offset] = i
-        by_name[name] = i
+        if offset < 12 { return Unsupported("pack index offsets") }
         (mut entries).push(Entry {
             name: name,
             offset: offset,
@@ -90,10 +159,16 @@ fn parse_index(data: List[byte]) -> Index ! PackErrors {
         bucket += 1
     }
     if large_used.len != large_count { return Unsupported("pack index large offsets") }
+    // Two entries at one offset: the former per-entry duplicate check, once.
+    let by_offset = offset_order(entries)
+    for rank in 1..by_offset.len {
+        if entries[by_offset[rank]].offset == entries[by_offset[rank - 1]].offset {
+            return Unsupported("pack index offsets")
+        }
+    }
     Index {
         entries: entries,
         by_offset: by_offset,
-        by_name: by_name,
         pack_sum: data[data.len - 40..data.len - 20],
     }
 }
