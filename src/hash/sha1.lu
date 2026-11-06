@@ -133,8 +133,14 @@ fn load_words(mut d: Digest, width: int, little: bool) {
 
 /// Feed a byte slice without retaining it; SHA-1 length wraps modulo 2^64 bits.
 pub fn update1(mut d: Digest, data: List[byte]) {
+    update1_prefix(mut d, data, data.len)
+}
+
+/// Feed data[0..end] (end clamped to data.len) without copying the prefix.
+pub fn update1_prefix(mut d: Digest, data: List[byte], end: int) {
+    let stop = if end < data.len then end else data.len
     var pos = 0
-    while d.used > 0 && pos < data.len {
+    while d.used > 0 && pos < stop {
         d.buf[d.used] = data[pos]
         d.used += 1
         d.count += 1
@@ -142,12 +148,12 @@ pub fn update1(mut d: Digest, data: List[byte]) {
         if d.used == 64 { sha1_block(mut d); d.used = 0 }
     }
     // Whole blocks go straight from data; only a final partial block is buffered.
-    while data.len - pos >= 64 {
+    while stop - pos >= 64 {
         sha1_block_at(mut d, data, pos)
         d.count += 64
         pos += 64
     }
-    while pos < data.len {
+    while pos < stop {
         d.buf[d.used] = data[pos]
         d.used += 1
         d.count += 1
