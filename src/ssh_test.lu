@@ -11,7 +11,49 @@ fn bad(url: str, expected: str) -> bool {
     refused
 }
 
+// The remote command is the words after the host, which ssh joins with
+// spaces. Git sends a plain program word bare (measured black-box against
+// the pinned Git with a recording ssh): `git-upload-pack '/path'`.
+fn command_is(url: str, program: str, want: str, row: str) -> bool {
+    let argv = transport.ssh_argv(url, program) else |e| {
+        print("FAIL {row}: {e}")
+        return false
+    }
+    let n = argv.len
+    let got = "{argv[n - 2]} {argv[n - 1]}"
+    if n < 4 || argv[n - 4] != "--" || argv[n - 3] != "example.invalid" || got != want {
+        print("FAIL {row}: {got}")
+        return false
+    }
+    print("PASS {row}")
+    true
+}
+
+fn command_rows() -> int {
+    let url = "ssh://example.invalid/srv/a b'c.git"
+    let path = "'/srv/a b'\\''c.git'"
+    let rows = [
+        ["git-receive-pack", "git-receive-pack {path}", "ssh-command-receive-plain"],
+        ["git-upload-pack", "git-upload-pack {path}", "ssh-command-upload-plain"],
+        ["/opt/git/bin/git-upload-pack", "/opt/git/bin/git-upload-pack {path}", "ssh-command-override-plain"],
+        ["Git_2.56+x/up-load", "Git_2.56+x/up-load {path}", "ssh-command-plain-word-set"],
+        ["/opt/my git/git-upload-pack", "'/opt/my git/git-upload-pack' {path}", "ssh-command-override-space"],
+        ["it's", "'it'\\''s' {path}", "ssh-command-override-quote"],
+        ["git-upload-pack;id", "'git-upload-pack;id' {path}", "ssh-command-override-shell"],
+        ["", "'' {path}", "ssh-command-override-empty"],
+    ]
+    var failed = 0
+    for row in rows {
+        if !command_is(url, row[0], row[1], row[2]) { failed = failed + 1 }
+    }
+    if !command_is("example.invalid:srv/repo.git", "git-upload-pack", "git-upload-pack 'srv/repo.git'", "ssh-command-scp") {
+        failed = failed + 1
+    }
+    failed
+}
+
 fn main() -> int ! transport.Errors {
+    let failed = command_rows()
     let plain = transport.ssh_endpoint("ssh://kasumi/home/user/lanes/vc16/repo.git")?
     if plain.host != "kasumi" || plain.port != 0 || plain.path != "/home/user/lanes/vc16/repo.git" {
         print("FAIL ssh-parser-uri")
@@ -44,6 +86,10 @@ fn main() -> int ! transport.Errors {
     }
     if !bad("ssh://kasumi/a%20b", "Unsupported(percent-encoded ssh URL)") {
         print("FAIL ssh-parser-encoded")
+        return 1
+    }
+    if failed > 0 {
+        print("FAIL ssh-command: {failed} rows")
         return 1
     }
     print("ssh parser: URI/scp/user/port, literal quoting and pre-exec refusals")
