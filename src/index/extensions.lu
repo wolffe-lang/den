@@ -29,6 +29,23 @@ pub fn cached_trees(value: Index) -> List[oid.Oid] ! IndexErrors {
     out
 }
 
+/// The valid root cache-tree record's tree id, when there is one: the tree
+/// these entries would write. Spans are validated against the entries first,
+/// so a valid root covers every entry, all at stage zero and none intent-to-add.
+pub fn cached_root(value: Index) -> List[oid.Oid] ! IndexErrors {
+    validate_cache_spans(value)?
+    var out = List[oid.Oid]()
+    for extension in value.extensions {
+        if extension.signature != "TREE" { continue }
+        for node in parse_cache(extension.data)? {
+            if node.path.len == 0 && node.count >= 0 && out.len == 0 {
+                (mut out).push(oid.from_bytes("sha1", node.id)?)
+            }
+        }
+    }
+    out
+}
+
 fn decimal(data: List[byte], mut pos: int, terminator: byte, negative: bool) -> int ! IndexErrors {
     var sign = 1
     if pos < data.len && data[pos] == 45 as byte {
