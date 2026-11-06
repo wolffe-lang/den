@@ -395,8 +395,10 @@ error, not a missing-object fallback.
 
 Pack hashing and file reads use reclaimed 64-KiB offset windows without mmap.
 Compressed entries and reconstructed bodies are bounded whole-object buffers:
-16 MiB per inflated entry/body, 17,000,000 compressed bytes, 64 delta links and
-128 MiB of charged reconstruction input/output per read. Indexes are bounded at
+512 MiB per inflated entry/body (Git's `core.bigFileThreshold` default; it was
+16 MiB before vc23), that plus a sixteenth and 64 KiB compressed, 64 delta
+links and three objects' worth of charged reconstruction input/output per read.
+Inflated entries are reserved to their declared size. Indexes are bounded at
 16 MiB/400,000 objects, directories at 8,192 entries and 256 packs. No persistent
 verification cache or pack-size-independent CPU cost is claimed: checksums scan
 candidate packs again on each lookup.
@@ -539,14 +541,28 @@ transaction, crash-lock recovery or concurrent reader snapshot-isolation promise
 a postcommit directory-sync failure is reported separately from the committed
 logical result. Non-atomic requests retain per-ref outcomes.
 
-Received pack-v2 streams support whole objects, OFS/REF deltas, forward REF bases
-and thin REF bases found in the local object store. The existing inflater, delta
-application and canonical object hashing remain shared. The complete stream is
-validated before loose object publication; selected typed closures are checked
-before refs change. Bounds are 10,000 transmitted objects, 16 MiB per body,
-128 MiB of charged pack/reconstruction payload and 64 delta links, not streaming,
-peak-RSS or pack-size-independent CPU guarantees. Thin streams are never stored
-as thin on-disk packs.
+Clone and fetch stream the response's packfile section to a temporary under
+`objects/pack` as it arrives, as `git index-pack` does (vc23, den#61): no
+response, HTTP body or pack is held in memory, and there is no whole-pack cap.
+A failed write refuses by name and removes the temporary. The pack is then read
+back by offset. Each entry is inflated into a buffer reserved to its declared
+size, and its CRC-32 and the pack's SHA-1 are checked over the same bytes.
+Deltas resolve depth-first from the whole objects, with the bodies on the
+walk's path bounded at 96 MiB (Git's `core.deltaBaseCacheLimit` default); a
+deeper subtree is revisited from its own reconstruction. Objects cap at
+512 MiB (`pack object size limit`), counts at 400,000 and delta depth at 64.
+The fetch asks for no thin pack, so the received pack is self-contained. Its
+idx v2 is written and both are installed: a clone keeps the pack, as Git does,
+and so does a fetch of 100 objects or more (`fetch.unpackLimit`'s default); a
+smaller fetch is rebuilt into loose objects one at a time. Peak memory follows
+the largest object, not the pack: at most about 64 MiB + 96 MiB + 5 times the
+largest object, measured by `tools/large-pack-test.py` under a hard
+address-space cap. The selected closures are checked before refs change,
+typing blobs from the received pack's own table without reading them.
+
+`pack.decode`, the whole-stream decoder, remains for its own callers with its
+bounds: 10,000 objects, 16 MiB per body, 128 MiB of charged payload and 64
+delta links. Thin streams are never stored as thin on-disk packs.
 
 `tools/check-wire` exercises native/release peers in both directions against the
 pinned Git services and daemon, native self-hosted services without external tools
@@ -604,9 +620,10 @@ refused.
 
 Responses are HTTP/1.0 or 1.1 with Content-Length or chunked framing.
 Header blocks are capped at 64 KiB, header lines at 8 KiB and fields at 256.
-Bodies keep the wire layer's 140,000,000-byte cap. Each read's buffers and
-TLS records are freed when the read ends, so a body's peak memory is about
-three times its size. A close-delimited HTTPS body is refused until the
+Discovery, `ls-refs` and push responses keep their caps (140,000,000 bytes at
+most), and each read's buffers and TLS records are freed when the read ends.
+A fetch response streams a pkt-line at a time through the connection's one
+reused 64 KiB buffer, with no whole-body cap. A close-delimited HTTPS body is refused until the
 standard library can tell a clean close from truncation (wolf-std#133).
 A failed clone removes the directory it created, as Git does.
 
@@ -615,11 +632,14 @@ checked machine. It also runs raw-peer and hostile-input rows, TLS rows against
 the pinned OpenSSL, memory, redirect, authentication and refusal rows, and
 clone, fetch and push against the pinned `git-http-backend` over plain HTTP
 and authenticated TLS. Two live rows read from github.com:
-a small public repository compared with Git's clone, and den's own repository,
-whose pack is larger than the wire cap and must be refused by name within
-bounded time and memory. Both are named SKIPs without network. A third pushes
-and deletes a disposable branch on the repository that `DEN_LIVE_HTTPS_URL`
-names, with `DEN_LIVE_HTTPS_TOKEN`, and is a named SKIP without them.
+a small public repository and den's own repository (a pack over 300 MB), each
+cloned by den and compared with Git's clone, den's own within its predicted
+time and peak memory. Both are named SKIPs without network. A third fetches,
+pushes and deletes a disposable branch on the repository that
+`DEN_LIVE_HTTPS_URL` names, with `DEN_LIVE_HTTPS_TOKEN`, and is a named SKIP
+without them. It names that repository only in the environment, as a remote
+den reads from `GIT_CONFIG_*`, and checks every child's `/proc/<pid>/cmdline`
+for the URL and the token while it runs.
 
 Configured fetch/push cover ordinary scalar URLs and wildcard branch fetch maps,
 branch defaults, tracking updates/prune, `push -u` and plain/explicit leases.
