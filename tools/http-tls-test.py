@@ -58,25 +58,72 @@ def main():
     encoded = base64.b64encode(broken)
     (root / 'bad-signature.pem').write_bytes(b'-----BEGIN CERTIFICATE-----\n' +
         b'\n'.join(encoded[i:i+64] for i in range(0, len(encoded), 64)) + b'\n-----END CERTIFICATE-----\n')
+    # The broader chain: an intermediate, a non-CA issuer, a clientAuth-only
+    # leaf, a leaf not yet valid (UTCTime 2040, issued by `openssl ca`), and
+    # ECDSA P-256/P-384 leaves under the RSA root, each signed by OpenSSL.
+    ca_extensions = root / 'ca-extensions.cnf'
+    ca_extensions.write_text('basicConstraints=critical,CA:TRUE\nkeyUsage=critical,keyCertSign,cRLSign\n')
+    not_ca_extensions = root / 'not-ca-extensions.cnf'
+    not_ca_extensions.write_text('basicConstraints=critical,CA:FALSE\nkeyUsage=critical,keyCertSign,cRLSign\n')
+    client_extensions = root / 'client-extensions.cnf'
+    client_extensions.write_text(extensions.read_text().replace('serverAuth', 'clientAuth'))
+    for name, ext in [('intermediate', ca_extensions), ('not-ca', not_ca_extensions)]:
+        openssl('req', '-new', '-newkey', 'rsa:2048', '-nodes', '-subj', '/CN=HTTP test issuer ' + name,
+                '-keyout', root / (name + '.key'), '-out', root / (name + '.csr'))
+        openssl('x509', '-req', '-in', root / (name + '.csr'), '-CA', root / 'ca.pem', '-CAkey', root / 'ca.key',
+                '-CAcreateserial', '-days', '2', '-sha256', '-extfile', ext, '-out', root / (name + '.pem'))
+        openssl('x509', '-req', '-in', root / 'leaf.csr', '-CA', root / (name + '.pem'), '-CAkey', root / (name + '.key'),
+                '-CAcreateserial', '-days', '1', '-sha256', '-extfile', extensions, '-out', root / ('leaf-' + name + '.pem'))
+    openssl('x509', '-req', '-in', root / 'leaf.csr', '-CA', root / 'ca.pem', '-CAkey', root / 'ca.key',
+            '-CAcreateserial', '-days', '1', '-sha256', '-extfile', client_extensions, '-out', root / 'client-auth.pem')
+    (root / 'issued').mkdir(exist_ok=True)
+    (root / 'index.txt').write_text('')
+    (root / 'serial').write_text('1000\n')
+    (root / 'ca.cnf').write_text('[ca]\ndefault_ca = fixture\n[fixture]\ndatabase = index.txt\nnew_certs_dir = issued\n'
+                                 'serial = serial\ndefault_md = sha256\npolicy = anything\n'
+                                 '[anything]\ncommonName = supplied\n')
+    openssl('ca', '-batch', '-notext', '-config', root / 'ca.cnf', '-cert', root / 'ca.pem', '-keyfile', root / 'ca.key',
+            '-in', root / 'leaf.csr', '-startdate', '400101000000Z', '-enddate', '401231000000Z',
+            '-extfile', extensions, '-out', root / 'not-yet-valid.pem')
+    for curve in ['P-256', 'P-384']:
+        stem = curve.lower().replace('-', '')
+        openssl('req', '-new', '-newkey', 'ec', '-pkeyopt', 'ec_paramgen_curve:' + curve, '-nodes', '-subj', '/CN=localhost',
+                '-keyout', root / (stem + '.key'), '-out', root / (stem + '.csr'))
+        openssl('x509', '-req', '-in', root / (stem + '.csr'), '-CA', root / 'ca.pem', '-CAkey', root / 'ca.key',
+                '-CAcreateserial', '-days', '1', '-sha256', '-extfile', extensions, '-out', root / (stem + '.pem'))
     (root / 'probe').write_bytes(b'HTTP/1.1 200 OK\r\nContent-Length: 3\r\nConnection: close\r\n\r\nTLS')
     results = []
     failures = []
-    for name, roots, leaf, expected in [('http-tls-trusted', 'ca.der', 'leaf.pem', None),
-                                   ('http-tls-utc', 'ca.der', 'leaf.pem', None),
-                                   ('http-tls-unknown-root', 'wrong-ca.der', 'leaf.pem', b'issuer_mismatch'),
-                                   ('http-tls-wrong-name', 'ca.der', 'wrong-name.pem', b'name_mismatch'),
-                                   ('http-tls-expired', 'ca.der', 'expired.pem', b'expired'),
-                                   ('http-tls-bad-signature', 'ca.der', 'bad-signature.pem', b'bad_signature'),
-                                   ('http-tls-unframed', 'ca.der', 'leaf.pem', b'wolf-std#133')]:
+    tls13 = ['-tls1_3', '-ciphersuites', 'TLS_CHACHA20_POLY1305_SHA256']
+    for name, roots, leaf, expected, option in [
+            ('http-tls-trusted', 'ca.der', 'leaf.pem', None, {}),
+            ('http-tls-utc', 'ca.der', 'leaf.pem', None, {}),
+            ('http-tls-unknown-root', 'wrong-ca.der', 'leaf.pem', b'issuer_mismatch', {}),
+            ('http-tls-wrong-name', 'ca.der', 'wrong-name.pem', b'name_mismatch', {}),
+            ('http-tls-expired', 'ca.der', 'expired.pem', b'expired', {}),
+            ('http-tls-bad-signature', 'ca.der', 'bad-signature.pem', b'bad_signature', {}),
+            ('http-tls-unframed', 'ca.der', 'leaf.pem', b'wolf-std#133', {}),
+            ('http-tls-intermediate', 'ca.der', 'leaf-intermediate.pem', None, {'chain': 'intermediate.pem'}),
+            ('http-tls-missing-intermediate', 'ca.der', 'leaf-intermediate.pem', b'issuer_mismatch', {}),
+            ('http-tls-issuer-not-ca', 'ca.der', 'leaf-not-ca.pem', b'not_ca', {'chain': 'not-ca.pem'}),
+            ('http-tls-client-auth-only', 'ca.der', 'client-auth.pem', b'bad_usage', {}),
+            ('http-tls-not-yet-valid', 'ca.der', 'not-yet-valid.pem', b'not_yet_valid', {}),
+            ('http-tls-p256-leaf', 'ca.der', 'p256.pem', None, {'key': 'p256.key'}),
+            ('http-tls-p384-leaf', 'ca.der', 'p384.pem', None, {'key': 'p384.key'}),
+            ('http-tls-version-1-2', 'ca.der', 'leaf.pem', b'handshake_failure', {'protocol': ['-tls1_2']}),
+            ('http-tls-git-bypass-ignored', 'wrong-ca.der', 'leaf.pem', b'issuer_mismatch',
+             {'env': {'GIT_SSL_NO_VERIFY': '1', 'GIT_SSL_CAINFO': str(root / 'ca.pem')}}),
+    ]:
         with socket.socket() as reservation:
             reservation.bind(('127.0.0.1', 0))
             port = reservation.getsockname()[1]
+        chain = ['-cert_chain', str(root / option['chain'])] if 'chain' in option else []
         # -HTTP serves the complete framed response file. Only the dedicated
         # wolf-std#133 refusal row uses -www's close-delimited response.
         with (root / (name + '-server.log')).open('wb') as log:
             server = subprocess.Popen(['/usr/bin/openssl', 's_server', '-accept', str(port),
-                                       '-cert', str(root / leaf), '-key', str(root / 'leaf.key'),
-                                       '-tls1_3', '-ciphersuites', 'TLS_CHACHA20_POLY1305_SHA256',
+                                       '-cert', str(root / leaf), '-key', str(root / option.get('key', 'leaf.key')),
+                                       *chain, *option.get('protocol', tls13),
                                        '-www' if name == 'http-tls-unframed' else '-HTTP', '-naccept', '1'],
                                       cwd=root, stdout=subprocess.PIPE, stderr=log)
             try:
@@ -93,11 +140,13 @@ def main():
                 env = {**os.environ, 'DEN_TEST_HTTP_URL': f'https://localhost:{port}',
                        'DEN_TLS_ROOTS': str(root / roots), 'DEN_TEST_HTTP_COUNT': '1'}
                 if name == 'http-tls-utc': env['TZ'] = 'UTC+12'
+                env.update(option.get('env', {}))
                 result = subprocess.run([args.client], env=env, capture_output=True, timeout=60)
                 ok = result.returncode == 0 and result.stdout.startswith(b'status=200 bytes=') if expected is None else (
                     result.returncode != 0 and expected in result.stderr)
                 results.append(dict(row=name, exit=result.returncode, stdout=result.stdout.hex(), stderr=result.stderr.hex()))
-                print(('PASS ' if ok else 'FAIL ') + name, flush=True)
+                print(('PASS ' if ok else 'FAIL ') + name + ('' if ok else ': exit %d stderr %r' % (
+                    result.returncode, result.stderr[:200])), flush=True)
                 if not ok:
                     failures.append(name)
             finally:
