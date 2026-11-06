@@ -1,0 +1,31 @@
+// Primitive costs behind status on the pinned toolchain; prints ns per phase.
+use std.time
+use hash
+
+fn main() -> int {
+    var data = List[byte]()
+    var start = time.monotonic_ns()
+    for i in 0..19000000 { (mut data).push((i & 255) as byte) }
+    print("push_19mb_ns={time.monotonic_ns() - start}")
+    start = time.monotonic_ns()
+    let digest = hash.sum1(data)
+    print("sha1_19mb_ns={time.monotonic_ns() - start} first={digest[0]}")
+    for count in [454, 2500] {
+        var names = List[str]()
+        for i in 0..count { (mut names).push("src/d{i / 30}/f{i}.bin") }
+        start = time.monotonic_ns()
+        var m = Map[str, int]()
+        for i in 0..count { m[names[i]] = i }
+        print("map_insert_{count}_ns={time.monotonic_ns() - start}")
+        start = time.monotonic_ns()
+        var total = 0
+        for name in names { total += m[name] else 0 }
+        print("map_lookup_{count}_ns={time.monotonic_ns() - start} total={total}")
+        var ints = Map[int, int]()
+        start = time.monotonic_ns()
+        for i in 0..count { ints[i * 977] = i }
+        for i in 0..count { total += ints[i * 977] else 0 }
+        print("intmap_{count}_ns={time.monotonic_ns() - start} total={total}")
+    }
+    0
+}

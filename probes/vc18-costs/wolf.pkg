@@ -1,0 +1,6 @@
+pkg {
+    name: "vc18-costs",
+    edition: "1",
+    capabilities: [env, fs],
+    deps: {hash: {path: "../../src/hash"}},
+}
