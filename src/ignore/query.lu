@@ -223,3 +223,87 @@ pub fn query_tracked_with_warnings(
     if tracked { return unmatched() }
     query_with_warnings(repo, worktree, path, is_dir, mut warnings)?
 }
+
+/// query_with_warnings for many paths of one operation over one worktree:
+/// the realpath, the global/info/root sources and each ancestor's cumulative
+/// rules load once, on first use. Decisions and warnings (which dedupe) are
+/// query_with_warnings' own; only the repeated reads are gone.
+pub struct Cache {
+    root: str,
+    ready: bool,
+    base: List[Rule],
+    dirs: List[str],
+    dir_rules: List[List[Rule]],
+}
+
+/// An empty cache; it loads on the first query_cached.
+pub fn cache() -> Cache {
+    Cache {
+        root: "",
+        ready: false,
+        base: List[Rule](),
+        dirs: List[str](),
+        dir_rules: List[List[Rule]](),
+    }
+}
+
+/// query_with_warnings through cache, which must serve one repo and worktree.
+pub fn query_cached(
+    repo: repository.Repo,
+    worktree: str,
+    mut c: Cache,
+    path: str,
+    is_dir: bool,
+    mut warnings: List[str],
+) -> Match ! IgnoreErrors {
+    if !valid_path(path.bytes()) { return invalid }
+    if !c.ready {
+        c.root = fs.realpath(worktree) else |e| match e {
+            not_found => { return invalid },
+            io => { return io },
+        }
+        let global = excludes_file(repo)?
+        if global != "" {
+            let lookup = if global.starts_with("/") then global else "{c.root}/{global}"
+            append_file(lookup, global, "", false, mut c.base, mut warnings)?
+        }
+        append_file(
+            "{repo.gitdir}/info/exclude",
+            display_info(repo.gitdir, c.root),
+            "",
+            false,
+            mut c.base,
+            mut warnings,
+        )?
+        append_file("{c.root}/.gitignore", ".gitignore", "", true, mut c.base, mut warnings)?
+        c.ready = true
+    }
+    var rules = copy c.base
+    for pos in 0..path.len {
+        if path.bytes()[pos] != 47 as byte { continue }
+        let parent = path[0..pos]
+        let result = decision(rules, parent.bytes(), true)
+        if result.ignored { return result }
+        var known = -1
+        for k in 0..c.dirs.len { if c.dirs[k] == parent { known = k; break } }
+        if known >= 0 { rules = copy c.dir_rules[known]; continue }
+        let kind = fs.lstat("{c.root}/{parent}") else |e| match e {
+            not_found => { return evaluate(rules, path.bytes(), is_dir, false)? },
+            denied => { return denied },
+            io => { return io },
+        }
+        if kind.kind == 3 { return Unsupported("ignore query beyond symlink") }
+        if kind.kind != 1 { return invalid }
+        append_file(
+            "{c.root}/{parent}/.gitignore",
+            "{parent}/.gitignore",
+            parent,
+            true,
+            mut rules,
+            mut warnings,
+        )?
+        (mut c.dirs).push(copy parent)
+        (mut c.dir_rules).push(copy rules)
+    }
+    decision(rules, path.bytes(), is_dir)
+}
