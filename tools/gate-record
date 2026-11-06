@@ -11,6 +11,8 @@ cd "$root"
 export TMPDIR="$root/target/tmp"
 mkdir -p "$TMPDIR" target/runs
 logs=$(mktemp -d "$root/target/runs/gate-record.XXXXXX")
+# mktemp -d makes it 0700; leaf logs are evidence another user must read.
+chmod 755 "$logs"
 mode=run
 
 binary_strict() {
