@@ -170,7 +170,11 @@ fn clone_mode(url: str, destination: str, bare: bool, local: bool) -> () ! objec
     fs.create_dir(destination)?
     let (repo, _) = repository.init(destination, bare, "main")?
     let plain = transport.local_path(url)
-    let advertised = if plain && local then clone_local_objects(repo, url)? else fetch_objects(repo, url)?
+    let advertised = if plain && local {
+        clone_local_objects(repo, url)?
+    } else {
+        fetch_objects(repo, url)?
+    }
     var selected = wire.Ref { name: "HEAD", id: "unborn", target: "", peeled: "" }
     for reference in advertised { if reference.name == "HEAD" { selected = copy reference } }
     var packed = List[refs.Packed]()
@@ -184,8 +188,13 @@ fn clone_mode(url: str, destination: str, bare: bool, local: bool) -> () ! objec
         if !bare && name.starts_with("refs/heads/") { name = "refs/remotes/origin/{name[11..]}" }
         if plain {
             (mut packed).push(refs.Packed {
-                name: name, id: oid.parse("sha1", reference.id)?,
-                peeled: if reference.peeled == "" then List[oid.Oid]() else [oid.parse("sha1", reference.peeled)?],
+                name: name,
+                id: oid.parse("sha1", reference.id)?,
+                peeled: if reference.peeled == "" {
+                    List[oid.Oid]()
+                } else {
+                    [oid.parse("sha1", reference.peeled)?]
+                },
             })
         } else {
             update(repo, name, reference.id)?

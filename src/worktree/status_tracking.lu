@@ -1,9 +1,12 @@
 use revision
 
 fn status_upstream(snapshot: Snapshot, counts: bool) -> revision.Upstream ! WorkErrors {
-    revision.upstream(snapshot.context.repo,
+    revision.upstream(
+        snapshot.context.repo,
         if snapshot.head.detached then "" else snapshot.head.branch,
-        snapshot.head.commits, counts)?
+        snapshot.head.commits,
+        counts,
+    )?
 }
 
 fn upstream_summary(tracking: revision.Upstream) -> str {
@@ -34,15 +37,26 @@ fn tracking_long(mut out: List[byte], snapshot: Snapshot, hints: bool) -> () ! W
     } else if ahead == 0 && behind == 0 {
         line(mut out, "Your branch is up to date with '{name}'.")
     } else if behind == 0 {
-        line(mut out, "Your branch is ahead of '{name}' by {ahead} {if ahead == 1 then "commit" else "commits"}.")
+        line(
+            mut out,
+            "Your branch is ahead of '{name}' by {ahead} {if ahead == 1 then "commit" else "commits"}.",
+        )
         if hints { line(mut out, "  (use \"git push\" to publish your local commits)") }
     } else if ahead == 0 {
-        line(mut out, "Your branch is behind '{name}' by {behind} {if behind == 1 then "commit" else "commits"}, and can be fast-forwarded.")
+        line(
+            mut out,
+            "Your branch is behind '{name}' by {behind} {if behind == 1 then "commit" else "commits"}, and can be fast-forwarded.",
+        )
         if hints { line(mut out, "  (use \"git pull\" to update your local branch)") }
     } else {
         line(mut out, "Your branch and '{name}' have diverged,")
         line(mut out, "and have {ahead} and {behind} different commits each, respectively.")
-        if hints { line(mut out, "  (use \"git pull\" if you want to integrate the remote branch with yours)") }
+        if hints {
+            line(
+                mut out,
+                "  (use \"git pull\" if you want to integrate the remote branch with yours)",
+            )
+        }
     }
     line(mut out, "")
 }

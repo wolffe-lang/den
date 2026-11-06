@@ -5,7 +5,11 @@ use repository
 
 /// Empty reference means no mapping; empty ids means a configured, gone upstream.
 pub struct Upstream {
-    reference: str, name: str, ids: List[oid.Oid], ahead: int, behind: int,
+    reference: str,
+    name: str,
+    ids: List[oid.Oid],
+    ahead: int,
+    behind: int,
 }
 
 fn tracking_name(repo: repository.Repo, reference: str) -> str ! RevisionErrors {
@@ -47,8 +51,11 @@ fn tracking_reference(repo: repository.Repo, branch: str) -> str ! RevisionError
     if source.len != 2 || destination.len != 2 {
         return Unsupported("upstream fetch refspec")
     }
-    if !merge.starts_with(source[0]) || !merge.ends_with(source[1]) ||
-        merge.len < source[0].len + source[1].len { return "" }
+    if !merge.starts_with(source[0]) ||
+        !merge.ends_with(source[1]) ||
+        merge.len < source[0].len + source[1].len {
+        return ""
+    }
     let matched = merge[source[0].len..merge.len - source[1].len]
     let reference = "{destination[0]}{matched}{destination[1]}"
     if !refs.valid(reference) { return invalid }

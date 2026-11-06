@@ -157,7 +157,11 @@ fn named_fetch(
 }
 
 fn fetch_tags(
-    repo: repository.Repo, url: str, roots: List[str], identity: str, action: str,
+    repo: repository.Repo,
+    url: str,
+    roots: List[str],
+    identity: str,
+    action: str,
     mut rows: List[TransportRow],
 ) -> str ! object.StoreErrors {
     var extra = ""

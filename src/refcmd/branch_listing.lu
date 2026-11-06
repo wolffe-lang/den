@@ -43,7 +43,11 @@ fn branch_listing(
             name = "(HEAD detached {relation} {if origin.label == "" then short else origin.label})"
         }
         (mut rows).push(BranchDisplay {
-            full: "", name: name, id: copy head.commits[0], local: false, symbolic: "",
+            full: "",
+            name: name,
+            id: copy head.commits[0],
+            local: false,
+            symbolic: "",
         })
     }
     for prefix in ["refs/heads/", "refs/remotes/"] {
@@ -58,8 +62,11 @@ fn branch_listing(
             }
             if !branch_selected(name, names) { continue }
             (mut rows).push(BranchDisplay {
-                full: copy record.name, name: name, id: copy record.id,
-                local: prefix == "refs/heads/", symbolic: refs.symbolic(ctx.repo, record.name)?,
+                full: copy record.name,
+                name: name,
+                id: copy record.id,
+                local: prefix == "refs/heads/",
+                symbolic: refs.symbolic(ctx.repo, record.name)?,
             })
         }
     }
@@ -70,7 +77,11 @@ fn branch_listing(
         let current = row.full == head.reference || row.full == "" && head.detached
         branch_text(mut out, "{if current then "*" else " "} {row.name}")
         if row.symbolic != "" {
-            let target = if row.symbolic.starts_with("refs/remotes/") then row.symbolic[13..] else row.symbolic
+            let target = if row.symbolic.starts_with("refs/remotes/") {
+                row.symbolic[13..]
+            } else {
+                row.symbolic
+            }
             branch_text(mut out, " -> {target}")
         } else if verbose > 0 {
             for _ in row.name.len..width { (mut out).push(32 as byte) }

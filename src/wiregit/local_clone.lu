@@ -60,14 +60,24 @@ fn clone_local_objects(repo: repository.Repo, path: str) -> List[wire.Ref] ! obj
     let source = repository.open(admin)?
     local_objects("{source.gitdir}/objects", "{repo.gitdir}/objects")?
     let tip = refs.optional(source, "HEAD")?
-    let head_text = (str_from_utf8(repository.read_bytes("{source.gitdir}/HEAD", 4096)?) else |_| { return invalid }).trim()
+    let head_text = (
+        str_from_utf8(repository.read_bytes("{source.gitdir}/HEAD", 4096)?) else |_| {
+            return invalid
+        }
+    ).trim()
     let target = if head_text.starts_with("ref: ") then head_text[5..] else ""
-    var advertised = [wire.Ref {
-        name: "HEAD", id: if tip.len == 0 then "unborn" else oid.hex(tip[0])?,
-        target: target, peeled: "",
-    }]
+    var advertised = [
+        wire.Ref {
+            name: "HEAD",
+            id: if tip.len == 0 then "unborn" else oid.hex(tip[0])?,
+            target: target,
+            peeled: "",
+        },
+    ]
     for record in refs.list(source, "refs/")? {
-        if !record.name.starts_with("refs/heads/") && !record.name.starts_with("refs/tags/") { continue }
+        if !record.name.starts_with("refs/heads/") && !record.name.starts_with("refs/tags/") {
+            continue
+        }
         let body = object.read_object(source, record.id, 16777216)?
         let peeled = if body.kind == "tag" {
             let target_id = revision.peel(source, record.id, "peel") else |error| {
@@ -78,7 +88,10 @@ fn clone_local_objects(repo: repository.Repo, path: str) -> List[wire.Ref] ! obj
             ""
         }
         (mut advertised).push(wire.Ref {
-            name: copy record.name, id: oid.hex(record.id)?, target: "", peeled: peeled,
+            name: copy record.name,
+            id: oid.hex(record.id)?,
+            target: "",
+            peeled: peeled,
         })
     }
     advertised

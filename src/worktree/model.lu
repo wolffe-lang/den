@@ -420,8 +420,16 @@ fn path_order(paths: List[List[byte]]) -> List[int] {
                 }
                 k += 1
             }
-            while i < mid { scratch[k] = order[i]; i += 1; k += 1 }
-            while j < hi { scratch[k] = order[j]; j += 1; k += 1 }
+            while i < mid {
+                scratch[k] = order[i]
+                i += 1
+                k += 1
+            }
+            while j < hi {
+                scratch[k] = order[j]
+                j += 1
+                k += 1
+            }
             lo = hi
         }
         order = copy scratch

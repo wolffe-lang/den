@@ -22,7 +22,11 @@ fn controls(ctx: worktree.Context, command: str) -> () ! commit.CommitErrors {
     controls_tracking(ctx, command, false)?
 }
 
-fn controls_tracking(ctx: worktree.Context, command: str, listing: bool) -> () ! commit.CommitErrors {
+fn controls_tracking(
+    ctx: worktree.Context,
+    command: str,
+    listing: bool,
+) -> () ! commit.CommitErrors {
     if command == "branch" ||
         command == "switch" ||
         command == "checkout" ||
@@ -129,7 +133,9 @@ fn branch(args: List[str]) -> int ! commit.CommitErrors {
         } else if arg == "--remotes" {
             include_local = false
             include_remote = true
-        } else if arg.len > 1 && arg.starts_with("-") && !arg.starts_with("--") &&
+        } else if arg.len > 1 &&
+            arg.starts_with("-") &&
+            !arg.starts_with("--") &&
             listing_flags(arg[1..]) {
             for flag in arg[1..].bytes() {
                 if flag == 118 as byte { verbose += 1 }

@@ -23,7 +23,8 @@ fn status_command(ctx: Context, args: List[str]) -> int ! WorkErrors {
             options.short = true
             format = true
             version2 = true
-        } else if !literal && (arg == "--porcelain" || arg == "--porcelain=1" || arg == "--porcelain=v1") {
+        } else if !literal &&
+            (arg == "--porcelain" || arg == "--porcelain=1" || arg == "--porcelain=v1") {
             version2 = false
             options.porcelain = true
             options.short = true
@@ -81,7 +82,11 @@ fn status_command(ctx: Context, args: List[str]) -> int ! WorkErrors {
     var warnings = List[str]()
     defer emit_ignore_warnings(warnings)
     let snapshot = scan_status(ctx, options.untracked != "no", options.ignored, mut warnings)?
-    let bytes = if version2 then render_status_v2(snapshot, options)? else render_status(snapshot, options)?
+    let bytes = if version2 {
+        render_status_v2(snapshot, options)?
+    } else {
+        render_status(snapshot, options)?
+    }
     var output = fs.stdout()
     fs.write_chunk(mut output, bytes)?
     0

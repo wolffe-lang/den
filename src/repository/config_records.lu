@@ -2,13 +2,15 @@
 
 /// A source is deliberately not folded into Repo.config's last-value map.
 pub struct ConfigRecord { entry: ConfigEntry, level: str, origin: str }
+
 struct ConfigSource { path: str, level: str }
 
 fn config_sources(gitdir: str) -> List[ConfigSource] ! ConfigReadErrors {
     var sources = List[ConfigSource]()
     if !config_nosystem()? {
         (mut sources).push(ConfigSource {
-            path: env_get("GIT_CONFIG_SYSTEM") else "/etc/gitconfig", level: "system",
+            path: env_get("GIT_CONFIG_SYSTEM") else "/etc/gitconfig",
+            level: "system",
         })
     }
     let explicit = env_get("GIT_CONFIG_GLOBAL") else "\0"
@@ -23,7 +25,8 @@ fn config_sources(gitdir: str) -> List[ConfigSource] ! ConfigReadErrors {
     }
     if gitdir != "" {
         (mut sources).push(ConfigSource {
-            path: if gitdir == "." then "config" else "{gitdir}/config", level: "local",
+            path: if gitdir == "." then "config" else "{gitdir}/config",
+            level: "local",
         })
     }
     sources
@@ -43,9 +46,12 @@ pub fn configuration_records(
     }
     // Explicit system selection ignores NOSYSTEM, unlike implicit discovery.
     if level == "system" {
-        sources = [ConfigSource {
-            path: env_get("GIT_CONFIG_SYSTEM") else "/etc/gitconfig", level: "system",
-        }]
+        sources = [
+            ConfigSource {
+                path: env_get("GIT_CONFIG_SYSTEM") else "/etc/gitconfig",
+                level: "system",
+            },
+        ]
     }
     var records = List[ConfigRecord]()
     for source in sources {
@@ -54,7 +60,9 @@ pub fn configuration_records(
         config_file(source.path, source.level != "local" && level != "file", mut entries)?
         for entry in entries {
             (mut records).push(ConfigRecord {
-                entry: copy entry, level: source.level, origin: "file:{source.path}",
+                entry: copy entry,
+                level: source.level,
+                origin: "file:{source.path}",
             })
         }
     }
@@ -63,7 +71,9 @@ pub fn configuration_records(
         config_runtime(mut runtime)?
         for entry in runtime {
             (mut records).push(ConfigRecord {
-                entry: copy entry, level: "command", origin: "command line:",
+                entry: copy entry,
+                level: "command",
+                origin: "command line:",
             })
         }
     }

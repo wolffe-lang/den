@@ -146,7 +146,11 @@ fn head_flat(ctx: Context, value: index.Index, commit: oid.Oid) -> List[FlatEntr
     if root.len == 1 && oid.equal(root[0], tree_id(ctx.repo, commit)?) {
         var out = List[FlatEntry]()
         for entry in value.entries {
-            (mut out).push(FlatEntry { path: copy entry.path, mode: entry.stat[6], id: copy entry.id })
+            (mut out).push(FlatEntry {
+                path: copy entry.path,
+                mode: entry.stat[6],
+                id: copy entry.id,
+            })
         }
         return out
     }
@@ -186,10 +190,15 @@ fn stat_clean(entry: index.Entry, record: List[int], mode: int, written: List[in
     let required: int = 247507
     if record[3] & required != required { return false }
     let m: int = 4294967295
-    if entry.stat[6] != mode || entry.stat[0] != record[16] & m || entry.stat[1] != record[17] & m ||
-        entry.stat[2] != record[14] & m || entry.stat[3] != record[15] & m ||
-        entry.stat[4] != record[9] & m || entry.stat[5] != record[10] & m ||
-        entry.stat[7] != record[6] & m || entry.stat[8] != record[7] & m ||
+    if entry.stat[6] != mode ||
+        entry.stat[0] != record[16] & m ||
+        entry.stat[1] != record[17] & m ||
+        entry.stat[2] != record[14] & m ||
+        entry.stat[3] != record[15] & m ||
+        entry.stat[4] != record[9] & m ||
+        entry.stat[5] != record[10] & m ||
+        entry.stat[7] != record[6] & m ||
+        entry.stat[8] != record[7] & m ||
         entry.stat[9] != record[1] & m {
         return false
     }
@@ -276,7 +285,9 @@ fn walk_mode(
                 io => { return io },
             }
             if info[0] == 1 {
-                if status && include_untracked && !show_ignored &&
+                if status &&
+                    include_untracked &&
+                    !show_ignored &&
                     !tracked_under(value.entries, path) {
                     let decision = ignore.query_cached(
                         ctx.repo,
@@ -302,7 +313,11 @@ fn walk_mode(
                     if index.stage(value.entries[at]) == 0 { staged = at }
                 }
                 let prior_mode = if staged >= 0 then value.entries[staged].stat[6] else -1
-                let mode = if info[0] == 0 then entry_disk_mode(info, prior_mode, filemode, symlinks) else 0o120000
+                let mode = if info[0] == 0 {
+                    entry_disk_mode(info, prior_mode, filemode, symlinks)
+                } else {
+                    0o120000
+                }
                 var file = FileState {
                     path: owned_bytes(path),
                     mode: mode,
@@ -313,7 +328,9 @@ fn walk_mode(
                 }
                 if status && info[0] == 0 && at < 0 {
                     // Untracked or ignored: status renders the path alone.
-                } else if status && info[0] == 0 && staged >= 0 &&
+                } else if status &&
+                    info[0] == 0 &&
+                    staged >= 0 &&
                     stat_clean(value.entries[staged], info, mode, written) {
                     file.id = copy value.entries[staged].id
                 } else {

@@ -39,8 +39,12 @@ fn sha1_rounds(mut d: Digest) {
     var f = d.h[4]
     i = 0
     while i < 20 {
-        let t = ((a << 5 | a >> 27) & 0xffffffff) + (b & c | (b ^ 0xffffffff) & e) +
-            f + 0x5a827999 + d.w[i] & 0xffffffff
+        let t = ((a << 5 | a >> 27) & 0xffffffff) +
+            (b & c | (b ^ 0xffffffff) & e) +
+            f +
+            0x5a827999 +
+            d.w[i] &
+            0xffffffff
         f = e
         e = c
         c = (b << 30 | b >> 2) & 0xffffffff
@@ -59,8 +63,12 @@ fn sha1_rounds(mut d: Digest) {
         i += 1
     }
     while i < 60 {
-        let t = ((a << 5 | a >> 27) & 0xffffffff) + (b & c | b & e | c & e) + f + 0x8f1bbcdc +
-            d.w[i] & 0xffffffff
+        let t = ((a << 5 | a >> 27) & 0xffffffff) +
+            (b & c | b & e | c & e) +
+            f +
+            0x8f1bbcdc +
+            d.w[i] &
+            0xffffffff
         f = e
         e = c
         c = (b << 30 | b >> 2) & 0xffffffff

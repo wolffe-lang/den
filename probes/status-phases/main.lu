@@ -27,7 +27,9 @@ fn measured(root: str, untracked: bool, full: bool) -> () ! worktree.WorkErrors 
     }
     start = time.monotonic_ns()
     let status = worktree.scan_status(ctx, untracked, false, mut warnings)?
-    print("status_scan_inclusive_ns={time.monotonic_ns() - start} files={status.files.len} rows={status.rows.len}")
+    print(
+        "status_scan_inclusive_ns={time.monotonic_ns() - start} files={status.files.len} rows={status.rows.len}",
+    )
     start = time.monotonic_ns()
     let bytes = worktree.render_status(status, worktree.status_options(ctx)?)?
     print("render_ns={time.monotonic_ns() - start} bytes={bytes.len}")

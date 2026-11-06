@@ -15,7 +15,11 @@ fn local_fetch_command(operands: List[str], quiet: bool, force: bool) -> () ! ob
         let spec = if raw.starts_with("+") then raw[1..] else raw
         let pair = spec.split(":")
         if pair.len > 2 || pair[0] == "" { return Unsupported("local fetch refspec") }
-        source = if pair[0] == "HEAD" || pair[0].starts_with("refs/") then copy pair[0] else "refs/heads/{pair[0]}"
+        source = if pair[0] == "HEAD" || pair[0].starts_with("refs/") {
+            copy pair[0]
+        } else {
+            "refs/heads/{pair[0]}"
+        }
         if pair.len == 2 { destination = copy pair[1] }
     }
     var action = "fetch"
@@ -47,19 +51,32 @@ fn local_fetch_command(operands: List[str], quiet: bool, force: bool) -> () ! ob
     var rows = List[TransportRow]()
     if destination == "" {
         (mut rows).push(TransportRow {
-            flag: "*", summary: "branch", source: short_ref(source), destination: "FETCH_HEAD", reason: "",
+            flag: "*",
+            summary: "branch",
+            source: short_ref(source),
+            destination: "FETCH_HEAD",
+            reason: "",
         })
     } else if before.len == 0 {
         (mut rows).push(TransportRow {
-            flag: "*", summary: "[new branch]", source: short_ref(source), destination: short_ref(destination), reason: "",
+            flag: "*",
+            summary: "[new branch]",
+            source: short_ref(source),
+            destination: short_ref(destination),
+            reason: "",
         })
     } else if oid.hex(before[0])? != id {
         let old = oid.hex(before[0])?
         let forward = ancestor(repo, old, id)?
         (mut rows).push(TransportRow {
             flag: if forward then " " else "+",
-            summary: if forward then "{report_id(repo, old)?}..{report_id(repo, id)?}" else "{report_id(repo, old)?}...{report_id(repo, id)?}",
-            source: short_ref(source), destination: short_ref(destination),
+            summary: if forward {
+                "{report_id(repo, old)?}..{report_id(repo, id)?}"
+            } else {
+                "{report_id(repo, old)?}...{report_id(repo, id)?}"
+            },
+            source: short_ref(source),
+            destination: short_ref(destination),
             reason: if forward then "" else "forced update",
         })
     }
