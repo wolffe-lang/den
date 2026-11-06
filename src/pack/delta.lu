@@ -34,16 +34,57 @@ fn variable(src: List[byte], mut pos: int) -> int ! {invalid} {
     invalid
 }
 
+/// The reflected CRC-32 table (polynomial 0xEDB88320), one entry a byte value.
+pub fn crc32_table() -> List[int] {
+    var table = List[int]()
+    for n in 0..256 {
+        var c: int = n
+        for _ in 0..8 { c = if c & 1 != 0 then c >> 1 ^ 3988292384 else c >> 1 }
+        (mut table).push(c)
+    }
+    table
+}
+
+/// Continue a CRC-32 over data[0..end]; start from 0, and the value after the
+/// last part is the finished CRC (the pre- and post-inversion are inside).
+pub fn crc32_update(table: List[int], crc: int, data: List[byte], end: int) -> int {
+    var c = crc ^ 4294967295
+    for i in 0..end { c = table[(c ^ data[i] as int) & 255] ^ c >> 8 }
+    c ^ 4294967295
+}
+
 /// Apply exact copy/insert instructions, inclusive output cap and owned result.
 /// No instruction may read outside its base or overflow the declared target.
 pub fn apply_delta(base: List[byte], src: List[byte], cap: int) -> List[byte] ! DeltaErrors {
+    var out = List[byte]()
+    apply_delta_into(base, src, cap, mut out)?
+    out
+}
+
+/// The delta's declared target size, read from its header without applying it.
+pub fn delta_target_size(src: List[byte]) -> int ! DeltaErrors {
+    var pos: int = 0
+    let _ = variable(src, mut pos)?
+    variable(src, mut pos)?
+}
+
+/// apply_delta into out, which is reset and then reserved to the declared
+/// target once, so a caller's long-lived list never regrows (resets and
+/// pushes only: out may live outside the caller's region).
+pub fn apply_delta_into(
+    base: List[byte],
+    src: List[byte],
+    cap: int,
+    mut out: List[byte],
+) -> () ! DeltaErrors {
     if cap < 0 { return invalid }
     var pos: int = 0
     let before = variable(src, mut pos)?
     let after = variable(src, mut pos)?
     if before != base.len { return invalid }
     if after > cap { return limit }
-    var out = List[byte]()
+    (mut out).reset()
+    (mut out).reserve(after)
     while pos < src.len {
         let op = src[pos] as int
         pos += 1
@@ -75,5 +116,4 @@ pub fn apply_delta(base: List[byte], src: List[byte], cap: int) -> List[byte] ! 
         }
     }
     if out.len != after { return invalid }
-    out
 }
