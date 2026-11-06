@@ -13,6 +13,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import shutil
 import socket
 import subprocess
 import threading
@@ -35,8 +36,14 @@ def main():
     for path, digest in PINS.items():
         for _ in range(2):
             assert hashlib.sha256(Path(path).read_bytes()).hexdigest() == digest, path
-    root = Path(args.output).resolve()
-    root.mkdir(parents=True, exist_ok=True)
+    evidence = Path(args.output).resolve()
+    evidence.mkdir(parents=True, exist_ok=True)
+    # The fixture PKI and the served body stay out of target/runs, which CI
+    # uploads as evidence; they live under target/pki and are removed at the end.
+    pki = evidence.parent.parent / 'pki' / evidence.name
+    if pki.exists():
+        shutil.rmtree(pki)
+    pki.mkdir(parents=True)
 
     def openssl(*argv):
         subprocess.run(['/usr/bin/openssl', *map(str, argv)], check=True, capture_output=True)
@@ -44,14 +51,14 @@ def main():
     # Disposable local fixture keys; never live credentials.
     openssl('req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-sha256', '-days', '2', '-subj', '/CN=HTTP memory root',
             '-addext', 'basicConstraints=critical,CA:TRUE', '-addext', 'keyUsage=critical,keyCertSign,cRLSign',
-            '-keyout', root / 'ca.key', '-out', root / 'ca.pem')
-    openssl('x509', '-in', root / 'ca.pem', '-outform', 'DER', '-out', root / 'ca.der')
-    (root / 'leaf.cnf').write_text('basicConstraints=critical,CA:FALSE\nkeyUsage=critical,digitalSignature\n'
+            '-keyout', pki / 'ca.key', '-out', pki / 'ca.pem')
+    openssl('x509', '-in', pki / 'ca.pem', '-outform', 'DER', '-out', pki / 'ca.der')
+    (pki / 'leaf.cnf').write_text('basicConstraints=critical,CA:FALSE\nkeyUsage=critical,digitalSignature\n'
                                    'extendedKeyUsage=serverAuth\nsubjectAltName=DNS:localhost\n')
     openssl('req', '-new', '-newkey', 'rsa:2048', '-nodes', '-subj', '/CN=localhost',
-            '-keyout', root / 'leaf.key', '-out', root / 'leaf.csr')
-    openssl('x509', '-req', '-in', root / 'leaf.csr', '-CA', root / 'ca.pem', '-CAkey', root / 'ca.key',
-            '-CAcreateserial', '-days', '1', '-sha256', '-extfile', root / 'leaf.cnf', '-out', root / 'leaf.pem')
+            '-keyout', pki / 'leaf.key', '-out', pki / 'leaf.csr')
+    openssl('x509', '-req', '-in', pki / 'leaf.csr', '-CA', pki / 'ca.pem', '-CAkey', pki / 'ca.key',
+            '-CAcreateserial', '-days', '1', '-sha256', '-extfile', pki / 'leaf.cnf', '-out', pki / 'leaf.pem')
     piece = b'x' * 16384
     results, failures = [], []
 
@@ -60,21 +67,21 @@ def main():
         server = thread = None
         errors = []
         if name == 'http-memory-tls':
-            (root / 'probe').write_bytes(b'HTTP/1.1 200 OK\r\nContent-Length: %d\r\nConnection: close\r\n\r\n' % BODY +
+            (pki / 'probe').write_bytes(b'HTTP/1.1 200 OK\r\nContent-Length: %d\r\nConnection: close\r\n\r\n' % BODY +
                                          b'x' * BODY)
             with socket.socket() as reservation:
                 reservation.bind(('127.0.0.1', 0))
                 port = reservation.getsockname()[1]
             server = subprocess.Popen(['/usr/bin/openssl', 's_server', '-accept', str(port),
-                                       '-cert', str(root / 'leaf.pem'), '-key', str(root / 'leaf.key'), '-tls1_3',
+                                       '-cert', str(pki / 'leaf.pem'), '-key', str(pki / 'leaf.key'), '-tls1_3',
                                        '-ciphersuites', 'TLS_CHACHA20_POLY1305_SHA256', '-HTTP', '-naccept', '1'],
-                                      cwd=root, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+                                      cwd=pki, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
             greeting, deadline = b'', time.monotonic() + 10
             while b'ACCEPT' not in greeting:
                 if time.monotonic() > deadline:
                     raise RuntimeError('OpenSSL startup timeout')
                 greeting += os.read(server.stdout.fileno(), 4096)
-            env.update(DEN_TEST_HTTP_URL='https://localhost:%d' % port, DEN_TLS_ROOTS=str(root / 'ca.der'))
+            env.update(DEN_TEST_HTTP_URL='https://localhost:%d' % port, DEN_TLS_ROOTS=str(pki / 'ca.der'))
         else:
             listener = socket.socket()
             listener.bind(('127.0.0.1', 0))
@@ -108,7 +115,7 @@ def main():
             thread.start()
             env['DEN_TEST_HTTP_URL'] = 'http://127.0.0.1:%d' % port
         started = time.monotonic()
-        with (root / (name + '.stdout')).open('wb') as stdout, (root / (name + '.stderr')).open('wb') as stderr:
+        with (evidence / (name + '.stdout')).open('wb') as stdout, (evidence / (name + '.stderr')).open('wb') as stderr:
             child = subprocess.Popen([args.client], env=env, stdin=subprocess.DEVNULL, stdout=stdout, stderr=stderr)
         _, status, usage = os.wait4(child.pid, 0)
         child.returncode = os.waitstatus_to_exitcode(status)
@@ -120,20 +127,21 @@ def main():
             server.stdout.close()
         if thread is not None:
             thread.join(timeout=30)
-        head = (root / (name + '.stdout')).read_bytes()[:64]
+        head = (evidence / (name + '.stdout')).read_bytes()[:64]
         ratio = usage.ru_maxrss * 1024 / BODY
         ok = (child.returncode == 0 and not errors and head.startswith(b'status=200 bytes=%d round=0\n' % BODY)
               and ratio <= RATIO)
         results.append(dict(row=name, exit=child.returncode, body=BODY, maxrss_kib=usage.ru_maxrss,
                             ratio=round(ratio, 2), elapsed=round(elapsed, 2), errors=errors))
-        (root / 'results.json').write_text(json.dumps(results, indent=2) + '\n')
+        (evidence / 'results.json').write_text(json.dumps(results, indent=2) + '\n')
         print('%s %s: maxrss=%d KiB ratio=%.2f (bound %d) exit=%d' % (
             'PASS' if ok else 'FAIL', name, usage.ru_maxrss, ratio, RATIO, child.returncode), flush=True)
         if not ok:
             failures.append(name)
-        for leftover in (root / (name + '.stdout'), root / 'probe'):
+        for leftover in (evidence / (name + '.stdout'), pki / 'probe'):
             if leftover.exists():
                 leftover.unlink()
+    shutil.rmtree(pki)
     if failures:
         raise SystemExit('failed rows: ' + ', '.join(failures))
 
