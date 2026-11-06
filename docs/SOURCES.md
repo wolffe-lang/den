@@ -32,6 +32,15 @@ Performance fixtures are deterministic generated inputs, not user repositories.
 Their copied inode/ctime mismatch and explicitly refreshed stat cache are
 retained separately; `cp -a` is not assumed to preserve inode or ctime.
 
+The status fast path cites published pages by URL only:
+gitformat-index(5) (`https://git-scm.com/docs/gitformat-index`), Cache tree,
+for valid and invalidated records; and Git's racy-git notes
+(`https://git-scm.com/docs/racy-git`), cited by URL, not re-read, for the rule
+that an entry cached at or after the index file's mtime is content-checked.
+den compares all ten stat words and treats an unknown index time as racy, so
+it reads at least what that rule requires. The SHA-1 block restructuring
+follows FIPS 180-4 §6.1.2, as the vendored header says.
+
 ## Daily-use references (vc17)
 
 Read published Git documentation at `https://git-scm.com/docs/` before
