@@ -56,7 +56,8 @@ fn load_index(path: str) -> Index ! PackErrors {
     parse_index(bytes)?
 }
 
-fn verify(fd: int, index: Index) -> int ! PackErrors {
+/// Header, object count and offset bounds against the parsed index; the size.
+fn structure(fd: int, index: Index) -> int ! PackErrors {
     let size = file_size(fd)?
     if size < 32 { return Unsupported("pack truncated") }
     let header = range_bytes(fd, 0, 12)?
@@ -71,6 +72,23 @@ fn verify(fd: int, index: Index) -> int ! PackErrors {
     for entry in index.entries {
         if entry.offset >= size - 20 { return Unsupported("pack index offsets") }
     }
+    size
+}
+
+/// The read path's check (R-vc18-3): structure plus the idx-to-pack trailer
+/// binding, never a whole-pack hash. Every object read is still bounded by
+/// its entry CRC32 and its reconstructed identity; verify-pack, fsck and
+/// installation keep the whole-pack checksum through verify below.
+fn bounds(fd: int, index: Index) -> int ! PackErrors {
+    let size = structure(fd, index)?
+    let trailer = range_bytes(fd, size - 20, 20)?
+    if !same(trailer, index.pack_sum) { return Unsupported("pack index binding") }
+    if file_size(fd)? != size { return Unsupported("pack changed") }
+    size - 20
+}
+
+fn verify(fd: int, index: Index) -> int ! PackErrors {
+    let size = structure(fd, index)?
     var state = hash.new1(), pos: int = 0
     while pos < size - 20 {
         region window {
@@ -239,7 +257,7 @@ pub fn read_object(gitdir: str, name: str, cap: int) -> Body ! PackErrors {
             let index = load_index(path)?
             let fd = open_pack("{path[0..path.len - 4]}.pack")?
             defer fs_close(fd) else |_| {}
-            let end = verify(fd, index)?
+            let end = bounds(fd, index)?
             let slot = index.by_name[name] else -1
             if slot >= 0 {
                 var seen = Map[int, bool](), total: int = 0
@@ -257,7 +275,7 @@ pub fn read_object(gitdir: str, name: str, cap: int) -> Body ! PackErrors {
 }
 
 /// Return at most two distinct matching names, sufficient for ambiguity checks.
-/// Validate both trailing checksums and the binding even for prefix-only reads.
+/// Validate the idx checksum and the trailer binding even for prefix-only reads.
 pub fn prefix(gitdir: str, prefix: str) -> List[str] ! PackErrors {
     var out = List[str]()
     for path in indexes(gitdir)? {
@@ -265,7 +283,7 @@ pub fn prefix(gitdir: str, prefix: str) -> List[str] ! PackErrors {
             let index = load_index(path)?
             let fd = open_pack("{path[0..path.len - 4]}.pack")?
             defer fs_close(fd) else |_| {}
-            let _ = verify(fd, index)?
+            let _ = bounds(fd, index)?
             for entry in index.entries {
                 if entry.name.starts_with(prefix) {
                     var duplicate = false
@@ -277,3 +295,4 @@ pub fn prefix(gitdir: str, prefix: str) -> List[str] ! PackErrors {
     }
     out
 }
+
