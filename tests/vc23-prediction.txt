@@ -1,0 +1,168 @@
+vc23: den clones a pack over its wire cap (den#61), keeps the live
+fixture's URL off children's argv, and diagnoses den#66
+Base: ac2332bfd2e1b01036a599ce79fac04a2285d8db
+Prediction committed before implementation; observations do not replace it.
+
+Sources read: Git v2.56.0 documentation: gitformat-pack(5) (pack and idx
+v2, object entries, deltified representation, OFS and REF bases, the
+trailer), git-index-pack(1) (indexing a received pack, --fix-thin,
+--max-input-size), gitprotocol-v2(5) (fetch, the packfile section,
+thin-pack, ofs-delta, sideband), gitprotocol-pack(5) (pack transfer),
+gitprotocol-http(5) (smart RPC responses), git-clone(1), git-fetch(1),
+git-config(1) (core.bigFileThreshold, core.deltaBaseCacheLimit,
+fetch.unpackLimit, transfer.unpackLimit, maintenance.autoDetach,
+remote.<name>.url, GIT_CONFIG_COUNT), gitremote-helpers(7) (the helper's
+arguments), git-maintenance(1). Black-box runs of the pinned Git 2.56.0
+and a field Git. Own code: den's pack reader, stream decoder, idx writer,
+installer, wire limits, transport channels, HTTP client and fetch paths;
+the wolf book's chapters on lists and regions; wolf-std's fs.
+No Git, libgit2, JGit or other implementation source consulted.
+
+Measured before any change, trunk ac2332b, release tier, a Linux x86-64
+desktop in the pinned oracle container (12 GiB cap), each child reaped by
+wait4 for its own peak RSS:
+
+  den's own public repository over https (pinned Git's clone):
+    pack 312,146,413 bytes; 4,937 objects (622 commits, 1,932 trees,
+    2,383 blobs); 2,750 deltas, deepest chain 29; inflated objects
+    377,849,632 bytes; largest object 103,002,444 bytes (a whole blob in
+    history); largest blob at HEAD 19,889,137 bytes; HEAD's worktree
+    1,871 files, 339,107,885 bytes.
+    git clone --bare: 134.3 s, 300,128 KiB; git clone: 129.2 s,
+    289,620 KiB (the link, about 2.3 MB/s, decides both).
+    den clone: refused `den: wire: limit`, exit 2, at 72.5 s, 423,152 KiB,
+    2.13 s user; nothing left behind (vc22's behaviour, unchanged).
+  A 110,135,503-byte pack under every trunk cap (seven 15 MiB random
+  blobs), file://: git 2.17 s, 112,268 KiB; den 32.05 s, 6,623,028 KiB.
+  den holds about 60 times the pack.
+  A wolf probe: a List slice is a copy, also as a call argument; two
+  hundred slices of a 64 MiB list passed to a function ran a 6 GiB
+  container out of memory. Nothing allocated outside a region is freed.
+
+P1. What holds memory today on a large pack, by component (file://; https
+adds its two body copies):
+  a. transport.message: the whole pkt-line response F in one growing List
+     in the ambient region (each doubling leaves its old buffer), and
+     every packet's own payload, never reclaimed: about 3F to 4F.
+  b. wire.parse_pack: a decoded copy of every payload and the appended
+     pack P, growing by doubling: about 3P.
+  c. pack.stream_entries, run twice (stream_refs, then decode): each entry
+     inflates `data[pos..]`, a copy of the rest of the pack, so the copies
+     sum to about entries x P / 2 per run; plus a copy of every inflated
+     body (U, the sum of object sizes).
+  d. pack.decode: a copy of every entry on every resolution pass and the
+     resolved bodies: at least 2U.
+  e. loose installation: one compressed copy per object, ambient.
+  f. the closure check: per-object reads in regions, reclaimed, but an
+     aggregate 128 MiB cap on bodies read, and every blob is read.
+  g. checkout: every target blob read twice outside any region, and each
+     written file read back for the index: about 3 x the worktree.
+  Over https: the response body (F, read per region since vc22) and its
+  returned copy (F).
+  So today's peak is tens of times the pack, as measured; the 140,000,000
+  wire cap and the 128 MiB payload caps are the only thing keeping it
+  inside a container, and den's own repository cannot pass them.
+
+P2. The streaming design and its bound:
+  - Receive: the fetch response is read one pkt-line at a time, each in
+    its own region; band 1 goes straight to an exclusively created
+    temporary under objects/pack, band 2 is dropped, band 3 is fatal.
+    HTTP bodies stream through the connection's one reused 64 KiB buffer
+    (Content-Length or chunked). No whole response, body or pack is held.
+    The fetch no longer asks for thin-pack, so the received pack is
+    self-contained and installed as it is (git-index-pack(1) appends
+    missing bases instead; den does not need to).
+  - Index (pass 1, sequential): each entry is read from the file by
+    offset into a window sized from its declared size and grown by
+    doubling only when the inflater reports truncation; whole objects are
+    inflated into a list reserved to their exact size and hashed; deltas
+    are inflated to check their size and record their base. The CRC-32
+    and the pack's SHA-1 are computed over the same bytes. One entry's
+    window and body live in one region: about 2.1 x that object.
+  - Resolve (pass 2): a depth-first walk from every whole object over its
+    OFS and REF children. The bodies on the walk's path are bounded by
+    W = 96 MiB (git-config(1)'s core.deltaBaseCacheLimit default); a
+    child that would cross W is resolved and named, and its own subtree is
+    revisited later from a fresh reconstruction (base, delta and result,
+    at most three bodies at once). Delta outputs are reserved to their
+    declared size.
+  - Per-object metadata (offset, length, CRC, kind, size, base, parent,
+    name) and the idx (28 bytes an object): about 160 bytes an object.
+  - The connectivity check walks commits, trees and tags; blob types come
+    from the indexer's table, so no blob body is read.
+  - Checkout: one file at a time in its own region; the pack reader's
+    copies make about 5 x that blob.
+  Bound: peak RSS <= 64 MiB + W + 5 x L + 160 bytes x objects, where L is
+  the largest object (indexing) or largest checked-out blob (checkout).
+  Predicted: den's own repository about 230 MiB (pass 1 on its 98 MiB
+  whole blob; bound 652 MiB); the large fixture below (48 MiB blobs at
+  HEAD) about 300 MiB (checkout; bound 400 MiB). Disk: the pack once, as
+  git keeps it, plus the idx.
+
+P3. Time for den's own repository over https: den receives at the link's
+  rate (2.13 s of CPU for 140 MB of TLS today), then inflates about
+  378 MB (about 70 MB/s, vc01's release figure) and hashes the same with
+  SHA-1 (about 65 MB/s, vc18's), then checks out 339 MB (a second inflate
+  and SHA-1 for the index). Expect about 30 s of release CPU and twice
+  that natively: den about 165 s release and 220 s native, against git's
+  130 s on the same link, so 1.3x and 1.7x. On a fast link the ratio
+  grows toward den's CPU against git's (git used about 4 s of CPU).
+
+P4. Rows, red first at trunk with `den: wire: limit` (tools/large-pack-test.py):
+  - large-pack-<transport>: a deterministic bare repository built by the
+    pinned Git whose pack exceeds 134,217,728 bytes (three 48 MiB random
+    blobs and a text file deltified over forty commits, a tag), cloned by
+    den and by the pinned Git over file://, git:// (git daemon), ssh (a
+    local ssh program that runs the remote command, den's ssh channel as
+    vc22 drives it in the container) and https (the pinned OpenSSL
+    terminator and git-http-backend, vc22's fixture); refs, HEAD, every
+    reachable object's bytes, the worktree and remote config equal, and
+    the pinned Git's fsck --full and status clean on den's clone; also a
+    plain local path, whose copy carries the same 128 MiB cap today.
+  - large-pack-fetch: an incremental fetch of a large pack into an
+    existing clone, the same comparisons.
+  - large-pack-memory: den's clone under a hard address-space cap at the
+    P2 bound, and its peak RSS recorded beside the prediction.
+  - large-pack-object-limit: a pack whose one blob is one byte over the
+    per-object cap; den refuses by name, exit 2, and leaves nothing.
+  - http-live-self (tools/http-live-test.py): den clones its own public
+    repository over https, compared with the pinned Git's clone as the
+    live read row compares; it replaces the limit row.
+  - pure units: the table CRC-32 against the bitwise one, sized inflate,
+    reserved delta application, the idx writer against the reader.
+
+P5. The URL off argv (R-vc22b-1 (a)): Git does not keep a configured
+  remote's URL off argv over https. Measured black-box with GIT_TRACE: for
+  `git ls-remote live` with remote.live.url from GIT_CONFIG_*, git starts
+  `git remote-https live <URL>`, as gitremote-helpers(7) describes. So
+  the push row stops using Git against the private fixture: den takes the
+  URL from a remote configured after `den init` through GIT_CONFIG_*
+  (fetch and push by name), and the pushed branch is checked in-process
+  by the row against the server's own ref advertisement. A watcher reads
+  /proc/<pid>/cmdline of every descendant while the row runs and fails if
+  the URL or token appears; red on trunk's tools/http-live-test.py (the
+  URL is on den's and git's argv). R-vc23-3 records the choice.
+
+P6. den#66: the witness is in the field leg's evidence. In the failing
+  m2-commit-paragraphs row, Git's snapshot holds
+  .git/objects/maintenance.lock (empty, 0644) and den's does not; the
+  index differs only in stat fields the index proof canonicalizes and the
+  loose object only in its zlib bytes. Git's commit starts automatic
+  maintenance detached (git-config(1) maintenance.autoDetach defaults to
+  true), and the harness can snapshot while the detached child holds its
+  lock. Expect the pinned environment's maintenance.autoDetach=false to
+  join that work before the command returns, so the lock never appears,
+  with every oracle row unchanged. A repeat count on the Mac with
+  Homebrew's Git shows the lock before and none after.
+
+P7. Rulings: R-vc23-1 the wire cap: recommend (A), remove the whole-pack
+  cap: memory no longer scales with the pack, and the disk check is the
+  write itself (a failed write refuses by name and removes the
+  temporary). R-vc23-2 the per-object cap: recommend 512 MiB,
+  core.bigFileThreshold's default, the size above which Git itself stops
+  treating an object as an in-memory delta candidate; at the cap the P2
+  bound is about 2.7 GiB, inside a 6 GiB container. The pack reader's
+  16 MiB object cap rises to the same value, or a clone could not check
+  out what it indexed (den's HEAD has 19.9 MB blobs). The object count
+  follows the idx reader's existing 400,000 cap, and delta depth stays at
+  the reader's 64 (den's own deepest chain is 29).
