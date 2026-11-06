@@ -31,6 +31,8 @@ import shutil
 import signal
 import socket
 import subprocess
+import sys
+import threading
 import time
 
 GIT_SHA256 = 'c4848492938c4ebfffbefe1fbbaa68b9af90c86d1f6a20e76816c5ff37fcfa60'
@@ -76,6 +78,73 @@ def reachable(host, port, timeout=10):
             return ''
     except OSError as exc:
         return type(exc).__name__
+
+
+class ArgvWatch:
+    """R-vc22b-1 (a): read /proc/<pid>/cmdline of every descendant of this
+    process while a row runs, and count each argv holding a secret needle (the
+    fixture's URL, its path or the token). Needles are never printed. A
+    synthetic control child proves the watcher sees an argv it should."""
+    CONTROL = b'den-live-argv-control-' + secrets.token_hex(8).encode()
+
+    def __init__(self, needles):
+        self.needles = [needle for needle in needles if needle] + [self.CONTROL]
+        self.stop = threading.Event()
+        self.seen, self.hits, self.control = set(), set(), False
+        self.thread = threading.Thread(target=self.loop, name='argv-watch', daemon=True)
+
+    def descendants(self):
+        me, parents = os.getpid(), {}
+        for entry in os.listdir('/proc'):
+            if not entry.isdigit():
+                continue
+            try:
+                with open('/proc/' + entry + '/stat', 'rb') as handle:
+                    stat = handle.read()
+            except OSError:
+                continue
+            parents[int(entry)] = int(stat[stat.rfind(b')') + 2:].split()[1])
+        out = []
+        for pid in parents:
+            node = pid
+            for _ in range(64):
+                node = parents.get(node)
+                if node is None:
+                    break
+                if node == me:
+                    out.append(pid)
+                    break
+        return out
+
+    def loop(self):
+        while not self.stop.is_set():
+            for pid in self.descendants():
+                try:
+                    with open('/proc/%d/cmdline' % pid, 'rb') as handle:
+                        argv = handle.read()
+                except OSError:
+                    continue
+                if not argv:
+                    continue
+                self.seen.add(pid)
+                for needle in self.needles:
+                    if needle in argv:
+                        if needle == self.CONTROL:
+                            self.control = True
+                        else:
+                            self.hits.add(pid)
+            self.stop.wait(0.005)
+
+    def __enter__(self):
+        self.thread.start()
+        control = subprocess.Popen([sys.executable, '-I', '-c', 'import time; time.sleep(0.5)',
+                                    self.CONTROL.decode()], stdin=subprocess.DEVNULL)
+        control.wait(timeout=30)
+        return self
+
+    def __exit__(self, *_):
+        self.stop.set()
+        self.thread.join(timeout=10)
 
 
 def main():
@@ -303,6 +372,9 @@ def main():
                 problems.append('pinned Git ls-remote exit %d' % listed['exit'])
             return bytes.fromhex(listed['stdout']).split(b'\t')[0].decode() if listed['stdout'] else ''
 
+        fixture_path = live_url.removeprefix('https://github.com').removesuffix('.git').encode()
+        watch = ArgvWatch([live_url.encode(), live_url.removesuffix('.git').encode(), fixture_path,
+                           live_token.encode(), basic]).__enter__()
         clone = run([den, 'clone', '-q', live_url, work], out, name + '-clone', READ_SECONDS, 'den', den_auth)
         if clone['exit']:
             problems.append('den clone exit %d: %r' % (clone['exit'], bytes.fromhex(clone['stderr'])[:300]))
@@ -329,6 +401,21 @@ def main():
                         problems.append('den delete exit %d: %r' % (delete['exit'], bytes.fromhex(delete['stderr'])[:300]))
                     elif remote_ref():
                         problems.append('the disposable branch is still on the remote')
+        watch.__exit__()
+        argv_problems = []
+        if not watch.control:
+            argv_problems.append('the watcher did not see its control argv')
+        if not watch.seen:
+            argv_problems.append('the watcher saw no child')
+        if watch.hits:
+            argv_problems.append('%d of %d children held the fixture URL or token on argv (values withheld)' % (
+                len(watch.hits), len(watch.seen)))
+        print('LIVE http-live-argv children=%d hits=%d control=%s' % (len(watch.seen), len(watch.hits), watch.control),
+              flush=True)
+        print(('PASS ' if not argv_problems else 'FAIL ') + 'http-live-argv' +
+              ('' if not argv_problems else ': ' + '; '.join(argv_problems)), flush=True)
+        if argv_problems:
+            failed.append('http-live-argv')
         for path in out.rglob('*'):
             if path.is_file():
                 hidden(path.read_bytes())
