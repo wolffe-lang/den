@@ -168,8 +168,8 @@ def selftest():
 # the snapshot can catch the detached child's objects/maintenance.lock (the
 # Homebrew leg's m2-commit-paragraphs FAIL). git-config(1) and
 # git-maintenance(1): maintenance.autoDetach=false joins it to the command.
-# The oracle's own Git runs take these options.
-ORACLE_GIT_OPTIONS=[]
+# Only the oracle's own Git runs take it; the pinned environment is unchanged.
+ORACLE_GIT_OPTIONS=['-c','maintenance.autoDetach=false']
 
 def joined_maintenance():
     """Read the oracle's Git invocation's trace2 child_start events: its
