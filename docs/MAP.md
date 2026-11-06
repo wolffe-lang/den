@@ -254,7 +254,9 @@ went from 5.1x the body (plain) and 65.5x (TLS) to 3.1x and 3.3x.
 
 The rows are `tools/check-http`'s, listed in the vc22 note. The live rows reach
 github.com only; their SKIP is by name when github.com:443 does not connect or
-when no distribution root bundle exists. A SKIP is not a pass.
+when no distribution root bundle exists, and the push row's also when
+`DEN_LIVE_HTTPS_URL` and `DEN_LIVE_HTTPS_TOKEN` are not both set. A SKIP is not
+a pass.
 
 Limits by name: close-delimited HTTPS bodies (wolf-std#133); credential
 helpers; `http.*` configuration other than `http.followRedirects=initial`;
