@@ -87,13 +87,22 @@ p,i,_ = make(chain)
 check('depth-limit',repo('depth',p,i),b'65',expected='pack delta depth limit')
 check('depth-boundary',OUT/'depth',b'64')
 flipped=bytearray(pack); flipped[-25]^=1
-check('flipped-delta',repo('flipped-delta',bytes(flipped),idx),last,expected='pack checksum')
+# R-vc18-3: a read checks the entry it reads (CRC32 and identity) and the
+# idx-to-pack trailer binding, never the whole-pack hash; verify-pack keeps it.
+check('flipped-delta',repo('flipped-delta',bytes(flipped),idx),last,expected='pack entry CRC')
+def verify(name, r, expected):
+    p = subprocess.run([str(ROOT/'target'/A.tier/'den'), 'verify-pack', str(r/'objects'/'pack'/'pack-fixture.idx')], capture_output=True, timeout=60)
+    good = p.returncode != 0 and expected.encode() in p.stderr and not p.stdout
+    rows.append(dict(name=name, ok=good, code=p.returncode, stdout_sha256=hashlib.sha256(p.stdout).hexdigest(), stderr=p.stderr.decode(errors='replace')))
+    if not good: print(name, p.returncode, p.stdout[:200], p.stderr, flush=True)
+verify('flipped-delta-verify-pack',OUT/'flipped-delta','pack checksum')
 # An incompressible object crosses many 64-KiB windows, not a full-pack allocation.
 big = random.Random(901).randbytes(300000)
 p,i,_ = make([(3,big,big,b'')]); check('window-crossing',repo('windows',p,i),big)
 # Trailer failures do not disappear when resolving a prefix.
-for name,p,i,reason in [('short-pack',pack[:11],idx,'pack truncated'),('bad-pack-trailer',pack[:-1]+bytes([pack[-1]^1]),idx,'pack checksum'),('bad-idx-trailer',pack,idx[:-1]+bytes([idx[-1]^1]),'pack index checksum'),('short-idx',pack,idx[:1020],'pack index truncated')]:
+for name,p,i,reason in [('short-pack',pack[:11],idx,'pack truncated'),('bad-pack-trailer',pack[:-1]+bytes([pack[-1]^1]),idx,'pack index binding'),('bad-idx-trailer',pack,idx[:-1]+bytes([idx[-1]^1]),'pack index checksum'),('short-idx',pack,idx[:1020],'pack index truncated')]:
     rr=repo(name,p,i); check(name,rr,last,expected=reason); check(name+'-prefix',rr,last,expected=reason,name_id=oid('blob',last).hex()[:7])
+verify('bad-pack-trailer-verify-pack',OUT/'bad-pack-trailer','pack checksum')
 # Re-sign malformed indexes so structure/CRC guards, not just SHA, must fire.
 for name,offset,value,reason in [('fanout',8,u32(999),'pack index fanout'),('crc',1032+20*3,b'\0'*4,'pack entry CRC'),('offset',1032+24*3+4*next(n for n,x in enumerate(records) if x[2]==12),u32(13),'pack index offsets'),('pack-binding',len(idx)-40,b'\0'*20,'pack index binding')]:
     bad=idx[:offset]+value+idx[offset+len(value):]; rr=repo(name,pack,resign_idx(bad))
