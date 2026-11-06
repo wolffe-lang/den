@@ -30,7 +30,10 @@ def main():
     root.mkdir(parents=True, exist_ok=True)
 
     def openssl(*argv):
-        subprocess.run(['/usr/bin/openssl', *map(str, argv)], check=True, capture_output=True)
+        result = subprocess.run(['/usr/bin/openssl', *map(str, argv)], capture_output=True)
+        if result.returncode:
+            raise SystemExit('FAIL http-tls-fixture: openssl %s exit %d: %s' % (
+                argv[0], result.returncode, result.stderr.decode(errors='replace').strip()[-400:]))
 
     # Locally generated, disposable fixture keys; never live credentials.
     for name in ['ca', 'wrong-ca']:
@@ -79,9 +82,9 @@ def main():
     (root / 'issued').mkdir(exist_ok=True)
     (root / 'index.txt').write_text('')
     (root / 'serial').write_text('1000\n')
-    (root / 'ca.cnf').write_text('[ca]\ndefault_ca = fixture\n[fixture]\ndatabase = index.txt\nnew_certs_dir = issued\n'
-                                 'serial = serial\ndefault_md = sha256\npolicy = anything\n'
-                                 '[anything]\ncommonName = supplied\n')
+    (root / 'ca.cnf').write_text('[ca]\ndefault_ca = fixture\n[fixture]\ndatabase = %s\nnew_certs_dir = %s\n'
+                                 'serial = %s\ndefault_md = sha256\npolicy = anything\n'
+                                 '[anything]\ncommonName = supplied\n' % (root / 'index.txt', root / 'issued', root / 'serial'))
     openssl('ca', '-batch', '-notext', '-config', root / 'ca.cnf', '-cert', root / 'ca.pem', '-keyfile', root / 'ca.key',
             '-in', root / 'leaf.csr', '-startdate', '400101000000Z', '-enddate', '401231000000Z',
             '-extfile', extensions, '-out', root / 'not-yet-valid.pem')
