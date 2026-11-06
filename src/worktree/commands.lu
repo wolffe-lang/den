@@ -80,7 +80,7 @@ fn status_command(ctx: Context, args: List[str]) -> int ! WorkErrors {
     if options.nul && !format { options.porcelain = true; options.short = true }
     var warnings = List[str]()
     defer emit_ignore_warnings(warnings)
-    let snapshot = scan_with_warnings(ctx, options.untracked != "no", mut warnings)?
+    let snapshot = scan_status(ctx, options.untracked != "no", options.ignored, mut warnings)?
     let bytes = if version2 then render_status_v2(snapshot, options)? else render_status(snapshot, options)?
     var output = fs.stdout()
     fs.write_chunk(mut output, bytes)?
