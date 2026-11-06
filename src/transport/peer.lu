@@ -164,3 +164,77 @@ pub fn close_peer(mut p: Peer) -> int ! Errors {
 
 /// Credential-aware textual diagnostic boundary; never apply to pack bytes.
 pub fn redact(text: str) -> str { http.redact(text) }
+
+/// vc23: one response read a pkt-line at a time, never whole: a stream
+/// channel's packets, or an HTTP RPC body's. The HTTP connection is the
+/// peer's own, moved here for the response and back by end_stream.
+pub struct Stream { channel: Channel, web: http.Connection, http: bool }
+
+/// Send a complete command and start its response, which streams (a fetch
+/// response carrying a pack of any size). HTTP status and content type are
+/// checked as exchange checks them; a refused response closes.
+pub fn begin_stream(mut p: Peer, request: List[byte]) -> Stream ! Errors {
+    if p.stream.len == 1 {
+        write(p.stream[0], request)?
+        return Stream { channel: copy p.stream[0], web: http.idle(), http: false }
+    }
+    if p.web.len != 1 { return invalid }
+    var c = copy p.web[0]
+    defer { p.web[0] = copy c }
+    let response = http.request_streamed(
+        mut c,
+        "POST",
+        "{c.endpoint.path}/git-{p.service}",
+        "git-{p.service}",
+        request,
+    )?
+    if response.status != 200 {
+        http.close(mut c)
+        http_status(response.status, true)?
+        return invalid
+    }
+    if response.content_type.lower() != "application/x-git-{p.service}-result" {
+        http.close(mut c)
+        return Unsupported("HTTP RPC content type")
+    }
+    Stream {
+        channel: Channel { input: -1, output: -1, socket: false, child: -1 },
+        web: copy c,
+        http: true,
+    }
+}
+
+/// The response's next packet; kind -1 is a clean end before a header.
+pub fn stream_packet(mut s: Stream) -> pktline.Packet ! Errors {
+    if !s.http { return packet(s.channel)? }
+    let header = http.body_read(mut s.web, 4)?
+    if header.len == 0 { return pktline.Packet { kind: -1, data: List[byte](), next: 0 } }
+    var bytes = copy header
+    if bytes.len < 4 {
+        for b in http.body_take(mut s.web, 4 - bytes.len)? { (mut bytes).push(b) }
+    }
+    let size = pktline.header(bytes)?
+    if size < 4 { return pktline.Packet { kind: size, data: List[byte](), next: 4 } }
+    pktline.Packet { kind: 4, data: http.body_take(mut s.web, size - 4)?, next: size }
+}
+
+/// After the response's last section: an HTTP body may hold only the
+/// stateless response-end marker before it ends (as exchange accepts it);
+/// then the connection goes back to the peer. A stream channel has nothing.
+pub fn end_stream(mut p: Peer, take s: Stream) -> () ! Errors {
+    if !s.http { return }
+    var c = s.web
+    defer { p.web[0] = copy c }
+    var rest = List[byte]()
+    loop {
+        let more = http.body_read(mut c, 4)?
+        if more.len == 0 { break }
+        for b in more { (mut rest).push(b) }
+        if rest.len > 4 { http.close(mut c); return invalid }
+    }
+    if rest.len != 0 && (str_from_utf8(rest) else "") != "0002" {
+        http.close(mut c)
+        return invalid
+    }
+    http.body_end(mut c)?
+}
