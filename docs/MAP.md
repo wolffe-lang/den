@@ -255,7 +255,7 @@ replaced buffer, and the TLS client's per-record temporaries, would otherwise
 live until the connection ends. Measured on one 32,000,000-byte body, peak RSS
 went from 5.1x the body (plain) and 65.5x (TLS) to 3.1x and 3.3x.
 
-The rows are `tools/check-http`'s, listed in the vc22 note. The live rows reach
+The rows are `tools/check-http`'s, listed in the vc22 note. Fixture PKI, keys included, lives under `target/pki/<row>` and is removed when the row ends, never under the uploaded `target/runs`; `tools/evidence-modes.py`, last in both gates, refuses an upload path a non-owner cannot read or that holds a private key. The live rows reach
 github.com only; their SKIP is by name when github.com:443 does not connect or
 when no distribution root bundle exists, and the push row's also when
 `DEN_LIVE_HTTPS_URL` and `DEN_LIVE_HTTPS_TOKEN` are not both set. A SKIP is not
