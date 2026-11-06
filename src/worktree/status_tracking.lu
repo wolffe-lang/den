@@ -14,7 +14,7 @@ fn upstream_summary(tracking: revision.Upstream) -> str {
     if tracking.ahead > 0 && tracking.behind > 0 {
         return "ahead {tracking.ahead}, behind {tracking.behind}"
     }
-    if tracking.ahead > 0 { return "ahead {tracking.ahead}" }
+    if tracking.ahead > 0 { return "behind {tracking.ahead}" }
     if tracking.behind > 0 { return "behind {tracking.behind}" }
     ""
 }
