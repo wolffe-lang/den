@@ -520,9 +520,12 @@ The daemon serves one connection on IPv4 loopback, requires
 against its export root, and enables writes only with the explicit flag. The
 transport supports plain `file:///absolute/path`, `git://host[:port]/path`,
 `ssh://[user@]host[:port]/path` and scp-like `[user@]host:path` forms up to
-4,096 bytes. SSH uses the system executable and an argv vector, with separately
-quoted literal remote program/path arguments; percent-escaped paths and IPv6 SSH
-forms remain named limits. TCP operations have 30-second deadlines; local and
+4,096 bytes. SSH uses the system executable and an argv vector. The remote
+command is the program word and the single-quoted path, as Git sends it: a plain
+program word (letters, digits and `._/+-`) goes bare, because a service that
+parses the command itself, as GitHub's does, refuses a quoted one; any other
+`--upload-pack=`/`--receive-pack=` value is a literal executable and stays quoted.
+Percent-escaped paths and IPv6 SSH forms remain named limits. TCP operations have 30-second deadlines; local and
 SSH services use mapped byte pipes. An sshd that does not accept GIT_PROTOCOL
 serves protocol v0, which den refuses rather than falling back. The live fixture
 uses explicitly selected owned wrappers exporting protocol v2, not sshd changes.
