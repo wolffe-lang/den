@@ -25,9 +25,10 @@ rows = []
 env = dict(os.environ)
 
 
-def state():
+def state(top=None):
+    # Rows run inside one repository snapshot that repository; others the root.
     files = {}
-    for f in sorted(root.rglob('*')):
+    for f in sorted((top or root).rglob('*')):
         name = f.relative_to(root).as_posix()
         if name in ('held-input', 'held-output'):
             continue  # Explicit process stream captures, not repository paths.
@@ -93,11 +94,11 @@ def g(*args, data=None):
 
 
 def check(name, args, changes=None, data=None, inherited=False, cwd=None):
-    before = state()
+    before = state(cwd)
     left = run(G, args, changes, data, inherited, cwd)
-    middle = state()
+    middle = state(cwd)
     right = run(D, args, changes, data, inherited, cwd)
-    after = state()
+    after = state(cwd)
     ok = left == right and before == middle == after
     rows.append(dict(name=name, argv=args, environment=changes or {}, stdin=(data or b'').hex(),
                      inherited=inherited, expected=left, actual=right,
@@ -300,13 +301,13 @@ def combined():
         gx(repo, 'reset', '-q', '--hard', tip)
         return repo
 
-    def rows(name, repo, extra=()):
+    def show_rows(name, repo, extra=()):
         for flags in [[], ['--cc'], ['-c'], *extra]:
             label = 'default' if not flags else '_'.join(f.lstrip('-') for f in flags)
             check('combined-' + name + '-' + label, ['show', *flags], cwd=repo)
 
     def two(name, base_files, left, right, result, extra=()):
-        rows(name, merge(name, base_files, [left, right], result), extra)
+        show_rows(name, merge(name, base_files, [left, right], result), extra)
 
     f = L(*n)
     two('clean-two-sides', {'f': f}, {'f': sub(n, {1: 'LEFT 2'})}, {'f': sub(n, {25: 'RIGHT 26'})},
@@ -359,6 +360,38 @@ def combined():
         {'f': L('s', 'M', 'e')})
     two('lost-many', {'f': L('s', 'x', 'e')}, {'f': L('s', 'a', 'b', 'c', 'd', 'e')},
         {'f': L('s', 'c', 'q', 'a', 'd', 'e')}, {'f': L('s', 'M', 'e')})
+    two('mid-lost', {'f': f}, {'f': sub(n, {4: 'L5', 8: None, 11: 'L12'})}, {'f': sub(n, {4: 'R5', 11: 'R12'})},
+        {'f': sub(n, {4: 'M5', 8: None, 11: 'M12'})})
+    two('mid-pick', {'f': f}, {'f': sub(n, {4: 'L5', 8: 'L9', 11: 'L12'})}, {'f': sub(n, {4: 'R5', 8: 'R9', 11: 'R12'})},
+        {'f': sub(n, {4: 'M5', 8: 'L9', 11: 'M12'})})
+    two('start-lost', {'f': f}, {'f': sub(n, {5: None, 9: 'L10'})}, {'f': sub(n, {9: 'R10'})},
+        {'f': sub(n, {5: None, 9: 'M10'})}, extra=(['--cc', '-U2'], ['--cc', '-U4']))
+    two('end-lost', {'f': f}, {'f': sub(n, {5: 'L6', 9: None})}, {'f': sub(n, {5: 'R6'})},
+        {'f': sub(n, {5: 'M6', 9: None})}, extra=(['--cc', '-U2'], ['--cc', '-U4']))
+    for d in (3, 4, 5):
+        two('lost-near-d%d' % d, {'f': f}, {'f': sub(n, {4: None, 4 + d: 'L'})}, {'f': sub(n, {4 + d: 'R'})},
+            {'f': sub(n, {4: None, 4 + d: 'M'})}, extra=(['--cc', '-U2'],))
+        two('lost-near-d%d-after' % d, {'f': f}, {'f': sub(n, {4: 'L', 4 + d: None})}, {'f': sub(n, {4: 'R'})},
+            {'f': sub(n, {4: 'M', 4 + d: None})}, extra=(['--cc', '-U2'],))
+    touch = n[:9] + ['A1', 'A2'] + n[9:]
+    two('touch-U0', {'f': f}, {'f': sub(touch, {25: 'L'})}, {'f': L(*(n[:8] + ['Q1', 'Q2'] + n[8:]))},
+        {'f': L(*touch)}, extra=(['-c', '-U0'], ['--cc', '-U0'], ['-c', '-U1']))
+    e = ['line %d' % i for i in range(1, 13)]
+    X = (['-c', '-U0'], ['--cc', '-U0'], ['-c', '-U1'])
+    two('eof-lost-only', {'f': L(*e)}, {'f': sub(e, {2: 'L'})}, {'f': sub(e, {2: 'R'})},
+        {'f': sub(e, {2: 'M', 11: None})}, extra=X)
+    two('eof-flag-lost', {'f': L(*e)}, {'f': sub(e, {2: 'L'})}, {'f': sub(e, {2: 'R'})},
+        {'f': sub(e, {2: 'M', 10: 'END', 11: None})}, extra=X)
+    two('eof-flag-only', {'f': L(*e)}, {'f': sub(e, {2: 'L', 11: 'L12'})}, {'f': sub(e, {2: 'R', 11: 'R12'})},
+        {'f': sub(e, {2: 'M', 11: 'M12'})}, extra=X)
+    two('eof-p2-lost', {'f': L(*e)}, {'f': sub(e, {2: 'L'})}, {'f': L(*(e[:2] + ['R'] + e[3:] + ['T1', 'T2']))},
+        {'f': sub(e, {2: 'M'})}, extra=X)
+    two('eof-dropped-lost', {'f': L(*e)}, {'f': sub(e, {2: 'L', 11: None})}, {'f': sub(e, {2: 'R'})},
+        {'f': sub(e, {2: 'M', 11: None})}, extra=(['--cc', '-U9'], ['--cc', '-U8'], ['-c', '-U9']))
+    two('eof-mid-lost', {'f': L(*e)}, {'f': sub(e, {2: 'L'})}, {'f': sub(e, {2: 'R'})},
+        {'f': sub(e, {2: 'M', 9: None})}, extra=X)
+    two('eol-coalesce', {'f': L('y', 'w')}, {'f': 'y'}, {'f': L('y', 'w')}, {'f': L('b')})
+    two('eol-coalesce2', {'f': L('s', 'y', 'w')}, {'f': 's\ny'}, {'f': L('s', 'y', 'q')}, {'f': L('s', 'b')})
     ind = lambda tag, k: ['  %s%d' % (tag, i) for i in range(k)]
     t = ['func_a'] + ind('a', 9) + ['  plain'] + ind('b', 19)
     two('heading-result', {'f': L(*t)}, {'f': sub(t, {25: '  L'})}, {'f': sub(t, {25: '  R'})},
@@ -378,14 +411,14 @@ def combined():
     two('binary', {'b.bin': 'a\0b\n'}, {'b.bin': 'l\0b\n'}, {'b.bin': 'r\0b\n'}, {'b.bin': 'm\0b\n'})
     two('disjoint', {'f': L('a'), 'g': L('b')}, {'f': L('a', 'l')}, {'g': L('b', 'r')}, {'f': L('a', 'l'), 'g': L('b', 'r')})
     m = ['line %d' % i for i in range(1, 31)]
-    rows('octopus', merge('octopus', {'f': L(*m[:10]), 'a': L('a')}, [{'b1': L('b1')}, {'b2': L('b2')}, {'b3': L('b3')}],
+    show_rows('octopus', merge('octopus', {'f': L(*m[:10]), 'a': L('a')}, [{'b1': L('b1')}, {'b2': L('b2')}, {'b3': L('b3')}],
                           {'f': sub(m[:10], {4: 'OCTO'}), 'b1': L('b1', 'more'), 'b2': L('b2'), 'b3': L('b3')}))
     for label, versions, result in [('2v-pick-a', 'ABA', 'A'), ('2v-pick-b', 'ABA', 'B'),
                                     ('3v-pick-a', 'ABC', 'A'), ('2v-new', 'ABA', 'M')]:
-        rows('octopus-' + label, merge('octopus-' + label, {'f': L(*m), 'g': L('g')},
+        show_rows('octopus-' + label, merge('octopus-' + label, {'f': L(*m), 'g': L('g')},
              [{'f': sub(m, {2: 'P%d' % k, 20: v}), 'g': L('g', str(k))} for k, v in enumerate(versions)],
              {'f': sub(m, {2: 'NEW', 20: result}), 'g': L('g', 'M')}))
-    rows('octopus-deleted', merge('octopus-deleted', {'f': L('a', 'b')},
+    show_rows('octopus-deleted', merge('octopus-deleted', {'f': L('a', 'b')},
          [{'f': L('a', 'b', '1')}, {'f': L('a', 'b', '2')}, {'f': L('3')}], {'f': None}))
     nonmerge = root / 'm-nonmerge'
     nonmerge.mkdir()
@@ -394,11 +427,64 @@ def combined():
     gx(nonmerge, 'commit', '-qm', 'one')
     put(nonmerge, {'f': L('a', 'c')})
     gx(nonmerge, 'commit', '-qm', 'two')
-    rows('nonmerge', nonmerge)
+    show_rows('nonmerge', nonmerge)
+    # Seeded random merges: a small repetitive vocabulary forces removal-list
+    # ties, funcname candidates, end-of-file and missing-newline edges.
+    import random
+    words = ['a', 'b', 'c', 'x', 'y', '{', '}', '', 'func_q', '  z', 'int k(void)', '\tw']
+
+    def mutate(rng, lines):
+        out = list(lines)
+        for _ in range(rng.randint(0, 4)):
+            op = rng.random()
+            at = rng.randint(0, len(out))
+            if op < 0.4 and out:
+                at = min(at, len(out) - 1)
+                out[at] = rng.choice(words)
+            elif op < 0.7:
+                out[at:at] = [rng.choice(words) for _ in range(rng.randint(1, 3))]
+            elif out:
+                del out[min(at, len(out) - 1):min(at, len(out) - 1) + rng.randint(1, 3)]
+        return out
+
+    def body(rng, lines):
+        text = ''.join(x + '\n' for x in lines)
+        return text[:-1] if text and rng.random() < 0.15 else text
+
+    for seed in range(int(os.environ.get('DEN_COMBINED_SEEDS', '48'))):
+        rng = random.Random(seed)
+        base_lines = [rng.choice(words) for _ in range(rng.randint(0, 40))]
+        count = 3 if seed % 6 == 5 else 2
+        versions = [mutate(rng, base_lines) for _ in range(count)]
+        pick = rng.choice(versions)
+        final = mutate(rng, pick) if rng.random() < 0.8 else mutate(rng, base_lines)
+        parents = [{'f': body(rng, v)} for v in versions]
+        if rng.random() < 0.2:
+            parents[rng.randrange(count)]['f'] = None
+        repo = merge('fuzz-%d' % seed, {'f': body(rng, base_lines)}, parents, {'f': body(rng, final)})
+        context = rng.choice([0, 1, 2, 3, 3, 3, 5])
+        # Combined columns are the per-parent line diffs. Where den's two-tree
+        # diff already aligns an equal-cost script differently (R-vc04-3), the
+        # combined row is a named review row, never counted either way.
+        inherited = []
+        for j in range(1, count + 1):
+            argv = ['diff', 'HEAD^%d' % j, 'HEAD']
+            if run(G, argv, cwd=repo) != run(D, argv, cwd=repo):
+                inherited.append(j)
+        for flags in [['--cc', '-U%d' % context], ['-c', '-U%d' % context]]:
+            name = 'combined-fuzz-%d-%s' % (seed, flags[0].lstrip('-'))
+            if not inherited:
+                check(name, ['show', *flags], cwd=repo)
+                continue
+            left, right = run(G, ['show', *flags], cwd=repo), run(D, ['show', *flags], cwd=repo)
+            rows.append(dict(name=name, argv=['show', *flags], review='R-vc04-3 parents %s' % inherited,
+                             expected=left, actual=right, equal=left == right))
+            print('REVIEW', name, 'inherited-alignment parents=' + ','.join(map(str, inherited)),
+                  'equal=' + str(left == right), flush=True)
     # The corpus's own merge fixture (tools/corpus.py: two disjoint additions).
     corpus = runpy.run_path(str(R / 'tools/corpus.py'))
     corpus['build'](root / 'corpus')
-    rows('corpus-merge', root / 'corpus' / 'merge')
+    show_rows('corpus-merge', root / 'corpus' / 'merge')
     for flags in [['-s'], ['--cc', '-s'], ['HEAD^1'], ['HEAD^2']]:
         check('combined-corpus-merge-' + '_'.join(f.lstrip('-') for f in flags), ['show', *flags],
               cwd=root / 'corpus' / 'merge')
@@ -410,4 +496,4 @@ finally:
     output = R / 'target/runs' / ('everyday-' + a.family + '-' + a.tier + '.json')
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps({'rows': rows, 'environment': env}, indent=2) + '\n')
-raise SystemExit(0 if rows and all(row['equal'] for row in rows) else 1)
+raise SystemExit(0 if rows and all(row['equal'] or row.get('review') for row in rows) else 1)
