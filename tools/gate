@@ -20,6 +20,7 @@ export DEN_GIT
 tools/check-fmt
 tools/build --all
 tools/check-wire
+tools/check-http
 tools/check-housekeeping
 tools/check-blame
 tools/check-stash

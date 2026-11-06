@@ -108,6 +108,7 @@ fi
 leaf format tools/check-fmt
 leaf build tools/build --all
 leaf wire tools/check-wire
+leaf http tools/check-http
 leaf housekeeping tools/check-housekeeping
 leaf blame tools/check-blame
 leaf stash tools/check-stash
