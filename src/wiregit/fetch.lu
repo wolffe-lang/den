@@ -163,6 +163,8 @@ fn checkout_clone(repo: repository.Repo, root: str, id: oid.Oid) -> () ! worktre
 /// Clone into an exclusively created destination. Normal clones project the
 /// selected HEAD through the shared worktree/index transaction, never a second
 /// checkout implementation. Existing destination directories are refused.
+/// A failed clone removes the directory this call created, as the pinned Git
+/// does (R-vc22-6, measured black-box); nothing it did not create is touched.
 pub fn clone_repository(url: str, destination: str, bare: bool) -> () ! object.StoreErrors {
     clone_mode(url, destination, bare, true)?
 }
@@ -171,6 +173,13 @@ fn clone_mode(url: str, destination: str, bare: bool, local: bool) -> () ! objec
     if url.contains("\n") || url.contains("\r") { return invalid }
     if fs.exists(destination) { return exists }
     fs.create_dir(destination)?
+    var complete = false
+    defer { if !complete { fs.remove_dir_all(destination) else |_| {} } }
+    clone_created(url, destination, bare, local)?
+    complete = true
+}
+
+fn clone_created(url: str, destination: str, bare: bool, local: bool) -> () ! object.StoreErrors {
     let (repo, _) = repository.init(destination, bare, "main")?
     let plain = transport.local_path(url)
     let advertised = if plain && local {
