@@ -614,7 +614,9 @@ clone, fetch and push against the pinned `git-http-backend` over plain HTTP
 and authenticated TLS. Two live rows read from github.com:
 a small public repository compared with Git's clone, and den's own repository,
 whose pack is larger than the wire cap and must be refused by name within
-bounded time and memory. Both are named SKIPs without network.
+bounded time and memory. Both are named SKIPs without network. A third pushes
+and deletes a disposable branch on the repository that `DEN_LIVE_HTTPS_URL`
+names, with `DEN_LIVE_HTTPS_TOKEN`, and is a named SKIP without them.
 
 Configured fetch/push cover ordinary scalar URLs and wildcard branch fetch maps,
 branch defaults, tracking updates/prune, `push -u` and plain/explicit leases.
