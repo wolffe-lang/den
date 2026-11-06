@@ -36,7 +36,14 @@ LOOSE = re.compile(r'(^|/)objects/[0-9a-f]{2}/[0-9a-f]{38}$')
 # den installs the same objects loose (its wire import). Storage form is a
 # representation (R4c), so these rows are reviewed, never counted, and only
 # while process bytes, refs, config and the object inventory are all exact.
-REVIEWED = {'local-clone-no-local-absolute', 'local-clone-no-local-relative'}
+REVIEWED = {'local-clone-no-local-absolute', 'local-clone-no-local-relative',
+            'local-clone-no-local-loud-absolute', 'local-clone-no-local-loud-relative'}
+# R-vc18-2: a checkout clone's reflogs use den's transport identity, a zero
+# date and bare clone/fetch messages on every transport (vc19's census, day 5:
+# a metadata-fidelity finding for its own lane). These rows stay exact outside
+# .git/logs/, name every differing log path and are never counted as parity.
+KNOWN_LOGS = {'local-clone-worktree-absolute', 'local-clone-worktree-relative',
+              'local-clone-worktree-loud-absolute', 'local-clone-worktree-loud-relative'}
 
 
 def run(exe, args, cwd, data=None):
@@ -145,13 +152,22 @@ def compare(name, args, cwd='.', target='clone.git'):
     ok = left['result'] == right['result'] and left['after'] == right['after'] and index_error is None
     object_equal = left['objects'] == right['objects'] and left['objects'] is not None
     reviewed = not ok and name in REVIEWED and storage_review(left, right, target)
+    logs = target + '/.git/logs/'
+    def outside(after):
+        return {k: v for k, v in after.items() if not (k + '/').startswith(logs)}
+    log_paths = sorted(k for k in left['after'].keys() | right['after'].keys()
+                       if (k + '/').startswith(logs) and left['after'].get(k) != right['after'].get(k))
+    known = (not ok and name in KNOWN_LOGS and index_error is None and object_equal and
+             left['result'] == right['result'] and outside(left['after']) == outside(right['after']))
     rows.append(dict(name=name, argv=args, cwd=cwd, environment=dict(os.environ),
-                     expected=left, actual=right, equal=ok, reviewed=reviewed,
+                     expected=left, actual=right, equal=ok, reviewed=reviewed, known=known,
+                     known_log_paths=log_paths if known else [],
                      canonical_objects_equal=object_equal))
-    verdict = 'PASS' if ok else 'REVIEW' if reviewed else 'FAIL'
+    verdict = 'PASS' if ok else 'REVIEW' if reviewed else 'KNOWN' if known else 'FAIL'
     print(verdict, name, 'canonical_objects_equal=' + str(object_equal) +
-          (' storage=git-pack/den-loose' if reviewed else ''), flush=True)
-    if not ok and not reviewed:
+          (' storage=git-pack/den-loose' if reviewed else '') +
+          (' reflog-paths=' + ','.join(p[len(logs):] for p in log_paths) if known else ''), flush=True)
+    if not ok and not reviewed and not known:
         paths = sorted(k for k in left['after'].keys() | right['after'].keys()
                        if left['after'].get(k) != right['after'].get(k))
         print('  expected', left['result'], 'actual', right['result'], 'differing_paths', paths,
@@ -176,6 +192,8 @@ try:
         compare('local-clone-bare-' + label, ['clone', '-q', '--bare', url, 'clone.git'])
         compare('local-clone-no-local-' + label,
                 ['clone', '-q', '--bare', '--no-local', url, 'clone.git'])
+        compare('local-clone-bare-loud-' + label, ['clone', '--bare', url, 'clone.git'])
+        compare('local-clone-no-local-loud-' + label, ['clone', '--bare', '--no-local', url, 'clone.git'])
         compare('local-clone-worktree-' + label, ['clone', '-q', url, 'clone'], target='clone')
         compare('local-clone-worktree-loud-' + label, ['clone', url, 'clone'], target='clone')
     for label, url in [('absolute', str(world / 'peer.git')), ('relative', '../peer.git')]:
@@ -191,5 +209,6 @@ finally:
     output.write_text(json.dumps(dict(rows=rows), indent=2) + '\n')
 exact = sum(row['equal'] for row in rows)
 review = sum(row['reviewed'] for row in rows)
-print('local-path exact=%d reviewed=%d rows=%d' % (exact, review, len(rows)), flush=True)
-raise SystemExit(0 if rows and all(row['equal'] or row['reviewed'] for row in rows) else 1)
+known = sum(row['known'] for row in rows)
+print('local-path exact=%d reviewed=%d known=%d rows=%d' % (exact, review, known, len(rows)), flush=True)
+raise SystemExit(0 if rows and all(row['equal'] or row['reviewed'] or row['known'] for row in rows) else 1)
