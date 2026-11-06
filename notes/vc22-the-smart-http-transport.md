@@ -11,7 +11,7 @@ Clean room: git's documentation, the RFCs, and the pinned Git and OpenSSL run as
 ## Inputs verified
 
 - **Base:** den trunk `ef0bb0c`, branch `vc22`, rebased once onto trunk `ce939e2` (vc18's merge). The rebase had no textual conflict; the one semantic one is under R-vc22-6.
-- **Toolchain:** wolf 0.2.36 (`5adf3d91`; binary `f7b73fba…`), lupin 0.1.58 (binary `47c646a6…`), unchanged. The std pin moves from `78b9d3cb` to wolf-std `d4a4d4c` (`5cfd023`), after a red row requiring its public-PKI signature schemes (`7bfcc2e`). 0.2.36 builds against it, so no toolchain re-pin was needed.
+- **Toolchain:** wolf 0.2.36 (`5adf3d91`; binary `f7b73fba…`), lupin 0.1.58 (binary `47c646a6…`), unchanged. The std pin moves from `78b9d3cb` to wolf-std `d4a4d4c` (`cb16de5`), after a red row requiring its public-PKI signature schemes (`5449585`). 0.2.36 builds against it, so no toolchain re-pin was needed.
 - **Oracle:** Git 2.56.0, executable `c4848492…`; OpenSSL 3.0.13 from the oracle image, `/usr/bin/openssl` `b4f547c0…`, `libssl.so.3` `a40e7b67…`, `libcrypto.so.3` `6866ed71…`, each read twice before a TLS row runs.
 - **Roots for the live rows:** the image's distribution bundle, 120 certificates, 128,549 bytes of concatenated DER, sha256 `98a12f1a…`, decoded from PEM per RFC 7468 by the harness.
 
@@ -22,9 +22,9 @@ Clean room: git's documentation, the RFCs, and the pinned Git and OpenSSL run as
 
 ## Prediction
 
-`tests/vc22-prediction.txt`, committed first (`414ced9`).
+`tests/vc22-prediction.txt`, committed first (`3209728`).
 
-- **P1, the std pin:** held. 0.2.36/0.1.58 build den against `d4a4d4c`; the import probe was red at the old pin (`7bfcc2e`) and green after (`5cfd023`).
+- **P1, the std pin:** held. 0.2.36/0.1.58 build den against `d4a4d4c`; the import probe was red at the old pin (`5449585`) and green after (`cb16de5`).
 - **P2, bounded exchanges:** held. HTTP is a request/response peer beside the stream channels; fetch and push reuse every existing parser and publication path.
 - **P3, discovery:** did not hold as written. "V2 discovery begins directly with version 2" is true of `git-http-backend` but not of github.com, which sends the `# service=git-upload-pack` banner, a flush and then v2 (captured, 191 bytes, sha256 `52c327cc…`). Accepting exactly that envelope is R-vc22-4.
 - **P4, framing and reclaiming scratch:** the framing half held. The reclaiming half did not, at first: each read replaced the connection's buffer, and the TLS client's per-record temporaries were charged to the connection's region, so a body peaked at 5.1x its size over plain HTTP and 65.5x over TLS. The over-limit live row found it (about 6 GiB before refusing). Fixed by a region per read (R-vc22-5); now 3.1x and 3.3x.
@@ -37,26 +37,28 @@ Clean room: git's documentation, the RFCs, and the pinned Git and OpenSSL run as
 
 ## Evidence index
 
+Shas name the commits as rebased onto `ce939e2`. A row measured before the rebase is cited by the rebased commit that carries the same change.
+
 ### Commits
 
-- `414ced9` the prediction.
-- `7bfcc2e`, `5cfd023` the std pin, red then green.
-- `c21e3b4`, `490104d` URL and framing rows, then the parsers.
-- `9286ad0`, `d3a6e18`, `016ee1f` raw-peer client rows, then bounded exchanges and cleanup on failure.
-- `7c3cd2f`, `9500c5b`, `c4c3daa`, `b1aecd8` TLS rows, formatting, the framed-HTTPS row (wolf-std#133), then HTTPS with roots, entropy and UTC.
-- `2db1e7f`, `9e1febb`, `fc8a22b`, `83db33e` the gate pruner on Linux without `lsof`, red first, with a named preflight.
-- `ed93f2f`, `5d2e450`, `1f52985` Basic authentication rows, then credentials and the no-echo prompt.
-- `21d690f`, `286fc28`, `a13a0eb`, `d3c2356` discovery, interop, redirect and policy rows; `769d102`, `aca80d9`, `f09a556`, `027d4bf`, `067b0dd` redirects, HTTP peers, shared fetch/push over RPCs, roots and redaction.
-- `4e47b71`, `d2d7a4c`, `b72b759`, `b38f045` receive-pack side-band rows, the bounded oracle timeout (R-vc22-3), then exact demultiplexing.
-- `ec06265`, `00c0959`, `0e478ad`, `d398284` GitHub's wrapped discovery: the capture, two red rows, then the envelope (R-vc22-4).
-- `f2fe674` certificate signature, name, expiry and UTC controls.
-- `3ca92a3` the live rows.
-- `ac224e7`, `12112ab` the memory row, then a region per read (R-vc22-5).
-- `170976b`, `ec20219` discovery and RPC refusal rows with failed-clone cleanup, then the cleanup (R-vc22-6).
-- `819db8a`, `0a8da97` the planner's smart-HTTP gate assertion, then the gate wiring.
-- `5abe6ab`, `3b208b3`, `772af53`, `28639d3` hostile peer, policy and certificate rows.
-- `3577148` formatting with the pinned compiler; then the README, MAP, SOURCES and CHANGELOG.
-- `1f7a72e`, `a5b774e`, `8e47a1e`, `5110cf7`, `b28fa76` the ssh program word (R-bw03-7): the argv as a pure function, the unit and recording-ssh rows red, a plain word sent bare, then formatting.
+- `3209728` the prediction.
+- `5449585`, `cb16de5` the std pin, red then green.
+- `fd7731c`, `fb980f4` URL and framing rows, then the parsers.
+- `812972c`, `ddee85a`, `3eac5e9` raw-peer client rows, then bounded exchanges and cleanup on failure.
+- `a950827`, `429cb1f`, `9afe03d`, `894d302` TLS rows, formatting, the framed-HTTPS row (wolf-std#133), then HTTPS with roots, entropy and UTC.
+- `5018022`, `c0061d5`, `31919b1`, `2203eab` the gate pruner on Linux without `lsof`, red first, with a named preflight.
+- `97b283f`, `56309e8`, `fce2020` Basic authentication rows, then credentials and the no-echo prompt.
+- `520f9d9`, `9542ce8`, `4f1c1fd`, `6c99d4b` discovery, interop, redirect and policy rows; `757ef56`, `29eee57`, `1b1b9ea`, `6947dfe`, `b591015` redirects, HTTP peers, shared fetch/push over RPCs, roots and redaction.
+- `ba128d6`, `833dad5`, `0c84a56`, `2b1deaa` receive-pack side-band rows, the bounded oracle timeout (R-vc22-3), then exact demultiplexing.
+- `e2ab3cb`, `449fedc`, `23ca307`, `3b6e54f` GitHub's wrapped discovery: the capture, two red rows, then the envelope (R-vc22-4).
+- `312816c` certificate signature, name, expiry and UTC controls.
+- `653db36` the live rows.
+- `94fd26b`, `d315d0b` the memory row, then a region per read (R-vc22-5).
+- `3aa39d9`, `c74788e` discovery and RPC refusal rows with failed-clone cleanup, then the cleanup (R-vc22-6).
+- `9a28290`, `a648f68` the planner's smart-HTTP gate assertion, then the gate wiring.
+- `7474c7b`, `a0bfa42`, `3c3badc`, `c1b2987` hostile peer, policy and certificate rows.
+- `a0b1944` formatting with the pinned compiler; then the README, MAP, SOURCES and CHANGELOG.
+- `e21de88`, `d2c78f8`, `8a84516`, `c3b3aa7`, `fbf5637` the ssh program word (R-bw03-7): the argv as a pure function, the unit and recording-ssh rows red, a plain word sent bare, then formatting.
 
 ### Rows (`tools/check-http`, native and release unless marked)
 
@@ -81,21 +83,21 @@ den's repository is a 311,900,659-byte pack (297.4 MiB, measured by the pinned G
 
 | head | tier | elapsed | peak RSS | partial clone |
 |---|---|---|---|---|
-| `3ca92a3` (before the fixes) | release | 102.2 s | 6,279,204 KiB | left (an initialised skeleton) |
-| `3ca92a3` (before the fixes) | native | 97.0 s | 6,270,644 KiB | left |
-| `28639d3` (after both fixes) | release | 82.8 s | 422,676 KiB | none |
-| `28639d3` (after both fixes) | native | 115.8 s | 423,484 KiB | none |
+| `653db36` (before the fixes) | release | 102.2 s | 6,279,204 KiB | left (an initialised skeleton) |
+| `653db36` (before the fixes) | native | 97.0 s | 6,270,644 KiB | left |
+| `c1b2987` (after both fixes) | release | 82.8 s | 422,676 KiB | none |
+| `c1b2987` (after both fixes) | native | 115.8 s | 423,484 KiB | none |
 
 The 6 GiB peak was the light container's cap, so den was near an out-of-memory kill. On loopback, one 32,000,000-byte body measured:
 
 | head | plain, Content-Length | plain, chunked | TLS |
 |---|---|---|---|
-| `ac224e7` | 5.13x | 5.18x | 65.51x |
-| `12112ab` | 3.14x | 3.14x | 3.26x |
+| `94fd26b` | 5.13x | 5.18x | 65.51x |
+| `d315d0b` | 3.14x | 3.14x | 3.26x |
 
 ### The live read
 
-den and the pinned Git cloned the same public repository at the same ref (284 objects), with identical refs, HEAD, reachable canonical objects, worktree and remote configuration; Git's `fsck --full` and `status` are clean on den's clone. At `3ca92a3`: den 7.27 s and 85,252 KiB in release, 10.22 s and 86,356 KiB natively; Git 0.50–0.55 s and about 38,000 KiB. Later reads of the same repository (480 objects, as it grew) took den 8–69 s, against Git's 0.5 s. A TCP relay timeline (encrypted byte counts only) put the whole exchange, discovery, `ls-refs` and the pack, on one reused connection, done at 1.63 s. den then sat for about 9 s, with about 0.3 s of CPU, before its TLS close: local I/O wait in the fetch import every transport shares, not HTTP. den#62 tracks it.
+den and the pinned Git cloned the same public repository at the same ref (284 objects), with identical refs, HEAD, reachable canonical objects, worktree and remote configuration; Git's `fsck --full` and `status` are clean on den's clone. At `653db36`: den 7.27 s and 85,252 KiB in release, 10.22 s and 86,356 KiB natively; Git 0.50–0.55 s and about 38,000 KiB. Later reads of the same repository (480 objects, as it grew) took den 8–69 s, against Git's 0.5 s. A TCP relay timeline (encrypted byte counts only) put the whole exchange, discovery, `ls-refs` and the pack, on one reused connection, done at 1.63 s. den then sat for about 9 s, with about 0.3 s of CPU, before its TLS close: local I/O wait in the fetch import every transport shares, not HTTP. den#62 tracks it.
 
 ### The ssh program word (R-bw03-7)
 
@@ -103,12 +105,12 @@ A live row against GitHub found den sending `'git-receive-pack' 'owner/repo.git'
 
 den now sends a plain program word (letters, digits and `._/+-`) bare and quotes any other as a literal executable; the path stays quoted. This covers `upload-pack`, `receive-pack` and their `--upload-pack=`/`--receive-pack=` overrides. Sources: `gitprotocol-pack(5)` (ssh transport) and `git-shell(1)` (the commands it accepts), and the black-box argv; no Git source.
 
-| row | at `8e47a1e` | at `b28fa76` |
+| row | at `8a84516` | at `fbf5637` |
 |---|---|---|
 | `ssh-command-*` units, native, release and checked | 5 red (`receive-plain`, `upload-plain`, `override-plain`, `plain-word-set`, `scp`), 4 non-plain guards green; checked `exit(1)` | 9/9 in both tiers; checked `exit(0)` |
 | `ssh-cli-*` against the pinned Git and `sh -c`, both tiers | 4 red (`clone-plain`, `clone-override-plain`, `push-plain`, `push-override-plain`), `clone-override-space` green | 5/5 in both tiers |
 
-`ssh-cli-*` also runs each command through `/bin/sh -c` with recording service programs: the far side receives the same argv for den's command as for the fully quoted form, so den's existing sshd rows see no difference. At `b28fa76`, `ssh-peer-scope` and every `tools/check-porcelain` step, including the format check, end with exit 0.
+`ssh-cli-*` also runs each command through `/bin/sh -c` with recording service programs: the far side receives the same argv for den's command as for the fully quoted form, so den's existing sshd rows see no difference. At `fbf5637`, `ssh-peer-scope` and every `tools/check-porcelain` step, including the format check, end with exit 0.
 
 ## Done-when
 
@@ -131,7 +133,7 @@ den now sends a plain program word (letters, digits and `._/+-`) bare and quotes
 - **R-vc22-4 — applied:** discovery accepts direct v2 or exactly the matching banner, flush and v2. A mismatched banner, a missing flush, v0 (with or without the banner, including a NUL capability line) and v1 are refused by name. Lines are compared as bytes, not text, so a v0 capability line reads as "not v2" rather than malformed.
 - **R-vc22-5 — accepted, applied:** the over-limit refusal stays den's existing `den: wire: limit`, exit 2; the row bounds it at 600 s and 1 GiB peak RSS, and the shared limits are not relaxed. Each read runs in its own region and appends to one long-lived buffer. Options: (A) as built; (B) stream bodies to the pack parser instead of buffering whole responses, a larger change touching every transport. A was accepted; streaming bodies is den#61's.
 - **R-vc22-6 — accepted, applied:** a failed clone removes the directory it created, for every transport, as the pinned Git does (measured black-box: a new directory is removed, an existing empty one kept). den already refuses an existing destination, so it never removes anything it did not create in that command. Options: (A) as built; (B) leave partial clones and file an issue. A was accepted. The cleanup is one small commit (`c74788e` after the rebase), a `defer` around clone. On the rebase, vc18 had split clone into `clone_mode`, which creates the destination and gained a local-path flag. Git applied the hunk there without a conflict, but the moved body no longer saw that flag, so the commit itself now passes it through. Both intents hold: vc18's local-path clone, and the removal of a failed clone's directory on every path.
-- **R-bw03-7 = (a) — applied:** a plain program word goes bare, as Git sends it; any other is quoted; the path stays quoted. Red first (`a5b774e`, `8e47a1e`), then `5110cf7`.
+- **R-bw03-7 = (a) — applied:** a plain program word goes bare, as Git sends it; any other is quoted; the path stays quoted. Red first (`d2c78f8`, `8a84516`), then `c3b3aa7`.
 
 ### Remaining limits
 
