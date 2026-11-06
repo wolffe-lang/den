@@ -9,7 +9,26 @@ fn main() -> int {
     print("push_19mb_ns={time.monotonic_ns() - start}")
     start = time.monotonic_ns()
     let digest = hash.sum1(data)
-    print("sha1_19mb_ns={time.monotonic_ns() - start} first={digest[0]}")
+    let elapsed = time.monotonic_ns() - start
+    var text = ""
+    for b in digest {
+        let digits = "0123456789abcdef"
+        text = "{text}{digits[b as int / 16..b as int / 16 + 1]}{digits[b as int % 16..b as int % 16 + 1]}"
+    }
+    print("sha1_19mb_ns={elapsed} digest={text}")
+    // Split updates cross the partial-block buffer at every alignment.
+    var state = hash.new1()
+    var pos = 0, step = 1
+    while pos < data.len {
+        let end = if pos + step < data.len then pos + step else data.len
+        hash.update1(mut state, data[pos..end])
+        pos = end
+        step = step % 131 + 7
+    }
+    let split = hash.final1(take state)
+    var same = split.len == digest.len
+    for i in 0..digest.len { if split[i] != digest[i] { same = false } }
+    print("sha1_split_same={same}")
     for count in [454, 2500] {
         var names = List[str]()
         for i in 0..count { (mut names).push("src/d{i / 30}/f{i}.bin") }

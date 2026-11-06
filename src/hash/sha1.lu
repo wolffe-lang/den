@@ -5,9 +5,31 @@
 // FIPS 180-4 sections 4.1.1, 5, 6.1; no other implementation read.
 fn sha1_block(mut d: Digest) {
     load_words(mut d, 4, false)
+    sha1_rounds(mut d)
+}
+
+/// One block straight from data[pos..pos + 64], big-endian words (FIPS 180-4
+/// 6.1.2 step 1), with no copy through the partial-block buffer.
+fn sha1_block_at(mut d: Digest, data: List[byte], pos: int) {
+    var i = 0
+    while i < 16 {
+        let p = pos + i * 4
+        d.w[i] = data[p] as int as wrapping[u64] << 24 |
+            data[p + 1] as int as wrapping[u64] << 16 |
+            data[p + 2] as int as wrapping[u64] << 8 |
+            data[p + 3] as int as wrapping[u64]
+        i += 1
+    }
+    sha1_rounds(mut d)
+}
+
+/// The schedule and the 80 rounds (FIPS 180-4 6.1.2 steps 1-4), one loop per
+/// round function so no round branches on its index; ROTL^n is spelled inline.
+fn sha1_rounds(mut d: Digest) {
     var i = 16
     while i < 80 {
-        d.w[i] = rotr32(d.w[i - 3] ^ d.w[i - 8] ^ d.w[i - 14] ^ d.w[i - 16], 31)
+        let x = d.w[i - 3] ^ d.w[i - 8] ^ d.w[i - 14] ^ d.w[i - 16]
+        d.w[i] = (x << 1 | x >> 31) & 0xffffffff
         i += 1
     }
     var a = d.h[0]
@@ -16,24 +38,44 @@ fn sha1_block(mut d: Digest) {
     var e = d.h[3]
     var f = d.h[4]
     i = 0
-    while i < 80 {
-        var choose: wrapping[u64] = b ^ c ^ e
-        var k: wrapping[u64] = 0xca62c1d6
-        if i < 20 {
-            choose = b & c ^ (b ^ 0xffffffff) & e
-            k = 0x5a827999
-        } else if i < 40 {
-            k = 0x6ed9eba1
-        } else if i < 60 {
-            choose = b & c ^ b & e ^ c & e
-            k = 0x8f1bbcdc
-        }
-        let next = rotr32(a, 27) + choose + f + k + d.w[i] & 0xffffffff
+    while i < 20 {
+        let t = ((a << 5 | a >> 27) & 0xffffffff) + (b & c | (b ^ 0xffffffff) & e) +
+            f + 0x5a827999 + d.w[i] & 0xffffffff
         f = e
         e = c
-        c = rotr32(b, 2)
+        c = (b << 30 | b >> 2) & 0xffffffff
         b = a
-        a = next
+        a = t
+        i += 1
+    }
+    while i < 40 {
+        let t = ((a << 5 | a >> 27) & 0xffffffff) + (b ^ c ^ e) + f + 0x6ed9eba1 + d.w[i] &
+            0xffffffff
+        f = e
+        e = c
+        c = (b << 30 | b >> 2) & 0xffffffff
+        b = a
+        a = t
+        i += 1
+    }
+    while i < 60 {
+        let t = ((a << 5 | a >> 27) & 0xffffffff) + (b & c | b & e | c & e) + f + 0x8f1bbcdc +
+            d.w[i] & 0xffffffff
+        f = e
+        e = c
+        c = (b << 30 | b >> 2) & 0xffffffff
+        b = a
+        a = t
+        i += 1
+    }
+    while i < 80 {
+        let t = ((a << 5 | a >> 27) & 0xffffffff) + (b ^ c ^ e) + f + 0xca62c1d6 + d.w[i] &
+            0xffffffff
+        f = e
+        e = c
+        c = (b << 30 | b >> 2) & 0xffffffff
+        b = a
+        a = t
         i += 1
     }
     d.h[0] = d.h[0] + a & 0xffffffff
@@ -66,10 +108,6 @@ pub fn new1() -> Digest {
     d
 }
 
-fn rotr32(x: wrapping[u64], n: int) -> wrapping[u64] {
-    (x >> n as wrapping[u64] | x << (32 - n) as wrapping[u64]) & 0xffffffff
-}
-
 fn load_words(mut d: Digest, width: int, little: bool) {
     var i = 0
     while i < 16 {
@@ -87,11 +125,25 @@ fn load_words(mut d: Digest, width: int, little: bool) {
 
 /// Feed a byte slice without retaining it; SHA-1 length wraps modulo 2^64 bits.
 pub fn update1(mut d: Digest, data: List[byte]) {
-    for b in data {
-        d.buf[d.used] = b
+    var pos = 0
+    while d.used > 0 && pos < data.len {
+        d.buf[d.used] = data[pos]
         d.used += 1
         d.count += 1
+        pos += 1
         if d.used == 64 { sha1_block(mut d); d.used = 0 }
+    }
+    // Whole blocks go straight from data; only a final partial block is buffered.
+    while data.len - pos >= 64 {
+        sha1_block_at(mut d, data, pos)
+        d.count += 64
+        pos += 64
+    }
+    while pos < data.len {
+        d.buf[d.used] = data[pos]
+        d.used += 1
+        d.count += 1
+        pos += 1
     }
 }
 
