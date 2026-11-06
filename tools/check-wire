@@ -33,6 +33,8 @@ for tier in native release; do
     step "$tier-wire-unit" "target/$tier/wire-test"
     step "$tier-pack-stream-build" "$WOLF" build $flag --deny-warnings src/pack_stream_test.lu -o "target/$tier/pack-stream-test"
     step "$tier-pack-stream-unit" "target/$tier/pack-stream-test"
+    step "$tier-pack-ingest-build" "$WOLF" build $flag --deny-warnings src/pack_ingest_test.lu -o "target/$tier/pack-ingest-test"
+    step "$tier-pack-ingest-unit" "target/$tier/pack-ingest-test"
     step "$tier-wire-client-build" "$WOLF" build $flag --deny-warnings probes/wire-client/main.lu -o "target/$tier/wire-client"
     step "$tier-atomic-client-build" "$WOLF" build $flag --deny-warnings probes/atomic-client/main.lu -o "target/$tier/atomic-client"
     step "$tier-upload-service-build" "$WOLF" build $flag --deny-warnings probes/upload-service/main.lu -o "target/$tier/upload-service"

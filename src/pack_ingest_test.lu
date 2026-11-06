@@ -1,0 +1,179 @@
+//! member: false
+
+// vc23: the streamed indexer against the pack writer and the reader, and the
+// table CRC-32, sized inflate and reserved delta application it is built on.
+
+use std.fs
+use hash
+use oid
+use pack
+use zlib
+
+fn same(a: List[byte], b: List[byte]) -> bool {
+    if a.len != b.len { return false }
+    for i in 0..a.len { if a[i] != b[i] { return false } }
+    true
+}
+
+fn body_raw(body: pack.Body) -> List[byte] {
+    var header = "{body.kind} {body.data.len}\0".bytes()
+    for b in body.data { (mut header).push(b) }
+    hash.sum1(header)
+}
+
+fn body_hex(body: pack.Body) -> str ! pack.PackErrors {
+    let id = oid.from_bytes("sha1", body_raw(body)) else |_| { return Unsupported("identity") }
+    oid.hex(id) else |_| { return Unsupported("identity") }
+}
+
+fn part(data: List[byte], start: int, end: int) -> List[byte] {
+    var out = List[byte]()
+    for i in start..end { (mut out).push(data[i]) }
+    out
+}
+
+fn fresh(name: str) -> str ! pack.PackErrors {
+    let dir = "target/tmp/pack-ingest-{name}"
+    if fs.exists(dir) { fs.remove_dir_all(dir) else |_| { return io } }
+    fs.create_dir_all("{dir}/objects/pack") else |_| { return io }
+    dir
+}
+
+fn leftovers(dir: str) -> int ! pack.PackErrors {
+    var n = 0
+    for entry in fs.entries("{dir}/objects/pack") else |_| { return io } {
+        let name = str_from_utf8(entry.name) else ""
+        if name.starts_with("tmp_") { n += 1 }
+    }
+    n
+}
+
+// Receive data in three writes and index it; the receiver is aborted on refusal.
+fn received(dir: str, data: List[byte]) -> pack.Indexed ! pack.PackErrors {
+    var r = pack.receive_begin(dir)?
+    defer pack.receive_abort(mut r)
+    let third = data.len / 3
+    pack.receive_write(mut r, part(data, 0, third))?
+    pack.receive_write(mut r, part(data, third, 2 * third))?
+    pack.receive_write(mut r, part(data, 2 * third, data.len))?
+    pack.received_index(mut r)?
+}
+
+fn refused(dir: str, data: List[byte]) -> str ! pack.PackErrors {
+    let ix = received(dir, data) else |e| {
+        assert(leftovers(dir)? == 0)
+        return "{e}"
+    }
+    pack.received_discard(ix)
+    ""
+}
+
+fn units() -> () ! pack.PackErrors {
+    let table = pack.crc32_table()
+    for text in ["", "a", "The quick brown fox jumps over the lazy dog", "den clones itself"] {
+        let bytes = text.bytes()
+        assert(pack.crc32_update(table, 0, bytes, bytes.len) == pack.crc32(bytes))
+        let half = bytes.len / 2
+        let first = pack.crc32_update(table, 0, bytes, half)
+        let rest = part(bytes, half, bytes.len)
+        assert(pack.crc32_update(table, first, rest, rest.len) == pack.crc32(bytes))
+    }
+    var input = List[byte]()
+    for i in 0..70000 { (mut input).push((i * 7 % 251) as byte) }
+    let deflated = zlib.deflate(input, 1, 200000) else |_| { return Unsupported("deflate") }
+    var framed = [1 as byte, 2 as byte, 3 as byte]
+    for b in deflated { (mut framed).push(b) }
+    let back = zlib.inflate_sized(framed, 3, input.len) else |_| {
+        return Unsupported("inflate_sized")
+    }
+    assert(same(back.data, input) && back.consumed == deflated.len)
+    var cut = part(framed, 0, framed.len - 9)
+    var truncated = false
+    let _ = zlib.inflate_sized(cut, 3, input.len) else |e| match e {
+        truncated => { truncated = true; zlib.Inflated { data: List[byte](), consumed: 0 } },
+        _ => { return Unsupported("inflate_sized truncation") },
+    }
+    assert(truncated)
+    (mut cut).reset()
+    let base = "base text\nshared line\n".bytes()
+    let target = "shared line\nbase text\n".bytes()
+    let delta = pack.encode_delta(base, target) else |_| { return Unsupported("encode_delta") }
+    var out = [9 as byte]
+    pack.apply_delta_into(base, delta, 1000, mut out) else |_| {
+        return Unsupported("apply_delta_into")
+    }
+    let declared = pack.delta_target_size(delta) else |_| {
+        return Unsupported("delta_target_size")
+    }
+    assert(same(out, target) && declared == target.len)
+}
+
+fn ingest() -> () ! pack.PackErrors {
+    var bodies = List[pack.Body]()
+    var text = ""
+    for i in 0..30 {
+        text = "{text}line {i} of the fixture, long enough to deltify against its parent\n"
+        (mut bodies).push(pack.Body { kind: "blob", data: text.bytes() })
+    }
+    (mut bodies).push(pack.Body { kind: "tree", data: List[byte]() })
+    for mode in ["none", "ofs", "ref"] {
+        let encoded = pack.encode(bodies, mode)?
+        let dir = fresh(mode)?
+        let ix = received(dir, encoded.data)?
+        // The indexer's idx is the writer's, byte for byte: same names,
+        // CRC-32s and offsets for the same pack.
+        assert(same(ix.index, encoded.index))
+        assert(pack.received_count(ix) == bodies.len)
+        let blob = pack.received_rank(ix, body_hex(bodies[29])?)?
+        assert(blob >= 0 && pack.received_rank_kind(ix, blob) == "blob")
+        let tree = pack.received_rank(ix, body_hex(bodies[30])?)?
+        assert(tree >= 0 && pack.received_rank_kind(ix, tree) == "tree")
+        assert(pack.received_rank(ix, "0123456789012345678901234567890123456789")? == -1)
+        let name = pack.received_install(ix)?
+        assert(name == encoded.name && leftovers(dir)? == 0)
+        assert(
+            fs.exists("{dir}/objects/pack/pack-{name}.pack") &&
+                fs.exists("{dir}/objects/pack/pack-{name}.idx"),
+        )
+        for body in bodies {
+            let read = pack.read_object("{dir}/.", body_hex(body)?, 1000000)?
+            assert(read.kind == body.kind && same(read.data, body.data))
+        }
+        // Refusals, each leaving no temporary behind.
+        var flipped = copy encoded.data
+        flipped[40] = (flipped[40] as int ^ 1) as byte
+        assert(refused(dir, flipped)? != "")
+        assert(refused(dir, part(encoded.data, 0, encoded.data.len - 1))? != "")
+        var extra = copy encoded.data
+        (mut extra).push(0 as byte)
+        assert(refused(dir, extra)? != "")
+        fs.remove_dir_all(dir) else |_| { return io }
+    }
+    // A thin pack: one REF_DELTA whose base is absent refuses by name.
+    let base = "absent base\n".bytes()
+    let delta = pack.encode_delta(base, "absent base\nplus\n".bytes()) else |_| {
+        return Unsupported("delta")
+    }
+    var thin = "PACK".bytes()
+    for b in [0, 0, 0, 2, 0, 0, 0, 1] { (mut thin).push(b as byte) }
+    (mut thin).push((7 << 4 | delta.len & 15 | (if delta.len > 15 then 128 else 0)) as byte)
+    if delta.len > 15 { (mut thin).push((delta.len >> 4) as byte) }
+    let absent = body_raw(pack.Body { kind: "blob", data: base })
+    for b in absent { (mut thin).push(b) }
+    for b in zlib.deflate(delta, 1, 1000) else |_| { return Unsupported("deflate") } {
+        (mut thin).push(b)
+    }
+    for b in hash.sum1(thin) { (mut thin).push(b) }
+    let dir = fresh("thin")?
+    assert(refused(dir, thin)? == "Unsupported(pack delta base missing)")
+    fs.remove_dir_all(dir) else |_| { return io }
+}
+
+fn main() -> int {
+    units() else |e| { eprint("units: {e}"); return 1 }
+    ingest() else |e| { eprint("ingest: {e}"); return 1 }
+    print(
+        "vc23 pack ingest: table CRC-32, sized inflate, reserved deltas; none/ofs/ref packs indexed to the writer's idx, installed and read back; corrupt, truncated, trailing and thin refusals with no temporary left; zero skips",
+    )
+    0
+}
