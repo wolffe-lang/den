@@ -99,6 +99,8 @@ fn dispatch(args: List[str]) -> int ! worktree.WorkErrors {
     var color_mode = ctx.repo.config["color.log"] else (ctx.repo.config["color.ui"] else "auto")
     let root_diff = worktree.config_bool(ctx, "log.showroot", true)?
     var count = 100000, skip = 0, minimum = display.abbreviate
+    // git-show(1): merges default to dense combined; -c/--cc imply -p.
+    var dense = true
     var revisions = List[str](), i = 1
     while i < args.len {
         let arg = args[i]
@@ -136,6 +138,10 @@ fn dispatch(args: List[str]) -> int ! worktree.WorkErrors {
         } else if arg.starts_with("--date=") {
             date_style = arg[7..]
         } else if arg == "-p" || arg == "--patch" {
+            display.patch = true
+            explicit_patch = true
+        } else if show && (arg == "-c" || arg == "--cc") {
+            dense = arg == "--cc"
             display.patch = true
             explicit_patch = true
         } else if arg == "-s" || arg == "--no-patch" {
@@ -337,8 +343,16 @@ fn dispatch(args: List[str]) -> int ! worktree.WorkErrors {
         } else {
             copy commits[at]
         }
-        if show && value.parents.len > 1 && (display.patch || display.stat) && !first_parent {
-            return Unsupported("show combined merge diff")
+        let merged = show && value.parents.len > 1 && !first_parent
+        if merged && display.stat { return Unsupported("show combined merge stat") }
+        if merged && display.patch {
+            if format != "medium" { return Unsupported("show combined merge format {format}") }
+            if display.binary_patch { return Unsupported("show combined merge binary patch") }
+            if fs.exists("{ctx.root}/.gitattributes") ||
+                fs.exists("{ctx.repo.gitdir}/info/attributes") ||
+                (ctx.repo.config["core.attributesfile"] else "") != "" {
+                return Unsupported("diff attributes")
+            }
         }
         if printed_commit && format != "oneline" { (mut out).push(10 as byte) }
         printed_commit = true
@@ -366,6 +380,14 @@ fn dispatch(args: List[str]) -> int ! worktree.WorkErrors {
                 return Unsupported("history notes with patch and stat")
             }
             add(mut out, notes.display(ctx.repo, annotations, value.id)?)
+        }
+        if merged && display.patch {
+            // Measured: a shown merge always ends its header with one blank
+            // line, even when no path differs from every parent.
+            (mut out).push(10 as byte)
+            add(mut out, diff.combined(ctx, value.parents, value.tree, display, dense)?)
+            if out.len > 134217728 { return limit }
+            continue
         }
         let changes = if !show && !root_diff && value.parents.len == 0 {
             List[byte]()
