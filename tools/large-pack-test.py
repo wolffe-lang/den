@@ -306,7 +306,8 @@ def main():
         results[name] = dict(measured, problems=problems)
         record()
         print('LARGE ' + name + ' ' + json.dumps(measured, sort_keys=True), flush=True)
-        print(('PASS ' if not problems else 'FAIL ') + name + ('' if not problems else ': ' + '; '.join(problems)),
+        # 'FAIL <row> <why>': a record reads the row's name up to the first space.
+        print(('PASS ' if not problems else 'FAIL ') + name + ('' if not problems else ' ' + '; '.join(problems)),
               flush=True)
         if problems:
             failed.append(name)
