@@ -552,7 +552,8 @@ walk's path bounded at 96 MiB (Git's `core.deltaBaseCacheLimit` default); a
 deeper subtree is revisited from its own reconstruction. Objects cap at
 512 MiB (`pack object size limit`), counts at 400,000 and delta depth at 64.
 The fetch asks for no thin pack, so the received pack is self-contained. Its
-idx v2 is written and both are installed: a clone keeps the pack, as Git does,
+idx v2 and its reverse index (`.rev`, which Git writes by default) are written
+and installed with it: a clone keeps the pack, as Git does,
 and so does a fetch of 100 objects or more (`fetch.unpackLimit`'s default); a
 smaller fetch is rebuilt into loose objects one at a time. Peak memory follows
 the largest object, not the pack: at most about 64 MiB + 96 MiB + 5 times the
