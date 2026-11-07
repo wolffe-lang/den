@@ -113,8 +113,9 @@ or normalizations of ANSI bytes, config bytes or unproven index differences.
   CRC-32 and the trailer over the same bytes. Pass 2 resolves deltas depth-first
   with a 96 MiB path bound, revisiting deeper subtrees from a fresh rebuild.
   The idx v2 (`idx_bytes`) is byte-identical to the writer's for the same pack.
-  Install reads the idx back through the unchanged reader before publishing
-  `pack-<checksum>.pack` then `.idx`. `object_limit()` is 512 MiB (R-vc23-2);
+  `rev_bytes` writes the gitformat-pack(5) reverse index Git writes by default
+  (`pack.writeReverseIndex`). Install reads the idx back through the unchanged
+  reader before publishing `pack-<checksum>.pack`, then `.rev`, then `.idx`. `object_limit()` is 512 MiB (R-vc23-2);
   counts cap at 400,000, depth at 64. `transport.begin_stream`,
   `stream_packet`, `end_stream` read one response a pkt-line at a time, over a
   stream channel or an HTTP body (`http.request_streamed`, `body_read`,
