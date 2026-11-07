@@ -74,7 +74,21 @@ fn check_rev(path: str, count: int, data: List[byte]) -> () ! pack.PackErrors {
     let rev = fs.read_bytes(path) else |_| { return Unsupported("no reverse index") }
     assert(rev.len == 12 + 4 * count + 40)
     assert(same(part(rev, 0, 4), "RIDX".bytes()))
-    assert(same(part(rev, 4, 12), [0 as byte, 0 as byte, 0 as byte, 1 as byte, 0 as byte, 0 as byte, 0 as byte, 1 as byte]))
+    assert(
+        same(
+            part(rev, 4, 12),
+            [
+                0 as byte,
+                0 as byte,
+                0 as byte,
+                1 as byte,
+                0 as byte,
+                0 as byte,
+                0 as byte,
+                1 as byte,
+            ],
+        ),
+    )
     var seen = List[bool]()
     for _ in 0..count { (mut seen).push(false) }
     for i in 0..count {
