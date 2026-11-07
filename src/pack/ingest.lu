@@ -43,6 +43,7 @@ pub fn receive_begin(gitdir: str) -> Receiver ! PackErrors {
 /// write (a full disk) refuses by name, and the caller removes the temporary.
 pub fn receive_write(mut r: Receiver, data: List[byte]) -> () ! PackErrors {
     if r.fd < 0 { return Unsupported("pack receiver closed") }
+    if r.written + data.len > 134217728 { return Unsupported("pack write failed") }
     fs_write_chunk(r.fd, data) else |_| { return Unsupported("pack write failed") }
     r.written += data.len
 }
