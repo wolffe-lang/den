@@ -28,7 +28,7 @@ Clean room: git's documentation and the pinned Git, a field Git and the pinned O
 - **P1, what held memory:** held as a description; the streamed path no longer has any of those components.
 - **P2, the bound:** held. The large fixture (largest object 48 MiB) peaked at 274,040 to 287,144 KiB in release, inside the 400 MiB bound, and cloned under `prlimit --as` at that bound. den's own repository peaked at 374,852 KiB, inside its 652 MiB bound but above the predicted 230 MiB: the checkout's reader holds four copies of each blob and the 98 MiB whole blob costs about 2.1 times itself while indexing, so the estimate of the actual peak was low; the bound held.
 - **P3, the time:** den cloned its own repository in 206.2 s release (39.2 s of CPU), against Git's 131.1 s (4.1 s) on the same link, 1.57 times; predicted 165 s and 1.3 times. The CPU was a third higher than predicted, and den's phases run one after another.
-- **P4, the rows:** held; every row was red on trunk by name and is green (below).
+- **P4, the rows:** held; every row was red on trunk by name and is green (below). Not predicted: Git writes a reverse index beside every pack it indexes, and den now keeps the pack it receives, so the `--no-local` clone rows compared the two and found it missing (below).
 - **P5, the URL off argv:** held. Git passes a configured remote's URL to `git remote-https` on argv (measured with `GIT_TRACE`), so the row reads the server's advertisement itself (R-vc23-3).
 - **P6, den#66:** held in its cause, not in where the fix went. `maintenance.autoDetach=false` turns the child into `--no-detach`, but the pinned environment's global config is bound into reviewed rows (`configured-lease-delete-match` fingerprints it), so a change there voids their reviews. The fix went into the oracle's own Git runs instead (`-c maintenance.autoDetach=false`), and the oracle refuses an invocation whose maintenance detaches.
 - **P7, the rulings:** implemented as recommended (below).
@@ -48,6 +48,8 @@ Clean room: git's documentation and the pinned Git, a field Git and the pinned O
 - `fa7a94e` streamed HTTP bodies; `fdab3c8` streamed responses on every transport.
 - `ea1e73f` receive, publish and the closure check; `a3ce882` clone and fetch through them; `60a4f3b` the local clone's copy cap; `13aa28f` the checkout's regions.
 - `560ea3b`, `b696785`, `f43302d`, `add68b9` SOURCES, MAP, the README and the CHANGELOG.
+- `f77c4f9` this note.
+- `c7d36bf` the unit row requiring a reverse index, red; `a0c8dd7` the reverse index; `1c33e69` its formatting; `48aa8ba` the `--no-local` rows' comment; `431c183`, `1c9c9fe`, `b6da436` MAP, the README and the CHANGELOG.
 
 ### Red first, on trunk's sources
 
@@ -89,6 +91,10 @@ Natively den takes about twice as long (24 to 34 s). Peak RSS readings start at 
 - **Pass 2:** deltas resolve depth-first from the whole objects; the bodies on the path stay under 96 MiB, and a deeper subtree waits for its own reconstruction (at most base, delta and result at once).
 - **Install:** the idx v2 is byte-identical to the pack writer's for the same pack (the unit row checks this for none, OFS and REF packs). It is read back through the unchanged reader before `pack-<checksum>.pack` and `.idx` are published. A clone keeps the pack, and so does a fetch of 100 objects or more; a smaller fetch is rebuilt into loose objects.
 - **Closure:** commits, trees and tags are read one at a time; blobs in the received pack are typed from its table, never read.
+
+### The reverse index (found by the first full record)
+
+The first full record, at `f77c4f9`, went red at `everyday`. Four local-path rows failed on both tiers: `local-clone-no-local-absolute`, `-loud-absolute`, `-relative` and `-loud-relative`. Each had `canonical_objects_equal=True` and one differing path, `objects/pack/pack-<checksum>.rev`, which Git's clone held and den's did not. Before vc23 these rows were reviewed (Git keeps a pack, den kept loose objects). Now den keeps the same pack and the same idx, byte for byte, so only the reverse index differed. gitformat-pack(5) documents the `.rev` format, and git-config(1) says `pack.writeReverseIndex` defaults to true, for every pack Git writes outside fast-import and bulk checkin. den now writes it beside every received pack: 'RIDX', version 1, SHA-1, each object's idx position in pack order, the pack checksum and its own. The unit row requiring it was red at `c7d36bf` (`no reverse index`). At `a0c8dd7` `tools/check-everyday` passes on both tiers, and the four rows pass exactly, no longer reviewed.
 
 ### den#66
 
