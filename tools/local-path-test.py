@@ -33,9 +33,11 @@ rows = []
 proof = runpy.run_path(str(R / 'tools/index-proof.py'))
 LOOSE = re.compile(r'(^|/)objects/[0-9a-f]{2}/[0-9a-f]{38}$')
 # R-vc18-1: --no-local is git's file transport. Git keeps the received pack;
-# den installs the same objects loose (its wire import). Storage form is a
-# representation (R4c), so these rows are reviewed, never counted, and only
-# while process bytes, refs, config and the object inventory are all exact.
+# den installed the same objects loose until vc23, so these rows were
+# reviewed, never counted, and only while process bytes, refs, config and the
+# object inventory were all exact. Since vc23 den keeps the received pack with
+# its idx and .rev, byte for byte Git's, and the rows pass exactly; the review
+# stays for a storage form that differs again.
 REVIEWED = {'local-clone-no-local-absolute', 'local-clone-no-local-relative',
             'local-clone-no-local-loud-absolute', 'local-clone-no-local-loud-relative'}
 # R-vc18-2: a checkout clone's reflogs use den's transport identity, a zero
