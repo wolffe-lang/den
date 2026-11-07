@@ -11,8 +11,9 @@
   and removes the temporary. Objects cap at 512 MiB (R-vc23-2), refused by name
   as `pack object size limit`, and the pack reader's per-object cap rises from
   16 MiB to the same value, so a clone checks out what it indexed.
-- A clone keeps the received pack, as Git does, and so does a fetch of 100
-  objects or more; a smaller fetch becomes loose objects. The fetch asks for no
+- A clone keeps the received pack with its idx and reverse index (`.rev`),
+  byte-identical to Git's, and so does a fetch of 100 objects or more; a
+  smaller fetch becomes loose objects. The fetch asks for no
   thin pack, so every installed pack is self-contained. A plain local path
   clone loses its 128 MiB copy cap.
 - A checkout holds one file's body at a time.
