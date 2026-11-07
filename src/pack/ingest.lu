@@ -79,12 +79,14 @@ struct Table {
 }
 
 /// An indexed received pack: its temporary, its trailer checksum, the idx
-/// bytes for it, and every object's name and type. Install or discard it.
+/// and reverse-index bytes for it, and every object's name and type.
+/// Install or discard it.
 pub struct Indexed {
     dir: str,
     path: str,
     sum: List[byte],
     index: List[byte],
+    reverse: List[byte],
     table: Table,
     order: List[int],
 }
@@ -546,6 +548,24 @@ fn idx_bytes(t: Table, order: List[int], sum: List[byte]) -> List[byte] {
     out
 }
 
+// gitformat-pack(5) pack-*.rev: 'RIDX', version 1, hash function 1 (SHA-1),
+// each object's idx position in pack offset order, the pack checksum and the
+// checksum of all of the above. git-config(1): pack.writeReverseIndex
+// defaults to true, so Git writes one beside every pack it indexes.
+fn rev_bytes(order: List[int], sum: List[byte]) -> List[byte] {
+    var rank = List[int]()
+    for _ in 0..order.len { (mut rank).push(0) }
+    for i in 0..order.len { rank[order[i]] = i }
+    var out = "RIDX".bytes()
+    put32(mut out, 1)
+    put32(mut out, 1)
+    for slot in 0..order.len { put32(mut out, rank[slot]) }
+    for b in sum { (mut out).push(b) }
+    let check = hash.sum1(out)
+    for b in check { (mut out).push(b) }
+    out
+}
+
 /// Close the received temporary, verify and index it: every entry's CRC-32,
 /// the trailer, every object's name; deltas resolved. The idx is built in
 /// memory (28 bytes an object). On failure the caller aborts the receiver.
@@ -566,9 +586,18 @@ pub fn received_index(mut r: Receiver) -> Indexed ! PackErrors {
         }
     }
     let index = idx_bytes(t, order, sum)
+    let reverse = rev_bytes(order, sum)
     let path = copy r.path
     r.path = ""
-    Indexed { dir: copy r.dir, path: path, sum: sum, index: index, table: t, order: order }
+    Indexed {
+        dir: copy r.dir,
+        path: path,
+        sum: sum,
+        index: index,
+        reverse: reverse,
+        table: t,
+        order: order,
+    }
 }
 
 /// The number of objects in an indexed pack.
@@ -614,24 +643,17 @@ pub fn received_discard(ix: Indexed) {
     if ix.path != "" { fs.remove(ix.path) else |_| {} }
 }
 
-/// Publish the received pack as pack-<checksum>.pack, then its idx, both
-/// read-only, each synced before its rename and the directory after. An
-/// existing pair of the same name is kept and the temporaries removed.
-pub fn received_install(ix: Indexed) -> str ! PackErrors {
-    let id = oid.from_bytes("sha1", ix.sum) else |_| { return Unsupported("pack identity") }
-    let name = oid.hex(id) else |_| { return Unsupported("pack identity") }
-    let stem = "{ix.dir}/pack-{name}"
-    var idx_path = ""
+// One read-only, synced temporary under dir holding bytes; its path.
+fn temporary(dir: str, prefix: str, bytes: List[byte]) -> str ! PackErrors {
     for serial in 0..1024 {
-        let candidate = "{ix.dir}/tmp_idx_den_{serial}"
+        let candidate = "{dir}/{prefix}{serial}"
         let file = fs.create_new_with_mode(candidate, 0o444) else |e| match e {
             exists => { continue },
             _ => { return Unsupported("pack temporary") },
         }
-        idx_path = candidate
         var written = false
         defer { if !written { fs.remove(candidate) else |_| {} } }
-        fs_write_chunk(file.fd, ix.index) else |_| {
+        fs_write_chunk(file.fd, bytes) else |_| {
             fs_close(file.fd) else |_| {}
             return Unsupported("pack write failed")
         }
@@ -641,17 +663,36 @@ pub fn received_install(ix: Indexed) -> str ! PackErrors {
         }
         fs_close(file.fd) else |_| { return Unsupported("pack write failed") }
         written = true
-        break
+        return candidate
     }
-    if idx_path == "" { return Unsupported("pack temporary") }
+    Unsupported("pack temporary")
+}
+
+/// Publish the received pack as pack-<checksum>.pack, then its .rev, then
+/// its .idx (so a reader that finds the idx finds the rest), all read-only,
+/// each synced before its rename and the directory after. An existing pack
+/// of the same name is kept, its missing companions added and the
+/// temporaries removed.
+pub fn received_install(ix: Indexed) -> str ! PackErrors {
+    let id = oid.from_bytes("sha1", ix.sum) else |_| { return Unsupported("pack identity") }
+    let name = oid.hex(id) else |_| { return Unsupported("pack identity") }
+    let stem = "{ix.dir}/pack-{name}"
+    let idx_path = temporary(ix.dir, "tmp_idx_den_", ix.index)?
     var idx_owned = true
     defer { if idx_owned { fs.remove(idx_path) else |_| {} } }
+    let rev_path = temporary(ix.dir, "tmp_rev_den_", ix.reverse)?
+    var rev_owned = true
+    defer { if rev_owned { fs.remove(rev_path) else |_| {} } }
     // The idx must read back through the unchanged reader before publication.
     let check = load_index(idx_path)?
     if check.entries.len != ix.order.len || !same(check.pack_sum, ix.sum) {
         return Unsupported("pack index readback")
     }
     if fs.exists("{stem}.pack") {
+        if !fs.exists("{stem}.rev") {
+            fs.move_file(rev_path, "{stem}.rev") else |_| { return io }
+            rev_owned = false
+        }
         if !fs.exists("{stem}.idx") {
             fs.move_file(idx_path, "{stem}.idx") else |_| { return io }
             idx_owned = false
@@ -662,7 +703,14 @@ pub fn received_install(ix: Indexed) -> str ! PackErrors {
     }
     fs.move_file(ix.path, "{stem}.pack") else |_| { return io }
     var published = false
-    defer { if !published { fs.remove("{stem}.pack") else |_| {} } }
+    defer {
+        if !published {
+            fs.remove("{stem}.pack") else |_| {}
+            if !rev_owned { fs.remove("{stem}.rev") else |_| {} }
+        }
+    }
+    fs.move_file(rev_path, "{stem}.rev") else |_| { return io }
+    rev_owned = false
     fs.move_file(idx_path, "{stem}.idx") else |_| { return io }
     idx_owned = false
     published = true
