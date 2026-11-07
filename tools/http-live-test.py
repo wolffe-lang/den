@@ -327,7 +327,7 @@ def main():
                 name, ours['refs'].split('\n')[0], ours['objects'], candidate['elapsed'],
                 candidate['maxrss_kib'], oracle['elapsed'], oracle['maxrss_kib']), flush=True)
             break
-        print(('PASS ' if ok else 'FAIL ') + name + ('' if ok else ': ' + why), flush=True)
+        print(('PASS ' if ok else 'FAIL ') + name + ('' if ok else ' ' + why), flush=True)
         if not ok:
             failed.append(name)
 
@@ -367,7 +367,7 @@ def main():
                 problems.append('state differs: ' + ', '.join(differ) + (' (den worktree dirty)' if dirty else ''))
         results[name] = measured
         print('LIVE ' + name + ' ' + json.dumps(measured, sort_keys=True), flush=True)
-        print(('PASS ' if not problems else 'FAIL ') + name + ('' if not problems else ': ' + '; '.join(problems)),
+        print(('PASS ' if not problems else 'FAIL ') + name + ('' if not problems else ' ' + '; '.join(problems)),
               flush=True)
         if problems:
             failed.append(name)
@@ -480,14 +480,14 @@ def main():
         print('LIVE http-live-argv children=%d hits=%d control=%s' % (len(watch.seen), len(watch.hits), watch.control),
               flush=True)
         print(('PASS ' if not argv_problems else 'FAIL ') + 'http-live-argv' +
-              ('' if not argv_problems else ': ' + '; '.join(argv_problems)), flush=True)
+              ('' if not argv_problems else ' ' + '; '.join(argv_problems)), flush=True)
         if argv_problems:
             failed.append('http-live-argv')
         for path in out.rglob('*'):
             if path.is_file():
                 hidden(path.read_bytes())
         print('PASS http-token-secrecy-live', flush=True)
-        print(('PASS ' if not problems else 'FAIL ') + name + ('' if not problems else ': ' + '; '.join(problems)),
+        print(('PASS ' if not problems else 'FAIL ') + name + ('' if not problems else ' ' + '; '.join(problems)),
               flush=True)
         if problems:
             failed.append(name)
