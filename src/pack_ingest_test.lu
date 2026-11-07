@@ -68,6 +68,26 @@ fn refused(dir: str, data: List[byte]) -> str ! pack.PackErrors {
     ""
 }
 
+// gitformat-pack(5) pack-*.rev beside the installed pack: 'RIDX', version 1,
+// SHA-1, a permutation of the idx positions, the pack's checksum, its own.
+fn check_rev(path: str, count: int, data: List[byte]) -> () ! pack.PackErrors {
+    let rev = fs.read_bytes(path) else |_| { return Unsupported("no reverse index") }
+    assert(rev.len == 12 + 4 * count + 40)
+    assert(same(part(rev, 0, 4), "RIDX".bytes()))
+    assert(same(part(rev, 4, 12), [0 as byte, 0 as byte, 0 as byte, 1 as byte, 0 as byte, 0 as byte, 0 as byte, 1 as byte]))
+    var seen = List[bool]()
+    for _ in 0..count { (mut seen).push(false) }
+    for i in 0..count {
+        var n = 0
+        for j in 0..4 { n = n * 256 + rev[12 + 4 * i + j] as int }
+        assert(n < count && !seen[n])
+        seen[n] = true
+    }
+    let tail = 12 + 4 * count
+    assert(same(part(rev, tail, tail + 20), part(data, data.len - 20, data.len)))
+    assert(same(part(rev, tail + 20, rev.len), hash.sum1(part(rev, 0, tail + 20))))
+}
+
 fn units() -> () ! pack.PackErrors {
     let table = pack.crc32_table()
     for text in ["", "a", "The quick brown fox jumps over the lazy dog", "den clones itself"] {
@@ -135,6 +155,7 @@ fn ingest() -> () ! pack.PackErrors {
             fs.exists("{dir}/objects/pack/pack-{name}.pack") &&
                 fs.exists("{dir}/objects/pack/pack-{name}.idx"),
         )
+        check_rev("{dir}/objects/pack/pack-{name}.rev", bodies.len, encoded.data)?
         for body in bodies {
             let read = pack.read_object("{dir}/.", body_hex(body)?, 1000000)?
             assert(read.kind == body.kind && same(read.data, body.data))
@@ -173,7 +194,7 @@ fn main() -> int {
     units() else |e| { eprint("units: {e}"); return 1 }
     ingest() else |e| { eprint("ingest: {e}"); return 1 }
     print(
-        "vc23 pack ingest: table CRC-32, sized inflate, reserved deltas; none/ofs/ref packs indexed to the writer's idx, installed and read back; corrupt, truncated, trailing and thin refusals with no temporary left; zero skips",
+        "vc23 pack ingest: table CRC-32, sized inflate, reserved deltas; none/ofs/ref packs indexed to the writer's idx, installed with a reverse index and read back; corrupt, truncated, trailing and thin refusals with no temporary left; zero skips",
     )
     0
 }
