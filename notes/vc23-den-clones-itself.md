@@ -49,7 +49,7 @@ Clean room: git's documentation and the pinned Git, a field Git and the pinned O
 - `ea1e73f` receive, publish and the closure check; `a3ce882` clone and fetch through them; `60a4f3b` the local clone's copy cap; `13aa28f` the checkout's regions.
 - `560ea3b`, `b696785`, `f43302d`, `add68b9` SOURCES, MAP, the README and the CHANGELOG.
 - `f77c4f9` this note.
-- `c7d36bf` the unit row requiring a reverse index, red; `a0c8dd7` the reverse index; `1c33e69` its formatting; `48aa8ba` the `--no-local` rows' comment; `431c183`, `1c9c9fe`, `b6da436` MAP, the README and the CHANGELOG.
+- `c7d36bf` the unit row requiring a reverse index, red; `a0c8dd7` the reverse index; `1c33e69` its formatting; `48aa8ba` the `--no-local` rows' comment; `431c183`, `1c9c9fe`, `b6da436` MAP, the README and the CHANGELOG. `ab13afa`, `c5b14d7` a failed row's line as the recorder reads it.
 
 ### Red first, on trunk's sources
 
@@ -95,6 +95,10 @@ Natively den takes about twice as long (24 to 34 s). Peak RSS readings start at 
 ### The reverse index (found by the first full record)
 
 The first full record, at `f77c4f9`, went red at `everyday`. Four local-path rows failed on both tiers: `local-clone-no-local-absolute`, `-loud-absolute`, `-relative` and `-loud-relative`. Each had `canonical_objects_equal=True` and one differing path, `objects/pack/pack-<checksum>.rev`, which Git's clone held and den's did not. Before vc23 these rows were reviewed (Git keeps a pack, den kept loose objects). Now den keeps the same pack and the same idx, byte for byte, so only the reverse index differed. gitformat-pack(5) documents the `.rev` format, and git-config(1) says `pack.writeReverseIndex` defaults to true, for every pack Git writes outside fast-import and bulk checkin. den now writes it beside every received pack: 'RIDX', version 1, SHA-1, each object's idx position in pack order, the pack checksum and its own. The unit row requiring it was red at `c7d36bf` (`no reverse index`). At `a0c8dd7` `tools/check-everyday` passes on both tiers, and the four rows pass exactly, no longer reviewed.
+
+### The plant's FAIL line (found by the first plant record)
+
+The first plant record, at the plant on `c0e16a6`, was red by name, but the recorder refused it: `missing FAIL line for large-pack-file`. The recorder reads a planted row's name from `FAIL <row>` followed by a space or the line's end. The new harnesses printed `FAIL large-pack-file: …`, with a colon. `ab13afa` and `c5b14d7` print the name, a space, then the reasons, as den's other harnesses do. That changes only the text of a failing row's line.
 
 ### den#66
 
