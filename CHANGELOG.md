@@ -20,6 +20,10 @@
   without entering a submodule; `rm` of a submodule removes its worktree and
   its `.gitmodules` section. `checkout` and `switch` print the local changes
   and tracking lines Git prints.
+- `checkout`, `switch` and `reset` run where branches have upstreams, as in
+  every clone; making a tracking branch from a remote-tracking start point, or
+  by guessing a remote's branch, is refused by name. `stash` in a
+  superproject is refused by name.
 - Hostile `.gitmodules` input is refused or warned about as Git does:
   suspicious names, dash URLs and paths, missing URLs or commits, invalid
   values, bad config lines (`bad config line N in file ...`).
