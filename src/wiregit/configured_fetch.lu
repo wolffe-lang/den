@@ -2,6 +2,7 @@
 use std.fs
 use object
 use oid
+use pack
 use refs
 use remote
 use repository
@@ -165,12 +166,12 @@ fn fetch_tags(
     mut rows: List[TransportRow],
 ) -> str ! object.StoreErrors {
     var extra = ""
-    var reachable = Map[str, bool]()
-    for id in closure(repo, roots, [])? { reachable[id] = true }
+    var reachable = pack.nameset()
+    for id in closure(repo, roots, [])? { let _ = pack.names_add(mut reachable, id, "") }
     for tag in fetch_view(repo, url, "refs/tags/", false)? {
         if tag.id == "unborn" || refs.optional(repo, tag.name)?.len > 0 { continue }
         let target = if tag.peeled == "" then copy tag.id else copy tag.peeled
-        if !(reachable[target] else false) { continue }
+        if !pack.names_has(reachable, target) { continue }
         let _ = fetch_view(repo, url, tag.name, true)?
         refs.update(
             repo,
