@@ -239,13 +239,12 @@ fn transition_mode(
         value.extensions = []
         let tree = index.build_trees(value)?
         value.extensions = [index.Extension { signature: "TREE", data: copy tree.cache }]
-        // A staged gitlink kept through a switch leaves its trees invalid,
-        // as Git's does (vc25 work rows).
+        // A staged change kept through a switch, to a gitlink or a file, an
+        // addition or a removal, leaves its trees invalid, as Git's does
+        // (vc25 work and report rows).
         for path in paths {
             if !(keep[text(path)?] else false) { continue }
-            let at = flat_at(indexed, path)
-            if at < 0 || indexed[at].mode != 0o160000 { continue }
-            if !same_flat(indexed, at, target, flat_at(target, path)) {
+            if !same_flat(indexed, flat_at(indexed, path), target, flat_at(target, path)) {
                 value = index.invalidate_tree(value, path)?
             }
         }
