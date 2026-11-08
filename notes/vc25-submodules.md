@@ -64,6 +64,10 @@ The next two finals passed every row and failed at the last leaf, the guard over
 
 The macOS record now also runs the gate's own leaves over the commands this branch changes that run against a field Git (refs, merge, replay, diff units, index, ignore, worktree and commit) and the config leaf's units and `tools/config-test.py`, besides the submodule and plain-clone families. The stash, revision, history, everyday and status-speed leaves, and the config leaf's day-to-day rows, assert the pinned Linux Git's digest, so they run in the Linux final only, and a check against the pinned Git runs the config and refs leaves whole before each final.
 
+### Live rows (public wolffe-lang superprojects)
+
+`tools/submodule-live-test.py`, natively through `tools/check-submodule`, over https against github.com, read-only: `live-wolf-web` clones wolf-web with `--recurse-submodules` by each tool (four submodules two levels down, names unlike their paths) and compares the process bytes and, for the superproject and every repository under `.git/modules`, refs, HEAD, every reachable object, the config file's bytes and the worktree; its guard holds what the clones take, the superproject's and every submodule remote's branches and tags, and retries once. `live-wolf-interp-gitlinks`, `live-wolf-std-gitlinks` and `live-wolf-lsp-gitlinks` read the commit that last moved each release-pinned gitlink (`submodule status`, `ls-tree`, `ls-files -s`, `log`, `show --submodule=log`, `diff`, `diff --submodule=log`, `status`) in one clone, by both tools, byte for byte. `live-wolf-std-ssh` runs only where an ssh key for github.com answers, and is a named SKIP otherwise. Every row is a named SKIP without github.com or a root bundle.
+
 ### PAX: the px lane's items (item 9, draft)
 
 A px lane wires a submodule witness into the next stick. Its items, for that lane to take as written or amend:
