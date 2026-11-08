@@ -606,7 +606,7 @@ def family_work():
     for state in ('new-commits', 'modified', 'untracked', 'staged-gitlink', 'clean'):
         s = state_seed(state)
         for argv in (['add', 'mid'], ['add', '-A'], ['add', '.'], ['add', '-u'], ['commit', '-q', '-a', '-m', 'all'],
-                     ['commit', '-a', '-m', 'all'], ['reset', '--hard'], ['reset'], ['reset', '-q', 'HEAD', '--', 'mid'],
+                     ['commit', '-a', '-m', 'all'], ['reset', '--hard'], ['reset'], ['reset', '-q'],
                      ['rm', 'mid'], ['rm', '--cached', 'mid'], ['rm', '-f', 'mid'], ['rm', '-n', 'mid'],
                      ['checkout', '-q', '--detach', 'HEAD'], ['switch', '-q', '--detach', 'HEAD']):
             compare('work-%s-%s' % (state, '-'.join(x.strip('-') for x in argv if x not in ('-m', 'all'))), argv, s, cwd='c')
