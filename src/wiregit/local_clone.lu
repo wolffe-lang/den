@@ -56,7 +56,15 @@ fn local_objects(source: str, destination: str) -> () ! object.StoreErrors {
 }
 
 fn clone_local_objects(repo: repository.Repo, path: str) -> List[wire.Ref] ! object.StoreErrors {
-    let admin = if fs.is_dir("{path}/.git") then "{path}/.git" else path
+    // A local path names its repository as Git looks for it: PATH/.git,
+    // PATH, then PATH.git (git-clone(1) <repository>).
+    let admin = if fs.is_dir("{path}/.git") {
+        "{path}/.git"
+    } else if fs.is_dir(path) || !fs.is_dir("{path}.git") {
+        copy path
+    } else {
+        "{path}.git"
+    }
     let source = repository.open(admin)?
     local_objects("{source.gitdir}/objects", "{repo.gitdir}/objects")?
     let tip = refs.optional(source, "HEAD")?
@@ -65,7 +73,10 @@ fn clone_local_objects(repo: repository.Repo, path: str) -> List[wire.Ref] ! obj
             return invalid
         }
     ).trim()
-    let target = if head_text.starts_with("ref: ") then head_text[5..] else ""
+    var target = if head_text.starts_with("ref: ") then head_text[5..] else ""
+    // An unborn HEAD is named only when the source would advertise it
+    // (git-config(1) lsrefs.unborn; Git's local clone asks as a fetch does).
+    if tip.len == 0 && (source.config["lsrefs.unborn"] else "advertise") == "ignore" { target = "" }
     var advertised = [
         wire.Ref {
             name: "HEAD",
