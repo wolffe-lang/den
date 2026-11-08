@@ -243,6 +243,16 @@ pub fn parse_config(input: str) -> List[ConfigEntry] ! ConfigErrors {
     }
 }
 
+/// Parse text that names its own file in a syntax diagnostic, as Git does
+/// for .gitmodules (vc25): `fatal: bad config line N in file FILE`.
+pub fn parse_config_named(input: str, file: str) -> List[ConfigEntry] ! ConfigReadErrors {
+    parse_config_at(input) else |e| match e {
+        ConfigLine(line) => { return ConfigDiagnostic("fatal: bad config line {line} in file {file}") },
+        limit => { return limit },
+        Unsupported(feature) => { return Unsupported(feature) },
+    }
+}
+
 fn config_file(path: str, optional: bool, mut entries: List[ConfigEntry]) -> () ! ConfigReadErrors {
     let bytes = read_bytes(path, 1048576) else |e| match e {
         not_found => { return },
