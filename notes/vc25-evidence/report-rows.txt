@@ -1,0 +1,158 @@
+vc25: the report rows of tools/clone-work-test.py (22 rows in a clone over a
+local path, each tool cloning and then making the same edit and move) against
+the pinned Git, at three heads: the rows alone (red), the list fixed, and the
+kept staged trees fixed. KNOWN rows differ only in den's reflog identity.
+Differing steps print under each run; the 8 staged rows that still fail with
+only the list fixed differ in the index's tree extension alone.
+
+  ba27edc  Add report rows: which moves list local changes, and by which letter
+  8bb588e  List local changes after a move as Git does (the list)
+  c148a7f  Leave trees invalid over any staged change a switch keeps
+
+== ba27edc native
+FAIL report-switch-create-local
+KNOWN report-switch-create-head-local
+FAIL report-switch-force-create-local
+KNOWN report-switch-force-create-head-local
+FAIL report-switch-detach-local
+KNOWN report-switch-detach-head-local
+KNOWN report-switch-same-local
+FAIL report-checkout-create-local
+KNOWN report-checkout-create-head-local
+KNOWN report-checkout-force-create-local
+KNOWN report-checkout-detach-local
+KNOWN report-checkout-same-local
+KNOWN report-letter-modified-local
+FAIL report-letter-staged-modified-local
+FAIL report-letter-staged-then-modified-local
+FAIL report-letter-staged-reverted-local
+FAIL report-letter-staged-new-local
+FAIL report-letter-staged-new-gone-local
+KNOWN report-letter-deleted-local
+FAIL report-letter-staged-deleted-local
+FAIL report-letter-staged-renamed-local
+FAIL report-letter-staged-renamed-quiet-local
+  step 2 ['switch', '-c', 'topic']
+  expected {"status": 0, "stdout": "", "stderr": "Switched to a new branch 'topic'\n"}
+  actual   {"status": 0, "stdout": "M\tb.txt\n", "stderr": "Switched to a new branch 'topic'\n"}
+  step 2 ['switch', '-C', 'main']
+  expected {"status": 0, "stdout": "Your branch is up to date with 'origin/main'.\n", "stderr": "Reset branch 'main'\n"}
+  actual   {"status": 0, "stdout": "M\tb.txt\nYour branch is up to date with 'origin/main'.\n", "stderr": "Reset branch 'main'\n"}
+  step 2 ['switch', '--detach']
+  expected {"status": 0, "stdout": "", "stderr": "HEAD is now at 1f538e8 commit 3\n"}
+  actual   {"status": 0, "stdout": "M\tb.txt\n", "stderr": "HEAD is now at 1f538e8 commit 3\n"}
+  step 2 ['checkout', '-b', 'topic']
+  expected {"status": 0, "stdout": "", "stderr": "Switched to a new branch 'topic'\n"}
+  actual   {"status": 0, "stdout": "M\tb.txt\n", "stderr": "Switched to a new branch 'topic'\n"}
+  step 3 ['switch', '--detach', 'HEAD~1']
+  expected {"status": 0, "stdout": "M\tb.txt\n", "stderr": "HEAD is now at 5e8374b commit 2\n"}
+  actual   {"status": 0, "stdout": "", "stderr": "HEAD is now at 5e8374b commit 2\n"}
+  step 3 ['switch', '--detach', 'HEAD~1']
+  expected {"status": 0, "stdout": "A\tc.txt\n", "stderr": "HEAD is now at 5e8374b commit 2\n"}
+  actual   {"status": 0, "stdout": "", "stderr": "HEAD is now at 5e8374b commit 2\n"}
+  step 4 ['switch', '--detach', 'HEAD~1']
+  expected {"status": 0, "stdout": "", "stderr": "HEAD is now at 5e8374b commit 2\n"}
+  actual   {"status": 0, "stdout": "D\tc.txt\n", "stderr": "HEAD is now at 5e8374b commit 2\n"}
+  step 2 ['switch', '--detach', 'HEAD~1']
+  expected {"status": 0, "stdout": "D\tb.txt\n", "stderr": "HEAD is now at 5e8374b commit 2\n"}
+  actual   {"status": 0, "stdout": "", "stderr": "HEAD is now at 5e8374b commit 2\n"}
+  step 2 ['switch', '--detach', 'HEAD~1']
+  expected {"status": 0, "stdout": "D\tb.txt\nA\tz.txt\n", "stderr": "HEAD is now at 5e8374b commit 2\n"}
+  actual   {"status": 0, "stdout": "", "stderr": "HEAD is now at 5e8374b commit 2\n"}
+clone-work native report exact=0 known=10 failed=12 rows=22
+== 8bb588e native
+KNOWN report-switch-create-local
+KNOWN report-switch-create-head-local
+KNOWN report-switch-force-create-local
+KNOWN report-switch-force-create-head-local
+KNOWN report-switch-detach-local
+KNOWN report-switch-detach-head-local
+KNOWN report-switch-same-local
+KNOWN report-checkout-create-local
+KNOWN report-checkout-create-head-local
+KNOWN report-checkout-force-create-local
+KNOWN report-checkout-detach-local
+KNOWN report-checkout-same-local
+KNOWN report-letter-modified-local
+FAIL report-letter-staged-modified-local
+FAIL report-letter-staged-then-modified-local
+FAIL report-letter-staged-reverted-local
+FAIL report-letter-staged-new-local
+FAIL report-letter-staged-new-gone-local
+KNOWN report-letter-deleted-local
+FAIL report-letter-staged-deleted-local
+FAIL report-letter-staged-renamed-local
+FAIL report-letter-staged-renamed-quiet-local
+clone-work native report exact=0 known=14 failed=8 rows=22
+== 8bb588e release
+KNOWN report-switch-create-local
+KNOWN report-switch-create-head-local
+KNOWN report-switch-force-create-local
+KNOWN report-switch-force-create-head-local
+KNOWN report-switch-detach-local
+KNOWN report-switch-detach-head-local
+KNOWN report-switch-same-local
+KNOWN report-checkout-create-local
+KNOWN report-checkout-create-head-local
+KNOWN report-checkout-force-create-local
+KNOWN report-checkout-detach-local
+KNOWN report-checkout-same-local
+KNOWN report-letter-modified-local
+FAIL report-letter-staged-modified-local
+FAIL report-letter-staged-then-modified-local
+FAIL report-letter-staged-reverted-local
+FAIL report-letter-staged-new-local
+FAIL report-letter-staged-new-gone-local
+KNOWN report-letter-deleted-local
+FAIL report-letter-staged-deleted-local
+FAIL report-letter-staged-renamed-local
+FAIL report-letter-staged-renamed-quiet-local
+clone-work release report exact=0 known=14 failed=8 rows=22
+== c148a7f native
+KNOWN report-switch-create-local
+KNOWN report-switch-create-head-local
+KNOWN report-switch-force-create-local
+KNOWN report-switch-force-create-head-local
+KNOWN report-switch-detach-local
+KNOWN report-switch-detach-head-local
+KNOWN report-switch-same-local
+KNOWN report-checkout-create-local
+KNOWN report-checkout-create-head-local
+KNOWN report-checkout-force-create-local
+KNOWN report-checkout-detach-local
+KNOWN report-checkout-same-local
+KNOWN report-letter-modified-local
+KNOWN report-letter-staged-modified-local
+KNOWN report-letter-staged-then-modified-local
+KNOWN report-letter-staged-reverted-local
+KNOWN report-letter-staged-new-local
+KNOWN report-letter-staged-new-gone-local
+KNOWN report-letter-deleted-local
+KNOWN report-letter-staged-deleted-local
+KNOWN report-letter-staged-renamed-local
+KNOWN report-letter-staged-renamed-quiet-local
+clone-work native report exact=0 known=22 failed=0 rows=22
+== c148a7f release
+KNOWN report-switch-create-local
+KNOWN report-switch-create-head-local
+KNOWN report-switch-force-create-local
+KNOWN report-switch-force-create-head-local
+KNOWN report-switch-detach-local
+KNOWN report-switch-detach-head-local
+KNOWN report-switch-same-local
+KNOWN report-checkout-create-local
+KNOWN report-checkout-create-head-local
+KNOWN report-checkout-force-create-local
+KNOWN report-checkout-detach-local
+KNOWN report-checkout-same-local
+KNOWN report-letter-modified-local
+KNOWN report-letter-staged-modified-local
+KNOWN report-letter-staged-then-modified-local
+KNOWN report-letter-staged-reverted-local
+KNOWN report-letter-staged-new-local
+KNOWN report-letter-staged-new-gone-local
+KNOWN report-letter-deleted-local
+KNOWN report-letter-staged-deleted-local
+KNOWN report-letter-staged-renamed-local
+KNOWN report-letter-staged-renamed-quiet-local
+clone-work release report exact=0 known=22 failed=0 rows=22
