@@ -183,6 +183,25 @@ def seed(name, build):
     return seeds[name]
 
 
+SERVER_LINE = re.compile(r'^(fatal|error|warning): git upload-pack: ')
+
+
+def settled(result):
+    """RESULT with its stderr's server lines after the client's. Over a local
+    transport the server (git upload-pack) writes its own fatal line to the
+    stderr it shares with the client, while the client relays the same error
+    from the server's ERR packet; the two processes' lines interleave by
+    scheduling, in the pinned Git as in den (one run in twenty of
+    hostile-missing-commit-update had Git's in the other order). Each
+    process's own lines keep their order."""
+    lines = result['stderr'].splitlines(keepends=True)
+    server = [line for line in lines if SERVER_LINE.match(line)]
+    if not server:
+        return result
+    client = [line for line in lines if not SERVER_LINE.match(line)]
+    return dict(result, stderr=''.join(client + server))
+
+
 def compare(name, args, seed_name, cwd='.', extra=None, data=None, prepare=None):
     if a.only and not re.search(a.only, name):
         return
@@ -224,10 +243,11 @@ def compare(name, args, seed_name, cwd='.', extra=None, data=None, prepare=None)
             right['after'][key] = [right['after'][key][0], rc.hex()]
         except ValueError as error:
             index_errors.append(key + ': ' + str(error))
-    ok = left['result'] == right['result'] and left['after'] == right['after'] and not index_errors
+    same_result = settled(left['result']) == settled(right['result'])
+    ok = same_result and left['after'] == right['after'] and not index_errors
     differing = sorted(k for k in left['after'].keys() | right['after'].keys()
                        if left['after'].get(k) != right['after'].get(k))
-    known = (not ok and left['result'] == right['result'] and not index_errors and differing
+    known = (not ok and same_result and not index_errors and differing
              and all(LOGS.search(k) for k in differing))
     details = {} if ok or known else {
         k: [shown(left['after'].get(k)), shown(right['after'].get(k))]
