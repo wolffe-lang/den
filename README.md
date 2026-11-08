@@ -639,9 +639,26 @@ largest object, measured by `tools/large-pack-test.py` under a hard
 address-space cap. The selected closures are checked before refs change,
 typing blobs from the received pack's own table without reading them.
 
-`pack.decode`, the whole-stream decoder, remains for its own callers with its
-bounds: 10,000 objects, 16 MiB per body, 128 MiB of charged payload and 64
-delta links. Thin streams are never stored as thin on-disk packs.
+Serving, pushing and receiving a push have no object count (den#73). The
+closure to send is walked through one reader, whose cache rebuilds each base
+of a delta chain once (Git's `core.deltaBaseCacheLimit` names the same idea),
+with hashed sets and each object kept as its name's bytes, a type code and a
+size; the pack is then written to a temporary under `TMPDIR` one object at a
+time, each tried against the last ten of its type, and sent from the file in
+windows. A pushed pack goes through the same streamed indexer as a fetch's
+and is kept as a pack at 100 objects or more, as Git's receive-pack keeps it.
+The rows clone, fetch, push and serve 50,000 objects and i3's public history
+(41,341 objects) with the pinned Git's result, and hold each den process's
+peak memory under 64 MiB plus 1 KiB an object. Serving 50,000 objects costs
+about 8 times Git's CPU on macOS (i3's history about 34 times), as den
+rebuilds, deflates and searches deltas for every object where Git copies its
+stored entries; the remaining bounds
+and their reasons are in `notes/vc24-the-everyday-wire-gaps.md`.
+
+`pack.decode`, the whole-stream decoder, remains for its own callers (and a
+thin pushed pack) with its bounds: 16 MiB per body, 128 MiB of stream and of
+charged payload and 64 delta links, and no count bound (den#73). Thin streams
+are never stored as thin on-disk packs.
 
 `tools/check-wire` exercises native/release peers in both directions against the
 pinned Git services and daemon, native self-hosted services without external tools
