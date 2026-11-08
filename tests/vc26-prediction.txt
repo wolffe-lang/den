@@ -1,0 +1,138 @@
+vc26: identities as git reads them
+Base: 474a926ae2242d1227d46c27977370bbc9a93b08
+Prediction committed before any measurement or change; observations do
+not replace it.
+
+Witness: den at the base refuses a clone of https://github.com/i3/i3.git
+with `den: wire: Unsupported(fsck identity diagnostics)`; Git clones it.
+Commit 5f453914a04c193baf5b4239d83116d33a74de62 has
+`author walker0643 <> 1519250155 -0500` and the same committer line.
+
+Sources read: Git v2.56.0 documentation from the release tarball (sha256
+26c56c29..., Documentation/ only): git-fsck(1) (OPTIONS --strict, FSCK
+MESSAGES), fsck-msgids (every author/committer id and its default
+severity), config/fsck (fsck.<msg-id>, fsck.skipList), config/fetch
+(fetch.fsckObjects), config/receive (receive.fsckObjects),
+config/transfer (transfer.fsckObjects), git-commit(1) (COMMIT
+INFORMATION), git-commit-tree(1), git-var(1), config/user,
+pretty-formats (the author and committer placeholders). Own code: den's
+commit_format identity and date parsers, packcmd.links and fsck, the
+wire closures, pretty, blame's renderer, history, plumbing's cat-file and
+commit-tree. No Git, libgit2, JGit or other implementation source.
+
+The shapes (each is the whole value after `author `, `committer ` or
+`tagger `; the crafted commit carries it in both author and committer,
+as the witness does, and an annotated tag carries it as tagger):
+
+  control       A U Thor <author@example.invalid> 1700000000 +0000
+  empty-email   walker0643 <> 1519250155 -0500
+  empty-name    " <e@example.invalid> 1700000000 +0000" (one space, then <)
+  no-name       <e@example.invalid> 1700000000 +0000
+  empty-both    " <> 1700000000 +0000"
+  no-email      A U Thor 1700000000 +0000
+  glued-email   A U Thor<a@example.invalid> 1700000000 +0000
+  glued-date    A U Thor <a@example.invalid>1700000000 +0000
+  two-spaces    A U Thor <a@example.invalid>  1700000000 +0000
+  no-date       A U Thor <a@example.invalid>
+  zero-date     A U Thor <a@example.invalid> 0 +0000
+  zero-padded   A U Thor <a@example.invalid> 01700000000 +0000
+  negative      A U Thor <a@example.invalid> -1 +0000
+  over-i64      A U Thor <a@example.invalid> 9223372036854775808 +0000
+  over-u64      A U Thor <a@example.invalid> 18446744073709551616 +0000
+  zone-long     A U Thor <a@example.invalid> 1700000000 +00000
+  zone-short    A U Thor <a@example.invalid> 1700000000 +000
+  zone-unsigned A U Thor <a@example.invalid> 1700000000 0000
+  zone-minutes  A U Thor <a@example.invalid> 1700000000 +0099
+  lt-in-name    Jo<e <a@example.invalid> 1700000000 +0000
+  gt-in-name    Jo>e <a@example.invalid> 1700000000 +0000
+  lt-in-email   A U Thor <a<b@example.invalid> 1700000000 +0000
+  gt-in-email   A U Thor <a>b@example.invalid> 1700000000 +0000
+  trailing      A U Thor <a@example.invalid> 1700000000 +0000 garbage
+  latin1-name   Jos\xe9 <a@example.invalid> 1700000000 +0000 (one byte E9)
+  cr            A U Thor <a@example.invalid> 1700000000 +0000\r
+
+P1. git fsck, default severities (plain). Every identity id in
+  fsck-msgids is an ERROR, so a shape git reports makes fsck exit nonzero
+  with `error in commit <id>: <msgId>: <text>` (and in tag for the
+  tagger). Predicted id per shape:
+    control, zero-date, latin1-name: clean.
+    empty-email: clean. No id names an empty email: missingEmail is an
+      absent <...>, badEmail a malformed one. This is the witness's shape,
+      so the prediction is that git fsck itself accepts 5f453914.
+    over-i64: clean (the date fits an unsigned 64-bit timestamp).
+    zone-minutes: clean (fsck checks the zone's form, not its range).
+    empty-name, empty-both: badName.
+    no-name: missingNameBeforeEmail.
+    no-email: missingEmail.
+    glued-email, lt-in-name: missingSpaceBeforeEmail.
+    gt-in-name: badName.
+    lt-in-email: badEmail.
+    glued-date, gt-in-email, no-date: missingSpaceBeforeDate.
+    two-spaces, negative: badDate.
+    zero-padded: zeroPaddedDate.
+    over-u64: badDateOverflow.
+    zone-long, zone-short, zone-unsigned, trailing, cr: badTimezone.
+P2. git fsck --strict: identical to plain for every shape. The page says
+  --strict adds the g+w file mode check; no identity id changes severity.
+P3. git clone and fetch with their defaults (transfer.fsckObjects false):
+  every shape clones over file:// (upload-pack, index-pack and the
+  connectivity check), with exit 0 and no message. With
+  transfer.fsckObjects=true (or fetch.fsckObjects=true) git refuses each
+  shape P1 names, naming the msg id, and clones the clean ones.
+P4. git reading, every shape, exit 0:
+  a. cat-file -p prints the object's bytes unchanged.
+  b. log, show (medium, full, fuller) print `Author: <name> <<email>>`
+     from the line's own bytes, the latin1 byte unchanged; a date that
+     does not parse prints as the epoch, `Thu Jan 1 00:00:00 1970 +0000`;
+     no shape is refused.
+  c. %an/%ae/%al are the name, the email and its local part as split at
+     the first `<` and the following `>`; %ae is empty for empty-email.
+  d. blame (default and --porcelain) prints every shape.
+P5. git writing:
+  a. An explicitly empty email (`-c user.email=` or GIT_AUTHOR_EMAIL set
+     empty) is accepted by commit, commit-tree and tag -a, writing `<>`.
+  b. An empty name is refused by name: `fatal: empty ident name (for
+     <e@example.invalid>) not allowed`, exit 128.
+
+P6. den at the base, from its sources:
+  a. Receive (clone and fetch on every transport, and serving a fetch or
+     a push: the shared closures run packcmd.links, which runs
+     commit_format.parse_identity on every identity line) and den fsck:
+     refused `Unsupported(fsck identity diagnostics)`: empty-email,
+     empty-name, no-name, empty-both, no-email, no-date, negative,
+     over-i64, over-u64, zone-short, zone-unsigned, zone-minutes,
+     lt-in-name, gt-in-name, lt-in-email, gt-in-email, trailing;
+     `Unsupported(fsck identity bytes)`: latin1-name.
+     Accepted: control, zero-date, glued-email, glued-date, two-spaces,
+     zero-padded, zone-long (a six-character zone parses), and cr if
+     wolf's trim takes CR as whitespace.
+     So den refuses shapes git clones (every one), and accepts shapes git
+     fsck reports (glued-email, glued-date, two-spaces, zero-padded,
+     zone-long).
+  b. cat-file -p: the raw bytes, equal to git's for every shape.
+  c. log and show: pretty.identity prints the bytes up to the last `>`,
+     so the empty-email witness prints as git does (`walker0643 <>`).
+     Refused: latin1-name (not UTF-8), no-email and no-date (no `>` or
+     no date words), trailing (three words), over-i64 and over-u64 (no
+     64-bit int), negative (date range), zone-long and zone-short (zone
+     length), zone-minutes (`history noncanonical timezone`). Where git
+     prints the epoch for a bad date, den refuses.
+  d. --format=%an etc.: refused for every shape, control included
+     (`history pretty format:...`); den has no user formats.
+  e. blame: refuses no-name (no byte before the `<`) and the date shapes
+     log refuses.
+  f. Writing: den commit and commit-tree refuse an empty email and an
+     empty name with their own named refusals (`commit missing author
+     identity`, `commit-tree identity/date`), never Git's message.
+
+P7. The fix this lane expects (R-vc26-1 decides receive):
+  a. Receive validates no identity line, as Git's defaults do; links()
+     keeps the typed links and the tree and tag checks it has.
+  b. Identities are read from their raw bytes and never re-spelled; an
+     object's bytes and id never change by reading it.
+  c. den fsck reports identity problems with Git's msg ids, text and
+     status, for exactly the shapes git fsck reports.
+  d. log, show, blame and the identity placeholders print every shape as
+     git does, byte for byte.
+  e. The plant (the empty-part refusal restored on the receive path)
+     turns the empty-email clone row red by name.
