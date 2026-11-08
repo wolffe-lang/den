@@ -62,6 +62,8 @@ The next final, with that fixed, failed in the config leaf on one row, `config-f
 
 The next two finals passed every row and failed at the last leaf, the guard over CI's evidence upload (`tools/evidence-modes.py`): the plain-clone https fixture wrote its test CA and leaf keys under `target/runs`, at mode 0600, so unreadable and private keys in the upload. The guard is right that no key goes into evidence, a test key included. The fixture now keeps its keys under `target/pki`, as the wire fixtures do.
 
+In this branch's final the same guard also found the live rows' clones under `target/runs`: wolf-std vendors TLS test vectors, keys among them. The clones now go under `target/live`; only the rows' reports stay in `target/runs`.
+
 The macOS record now also runs the gate's own leaves over the commands this branch changes that run against a field Git (refs, merge, replay, diff units, index, ignore, worktree and commit) and the config leaf's units and `tools/config-test.py`, besides the submodule and plain-clone families. The stash, revision, history, everyday and status-speed leaves, and the config leaf's day-to-day rows, assert the pinned Linux Git's digest, so they run in the Linux final only, and a check against the pinned Git runs the config and refs leaves whole before each final.
 
 ### Live rows (public wolffe-lang superprojects)
