@@ -125,6 +125,9 @@ fn config_header(text: str, start: int) -> (str, int) ! ConfigSyntaxErrors {
         while pos < text.len && config_space(text.bytes()[pos]) { pos += 1 }
     }
     if pos == text.len || text.bytes()[pos] != 93 as byte {
+        // Git counts the newline it stops on (vc25: an unterminated header
+        // on line 1 is reported as line 2).
+        if pos < text.len && text.bytes()[pos] == 10 as byte { return ConfigLine(config_line(text, pos + 1)) }
         return ConfigLine(config_line(text, pos))
     }
     config_include(section)?
