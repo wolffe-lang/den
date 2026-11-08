@@ -1,0 +1,43 @@
+vc25: the refs row extra-dirty-7 (tools/refs-test.py, native) red in the full
+gauntlet at this branch's head: after `switch -c new` with a modified file,
+Git prints nothing on stdout and den printed `M\ta`.
+
+  git 0 b'' b"Switched to a new branch 'new'\n"
+  den 0 b'M\ta\n' b"Switched to a new branch 'new'\n"
+
+Bisected between the base (vc24's head, 0393f74, where the row is parity)
+and this branch's head (e13ddee, red). Each step builds den natively at the
+commit and runs tools/refs-test.py --tier native against the pinned Git.
+Rebased onto the base, the commits from the clone-path changes up to their
+two post-rebase fixes (2763650 and 784ee9a, both signatures in
+src/wiregit/fetch.lu, nothing on the checkout path) do not build alone, so
+the first bisect could only skip them; the second applied those two fixes,
+uncommitted, to a commit that did not build without them ("fixes=" below).
+
+First bisect, 0393f74 good .. e13ddee bad (verdicts only; skips omitted):
+  0393f74 parity    e13ddee FAIL      aa6045b parity    3ff42b5 parity
+  156a573 parity    7accb01 parity    92fa194 FAIL      beddf2a parity
+  1c9f7fe FAIL      c2521cc parity    3a3344b parity    784ee9a FAIL
+  af272b8 parity
+
+Second bisect, 3a3344b good .. 784ee9a bad:
+  4e05a0b fixes=2763650+784ee9a FAIL
+  30e9677 fixes=2763650         parity
+  8c23de7 fixes=2763650+784ee9a parity
+  4f56853 fixes=2763650+784ee9a FAIL
+  3b8eb69 fixes=2763650+784ee9a FAIL
+  0cfaeef fixes=2763650+784ee9a parity
+  3b8eb69 is the first bad commit: "Print checkout's local changes and
+  tracking lines as Git does". Its parent 0cfaeef is parity.
+
+Cause: that commit printed the local-change list after every switch and
+checkout that was not quiet. Git prints none after switch names no start
+point (-c, -C or --detach alone) and none after checkout -b names none;
+checkout -B and checkout --detach without one still print it, and the
+tracking lines print either way (black-box, Git 2.56.0). Probing the same
+list also showed Git lists staged changes by how the worktree differs from
+HEAD (M, A, D; a staged rename as D and A; nothing for a path added and then
+deleted), where den listed only unstaged changes, and that a staged change a
+switch keeps leaves its trees invalid in Git's index, where den wrote a valid
+tree over it. All three are fixed, held by the report rows of
+tools/clone-work-test.py, red first (report-rows.txt).
