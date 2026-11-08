@@ -1,0 +1,199 @@
+// ls-tree and ls-files, the bounded forms git-ls-tree(1) and git-ls-files(1)
+// of Git v2.56.0 describe, held to the pinned Git (vc25's read rows). A
+// gitlink prints `160000 commit <id>` and `160000 <id> 0`. Other options are
+// named refusals. No implementation source consulted.
+use index
+use object
+use oid
+use repository
+use revision
+use worktree
+
+fn bytes_text(b: List[byte]) -> str ! Errors { str_from_utf8(b) else |_| { return invalid } }
+
+fn peel_tree(repo: repository.Repo, start: oid.Oid) -> oid.Oid ! Errors {
+    var current = copy start
+    for _ in 0..64 {
+        let stored = object.read_object(repo, current, 1000000000)?
+        if stored.kind == "tree" { return current }
+        if stored.kind != "commit" && stored.kind != "tag" { return Fatal("not a tree object") }
+        let headers = if stored.kind == "commit" {
+            object.parse_commit(stored.data, "sha1") else |_| { return invalid }
+        } else {
+            object.parse_tag(stored.data, "sha1") else |_| { return invalid }
+        }
+        let key = if stored.kind == "commit" then "tree" else "object"
+        var next = ""
+        for field in headers.fields { if field.key == key { next = bytes_text(field.value)? } }
+        if next == "" { return invalid }
+        current = oid.parse("sha1", next)?
+    }
+    Fatal("not a tree object")
+}
+
+struct Listed { path: str, mode: int, kind: str, id: oid.Oid }
+
+fn mode_digits(mode: int) -> str ! Errors {
+    if mode == 0o40000 { return "040000" }
+    object.mode_text(mode) else |_| { return invalid }
+}
+
+// Entries of tree ID under PREFIX (a directory path ending in "/" or empty),
+// recursing when RECURSE, trees kept per KEEP_TREES.
+fn walk_tree(
+    repo: repository.Repo,
+    id: oid.Oid,
+    prefix: str,
+    recurse: bool,
+    keep_trees: bool,
+    mut out: List[Listed],
+) -> () ! Errors {
+    let stored = object.read_object(repo, id, 1000000000)?
+    if stored.kind != "tree" { return invalid }
+    for entry in object.parse_tree(stored.data, "sha1") else |_| { return invalid } {
+        let path = "{prefix}{bytes_text(entry.name)?}"
+        let kind = object.mode_kind(entry.mode) else |_| { return invalid }
+        if kind == "tree" && recurse {
+            if keep_trees { (mut out).push(Listed { path: copy path, mode: entry.mode, kind: kind, id: copy entry.id }) }
+            walk_tree(repo, entry.id, "{path}/", recurse, keep_trees, mut out)?
+        } else {
+            (mut out).push(Listed { path: path, mode: entry.mode, kind: kind, id: copy entry.id })
+        }
+    }
+}
+
+fn quoted(path: str, high: bool, nul: bool) -> str ! Errors {
+    if nul { return copy path }
+    bytes_text(worktree.quote(path.bytes(), high, false))?
+}
+
+fn context_or_repo() -> (repository.Repo, str, bool) ! Errors {
+    let repo = repository.discover(".")?
+    if (repo.config["core.bare"] else "false").lower() == "true" { return (repo, "", true) }
+    let ctx = worktree.discover(".") else |e| match e {
+        Fatal(message) => { return Fatal(message) },
+        _ => { return invalid },
+    }
+    (copy ctx.repo, copy ctx.prefix, false)
+}
+
+fn matches(path: str, pattern: str) -> bool {
+    path == pattern || pattern.ends_with("/") && path.starts_with(pattern) ||
+        path.starts_with("{pattern}/")
+}
+
+fn ls_tree(args: List[str]) -> int ! Errors {
+    var recurse = false, trees = false, only_trees = false, name_only = false, nul = false
+    var operands = List[str]()
+    for arg in args[1..] {
+        if arg == "-r" { recurse = true }
+        else if arg == "-t" { trees = true }
+        else if arg == "-d" { only_trees = true }
+        else if arg == "--name-only" { name_only = true }
+        else if arg == "-z" { nul = true }
+        else if arg.starts_with("-") { return Unsupported("ls-tree option {arg}") }
+        else { (mut operands).push(copy arg) }
+    }
+    if operands.len == 0 { return Unsupported("ls-tree requires a tree-ish") }
+    let (repo, prefix, _) = context_or_repo()?
+    let named = revision.resolve(repo, operands[0]) else |e| match e {
+        Unsupported(feature) => { return Unsupported(feature) },
+        _ => { return Fatal("Not a valid object name {operands[0]}") },
+    }
+    let tree = peel_tree(repo, named)?
+    var listed = List[Listed]()
+    walk_tree(repo, tree, "", true, true, mut listed)?
+    var patterns = List[str]()
+    for path in operands[1..] {
+        if path.starts_with("/") || path.contains("..") { return Unsupported("ls-tree path {path}") }
+        (mut patterns).push(if path == "." then copy prefix else "{prefix}{path}")
+    }
+    let high = (repo.config["core.quotepath"] else "true").lower() != "false"
+    for entry in listed {
+        // The entries the request names: its directory's own level by default,
+        // descendants when recursing; a named path itself, or its children for
+        // a trailing slash.
+        var shown = false
+        if patterns.len == 0 {
+            shown = entry.path.starts_with(prefix) &&
+                (recurse || !entry.path[prefix.len..].contains("/"))
+        } else {
+            for pattern in patterns {
+                if pattern == "" {
+                    shown = recurse || !entry.path.contains("/")
+                } else if entry.path == unslash(pattern) && !pattern.ends_with("/") {
+                    shown = true
+                } else if entry.path.starts_with(if pattern.ends_with("/") then copy pattern else "{pattern}/") {
+                    let base = if pattern.ends_with("/") then pattern.len else pattern.len + 1
+                    shown = recurse || !entry.path[base..].contains("/")
+                }
+                if shown { break }
+            }
+        }
+        if !shown { continue }
+        if entry.kind == "tree" && recurse && !trees && !only_trees {
+            var named_itself = false
+            for pattern in patterns { if entry.path == pattern { named_itself = true } }
+            if !named_itself { continue }
+        }
+        // -d keeps directory-like entries: trees and gitlinks (measured).
+        if only_trees && entry.kind != "tree" && entry.kind != "commit" { continue }
+        let display = if entry.path.starts_with(prefix) then entry.path[prefix.len..] else copy entry.path
+        let name = quoted(display, high, nul)?
+        let line = if name_only {
+            name
+        } else {
+            "{mode_digits(entry.mode)?} {entry.kind} {oid.hex(entry.id)?}\t{name}"
+        }
+        if nul { print_raw("{line}\0") } else { print(line) }
+    }
+    0
+}
+
+fn unslash(path: str) -> str {
+    var out = copy path
+    while out.ends_with("/") { out = out[0..out.len - 1] }
+    out
+}
+
+
+fn ls_files(args: List[str]) -> int ! Errors {
+    var staged = false, nul = false
+    var paths = List[str]()
+    for arg in args[1..] {
+        if arg == "-s" || arg == "--stage" { staged = true }
+        else if arg == "-z" { nul = true }
+        else if arg == "--" { continue }
+        else if arg.starts_with("-") { return Unsupported("ls-files option {arg}") }
+        else { (mut paths).push(copy arg) }
+    }
+    let ctx = worktree.discover(".") else |e| match e {
+        Fatal(message) => { return Fatal(message) },
+        _ => { return invalid },
+    }
+    let value = worktree.read_index(ctx) else |_| { return invalid }
+    var patterns = List[str]()
+    for path in paths {
+        if path.starts_with("/") || path.contains("..") { return Unsupported("ls-files path {path}") }
+        let full = if path == "." then copy ctx.prefix else "{ctx.prefix}{path}"
+        (mut patterns).push(unslash(full))
+    }
+    let high = worktree.config_bool(ctx, "core.quotepath", true) else |_| { return invalid }
+    for entry in value.entries {
+        let path = bytes_text(entry.path)?
+        if !path.starts_with(ctx.prefix) { continue }
+        if patterns.len > 0 {
+            var hit = false
+            for pattern in patterns { if pattern == "" || matches(path, pattern) { hit = true } }
+            if !hit { continue }
+        }
+        let name = quoted(path[ctx.prefix.len..], high, nul)?
+        let line = if staged {
+            "{object.mode_text(entry.stat[6]) else |_| { return invalid }} {oid.hex(entry.id)?} {index.stage(entry)}\t{name}"
+        } else {
+            name
+        }
+        if nul { print_raw("{line}\0") } else { print(line) }
+    }
+    0
+}

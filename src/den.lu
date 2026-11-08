@@ -76,7 +76,7 @@ fn main() -> int {
                 for argument in args { if argument == "--" { return worktree.run(args) } }
                 return refcmd.run(args)
             },
-            "init" | "hash-object" | "cat-file" | "write-tree" | "commit-tree" | "mktag" | "mktree" | "config" => {
+            "init" | "hash-object" | "cat-file" | "write-tree" | "commit-tree" | "mktag" | "mktree" | "config" | "ls-tree" | "ls-files" => {
                 return plumbing.run(args)
             },
             _ => {},

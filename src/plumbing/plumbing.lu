@@ -535,6 +535,8 @@ fn dispatch(args: List[str]) -> int ! Errors {
         "commit-tree" => commit_tree(args)?,
         "mktag" => mktag(args)?,
         "mktree" => mktree(args)?,
+        "ls-tree" => ls_tree(args)?,
+        "ls-files" => ls_files(args)?,
         "write-tree" => {
             if args.len != 1 { return Unsupported("write-tree options") }
             let repo = repository.discover(".")?
