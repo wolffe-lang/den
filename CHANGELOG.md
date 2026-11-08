@@ -22,6 +22,9 @@
   configuration; names and emails are cleaned as Git cleans them.
   cherry-pick and rebase keep a picked author's stored bytes; amend re-reads
   the author as Git does.
+- `log -n` with no exclusion stops its walk after the count plus the skip:
+  `log -1` reads one commit, and a history past the walk's 10,000 commits is
+  no longer refused for a count.
 - `tools/identity-test.py` holds every identity shape to the pinned Git, and
   `tools/identity-census.py` runs the checker, a clone and the readers over
   real histories; the live row clones i3's public repository.
