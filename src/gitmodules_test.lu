@@ -291,7 +291,62 @@ fn name_rows() -> int {
     failed
 }
 
+// vc25: the line the pinned Git reports for each broken section header, and
+// the one header it takes (notes/vc25-evidence/config-header-lines.tsv). Left
+// out: a file that ends right after a section name, where Git reports the
+// next line and tools/config-test.py expects den's line (`[bad` is line 1).
+fn header_line(text: str) -> str {
+    let _ = repository.parse_config_named(text, "f") else |e| match e {
+        ConfigDiagnostic(message) => { return copy message },
+        _ => { return "ERROR {e}" },
+    }
+    ""
+}
+
+fn header_rows() -> int {
+    let cases = [
+        ["[broken\n", "1"],
+        ["[broken\nx = 1\n", "1"],
+        ["\n\n[broken\n", "3"],
+        ["[sec.sub\n", "1"],
+        ["[sec \n", "1"],
+        ["[sec ", "1"],
+        ["[sec \"", "1"],
+        ["[sec \"sub\n", "1"],
+        ["[sec \"sub", "1"],
+        ["[sec \"sub\\\n", "1"],
+        ["[sec \"sub\"\n", "2"],
+        ["[sec \"sub\"\nx = 1\n", "2"],
+        ["[sec \"sub\"\n\n", "2"],
+        ["\n\n[sec \"sub\"\n", "4"],
+        ["[sec \"sub\"", "2"],
+        ["[sec \"sub\"\r\n", "2"],
+        ["[sec \"sub\" \n", "1"],
+        ["[sec \"sub\"  \n", "1"],
+        ["[sec \"sub\"\t\n", "1"],
+        ["[sec \"sub\" ", "1"],
+        ["[sec \"sub\"x\n", "1"],
+        ["[sec \"sub\" ]\n\tx = 1\n", "1"],
+        ["[sec \"sub\"]\n\tx = 1\n", ""],
+        ["[sec x]\n", "1"],
+        ["[core]\n\tx = 1\n[broken\n", "3"],
+    ]
+    var failed = 0
+    var i = 0
+    for c in cases {
+        i += 1
+        let want = if c[1] == "" then "" else "fatal: bad config line {c[1]} in file f"
+        let got = header_line(c[0])
+        if got != want {
+            print("FAIL config-header-line-{i}: {got}, want {want}")
+            failed += 1
+        }
+    }
+    print("config-header-line: {cases.len - failed}/{cases.len}")
+    failed
+}
+
 fn main() -> int {
-    let failed = url_rows() + rewrite_rows() + layout_rows() + name_rows()
+    let failed = url_rows() + rewrite_rows() + layout_rows() + name_rows() + header_rows()
     if failed == 0 { 0 } else { 1 }
 }

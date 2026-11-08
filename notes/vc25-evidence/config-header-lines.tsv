@@ -1,0 +1,33 @@
+# vc25: the line the pinned Git (2.56.0) reports for each broken config section
+# header, black box: printf INPUT > f; git config --file f --get sec.sub.x
+# with an empty environment and no system config. Columns: the input as
+# printf escapes, Git's exit status, Git's output (stderr, or the value).
+git version 2.56.0
+[broken\n	128	fatal: bad config line 1 in file f
+[broken	128	fatal: bad config line 2 in file f
+[broken\nx = 1\n	128	fatal: bad config line 1 in file f
+\n\n[broken\n	128	fatal: bad config line 3 in file f
+\n\n[broken	128	fatal: bad config line 4 in file f
+[sec.sub\n	128	fatal: bad config line 1 in file f
+[sec \n	128	fatal: bad config line 1 in file f
+[sec 	128	fatal: bad config line 1 in file f
+[sec	128	fatal: bad config line 2 in file f
+[sec "	128	fatal: bad config line 1 in file f
+[sec "sub\n	128	fatal: bad config line 1 in file f
+[sec "sub	128	fatal: bad config line 1 in file f
+[sec "sub\\\n	128	fatal: bad config line 1 in file f
+[sec "sub"\n	128	fatal: bad config line 2 in file f
+[sec "sub"\nx = 1\n	128	fatal: bad config line 2 in file f
+[sec "sub"\n\n	128	fatal: bad config line 2 in file f
+\n\n[sec "sub"\n	128	fatal: bad config line 4 in file f
+[sec "sub"	128	fatal: bad config line 2 in file f
+[sec "sub"\r\n	128	fatal: bad config line 2 in file f
+[sec "sub" \n	128	fatal: bad config line 1 in file f
+[sec "sub"  \n	128	fatal: bad config line 1 in file f
+[sec "sub"\t\n	128	fatal: bad config line 1 in file f
+[sec "sub" 	128	fatal: bad config line 1 in file f
+[sec "sub"x\n	128	fatal: bad config line 1 in file f
+[sec "sub" ]\n\tx = 1\n	128	fatal: bad config line 1 in file f
+[sec "sub"]\n\tx = 1\n	0	1
+[sec x]\n	128	fatal: bad config line 1 in file f
+[core]\n\tx = 1\n[broken\n	128	fatal: bad config line 3 in file f
