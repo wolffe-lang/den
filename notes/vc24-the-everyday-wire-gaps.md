@@ -35,6 +35,8 @@ Clean room: git's documentation and black-box runs of the pinned Git and a field
 - **P7, PAX:** drafted below for a px lane; no PAX session was run here.
 - **P8, the refusals that remain:** as predicted, plus a new one (R-vc24-6).
 - **P9, the gate:** as predicted; the records are in the PR body.
+- **P10, the checkout's reader (a second change):** the cap held and the estimate did not. After the reader alone den's clone CPU was 8.3 times Git's on macOS, not about 5: the per-file syncs' system time, which the estimate left out, was most of the difference. After P11's change too, 6.5 times. Below, "The checkout's cost".
+- **P11, the checkout's syncs:** held. The pinned Git's pelt clone makes 3 sync calls, all on the received pack; den's fell from 19,390 to 20, none on the worktree. On a disk under strace den's clone fell from 294.4 s to 11.0 s; it was not measured in a tmpfs here.
 
 ## Evidence index
 
@@ -74,7 +76,7 @@ The issue's figures are commits (30 to 300), not thousands. Its fixture (burrow'
 
 At ef0bb0c the whole-pack decoder inflated each entry from a copy of the rest of the pack (about entries times pack over two), quadratic in history; vc23's streamed indexer (den#61) replaced it. At trunk an RSS timeline of the 80,000-object clone (VmRSS and open files every 5 ms) split the rest: receive 4.5 MiB; the indexer's tables +32 MiB; install +18 MiB; the closure's reader parsing the idx +56 MiB; the closure walk +78 MiB (`--bare` ends there); about a dozen further idx parses kept during checkout setup, about 20 MiB each, +245 MiB; each checked-out file parsing the idx again, reclaimed. The idx parse built a hex string, an id and a slice for every entry in the caller's region, and its merge sort copied its order list on every pass; tree walks opened readers whose parses outlived them; the closure queue kept every link's name.
 
-The fix (`b4fe7f1`, `d151ea8`, `212783a`): the idx parse reserves its lists to the count, decodes each name in its own region and merges without a copy a pass; `tree_id` and `flatten_tree` walk in a region and keep only their result; the closure walk queues received objects by rank with an int for the type it expects, and does each step in a region. The rows (`memory-long-20000`, `-bare`, `memory-issue-300-40`, `-bare`) hold the bound of P6 d, 64 MiB plus 1.5 KiB an object with a checkout (1 KiB bare), under `prlimit --as` at the bound plus 128 MiB, and compare each clone with Git's and its `fsck --full`. CPU for the 80,000-object clone fell from 21.1 s to 15.6 s with a checkout; Git takes 0.5 s. The checkout still parses the idx once for each object it writes (reclaimed), so its CPU grows with files times objects; a reader threaded through the worktree's install path is the next step, outside this lane.
+The fix (`b4fe7f1`, `d151ea8`, `212783a`): the idx parse reserves its lists to the count, decodes each name in its own region and merges without a copy a pass; `tree_id` and `flatten_tree` walk in a region and keep only their result; the closure walk queues received objects by rank with an int for the type it expects, and does each step in a region. The rows (`memory-long-20000`, `-bare`, `memory-issue-300-40`, `-bare`) hold the bound of P6 d, 64 MiB plus 1.5 KiB an object with a checkout (1 KiB bare), under `prlimit --as` at the bound plus 128 MiB, and compare each clone with Git's and its `fsck --full`. CPU for the 80,000-object clone fell from 21.1 s to 15.6 s with a checkout; Git takes 0.5 s. The checkout still parsed the idx once for each object it writes (reclaimed), so its CPU grew with files times objects; the second change, below, threads one reader through it.
 
 ### The rules, as measured
 
@@ -90,7 +92,40 @@ The fix (`b4fe7f1`, `d151ea8`, `212783a`): the idx parse reserves its lists to t
 - **R-vc24-3 = (A):** `rev-parse` takes the forms scripts use (P4) and a few neighbours; any other option is `den: not yet implemented: rev-parse (M3, vc10)`.
 - **R-vc24-4 = (A):** the oracle's `rev-parse` case is a parity row (`require_parity`); a new `rev-parse-parseopt` case keeps `tools/oracle --filter rev-parse --strict` red, so `tools/gate`, `tools/gate-record` and `ci/tiers-test.py` are unchanged.
 - **R-vc24-5 = (A):** `fetch --prune` with explicit refspecs refuses by name.
-- **R-vc24-6 (new, recommended, not applied):** with no `init.defaultBranch`, Git names a new repository's branch `master` and prints its initial-branch hint; `den init`, and a clone of an empty repository whose server does not advertise `unborn`, name it `main` silently. Options: (A) a follow-up lane holds `init` and the empty clone to Git without the pinned configuration (recommended: it is the PAX console's case, where no global configuration exists); (B) keep `main` as a reviewed difference.
+- **R-vc24-6 (accepted for a follow-up lane after vc25; not applied here):** with no `init.defaultBranch`, Git names a new repository's branch `master` and prints its initial-branch hint; `den init`, and a clone of an empty repository whose server does not advertise `unborn`, name it `main` silently. Options: (A) a follow-up lane holds `init` and the empty clone to Git without the pinned configuration (recommended: it is the PAX console's case, where no global configuration exists); (B) keep `main` as a reviewed difference.
+
+- **R-vc24-7 (asked by the second change's prediction; ruled to match the pinned Git):** worktree files are not synced, as the pinned Git syncs none.
+
+### The checkout's cost (den#63, a second change)
+
+From px108: `den clone https://github.com/wolffe-lang/pelt.git` at a PAX console took 70.2 s of user and 44.9 s of system time where Git takes 1.37 s; on Linux the same clone took 103 s into a tmpfs and 287 to 295 s on a disk. Predicted in P10 and P11 (`tests/vc24-prediction.txt`) before each change was built. Two terms, each measured before its change:
+
+1. **CPU, the index parsed twice a file.** The checkout reads each blob twice, to check every blob before writing any and then to write it, and each read went through `read_object`, which parses the pack index (356 KB for pelt: its SHA-1, its offset sort, its reads, its names). A macOS `sample` of the clone put most of its CPU there.
+2. **Wall time, two syncs a file.** The checkout synced each file and then its directory: 19,390 syncs in Linux's census of the clone below, and 86 percent of the checkout's wall time in a macOS sample once the first term was gone. The pinned Git's clone of the same repository makes three sync calls, on `objects/pack`'s temporary idx, rev and pack, at the end of the receive and none during the checkout; git-config(1)'s `core.fsync` names no component for worktree files.
+
+The change: `object.reader_batch` opens one reader for a checkout, a restore or a merge abort, and `install` reads through it (`c559c10`); a read through an opened reader re-checks its pack's size, header and trailer binding and rescans the index's offsets only when the size moved (`5749abf`); a reader whose packs cannot open up front serves loose objects and fails a packed read with a single read's error (`e69f732`). `install` syncs neither its file nor its directory (`0f25864`); the pack, refs, index and configuration keep their syncs.
+
+The rows, `tools/check-http`'s `release-clone-cost` step: `clone-cost-pelt` clones pelt's trunk at `b80d657` (12,038 objects, 9,685 files; a bundle pinned by its digest, repacked by the pinned Git on one thread, served by the pinned git daemon), the pinned Git then den, three times in turn, and holds den's least CPU (user plus system, from `wait4`, children included) to at most ten times Git's, with both clones checked out and equal; `clone-syncs-pelt` (Linux) counts each client's sync calls through a preloaded census library (`tools/sync-census.c`) by what they sync, and holds den's worktree syncs to Git's (none) and its total to at most 24 more than Git's. The batch reader's re-check has its own rows in `tools/pack-test.py` (`session-*`): a pack replaced under an opened reader, by the same bytes, shorter, longer, a changed header, count, trailer or entry, answers as a fresh read of it does.
+
+pelt's clone, release, the least CPU and the least wall time of three runs each:
+
+| | den CPU | Git CPU | ratio | den wall | Git wall |
+|---|---|---|---|---|---|
+| macOS arm64, field Git, before (`304757b`) | 115.62 s | 0.92 s | 125.7 | 186.1 s | 0.8 s |
+| macOS, after the reader only (outside the pinned environment) | 8.12 s | 0.98 s | 8.3 | 79.8 s | 0.9 s |
+| macOS, after both changes | 6.00 s | 0.93 s | 6.5 | 6.1 s | 0.8 s |
+
+Linux's system call census of the same clone (strace `-f -c`, a light slot, on a disk; one run each, so its times include strace's):
+
+| | calls | pread64 | statx | openat | brk | getdents64 | fsync | wall under strace |
+|---|---|---|---|---|---|---|---|---|
+| the pinned Git | 70,504 | 5,916 | 10,718 (newfstatat) | 20,262 | 85 | 20 | 3 | 1.5 s |
+| den before (`304757b`) | 863,457 | 255,369 | 213,881 | 116,939 | 38,639 | 38,762 | 19,390 | 294.4 s |
+| den after | 457,091 | 139,157 | 155,776 | 68,517 | 418 | 24 | 20 | 11.0 s |
+
+The Linux timed rows' figures, before and after, are the gauntlet's and are in the PR body.
+
+**The next term** is den's own per-object work: each blob is inflated and hashed in wolf when the received pack is indexed, again when the checkout checks it and again when it writes it (each through its delta chain), and the written file is read back and hashed once more, where Git inflates each object once. On macOS a bare clone (the receive alone, which neither change touches) took 2.4 s of CPU against Git's 0.32 s, and the sample of the whole clone is led by SHA-1, inflate and delta application. In system calls, den's checkout still makes about 16 `statx`, 14 `pread64` and 7 `openat` a file where Git makes about 1, 0.6 and 2: the pack is opened and re-checked for each of a blob's two reads, each ancestor directory is checked before a file is written, and the written file is read back.
 
 ### On PAX: a px lane's items (drafted, not run)
 
@@ -110,7 +145,8 @@ The fix (`b4fe7f1`, `d151ea8`, `212783a`): the idx parse reserves its lists to t
 - `rev-parse` options other than P4's are not yet implemented (R-vc24-3); `GIT_DIR` and `GIT_WORK_TREE` overrides are not row-tested.
 - Clone's operand errors are named refusals, not Git's usage text (R-vc24-1).
 - `init` and an empty clone with no `init.defaultBranch` (R-vc24-6).
-- The checkout still parses the pack index once for every object it writes (each parse reclaimed): its CPU grows with files times objects, while its memory does not.
+- A clone's CPU after the second change is about six times Git's on macOS, in den's own inflate and SHA-1 (below, "the next term").
+- den hardens a clone's refs, index and configuration, which Git's default leaves to the system: pelt's clone makes 20 sync calls against Git's 3, by `clone-syncs-pelt`'s classes: 9 on the repository's own files (its configuration, reflogs and directory), 6 on refs, 4 on the pack and its directory, 1 on the index.
 
 ## Done-when
 
@@ -119,3 +155,4 @@ The fix (`b4fe7f1`, `d151ea8`, `212783a`): the idx parse reserves its lists to t
 - [x] den#63: the memory rows under a hard cap at the predicted bound.
 - [x] PAX: the px lane's items drafted above.
 - [ ] The final gauntlet, the plant and the macOS record at the head: their records and every END line are in the PR body.
+- [x] The checkout's reader and syncs (den#63, second change): predicted (P10, P11), the rows red first at `304757b`, then green.
