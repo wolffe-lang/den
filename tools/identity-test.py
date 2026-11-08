@@ -8,8 +8,13 @@ for byte, and the object bytes and ids a clone receives.
 
   --measure    run every row and write the table (target/identity-TIER/),
                failing nothing: the lane's specification, before a change.
-  (default)    the same rows; any row whose bytes differ is FAIL <row>.
-  --family F   read, fsck, wire or write only (repeatable).
+  (default)    the same rows; any row whose bytes differ is FAIL <row>,
+               except the named refusals in REFUSED, where den must refuse
+               by that name (and Git's answer is recorded).
+  --family F   read, format, fsck, wire, replay or write (repeatable).
+  --field      Git is not the pinned one (the macOS field leg): its digest
+               is not checked, and the rows in FIELD are named differences,
+               never passes.
 """
 import argparse
 import hashlib
@@ -89,6 +94,11 @@ SHAPES = [
     ('far-year', b'A U Thor <a@example.invalid> 100000000000000 +0000'),
     ('gmtime-edge', b'A U Thor <a@example.invalid> 67767976233532799 +0000'),
     ('gmtime-past', b'A U Thor <a@example.invalid> 67767976233532800 +0000'),
+    ('max-i64-west', b'A U Thor <a@example.invalid> 9223372036854775807 -0500'),
+    ('epoch-west', b'A U Thor <a@example.invalid> 0 -0500'),
+    ('one-west', b'A U Thor <a@example.invalid> 1 -0100'),
+    ('gmtime-last', b'A U Thor <a@example.invalid> 67768036191676799 +0000'),
+    ('gmtime-fail', b'A U Thor <a@example.invalid> 67768036191676800 +0000'),
 ]
 
 PLACEHOLDERS = ('%an|%ae|%al|%aN|%aE|%aL|%ad|%aD|%at|%ai|%aI|%as%n'
@@ -97,28 +107,50 @@ PLACEHOLDERS = ('%an|%ae|%al|%aN|%aE|%aL|%ad|%aD|%at|%ai|%aI|%as%n'
 CONTROL = b'A U Thor <author@example.invalid> 1700000000 +0000'
 
 
+# Den refuses these by name, as ruled: den does not run Git's full object
+# checks, so a configuration that asks for them is refused, never ignored;
+# `fsck --strict` adds a file mode check den does not make; placeholders
+# outside the minimal format engine are refused. (family, op) -> text that
+# den's stderr must hold, with exit 2.
+CHECKS = ": den does not run git's full object checks"
+REFUSED = {
+    ('wire', 'clone-fsck-objects'): 'transfer.fsckObjects' + CHECKS,
+    ('wire', 'clone-fetch-fsck-objects'): 'fetch.fsckObjects' + CHECKS,
+    ('wire', 'serve-push-fsck-objects'): 'receive.fsckObjects' + CHECKS,
+    ('fsck', 'fsck-strict'): 'not yet implemented: fsck --strict',
+}
+
+# The macOS field Git prints a Latin-1 byte in an identity as UTF-8, where
+# the pinned Git prints the byte (measured at the base). Named per row.
+FIELD_LATIN1 = ('latin1-name', 'email-latin1')
+
+
 def parse_args():
     p = argparse.ArgumentParser()
     p.add_argument('--tier', default='native')
     p.add_argument('--measure', action='store_true')
-    p.add_argument('--family', action='append', choices=('read', 'fsck', 'wire', 'write'))
+    p.add_argument('--field', action='store_true')
+    p.add_argument('--family', action='append',
+                   choices=('read', 'format', 'fsck', 'wire', 'replay', 'write'))
     p.add_argument('--shape', action='append')
     return p.parse_args()
 
 
 A = parse_args()
-FAMILIES = A.family or ['read', 'fsck', 'wire', 'write']
+FAMILIES = A.family or ['read', 'format', 'fsck', 'wire', 'replay', 'write']
 GIT = pathlib.Path(os.environ.get('DEN_GIT') or next((R / 'target/oracle').glob('*/root/opt/git/bin/git')))
-assert hashlib.sha256(GIT.read_bytes()).hexdigest() == ORACLE_SHA, 'pinned oracle digest'
+if not A.field:
+    assert hashlib.sha256(GIT.read_bytes()).hexdigest() == ORACLE_SHA, 'pinned oracle digest'
 DEN = R / 'target' / A.tier / 'den'
 assert DEN.is_file(), DEN
-ROOT = R / 'target' / ('identity-' + A.tier)
+ROOT = R / 'target' / ('identity-' + A.tier + ('-field' if A.field else ''))
 if ROOT.exists():
     shutil.rmtree(ROOT)
 ROOT.mkdir(parents=True)
 TOOLS = {'git': str(GIT), 'den': str(DEN)}
 rows = []
 failures = []
+named = []
 
 
 def run(argv, cwd, data=None, env=None):
@@ -146,8 +178,8 @@ def result(q):
 def verdict(res):
     """A short reading of one result: ok, warn ID, or xSTATUS ID."""
     ids = re.findall(r'\b([a-z]+[A-Z][A-Za-z0-9]*): ', res['stderr'] + res['stdout'])
-    named = re.findall(r'Unsupported\(([^)]*)\)', res['stderr'])
-    tag = ','.join(dict.fromkeys(ids)) or (named[0] if named else '')
+    named_refusal = re.findall(r'Unsupported\(([^)]*)\)', res['stderr'])
+    tag = ','.join(dict.fromkeys(ids)) or (named_refusal[0] if named_refusal else '')
     if res['status'] == 0:
         return 'ok' if not res['stderr'] else 'warn ' + (tag or 'stderr')
     if not tag:
@@ -165,14 +197,30 @@ def record(shape, family, op, git_res, den_res, extra=None):
                git_verdict=verdict(git_res), den_verdict=verdict(den_res))
     if extra is not None:
         row['received'] = extra
-    rows.append(row)
     name = '%s/%s/%s' % (family, shape, op)
-    if same:
-        print('PASS', name, flush=True)
+    want = REFUSED.get((family, op))
+    row['refusal'] = want
+    rows.append(row)
+    if want is not None:
+        ok = den_res['status'] != 0 and want in den_res['stderr']
+        if extra is not None:
+            ok = ok and extra.get('den') is None
+        row['passed'] = ok
+        if ok:
+            print('PASS', name, 'refused by name:', want, '(git: %s)' % row['git_verdict'], flush=True)
+            return
     else:
-        failures.append(name)
-        print(('DIFF ' if A.measure else 'FAIL ') + name, 'git=' + json.dumps(git_res), 'den=' + json.dumps(den_res),
-              ('received=' + json.dumps(extra)) if extra is not None else '', flush=True)
+        row['passed'] = same
+        if same:
+            print('PASS', name, flush=True)
+            return
+        if A.field and shape in FIELD_LATIN1:
+            named.append(name)
+            print('NAMED', name, 'field Git re-encodes a Latin-1 identity byte', flush=True)
+            return
+    failures.append(name)
+    print(('DIFF ' if A.measure else 'FAIL ') + name, 'git=' + json.dumps(git_res), 'den=' + json.dumps(den_res),
+          ('received=' + json.dumps(extra)) if extra is not None else '', flush=True)
 
 
 def build_source(name, value):
@@ -198,6 +246,10 @@ def build_source(name, value):
     return src, dict(commit=c1, tag=t, root=c0, commit_bytes=body.hex(), tag_bytes=tag.hex())
 
 
+def both(args, cwd):
+    return {tool: result(run([TOOLS[tool], *args], cwd)) for tool in ('git', 'den')}
+
+
 def read_family(name, src, ids):
     c1, t = ids['commit'], ids['tag']
     ops = [
@@ -210,18 +262,19 @@ def read_family(name, src, ids):
         ('show', ['show', '-s', c1]),
         ('show-tag', ['show', '-s', t]),
         ('format', ['log', '-1', '--format=' + PLACEHOLDERS, c1]),
+        ('format-dates', ['log', '-1', '--date=raw', '--format=%ad|%cd', c1]),
         ('blame', ['blame', c1, '--', 'f']),
         ('blame-porcelain', ['blame', '--porcelain', c1, '--', 'f']),
         ('blame-email', ['blame', '-e', c1, '--', 'f']),
     ]
     for op, args in ops:
-        res = {tool: result(run([TOOLS[tool], *args], src)) for tool in ('git', 'den')}
+        res = both(args, src)
         record(name, 'read', op, res['git'], res['den'])
 
 
 def fsck_family(name, src, ids):
     for op, args in [('fsck', ['fsck']), ('fsck-strict', ['fsck', '--strict'])]:
-        res = {tool: result(run([TOOLS[tool], *args], src)) for tool in ('git', 'den')}
+        res = both(args, src)
         record(name, 'fsck', op, res['git'], res['den'])
 
 
@@ -237,30 +290,44 @@ def received(dst, ids):
     return out
 
 
+def global_config(work, extra):
+    # Configuration through a copy of the pinned global config file: both
+    # tools read it, and den takes no `-c`.
+    conf = work / 'gitconfig'
+    base = pathlib.Path(os.environ['GIT_CONFIG_GLOBAL']).read_bytes()
+    conf.write_bytes(base + extra)
+    return {'GIT_CONFIG_GLOBAL': str(conf)}
+
+
+WIRE_OPS = ('clone', 'clone-bare', 'clone-local', 'clone-fsck-objects', 'clone-fetch-fsck-objects',
+            'clone-fetch-false', 'push', 'serve-fetch', 'serve-push', 'serve-push-fsck-objects')
+
+
 def wire_family(name, src, ids):
     url = src.as_uri()
-    for op in ('clone', 'clone-bare', 'clone-local', 'clone-fsck-objects', 'push', 'serve-fetch', 'serve-push'):
+    for op in WIRE_OPS:
         res, held = {}, {}
         for tool in ('git', 'den'):
             work = ROOT / 'wire' / tool / name / op
             work.mkdir(parents=True)
+            dst = work / 'dst'
             if op == 'clone':
                 q = run([TOOLS[tool], 'clone', '-q', url, 'dst'], work)
-                dst = work / 'dst'
             elif op == 'clone-bare':
                 q = run([TOOLS[tool], 'clone', '-q', '--bare', url, 'dst.git'], work)
                 dst = work / 'dst.git'
             elif op == 'clone-local':
                 q = run([TOOLS[tool], 'clone', '-q', str(src), 'dst'], work)
-                dst = work / 'dst'
             elif op == 'clone-fsck-objects':
-                # transfer.fsckObjects through the pinned global config file:
-                # both tools read it, and neither takes `-c`.
-                conf = work / 'gitconfig'
-                base = pathlib.Path(os.environ['GIT_CONFIG_GLOBAL']).read_bytes()
-                conf.write_bytes(base + b'[transfer]\n\tfsckObjects = true\n')
-                q = run([TOOLS[tool], 'clone', '-q', url, 'dst'], work, env={'GIT_CONFIG_GLOBAL': str(conf)})
-                dst = work / 'dst'
+                env = global_config(work, b'[transfer]\n\tfsckObjects = true\n')
+                q = run([TOOLS[tool], 'clone', '-q', url, 'dst'], work, env=env)
+            elif op == 'clone-fetch-fsck-objects':
+                env = global_config(work, b'[fetch]\n\tfsckObjects = true\n[transfer]\n\tfsckObjects = false\n')
+                q = run([TOOLS[tool], 'clone', '-q', url, 'dst'], work, env=env)
+            elif op == 'clone-fetch-false':
+                # fetch.fsckObjects wins over transfer.fsckObjects: no checks.
+                env = global_config(work, b'[fetch]\n\tfsckObjects = false\n[transfer]\n\tfsckObjects = true\n')
+                q = run([TOOLS[tool], 'clone', '-q', url, 'dst'], work, env=env)
             elif op == 'push':
                 dst = work / 'dst.git'
                 g(work, 'init', '-q', '--bare', 'dst.git')
@@ -275,11 +342,99 @@ def wire_family(name, src, ids):
                 # The pinned Git pushes into TOOL's receive-pack.
                 dst = work / 'dst.git'
                 g(work, 'init', '-q', '--bare', 'dst.git')
+                if op == 'serve-push-fsck-objects':
+                    g(dst, 'config', 'receive.fsckObjects', 'true')
                 q = run([GIT, 'push', '-q', '--receive-pack=' + TOOLS[tool] + ' receive-pack', dst.as_uri(),
                          'refs/heads/main:refs/heads/main', 'refs/tags/t:refs/tags/t'], src)
             res[tool] = result(q)
             held[tool] = received(dst, ids) if dst.exists() else None
+        if op == 'serve-push-fsck-objects':
+            # A refused push leaves the bare repository; what it holds is
+            # compared through its refs only.
+            held = {t: (None if not (held[t] or {}).get('refs') else held[t]) for t in held}
         record(name, 'wire', op, res['git'], res['den'], extra=held)
+
+
+def head_bytes(work):
+    q = run([GIT, 'cat-file', 'commit', 'HEAD'], work)
+    return text(q.stdout) if q.returncode == 0 else None
+
+
+def replay_family(name, src, ids):
+    """What amend, cherry-pick and rebase keep of a shaped author."""
+    for op in ('amend', 'cherry-pick', 'rebase'):
+        res, made = {}, {}
+        for tool in ('git', 'den'):
+            work = ROOT / 'replay' / tool / name / op
+            shutil.copytree(src, work)
+            if op == 'amend':
+                (work / 'f').write_bytes(b'one\ntwo\nthree\nfour\n')
+                g(work, 'add', 'f')
+                q = run([TOOLS[tool], 'commit', '-q', '--amend', '-m', 'amended'], work)
+            else:
+                # side: the root plus an unrelated commit touching g.
+                g(work, 'checkout', '-q', '-b', 'side', ids['root'])
+                (work / 'g').write_bytes(b'side\n')
+                g(work, 'add', 'g')
+                g(work, 'commit', '-q', '-m', 'side')
+                if op == 'cherry-pick':
+                    q = run([TOOLS[tool], 'cherry-pick', ids['commit']], work)
+                else:
+                    g(work, 'checkout', '-q', 'main')
+                    q = run([TOOLS[tool], 'rebase', 'side'], work)
+            res[tool] = result(q)
+            made[tool] = head_bytes(work)
+        record(name, 'replay', op, res['git'], res['den'], extra=made)
+
+
+FORMAT_BASIC = '%H|%h|%T|%t|%P|%p|%s|%b|%B|%n|%%|lit'
+FORMAT_OPS = [
+    ('basic', ['log', '--format=' + FORMAT_BASIC]),
+    ('format-prefix', ['log', '--pretty=format:%h %s']),
+    ('tformat-prefix', ['log', '--pretty=tformat:%h %s']),
+    ('format-name', ['log', '--format=format:%an']),
+    ('body-raw', ['log', '-1', '--format=%B']),
+    ('body', ['log', '--format=[%b]']),
+    ('subject', ['log', '--format=[%s]']),
+    ('empty', ['log', '--format=']),
+    ('show-format', ['show', '-s', '--format=%h %an %ad']),
+    ('date-style', ['log', '--date=iso', '--format=%ad|%cd']),
+    ('reverse', ['log', '--reverse', '--format=%h']),
+    ('max-count', ['log', '-n', '2', '--format=%h %p']),
+]
+# Placeholders outside the engine: den refuses each by name.
+FORMAT_REFUSED = ['%ar', '%ah', '%cr', '%ch', '%d', '%D', '%e', '%x41', '%C(red)', '%Cred', '%<(10)%s',
+                  '%G?', '%N', '%gd', '%m', '%w(10)', '%(trailers)', '%+s', '%-s', '% s', '%f', '%S',
+                  '%z', '%']
+
+
+def format_family():
+    work = ROOT / 'format'
+    work.mkdir(parents=True)
+    g(work, 'init', '-q', '-b', 'main')
+    messages = [b'subject line\n\nbody para one\nline two\n\nsecond para\n',
+                b'first line\nsecond line of subject\n\nbody\n',
+                b'  spaced subject  \n\n\n  indented body\t\n\n',
+                b'no newline']
+    parent = None
+    for i, message in enumerate(messages):
+        blob = g(work, 'hash-object', '-w', '--stdin', data=b'content %d\n' % i)
+        tree = g(work, 'mktree', data=('100644 blob %s\tf\n' % blob).encode())
+        stamp = b' %d +0%d00' % (1700000000 + i, i)
+        body = b'tree ' + tree.encode() + b'\n' + (b'parent ' + parent.encode() + b'\n' if parent else b'')
+        body += b'author A U Thor <author@example.invalid>' + stamp + b'\n'
+        body += b'committer C O Mitter <committer@example.invalid>' + stamp + b'\n\n' + message
+        parent = g(work, 'hash-object', '-w', '-t', 'commit', '--stdin', data=body)
+    side = g(work, 'commit-tree', tree, '-p', parent, '-m', 'side')
+    merge = g(work, 'commit-tree', tree, '-p', parent, '-p', side, '-m', 'merge')
+    g(work, 'update-ref', 'refs/heads/main', merge)
+    for op, args in FORMAT_OPS:
+        res = both(args, work)
+        record('history', 'format', op, res['git'], res['den'])
+    for placeholder in FORMAT_REFUSED:
+        res = both(['log', '-1', '--format=' + placeholder], work)
+        REFUSED[('format', 'refuse ' + placeholder)] = 'not yet implemented: history format placeholder'
+        record('history', 'format', 'refuse ' + placeholder, res['git'], res['den'])
 
 
 WRITES = [
@@ -288,11 +443,14 @@ WRITES = [
     ('name-empty-config', [('user.name', '')], {}, ['commit', '-q', '-m', 'w']),
     ('email-empty-env', [], {'GIT_AUTHOR_EMAIL': '', 'GIT_COMMITTER_EMAIL': ''}, ['commit', '-q', '-m', 'w']),
     ('name-empty-env', [], {'GIT_AUTHOR_NAME': '', 'GIT_COMMITTER_NAME': ''}, ['commit', '-q', '-m', 'w']),
+    ('name-blank-env', [], {'GIT_AUTHOR_NAME': '  '}, ['commit', '-q', '-m', 'w']),
+    ('email-blank-config', [('user.email', '  ')], {}, ['commit', '-q', '-m', 'w']),
     ('author-empty-email', [], {}, ['commit', '-q', '-m', 'w', '--author=Some One <>']),
     ('author-empty-name', [], {}, ['commit', '-q', '-m', 'w', '--author= <a@example.invalid>']),
     ('name-brackets-config', [('user.name', 'Jo<e> Q')], {}, ['commit', '-q', '-m', 'w']),
     ('commit-tree-email-empty', [('user.email', '')], {}, ['commit-tree', '-m', 'w', 'TREE']),
     ('commit-tree-name-empty', [('user.name', '')], {}, ['commit-tree', '-m', 'w', 'TREE']),
+    ('commit-tree-name-empty-env', [], {'GIT_COMMITTER_NAME': ''}, ['commit-tree', '-m', 'w', 'TREE']),
     ('tag-email-empty', [('user.email', '')], {}, ['tag', '-a', '-m', 'w', 'v1', 'BASE']),
     ('tag-name-empty', [('user.name', '')], {}, ['tag', '-a', '-m', 'w', 'v1', 'BASE']),
 ]
@@ -342,7 +500,7 @@ def table():
         for row in rows:
             if (row['family'], row['op']) != (family, op):
                 continue
-            mark = '=' if row['same'] else '!'
+            mark = '=' if row['same'] else ('R' if row.get('passed') else '!')
             lines.append('  %-22s git: %-34s den: %-46s %s' % (row['shape'], row['git_verdict'][:34],
                                                               row['den_verdict'][:46], mark))
     return '\n'.join(lines) + '\n'
@@ -358,12 +516,17 @@ try:
             fsck_family(name, src, ids)
         if 'wire' in FAMILIES:
             wire_family(name, src, ids)
+        if 'replay' in FAMILIES:
+            replay_family(name, src, ids)
+    if 'format' in FAMILIES:
+        format_family()
     if 'write' in FAMILIES:
         write_family()
 finally:
     (ROOT / 'rows.json').write_text(json.dumps(rows, indent=1))
     (ROOT / 'table.txt').write_text(table())
 print(table(), end='')
-print('IDENTITY rows=%d same=%d differ=%d' % (len(rows), len(rows) - len(failures), len(failures)))
+print('IDENTITY rows=%d passed=%d named=%d failed=%d' % (len(rows), len(rows) - len(failures) - len(named),
+                                                           len(named), len(failures)))
 if failures and not A.measure:
     sys.exit(1)
