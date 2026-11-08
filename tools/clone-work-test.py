@@ -318,8 +318,12 @@ def start_https():
     fixture = runpy.run_path(str(R / 'tools/http-git-test.py'))
     for path, digest in fixture['OPENSSL_PINS'].items():
         assert hashlib.sha256(Path(path).read_bytes()).hexdigest() == digest, 'pinned TLS oracle digest'
-    pki = out / 'pki'
-    pki.mkdir()
+    # The fixture's keys stay out of target/runs, which CI uploads as evidence:
+    # a test CA's key is still a key (tools/evidence-modes.py).
+    pki = R / 'target/pki' / ('clone-work-' + a.tier)
+    if pki.exists():
+        shutil.rmtree(pki)
+    pki.mkdir(parents=True)
 
     def openssl(*argv):
         q = subprocess.run(['/usr/bin/openssl', *map(str, argv)], env=env, capture_output=True, timeout=120)
