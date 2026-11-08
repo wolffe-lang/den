@@ -3,7 +3,8 @@
 # URLs and insteadOf as units (native, release, checked); reading gitlinks,
 # status and diff of submodule worktrees, clone --recurse-submodules and the
 # submodule command, hostile inputs and the protocol policy as exact
-# black-box rows on both tiers. Each step's exit code is read directly.
+# black-box rows on both tiers, and the plain-clone rows of
+# tools/clone-work-test.py. Each step's exit code is read directly.
 set -eu
 DEN_ROOT=$(cd "$(dirname "$0")/.." && pwd)
 export DEN_ROOT
@@ -26,5 +27,8 @@ for tier in native release; do
     for family in read status diff clone hostile transport work refusals; do
         tools/env python3 -I tools/submodule-test.py --tier "$tier" --family "$family"
     done
+    # A plain clone on every transport, byte for byte, and switch, checkout
+    # and reset where branches have upstreams (vc25).
+    tools/env python3 -I tools/clone-work-test.py --tier "$tier"
 done
 echo 'submodule: native/release units, actual checked units, exact rows (reflog identity KNOWN only); zero skips'
