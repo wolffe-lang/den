@@ -56,11 +56,23 @@ fn next_offset(index: Index, offset: int, end: int) -> int {
     end
 }
 
-/// Slots ordered by offset: a stable bottom-up merge sort.
+// An object name's hex from its 20 raw bytes, or "" when they are not one.
+fn hex_name(raw: List[byte]) -> str {
+    let id = oid.from_bytes("sha1", raw) else { return "" }
+    oid.hex(id) else ""
+}
+
+/// Slots ordered by offset: a stable bottom-up merge sort. Each pass merges
+/// into scratch and copies back element by element, so no pass allocates
+/// (den#63: a copied list a pass was 17 lists for 80,000 objects).
 fn offset_order(entries: List[Entry]) -> List[int] {
-    var order = List[int]()
-    for i in 0..entries.len { (mut order).push(i) }
-    var scratch = copy order
+    var order = List[int](), scratch = List[int]()
+    (mut order).reserve(entries.len)
+    (mut scratch).reserve(entries.len)
+    for i in 0..entries.len {
+        (mut order).push(i)
+        (mut scratch).push(i)
+    }
     var width = 1
     while width < order.len {
         var lo = 0
@@ -90,7 +102,7 @@ fn offset_order(entries: List[Entry]) -> List[int] {
             }
             lo = hi
         }
-        order = copy scratch
+        for i in 0..order.len { order[i] = scratch[i] }
         width *= 2
     }
     order
@@ -127,8 +139,12 @@ fn parse_index(data: List[byte]) -> Index ! PackErrors {
         if n < previous || n > count { return Unsupported("pack index fanout") }
         previous = n
     }
+    // den#63: the entries are reserved to the count and each entry's name is
+    // decoded in its own region, so a parse keeps one name and two ints an
+    // object rather than every slice, id and copy made on the way.
     var entries = List[Entry]()
-    var bucket = 0, name_before = ""
+    (mut entries).reserve(count)
+    var bucket = 0
     var large_used = Map[int, bool]()
     for i in 0..count {
         let pos = 1032 + 20 * i
@@ -137,12 +153,13 @@ fn parse_index(data: List[byte]) -> Index ! PackErrors {
             if be32(data, 8 + bucket * 4) != i { return Unsupported("pack index fanout") }
             bucket += 1
         }
-        let id = oid.from_bytes("sha1", data[pos..pos + 20]) else |_| {
-            return Unsupported("pack index name")
+        let name = copy region {
+            var raw = List[byte]()
+            for k in pos..pos + 20 { (mut raw).push(data[k]) }
+            hex_name(raw)
         }
-        let name = oid.hex(id) else |_| { return Unsupported("pack index name") }
-        if i > 0 && name <= name_before { return Unsupported("pack index name order") }
-        name_before = name
+        if name == "" { return Unsupported("pack index name") }
+        if i > 0 && name <= entries[i - 1].name { return Unsupported("pack index name order") }
         var offset = be32(data, 1032 + count * 24 + i * 4)
         if offset >= 2147483648 {
             let slot = offset - 2147483648
