@@ -31,4 +31,6 @@ for tier in native release; do
     # and reset where branches have upstreams (vc25).
     tools/env python3 -I tools/clone-work-test.py --tier "$tier"
 done
-echo 'submodule: native/release units, actual checked units, exact rows (reflog identity KNOWN only); zero skips'
+# Public wolffe-lang superprojects over https, natively; named SKIPs offline.
+tools/env python3 -I tools/submodule-live-test.py --tier native
+echo 'submodule: native/release units, actual checked units, exact rows (reflog identity KNOWN only); fixture rows never skip, live rows SKIP by name offline'
