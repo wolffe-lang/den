@@ -95,8 +95,12 @@ srv = out / 'srv'
 srv.mkdir()
 world = out / 'world'
 proof = runpy.run_path(str(R / 'tools/index-proof.py'))
+# Git prints "Updating files" progress on a piped stderr once a reset
+# or a recursive move runs past GIT_PROGRESS_DELAY (git(1), 2 s by
+# default), so a loaded machine changed its bytes; no row wants it.
 env = dict(os.environ)
 env.update(PATH=str(out / 'bin') + ':' + env['PATH'], GIT_SSH_VARIANT='ssh', GIT_TERMINAL_PROMPT='0',
+           GIT_PROGRESS_DELAY='86400',
            GIT_CONFIG_COUNT='1', GIT_CONFIG_KEY_0='protocol.version', GIT_CONFIG_VALUE_0='2')
 rows = []
 daemon = https = None

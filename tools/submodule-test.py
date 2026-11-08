@@ -39,6 +39,10 @@ p.add_argument('--family', required=True)
 p.add_argument('--only', default='')
 a = p.parse_args()
 R = Path(__file__).resolve().parent.parent
+# Git prints "Updating files" progress on a piped stderr once a reset
+# or a recursive move runs past GIT_PROGRESS_DELAY (git(1), 2 s by
+# default), so a loaded machine changed its bytes; no row wants it.
+os.environ['GIT_PROGRESS_DELAY'] = '86400'
 G = Path(os.environ['DEN_GIT'])
 FIELD = os.environ.get('DEN_SUBMODULE_FIELD') == '1'
 if not FIELD:
