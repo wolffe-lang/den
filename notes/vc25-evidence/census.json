@@ -1,0 +1,111 @@
+{
+ "activity_90d": {
+  "commits_touching_gitmodules": 7,
+  "gitmodules_changes": {
+   "submodule additions": 3,
+   "url changes": 4
+  },
+  "gitmodules_changes_last_30d": 1,
+  "single_parent_commits_moving_a_gitlink": 251
+ },
+ "gitlinks": 70,
+ "gitmodules_entries": 71,
+ "gitmodules_shapes": {
+  "blank line between sections": 1,
+  "comment lines inside a section": 1
+ },
+ "method": "gh api, public metadata only, nothing cloned: every public repository under thirteen GitHub owners (298 repositories; a fourteenth owner scanned has none). .gitmodules from each default branch (contents API), mode 160000 entries from the recursive tree, activity from the commits API with a path filter over the 90 days before 2026-11-08. The per-repository table stays outside the repository; this file is the aggregate.",
+ "names_containing_slash": 29,
+ "names_unlike_paths": 3,
+ "nesting_depth_superprojects": {
+  "1": 15,
+  "2": 1
+ },
+ "odd_inputs_found": {
+  "a .gitmodules entry with no gitlink (in a fork)": 1,
+  "gitlinks with no .gitmodules entry (one repository, two gitlinks)": 2
+ },
+ "relative_urls_crossing_owners": 1,
+ "settings": {
+  "branch=another branch": 1,
+  "branch=trunk": 38,
+  "fetchRecurseSubmodules": 0,
+  "ignore=untracked": 2,
+  "shallow": 0,
+  "update": 0
+ },
+ "submodules_per_superproject": [
+  1,
+  1,
+  1,
+  1,
+  1,
+  1,
+  1,
+  1,
+  2,
+  3,
+  4,
+  4,
+  6,
+  6,
+  16,
+  22
+ ],
+ "superprojects": 16,
+ "url_forms": {
+  "file-or-local-path": 0,
+  "git": 0,
+  "https": 38,
+  "relative": 21,
+  "scp-like": 12,
+  "ssh-url": 0
+ },
+ "urls_without_dot_git": 27,
+ "wolffe_lang_superprojects": [
+  {
+   "depth": 1,
+   "gitlink_moves_90d": 60,
+   "gitmodules_commits_90d": 1,
+   "names_unlike_paths": 0,
+   "repository": "wolffe-lang/wolf-interp",
+   "submodules": 1,
+   "urls": [
+    "https"
+   ]
+  },
+  {
+   "depth": 1,
+   "gitlink_moves_90d": 25,
+   "gitmodules_commits_90d": 1,
+   "names_unlike_paths": 0,
+   "repository": "wolffe-lang/wolf-lsp",
+   "submodules": 1,
+   "urls": [
+    "https"
+   ]
+  },
+  {
+   "depth": 1,
+   "gitlink_moves_90d": 50,
+   "gitmodules_commits_90d": 2,
+   "names_unlike_paths": 0,
+   "repository": "wolffe-lang/wolf-std",
+   "submodules": 1,
+   "urls": [
+    "https"
+   ]
+  },
+  {
+   "depth": 2,
+   "gitlink_moves_90d": 96,
+   "gitmodules_commits_90d": 2,
+   "names_unlike_paths": 3,
+   "repository": "wolffe-lang/wolf-web",
+   "submodules": 4,
+   "urls": [
+    "https"
+   ]
+  }
+ ]
+}
