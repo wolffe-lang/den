@@ -18,7 +18,8 @@ no transport):
   memory     den#63: clone memory against history length, under a hard cap
   cost       den#63: a clone's CPU against the pinned Git's on a real
              repository (pelt's trunk at a pinned commit), git:// and runs
-             in turn, at most COST_RATIO times Git's
+             in turn, at most COST_RATIO times Git's; and (Linux) the same
+             clone's sync calls by what they sync, against Git's
 The rev-parse rows (den#69) are tools/rev-parse-test.py's.
 
 Transports: a plain local path, file://, git:// (the pinned git daemon, with
@@ -31,8 +32,8 @@ paths and runs den, so both see the same URLs; then it compares stdout,
 stderr and exit status byte for byte, and the state each left (refs, HEAD,
 FETCH_HEAD, remote and branch configuration, reachable objects, worktree).
 No row is skipped or reviewed: a difference is FAIL. --field runs against a
-Git that is not the pinned one (the macOS field leg); https and memory need
-the Linux container and are left out there, by name.
+Git that is not the pinned one (the macOS field leg); https, memory and the
+sync census need the Linux container and are left out there, by name.
 """
 import argparse
 import hashlib
@@ -915,12 +916,90 @@ def family_cost(h):
                   ratio_cap=COST_RATIO, runs=runs)
     h.verdict(name, problems, detail)
     print('COST %s %s' % (name, json.dumps(detail)), flush=True)
-    for path in (ours, theirs, repo):
+    for path in (ours, theirs):
         shutil.rmtree(path, ignore_errors=True)
+    if not h.field:
+        clone_syncs(h, url)
+    shutil.rmtree(repo, ignore_errors=True)
 
 
-def launched(h, argv, cap):
-    result = subprocess.run([sys.executable, '-I', '-S', '-c', LAUNCH, *map(str, argv)], env=h.env,
+# den#63's syncs, from px108: on a disk, den's pelt clone spent most of its
+# time syncing each checked-out file and then its directory. The row counts
+# each client's sync calls (tools/sync-census.c, preloaded; Linux only) by what
+# they sync, the pinned Git first, then den. den syncs no more worktree paths
+# than Git does (none, measured), and at most SYNC_EXTRA calls more in all:
+# the refs, index and configuration it hardens, a fixed number a clone.
+SYNC_EXTRA = 24
+
+
+def sync_class(target, dest):
+    dest = os.path.realpath(dest)
+    if target != dest and not target.startswith(dest + '/'):
+        return 'outside'
+    relative = target[len(dest) + 1:]
+    if relative != '.git' and not relative.startswith('.git/'):
+        return 'worktree'
+    inside = relative[5:]
+    if inside.startswith('objects/pack'):
+        return 'pack'
+    if inside.startswith('objects'):
+        return 'objects'
+    if inside.startswith('refs') or inside in ('HEAD', 'packed-refs'):
+        return 'refs'
+    if inside.startswith('index'):
+        return 'index'
+    return 'repository'
+
+
+def sync_census(h, binary, url, dest, library, log):
+    if log.exists():
+        log.unlink()
+    shutil.rmtree(dest, ignore_errors=True)
+    measured = launched(h, [binary, 'clone', '-q', url, str(dest)], 1 << 40,
+                        extra=dict(LD_PRELOAD=str(library), DEN_SYNC_LOG=str(log)))
+    loads, counts = [], {}
+    for line in (log.read_text(errors='replace').splitlines() if log.exists() else []):
+        call, _, target = line.partition(' ')
+        if call == 'load':
+            loads.append(target)
+        else:
+            kind = sync_class(target, dest)
+            counts[kind] = counts.get(kind, 0) + 1
+    shutil.rmtree(dest, ignore_errors=True)
+    return measured, loads, counts
+
+
+def clone_syncs(h, url):
+    name = 'clone-syncs-pelt'
+    library = h.out / 'sync-census.so'
+    built = subprocess.run(['cc', '-shared', '-fPIC', '-O2', '-o', str(library), str(h.root / 'tools/sync-census.c'),
+                            '-ldl'], env=h.env, capture_output=True, timeout=120)
+    if built.returncode:
+        h.verdict(name, ['sync census library: ' + built.stderr.decode(errors='replace')[-300:]])
+        return
+    problems, counts = [], {}
+    for tool, binary in (('git', h.git), ('den', h.den)):
+        measured, loads, counts[tool] = sync_census(h, binary, url, h.out / ('syncs-' + tool), library,
+                                                    h.out / ('syncs-%s.log' % tool))
+        if measured['exit'] != 0:
+            problems.append('%s clone: exit %d %r' % (tool, measured['exit'], measured['stderr']))
+        if os.path.realpath(binary) not in loads:
+            problems.append('the census library did not load into %s' % binary)
+    total = {tool: sum(counts[tool].values()) for tool in counts}
+    if counts['den'].get('worktree', 0) > counts['git'].get('worktree', 0):
+        problems.append('den synced %d worktree paths, the pinned Git %d' % (
+            counts['den'].get('worktree', 0), counts['git'].get('worktree', 0)))
+    if total['den'] > total['git'] + SYNC_EXTRA:
+        problems.append('den made %d sync calls, the pinned Git %d, over %d more' % (
+            total['den'], total['git'], SYNC_EXTRA))
+    detail = dict(git=counts['git'], den=counts['den'], git_total=total['git'], den_total=total['den'],
+                  extra_cap=SYNC_EXTRA)
+    h.verdict(name, problems, detail)
+    print('SYNCS %s %s' % (name, json.dumps(detail, sort_keys=True)), flush=True)
+
+
+def launched(h, argv, cap, extra=None):
+    result = subprocess.run([sys.executable, '-I', '-S', '-c', LAUNCH, *map(str, argv)], env={**h.env, **(extra or {})},
                             capture_output=True, stdin=subprocess.DEVNULL, timeout=1800)
     row = json.loads(result.stdout.decode().strip().splitlines()[-1])
     row['stderr'] = result.stderr[-300:].decode(errors='replace')
@@ -949,7 +1028,7 @@ def main():
     finally:
         h.stop()
     h.no_private_keys()
-    left = ' (https and memory not run: field leg)' if args.field else ''
+    left = ' (https, memory and clone-syncs-pelt not run: field leg)' if args.field else ''
     if h.failed:
         raise SystemExit('FAIL wire-gaps: %d of %d rows: %s' % (len(h.failed), len(h.failed) + h.passed,
                                                                 ', '.join(h.failed)))
