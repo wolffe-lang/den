@@ -45,13 +45,14 @@ pub fn bases(
 pub fn files(repo: repository.Repo, id: oid.Oid) -> List[diff.File] ! worktree.WorkErrors {
     var out = List[diff.File](), total = 0
     for entry in worktree.flatten_tree(repo, id)? {
-        // A gitlink merges by its recorded commit alone (vc25): no blob.
+        // A gitlink merges by its recorded commit alone (vc25): no blob; its
+        // data is the pseudo-blob a diffstat counts, as Git's does.
         if entry.mode == 0o160000 {
             (mut out).push(diff.File {
                 path: copy entry.path,
                 mode: entry.mode,
                 id: copy entry.id,
-                data: List[byte](),
+                data: worktree.subproject_text(entry.id, false)?,
             })
             continue
         }
