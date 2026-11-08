@@ -303,3 +303,29 @@ Rulings (recommended and implemented):
     tools/gate and ci/tiers-test.py (cross-cutting).
   R-vc24-5 fetch --prune with explicit refspecs: (A) a named refusal
     (recommended); (B) Git's prune within the refspecs.
+
+The checkout's reader (a second change, after the first was recorded).
+Written with the code, before its first build or measurement; the
+"before" figure was measured first.
+
+P10. den#63, a clone's CPU. Before: cloning pelt (12,670 objects, 9,685
+  files) over git:// on the macOS arm64 machine took den 125.6 s of CPU
+  against the pinned Git's 1.0 s (124 times), and 204.7 s of wall time.
+  A sample of that clone put most of its CPU in the pack index's parse
+  (its SHA-1, its offset sort, its reads and its name decoding), once
+  for each blob read and twice a file, since the checkout reads each
+  blob to check it and again to write it. The change: one reader for
+  the whole checkout (also for restore and merge abort), its indexes
+  parsed once; and a read through an opened reader re-checks only its
+  pack's size, header and trailer binding rather than every index
+  offset, which depend only on the index and the size. Predicted: den's
+  clone CPU at most 10 times Git's (the row's cap) and about 5 times;
+  the clone's memory unchanged within the den#63 bounds. The next term
+  is not CPU: the checkout syncs each file and then its directory
+  (about 40 percent of that clone's wall time in the sample), where
+  git-config(1)'s core.fsync names no component for worktree files.
+  Not changed here; a ruling is asked.
+  Worktree file syncs: (A) keep a sync of each written file and
+    its directory; (B) as git-config(1) documents, no per-file sync of
+    the worktree, the index and refs still hardened (recommended, as a
+    follow-up lane: it changes checkout, switch, reset and restore).
