@@ -8,5 +8,6 @@ pkg {
         delta: {path: "../delta"}, difftext: {path: "../difftext"},
         index: {path: "../index"}, object: {path: "../object"}, oid: {path: "../oid"},
         rename: {path: "../rename"}, repository: {path: "../repository"}, worktree: {path: "../worktree"},
+        walk: {path: "../walk"}, gitmodules: {path: "../gitmodules"},
     },
 }

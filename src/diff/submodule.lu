@@ -1,0 +1,181 @@
+// --submodule=log and --submodule=diff (git-diff(1)) and the pseudo-blob a
+// gitlink diffs as, held to the pinned Git (vc25 probes 1 and 2, vc25's read
+// and status rows). The submodule's own repository supplies its commits; when
+// it is not checked out, or lacks a commit, the summary says so as Git does.
+// No implementation source consulted.
+use std.fs
+use object
+use oid
+use repository
+use walk
+use worktree
+
+fn short(id: oid.Oid) -> str ! worktree.WorkErrors { oid.hex(id)?[0..7] }
+
+/// The submodule repository checked out at PATH, if any (never the
+/// superproject's own).
+fn subrepo(ctx: worktree.Context, path: List[byte]) -> List[repository.Repo] ! worktree.WorkErrors {
+    let full = "{ctx.root}/{text(path)?}"
+    if !fs.exists("{full}/.git") { return [] }
+    let repo = repository.discover(full) else |_| { return [] }
+    if repo.gitdir == ctx.repo.gitdir { return [] }
+    [repo]
+}
+
+fn commit_in(repo: repository.Repo, id: oid.Oid) -> bool {
+    let value = object.read_object(repo, id, 16777216) else |_| { return false }
+    value.kind == "commit"
+}
+
+fn ancestors(repo: repository.Repo, start: oid.Oid) -> Map[str, bool] ! worktree.WorkErrors {
+    var seen = Map[str, bool](), pending = [copy start], pos = 0
+    while pos < pending.len {
+        let id = copy pending[pos]
+        pos += 1
+        let key = oid.hex(id)?
+        if seen[key] else false { continue }
+        seen[key] = true
+        if seen.len > 10000 { return limit }
+        let commit = walk.read(repo, id) else |_| { continue }
+        for parent in commit.parents { (mut pending).push(copy parent) }
+    }
+    seen
+}
+
+fn subject(c: walk.Commit) -> str {
+    let message = str_from_utf8(c.headers.message) else ""
+    var first = ""
+    for line in message.split("\n") {
+        if line.trim() == "" { if first != "" { break } else { continue } }
+        first = if first == "" then line.trim() else "{first} {line.trim()}"
+    }
+    first
+}
+
+struct Marked { mark: str, subject: str, timestamp: int, order: int }
+
+// Commits on one side only, newest first (ties in discovery order).
+fn one_side(
+    repo: repository.Repo,
+    tip: oid.Oid,
+    other: Map[str, bool],
+    mark: str,
+    mut out: List[Marked],
+) -> () ! worktree.WorkErrors {
+    var seen = Map[str, bool](), pending = [copy tip], pos = 0
+    while pos < pending.len {
+        let id = copy pending[pos]
+        pos += 1
+        let key = oid.hex(id)?
+        if (seen[key] else false) || (other[key] else false) { continue }
+        seen[key] = true
+        if seen.len > 10000 { return limit }
+        let commit = walk.read(repo, id)?
+        (mut out).push(Marked { mark: mark, subject: subject(commit), timestamp: commit.timestamp, order: out.len })
+        for parent in commit.parents { (mut pending).push(copy parent) }
+    }
+}
+
+/// The `--submodule=log` lines for one gitlink change at PATH (before/after
+/// empty for an added/deleted submodule; DIRTY when the worktree side has
+/// modified content).
+pub fn summary(
+    ctx: worktree.Context,
+    path: List[byte],
+    before: List[oid.Oid],
+    after: List[oid.Oid],
+    dirty: bool,
+) -> List[byte] ! worktree.WorkErrors {
+    let name = text(path)?
+    var out = ""
+    if dirty { out = "Submodule {name} contains modified content\n" }
+    if before.len == 0 {
+        return "{out}Submodule {name} 0000000...{short(after[0])?} (new submodule)\n".bytes()
+    }
+    if after.len == 0 {
+        return "{out}Submodule {name} {short(before[0])?}...0000000 (submodule deleted)\n".bytes()
+    }
+    if oid.equal(before[0], after[0]) { return out.bytes() }
+    let a = short(before[0])?, b = short(after[0])?
+    let repos = subrepo(ctx, path)?
+    if repos.len == 0 || !commit_in(repos[0], before[0]) || !commit_in(repos[0], after[0]) {
+        return "{out}Submodule {name} {a}...{b} (commits not present)\n".bytes()
+    }
+    let repo = repos[0]
+    var marked = List[Marked]()
+    one_side(repo, after[0], ancestors(repo, before[0])?, ">", mut marked)?
+    let right = marked.len
+    one_side(repo, before[0], ancestors(repo, after[0])?, "<", mut marked)?
+    let left = marked.len - right
+    let header = if right > 0 && left > 0 {
+        "Submodule {name} {a}...{b}:\n"
+    } else if left > 0 {
+        "Submodule {name} {a}..{b} (rewind):\n"
+    } else {
+        "Submodule {name} {a}..{b}:\n"
+    }
+    // Newest first across both sides; equal times keep discovery order.
+    for i in 1..marked.len {
+        var n = i
+        while n > 0 && (marked[n - 1].timestamp < marked[n].timestamp ||
+            marked[n - 1].timestamp == marked[n].timestamp && marked[n - 1].order > marked[n].order) {
+            let temp = copy marked[n - 1]
+            marked[n - 1] = copy marked[n]
+            marked[n] = temp
+            n -= 1
+        }
+    }
+    out = "{out}{header}"
+    for m in marked { out = "{out}  {m.mark} {m.subject}\n" }
+    out.bytes()
+}
+
+/// True when FILE is a gitlink side whose pseudo-blob says `-dirty`.
+pub fn dirty_side(files: List[File]) -> bool {
+    if files.len == 0 || files[0].mode != 0o160000 { return false }
+    let data = files[0].data
+    data.len > 7 && str_from_utf8(data[data.len - 7..data.len]) else "" == "-dirty\n"
+}
+
+/// --submodule=diff's body: the submodule's own patch between the recorded
+/// commits (its worktree for a dirty side), paths under the gitlink's path.
+pub fn inner(
+    ctx: worktree.Context,
+    path: List[byte],
+    before: List[oid.Oid],
+    after: List[oid.Oid],
+    dirty: bool,
+    options: Options,
+) -> List[byte] ! worktree.WorkErrors {
+    let name = text(path)?
+    let full = "{ctx.root}/{name}"
+    if !fs.exists("{full}/.git") { return [] }
+    let sub = worktree.discover(full) else |_| { return [] }
+    if sub.root == ctx.root { return [] }
+    var old = List[File](), new = List[File]()
+    if before.len == 1 {
+        if !commit_in(sub.repo, before[0]) { return [] }
+        old = from_tree(sub, oid.hex(before[0])?)?
+    }
+    if dirty {
+        new = from_worktree(sub, worktree.read_index(sub)?)?
+    } else if after.len == 1 {
+        if !commit_in(sub.repo, after[0]) { return [] }
+        new = from_tree(sub, oid.hex(after[0])?)?
+    }
+    var inner_options = copy options
+    inner_options.paths = []
+    inner_options.revisions = []
+    var changed = changes(prefixed_files(old, name), prefixed_files(new, name), inner_options)?
+    render(sub, changed, inner_options)?
+}
+
+fn prefixed_files(files: List[File], name: str) -> List[File] {
+    var out = List[File]()
+    for file in files {
+        var path = owned("{name}/".bytes())
+        add(mut path, file.path)
+        (mut out).push(File { path: path, mode: file.mode, id: copy file.id, data: owned(file.data) })
+    }
+    out
+}

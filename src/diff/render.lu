@@ -96,18 +96,23 @@ fn patch_one(
         add(mut out, quoted(new_path, options))
         (mut out).push(10 as byte)
     }
-    if unchanged(change) { return }
-    add(
-        mut out,
-        "index {abbreviation(ctx,change.before,options)?}..{abbreviation(ctx,change.after,options)?}".
-            bytes(),
-    )
-    if change.before.len > 0 &&
-        change.after.len > 0 &&
-        change.before[0].mode == change.after[0].mode {
-        add(mut out, " {object.mode_text(change.before[0].mode)?}".bytes())
+    // A gitlink whose commit is unchanged but whose worktree is dirty prints
+    // its `-dirty` hunk with no index line (vc25 probe 1, diff-modified).
+    let dirty_only = unchanged(change) && compare(data(change.before), data(change.after)) != 0
+    if unchanged(change) && !dirty_only { return }
+    if !dirty_only {
+        add(
+            mut out,
+            "index {abbreviation(ctx,change.before,options)?}..{abbreviation(ctx,change.after,options)?}".
+                bytes(),
+        )
+        if change.before.len > 0 &&
+            change.after.len > 0 &&
+            change.before[0].mode == change.after[0].mode {
+            add(mut out, " {object.mode_text(change.before[0].mode)?}".bytes())
+        }
+        (mut out).push(10 as byte)
     }
-    (mut out).push(10 as byte)
     let before = data(change.before), after = data(change.after)
     if !options.text && (delta.binary(before) || delta.binary(after)) {
         if options.binary_patch { add(mut out, diffbinary.patch(before, after)?); return }
@@ -179,7 +184,8 @@ fn validate_side(files: List[File]) -> () ! worktree.WorkErrors {
         if file.path.len == 0 { return invalid }
         for b in file.path { if b == 0 as byte { return invalid } }
         if file.data.len > 16777216 { return limit }
-        if file.mode != 0o100644 && file.mode != 0o100755 && file.mode != 0o120000 {
+        if file.mode != 0o100644 && file.mode != 0o100755 && file.mode != 0o120000 &&
+            file.mode != 0o160000 {
             return invalid
         }
         oid.validate(file.id)?
@@ -231,7 +237,9 @@ pub fn render(
         }
         for change in changes {
             region patch_scratch {
-                if change.status == "T" {
+                if options.submodule != "short" && gitlink_change(change) {
+                    submodule_patch(mut out, ctx, change, options)?
+                } else if change.status == "T" {
                     patch_one(
                         mut out,
                         ctx,
@@ -251,4 +259,49 @@ pub fn render(
         }
     }
     out
+}
+
+fn gitlink_change(change: Change) -> bool {
+    change.before.len > 0 && change.before[0].mode == 0o160000 ||
+        change.after.len > 0 && change.after[0].mode == 0o160000
+}
+
+fn side_ids(files: List[File]) -> List[oid.Oid] {
+    if files.len == 0 || files[0].mode != 0o160000 { return [] }
+    [copy files[0].id]
+}
+
+// --submodule=log|diff for one change touching a gitlink (vc25). A
+// typechange prints the gitlink side's summary and the file side's patch.
+fn submodule_patch(
+    mut out: List[byte],
+    ctx: worktree.Context,
+    change: Change,
+    options: Options,
+) -> () ! worktree.WorkErrors {
+    let path = if change.after.len > 0 then owned(change.after[0].path) else owned(change.before[0].path)
+    if change.status == "T" {
+        if change.before[0].mode == 0o160000 {
+            add(mut out, summary(ctx, path, side_ids(change.before), [], false)?)
+            patch_one(mut out, ctx, Change { before: [], after: copy change.after, status: "A", percent: 0 }, options)?
+        } else {
+            patch_one(mut out, ctx, Change { before: copy change.before, after: [], status: "D", percent: 0 }, options)?
+            add(mut out, summary(ctx, path, [], side_ids(change.after), false)?)
+        }
+        return
+    }
+    let dirty = dirty_side(change.after)
+    let lines = summary(ctx, path, side_ids(change.before), side_ids(change.after), dirty)?
+    if options.submodule == "log" {
+        add(mut out, lines)
+        return
+    }
+    // diff: the summary's header (its commit lines dropped), then the
+    // submodule's own patch with paths under the gitlink.
+    let text = str_from_utf8(lines) else ""
+    for line in text.split("\n") {
+        if line == "" || line.starts_with("  ") { continue }
+        add(mut out, "{line}\n".bytes())
+    }
+    add(mut out, inner(ctx, path, side_ids(change.before), side_ids(change.after), dirty, options)?)
 }

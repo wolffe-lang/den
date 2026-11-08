@@ -34,6 +34,11 @@ fn threshold(value: str) -> int ! worktree.WorkErrors {
     n * 100 / denominator
 }
 
+fn submodule_format(value: str) -> str ! worktree.WorkErrors {
+    if value == "short" || value == "log" || value == "diff" { return copy value }
+    Fatal("bad --submodule argument: {value}")
+}
+
 fn parse(ctx: worktree.Context, args: List[str]) -> Options ! worktree.WorkErrors {
     var options = defaults()
     options.width = terminal_width()
@@ -51,11 +56,20 @@ fn parse(ctx: worktree.Context, args: List[str]) -> Options ! worktree.WorkError
     options.graph_width = integer(ctx.repo.config["diff.statgraphwidth"] else "0", 100000)?
     options.abbreviate = integer(ctx.repo.config["core.abbrev"] else "7", 40)?
     if options.abbreviate < 4 { options.abbreviate = 4 }
+    options.submodule = submodule_format(ctx.repo.config["diff.submodule"] else "short")?
     var paths = false, explicit_patch = false
     for arg in args {
         if paths { (mut options.paths).push(arg); continue }
         if arg == "--" { paths = true; continue }
-        if arg == "--cached" || arg == "--staged" {
+        if arg == "--submodule" || arg.starts_with("--submodule=") {
+            options.submodule = if arg == "--submodule" then "log" else submodule_format(arg[12..])?
+        } else if arg == "--ignore-submodules" || arg.starts_with("--ignore-submodules=") {
+            let setting = if arg == "--ignore-submodules" then "all" else arg[20..]
+            if setting != "none" && setting != "untracked" && setting != "dirty" && setting != "all" {
+                return Fatal("bad --ignore-submodules argument: {setting}")
+            }
+            options.ignore_submodules = setting
+        } else if arg == "--cached" || arg == "--staged" {
             options.cached = true
         } else if arg == "-p" || arg == "--patch" || arg == "-u" || arg == "-U" {
             options.patch = true

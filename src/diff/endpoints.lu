@@ -3,10 +3,19 @@ use index
 use object
 use oid
 use rename
+use gitmodules
 use worktree
 
 fn blob(ctx: worktree.Context, entry: worktree.FlatEntry) -> File ! worktree.WorkErrors {
-    if entry.mode == 0o160000 { return Unsupported("diff submodule") }
+    // A gitlink diffs as Git's text for it (vc25), never as an object read.
+    if entry.mode == 0o160000 {
+        return File {
+            path: owned(entry.path),
+            mode: entry.mode,
+            id: copy entry.id,
+            data: worktree.subproject_text(entry.id, false)?,
+        }
+    }
     let stored = object.read_object(ctx.repo, entry.id, 16777216)?
     if stored.kind != "blob" { return invalid_tree }
     File { path: owned(entry.path), mode: entry.mode, id: copy entry.id, data: owned(stored.data) }
@@ -46,12 +55,42 @@ fn from_index(
 }
 
 fn from_worktree(ctx: worktree.Context, value: index.Index) -> List[File] ! worktree.WorkErrors {
+    from_worktree_ignoring(ctx, value, "")?
+}
+
+/// The worktree side; a gitlink is its submodule's HEAD, `-dirty` when its
+/// tracked content is modified (untracked content alone never shows in a
+/// diff unless the ignore setting is none; vc25 rows).
+fn from_worktree_ignoring(
+    ctx: worktree.Context,
+    value: index.Index,
+    ignore_option: str,
+) -> List[File] ! worktree.WorkErrors {
     let autocrlf = (ctx.repo.config["core.autocrlf"] else "false").lower()
     if autocrlf != "false" && autocrlf != "0" { return Unsupported("core.autocrlf={autocrlf}") }
     var out = List[File]()
     var total: int = 0
+    var parsed = List[gitmodules.Parsed]()
     for entry in value.entries {
         if index.stage(entry) != 0 { return Unsupported("diff unmerged index") }
+        if entry.stat[6] == 0o160000 {
+            if !fs.is_dir("{ctx.root}/{text(entry.path)?}") { continue }
+            if parsed.len == 0 { (mut parsed).push(worktree.modules(ctx)?) }
+            let setting = worktree.ignore_for(ctx, parsed[0], text(entry.path)?, ignore_option)
+            if setting == "all" {
+                (mut out).push(blob(ctx, worktree.FlatEntry { path: owned(entry.path), mode: entry.stat[6], id: copy entry.id })?)
+                continue
+            }
+            let state = worktree.submodule_state(ctx, text(entry.path)?, entry.id, if setting == "" then "untracked" else setting)?
+            let dirty = state.modified || setting == "none" && state.untracked
+            (mut out).push(File {
+                path: owned(entry.path),
+                mode: 0o160000,
+                id: copy state.head,
+                data: worktree.subproject_text(state.head, dirty)?,
+            })
+            continue
+        }
         if entry.flags & 0x8000 != 0 || entry.extended & 0x4000 != 0 {
             let file = blob(ctx, worktree.
                 FlatEntry { path: owned(entry.path), mode: entry.stat[6], id: copy entry.id })?
@@ -235,8 +274,15 @@ pub fn collect(ctx: worktree.Context, options: Options) -> List[Change] ! worktr
             } else {
                 from_index(ctx, value, false)?
             }
-            after = from_worktree(ctx, value)?
+            after = from_worktree_ignoring(ctx, value, options.ignore_submodules)?
         }
+    }
+    if options.ignore_submodules == "all" {
+        var kept_old = List[File](), kept_new = List[File]()
+        for file in before { if file.mode != 0o160000 { (mut kept_old).push(copy file) } }
+        for file in after { if file.mode != 0o160000 { (mut kept_new).push(copy file) } }
+        before = kept_old
+        after = kept_new
     }
     var selected_old = List[File](), selected_new = List[File]()
     let specs = pathspecs(ctx, options.paths)?

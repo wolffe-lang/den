@@ -33,18 +33,19 @@ pub fn modules(ctx: Context) -> gitmodules.Parsed ! WorkErrors {
 }
 
 /// The effective ignore setting for the submodule at PATH: the command-line
-/// value, else submodule.<name>.ignore in config, else .gitmodules, else none.
+/// value, else submodule.<name>.ignore in config, else .gitmodules, else ""
+/// (unset: status reads it as none; diff still leaves untracked content out).
 pub fn ignore_for(ctx: Context, parsed: gitmodules.Parsed, path: str, option: str) -> str {
     if option != "" { return copy option }
     let at = gitmodules.by_path(parsed, path)
-    if at < 0 { return "none" }
+    if at < 0 { return "" }
     let name = parsed.modules[at].name
     let configured = ctx.repo.config["submodule.{name}.ignore"] else ""
     if configured == "none" || configured == "untracked" || configured == "dirty" || configured == "all" {
         return configured
     }
     if parsed.modules[at].ignore != "" { return copy parsed.modules[at].ignore }
-    "none"
+    ""
 }
 
 fn unpopulated(recorded: oid.Oid) -> SubState {

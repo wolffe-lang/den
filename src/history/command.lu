@@ -37,7 +37,15 @@ pub fn abbreviate(repo: repository.Repo, id: oid.Oid, minimum: int) -> str ! wor
 fn root_files(ctx: worktree.Context, id: oid.Oid) -> List[diff.File] ! worktree.WorkErrors {
     var out = List[diff.File](), total = 0
     for entry in worktree.flatten_tree(ctx.repo, id)? {
-        if entry.mode == 0o160000 { return Unsupported("history submodule diff") }
+        if entry.mode == 0o160000 {
+            (mut out).push(diff.File {
+                path: copy entry.path,
+                mode: entry.mode,
+                id: copy entry.id,
+                data: worktree.subproject_text(entry.id, false)?,
+            })
+            continue
+        }
         let value = object.read_object(ctx.repo, entry.id, 16777216)?
         if value.kind != "blob" { return invalid_tree }
         total += value.data.len
@@ -148,6 +156,12 @@ fn dispatch(args: List[str]) -> int ! worktree.WorkErrors {
             display.patch = false
             display.stat = false
             explicit_patch = true
+        } else if arg == "--submodule" || arg.starts_with("--submodule=") {
+            let value = if arg == "--submodule" then "log" else arg[12..]
+            if value != "short" && value != "log" && value != "diff" {
+                return Fatal("bad --submodule argument: {value}")
+            }
+            display.submodule = value
         } else if arg == "--stat" {
             display.stat = true
             if !explicit_patch { display.patch = false }

@@ -37,6 +37,10 @@ pub struct Options {
     quote_path: bool,
     paths: List[str],
     revisions: List[str],
+    /// git-diff(1) --submodule: short (the default), log or diff (vc25).
+    submodule: str,
+    /// --ignore-submodules' value, empty when not given (vc25).
+    ignore_submodules: str,
 }
 
 /// Default patch output and rename threshold, before configuration is applied.
@@ -69,6 +73,8 @@ pub fn defaults() -> Options {
         quote_path: true,
         paths: [],
         revisions: [],
+        submodule: "short",
+        ignore_submodules: "",
     }
 }
 
