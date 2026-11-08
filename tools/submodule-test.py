@@ -739,6 +739,26 @@ def family_fetch():
     compare('fetch-nested-pull-merge', ['pull', '--no-rebase'], 'fetch-nested', cwd='c', extra=ALLOW_FILE,
             prepare=local_commit)
 
+    # Moved on both sides: den refuses the merge by name and changes nothing.
+    name = 'refusal-merge-submodule-both-moved'
+    if not a.only or re.search(a.only, name):
+        if world.exists():
+            shutil.rmtree(world)
+        shutil.copytree(seeds['fetch-abs'], world, symlinks=True)
+        c = world / 'c'
+        g('fetch', '-q', cwd=c, extra=ALLOW_FILE)
+        (c / 'abs/local.txt').write_text('local\n')
+        g('add', 'local.txt', cwd=c / 'abs')
+        g('commit', '-q', '-m', 'local leaf', cwd=c / 'abs')
+        g('add', 'abs', cwd=c)
+        commit(c, 'local moves abs')
+        before = state(world)
+        q = run(D, ['merge', 'origin/main'], c, ALLOW_FILE)
+        ok = q['status'] == 2 and 'not yet implemented' in q['stderr'] and state(world) == before
+        rows.append(dict(name=name, argv=['merge', 'origin/main'], equal=ok, known=False, refusal=True,
+                         actual=dict(result=q)))
+        print('PASS' if ok else 'FAIL', name, '' if ok else json.dumps(q), flush=True)
+
     def gone(w):
         (w / 'leaf.git').rename(w / 'leaf-gone.git')
 
