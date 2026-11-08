@@ -364,7 +364,9 @@ The authoring commands (`submodule add`, `deinit`, `set-url`, `set-branch`,
 `--merge` and `--rebase`, `status.submoduleSummary`, `mv` of a submodule,
 `restore` of a gitlink path, `stash` in a superproject and
 `extensions.submodulePathConfig` are named refusals. `tools/check-submodule`
-compares every supported form with the pinned Git on both tiers.
+compares every supported form with the pinned Git on both tiers, and its live
+rows clone public superprojects of this organisation over https with both
+tools (named SKIPs offline).
 
 ## Blame boundaries
 
