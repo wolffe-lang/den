@@ -49,10 +49,14 @@ fn transition_path(
         if mode == "mixed" { return entry }
         safe_parents(ctx, path, true)?
         let full = absolute(ctx, path)?
-        if !fs.exists(full) { fs.create_dir(full)? }
+        let existed = fs.exists(full)
+        if !existed { fs.create_dir(full)? }
         let record = fs_lstat(full)?
         if record[0] != 1 { return Unsupported("submodule path {text(path)?} is not a directory") }
         if prior.len == 1 && same_entry(prior[0], desired) && prior[0].stat[0] != 0 { return entry }
+        // A hard reset that moves a gitlink over its existing directory
+        // leaves the entry without stat, as Git's does (vc25 work rows).
+        if mode == "hard" && existed { return entry }
         return index.entry_from_directory(record, path, desired.id, 0, 0)?
     }
     if mode != "mixed" {
@@ -184,6 +188,8 @@ fn transition_mode(
         if keep[text(path)?] else false {
             if at >= 0 {
                 var entry = copy previous.entries[at]
+                // An unchanged gitlink keeps its entry, stat and all (vc25).
+                if entry.stat[6] == 0o160000 { (mut entries).push(entry); continue }
                 let disk = file_at(snapshot.files, path)
                 if disk >= 0 &&
                     snapshot.files[disk].mode == entry.stat[6] &&
