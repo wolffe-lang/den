@@ -289,25 +289,32 @@ STATUS_FORMS = [['status'], ['status', '-s'], ['status', '--porcelain'], ['statu
                 ['status', '-sb']]
 
 
+def state_seed(state):
+    """A seed holding the recursive clone in STATE: built once, so both tools
+    start from byte-identical copies (index stat words included)."""
+    name = 'clone-' + state
+    seed(name, lambda w: (recursive_clone(w), STATES[state](w)))
+    return name
+
+
 def family_status():
     seed('clone', recursive_clone)
     seed('plain', plain_clone)
-    for state, prepare in STATES.items():
+    for state in STATES:
         for argv in STATUS_FORMS:
-            compare('status-%s-%s' % (state, '-'.join(x.strip('-') for x in argv[1:]) or 'long'), argv, 'clone',
-                    cwd='c', prepare=prepare)
+            compare('status-%s-%s' % (state, '-'.join(x.strip('-') for x in argv[1:]) or 'long'), argv,
+                    state_seed(state), cwd='c')
     for when in ('none', 'untracked', 'dirty', 'all'):
         for state in ('modified-untracked', 'new-commits-untracked', 'untracked'):
             compare('status-ignore-%s-%s' % (when, state), ['status', '-s', '--ignore-submodules=' + when],
-                    'clone', cwd='c', prepare=STATES[state])
-            compare('status-config-ignore-%s-%s' % (when, state), ['status', '-s'], 'clone', cwd='c',
-                    prepare=STATES[state], extra={'GIT_CONFIG_COUNT': '1', 'GIT_CONFIG_KEY_0': 'submodule.midname.ignore',
+                    state_seed(state), cwd='c')
+            compare('status-config-ignore-%s-%s' % (when, state), ['status', '-s'], state_seed(state), cwd='c',
+                    extra={'GIT_CONFIG_COUNT': '1', 'GIT_CONFIG_KEY_0': 'submodule.midname.ignore',
                                                   'GIT_CONFIG_VALUE_0': when})
         compare('status-gitmodules-ignore-%s' % when, ['status'], 'clone', cwd='c',
                 prepare=lambda w, when=when: (STATES['modified-untracked'](w),
                                               g('config', '-f', '.gitmodules', 'submodule.midname.ignore', when, cwd=w / 'c')))
-    compare('status-ignore-bare-flag', ['status', '-s', '--ignore-submodules'], 'clone', cwd='c',
-            prepare=STATES['new-commits'])
+    compare('status-ignore-bare-flag', ['status', '-s', '--ignore-submodules'], state_seed('new-commits'), cwd='c')
     for argv in STATUS_FORMS:
         compare('status-unpopulated-' + ('-'.join(x.strip('-') for x in argv[1:]) or 'long'), argv, 'plain', cwd='c')
     compare('status-unpopulated-moved', ['status'], 'plain', cwd='c',
@@ -316,7 +323,7 @@ def family_status():
             prepare=lambda w: (w / 'c/mid').rmdir())
     compare('status-from-subdirectory', ['status'], 'clone', cwd='c/mid/deps',
             prepare=STATES['nested-untracked'])
-    compare('status-inside-submodule', ['status', '-s'], 'clone', cwd='c/mid', prepare=STATES['nested-new-commits'])
+    compare('status-inside-submodule', ['status', '-s'], state_seed('nested-new-commits'), cwd='c/mid')
 
 
 FAMILIES = {'read': family_read, 'status': family_status}
