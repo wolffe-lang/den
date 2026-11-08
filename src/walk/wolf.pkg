@@ -1,4 +1,4 @@
 pkg {
     name: "walk", edition: "1", capabilities: [env, fs],
-    deps: {object: {path: "../object"}, oid: {path: "../oid"}, repository: {path: "../repository"}, worktree: {path: "../worktree"}},
+    deps: {commit_format: {path: "../commit_format"}, object: {path: "../object"}, oid: {path: "../oid"}, repository: {path: "../repository"}, worktree: {path: "../worktree"}},
 }
