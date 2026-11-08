@@ -88,6 +88,20 @@ fn work(args: List[str]) -> int ! ProbeErrors {
     } else if args[0] == "parse-identity" {
         if args.len != 2 { return invalid }
         print(commit_format.identity_text(commit_format.parse_identity(args[1])?)?)
+    } else if args[0] == "problems" {
+        // problems FILE: one identity value a line; each line's Git fsck id
+        // (commit_format.identity_problem), or `-` when it is clean (vc26).
+        if args.len != 2 { return invalid }
+        let data = input(args[1])?
+        var out = List[byte](), start = 0
+        for i in 0..data.len {
+            if data[i] != 10 as byte { continue }
+            let (id, _) = commit_format.identity_problem(data[start..i])
+            for b in (if id == "" then "-" else id).bytes() { (mut out).push(b) }
+            (mut out).push(10 as byte)
+            start = i + 1
+        }
+        output(out)?
     } else if args[0] == "comment" {
         // comment CONFIGURED FILE
         if args.len != 3 { return invalid }
