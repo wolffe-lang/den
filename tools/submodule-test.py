@@ -167,6 +167,15 @@ def compare(name, args, seed_name, cwd='.', extra=None, data=None, prepare=None)
         after = state(world)
         outcomes.append(dict(result=q, after=after, indexes=indexes(world)))
     left, right = outcomes
+    if FIELD:
+        # macOS only: Git probes the case-insensitive file system and writes
+        # two core lines the Linux oracle never writes. Field mode drops them
+        # from both sides; the gate never runs in field mode.
+        drop = b'\tignorecase = true\n\tprecomposeunicode = true\n'.hex()
+        for side in (left, right):
+            for key, value in side['after'].items():
+                if key.endswith('config') and value[0] != 'directory' and drop in value[1]:
+                    side['after'][key] = [value[0], value[1].replace(drop, '')]
     index_errors = []
     for key in sorted(set(left['indexes']) & set(right['indexes'])):
         (lraw, lproof), (rraw, rproof) = left['indexes'][key], right['indexes'][key]
