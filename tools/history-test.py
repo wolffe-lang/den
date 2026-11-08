@@ -103,6 +103,27 @@ for args,feature in [(['log','--graph'],'log option --graph'),(['log','--','dirt
 # Unborn error bytes and no index requirements.
 (root/'.git/HEAD').write_text('ref: refs/heads/unborn\n')
 check('unborn-log',['log']);check('unborn-show',['show'])
+# A history past the walk's 10,000-commit bound, in its own repository: a
+# count with no exclusions reads that many commits, as Git's does.
+long_root=root.parent/(root.name+'-long')
+if long_root.exists(): shutil.rmtree(long_root)
+long_root.mkdir()
+def long_run(exe,args,data=None):
+ q=subprocess.run([str(exe),*args],cwd=long_root,input=data,capture_output=True)
+ return {'status':q.returncode,'stdout':q.stdout.hex(),'stderr':q.stderr.hex()}
+def long_state():
+ return {str(f.relative_to(long_root)):hashlib.sha256(f.read_bytes()).hexdigest() for f in sorted(long_root.rglob('*')) if f.is_file()}
+assert long_run(G,['init','-q'])['status']==0 and long_run(G,['symbolic-ref','HEAD','refs/heads/main'])['status']==0
+stream=b''.join(b'commit refs/heads/main\nauthor A <a@b> %d +0000\ncommitter C <c@d> %d +0000\ndata %d\nn %d\n'%(1700000000+n,1700000000+n,len(b'n %d'%n),n) for n in range(10001))
+assert long_run(G,['fast-import','--quiet'],stream)['status']==0
+for args in [['log','-1'],['log','-n3','--skip=2'],['log','--oneline','-2'],['log','-1','--format=%H %an %ad'],['log','--first-parent','-2']]:
+ before=long_state(); expected=long_run(G,args); after_git=long_state(); actual=long_run(DEN,args); after=long_state()
+ row={'name':f'long-{args}','args':args,'expected':expected,'actual':actual,'unchanged':before==after_git==after}
+ rows.append(row)
+ if actual!=expected or not row['unchanged']:
+  failures.append(row['name'])
+  print('FAIL',row['name'],args,'expected',bytes.fromhex(expected['stdout'])[:200],bytes.fromhex(expected['stderr']),'actual',bytes.fromhex(actual['stdout'])[:200],bytes.fromhex(actual['stderr']),flush=True)
+shutil.rmtree(long_root)
 summary={'tier':a.tier,'total':len(rows),'exact':len(rows)-len(failures),'failures':failures,'zero_skips':True,'rows':rows,'named_refusals':refusals,'external_clients':3}
 (R/f'target/history-{fixture_mode}.json').write_text(json.dumps(summary,indent=2)+'\n')
 print(f'history: {len(rows)-len(failures)}/{len(rows)} exact stdout/stderr/status and state; zero skips',flush=True)
