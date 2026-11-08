@@ -29,12 +29,40 @@ fn title(ctx: worktree.Context, id: oid.Oid) -> str ! commit.CommitErrors {
     str_from_utf8(commit.subject(item.headers.message)?)?
 }
 
+// NAME as a start point is a remote-tracking branch.
+fn remote_tracking(ctx: worktree.Context, name: str) -> bool ! commit.CommitErrors {
+    let full = if name.starts_with("refs/remotes/") then copy name else "refs/remotes/{name}"
+    if !refs.valid(full) { return false }
+    refs.optional(ctx.repo, full)?.len > 0
+}
+
+// NAME is no local branch, tag or commit, but some remote has a branch so
+// named: the case Git's guess creates a tracking branch for.
+fn guessed(ctx: worktree.Context, name: str) -> bool ! commit.CommitErrors {
+    if name == "" || name.starts_with("-") || !refs.valid("refs/heads/{name}") { return false }
+    if refs.optional(ctx.repo, "refs/heads/{name}")?.len > 0 { return false }
+    let _ = resolve_commit(ctx.repo, name) else |_| {
+        for (key, _) in ctx.repo.config.pairs() {
+            if key.starts_with("remote.") && key.ends_with(".url") {
+                let remote = key[7..key.len - 4]
+                if refs.valid("refs/remotes/{remote}/{name}") &&
+                    refs.optional(ctx.repo, "refs/remotes/{remote}/{name}")?.len > 0 {
+                    return true
+                }
+            }
+        }
+        return false
+    }
+    false
+}
+
 fn switch_branch(args: List[str]) -> int ! commit.CommitErrors {
     let ctx = worktree.discover(".")?
     controls(ctx, args[0])?
     let old = worktree.head(ctx)?
     let expected = head_bytes(ctx)?
     var detach = false, quiet = false, force = false, create_force = false, implicit_detach = false
+    var no_track = false
     var create = "", names = List[str]()
     var at = 1
     while at < args.len {
@@ -46,7 +74,9 @@ fn switch_branch(args: List[str]) -> int ! commit.CommitErrors {
             quiet = true
         } else if arg == "-f" || arg == "--force" || arg == "--discard-changes" {
             force = true
-        } else if arg == "--no-guess" || arg == "--no-track" {} else if arg == "-c" ||
+        } else if arg == "--no-guess" || arg == "--no-track" {
+            no_track = true
+        } else if arg == "-c" ||
             arg == "-C" ||
             arg == "-b" ||
             arg == "-B" {
@@ -75,6 +105,16 @@ fn switch_branch(args: List[str]) -> int ! commit.CommitErrors {
         }
     }
     if names.len > 1 { return Unsupported("{args[0]} multiple targets") }
+    // Git sets up an upstream for a branch made from a remote-tracking ref,
+    // and guesses one from a remote's branch of the same name: both stay
+    // named refusals (vc25 lets checkout run where branches have upstreams).
+    let setup = !no_track && (ctx.repo.config["branch.autosetupmerge"] else "true") != "false"
+    if setup && create != "" && names.len == 1 && remote_tracking(ctx, names[0])? {
+        return Unsupported("{args[0]} upstream setup from {names[0]}")
+    }
+    if setup && create == "" && !detach && names.len == 1 && guessed(ctx, names[0])? {
+        return Unsupported("{args[0]} remote branch guess {names[0]}")
+    }
     let operand = revision.checkout_name(ctx.repo, if names.len == 1 then names[0] else "HEAD")?
     var branch = if create != "" then create else operand
     var target = List[oid.Oid]()
