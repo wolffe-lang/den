@@ -20,7 +20,7 @@ not a blanket byte-parity claim.
 | M4 (partial) | `pack`: pack-v2/idx-v2 reading (vc09), shared delta encoder and verified pair writer; `packcmd`: pack-objects, verify-pack, count-objects, bounded fsck (vc13/vc14), reachable closure and verified repack/prune-packed; gc policy remains named |
 | M5 (partial) | `pktline`, `wire`, `transport`, `wiregit`: v2 fetch/ls-refs and v0 receive-pack, file/git/system-SSH peers, clone/fetch/push, configured remote/tracking/leases and M3-backed pull (vc16); `http`: smart HTTP and HTTPS clone/fetch/push with Basic tokens over the standard library's public-PKI TLS (vc22); `pack` received/thin streams and `refs.transaction` logical atomic publication (vc15); broader configuration/transport policies remain named |
 | M6 | static build and PAX handoff (later lane); optional `git` alias |
-| Later | credential helpers, cookies, proxies, HTTP/2, close-delimited HTTPS bodies (wolf-std#133), hooks, worktrees, sparse index, submodules, SHA-256 repositories, interactive rebase, bundles and protocol v0/v1 fetch |
+| Later | credential helpers, cookies, proxies, HTTP/2, close-delimited HTTPS bodies (wolf-std#133), hooks, worktrees, sparse index, submodule authoring and command recursion, SHA-256 repositories, interactive rebase, bundles and protocol v0/v1 fetch |
 
 The MVP is M0–M3, file/git transports from M5, and M6. Pack reading is available
 beneath object lookup; pack construction is separate from housekeeping and transports.
@@ -337,6 +337,33 @@ advertisements; RPC redirects; side-band push messages over ssh and `git://`
 (den#60's). A fetch response streams with no whole-body cap, so den clones its
 own repository, a pack over 300 MB; the live row compares it with Git's clone
 (den#61, vc23).
+
+## Submodules (vc25)
+
+| Module | Owns |
+|---|---|
+| `src/gitmodules/gitmodules.lu` | `.gitmodules` parsing in file order: per-key warnings for suspicious names (a `..` component), dash paths and URLs and invalid `ignore`; fatal invalid `update`, `fetchRecurseSubmodules` and `shallow` values |
+| `src/gitmodules/url.lu` | relative URL resolution against the superproject's remote, `url.<base>.insteadOf` and `pushInsteadOf` (longest prefix; the stored URL stays the original) |
+| `src/gitmodules/layout.lu` | `.git/modules/<name>` at any depth, the worktree's `gitdir:` file and the relative `core.worktree` |
+| `src/worktree/submodule.lu` | a submodule worktree's state (populated, HEAD, modified, untracked) from its own scan, rolled up through nested submodules, and the `ignore` setting in force |
+| `src/diff/submodule.lu` | `--submodule=log` summaries and `--submodule=diff` bodies from the submodule's own repository |
+| `src/plumbing/ls.lu` | bounded `ls-tree` and `ls-files` |
+| `src/submodule/` | `submodule status`, `init`, `update`, `sync`, `foreach` and `clone --recurse-submodules`; `active` as gitsubmodules(7) defines it; the internal describe `status` prints |
+| `src/wiregit/url.lu` | the protocol policy (`protocol.allow`, `protocol.<name>.allow`, `GIT_PROTOCOL_FROM_USER`) and rewriting for every transport |
+
+A gitlink is one index entry and one status row; the scan never descends into
+it. Its state comes from a scan run inside the submodule's worktree, and its
+pseudo-blob (`Subproject commit <id>`, `-dirty` for modified content) is what
+diff and commit summaries see. `update` clones every submodule first, with one
+retry pass, then checks each out detached at its gitlink; a clone run for a
+submodule passes `GIT_PROTOCOL_FROM_USER=0`, so `file://` is refused unless the
+policy is `always`. A gitlink's index entry keeps its directory's stat from
+when the superproject's checkout made it, as Git's does; the rows' index proof
+allows exactly that for mode-160000 entries.
+
+The rows are `tools/submodule-test.py`'s families (read, status, diff, clone,
+hostile, transport, work, refusals) through `tools/check-submodule`, listed in
+the vc25 note. Limits by name are in the README's Submodules section.
 
 ## Pack writing and inspection (vc13)
 
@@ -1293,7 +1320,8 @@ Single-object consumers reject set operands by name. Tracking configuration,
 list glob patterns, orphan branches,
 overlapping rename paths, merge-mode checkout, tag editors/signing/stdin and
 reflog management commands remain outside the bounded surface. Tree transitions
-refuse unmerged/flagged indices and submodules; checkout during an in-progress
+refuse unmerged/flagged indices; a gitlink transitions as its directory without
+entering the submodule (vc25); checkout during an in-progress
 operation is a named refusal. Switch and soft reset have measured in-progress
 safety errors. None of these limits completes M2 or the remaining M3 rows.
 
