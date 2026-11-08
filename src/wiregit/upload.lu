@@ -1,6 +1,7 @@
 use std.fs
 use object
 use oid
+use pack
 use pktline
 use refs
 use repository
@@ -117,9 +118,11 @@ fn ls_refs(repo: repository.Repo, args: List[str]) -> List[byte] ! object.StoreE
     out
 }
 
-fn fetch(repo: repository.Repo, args: List[str]) -> List[byte] ! object.StoreErrors {
+fn fetch(repo: repository.Repo, args: List[str], c: transport.Channel) -> () ! object.StoreErrors {
     var wants = List[str](), haves = List[str](), done = false, ofs = false, include_tag = false
     let references = advertised(repo)?
+    // den#73: one reader for every have's presence check.
+    let reader = object.reader_batch(repo)
     var allowed = Map[str, bool]()
     for record in references { if record.id != "unborn" { allowed[record.id] = true } }
     for arg in args {
@@ -129,8 +132,8 @@ fn fetch(repo: repository.Repo, args: List[str]) -> List[byte] ! object.StoreErr
             (mut wants).push(name)
         } else if arg.starts_with("have ") {
             let name = oid.hex(oid.parse("sha1", arg[5..])?)?
-            let body = object.read_object(
-                repo,
+            let body = object.read_loaded(
+                reader,
                 oid.parse("sha1", name)?,
                 16777216,
             ) else |e| match e {
@@ -166,7 +169,9 @@ fn fetch(repo: repository.Repo, args: List[str]) -> List[byte] ! object.StoreErr
             return Unsupported("fetch argument {arg}")
         }
     }
-    if wants.len == 0 || wants.len > 10000 || haves.len > 10000 { return invalid }
+    // den#73: no count bound; the request's own read is capped in bytes
+    // (upload's transport.message, 2 MiB).
+    if wants.len == 0 { return invalid }
     if !done {
         var out = List[byte]()
         wire.line(mut out, "acknowledgments")?
@@ -176,22 +181,52 @@ fn fetch(repo: repository.Repo, args: List[str]) -> List[byte] ! object.StoreErr
             for name in haves { wire.line(mut out, "ACK {name}")? }
         }
         wire.append(mut out, "0000".bytes())
-        return out
+        transport.write(c, out)?
+        return
     }
-    var selected = copy wants
+    // den#73: one walk of the wants; include-tag adds the tags whose targets
+    // it reached, walking only from them.
+    let omit = have_set(repo, haves)?
+    var plan = walk_plan(repo, wants, omit)?
     if include_tag {
-        let omitted = closure(repo, haves, [])?
-        let included = closure(repo, wants, omitted)?
-        var sent = Map[str, bool]()
-        for name in included { sent[name] = true }
+        var sent = pack.nameset()
+        plan_into(plan, mut sent)
+        var tags = List[str]()
         for record in references {
-            if record.peeled != "" && (sent[record.peeled] else false) {
-                (mut selected).push(copy record.id)
+            if record.peeled != "" &&
+                pack.names_has(sent, record.peeled) &&
+                !pack.names_has(sent, record.id) {
+                (mut tags).push(copy record.id)
             }
         }
+        if tags.len > 0 { plan = plan_more(repo, plan, tags, omit)? }
     }
-    let bytes = pack_for(repo, selected, haves, if ofs then "ofs" else "ref")?
-    wire.pack_response(bytes)?
+    let file = write_plan(repo, plan, if ofs then "ofs" else "ref")?
+    defer fs.remove(file.path) else |_| {}
+    send_pack_file(c, file)?
+}
+
+// The packfile section from the written pack, read back in windows of one
+// pkt-line payload (band 1), so the pack is never held whole (den#73).
+fn send_pack_file(c: transport.Channel, file: PackFile) -> () ! object.StoreErrors {
+    var head = List[byte]()
+    wire.line(mut head, "packfile")?
+    transport.write(c, head)?
+    let fd = fs_open(file.path) else |_| { return io }
+    defer fs_close(fd) else |_| {}
+    var pos = 0
+    while pos < file.size {
+        region window {
+            let want = if file.size - pos > 65515 then 65515 else file.size - pos
+            let bytes = fs_read_at(fd, pos, want) else |_| { return io }
+            if bytes.len == 0 { return truncated }
+            var payload = [1 as byte]
+            wire.append(mut payload, bytes)
+            transport.write(c, pktline.encode(payload)?)?
+            pos += bytes.len
+        }
+    }
+    transport.write(c, "0000".bytes())?
 }
 
 /// Stateful transport, stateless command rounds; no hidden per-round wants.
@@ -207,7 +242,10 @@ pub fn upload(repo: repository.Repo, c: transport.Channel) -> () ! object.StoreE
         let request = transport.message(c, 2097152)?
         if request.len == 0 || request.len == 4 { return }
         let (name, args) = command(request)?
-        let reply = if name == "ls-refs" then ls_refs(repo, args)? else fetch(repo, args)?
-        transport.write(c, reply)?
+        if name == "ls-refs" {
+            transport.write(c, ls_refs(repo, args)?)?
+        } else {
+            fetch(repo, args, c)?
+        }
     }
 }
