@@ -158,6 +158,10 @@ class Harness:
         if not repo.exists():
             return dict(missing=True)
         gitdir = repo / '.git' if (repo / '.git').is_dir() else repo
+        if not (gitdir / 'HEAD').is_file():
+            # Not a repository: what is there, by name and content.
+            return dict(files={p.relative_to(repo).as_posix(): p.read_bytes().hex()
+                               for p in sorted(repo.rglob('*')) if p.is_file()})
         refs = self.git_out(repo, 'for-each-ref', '--format=%(refname) %(objectname) %(symref)')
         ids = sorted({line.split()[0] for line in
                       self.git_out(repo, 'rev-list', '--objects', '--all').splitlines()})
@@ -448,6 +452,11 @@ def family_clone(h):
     # The name alone: Git derives the directory before it connects, and so
     # must den; these URLs connect nowhere, so only the first line, a failing
     # exit and an untouched directory are compared.
+    # An ssh that connects nowhere, for both tools.
+    nowhere = h.out / 'bin-nowhere'
+    nowhere.mkdir()
+    (nowhere / 'ssh').write_text('#!/bin/sh\necho "ssh: connect to host nowhere.invalid: unreachable" >&2\nexit 255\n')
+    (nowhere / 'ssh').chmod(0o755)
     for i, spelling in enumerate(NAME_SPELLINGS):
         if h.field and spelling.startswith('https'):
             continue
@@ -457,7 +466,7 @@ def family_clone(h):
             shutil.rmtree(cwd, ignore_errors=True)
             cwd.mkdir()
             ran = h.run([h.git if tool == 'git' else h.den, 'clone', spelling], cwd,
-                        extra=dict(GIT_SSH_COMMAND='false'), timeout=60)
+                        extra=dict(PATH=str(nowhere) + ':' + h.env['PATH']), timeout=60)
             seen[tool] = (ran['stderr'].split(b'\n')[0], ran['exit'] != 0, sorted(os.listdir(cwd)))
         if seen['git'] != seen['den']:
             problems.append('git %r den %r' % (seen['git'], seen['den']))
