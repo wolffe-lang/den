@@ -1,5 +1,6 @@
 // Original pack-v2/idx-v2 writer from gitformat-pack(5). R4c: representation
 // is not byte parity. No object-store dependency, subprocess or pruning here.
+use std.fs
 use hash
 use oid
 use zlib
@@ -60,6 +61,16 @@ fn body_name(body: Body) -> str ! PackErrors {
 
 fn instructions(before: List[byte], after: List[byte]) -> List[byte] ! PackErrors {
     encode_delta(before, after) else |e| { return Unsupported("pack writer delta {e}") }
+}
+
+fn instructions_within(
+    before: List[byte],
+    after: List[byte],
+    within: int,
+) -> List[byte] ! PackErrors {
+    encode_delta_within(before, after, within) else |e| {
+        return Unsupported("pack writer delta {e}")
+    }
 }
 
 fn raw_id(name: str) -> List[byte] ! PackErrors {
@@ -188,4 +199,199 @@ pub fn encode(bodies: List[Body], mode: str) -> Encoded ! PackErrors {
     let index_sum = hash.sum1(index)
     append_write(mut index, index_sum)
     Encoded { data: data, index: index, name: name }
+}
+
+/// den#73: a pack written to a file as its objects come, one body at a
+/// time, for serving and push: no object count or aggregate cap, the
+/// per-object cap (object_limit) kept. Deltas are tried against the
+/// previous 10 objects of the same type (depth 50, as encode does), whose
+/// bodies are the only ones held, in buffers the writer owns (a caller adds
+/// from inside its own region). finish appends the trailer.
+pub struct Writer {
+    path: str,
+    fd: int,
+    mode: str,
+    count: int,
+    written: int,
+    offset: int,
+    kind: int,
+    names: List[byte],
+    data: List[List[byte]],
+    offsets: List[int],
+    depths: List[int],
+    filled: int,
+    next: int,
+    tables: zlib.Tables,
+}
+
+/// An exclusive temporary in dir for a pack of count objects; mode is none,
+/// ofs or ref.
+pub fn writer_begin(dir: str, count: int, mode: str) -> Writer ! PackErrors {
+    if mode != "none" && mode != "ofs" && mode != "ref" {
+        return Unsupported("pack writer delta mode")
+    }
+    if count < 0 || count > 4294967295 { return Unsupported("pack writer object count") }
+    fs.create_dir_all(dir) else |_| { return io }
+    var names = List[byte](), data = List[List[byte]](), offsets = List[int](), depths = List[int]()
+    for _ in 0..400 { (mut names).push(0 as byte) }
+    for _ in 0..10 {
+        (mut data).push(List[byte]())
+        (mut offsets).push(0)
+        (mut depths).push(0)
+    }
+    for serial in 0..1024 {
+        let path = "{dir}/den-out-{serial}.pack"
+        let file = fs.create_new_with_mode(path, 0o600) else |e| match e {
+            exists => { continue },
+            _ => { return Unsupported("pack writer temporary") },
+        }
+        var header = List[byte]()
+        append_write(mut header, "PACK".bytes())
+        put32(mut header, 2)
+        put32(mut header, count)
+        fs_write_chunk(file.fd, header) else |_| { return Unsupported("pack write failed") }
+        return Writer {
+            path: path,
+            fd: file.fd,
+            mode: copy mode,
+            count: count,
+            written: 0,
+            offset: 12,
+            kind: 0,
+            names: names,
+            data: data,
+            offsets: offsets,
+            depths: depths,
+            filled: 0,
+            next: 0,
+            tables: zlib.tables(),
+        }
+    }
+    Unsupported("pack writer temporary")
+}
+
+fn deflated_any(mut t: zlib.Tables, data: List[byte]) -> List[byte] ! PackErrors {
+    zlib.deflate_with(mut t, data, 1, data.len + data.len / 8 + 65536) else |e| {
+        return Unsupported("pack writer compression {e}")
+    }
+}
+
+// The window slot's name, from its 40 hex bytes.
+fn window_name(w: Writer, k: int) -> str ! PackErrors {
+    str_from_utf8(w.names[k * 40..k * 40 + 40]) else |_| {
+        return Unsupported("pack writer identity")
+    }
+}
+
+/// Append one object, named name (its identity, which the caller read).
+pub fn writer_add(mut w: Writer, body: Body, name: str) -> () ! PackErrors {
+    if w.fd < 0 { return Unsupported("pack writer closed") }
+    if w.written >= w.count { return Unsupported("pack writer object count") }
+    let code = kind_number(body.kind)?
+    if body.data.len > object_limit() { return Unsupported("pack writer object size limit") }
+    let raw = name.bytes()
+    if raw.len != 40 { return Unsupported("pack writer identity") }
+    if code != w.kind {
+        w.kind = code
+        w.filled = 0
+        w.next = 0
+    }
+    var depth = 0
+    let start = w.offset
+    region entry {
+        var encoded = List[byte](), whole = false
+        if w.mode == "none" || w.filled == 0 {
+            encoded = entry_header(code, body.data.len)
+            append_write(mut encoded, deflated_any(mut w.tables, body.data)?)
+            whole = true
+        }
+        if !whole {
+            // The candidate with the shortest raw delta is the one deflated
+            // and weighed against the whole object (den#73: deflating every
+            // candidate was most of a serve's CPU).
+            var best = -1, best_len = body.data.len
+            for prior in 0..w.filled {
+                region delta_candidate {
+                    if w.depths[prior] >= 50 { continue }
+                    // Empty once it cannot beat best_len: never chosen.
+                    let delta = instructions_within(w.data[prior], body.data, best_len)?
+                    if delta.len > 0 && delta.len < best_len {
+                        best = prior
+                        best_len = delta.len
+                    }
+                }
+            }
+            if best >= 0 {
+                let delta = instructions(w.data[best], body.data)?
+                var trial = entry_header(if w.mode == "ofs" then 6 else 7, delta.len)
+                if w.mode == "ofs" {
+                    append_write(mut trial, offset_bytes(start - w.offsets[best]))
+                } else {
+                    append_write(mut trial, raw_id(window_name(w, best)?)?)
+                }
+                append_write(mut trial, deflated_any(mut w.tables, delta)?)
+                encoded = copy trial
+                depth = w.depths[best] + 1
+            }
+            // A delta under half the object is taken unweighed; otherwise
+            // the whole object is deflated too and the smaller one kept.
+            if best < 0 || best_len * 2 >= body.data.len {
+                var plain = entry_header(code, body.data.len)
+                append_write(mut plain, deflated_any(mut w.tables, body.data)?)
+                if best < 0 || plain.len <= encoded.len {
+                    encoded = copy plain
+                    depth = 0
+                }
+            }
+        }
+        fs_write_chunk(w.fd, encoded) else |_| { return Unsupported("pack write failed") }
+        w.offset += encoded.len
+    }
+    // The window keeps the last 10 objects of this type, as a ring of
+    // buffers the writer owns.
+    let k = w.next
+    (mut w.data[k]).clear()
+    for b in body.data { (mut w.data[k]).push(b) }
+    for i in 0..40 { w.names[k * 40 + i] = raw[i] }
+    w.offsets[k] = start
+    w.depths[k] = depth
+    if w.filled < 10 { w.filled += 1 }
+    w.next = (k + 1) % 10
+    w.written += 1
+}
+
+/// Close the pack: check its count, append the SHA-1 of what was written
+/// (read back in windows) and return its path and size.
+pub fn writer_finish(mut w: Writer) -> (str, int) ! PackErrors {
+    if w.fd < 0 { return Unsupported("pack writer closed") }
+    if w.written != w.count { return Unsupported("pack writer object count") }
+    fs_close(w.fd) else |_| { return Unsupported("pack write failed") }
+    w.fd = -1
+    let fd = fs_open(w.path) else |_| { return Unsupported("pack writer temporary") }
+    var state = hash.new1(), pos = 0, failed = false
+    while pos < w.offset {
+        region window {
+            let want = if w.offset - pos > 65536 then 65536 else w.offset - pos
+            let bytes = fs_read_at(fd, pos, want) else |_| { failed = true; List[byte]() }
+            if bytes.len == 0 { failed = true }
+            hash.update1(mut state, bytes)
+            pos += bytes.len
+        }
+        if failed { break }
+    }
+    fs_close(fd) else |_| {}
+    if failed { return Unsupported("pack writer temporary") }
+    let sum = hash.final1(take state)
+    let out = fs.open_append(w.path) else |_| { return Unsupported("pack writer temporary") }
+    fs_write_chunk(out.fd, sum) else |_| { return Unsupported("pack write failed") }
+    fs_close(out.fd) else |_| { return Unsupported("pack write failed") }
+    (copy w.path, w.offset + 20)
+}
+
+/// Remove the temporary; safe on any path.
+pub fn writer_discard(mut w: Writer) {
+    if w.fd >= 0 { fs_close(w.fd) else |_| {} }
+    w.fd = -1
+    if w.path != "" { fs.remove(w.path) else |_| {} }
+    w.path = ""
 }
