@@ -1,0 +1,117 @@
+//! member: false
+
+// den#73: the encoder after its changes (kept match tables, the two-queue
+// join) gives the first form's bytes. first_form() is the SHA-1 of the first
+// form's output over this corpus, computed by this program's own loop built
+// at the commit before those changes (0393f74). Each output also comes back
+// through inflate, and deflate_with, with tables kept across every call and
+// across refused caps, gives the same bytes. Native and release only: the
+// checked machine's step budget does not reach the corpus.
+use hash
+use zlib
+
+fn first_form() -> str { "9cd14746e69cf64c9481e51cf2e2d437634d9dce" }
+
+// The corpus: sizes either side of a 32 KiB block and of 64 KiB, each in
+// four shapes (random bytes, four symbols, repeated words with changes,
+// zeros), at levels 1 and 0.
+fn corpus_input(shape: int, n: int, seed0: int) -> List[byte] {
+    var src = List[byte]()
+    var seed = seed0
+    let words = ["tree ", "blob ", "commit ", "parent ", "author ", "den ", "pack ", "\n"]
+    while src.len < n {
+        seed = (seed * 1103515245 + 12345) % 2147483648
+        let r = seed / 65536
+        if shape == 0 {
+            (mut src).push((r % 256) as byte)
+        } else if shape == 1 {
+            (mut src).push((r % 4 * 61) as byte)
+        } else if shape == 2 {
+            let w = words[r % 8].bytes()
+            for b in w { if src.len < n { (mut src).push(b) } }
+            if r % 17 == 0 && src.len < n { (mut src).push((r % 256) as byte) }
+        } else {
+            (mut src).push(0 as byte)
+        }
+    }
+    src
+}
+
+fn sizes() -> List[int] {
+    [
+        0,
+        1,
+        2,
+        3,
+        15,
+        100,
+        300,
+        1000,
+        4096,
+        20000,
+        32767,
+        32768,
+        32769,
+        40000,
+        65535,
+        65536,
+        70000,
+        140000,
+    ]
+}
+
+fn hex(bytes: List[byte]) -> str {
+    let digits = "0123456789abcdef".bytes()
+    var out = List[byte]()
+    for b in bytes {
+        (mut out).push(digits[b as int >> 4])
+        (mut out).push(digits[b as int & 15])
+    }
+    str_from_utf8(out) else ""
+}
+
+fn main() -> int ! {
+    invalid,
+    unsupported_level,
+    limit,
+    truncated,
+    bad_header,
+    dictionary,
+    checksum,
+} {
+    var digest = hash.new1()
+    var t = zlib.tables()
+    var count = 0, refused = 0
+    for shape in 0..4 {
+        for n in sizes() {
+            for level in [1, 0] {
+                region one {
+                    let src = corpus_input(shape, n, shape * 7919 + n)
+                    let out = zlib.deflate(src, level, n + n / 8 + 65536)?
+                    hash.update1(mut digest, out)
+                    let back = zlib.inflate(out, n)?
+                    assert(back.data.len == n && back.consumed == out.len)
+                    for i in 0..n { assert(back.data[i] == src[i]) }
+                    let kept = zlib.deflate_with(mut t, src, level, n + n / 8 + 65536)?
+                    assert(kept.len == out.len)
+                    for i in 0..out.len { assert(kept[i] == out[i]) }
+                    if out.len > 4 {
+                        let short = zlib.deflate_with(mut t, src, level, out.len / 2) else |e| {
+                            assert("{e}" == "limit")
+                            refused += 1
+                            List[byte]()
+                        }
+                        assert(short.len == 0)
+                    }
+                    count += 1
+                }
+            }
+        }
+    }
+    let sum = hex(hash.final1(take digest))
+    assert(sum == first_form())
+    print(
+        "PASS deflate gives the first form's bytes over {count} inputs ({sum}); deflate_with matches across {refused} refused caps\n",
+    )
+    0
+}
