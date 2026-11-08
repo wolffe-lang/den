@@ -81,7 +81,9 @@ fn module_at(modules: List[Module], name: str) -> int {
 /// ignore value warns; a bad fetchRecurseSubmodules or update value is fatal.
 pub fn parse(text: str, file: str) -> Parsed ! Errors {
     let entries = repository.parse_config_named(text, file) else |e| match e {
-        ConfigDiagnostic(message) => { return Fatal(message) },
+        ConfigDiagnostic(message) => {
+            return Fatal(if message.starts_with("fatal: ") then message[7..] else copy message)
+        },
         limit => { return limit },
         Unsupported(feature) => { return Unsupported(feature) },
         _ => { return invalid },

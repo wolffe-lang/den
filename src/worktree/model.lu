@@ -69,6 +69,8 @@ pub struct FileState {
     data: List[byte],
     stat: List[int],
     kind: int,
+    /// A gitlink's submodule worktree (vc25): 1 modified content, 2 untracked.
+    dirt: int,
 }
 
 /// Reusable status codes; original_path is populated only for a rename/copy.
@@ -79,6 +81,9 @@ pub struct StatusRow {
     y: str,
     ignored: bool,
     untracked: bool,
+    /// An unstaged gitlink change (vc25): 1 new commits, 2 modified content,
+    /// 4 untracked content, as git-status(1) reports a submodule.
+    sub: int,
 }
 
 /// Owned snapshot; scan never acquires a write lock or refreshes the index.

@@ -4,6 +4,7 @@ use ignore
 use index
 use object
 use oid
+use gitmodules
 
 fn stable(a: List[int], b: List[int]) -> bool {
     if a.len != 20 || b.len != 20 { return false }
@@ -87,6 +88,7 @@ pub fn read_file(
         data: data,
         stat: record,
         kind: named[0],
+        dirt: 0,
     }
 }
 
@@ -135,6 +137,7 @@ fn hash_file(
         data: List[byte](),
         stat: record,
         kind: 0,
+        dirt: 0,
     }
 }
 
@@ -234,10 +237,27 @@ fn walk_mode(
     mut ignores: ignore.Cache,
     mut warnings: List[str],
 ) -> Walk ! WorkErrors {
+    walk_submodules(ctx, value, include_untracked, paths, status, show_ignored, "", mut ignores, mut warnings)?
+}
+
+// walk_mode with --ignore-submodules' value (empty when not given). A gitlink
+// directory becomes one entry holding its submodule's HEAD and dirt, never
+// descended (vc25); .gitmodules is read once, at the first gitlink met.
+fn walk_submodules(
+    ctx: Context,
+    value: index.Index,
+    include_untracked: bool,
+    paths: List[List[byte]],
+    status: bool,
+    show_ignored: bool,
+    ignore_option: str,
+    mut ignores: ignore.Cache,
+    mut warnings: List[str],
+) -> Walk ! WorkErrors {
     for entry in value.entries {
         if entry.stat.len != 10 { return invalid_index }
-        if entry.stat[6] == 0o160000 { return Unsupported("submodule worktree") }
     }
+    var parsed = List[gitmodules.Parsed]()
     let written = if status then index_time(ctx) else [-1, -1]
     // Read once per walk in status mode; the full walk keeps read_file's own reads.
     let filemode = if status then config_bool(ctx, "core.filemode", true)? else true
@@ -285,6 +305,33 @@ fn walk_mode(
                 denied => { return denied },
                 io => { return io },
             }
+            if info[0] == 1 && gitlink_at(value, path) >= 0 {
+                if !selected(path, paths) { continue }
+                let at = gitlink_at(value, path)
+                if parsed.len == 0 { (mut parsed).push(modules(ctx)?) }
+                let name = text(path)?
+                // A full walk (add, commit -a) needs only the HEAD to stage.
+                let setting = if status then ignore_for(ctx, parsed[0], name, ignore_option) else "dirty"
+                let state = if setting == "all" {
+                    unpopulated(value.entries[at].id)
+                } else {
+                    submodule_state(ctx, name, value.entries[at].id, setting)?
+                }
+                var dirt = 0
+                if state.modified { dirt = 1 }
+                if state.untracked { dirt = dirt | 2 }
+                if files.len >= 1000000 { return limit }
+                (mut files).push(FileState {
+                    path: owned_bytes(path),
+                    mode: 0o160000,
+                    id: copy state.head,
+                    data: List[byte](),
+                    stat: copy info,
+                    kind: 1,
+                    dirt: dirt,
+                })
+                continue
+            }
             if info[0] == 1 {
                 if status &&
                     include_untracked &&
@@ -327,6 +374,7 @@ fn walk_mode(
                     // status renders paths and modes only; full walks keep the record.
                     stat: if status then List[int]() else copy info,
                     kind: info[0],
+                    dirt: 0,
                 }
                 if status && info[0] == 0 && at < 0 {
                     // Untracked or ignored: status renders the path alone.
@@ -367,6 +415,7 @@ fn status_row(path: List[byte], x: str, y: str) -> StatusRow {
         y: y,
         ignored: false,
         untracked: false,
+        sub: 0,
     }
 }
 
@@ -481,6 +530,7 @@ fn status_rows(
             change(tree[old].mode, tree[old].id, entry.stat[6], entry.id)
         }
         var y = " "
+        var sub = 0
         if entry.flags & 0x8000 == 0 && entry.extended & 0x4000 == 0 {
             y = if disk < 0 {
                 "D"
@@ -489,8 +539,18 @@ fn status_rows(
             } else {
                 change(entry.stat[6], entry.id, files[disk].mode, files[disk].id)
             }
+            if disk >= 0 && entry.stat[6] == 0o160000 && files[disk].mode == 0o160000 {
+                if y == "M" { sub = 1 }
+                if files[disk].dirt & 1 != 0 { sub = sub | 2 }
+                if files[disk].dirt & 2 != 0 { sub = sub | 4 }
+                if sub != 0 { y = "M" }
+            }
         }
-        if x != " " || y != " " { (mut rows).push(status_row(path, x, y)) }
+        if x != " " || y != " " {
+            var row = status_row(path, x, y)
+            row.sub = sub
+            (mut rows).push(row)
+        }
     }
     for file in files {
         if !include_untracked { break }
@@ -577,6 +637,17 @@ pub fn scan_status(
     show_ignored: bool,
     mut warnings: List[str],
 ) -> Snapshot ! WorkErrors {
+    scan_status_ignoring(ctx, include_untracked, show_ignored, "", mut warnings)?
+}
+
+/// scan_status with --ignore-submodules' value (empty when not given).
+pub fn scan_status_ignoring(
+    ctx: Context,
+    include_untracked: bool,
+    show_ignored: bool,
+    ignore_option: str,
+    mut warnings: List[str],
+) -> Snapshot ! WorkErrors {
     // read_index's parse validates exactly what serialize would re-check.
     let value = read_index(ctx)?
     let current_head = head(ctx)?
@@ -584,13 +655,14 @@ pub fn scan_status(
     if current_head.commits.len == 1 { entries = head_flat(ctx, value, current_head.commits[0])? }
     ensure_filters(ctx)?
     var ignores = ignore.cache()
-    let walked = walk_mode(
+    let walked = walk_submodules(
         ctx,
         value,
         include_untracked,
         [],
         true,
         show_ignored,
+        ignore_option,
         mut ignores,
         mut warnings,
     )?

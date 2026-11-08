@@ -304,7 +304,19 @@ pub fn render_status(snapshot: Snapshot, options: StatusOptions) -> List[byte] !
             (mut out).push(if options.nul then 0 as byte else 10 as byte)
         }
         for row in rows {
-            bytes_add(mut out, "{row.x}{row.y} ".bytes())
+            // git-status(1): a submodule's short code is M (new commits), m
+            // (modified content) or ? (untracked content only); porcelain
+            // reports M for every submodule change.
+            let y = if row.sub == 0 || options.porcelain || options.nul {
+                copy row.y
+            } else if row.sub & 1 != 0 {
+                "M"
+            } else if row.sub & 2 != 0 {
+                "m"
+            } else {
+                "?"
+            }
+            bytes_add(mut out, "{row.x}{y} ".bytes())
             if options.nul {
                 bytes_add(mut out, display(ctx, row.path, options))
                 (mut out).push(0 as byte)
@@ -423,11 +435,25 @@ pub fn render_status(snapshot: Snapshot, options: StatusOptions) -> List[byte] !
                 mut out,
                 "  (use \"git restore <file>...\" to discard changes in working directory)",
             )
+            var content = false
+            for row in rows { if !row.untracked && !row.ignored && row.sub & 6 != 0 { content = true } }
+            if content {
+                line(mut out, "  (commit or discard the untracked or modified content in submodules)")
+            }
         }
         for row in rows {
             if row.untracked || row.ignored || row.y == " " || conflict_row(row) { continue }
             bytes_add(mut out, "\t{label(row.y)}".bytes())
             bytes_add(mut out, display(ctx, row.path, options))
+            if row.sub != 0 {
+                var parts = List[str]()
+                if row.sub & 1 != 0 { (mut parts).push("new commits") }
+                if row.sub & 2 != 0 { (mut parts).push("modified content") }
+                if row.sub & 4 != 0 { (mut parts).push("untracked content") }
+                var joined = ""
+                for part in parts { joined = if joined == "" then copy part else "{joined}, {part}" }
+                bytes_add(mut out, " ({joined})".bytes())
+            }
             line(mut out, "")
         }
         line(mut out, "")

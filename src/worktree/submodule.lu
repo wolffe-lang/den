@@ -1,0 +1,101 @@
+// A gitlink's submodule as status and diff see it (vc25): gitsubmodules(7)
+// FORMS, git-status(1) "Submodules have more state", gitmodules(5)
+// submodule.<name>.ignore and git-config(1), held to the pinned Git (vc25's
+// probes and rows). The submodule is read with den's own status scan; nothing
+// is written. No implementation source consulted.
+use std.fs
+use gitmodules
+use index
+use oid
+use repository
+
+/// populated: the path holds a checked-out submodule (a `.git` there that
+/// is its own worktree's). head is its HEAD (the recorded commit when it is
+/// unpopulated or unborn). modified and untracked roll up from nested ones.
+pub struct SubState { populated: bool, head: oid.Oid, modified: bool, untracked: bool }
+
+/// The superproject's .gitmodules, read from the worktree file, warnings
+/// printed as Git prints them while reading (vc25 rows); an absent file is
+/// an empty list. A syntax or value error is Git's fatal.
+pub fn modules(ctx: Context) -> gitmodules.Parsed ! WorkErrors {
+    let file = "{ctx.root}/.gitmodules"
+    if !fs.is_file(file) { return gitmodules.Parsed { modules: [], warnings: [] } }
+    let bytes = repository.read_bytes(file, 1048576)?
+    let content = str_from_utf8(bytes) else |_| { return Unsupported("non-UTF-8 .gitmodules") }
+    let parsed = gitmodules.parse(content, file) else |e| match e {
+        Fatal(message) => { return Fatal(message) },
+        limit => { return limit },
+        Unsupported(feature) => { return Unsupported(feature) },
+        invalid => { return invalid },
+    }
+    for warning in parsed.warnings { eprint("warning: {warning}") }
+    parsed
+}
+
+/// The effective ignore setting for the submodule at PATH: the command-line
+/// value, else submodule.<name>.ignore in config, else .gitmodules, else none.
+pub fn ignore_for(ctx: Context, parsed: gitmodules.Parsed, path: str, option: str) -> str {
+    if option != "" { return copy option }
+    let at = gitmodules.by_path(parsed, path)
+    if at < 0 { return "none" }
+    let name = parsed.modules[at].name
+    let configured = ctx.repo.config["submodule.{name}.ignore"] else ""
+    if configured == "none" || configured == "untracked" || configured == "dirty" || configured == "all" {
+        return configured
+    }
+    if parsed.modules[at].ignore != "" { return copy parsed.modules[at].ignore }
+    "none"
+}
+
+fn unpopulated(recorded: oid.Oid) -> SubState {
+    SubState { populated: false, head: copy recorded, modified: false, untracked: false }
+}
+
+/// Inspect the submodule worktree at PATH (relative to the superproject root)
+/// whose gitlink records RECORDED. IGNORE "dirty"/"all" skips its worktree;
+/// "untracked" skips untracked files (Git still scans tracked content).
+pub fn submodule_state(ctx: Context, path: str, recorded: oid.Oid, ignore: str) -> SubState ! WorkErrors {
+    let full = "{ctx.root}/{path}"
+    if !fs.exists("{full}/.git") { return unpopulated(recorded) }
+    let real = fs.realpath(full) else |_| { return unpopulated(recorded) }
+    let sub = discover(real) else |_| { return unpopulated(recorded) }
+    if sub.root != real { return unpopulated(recorded) }
+    let current = head(sub)?
+    let id = if current.commits.len == 1 then copy current.commits[0] else copy recorded
+    if ignore == "dirty" || ignore == "all" {
+        return SubState { populated: true, head: id, modified: false, untracked: false }
+    }
+    var warnings = List[str]()
+    let snapshot = scan_status(sub, ignore != "untracked", false, mut warnings)?
+    var modified = false, untracked = false
+    for row in snapshot.rows {
+        if row.ignored { continue }
+        if row.untracked { untracked = true; continue }
+        if row.sub != 0 {
+            // A nested submodule: its commits or content are this one's
+            // modified content, its untracked files this one's untracked.
+            if row.sub & 3 != 0 || row.x != " " { modified = true }
+            if row.sub & 4 != 0 { untracked = true }
+            continue
+        }
+        modified = true
+    }
+    SubState { populated: true, head: id, modified: modified, untracked: untracked }
+}
+
+/// The text Git diffs for a gitlink side: `Subproject commit <id>\n`, with
+/// `-dirty` when its worktree has modified content (vc25 probe 1).
+pub fn subproject_text(id: oid.Oid, dirty: bool) -> List[byte] ! WorkErrors {
+    let hex = oid.hex(id)?
+    (if dirty then "Subproject commit {hex}-dirty\n" else "Subproject commit {hex}\n").bytes()
+}
+
+/// The stage-zero gitlink entry at PATH in VALUE, or -1.
+pub fn gitlink_at(value: index.Index, path: List[byte]) -> int {
+    var i = 0
+    for entry in value.entries {
+        if entry.stat[6] == 0o160000 && index.stage(entry) == 0 && compare(entry.path, path) == 0 { return i }
+        i += 1
+    }
+    -1
+}

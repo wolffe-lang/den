@@ -9,5 +9,6 @@ pkg {
         index: {path: "../index"}, ignore: {path: "../ignore"},
         object: {path: "../object"}, oid: {path: "../oid"},
         repository: {path: "../repository"}, hash: {path: "../hash"}, zlib: {path: "../zlib"},
+        gitmodules: {path: "../gitmodules"},
     },
 }
