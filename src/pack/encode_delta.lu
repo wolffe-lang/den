@@ -55,22 +55,62 @@ fn fingerprint(data: List[byte], pos: int) -> int {
 /// Owned delta instructions. Inputs capped at 16 MiB; one sampled candidate per
 /// 16-byte fingerprint, verified before use. No fixture-specific heuristics.
 pub fn encode_delta(before: List[byte], after: List[byte]) -> List[byte] ! DeltaErrors {
+    encode_delta_within(before, after, 9223372036854775807)?
+}
+
+/// encode_delta's instructions when they are shorter than within bytes, else
+/// an empty list as soon as they reach it: a pack writer weighing several
+/// bases stops a base once it cannot beat the best so far (den#73).
+pub fn encode_delta_within(
+    before: List[byte],
+    after: List[byte],
+    within: int,
+) -> List[byte] ! DeltaErrors {
     if before.len > 16777216 || after.len > 16777216 { return limit }
     var out = List[byte]()
     number(mut out, before.len)
     number(mut out, after.len)
-    var table = Map[int, int]()
+    // den#73: the first block offset for each fingerprint, by open
+    // addressing (a Map scans its keys, so a large base cost its square);
+    // the same first-offset answer, so the same delta.
+    var size = 64
+    while size < before.len / 8 { size *= 2 }
+    var keys = List[int](), offsets = List[int]()
+    (mut keys).reserve(size)
+    (mut offsets).reserve(size)
+    for _ in 0..size {
+        (mut keys).push(0)
+        (mut offsets).push(-1)
+    }
+    let mask = size - 1
     var pos = 0
     while pos + 16 <= before.len {
         let key = fingerprint(before, pos)
-        let existing = table[key] else -1
-        if existing == -1 { table[key] = pos }
+        var i = key & mask
+        while offsets[i] >= 0 && keys[i] != key { i = i + 1 & mask }
+        if offsets[i] < 0 {
+            keys[i] = key
+            offsets[i] = pos
+        }
         pos += 16
     }
+    // The fingerprint rolls one byte at a time between matches: the same
+    // value as fingerprint(after, pos), as arithmetic is mod 2^32 throughout.
+    var top = 1
+    for _ in 0..15 { top = top * 257 & 0xffffffff }
     pos = 0
-    var pending = 0
+    var pending = 0, wanted = 0, rolled = -1
     while pos + 16 <= after.len {
-        let candidate = table[fingerprint(after, pos)] else -1
+        if rolled == pos - 1 && rolled >= 0 {
+            wanted = (wanted - after[rolled] as int * top) * 257 + after[pos + 15] as int &
+                0xffffffff
+        } else {
+            wanted = fingerprint(after, pos)
+        }
+        rolled = pos
+        var i = wanted & mask
+        while offsets[i] >= 0 && keys[i] != wanted { i = i + 1 & mask }
+        let candidate = offsets[i]
         var length = 0
         if candidate >= 0 {
             while candidate + length < before.len &&
@@ -82,10 +122,14 @@ pub fn encode_delta(before: List[byte], after: List[byte]) -> List[byte] ! Delta
             copied(mut out, candidate, length)
             pos += length
             pending = pos
+            if out.len >= within { return List[byte]() }
         } else {
             pos += 1
+            // Pending literals cost a byte each and a count byte per 127.
+            if out.len + pos - pending >= within { return List[byte]() }
         }
     }
     inserted(mut out, after, pending, after.len)
+    if out.len >= within { return List[byte]() }
     out
 }
