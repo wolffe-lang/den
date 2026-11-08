@@ -11,6 +11,12 @@ http-live-self: den and the pinned Git clone den's own public repository
 compare as the read row does, within the time and the peak RSS predicted in
 tests/vc23-prediction.txt; the pinned Git checks den's clone.
 
+http-live-identity: den and the pinned Git clone i3's public repository,
+whose commit 5f453914 has an empty email (`walker0643 <>`, author and
+committer), and compare as the read row does; then `log -1`, `show -s` and
+the identity placeholders of that commit, byte for byte. Before vc26 den
+refused the clone (`Unsupported(fsck identity diagnostics)`).
+
 http-live-push: with DEN_LIVE_HTTPS_URL and DEN_LIVE_HTTPS_TOKEN, den fetches
 that repository with the token through a remote named only in GIT_CONFIG_*
 after `den init`, pushes a fresh disposable branch, the server's own ref
@@ -44,6 +50,9 @@ import time
 
 GIT_SHA256 = 'c4848492938c4ebfffbefe1fbbaa68b9af90c86d1f6a20e76816c5ff37fcfa60'
 READ_URL = 'https://github.com/wolffe-lang/burrow.git'
+IDENTITY_URL = 'https://github.com/i3/i3.git'
+IDENTITY_COMMIT = '5f453914a04c193baf5b4239d83116d33a74de62'
+IDENTITY_SECONDS = 900
 SELF_URL = 'https://github.com/wolffe-lang/den.git'
 # tests/vc23-prediction.txt P2: 64 MiB + W (96 MiB) + 5 x den's largest object.
 SELF_RSS_KIB = (160 * 1024 * 1024 + 5 * 103002444) // 1024
@@ -197,10 +206,10 @@ class ArgvWatch:
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--tier', choices=('native', 'release'), default='native')
-    parser.add_argument('--rows', default='read,self,push')
+    parser.add_argument('--rows', default='read,identity,self,push')
     args = parser.parse_args()
     rows = args.rows.split(',')
-    assert set(rows) <= {'read', 'self', 'push'} and rows, 'rows'
+    assert set(rows) <= {'read', 'identity', 'self', 'push'} and rows, 'rows'
     guard_selftest()
     root = Path(__file__).resolve().parent.parent
     git = str(Path(os.environ['DEN_GIT']).resolve())
@@ -208,7 +217,8 @@ def main():
     den = root / 'target' / args.tier / 'den'
     if not den.is_file():
         raise SystemExit('FAIL http-live-input: build target/' + args.tier + '/den first')
-    names = {'read': 'http-live-read', 'self': 'http-live-self', 'push': 'http-live-push'}
+    names = {'read': 'http-live-read', 'identity': 'http-live-identity', 'self': 'http-live-self',
+             'push': 'http-live-push'}
     live_url = os.environ.get('DEN_LIVE_HTTPS_URL', '')
     live_token = os.environ.get('DEN_LIVE_HTTPS_TOKEN', '')
     if 'push' in rows and not (live_url and live_token):
@@ -369,6 +379,52 @@ def main():
             print('LIVE %s head=%s objects=%d den=%.2fs/%sKiB git=%.2fs/%sKiB' % (
                 name, ours['refs'].split('\n')[0], ours['objects'], candidate['elapsed'],
                 candidate['maxrss_kib'], oracle['elapsed'], oracle['maxrss_kib']), flush=True)
+            break
+        print(('PASS ' if ok else 'FAIL ') + name + ('' if ok else ' ' + why), flush=True)
+        if not ok:
+            failed.append(name)
+
+    if 'identity' in rows:
+        name = names['identity']
+        ok, why = False, ''
+        for attempt in range(2):
+            before = run([git, 'ls-remote', IDENTITY_URL], out, name + '-ls-remote-before', 120)
+            den_dir, git_dir = out / ('identity-den-%d' % attempt), out / ('identity-git-%d' % attempt)
+            candidate = run([den, 'clone', '-q', IDENTITY_URL, den_dir], out, name + '-den', IDENTITY_SECONDS, 'den')
+            oracle = run([git, 'clone', '-q', IDENTITY_URL, git_dir], out, name + '-git', IDENTITY_SECONDS)
+            after = run([git, 'ls-remote', IDENTITY_URL], out, name + '-ls-remote-after', 120)
+            if before['exit'] or after['exit'] or oracle['exit']:
+                why = 'pinned Git could not read the public repository'
+                break
+            if moved(before['stdout'], after['stdout']):
+                why = 'public refs moved during the row'
+                continue
+            fields = [field for field in ('exit', 'stdout', 'stderr') if candidate[field] != oracle[field]]
+            if fields:
+                why = 'process ' + '/'.join(fields) + ' differ: den exit %d stderr %r' % (
+                    candidate['exit'], bytes.fromhex(candidate['stderr'])[:400])
+                break
+            ours, theirs = state(den_dir), state(git_dir)
+            differ = [key for key in ours if ours[key] != theirs[key]]
+            git_out(den_dir, 'fsck', '--full', '--no-reflogs')
+            dirty = git_out(den_dir, 'status', '--porcelain')
+            reads = []
+            for argv in (['log', '-1', IDENTITY_COMMIT], ['show', '-s', IDENTITY_COMMIT],
+                         ['log', '-1', '--format=%an|%ae|%al|%ad|%at|%cn|%ce|%cd', IDENTITY_COMMIT]):
+                mine = run([den, *argv], den_dir, name + '-den-' + argv[0], 120, 'den')
+                gits = run([git, *argv], git_dir, name + '-git-' + argv[0], 120)
+                if (mine['exit'], mine['stdout'], mine['stderr']) != (gits['exit'], gits['stdout'], gits['stderr']):
+                    reads.append(' '.join(argv[:-1]))
+            results[name] = dict(den=ours, git=theirs, differ=differ, status=dirty.decode(), reads=reads,
+                                 den_elapsed=candidate['elapsed'], den_maxrss_kib=candidate['maxrss_kib'],
+                                 git_elapsed=oracle['elapsed'], git_maxrss_kib=oracle['maxrss_kib'])
+            if differ or dirty or reads:
+                why = 'state differs: ' + ', '.join(differ + reads) + (' (den worktree dirty)' if dirty else '')
+                break
+            ok = True
+            print('LIVE %s objects=%d den=%.2fs/%sKiB git=%.2fs/%sKiB' % (
+                name, ours['objects'], candidate['elapsed'], candidate['maxrss_kib'], oracle['elapsed'],
+                oracle['maxrss_kib']), flush=True)
             break
         print(('PASS ' if ok else 'FAIL ') + name + ('' if ok else ' ' + why), flush=True)
         if not ok:
