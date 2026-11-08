@@ -281,12 +281,15 @@ fn dispatch(args: List[str]) -> int ! worktree.WorkErrors {
         }
         (mut revisions).push("HEAD")
     }
-    var starts = List[oid.Oid]()
+    var starts = List[oid.Oid](), start_names = List[str]()
     for name in revisions {
         if name == ".." {
             return Fatal("..: '..' is outside repository at '{ctx.root}'")
         }
-        if show { (mut starts).push(revision.resolve(ctx.repo, name)?) }
+        if show {
+            (mut starts).push(revision.resolve(ctx.repo, name)?)
+            (mut start_names).push(copy name)
+        }
     }
     var commits = List[walk.Commit](), out = List[byte](), printed_commit = false
     if !show {
@@ -303,7 +306,12 @@ fn dispatch(args: List[str]) -> int ! worktree.WorkErrors {
         let at = if reverse then length - n - 1 else n
         var id = if show then copy starts[at] else copy commits[at].id
         let value = if show {
-            var stored = object.read_object(ctx.repo, id, 16777216)?
+            // A name resolving to an absent object, as a gitlink's commit is
+            // in its superproject: Git's `fatal: bad object NAME` (vc25).
+            var stored = object.read_object(ctx.repo, id, 16777216) else |e| match e {
+                not_found => { return Fatal("bad object {start_names[at]}") },
+                _ => { object.read_object(ctx.repo, id, 16777216)? },
+            }
             var tag_depth = 0
             while stored.kind == "tag" {
                 tag_depth += 1
