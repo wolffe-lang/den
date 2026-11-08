@@ -244,6 +244,8 @@ fn clone_one(url: str, gitdir: str, full: str) -> bool {
     ok
 }
 
+struct Pending { sub: Sub, url: str, whole: bool }
+
 fn update(
     ctx: worktree.Context,
     options: UpdateOptions,
@@ -253,7 +255,10 @@ fn update(
     if options.init { init(ctx, parsed, options.paths, parent, options.quiet)? }
     let repo = fresh(ctx.repo)?
     var status = 0
-    var retry = List[Sub](), done = List[Sub]()
+    var retry = List[Sub](), pending = List[Pending](), done = List[Sub]()
+    // Every clone comes first, with one retry pass; only then are the
+    // submodules checked out, so a clone that fails twice leaves the others
+    // cloned but not checked out, as in Git (vc25 rows).
     for pass in 0..2 {
         let candidates = if pass == 0 then submodules(ctx, parsed)? else copy retry
         retry = []
@@ -285,8 +290,10 @@ fn update(
                             eprint("Failed to clone '{shown}'. Retry scheduled")
                             (mut retry).push(copy sub)
                         } else {
+                            // The first second failure ends the update
+                            // (vc25 rows).
                             eprint("Failed to clone '{shown}' a second time, aborting")
-                            status = 1
+                            return 1
                         }
                         continue
                     }
@@ -295,45 +302,51 @@ fn update(
                 write_gitfile(full, gitdir)?
                 whole = true
             }
-            let sub_ctx = worktree.discover(full)?
-            let target = copy sub.id
-            if !commit_present(sub_ctx.repo, target) {
-                // R-vc25-12: fetch the recorded commit by id, as Git does;
-                // the server's refusal is relayed before Git's own fatal.
-                let fetch_head = "{sub_ctx.repo.gitdir}/FETCH_HEAD"
-                if !fs.exists(fetch_head) {
-                    var f = fs.create_new_with_mode(fetch_head, 0o644)?
-                    fs.close(take f) else |_| {}
-                }
-                let saved = env_get("GIT_PROTOCOL_FROM_USER") else "\0"
-                env_set("GIT_PROTOCOL_FROM_USER", "0") else |_| {}
-                wiregit.fetch_commit(sub_ctx.repo, url, oid.hex(target)?) else |e| {
-                    let message = "{e}"
-                    if message.starts_with("Unsupported(") { eprint("fatal: {message[12..message.len - 1]}") }
-                }
-                if saved == "\0" { env_set("GIT_PROTOCOL_FROM_USER", "1") else |_| {} } else { env_set("GIT_PROTOCOL_FROM_USER", saved) else |_| {} }
-                if !commit_present(repository.open(sub_ctx.repo.gitdir)?, target) {
-                    return Fatal("Fetched in submodule path '{shown}', but it did not contain {oid.hex(target)?}. Direct fetching of that commit failed.")
-                }
-            }
-            let current = worktree.head(sub_ctx)?
-            let moved = current.commits.len != 1 || !oid.equal(current.commits[0], target) || !current.detached
-            if whole || moved || options.force {
-                checkout_detached(sub_ctx, target, whole, options.force) else |e| match e {
-                    Failure(message) => {
-                        // vc25 probe 2, upd-dirty-conflict: checkout's refusal,
-                        // then the submodule's, exit 1.
-                        eprint("error: {message}")
-                        eprint("fatal: Unable to checkout '{oid.hex(target)?}' in submodule path '{shown}'")
-                        return 1
-                    },
-                    _ => { return Fatal("submodule checkout: {e}") },
-                }
-                if !options.quiet { print("Submodule path '{shown}': checked out '{oid.hex(target)?}'") }
-            }
-            (mut done).push(copy sub)
+            (mut pending).push(Pending { sub: copy sub, url: copy url, whole: whole })
         }
         if retry.len == 0 { break }
+    }
+    for item in pending {
+        let sub = copy item.sub, url = copy item.url, whole = item.whole
+        let shown = display(ctx, parent, sub.path)
+        let full = "{ctx.root}/{sub.path}"
+        let sub_ctx = worktree.discover(full)?
+        let target = copy sub.id
+        if !commit_present(sub_ctx.repo, target) {
+            // R-vc25-12: fetch the recorded commit by id, as Git does; the
+            // server's refusal is relayed before Git's own fatal.
+            let fetch_head = "{sub_ctx.repo.gitdir}/FETCH_HEAD"
+            if !fs.exists(fetch_head) {
+                var f = fs.create_new_with_mode(fetch_head, 0o644)?
+                fs.close(take f) else |_| {}
+            }
+            let saved = env_get("GIT_PROTOCOL_FROM_USER") else "\0"
+            env_set("GIT_PROTOCOL_FROM_USER", "0") else |_| {}
+            wiregit.fetch_commit(sub_ctx.repo, url, oid.hex(target)?) else |e| {
+                let message = "{e}"
+                if message.starts_with("Unsupported(") { eprint("fatal: {message[12..message.len - 1]}") }
+            }
+            if saved == "\0" { env_set("GIT_PROTOCOL_FROM_USER", "1") else |_| {} } else { env_set("GIT_PROTOCOL_FROM_USER", saved) else |_| {} }
+            if !commit_present(repository.open(sub_ctx.repo.gitdir)?, target) {
+                return Fatal("Fetched in submodule path '{shown}', but it did not contain {oid.hex(target)?}. Direct fetching of that commit failed.")
+            }
+        }
+        let current = worktree.head(sub_ctx)?
+        let moved = current.commits.len != 1 || !oid.equal(current.commits[0], target) || !current.detached
+        if whole || moved || options.force {
+            checkout_detached(sub_ctx, target, whole, options.force) else |e| match e {
+                Failure(message) => {
+                    // vc25 probe 2, upd-dirty-conflict: checkout's refusal,
+                    // then the submodule's, exit 1.
+                    eprint("error: {message}")
+                    eprint("fatal: Unable to checkout '{oid.hex(target)?}' in submodule path '{shown}'")
+                    return 1
+                },
+                _ => { return Fatal("submodule checkout: {e}") },
+            }
+            if !options.quiet { print("Submodule path '{shown}': checked out '{oid.hex(target)?}'") }
+        }
+        (mut done).push(copy sub)
     }
     if options.recursive {
         for sub in done {
