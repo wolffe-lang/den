@@ -102,9 +102,10 @@ or normalizations of ANSI bytes, config bytes or unproven index differences.
   the inflater, delta application and canonical hash code. `bases` contains owned
   canonical bodies supplied by the caller; stream_refs also lists internal REF
   bases, so missing local copies are not by themselves errors. Decode resolves
-  all entries or rejects unresolved/cyclic bases. Counts cap at 10,000, bodies at
-  16 MiB, charged stream/reconstruction payload at 128 MiB and depth at 64.
-  These are not streaming or peak-RSS promises; fetch no longer uses them.
+  all entries or rejects unresolved/cyclic bases. Bodies cap at 16 MiB, the
+  stream and the charged reconstruction payload at 128 MiB and depth at 64;
+  there is no count bound (den#73). These are not streaming or peak-RSS
+  promises; fetch no longer uses them, and receive-pack only for a thin pack.
 - `pack.receive_begin`, `receive_write`, `receive_abort`, `received_index`,
   `received_install`, `received_body`, `received_rank`, `received_discard`
   (vc23): a received pack streams into an exclusive `objects/pack/tmp_pack_den_*`
@@ -221,6 +222,35 @@ open up front serves loose objects and fails a packed read as one read does.
 `install` syncs neither the file it writes nor its directory (the pinned Git
 syncs no worktree path); the pack, refs, index and configuration writers keep
 theirs.
+
+vc24 (den#73, the bounds at scale): `pack.NameSet` (`nameset`, `names_add`,
+`names_has`, `names_value`, `names_len`) holds object names and a type each by
+open addressing on a name's leading 60 bits, as bytes and ints, so a walk adds
+to it from inside its own regions. `wiregit.walk_plan(repo, roots, omit)`
+walks a typed closure through one batch reader and returns a `Plan` (40 name
+bytes, a type code and a size an object; `plan_len`, `plan_name`,
+`plan_into`), each step in its own region; `have_set` is the omitted closure
+of haves, `plan_more` adds the closure of more roots (include-tag's tags), and
+`closure` keeps its names-list answer for its other callers.
+`object.read_cached` and `pack.session_cached` read as `read_loaded` does but
+rebuild delta bases through the session's `pack.Cache` (256 direct-mapped
+slots by pack and offset, objects of at most 16 KiB, entered only once their
+identity is checked). `pack.Writer` (`writer_begin`, `writer_add`,
+`writer_finish`, `writer_discard`) writes a pack to an exclusive temporary one
+object at a time: each tried against the last ten of its type below fifty
+links, the shortest raw delta deflated and kept when smaller, the trailer
+summed by reading the file back. `wiregit.write_plan` orders a plan as
+`pack.encode` orders (type, then size descending) and writes it; `pack_file`
+plans and writes; `upload` sends the file in band-1 windows; push streams it
+to a stream peer and sends it whole over HTTP (`pack_for`). Receive-pack finds
+the pack's end with `pack.scan_begin`/`scan_more` (each entry inflated once)
+and installs it through the streamed indexer (`receive_import`), falling back
+to `import_pack` for a thin pack. `packcmd.wire_links` is `links` without
+fsck's strict diagnostics (unsafe paths, identities, tag names), for transfer
+walks. `zlib.Tables`/`tables`/`deflate_with` keep deflate's match tables
+across a writer's objects with deflate's bytes; `lengths` joins from two
+queues; inflate reads several bits a byte and decodes fixed blocks without
+tables; `encode_delta` rolls its fingerprint between matches.
 
 vc24 (den#72): `clone_name` derives a clone's directory from its URL when none
 is given; `clone_mode` fills an existing empty destination and empties it again
