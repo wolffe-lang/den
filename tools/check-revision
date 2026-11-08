@@ -14,8 +14,9 @@ for tier in native release; do
     "target/$tier/revision-test"
     "$WOLF" build $flag --deny-warnings probes/revision-client/main.lu -o "target/$tier/revision-client"
     tools/env python3 -I tools/revision-test.py --tier "$tier"
+    tools/env python3 -I tools/rev-parse-test.py --tier "$tier"
 done
 "$WOLF" conform-run src/revision_test.lu --checked --json > target/revision-checked.json
 cat target/revision-checked.json
 python3 -I tools/revision-verdict.py target/revision-checked.json
-echo 'revision: exact loose/packed commands and clients; checked syntax exit; zero skips'
+echo 'revision: exact loose/packed commands and clients; rev-parse rows; checked syntax exit; zero skips'
