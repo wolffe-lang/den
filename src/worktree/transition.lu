@@ -174,7 +174,16 @@ fn transition_mode(
         if next < 0 { continue }
         // Each path's blob, written file and read-back live in one region.
         region one {
-            let entry = transition_path(ctx, reader, snapshot, previous, at, target[next], path, mode)?
+            let entry = transition_path(
+                ctx,
+                reader,
+                snapshot,
+                previous,
+                at,
+                target[next],
+                path,
+                mode,
+            )?
             (mut entries).push(copy entry)
         }
     }
