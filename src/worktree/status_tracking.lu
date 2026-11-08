@@ -60,3 +60,21 @@ fn tracking_long(mut out: List[byte], snapshot: Snapshot, hints: bool) -> () ! W
     }
     line(mut out, "")
 }
+
+/// What checkout and switch print on stdout after moving HEAD (vc25, measured
+/// against the pinned Git): each unstaged local change as `<code>\t<path>`,
+/// then the branch's tracking lines, without status's trailing blank line.
+pub fn checkout_report(snapshot: Snapshot, hints: bool) -> List[byte] ! WorkErrors {
+    var out = List[byte]()
+    for row in snapshot.rows {
+        if row.untracked || row.ignored || row.y == " " { continue }
+        bytes_add(mut out, "{row.y}\t".bytes())
+        bytes_add(mut out, owned_bytes(row.path))
+        (mut out).push(10 as byte)
+    }
+    var tracking = List[byte]()
+    tracking_long(mut tracking, snapshot, hints)?
+    if tracking.len > 0 { tracking = owned_bytes(tracking[0..tracking.len - 1]) }
+    bytes_add(mut out, tracking)
+    out
+}
