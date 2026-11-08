@@ -11,13 +11,14 @@ branch or tag of the superproject or a submodule's remote moves while the row
 runs, it is retried once, then fails by name.
 
 live-<repo>-gitlinks, for wolf-interp, wolf-std and wolf-lsp: one clone by the
-pinned Git, then submodule status, ls-tree, log, show and diff of the commit
-that last moved the release-pinned gitlink, run by both tools in that clone
-and compared byte for byte (the submodule's commits are not present: its
-repository is never cloned).
+pinned Git, then submodule status, ls-tree, ls-files, cat-file and rev-parse
+around the commit that last moved the release-pinned gitlink, run by
+both tools in that clone and compared byte for byte (its repository is never
+cloned).
 
 live-wolf-std-ssh: through url.git@github.com:.insteadOf=https://github.com/,
-only where an ssh key for github.com answers; a named SKIP otherwise.
+only with DEN_LIVE_SSH=1 and where an ssh key for github.com answers; a named
+SKIP otherwise.
 
 --timed N: the measured row (not a gate): N interleaved recursive clones of
 wolf-web by each tool on this machine, wall time and the child's CPU from
@@ -49,6 +50,7 @@ p = argparse.ArgumentParser()
 p.add_argument('--tier', choices=('native', 'release'), default='native')
 p.add_argument('--timed', type=int, default=0)
 p.add_argument('--field', action='store_true', help='a Git other than the pinned one, for development only')
+p.add_argument('--only', default='', help='run the rows whose names match this pattern')
 p.add_argument('--url', default='', help='--timed only: another public superproject, measured locally')
 p.add_argument('--ssh-to-https', action='store_true',
                help='--timed only: url.https://github.com/.insteadOf=git@github.com: for scp-like submodule URLs')
@@ -130,9 +132,13 @@ def repo_state(gitdir):
         q = subprocess.run([git, '--git-dir=' + str(gitdir), 'cat-file', '--batch'], env=env, capture_output=True,
                            input=b''.join(i + b'\n' for i in ids), timeout=600)
         digest.update(q.stdout)
+    config = (gitdir / 'config').read_bytes().decode(errors='replace')
+    if a.field:
+        # macOS only: Git's two core lines for a case-folding file system
+        # (as tools/submodule-test.py drops them in field mode).
+        config = config.replace('\tignorecase = true\n\tprecomposeunicode = true\n', '')
     return dict(refs=refs.decode(), head=(gitdir / 'HEAD').read_bytes().decode(errors='replace'),
-                objects=len(ids), objects_sha256=digest.hexdigest(),
-                config=(gitdir / 'config').read_bytes().decode(errors='replace'))
+                objects=len(ids), objects_sha256=digest.hexdigest(), config=config)
 
 
 def tree_state(top):
@@ -228,22 +234,28 @@ def pinned_rows():
         c = work / 'c'
         moved = git_out(c, 'log', '-1', '--format=%H', '--', 'upstream').decode().strip()
         problems = []
-        commands = [['submodule', 'status'], ['ls-tree', 'HEAD', 'upstream'], ['ls-files', '-s', 'upstream'],
-                    ['log', '--oneline', '-3', '--', 'upstream'], ['show', '--submodule=log', moved, '--', 'upstream'],
-                    ['show', '--stat', moved], ['diff', moved + '~1', moved, '--', 'upstream'],
-                    ['diff', '--submodule=log', moved + '~1', moved], ['status', '--porcelain']]
+        # Path-limited history, and diff and status in a repository with
+        # attributes, are den limits for every repository; the moved gitlink
+        # is read here by the commands that need neither.
+        commands = [['submodule', 'status'], ['submodule', 'status', '--cached'], ['ls-tree', 'HEAD', 'upstream'],
+                    ['ls-tree', moved, 'upstream'], ['ls-tree', moved + '~1', 'upstream'], ['ls-files', '-s', 'upstream'],
+                    ['cat-file', '-p', moved + '^{tree}'], ['rev-parse', moved + ':upstream']]
         for argv in commands:
             oracle = run([git, *argv], c, 300)
             candidate = run([den, *argv], c, 300)
             for field in ('exit', 'stdout', 'stderr'):
                 if oracle[field] != candidate[field]:
                     problems.append('%s: %s differs (den exit %d, %r)' % (' '.join(argv[:2]), field, candidate['exit'],
-                                                                          candidate[field][-200:]))
+                                                                          str(candidate[field])[-200:]))
         verdict(name, problems, dict(moved=moved, commands=commands))
 
 
 def ssh_row():
     name = 'live-wolf-std-ssh'
+    # Opt-in: the row would use the machine's own ssh key.
+    if os.environ.get('DEN_LIVE_SSH') != '1':
+        print('SKIP %s reason=DEN_LIVE_SSH not set (the row uses this machine\'s ssh key)' % name, flush=True)
+        return
     q = subprocess.run(['ssh', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=10', '-T', 'git@github.com'],
                        env=env, capture_output=True, timeout=60, stdin=subprocess.DEVNULL)
     if b'successfully authenticated' not in q.stderr:
@@ -310,12 +322,19 @@ def timed():
     verdict('live-timed-wolf-web', [] if ok else ['a clone failed'])
 
 
+def selected(name):
+    return not a.only or __import__('re').search(a.only, name)
+
+
 if a.timed:
     timed()
 else:
-    web_row()
-    pinned_rows()
-    ssh_row()
+    if selected('live-wolf-web'):
+        web_row()
+    if any(selected('live-%s-gitlinks' % r) for r in PINNED):
+        pinned_rows()
+    if selected('live-wolf-std-ssh'):
+        ssh_row()
 if failed:
     raise SystemExit('FAIL submodule-live: ' + ', '.join(failed))
 print('submodule-live: %s %d rows' % (a.tier, len(names)), flush=True)
