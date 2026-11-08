@@ -587,22 +587,26 @@ REFUSALS = [
     ['submodule', 'update', '--remote'], ['submodule', 'update', '--merge'], ['submodule', 'update', '--rebase'],
     ['clone', '--shallow-submodules', '--recurse-submodules', 'x', 'y'], ['clone', '--remote-submodules', 'x', 'y'],
     ['mv', 'abs', 'abs2'], ['restore', 'abs'], ['stash'],
+    ['push', '--recurse-submodules=check', 'origin', 'main'], ['push', '--recurse-submodules=on-demand', 'origin', 'main'],
 ]
+RECURSE = {'GIT_CONFIG_COUNT': '2', 'GIT_CONFIG_KEY_0': 'protocol.file.allow', 'GIT_CONFIG_VALUE_0': 'always',
+           'GIT_CONFIG_KEY_1': 'submodule.recurse', 'GIT_CONFIG_VALUE_1': 'true'}
 
 
 def family_refusals():
     """Named refusals that remain (vc25b and later): den alone, each must
     refuse by name with exit 2 and change nothing."""
     seed('clone', recursive_clone)
-    for argv in REFUSALS:
-        name = 'refusal-' + '-'.join(x.strip('-') for x in argv[:3])
+    cases = [(argv, ALLOW_FILE, 'refusal-' + '-'.join(x.strip('-') for x in argv[:3])) for argv in REFUSALS]
+    cases.append((['push', 'origin', 'main'], RECURSE, 'refusal-push-submodule-recurse-true'))
+    for argv, extra, name in cases:
         if a.only and not re.search(a.only, name):
             continue
         if world.exists():
             shutil.rmtree(world)
         shutil.copytree(seeds['clone'], world, symlinks=True)
         before = state(world)
-        q = run(D, argv, world / 'c', ALLOW_FILE)
+        q = run(D, argv, world / 'c', extra)
         ok = q['status'] == 2 and 'not yet implemented' in q['stderr'] and state(world) == before
         rows.append(dict(name=name, argv=argv, equal=ok, known=False, refusal=True, actual=dict(result=q)))
         print('PASS' if ok else 'FAIL', name, '' if ok else json.dumps(q), flush=True)
