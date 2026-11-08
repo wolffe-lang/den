@@ -5,7 +5,8 @@
 # discovery and RPC refusals with failed-clone cleanup, receive-pack
 # side-band, smart-git interop against the pinned git-http-backend over
 # plain and authenticated TLS, the live github.com rows (a named SKIP
-# without network), and vc23's packs over 128 MiB on every transport.
+# without network), vc23's packs over 128 MiB on every transport, and
+# vc24's wire gaps (push, clone, ls-remote, fetch, clone memory).
 # Every output directory must be fresh.
 set -eu
 DEN_ROOT=$(cd "$(dirname "$0")/.." && pwd)
@@ -55,7 +56,8 @@ for tier in native release; do
     step "$tier-http-tls-git" tools/env python3 -I tools/http-git-test.py --tier "$tier" --transport tls --auth
     step "$tier-http-live" tools/env python3 -I tools/http-live-test.py --tier "$tier"
     step "$tier-large-pack" tools/env python3 -I tools/large-pack-test.py --tier "$tier"
+    step "$tier-wire-gaps" tools/env python3 -I tools/wire-gaps-test.py --tier "$tier"
 done
 step actual-checked-http checked http_test
 step actual-checked-http-advertisement checked http_redirect_test
-echo 'http: native/release units, peers, TLS, memory, refusals, smart-git interop, live and large-pack rows; checked units'
+echo 'http: native/release units, peers, TLS, memory, refusals, smart-git interop, live, large-pack and wire-gap rows; checked units'
