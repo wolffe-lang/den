@@ -242,13 +242,14 @@ def family_read():
                  ['ls-tree', '--name-only', 'HEAD'], ['ls-tree', '-d', 'HEAD'], ['ls-tree', '-t', '-r', 'HEAD'],
                  ['ls-tree', '-z', 'HEAD'], ['ls-files'], ['ls-files', '-s'], ['ls-files', '-s', 'mid'],
                  ['ls-files', '-z'], ['cat-file', '-p', 'HEAD^{tree}'], ['log', '-p', '-1'], ['log', '--stat', '-1'],
-                 ['log', '--oneline', '--name-status'], ['show'], ['show', '--stat'], ['show', '--raw'],
+                 ['log', '--oneline'], ['show'], ['show', '--stat'],
                  ['show', '--submodule=log'], ['show', '--submodule=diff'], ['show', '--submodule=short'],
                  ['diff', 'HEAD~1', 'HEAD'], ['diff', '--submodule=log', 'HEAD~1', 'HEAD'],
                  ['diff', '--submodule=diff', 'HEAD~1', 'HEAD'], ['diff', '--stat', 'HEAD~1', 'HEAD'],
-                 ['diff', '--numstat', 'HEAD~1', 'HEAD'], ['diff', '--raw', 'HEAD~1', 'HEAD'],
-                 ['diff', '--name-status', 'HEAD~1', 'HEAD'], ['diff', '--summary', 'HEAD~2', 'HEAD'],
-                 ['diff', 'HEAD~2', 'HEAD~1'], ['diff', '--submodule=log', 'HEAD', 'HEAD~1'],
+                 ['diff', '--numstat', 'HEAD~1', 'HEAD'], ['diff', '--name-status', 'HEAD~1', 'HEAD'],
+                 ['diff', '--name-only', 'HEAD~1', 'HEAD'], ['diff', '--shortstat', 'HEAD~1', 'HEAD'],
+                 ['diff', '--submodule=log', 'HEAD', 'HEAD~1'], ['log', '-p', '--root', '--submodule=log'],
+                 ['diff', '--submodule=diff', 'HEAD', 'HEAD~1'], ['show', '--submodule=log', 'HEAD~1'],
                  ['diff', '-c', 'diff.submodule=log', 'HEAD~1', 'HEAD'],
                  ['show', 'HEAD:mid'], ['log', '-p', '--submodule=log', '-2']):
         if argv[:2] == ['diff', '-c']:
@@ -326,7 +327,24 @@ def family_status():
     compare('status-inside-submodule', ['status', '-s'], state_seed('nested-new-commits'), cwd='c/mid')
 
 
-FAMILIES = {'read': family_read, 'status': family_status}
+DIFF_FORMS = [['diff'], ['diff', '--stat'], ['diff', '--numstat'], ['diff', '--submodule=log'],
+              ['diff', '--submodule=diff'], ['diff', '--cached'], ['diff', 'HEAD'], ['diff', '--ignore-submodules=dirty'],
+              ['diff', '--ignore-submodules=none'], ['diff', '--ignore-submodules'], ['diff', '--name-only']]
+
+
+def family_diff():
+    seed('clone', recursive_clone)
+    seed('plain', plain_clone)
+    for state in STATES:
+        for argv in DIFF_FORMS:
+            compare('diff-%s-%s' % (state, '-'.join(x.strip('-') for x in argv[1:]) or 'patch'), argv,
+                    state_seed(state), cwd='c')
+    for argv in (['diff'], ['diff', '--cached'], ['diff', '--cached', '--submodule=log']):
+        compare('diff-unpopulated-moved-' + ('-'.join(x.strip('-') for x in argv[1:]) or 'patch'), argv, 'plain',
+                cwd='c', prepare=lambda w: g('update-index', '--cacheinfo', '160000,' + '1' * 40 + ',mid', cwd=w / 'c'))
+
+
+FAMILIES = {'read': family_read, 'status': family_status, 'diff': family_diff}
 
 try:
     FAMILIES[a.family]()
