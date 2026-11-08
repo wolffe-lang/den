@@ -32,9 +32,15 @@
   read outside a reader and kept outside a region, and from the closure walk's
   queue of names. The idx parse keeps one name an object, tree walks reclaim
   their readers, and the closure walk queues ranks.
+- Clone CPU (den#63): a checkout, switch, reset, restore or merge abort reads
+  its blobs through one reader, so the pack index is parsed once rather than
+  twice for every file written; a read through an opened reader re-checks its
+  pack's size, header and trailer binding without rescanning every offset. A
+  reader whose packs cannot open up front still serves loose objects, and
+  fails a packed read with the error a single read gives.
 - `tools/wire-gaps-test.py` holds push, clone, ls-remote, fetch and clone
-  memory to the pinned Git on every transport; `tools/rev-parse-test.py` holds
-  rev-parse. The oracle's `rev-parse` case is a parity row and
+  memory to the pinned Git on every transport, and a pelt clone's CPU to at
+  most ten times the pinned Git's; `tools/rev-parse-test.py` holds rev-parse. The oracle's `rev-parse` case is a parity row and
   `rev-parse-parseopt` keeps the strict not-yet witness.
 
 ## Unreleased — den clones itself
