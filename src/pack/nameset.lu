@@ -1,0 +1,129 @@
+// den#73: a set of object names with a small value each (an object type),
+// by open addressing on a name's leading 60 bits, so a closure walk tests
+// membership in constant time where a Map scans its keys. Names are kept as
+// bytes in one flat list and values as codes, so a walk may add to a set
+// from inside its own regions: only bytes and ints are stored.
+
+/// The names, each once, with the value given when it was added.
+pub struct NameSet {
+    slots: List[int],
+    bytes: List[byte],
+    starts: List[int],
+    codes: List[int],
+    mask: int,
+}
+
+fn nibble(b: int) -> int {
+    if b >= 48 && b <= 57 { return b - 48 }
+    if b >= 97 && b <= 102 { return b - 87 }
+    if b >= 65 && b <= 70 { return b - 55 }
+    b & 15
+}
+
+fn name_key(raw: List[byte]) -> int {
+    let n = if raw.len < 15 then raw.len else 15
+    var key = 0
+    for i in 0..n { key = key * 16 + nibble(raw[i] as int) }
+    key
+}
+
+fn empty_slots(count: int) -> List[int] {
+    var slots = List[int]()
+    (mut slots).reserve(count)
+    for _ in 0..count { (mut slots).push(-1) }
+    slots
+}
+
+fn value_code(value: str) -> int {
+    match value {
+        "" => 0,
+        "commit" => 1,
+        "tree" => 2,
+        "blob" => 3,
+        "tag" => 4,
+        _ => 5,
+    }
+}
+
+fn code_value(code: int) -> str {
+    match code {
+        1 => "commit",
+        2 => "tree",
+        3 => "blob",
+        4 => "tag",
+        5 => "other",
+        _ => "",
+    }
+}
+
+/// An empty set.
+pub fn nameset() -> NameSet {
+    NameSet {
+        slots: empty_slots(1024),
+        bytes: List[byte](),
+        starts: [0],
+        codes: List[int](),
+        mask: 1023,
+    }
+}
+
+fn same_name(s: NameSet, at: int, raw: List[byte]) -> bool {
+    let start = s.starts[at], end = s.starts[at + 1]
+    if end - start != raw.len { return false }
+    for i in 0..raw.len { if s.bytes[start + i] != raw[i] { return false } }
+    true
+}
+
+// The slot holding the name, or the empty slot where it would go.
+fn slot_for(s: NameSet, raw: List[byte]) -> int {
+    var i = name_key(raw) & s.mask
+    loop {
+        let at = s.slots[i]
+        if at < 0 || same_name(s, at, raw) { return i }
+        i = i + 1 & s.mask
+    }
+}
+
+/// Whether name is in the set.
+pub fn names_has(s: NameSet, name: str) -> bool {
+    s.slots[slot_for(s, name.bytes())] >= 0
+}
+
+/// The value name was added with ("commit", "tree", "blob", "tag", "" or
+/// "other"), or "" when it is absent.
+pub fn names_value(s: NameSet, name: str) -> str {
+    let at = s.slots[slot_for(s, name.bytes())]
+    if at < 0 { return "" }
+    code_value(s.codes[at])
+}
+
+/// The number of names in the set.
+pub fn names_len(s: NameSet) -> int { s.codes.len }
+
+/// Add name with value (an object type or ""); false, and no change, when
+/// name is present.
+pub fn names_add(mut s: NameSet, name: str, value: str) -> bool {
+    let raw = name.bytes()
+    let slot = slot_for(s, raw)
+    if s.slots[slot] >= 0 { return false }
+    s.slots[slot] = s.codes.len
+    for b in raw { (mut s.bytes).push(b) }
+    (mut s.starts).push(s.bytes.len)
+    (mut s.codes).push(value_code(value))
+    if s.codes.len * 2 > s.slots.len {
+        let size = s.slots.len * 2
+        (mut s.slots).clear()
+        for _ in 0..size { (mut s.slots).push(-1) }
+        s.mask = size - 1
+        for at in 0..s.codes.len {
+            var key = 0
+            let start = s.starts[at], end = s.starts[at + 1]
+            let n = if end - start < 15 then end - start else 15
+            for i in 0..n { key = key * 16 + nibble(s.bytes[start + i] as int) }
+            var i = key & s.mask
+            while s.slots[i] >= 0 { i = i + 1 & s.mask }
+            s.slots[i] = at
+        }
+    }
+    true
+}
