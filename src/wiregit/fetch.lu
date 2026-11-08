@@ -47,6 +47,7 @@ fn fetch_selected(
 ) -> List[wire.Ref] ! object.StoreErrors {
     let opened = wire_url(repo.gitdir, repo.config, url, false)?
     transport.check_http_configuration(opened, repo.config)?
+    object_checks(repo.config, "fetch")?
     var p = transport.peer(opened, "upload-pack")?
     var active = true
     defer { if active { let _ = transport.close_peer(mut p) else 1 } }

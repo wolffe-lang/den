@@ -398,13 +398,15 @@ fn receive_configuration(repo: repository.Repo) -> () ! object.StoreErrors {
     if (repo.config["core.bare"] else "false") != "true" {
         return Unsupported("receive-pack requires bare repository")
     }
+    object_checks(repo.config, "receive")?
     for (key, _) in repo.config.pairs() {
         if key.starts_with("receive.") &&
             key != "receive.denynonfastforwards" &&
-            key != "receive.denydeletes" {
+            key != "receive.denydeletes" &&
+            key != "receive.fsckobjects" {
             return Unsupported("receive-pack configuration {key}")
         }
-        if key == "transfer.hiderefs" || key == "transfer.fsckobjects" {
+        if key == "transfer.hiderefs" {
             return Unsupported("receive-pack configuration {key}")
         }
     }

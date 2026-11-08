@@ -1,0 +1,32 @@
+// Clean-room: Git v2.56.0 Documentation/config/fetch.adoc
+// (fetch.fsckObjects), config/receive.adoc (receive.fsckObjects) and
+// config/transfer.adoc (transfer.fsckObjects): each defaults to false, and
+// fetch or receive falls back to transfer when unset. No implementation
+// consulted.
+
+fn checks_bool(key: str, value: str) -> bool ! {Unsupported(str)} {
+    let lower = value.lower()
+    if lower == "true" || lower == "yes" || lower == "on" || lower == "1" { return true }
+    if lower == "false" || lower == "no" || lower == "off" || lower == "0" || lower == "" {
+        return false
+    }
+    Unsupported("bad boolean config value '{value}' for '{key}'")
+}
+
+/// vc26: den validates no identity line on receipt, as Git's defaults do,
+/// and does not run Git's full object checks. A configuration that asks for
+/// them (SIDE.fsckObjects, else transfer.fsckObjects) is refused by name,
+/// never ignored. SIDE is "fetch" or "receive".
+pub fn object_checks(config: Map[str, str], side: str) -> () ! {Unsupported(str)} {
+    let own = config["{side}.fsckobjects"] else "\0"
+    if own != "\0" {
+        if checks_bool("{side}.fsckObjects", own)? {
+            return Unsupported("{side}.fsckObjects: den does not run git's full object checks")
+        }
+        return
+    }
+    let common = config["transfer.fsckobjects"] else "\0"
+    if common != "\0" && checks_bool("transfer.fsckObjects", common)? {
+        return Unsupported("transfer.fsckObjects: den does not run git's full object checks")
+    }
+}
