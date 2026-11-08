@@ -1,6 +1,7 @@
 // Git 2.56.0 git-log/git-show/pretty-formats documentation and binary witnesses.
 use std.fs
 use commit
+use commit_format
 use diff
 use notes
 use object
@@ -225,6 +226,26 @@ fn dispatch(args: List[str]) -> int ! worktree.WorkErrors {
             return Unsupported("history local timezone {tz}")
         }
     }
+    // vc26: a user format. `format:` separates entries with a newline;
+    // `tformat:`, and a format holding a `%`, ends each entry with one; an
+    // empty format prints nothing, as measured.
+    var user = "", terminated = true, user_given = false
+    if format.starts_with("format:") {
+        user = format[7..]
+        terminated = false
+        user_given = true
+    } else if format.starts_with("tformat:") {
+        user = format[8..]
+        user_given = true
+    } else if format == "" {
+        user_given = true
+    } else if format.contains("%") {
+        user = format
+        user_given = true
+    }
+    if user_given && (display.patch || display.stat) {
+        return Unsupported("history user format with a patch or stat")
+    }
     let terminal = os_isatty(fs.stdout().fd) else false
     decoration = match decoration.lower() {
         "true" | "yes" | "on" | "1" => "short",
@@ -314,6 +335,7 @@ fn dispatch(args: List[str]) -> int ! worktree.WorkErrors {
             }
             var tag_depth = 0
             while stored.kind == "tag" {
+                if user_given { return Unsupported("show a tag with a user format") }
                 tag_depth += 1
                 if tag_depth > 64 { return limit }
                 let headers = object.parse_tag(stored.data, "sha1")?
@@ -329,12 +351,30 @@ fn dispatch(args: List[str]) -> int ! worktree.WorkErrors {
                         id = oid.parse("sha1", str_from_utf8(field.value)?)?
                     }
                     if field.key == "tagger" && format != "oneline" {
-                        let (person, seconds, zone) = pretty.identity(field.value)?
-                        add(
-                            mut out,
-                            "Tagger: {person}\nDate:   {pretty.date(seconds, zone, date_style)?}\n".
-                                bytes(),
-                        )
+                        // vc26: the stored bytes, split as Git reads them; a
+                        // tagger Git cannot split prints no lines.
+                        let raw = commit_format.raw_identity(field.value)
+                        if raw.split {
+                            let (seconds, zone) = pretty.identity_time(raw)?
+                            // Git writes the tag line, then its fatal line.
+                            let when_text = pretty.shown(
+                                seconds,
+                                zone,
+                                date_style,
+                            ) else |e| match e {
+                                Fatal(message) => {
+                                    var stdout = fs.stdout()
+                                    fs.write_chunk(mut stdout, out)?
+                                    eprint("fatal: {message}")
+                                    return 128
+                                },
+                                Unsupported(feature) => { return Unsupported(feature) },
+                                _ => { return invalid },
+                            }
+                            add(mut out, "Tagger: ".bytes())
+                            add(mut out, pretty.person(raw))
+                            add(mut out, "\nDate:   {when_text}\n".bytes())
+                        }
                     }
                 }
                 (mut out).push(10 as byte)
@@ -375,6 +415,34 @@ fn dispatch(args: List[str]) -> int ! worktree.WorkErrors {
                 (ctx.repo.config["core.attributesfile"] else "") != "" {
                 return Unsupported("diff attributes")
             }
+        }
+        if user_given {
+            if user == "" { continue }
+            var short = [abbreviate(ctx.repo, value.id, minimum)?]
+            for parent in value.parents { (mut short).push(abbreviate(ctx.repo, parent, minimum)?) }
+            let tree_short = abbreviate(ctx.repo, value.tree, minimum)?
+            let entry = pretty.user_format(
+                value,
+                user,
+                date_style,
+                short,
+                tree_short,
+            ) else |e| match e {
+                Fatal(message) => {
+                    var stdout = fs.stdout()
+                    fs.write_chunk(mut stdout, out)?
+                    eprint("fatal: {message}")
+                    return 128
+                },
+                Unsupported(feature) => { return Unsupported(feature) },
+                _ => { return invalid },
+            }
+            if !terminated && printed_commit { (mut out).push(10 as byte) }
+            add(mut out, entry)
+            if terminated { (mut out).push(10 as byte) }
+            printed_commit = true
+            if out.len > 134217728 { return limit }
+            continue
         }
         if printed_commit && format != "oneline" { (mut out).push(10 as byte) }
         printed_commit = true
