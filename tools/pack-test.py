@@ -163,7 +163,11 @@ def session_row(name, r, body, mutate=None, cap=16777216, must=None):
     good = p.returncode == 0 and p.stdout.decode(errors='replace') == expected and not p.stderr and (must is None or must in expected)
     rows.append(dict(name=name, ok=good, code=p.returncode, stdout=p.stdout.decode(errors='replace'), expected=expected, stderr=p.stderr.decode(errors='replace')))
     if not good: print(name, p.returncode, p.stdout[:300], 'expected', expected, p.stderr, flush=True)
-def flip(at): return lambda b: b[:at] + bytes([b[at] ^ 1]) + b[at+1:]
+def flip(at):
+    def mutate(b):
+        i = at % len(b)
+        return b[:i] + bytes([b[i] ^ 1]) + b[i+1:]
+    return mutate
 for name, mutate, must in [('same', lambda b: b, 'second blob 9 '), ('shorter', lambda b: b[:-1], 'second error'),
                            ('longer', lambda b: b + b'\0', 'second error'),
                            ('header', flip(7), 'pack version'), ('count', flip(11), 'pack object count'),
