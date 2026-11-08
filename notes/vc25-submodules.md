@@ -68,6 +68,20 @@ The macOS record now also runs the gate's own leaves over the commands this bran
 
 `tools/submodule-live-test.py`, natively through `tools/check-submodule`, over https against github.com, read-only: `live-wolf-web` clones wolf-web with `--recurse-submodules` by each tool (four submodules two levels down, names unlike their paths) and compares the process bytes and, for the superproject and every repository under `.git/modules`, refs, HEAD, every reachable object, the config file's bytes and the worktree; its guard holds what the clones take, the superproject's and every submodule remote's branches and tags, and retries once. `live-wolf-interp-gitlinks`, `live-wolf-std-gitlinks` and `live-wolf-lsp-gitlinks` read the commit that last moved each release-pinned gitlink (`submodule status` and `--cached`, `ls-tree` at that commit, its parent and HEAD, `ls-files -s`, `cat-file -p` of its tree, `rev-parse <commit>:upstream`) in one clone, by both tools, byte for byte. These repositories carry `.gitattributes`, so `log -- <path>`, `diff` and `status` there meet den limits for every repository (path-limited history, worktree attributes) and are left out of the rows. `live-wolf-std-ssh` runs only with `DEN_LIVE_SSH=1`, where an ssh key for github.com answers, and is a named SKIP otherwise. Every row is a named SKIP without github.com or a root bundle.
 
+### Measured (item 10)
+
+All on the Apple silicon laptop, each tool's clone interleaved with the other's, behind the build lock, against the field Git 2.56.0; wall time and the clone's own CPU from wait4 (`tools/submodule-live-test.py --timed`). A measurement, not a gate.
+
+| clone (`-q --recurse-submodules`) | runs | Git wall | den wall | wall ratio | Git CPU | den CPU | CPU ratio |
+|---|---|---|---|---|---|---|---|
+| wolf-web, den with this lane's own transition reader | 3 | 95.4 s | 492.7 s | 5.17x (4.70 to 5.67) | 25.2 s | 240.1 s | 9.54x (9.48 to 10.10) |
+| wolf-web, den with vc24's checkout reader instead | 1 | 68.6 s | 302.6 s | 4.41x | 25.7 s | 221.8 s | 8.63x |
+| a public superproject of about 485 MB whose largest submodule is llama.cpp, two scp-like URLs through `url.https://github.com/.insteadOf`, vc24's reader | 1 | 192.2 s | 430.5 s | 2.24x | 37.3 s | 294.9 s | 7.92x |
+
+Medians, with the spread over the three runs. Peak RSS: Git about 130 MB and den about 750 MB for wolf-web; about 333 MB and 651 MB for the larger one.
+
+Against the prediction (wall 1.6x, from 1.3x to 2.2x; CPU 9x, from 6x to 13x): CPU falls inside it, wall falls outside it for wolf-web. The cause of the wall gap is not profiled. Git's clone here is mostly waiting on the network while den's is mostly computing (240 of 493 s), so den's https and pack-indexing CPU is the likely place, not proven. Before either reader, a transition loaded the pack index once per blob, and den's wolf-web clone did not finish in 27 minutes (25,777 files): that is the cost vc24's checkout reader removes, and this lane's own reader for it is dropped in favour of vc24's.
+
 ### A refusal during the work
 
 Before the timed row ran, I asked to stop my own queued timed job (it was only waiting for the build lock) so the row families could run first on the new build. The session's permission classifier refused it ("Interfere With Workloads"). The job was left to run, and the families were run after it instead, so neither perturbed the other's timing; no other way of stopping it was tried.
