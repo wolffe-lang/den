@@ -647,6 +647,94 @@ def family_work():
         compare('work-nosub-' + '-'.join(x.strip('-') for x in argv), argv, s, cwd='c')
 
 
+def fetch_seed(nested):
+    """The recursive clone, then a new leaf commit recorded in top at abs; with
+    NESTED, a new leaf commit recorded in mid at deps/leaf, and that mid
+    commit recorded in top instead."""
+    def build(w):
+        recursive_clone(w)
+        pub = w / 'pub'
+        g('clone', '-q', '--recurse-submodules', 'file://' + str(w / 'top.git'), 'pub', cwd=w, extra=ALLOW_FILE)
+        if nested:
+            leaf = pub / 'mid/deps/leaf'
+            g('checkout', '-q', 'main', cwd=leaf)
+            (leaf / 'leaf.txt').write_text('one\ntwo\nthree\n')
+            g('commit', '-q', '-am', 'leaf three', cwd=leaf)
+            g('push', '-q', 'origin', 'main', cwd=leaf)
+            g('checkout', '-q', 'main', cwd=pub / 'mid')
+            g('add', 'deps/leaf', cwd=pub / 'mid')
+            commit(pub / 'mid', 'mid moves leaf')
+            g('push', '-q', 'origin', 'main', cwd=pub / 'mid')
+            g('add', 'mid', cwd=pub)
+            commit(pub, 'top moves mid')
+        else:
+            g('checkout', '-q', 'main', cwd=pub / 'abs')
+            (pub / 'abs/leaf.txt').write_text('one\ntwo\nfour\n')
+            g('commit', '-q', '-am', 'leaf four', cwd=pub / 'abs')
+            g('push', '-q', 'origin', 'main', cwd=pub / 'abs')
+            g('add', 'abs', cwd=pub)
+            commit(pub, 'top moves abs')
+        g('push', '-q', 'origin', 'main', cwd=pub)
+        shutil.rmtree(pub)
+    return build
+
+
+def with_config(*pairs):
+    extra = dict(ALLOW_FILE)
+    extra['GIT_CONFIG_COUNT'] = str(1 + len(pairs))
+    for i, (key, value) in enumerate(pairs):
+        extra['GIT_CONFIG_KEY_%d' % (i + 1)] = key
+        extra['GIT_CONFIG_VALUE_%d' % (i + 1)] = value
+    return extra
+
+
+def family_fetch():
+    """git-fetch(1) --recurse-submodules and fetch.recurseSubmodules: a
+    superproject's fetch fetches its submodules on demand, before pull's
+    merge."""
+    seed('fetch-abs', fetch_seed(False))
+    seed('fetch-nested', fetch_seed(True))
+    for seed_name in ('fetch-abs', 'fetch-nested'):
+        label = seed_name[6:]
+        for argv in (['fetch'], ['fetch', '-q'], ['fetch', 'origin'], ['fetch', '--no-recurse-submodules'],
+                     ['fetch', '--recurse-submodules'], ['fetch', '--recurse-submodules=no'],
+                     ['fetch', '--recurse-submodules=on-demand'], ['fetch', '--recurse-submodules=yes'],
+                     ['fetch', '--recurse-submodules=bogus'], ['pull'], ['pull', '-q'], ['pull', '--ff-only'],
+                     ['pull', '--no-recurse-submodules']):
+            compare('fetch-%s-%s' % (label, '-'.join(x.strip('-') for x in argv)), argv, seed_name, cwd='c',
+                    extra=ALLOW_FILE)
+        compare('fetch-%s-status-after-pull' % label, ['status'], seed_name, cwd='c', extra=ALLOW_FILE,
+                prepare=lambda w: g('pull', '-q', cwd=w / 'c', extra=ALLOW_FILE))
+        compare('fetch-%s-config-false' % label, ['fetch'], seed_name, cwd='c',
+                extra=with_config(('fetch.recurseSubmodules', 'false')))
+        compare('fetch-%s-config-yes' % label, ['fetch'], seed_name, cwd='c',
+                extra=with_config(('fetch.recurseSubmodules', 'true')))
+        compare('fetch-%s-config-false-cli-yes' % label, ['fetch', '--recurse-submodules'], seed_name, cwd='c',
+                extra=with_config(('fetch.recurseSubmodules', 'false')))
+        compare('fetch-%s-submodule-recurse' % label, ['fetch'], seed_name, cwd='c',
+                extra=with_config(('submodule.recurse', 'true')))
+        compare('fetch-%s-default-policy' % label, ['fetch'], seed_name, cwd='c')
+        compare('fetch-%s-inside-submodule' % label, ['fetch'], seed_name, cwd='c/mid', extra=ALLOW_FILE)
+    compare('fetch-abs-name-false', ['fetch'], 'fetch-abs', cwd='c',
+            extra=with_config(('submodule.abs.fetchRecurseSubmodules', 'false')))
+    compare('fetch-abs-name-false-cli', ['fetch', '--recurse-submodules=on-demand'], 'fetch-abs', cwd='c',
+            extra=with_config(('submodule.abs.fetchRecurseSubmodules', 'false')))
+
+    def unpopulated(w):
+        shutil.rmtree(w / 'c/abs')
+        (w / 'c/abs').mkdir()
+
+    compare('fetch-abs-unpopulated', ['fetch'], 'fetch-abs', cwd='c', extra=ALLOW_FILE, prepare=unpopulated)
+    compare('fetch-abs-already-present', ['fetch'], 'fetch-abs', cwd='c', extra=ALLOW_FILE,
+            prepare=lambda w: g('fetch', '-q', cwd=w / 'c/abs', extra=ALLOW_FILE))
+
+    def gone(w):
+        (w / 'leaf.git').rename(w / 'leaf-gone.git')
+
+    compare('fetch-abs-submodule-error', ['fetch'], 'fetch-abs', cwd='c', extra=ALLOW_FILE, prepare=gone)
+    compare('fetch-abs-pull-submodule-error', ['pull'], 'fetch-abs', cwd='c', extra=ALLOW_FILE, prepare=gone)
+
+
 REFUSALS = [
     ['submodule', 'add', '../x.git', 'x'], ['submodule', 'deinit', 'abs'], ['submodule', 'set-url', 'abs', '../x'],
     ['submodule', 'set-branch', '-b', 'main', 'abs'], ['submodule', 'summary'], ['submodule', 'absorbgitdirs'],
@@ -654,6 +742,7 @@ REFUSALS = [
     ['clone', '--shallow-submodules', '--recurse-submodules', 'x', 'y'], ['clone', '--remote-submodules', 'x', 'y'],
     ['mv', 'abs', 'abs2'], ['restore', 'abs'], ['stash'],
     ['push', '--recurse-submodules=check', 'origin', 'main'], ['push', '--recurse-submodules=on-demand', 'origin', 'main'],
+    ['pull', '--recurse-submodules'], ['pull', '--recurse-submodules=on-demand'],
 ]
 RECURSE = {'GIT_CONFIG_COUNT': '2', 'GIT_CONFIG_KEY_0': 'protocol.file.allow', 'GIT_CONFIG_VALUE_0': 'always',
            'GIT_CONFIG_KEY_1': 'submodule.recurse', 'GIT_CONFIG_VALUE_1': 'true'}
@@ -665,6 +754,7 @@ def family_refusals():
     seed('clone', recursive_clone)
     cases = [(argv, ALLOW_FILE, 'refusal-' + '-'.join(x.strip('-') for x in argv[:3]), None) for argv in REFUSALS]
     cases.append((['push', 'origin', 'main'], RECURSE, 'refusal-push-submodule-recurse-true', None))
+    cases.append((['pull'], RECURSE, 'refusal-pull-submodule-recurse-true', None))
     # Checkout runs where branches have upstreams; making a tracking branch
     # (from a remote-tracking start, or by guessing a remote's branch) stays
     # refused by name.
@@ -689,7 +779,7 @@ def family_refusals():
         print('PASS' if ok else 'FAIL', name, '' if ok else json.dumps(q), flush=True)
 
 
-FAMILIES = {'read': family_read, 'status': family_status, 'diff': family_diff, 'clone': family_clone, 'hostile': family_hostile, 'transport': family_transport, 'work': family_work, 'refusals': family_refusals}
+FAMILIES = {'read': family_read, 'status': family_status, 'diff': family_diff, 'clone': family_clone, 'hostile': family_hostile, 'transport': family_transport, 'work': family_work, 'fetch': family_fetch, 'refusals': family_refusals}
 
 try:
     FAMILIES[a.family]()
