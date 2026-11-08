@@ -1,7 +1,18 @@
+use std.sort
+
 // Original bounded alphabet Huffman construction. No recursion or external code.
-// Repeatedly join the two lightest unparented nodes. If a depth exceeds the
-// format limit, halve positive weights (round up) and rebuild. This converges
-// to equal positive weights and hence a balanced tree, <=9 bits for 286 leaves.
+// Repeatedly join the two lightest unparented nodes, the lower index first on
+// equal weights. If a depth exceeds the format limit, halve positive weights
+// (round up) and rebuild. This converges to equal positive weights and hence a
+// balanced tree, <=9 bits for 286 leaves.
+//
+// The leaves are taken in (weight, index) order and the joined nodes in the
+// order they are made, which is their (weight, index) order too: a join never
+// weighs less than the one before it. So the lightest unparented node is the
+// lighter head of the two queues, the leaf on a tie (a leaf's index is below
+// every joined node's), and each join is the one a scan of all nodes would
+// pick, in time linear after the sort (den#73: the scan was quadratic, near
+// a tenth of serving a clone's CPU).
 fn lengths(freq: List[int], maximum: int, complete: bool) -> List[int] {
     var weights = copy freq
     var used = 0
@@ -17,22 +28,27 @@ fn lengths(freq: List[int], maximum: int, complete: bool) -> List[int] {
     loop {
         var deepest = 0
         region construction {
+            let n = weights.len
+            var leaves = List[int]()
+            for i in 0..n { if weights[i] != 0 { (mut leaves).push(weights[i] * 512 + i) } }
+            sort.sort_ints(mut leaves)
             var nodes = copy weights
             var parent = List[int]()
             for _ in weights { (mut parent).push(-1) }
+            var leaf = 0, joined = n
             for _ in 1..used {
-                var a = -1
-                var b = -1
-                for i in 0..nodes.len {
-                    if parent[i] < 0 && nodes[i] != 0 {
-                        if a < 0 || nodes[i] < nodes[a] {
-                            b = a
-                            a = i
-                        } else if b < 0 || nodes[i] < nodes[b] {
-                            b = i
-                        }
+                var pair = [0, 0]
+                for k in 0..2 {
+                    if leaf < leaves.len &&
+                        (joined >= nodes.len || nodes[leaves[leaf] % 512] <= nodes[joined]) {
+                        pair[k] = leaves[leaf] % 512
+                        leaf += 1
+                    } else {
+                        pair[k] = joined
+                        joined += 1
                     }
                 }
+                let a = pair[0], b = pair[1]
                 let sum = nodes[a] + nodes[b]
                 parent[a] = nodes.len
                 parent[b] = nodes.len
