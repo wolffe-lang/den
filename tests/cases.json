@@ -316,6 +316,16 @@
       "rev-parse",
       "HEAD^{tree}"
     ],
+    "lane": "M3, vc10",
+    "require_parity": true
+  },
+  {
+    "name": "rev-parse-parseopt",
+    "repo": "empty",
+    "args": [
+      "rev-parse",
+      "--parseopt"
+    ],
     "lane": "M3, vc10"
   },
   {
