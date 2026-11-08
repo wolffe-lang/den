@@ -130,9 +130,13 @@ fn dispatch(args: List[str]) -> int ! worktree.WorkErrors {
             return Unsupported("blame uncommitted contents")
         }
     }
-    let out = render(ctx, result, options)?
+    let rendered = render_checked(ctx, result, options)?
     var stdout = fs.stdout()
-    fs.write_chunk(mut stdout, out)?
+    fs.write_chunk(mut stdout, rendered.out)?
+    if rendered.fatal != "" {
+        eprint("fatal: {rendered.fatal}")
+        return 128
+    }
     0
 }
 

@@ -1,9 +1,9 @@
 use blamerange
+use commit_format
 use difftext
 use history
 use object
 use oid
-use pretty
 use worktree
 
 fn add(mut out: List[byte], data: List[byte]) { for b in data { (mut out).push(b) } }
@@ -18,26 +18,123 @@ fn line(mut out: List[byte], key: str, value: List[byte]) {
 
 fn pad(mut out: List[byte], n: int) { for _ in 0..n { (mut out).push(32 as byte) } }
 
-struct Person { name: List[byte], mail: List[byte], seconds: int, zone: str }
+// vc26: an identity as Git's blame shows it, from the stored bytes. A line
+// Git cannot split is `(unknown)` with time 0; a date it cannot read is
+// time 0 and zone `(unknown)`.
+struct Person {
+    name: List[byte],
+    mail: List[byte],
+    time: str,
+    zone: str,
+    raw: commit_format.RawIdentity,
+}
 
-fn person(raw: List[byte]) -> Person ! worktree.WorkErrors {
-    var left = 0, right = 0
-    for i in 0..raw.len {
-        if raw[i] == 60 as byte { left = i }
-        if raw[i] == 62 as byte { right = i }
+fn person(value: List[byte]) -> Person {
+    let raw = commit_format.raw_identity(value)
+    if !raw.split {
+        return Person {
+            name: "(unknown)".bytes(),
+            mail: "(unknown)".bytes(),
+            time: "0",
+            zone: "(unknown)",
+            raw: raw,
+        }
     }
-    if left < 1 || right <= left || right + 1 >= raw.len { return invalid_header }
-    let tail = str_from_utf8(raw[right + 1..])?.words()
-    if tail.len != 2 { return invalid_header }
-    let seconds = tail[0].to_int() else |_| { return invalid_header }
-    var end = left
-    while end > 0 && raw[end - 1] == 32 as byte { end -= 1 }
-    Person { name: raw[0..end], mail: raw[left..right + 1], seconds: seconds, zone: tail[1] }
+    var mail = List[byte]()
+    (mut mail).push(60 as byte)
+    add(mut mail, raw.email)
+    (mut mail).push(62 as byte)
+    if !raw.dated {
+        return Person { name: copy raw.name, mail: mail, time: "0", zone: "(unknown)", raw: raw }
+    }
+    let zone = str_from_utf8(raw.zone_text) else ""
+    Person { name: copy raw.name, mail: mail, time: copy raw.seconds_text, zone: zone, raw: raw }
 }
 
 fn identity(source: Source, key: str) -> Person ! worktree.WorkErrors {
-    for field in source.value.headers.fields { if field.key == key { return person(field.value)? } }
+    for field in source.value.headers.fields { if field.key == key { return person(field.value) } }
     invalid_header
+}
+
+// A name's display width as Git pads it: one column a byte when the bytes
+// are not UTF-8 (measured with Latin-1 names), else one a character; -1
+// (a named refusal) for a control byte or a character past U+02FF, whose
+// width this renderer does not know.
+fn display_width(name: List[byte]) -> int {
+    for b in name { if b < 32 as byte || b == 127 as byte { return -1 } }
+    let text = str_from_utf8(name) else |_| { return name.len }
+    var width = 0
+    for b in name {
+        if b < 128 as byte {
+            width += 1
+        } else if b >= 192 as byte {
+            if b >= 204 as byte { return -1 }
+            width += 1
+        }
+    }
+    let _ = text
+    width
+}
+
+// True when canonical decimal `left` is greater than `right`.
+fn decimal_greater(left: str, right: str) -> bool {
+    if left.len != right.len { return left.len > right.len }
+    let a = left.bytes(), b = right.bytes()
+    for i in 0..a.len { if a[i] != b[i] { return a[i] > b[i] } }
+    false
+}
+
+// The sum of a decimal of at most twenty digits and a small signed number,
+// in decimal (Git's blame adds the zone before it checks the range).
+fn decimal_sum(text: str, delta: int) -> str {
+    var digits = List[int]()
+    for b in text.bytes() { (mut digits).push(b as int - 48) }
+    var carry = delta, i = digits.len - 1
+    while carry != 0 && i >= 0 {
+        let v = digits[i] + carry % 10
+        carry = carry / 10
+        if v < 0 {
+            digits[i] = v + 10
+            carry -= 1
+        } else if v > 9 {
+            digits[i] = v - 10
+            carry += 1
+        } else {
+            digits[i] = v
+        }
+        i -= 1
+    }
+    var out = "", leading = true
+    for d in digits {
+        if leading && d == 0 { continue }
+        leading = false
+        out = "{out}{d}"
+    }
+    if out == "" then "0" else out
+}
+
+// The default display's date: Git's iso style, its fatal when the local time
+// is before the epoch, and its own fatal when seconds plus the zone exceed
+// 9223372036854775807.
+fn blame_date(who: Person) -> commit_format.ShownDate ! worktree.WorkErrors {
+    let raw = who.raw
+    if !raw.split || !raw.dated { return commit_format.shown_date(0, 0, "iso")? }
+    if !raw.zone_fits { return Unsupported("blame timezone with more than nine digits") }
+    let offset = commit_format.zone_seconds(raw.zone)
+    if !raw.fits || offset > 0 && raw.seconds > 9223372036854775807 - offset {
+        let sum = decimal_sum(raw.seconds_text, offset)
+        if !decimal_greater(sum, "9223372036854775807") {
+            return Unsupported("blame date near the 64-bit range")
+        }
+        if decimal_greater(sum, "18446744073709551615") {
+            return Unsupported("blame date past the 64-bit range")
+        }
+        return commit_format.ShownDate {
+            text: "",
+            fatal: "Timestamp too large for this system: {sum}",
+        }
+    }
+    commit_format.shown_date(raw.seconds, raw.zone, "iso")?
 }
 
 fn metadata(
@@ -50,7 +147,7 @@ fn metadata(
         let who = identity(source, key)?
         line(mut out, "{key} ", who.name)
         line(mut out, "{key}-mail ", who.mail)
-        text(mut out, "{key}-time {who.seconds}\n{key}-tz {who.zone}\n")
+        text(mut out, "{key}-time {who.time}\n{key}-tz {who.zone}\n")
     }
     line(mut out, "summary ", object.subject(source.value.headers.message)?)
     if source.value.parents.len == 0 && !root { text(mut out, "boundary\n") }
@@ -73,11 +170,28 @@ fn contiguous(result: Result, selected: List[bool], before: int, after: int) -> 
 
 /// Pure byte renderer with validated owned result indices. It never changes the
 /// index or object namespace. Porcelain preserves raw identity/content bytes.
+/// Rendered bytes, or the bytes Git writes before its fatal line and that
+/// line's text (a date it cannot show).
+pub struct Rendered { out: List[byte], fatal: str }
+
+/// The renderer without the partial output of a fatal date: Fatal.
 pub fn render(
     ctx: worktree.Context,
     result: Result,
     options: Options,
 ) -> List[byte] ! worktree.WorkErrors {
+    let value = render_checked(ctx, result, options)?
+    if value.fatal != "" { return Fatal(value.fatal) }
+    value.out
+}
+
+/// Pure byte renderer with validated owned result indices. It never changes the
+/// index or object namespace. Porcelain preserves raw identity/content bytes.
+pub fn render_checked(
+    ctx: worktree.Context,
+    result: Result,
+    options: Options,
+) -> Rendered ! worktree.WorkErrors {
     let lines = difftext.lines(result.data)?
     if result.rows.len != lines.len || result.sources.len > 10000 { return invalid }
     for row in result.rows {
@@ -128,14 +242,9 @@ pub fn render(
             if path.len > path_width { path_width = path.len }
             let who = identity(source, "author")?
             let name = if options.email then copy who.mail else copy who.name
-            if !options.porcelain && !options.suppress {
-                for b in name {
-                    if b >= 128 as byte || b < 32 as byte {
-                        unsupported_width = true
-                    }
-                }
-            }
-            if name.len > name_width { name_width = name.len }
+            let width = display_width(name)
+            if !options.porcelain && !options.suppress && width < 0 { unsupported_width = true }
+            if width > name_width { name_width = width }
             let number = "{i + 1}", original = "{row.original + 1}"
             if number.len > number_width { number_width = number.len }
             if original.len > original_width { original_width = original.len }
@@ -152,9 +261,27 @@ pub fn render(
     }
     if unsupported_width { return Unsupported("blame author display width") }
     if boundary && !options.long_ids && id_width < 40 { id_width += 1 }
-    var seen = Map[str, bool](), out = List[byte]()
+    // vc26: each source's date as the default display shows it, or Git's
+    // fatal line, computed before any row is written.
+    var dates = List[str](), fatals = List[str]()
+    for source in result.sources {
+        if options.porcelain || options.suppress {
+            (mut dates).push("")
+            (mut fatals).push("")
+            continue
+        }
+        let shown = blame_date(identity(source, "author")?)?
+        (mut dates).push(copy shown.text)
+        (mut fatals).push(copy shown.fatal)
+    }
+    for fatal in fatals {
+        if fatal != "" && (show_name || options.show_number) {
+            return Unsupported("blame fatal date beside names or numbers")
+        }
+    }
+    var seen = Map[str, bool](), out = List[byte](), stopped = -1
     for i in 0..lines.len {
-        if !selected[i] { continue }
+        if !selected[i] || stopped >= 0 { continue }
         region row_scratch {
             let row = copy result.rows[i], source = copy result.sources[row.source]
             let full = keys[row.source]
@@ -177,6 +304,11 @@ pub fn render(
                 } else {
                     text(mut out, full[0..id_width])
                 }
+                if !options.suppress && fatals[row.source] != "" {
+                    // Git writes the id, then its fatal line.
+                    stopped = row.source
+                    continue
+                }
                 text(mut out, " ")
                 if show_name {
                     let path = worktree.quote(source.path, quote, false)
@@ -189,13 +321,12 @@ pub fn render(
                     text(mut out, "{number} ")
                 }
                 if !options.suppress {
-                    text(mut out, "(")
                     let author = identity(source, "author")?
+                    text(mut out, "(")
                     let name = if options.email then copy author.mail else copy author.name
                     add(mut out, name)
-                    pad(mut out, name_width - name.len + 1)
-                    let who = identity(source, "author")?
-                    text(mut out, "{pretty.date(who.seconds, who.zone, "iso")?} ")
+                    pad(mut out, name_width - display_width(name) + 1)
+                    text(mut out, "{dates[row.source]} ")
                 }
                 let number = "{i + 1}"
                 pad(mut out, number_width - number.len)
@@ -208,5 +339,6 @@ pub fn render(
             if out.len > 134217728 { return limit }
         }
     }
-    out
+    if stopped >= 0 { return Rendered { out: out, fatal: copy fatals[stopped] } }
+    Rendered { out: out, fatal: "" }
 }
