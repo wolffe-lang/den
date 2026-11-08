@@ -873,3 +873,32 @@ repository (pelt) under strace (a system call census, and each sync call with
 its path and time) and under a preloaded library counting its sync calls
 (`tools/sync-census.c`, own code); macOS `sample` profiles of den's own
 clone. No implementation source was read.
+
+## Submodules (vc25)
+
+Git 2.56.0 documentation, read as published text:
+
+- `gitsubmodules(7)`: the layout, active submodules (`submodule.active`,
+  `submodule.<name>.active`, a URL as the fallback), the forms a submodule
+  takes, and the security notes on names.
+- `git-submodule(1)`: `status`, `init`, `update` (checkout, `none` and the
+  modes left as refusals), `sync`, `foreach` and its variables, and the
+  commands left as refusals.
+- `gitmodules(5)`: every `submodule.<name>.*` key and the relative URL rule.
+- `gitrepository-layout(5)`: `modules/`.
+- `git-config(1)`: `submodule.*`, `submodule.recurse`,
+  `extensions.submodulePathConfig`, `url.<base>.insteadOf`,
+  `url.<base>.pushInsteadOf`, `protocol.allow`, `protocol.<name>.allow`,
+  `fetch.recurseSubmodules`, `push.recurseSubmodules`, `diff.submodule`,
+  `diff.ignoreSubmodules`, `status.submoduleSummary`; `GIT_PROTOCOL_FROM_USER`
+  in `git(1)`.
+- `git-clone(1)`, `git-status(1)`, `git-diff(1)`, `git-fetch(1)`,
+  `git-pull(1)`, `git-checkout(1)`, `git-switch(1)`, `git-reset(1)`,
+  `git-rm(1)`, `git-add(1)`, `git-commit(1)`, `git-push(1)`, `git-ls-tree(1)`
+  and `git-ls-files(1)`, for their submodule options.
+
+Black boxes: the pinned Git 2.56.0 (two probes, 501 steps, kept as
+`notes/vc25-evidence/oracle-probe-*.jsonl`, and every row) and a field Git
+2.56.0 from Homebrew for development rows. The census read public repository
+metadata through the GitHub API; only aggregates are kept. No Git, libgit2,
+JGit or other implementation source was read.
