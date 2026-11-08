@@ -124,6 +124,31 @@ pub fn read_loaded(r: Reader, id: oid.Oid, max_output: int) -> Object ! StoreErr
     decode(input, id, max_output)?
 }
 
+/// read_loaded's answer, packed bases served by the reader's cache
+/// (pack.session_cached): for a batch that reads along delta chains, such as
+/// a pack writer or a closure walk. Only bytes and ints change in the
+/// reader, so a caller may read inside its own region.
+pub fn read_cached(mut r: Reader, id: oid.Oid, max_output: int) -> Object ! StoreErrors {
+    if max_output < 0 || max_output > 1000000000 { return limit }
+    let input = repository.read_bytes(
+        path(r.repo, id)?,
+        max_output + max_output / 100 + 65536,
+    ) else |e| match e {
+        not_found => {
+            let value = pack.session_cached(mut r.packs, oid.hex(id)?, max_output)?
+            return Object { kind: value.kind, data: copy value.data }
+        },
+        denied => { return denied },
+        io => { return io },
+        invalid => { return invalid },
+        exists => { return exists },
+        unsupported => { return unsupported },
+        limit => { return limit },
+        Unsupported(name) => { return Unsupported(name) },
+    }
+    decode(input, id, max_output)?
+}
+
 /// Resolve a loose/packed oid prefix; duplicates share one identity.
 /// Full-width ids are returned even when missing (read_object tests presence).
 pub fn lookup(repo: repository.Repo, name: str) -> oid.Oid ! StoreErrors {

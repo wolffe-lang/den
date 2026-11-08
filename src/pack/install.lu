@@ -9,8 +9,8 @@ fn validate_pair(pack_path: str, idx_path: str) -> () ! PackErrors {
     let end = verify(fd, index)?
     for slot in 0..index.entries.len {
         region object_check {
-            var seen = Map[int, bool](), total = 0
-            let _ = unpack(fd, end, index, slot, mut seen, mut total, 0)?
+            var seen = Map[int, bool](), total = 0, none = no_cache()
+            let _ = unpack(fd, end, index, slot, mut seen, mut total, 0, mut none, 0)?
         }
     }
 }

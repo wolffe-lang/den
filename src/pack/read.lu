@@ -141,6 +141,8 @@ fn unpack(
     mut seen: Map[int, bool],
     mut total: int,
     depth: int,
+    mut cache: Cache,
+    pack_no: int,
 ) -> Body ! PackErrors {
     if depth > 64 { return Unsupported("pack delta depth limit") }
     let offset = index.entries[slot].offset
@@ -207,8 +209,39 @@ fn unpack(
         return Unsupported("pack entry size or trailing bytes")
     }
     var result = Body { kind: "", data: List[byte]() }
-    if base_slot >= 0 {
-        let base = unpack(fd, end, index, base_slot, mut seen, mut total, depth + 1)?
+    let hit = if base_slot >= 0 {
+        cache_find(cache, pack_no, index.entries[base_slot].offset)
+    } else {
+        -1
+    }
+    if hit >= 0 {
+        // A base rebuilt and checked by an earlier read (cache_keep).
+        var delta_pos: int = 0
+        let _ = variable(inflated.data, mut delta_pos) else |_| {
+            return Unsupported("pack delta invalid")
+        }
+        let target_size = variable(inflated.data, mut delta_pos) else |_| {
+            return Unsupported("pack delta invalid")
+        }
+        if target_size > object_limit() { return Unsupported("pack object size limit") }
+        charge(mut total, cache.data[hit].len)?
+        charge(mut total, target_size)?
+        let data = apply_delta(cache.data[hit], inflated.data, object_limit()) else |e| {
+            return Unsupported("pack delta {e}")
+        }
+        result = Body { kind: kind_label(cache.kinds[hit]), data: data }
+    } else if base_slot >= 0 {
+        let base = unpack(
+            fd,
+            end,
+            index,
+            base_slot,
+            mut seen,
+            mut total,
+            depth + 1,
+            mut cache,
+            pack_no,
+        )?
         var delta_pos: int = 0
         let _ = variable(inflated.data, mut delta_pos) else |_| {
             return Unsupported("pack delta invalid")
@@ -231,6 +264,16 @@ fn unpack(
         }
         result = Body { kind: name, data: copy inflated.data }
     }
+    // A cached read checks the identity of the object asked for, not of each
+    // base on the way (den#73: on a real history most of a read was hashing
+    // each version of a large blob along its chain). A base is cached as it
+    // was rebuilt, exactly what a rebuild from the pack gives at its offset,
+    // and every object returned is still checked, so a bad base fails the
+    // read that reaches it. An uncached read checks every level, as before.
+    if depth > 0 && cache.keys.len > 0 {
+        cache_keep(mut cache, pack_no, offset, result)
+        return result
+    }
     var digest = hash.new1()
     hash.update1(mut digest, "{result.kind} {result.data.len}\0".bytes())
     hash.update1(mut digest, result.data)
@@ -240,7 +283,76 @@ fn unpack(
     if (oid.hex(id) else "") != index.entries[slot].name {
         return Unsupported("pack object identity")
     }
+    cache_keep(mut cache, pack_no, offset, result)
     result
+}
+
+/// den#73: objects rebuilt along delta chains, by pack and offset, so reads
+/// in walk order rebuild each base once rather than once for every object
+/// above it in its chain (git-config(1)'s core.deltaBaseCacheLimit describes
+/// Git's form of the idea). Direct-mapped slots, each holding an object of
+/// at most cache_object_limit() bytes, each as its rebuild from the pack gave
+/// it (only the object a read returns has its identity checked). Without
+/// slots (no_cache) nothing is kept.
+pub struct Cache {
+    keys: List[int],
+    kinds: List[int],
+    data: List[List[byte]],
+}
+
+/// 256 slots of at most 16 KiB: the slots never hold more than 4 MiB.
+pub fn base_cache() -> Cache {
+    var keys = List[int](), kinds = List[int](), data = List[List[byte]]()
+    for _ in 0..256 {
+        (mut keys).push(-1)
+        (mut kinds).push(0)
+        (mut data).push(List[byte]())
+    }
+    Cache { keys: keys, kinds: kinds, data: data }
+}
+
+fn no_cache() -> Cache { Cache { keys: List[int](), kinds: List[int](), data: List[List[byte]]() } }
+
+fn cache_object_limit() -> int { 16384 }
+
+fn cache_slot(c: Cache, pack_no: int, offset: int) -> int {
+    (offset / 16 + pack_no * 31) % c.keys.len
+}
+
+fn cache_key(pack_no: int, offset: int) -> int { pack_no * 1099511627776 + offset }
+
+fn cache_find(c: Cache, pack_no: int, offset: int) -> int {
+    if c.keys.len == 0 { return -1 }
+    let slot = cache_slot(c, pack_no, offset)
+    if c.keys[slot] == cache_key(pack_no, offset) { return slot }
+    -1
+}
+
+fn kind_label(code: int) -> str {
+    match code {
+        1 => "commit",
+        2 => "tree",
+        3 => "blob",
+        _ => "tag",
+    }
+}
+
+fn kind_code(kind: str) -> int {
+    match kind {
+        "commit" => 1,
+        "tree" => 2,
+        "blob" => 3,
+        _ => 4,
+    }
+}
+
+fn cache_keep(mut c: Cache, pack_no: int, offset: int, body: Body) {
+    if c.keys.len == 0 || body.data.len > cache_object_limit() { return }
+    let slot = cache_slot(c, pack_no, offset)
+    c.keys[slot] = cache_key(pack_no, offset)
+    c.kinds[slot] = kind_code(body.kind)
+    (mut c.data[slot]).clear()
+    for b in body.data { (mut c.data[slot]).push(b) }
 }
 
 fn indexes(gitdir: str) -> List[str] ! PackErrors {
@@ -284,8 +396,8 @@ pub fn read_object(gitdir: str, name: str, cap: int) -> Body ! PackErrors {
             let end = bounds(fd, index)?
             let slot = slot_named(index, name)
             if slot >= 0 {
-                var seen = Map[int, bool](), total: int = 0
-                let value = unpack(fd, end, index, slot, mut seen, mut total, 0)?
+                var seen = Map[int, bool](), total: int = 0, none = no_cache()
+                let value = unpack(fd, end, index, slot, mut seen, mut total, 0, mut none, 0)?
                 result = copy value
                 found = true
             }
@@ -331,6 +443,7 @@ pub struct Session {
     indexes: List[Index],
     ends: List[int],
     loaded: bool,
+    cache: Cache,
 }
 
 /// An unloaded session; indexes are listed and checked on the first read.
@@ -341,6 +454,7 @@ pub fn session(gitdir: str) -> Session {
         indexes: List[Index](),
         ends: List[int](),
         loaded: false,
+        cache: base_cache(),
     }
 }
 
@@ -377,8 +491,33 @@ pub fn session_peek(s: Session, name: str, cap: int) -> Body ! PackErrors {
             let fd = open_pack("{s.paths[i][0..s.paths[i].len - 4]}.pack")?
             defer fs_close(fd) else |_| {}
             let end = rebound(fd, s.indexes[i], s.ends[i])?
+            var seen = Map[int, bool](), total: int = 0, none = no_cache()
+            let value = unpack(fd, end, s.indexes[i], slot, mut seen, mut total, 0, mut none, 0)?
+            result = copy value
+        }
+        if result.data.len > cap { return Unsupported("pack object size limit") }
+        return result
+    }
+    not_found
+}
+
+/// session_peek's answer for an opened session, with its bases rebuilt
+/// through the session's cache (Cache): a batch reading many objects of a
+/// delta chain, as a pack writer or a closure walk does, rebuilds each base
+/// once. The cache changes only bytes and ints, so a caller may read inside
+/// its own region. Bases the cache serves are not read from the pack again.
+pub fn session_cached(mut s: Session, name: str, cap: int) -> Body ! PackErrors {
+    if !s.loaded { return read_object(s.gitdir, name, cap)? }
+    for i in 0..s.paths.len {
+        let slot = slot_named(s.indexes[i], name)
+        if slot < 0 { continue }
+        var result = Body { kind: "", data: List[byte]() }
+        region candidate {
+            let fd = open_pack("{s.paths[i][0..s.paths[i].len - 4]}.pack")?
+            defer fs_close(fd) else |_| {}
+            let end = rebound(fd, s.indexes[i], s.ends[i])?
             var seen = Map[int, bool](), total: int = 0
-            let value = unpack(fd, end, s.indexes[i], slot, mut seen, mut total, 0)?
+            let value = unpack(fd, end, s.indexes[i], slot, mut seen, mut total, 0, mut s.cache, i)?
             result = copy value
         }
         if result.data.len > cap { return Unsupported("pack object size limit") }
@@ -398,8 +537,8 @@ pub fn session_read(mut s: Session, name: str, cap: int) -> Body ! PackErrors {
             let fd = open_pack("{s.paths[i][0..s.paths[i].len - 4]}.pack")?
             defer fs_close(fd) else |_| {}
             let end = rebound(fd, s.indexes[i], s.ends[i])?
-            var seen = Map[int, bool](), total: int = 0
-            let value = unpack(fd, end, s.indexes[i], slot, mut seen, mut total, 0)?
+            var seen = Map[int, bool](), total: int = 0, none = no_cache()
+            let value = unpack(fd, end, s.indexes[i], slot, mut seen, mut total, 0, mut none, 0)?
             result = copy value
         }
         if result.data.len > cap { return Unsupported("pack object size limit") }
