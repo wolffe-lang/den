@@ -1,0 +1,27 @@
+vc25: the config row config-file-bad-local-preflight (tools/day-to-day-test.py,
+config family, native) red in the full gauntlet at this branch's earlier head
+019abab: for a .git/config whose last line is `[broken`, the same bytes for
+both tools, Git reports line 6 and den reported line 7.
+
+  expected stderr: fatal: bad config line 6 in file .git/config
+  actual stderr:   fatal: bad config line 7 in file .git/config
+
+Only three commits of this branch touch src/repository/config.lu; the one
+that changed the line a broken header reports is 04b74db, "Count the newline
+an unterminated config header stops on". The row at it and at its parent,
+each built natively with the later build fix 2763650 (src/wiregit/fetch.lu
+only) applied uncommitted, because neither builds alone after the rebase:
+
+  04b74db fixes=2763650 FAIL  (line 7)
+  83ccd50 fixes=2763650 parity
+
+That commit counted the newline after any unterminated header, a rule taken
+from one .gitmodules row whose header closed a quoted subsection and then
+broke the line. Git counts that newline only right after a closing quote
+(config-header-lines.tsv, 28 headers measured against the pinned Git). The
+units added with the fix (src/gitmodules_test.lu, config-header-line-*) hold
+25 of them: 13 failed at the units' commit before the fix, 25 of 25 pass
+after it, the whole config leaf passes on both tiers, and the row is parity
+again. The three left out end the file right after a section name (`[bad`),
+where Git reports the next line and tools/config-test.py, which states den's
+own expectations without running Git, expects the same line; den keeps that.
