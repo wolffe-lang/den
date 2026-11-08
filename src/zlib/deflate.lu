@@ -176,21 +176,43 @@ fn stored(mut w: Writer, src: List[byte], start: int, end: int, final_block: int
     for i in start..end { (mut w.data).push(src[i]) }
 }
 
-fn encode(src: List[byte], level: int, max_output: int, wrapped: bool) -> List[byte] ! {
-    invalid,
-    unsupported_level,
-    limit,
-} {
+/// Match tables a caller keeps across many deflate_with calls, so a small
+/// input does not pay for building 64 Ki entries each time. Every call leaves
+/// them as it found them; output is the same as deflate's.
+pub struct Tables {
+    heads: List[int],
+    links: List[int],
+}
+
+/// Tables for deflate_with.
+pub fn tables() -> Tables {
+    var heads = List[int](), links = List[int]()
+    (mut heads).reserve(32768)
+    (mut links).reserve(32768)
+    for _ in 0..32768 { (mut heads).push(-1); (mut links).push(-1) }
+    Tables { heads: heads, links: links }
+}
+
+// Every position a call can have inserted gets its head back to -1. A link is
+// always written before it is read within one call, so links need no reset.
+fn reset_heads(src: List[byte], mut heads: List[int]) {
+    if src.len < 3 { return }
+    for pos in 0..src.len - 2 { heads[hash3(src, pos)] = -1 }
+}
+
+fn encode(
+    src: List[byte],
+    level: int,
+    max_output: int,
+    wrapped: bool,
+    mut heads: List[int],
+    mut links: List[int],
+) -> List[byte] ! {invalid, unsupported_level, limit} {
     if max_output < 0 { return invalid }
     if level != -1 && level != 0 && level != 1 { return unsupported_level }
     var w = Writer { data: List[byte](), pending: 0, used: 0, cap: max_output }
     if wrapped { octet(mut w, 120)?; octet(mut w, 1)? }
     region match_state {
-        var heads = List[int]()
-        var links = List[int]()
-        if level != 0 {
-            for _ in 0..32768 { (mut heads).push(-1); (mut links).push(-1) }
-        }
         let bases = length_base()
         var start = 0
         loop {
@@ -229,11 +251,39 @@ fn encode(src: List[byte], level: int, max_output: int, wrapped: bool) -> List[b
 /// Encode RFC 1951, with level 0 stored or -1/1 bounded lazy LZ77.
 /// Other levels return unsupported_level; max_output is inclusive.
 pub fn deflate_raw(src: List[byte], level: int, max_output: int) -> List[byte] ! DeflateErrors {
-    encode(src, level, max_output, false)?
+    var t = fresh(level)
+    encode(src, level, max_output, false, mut t.heads, mut t.links)?
+}
+
+fn fresh(level: int) -> Tables {
+    if level == 0 { return Tables { heads: List[int](), links: List[int]() } }
+    tables()
 }
 
 /// Encode RFC 1950 with Adler checksum. Default level -1 means level 1.
 /// Returned bytes own storage; negative cap is invalid, overflow is limit.
 pub fn deflate(src: List[byte], level: int, max_output: int) -> List[byte] ! DeflateErrors {
-    encode(src, level, max_output, true)?
+    var t = fresh(level)
+    encode(src, level, max_output, true, mut t.heads, mut t.links)?
+}
+
+/// deflate, with match tables the caller keeps (see Tables); the bytes are
+/// deflate's.
+pub fn deflate_with(
+    mut t: Tables,
+    src: List[byte],
+    level: int,
+    max_output: int,
+) -> List[byte] ! DeflateErrors {
+    if t.heads.len != 32768 || t.links.len != 32768 { return invalid }
+    let out = encode(src, level, max_output, true, mut t.heads, mut t.links) else |e| {
+        reset_heads(src, mut t.heads)
+        match e {
+            invalid => { return invalid },
+            unsupported_level => { return unsupported_level },
+            limit => { return limit },
+        }
+    }
+    reset_heads(src, mut t.heads)
+    out
 }
