@@ -39,14 +39,14 @@ oracle builds are in `notes/vc00-evidence/`.
 |---|---|
 | Objects | `init`, `hash-object`, `cat-file -p/-t/-s`, `mktree`, `commit-tree`, `mktag` |
 | Wire | `clone [-q] [--bare] URL [DIRECTORY]`; explicit `fetch -q URL SRC:DST`; configured/default `fetch [--prune]`, `fetch [-q] [-f] REMOTE REFSPEC...`, `pull` merge/rebase and `push`, `push -u`, short push destinations placed as Git places them, plain/explicit `--force-with-lease`, `--force` and `--atomic`; `ls-remote` with `--heads`/`--branches`, `--tags`, `--refs`, `--symref`, `--exit-code` and patterns; `upload-pack`, bare `receive-pack`, and one-session loopback `daemon` within the limits below |
-| Packs | `pack-objects` from stdin object IDs to `objects/pack/pack`, OFS/REF deltas or no deltas; `verify-pack [-v]`; `count-objects [-v]`; bounded `fsck --full`; `repack -a -n -q [-d] [-k]` and `prune-packed [-n] [-q]` within the limits below |
+| Packs | `pack-objects` from stdin object IDs to `objects/pack/pack`, OFS/REF deltas or no deltas; `verify-pack [-v]`; `count-objects [-v]`; bounded `fsck --full`, with Git's author/committer diagnostics; `repack -a -n -q [-d] [-k]` and `prune-packed [-n] [-q]` within the limits below |
 | Index | `write-tree` over nested index v2/v3/v4 entries; exclusive `index.lock` writes, stat fields, flags and TREE cache updates |
 | Config / ignore | `config --get`, set/`--add`/`--unset`/`--unset-all`/`--replace-all` with local/global/file destinations; bounded `remote add/remove/rename/-v/get-url/set-url` and `branch --set-upstream-to`; `check-ignore` with provenance, negation, tracked-file bypass and `--no-index` |
 | Worktree | `add` paths/directories, `-A`, `-u`, `--ignore-removal`, `-f`, `-N`, `--chmod`; `rm`, `mv` and their implemented safety/force/recursive options |
 | Status | Human, short and porcelain v1, branch/unborn/detached headings, NUL output, untracked grouping and ignored paths |
 | Commit | Ordered `-m`, `-F`, `-a`, `--amend`, `--reset-author`, `--author`, fixed `--date`, cleanup modes, quiet and allow-empty options; attached/detached HEAD and loose-over-packed branch updates |
 | Diff | Worktree/index, `--cached`, two commits/trees or blobs; unified context, final-newline markers, modes, binary patches, stat/name forms, rename/copy detection and common pathspec magic |
-| History | `log` default/oneline/short/full/fuller, `-n`, `--skip`, `--reverse`, `--first-parent`, fixed date formats, patch/stat, short/full/no/terminal-auto decorations; `show` commits, trees, blobs, annotated tags and `REV:path`; default-format display of `refs/notes/commits` notes |
+| History | `log` default/oneline/short/full/fuller, user formats (`--format=`, `format:`, `tformat:`) over `%H %h %T %t %P %p %s %b %B %n %%` and the author and committer placeholders, `-n`, `--skip`, `--reverse`, `--first-parent`, fixed date formats, patch/stat, short/full/no/terminal-auto decorations; `show` commits, trees, blobs, annotated tags and `REV:path`; default-format display of `refs/notes/commits` notes; every identity line read as Git reads it |
 | Restore | Index-to-worktree `restore`, `--staged`, `--worktree`, `--source`; `checkout [<tree-ish>] -- <paths>` |
 | Refs | Loose and packed refs with peeled tag records; branch list/create/force/delete/rename, lightweight and message-supplied annotated tags, command reflogs |
 | Branch worktree | `switch` and branch `checkout`, `-c`/`-b` creation, explicit and implicit detached HEAD, dirty-worktree protection; `reset --soft/--mixed/--hard` |
@@ -535,6 +535,14 @@ The wire layer uses binary-clean pkt-lines, protocol-v2 capability advertisement
 emit LF; readers accept the optional missing LF required by the protocol. Push
 uses Git's documented receive-pack framing, capability negotiation and per-ref
 status, not an invented v2 push command.
+
+Receiving, serving and pushing validate no author, committer or tagger line,
+as Git's defaults do (`transfer.fsckObjects` is false): any identity Git
+clones, den clones. A configuration that asks for Git's object checks
+(`fetch.fsckObjects` or `receive.fsckObjects`, else `transfer.fsckObjects`,
+set true) is refused by name, since den does not run Git's full check set.
+Tree paths and tag names are still checked on receipt. `fsck` reports
+identity lines with Git's message ids and text.
 
 Supported command forms are explicit:
 
