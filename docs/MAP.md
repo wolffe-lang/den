@@ -210,6 +210,15 @@ result. `closure_received` queues received objects by rank with an int for the
 type each link expects (`kind_code`), names them only when read
 (`pack.received_rank_name`), and does each step in a region.
 
+vc24 (den#63, the checkout's reader): `object.reader_batch` opens one reader
+for a batch that reads inside its own regions; `worktree.transition`,
+`restore_paths` and `abort_merge` pass it to `install`, so a checkout parses
+each pack index once. A session keeps each pack's bounds answer (`ends`) and
+re-checks a read's pack with `rebound`: the size, header and trailer binding,
+and the full `bounds` only when the size moved. An unopened session's
+`session_peek` answers through `read_object`, so a reader whose packs cannot
+open up front serves loose objects and fails a packed read as one read does.
+
 vc24 (den#72): `clone_name` derives a clone's directory from its URL when none
 is given; `clone_mode` fills an existing empty destination and empties it again
 on failure, and reports an empty repository for Git's warning. A local clone's
