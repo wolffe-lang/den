@@ -40,6 +40,9 @@ fn reset_changes(ctx: worktree.Context) -> () ! commit.CommitErrors {
     var printed = false
     for row in snapshot.rows {
         if row.y == " " || row.untracked || row.ignored { continue }
+        // A submodule is listed for new commits only, never for its own
+        // worktree's content (vc25 work rows).
+        if row.sub != 0 && row.sub & 1 == 0 { continue }
         if !printed { print("Unstaged changes after reset:"); printed = true }
         print("{row.y}\t{str_from_utf8(row.path)?}")
     }
