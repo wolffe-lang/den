@@ -80,6 +80,13 @@ out = R / 'target/runs' / ('submodule-live-' + a.tier)
 if out.exists():
     shutil.rmtree(out)
 out.mkdir(parents=True)
+# The clones themselves stay out of target/runs, which CI uploads as evidence:
+# a cloned repository can carry test keys (wolf-std vendors TLS vectors), and
+# no key goes into evidence (tools/evidence-modes.py). Only the reports do.
+clones = R / 'target/live' / ('submodule-live-' + a.tier)
+if clones.exists():
+    shutil.rmtree(clones)
+clones.mkdir(parents=True)
 der, count = live['pem_roots'](pem)
 (out / 'roots.der').write_bytes(der)
 env = {k: v for k, v in os.environ.items() if not k.startswith(('DEN_HTTP', 'GIT_ASKPASS', 'SSH_ASKPASS'))}
@@ -181,7 +188,7 @@ def web_row():
     problems = []
     for attempt in range(2):
         problems = []
-        work = out / ('web-%d' % attempt)
+        work = clones / ('web-%d' % attempt)
         work.mkdir()
         before = cloned_refs(WEB)
         oracle = run([git, 'clone', '-q', '--recurse-submodules', WEB, 'git'], work)
@@ -225,7 +232,7 @@ def pinned_rows():
     for repo in PINNED:
         name = 'live-%s-gitlinks' % repo
         url = 'https://github.com/wolffe-lang/%s.git' % repo
-        work = out / repo
+        work = clones / repo
         work.mkdir()
         q = run([git, 'clone', '-q', url, 'c'], work)
         if q['exit']:
@@ -263,7 +270,7 @@ def ssh_row():
         return
     rewrite = dict(GIT_CONFIG_COUNT='2', GIT_CONFIG_KEY_1='url.git@github.com:.insteadOf',
                    GIT_CONFIG_VALUE_1='https://github.com/')
-    work = out / 'ssh'
+    work = clones / 'ssh'
     work.mkdir()
     oracle = run([git, 'clone', '-q', 'https://github.com/wolffe-lang/wolf-std.git', 'git'], work, extra=rewrite)
     candidate = run([den, 'clone', '-q', 'https://github.com/wolffe-lang/wolf-std.git', 'den'], work, extra=rewrite)
@@ -296,7 +303,7 @@ def timed():
     runs = []
     for i in range(a.timed):
         for tool, exe in (('git', git), ('den', str(den))):
-            work = out / ('timed-%s-%d' % (tool, i))
+            work = clones / ('timed-%s-%d' % (tool, i))
             work.mkdir()
             q = subprocess.run([sys.executable, '-I', '-S', '-c', LAUNCH, exe, 'clone', '-q', '--recurse-submodules',
                                 url, 'c'], cwd=str(work), env=env, capture_output=True, timeout=7200)
