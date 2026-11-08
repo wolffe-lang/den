@@ -138,6 +138,9 @@ fn init(ctx: worktree.Context, parsed: gitmodules.Parsed, paths: List[str], pare
     for sub in submodules(ctx, parsed)? {
         if !selected(ctx, sub, paths) { continue }
         let shown = display(ctx, parent, sub.path)
+        // With submodule.active set (a recursive clone), a gitlink .gitmodules
+        // does not name is passed over in silence (vc25 rows).
+        if has_active && !sub.mapped { continue }
         if !sub.mapped || sub.module.url == "" { return Fatal("No url found for submodule path '{shown}' in .gitmodules") }
         if paths.len == 0 && has_active && !active(repo, sub)? { continue }
         if (repo.config["submodule.{sub.name}.url"] else "") != "" { continue }
@@ -257,7 +260,14 @@ fn update(
         for sub in candidates {
             if pass == 0 && !selected(ctx, sub, options.paths) { continue }
             let shown = display(ctx, parent, sub.path)
-            if !sub.mapped { return Fatal("No url found for submodule path '{shown}' in .gitmodules") }
+            if !sub.mapped {
+                var configured_active = false
+                for entry in repository.configuration(repo.gitdir)? {
+                    if entry.key == "submodule.active" { configured_active = true }
+                }
+                if configured_active { continue }
+                return Fatal("No url found for submodule path '{shown}' in .gitmodules")
+            }
             if !active(repo, sub)? { continue }
             let url = repo.config["submodule.{sub.name}.url"] else ""
             if url == "" { return Fatal("No url found for submodule path '{shown}' in .gitmodules") }

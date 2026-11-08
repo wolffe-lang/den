@@ -4,6 +4,7 @@ use std.env
 use std.fs
 use std.process
 use object
+use gitmodules
 use oid
 use refs
 use repository
@@ -98,8 +99,20 @@ fn populated(ctx: worktree.Context, sub: Sub) -> List[worktree.Context] ! worktr
     [found]
 }
 
+// status and init read .gitmodules only when there is a gitlink to map
+// (vc25 rows: an invalid file with no gitlink is not an error there).
+fn has_gitlinks(ctx: worktree.Context) -> bool ! worktree.WorkErrors {
+    for entry in worktree.read_index(ctx)?.entries { if entry.stat[6] == 0o160000 { return true } }
+    false
+}
+
+fn lazy_modules(ctx: worktree.Context) -> gitmodules.Parsed ! worktree.WorkErrors {
+    if !has_gitlinks(ctx)? { return gitmodules.Parsed { modules: List[gitmodules.Module](), warnings: List[str]() } }
+    worktree.modules(ctx)?
+}
+
 fn status_lines(ctx: worktree.Context, cached: bool, recursive: bool, paths: List[str], parent: str) -> () ! worktree.WorkErrors {
-    let parsed = worktree.modules(ctx)?
+    let parsed = lazy_modules(ctx)?
     for sub in submodules(ctx, parsed)? {
         if !selected(ctx, sub, paths) { continue }
         let shown = display(ctx, parent, sub.path)
@@ -230,7 +243,7 @@ fn dispatch(args: List[str]) -> int ! worktree.WorkErrors {
         return 0
     }
     if sub == "init" {
-        init(ctx, worktree.modules(ctx)?, paths, "", quiet)?
+        init(ctx, lazy_modules(ctx)?, paths, "", quiet)?
         return 0
     }
     if sub == "sync" {
