@@ -15,7 +15,33 @@ fn emit(repo: repository.Repo, id: oid.Oid, cap: int, batch: bool) -> () ! objec
     if batch { fs.write_chunk(mut stdout, "\n".bytes())? }
 }
 
+// One read through a batch reader (object.reader_batch), printed as a line.
+fn session_line(r: object.Reader, label: str, id: oid.Oid, cap: int) -> () ! object.StoreErrors {
+    let value = object.read_loaded(r, id, cap) else |e| {
+        print("{label} error {e}")
+        return
+    }
+    print("{label} {value.kind} {value.data.len} {oid.hex(id)?}")
+}
+
+// --session REPO NAME CAP [PACK SOURCE]: read NAME through one batch reader;
+// with PACK and SOURCE, copy SOURCE over PACK and read NAME again through the
+// same reader, as a checkout's reader would see a pack changed under it.
+fn session(args: List[str]) -> () ! object.StoreErrors {
+    if args.len != 4 && args.len != 6 { return invalid }
+    let repo = repository.open(args[1])?
+    let id = oid.parse("sha1", args[2])?
+    let cap = args[3].to_int() else |_| { return invalid }
+    let r = object.reader_batch(repo)
+    session_line(r, "first", id, cap)?
+    if args.len == 6 {
+        fs.copy_file(args[5], args[4]) else |_| { return io }
+        session_line(r, "second", id, cap)?
+    }
+}
+
 fn run(args: List[str]) -> () ! object.StoreErrors {
+    if args.len > 0 && args[0] == "--session" { return session(args)? }
     if args.len != 3 && args.len != 4 { return invalid }
     let repo = repository.open(args[0])?
     if args.len == 4 {
