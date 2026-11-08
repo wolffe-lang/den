@@ -284,28 +284,26 @@ fn clone_into(
             if body.kind != "commit" { return invalid }
         }
         if !bare && name.starts_with("refs/heads/") { name = "refs/remotes/origin/{name[11..]}" }
-        if plain {
-            (mut packed).push(refs.Packed {
-                name: name,
-                id: oid.parse("sha1", reference.id)?,
-                peeled: if reference.peeled == "" {
-                    List[oid.Oid]()
-                } else {
-                    [oid.parse("sha1", reference.peeled)?]
-                },
-            })
-        } else {
-            update(repo, name, reference.id)?
-        }
+        // Every transport's clone packs its refs, as the pinned Git's does
+        // (vc25: loose refs differed byte for byte from Git's file:// clone).
+        (mut packed).push(refs.Packed {
+            name: name,
+            id: oid.parse("sha1", reference.id)?,
+            peeled: if reference.peeled == "" {
+                List[oid.Oid]()
+            } else {
+                [oid.parse("sha1", reference.peeled)?]
+            },
+        })
     }
-    if plain && packed.len > 0 {
+    if packed.len > 0 {
         var file = fs.create_new_with_mode("{repo.gitdir}/packed-refs", 0o666)?
         defer fs.close(take file) else |_| {}
         let bytes = refs.packed_bytes(packed, "peeled fully-peeled")?
         fs.write_chunk(mut file, bytes)?
         fs.sync(mut file)?
     }
-    if plain && fs.is_dir("{repo.gitdir}/hooks") && fs.entries("{repo.gitdir}/hooks")?.len == 0 {
+    if fs.is_dir("{repo.gitdir}/hooks") && fs.entries("{repo.gitdir}/hooks")?.len == 0 {
         fs.remove_dir("{repo.gitdir}/hooks")?
     }
     if !bare && selected.id != "unborn" && selected.target != "" {
@@ -349,11 +347,8 @@ fn clone_into(
     } else {
         copy url
     }
-    let quoted = if plain {
-        repository.config_quote(configured_url)?
-    } else {
-        "\"{configured_url.replace("\\", "\\\\").replace("\"", "\\\"")}\""
-    }
+    // Quoted only where config syntax needs it, as Git writes it (vc25).
+    let quoted = repository.config_quote(configured_url)?
     fs.write(mut config, "[remote \"origin\"]\n\turl = {quoted}\n")?
     if !bare {
         fs.write(mut config, "\tfetch = +refs/heads/*:refs/remotes/origin/*\n")?
