@@ -86,8 +86,10 @@ if pid == 0:
     fd = os.open(os.devnull, os.O_RDWR); os.dup2(fd, 0); os.dup2(fd, 1)
     os.execvp(sys.argv[1], sys.argv[1:])
 _, status, ru = os.wait4(pid, 0)
+# getrusage(2): ru_maxrss is in KiB on Linux, in bytes on macOS.
+rss = ru.ru_maxrss // 1024 if sys.platform == 'darwin' else ru.ru_maxrss
 print(json.dumps(dict(exit=os.waitstatus_to_exitcode(status), wall=round(time.monotonic() - t, 2),
-                      cpu=round(ru.ru_utime + ru.ru_stime, 2), maxrss_kib=ru.ru_maxrss)))
+                      cpu=round(ru.ru_utime + ru.ru_stime, 2), maxrss_kib=rss)))
 '''
 
 
@@ -1148,9 +1150,12 @@ def scale_verdict(h, name, objects, ours, theirs, measured, problems):
         a, b = scale_state(h, theirs), scale_state(h, ours)
         problems.append('differs from the pinned Git\'s: ' + ', '.join(k for k in a if a[k] != b[k]))
     bound = scale_bound(objects)
-    if not h.field and measured['maxrss_kib'] * 1024 > bound:
+    # The bound holds on both systems; prlimit's hard cap only on Linux.
+    if measured['maxrss_kib'] * 1024 > bound:
         problems.append('peak RSS %d KiB over the bound %d KiB' % (measured['maxrss_kib'], bound // 1024))
-    detail = dict(objects=objects, bound_kib=bound // 1024,
+    # The launcher's own floor (den --version from the same small parent),
+    # so a row's peak RSS can be read net of what any process starts with.
+    detail = dict(objects=objects, bound_kib=bound // 1024, floor_kib=getattr(h, 'scale_floor', None),
                   **{k: v for k, v in measured.items() if k != 'stderr'})
     h.verdict(name, problems, detail)
     print('SCALE %s %s' % (name, json.dumps(detail)), flush=True)
@@ -1158,6 +1163,7 @@ def scale_verdict(h, name, objects, ours, theirs, measured, problems):
 
 def family_scale(h):
     root, src, prefix, wide, wide_next, counts = scale_fixtures(h)
+    h.scale_floor = launched_in(h, [h.den, '--version'], root)['maxrss_kib']
     upload, receive = str(h.out / 'bin/den-upload-pack'), str(h.out / 'bin/den-receive-pack')
     def fresh(*paths):
         for path in paths:
