@@ -113,6 +113,13 @@ pub fn compression(repo: Repo) -> int ! {Unsupported(str)} {
 /// Initialize only the measured empty-template surface; preserve existing data.
 /// Returns repository and whether this was reinitialization.
 pub fn init(path: str, bare: bool, branch: str) -> (Repo, bool) ! RepoErrors {
+    init_with(path, bare, branch, "")?
+}
+
+/// init, or with WORKTREE non-empty a separate non-bare gitdir at PATH itself
+/// whose core.worktree is WORKTREE, as a submodule's .git/modules/<name> is
+/// (vc25; gitrepository-layout(5) `modules/`).
+pub fn init_with(path: str, bare: bool, branch: str, worktree: str) -> (Repo, bool) ! RepoErrors {
     if branch == "" ||
         branch.contains("..") ||
         branch.contains("@{{") ||
@@ -140,7 +147,7 @@ pub fn init(path: str, bare: bool, branch: str) -> (Repo, bool) ! RepoErrors {
     let globals = global_config()?
     let _ = globals
     fs.create_dir_all(path)?
-    var dir = if bare then path else "{path}/.git"
+    var dir = if bare || worktree != "" then path else "{path}/.git"
     if fs.is_file(dir) { dir = gitfile(dir)? }
     let reinit = fs.is_file("{dir}/HEAD")
     if reinit { let _ = open(dir)? }
@@ -154,7 +161,8 @@ pub fn init(path: str, bare: bool, branch: str) -> (Repo, bool) ! RepoErrors {
         fs.sync(mut head)?
         fs.close(take head)?
         var config = fs.create_new_with_mode("{dir}/config", 0o644)?
-        let tail = if bare then "\tbare = true\n" else "\tbare = false\n\tlogallrefupdates = true\n"
+        var tail = if bare then "\tbare = true\n" else "\tbare = false\n\tlogallrefupdates = true\n"
+        if worktree != "" { tail = "\tbare = false\n\tlogallrefupdates = true\n\tworktree = {worktree}\n" }
         fs.write(mut config, "[core]\n\trepositoryformatversion = 0\n\tfilemode = true\n{tail}")?
         fs.sync(mut config)?
         fs.close(take config)?

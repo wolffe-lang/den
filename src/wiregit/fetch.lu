@@ -45,8 +45,9 @@ fn fetch_selected(
     download: bool,
     keep: bool,
 ) -> List[wire.Ref] ! object.StoreErrors {
-    transport.check_http_configuration(url, repo.config)?
-    var p = transport.peer(url, "upload-pack")?
+    let opened = wire_url(repo.gitdir, repo.config, url, false)?
+    transport.check_http_configuration(opened, repo.config)?
+    var p = transport.peer(opened, "upload-pack")?
     var active = true
     defer { if active { let _ = transport.close_peer(mut p) else 1 } }
     let advertisement = transport.advertisement(mut p, 65536)?
@@ -241,7 +242,32 @@ fn clone_mode(url: str, destination: str, bare: bool, local: bool) -> bool ! obj
 
 fn clone_created(url: str, destination: str, bare: bool, local: bool) -> bool ! object.StoreErrors {
     let (repo, _) = repository.init(destination, bare, "main")?
+    clone_into(repo, url, destination, bare, local, true)?
+}
+
+/// Clone URL into a submodule's own gitdir GITDIR, whose core.worktree is
+/// WORKTREE (relative to GITDIR), without a checkout: the submodule layer
+/// detaches HEAD at the recorded commit (vc25). A failure removes GITDIR.
+pub fn clone_submodule(url: str, gitdir: str, worktree: str) -> () ! object.StoreErrors {
+    if url.contains("\n") || url.contains("\r") { return invalid }
+    if fs.exists(gitdir) { return exists }
+    var complete = false
+    defer { if !complete { fs.remove_dir_all(gitdir) else |_| {} } }
+    let (repo, _) = repository.init_with(gitdir, false, "main", worktree)?
+    clone_into(repo, url, gitdir, false, true, false)?
+    complete = true
+}
+
+fn clone_into(
+    repo: repository.Repo,
+    url: str,
+    destination: str,
+    bare: bool,
+    local: bool,
+    checkout: bool,
+) -> () ! object.StoreErrors {
     let plain = transport.local_path(url)
+    if plain { protocol_check(repo.config, url)? }
     let advertised = if plain && local {
         clone_local_objects(repo, url)?
     } else {
@@ -340,7 +366,7 @@ fn clone_created(url: str, destination: str, bare: bool, local: bool) -> bool ! 
         }
     }
     fs.sync(mut config)?
-    if !bare && after.len == 1 {
+    if checkout && !bare && after.len == 1 {
         checkout_clone(repo, destination, after[0]) else |e| {
             return Unsupported("clone checkout: {e}")
         }
