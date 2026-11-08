@@ -1,0 +1,246 @@
+// git-ls-remote(1) over protocol v2's ls-refs (den#68): a remote's refs in
+// the server's order, filtered by --heads/--branches, --tags and --refs and
+// by tail-matched glob patterns, with peeled tags, --symref and --exit-code,
+// on every transport den speaks. --get-url, --sort and -o/--server-option
+// remain named refusals.
+use object
+use remote
+use repository
+use transport
+use wire
+
+// gitglossary(7) glob, as ls-remote applies it: `*` and `?` cross "/",
+// `[...]` classes (with `!` or `^` negation and ranges), `\` escapes.
+fn glob_at(pattern: List[byte], p: int, text: List[byte], t: int) -> bool {
+    var pi = p, ti = t
+    while pi < pattern.len {
+        let c = pattern[pi] as int
+        if c == 42 {
+            while pi < pattern.len && pattern[pi] as int == 42 { pi += 1 }
+            if pi == pattern.len { return true }
+            for k in ti..=text.len { if glob_at(pattern, pi, text, k) { return true } }
+            return false
+        }
+        if ti >= text.len { return false }
+        if c == 63 {
+            pi += 1
+            ti += 1
+            continue
+        }
+        if c == 91 {
+            var close = pi + 1
+            if close < pattern.len && (pattern[close] as int == 33 || pattern[close] as int == 94) {
+                close += 1
+            }
+            if close < pattern.len && pattern[close] as int == 93 { close += 1 }
+            while close < pattern.len && pattern[close] as int != 93 { close += 1 }
+            if close < pattern.len {
+                var at = pi + 1, negate = false, matched = false
+                if pattern[at] as int == 33 || pattern[at] as int == 94 {
+                    negate = true
+                    at += 1
+                }
+                let b = text[ti] as int
+                var first = true
+                while at < close {
+                    let lo = pattern[at] as int
+                    if lo == 93 && !first { break }
+                    first = false
+                    if at + 2 < close && pattern[at + 1] as int == 45 {
+                        if b >= lo && b <= pattern[at + 2] as int { matched = true }
+                        at += 3
+                    } else {
+                        if b == lo { matched = true }
+                        at += 1
+                    }
+                }
+                if matched == negate { return false }
+                pi = close + 1
+                ti += 1
+                continue
+            }
+        }
+        var literal = c
+        if c == 92 && pi + 1 < pattern.len {
+            pi += 1
+            literal = pattern[pi] as int
+        }
+        if text[ti] as int != literal { return false }
+        pi += 1
+        ti += 1
+    }
+    ti == text.len
+}
+
+// A pattern matches a name's tail: the whole name, or what follows any "/".
+fn tail_match(patterns: List[str], name: str) -> bool {
+    if patterns.len == 0 { return true }
+    let bytes = name.bytes()
+    for pattern in patterns {
+        let glob = pattern.bytes()
+        if glob_at(glob, 0, bytes, 0) { return true }
+        for i in 0..bytes.len {
+            if bytes[i] as int != 47 { continue }
+            var tail = List[byte]()
+            for k in i + 1..bytes.len { (mut tail).push(bytes[k]) }
+            if glob_at(glob, 0, tail, 0) { return true }
+        }
+    }
+    false
+}
+
+// ls-refs with symrefs and peeled tags; ref-prefix only for --heads/--tags.
+fn listed(
+    url: str,
+    config: Map[str, str],
+    prefixes: List[str],
+) -> List[wire.Ref] ! object.StoreErrors {
+    transport.check_http_configuration(url, config)?
+    var p = transport.peer(url, "upload-pack")?
+    var active = true
+    defer { if active { let _ = transport.close_peer(mut p) else 1 } }
+    let advertisement = transport.advertisement(mut p, 65536)?
+    if advertisement.len == 0 { return Unsupported("remote service unavailable") }
+    let remote_message = remote_error(advertisement)?
+    if remote_message != "" { return Unsupported(remote_message) }
+    let caps = wire.capabilities(advertisement) else |_| {
+        return Unsupported("remote does not advertise protocol v2")
+    }
+    if !wire.supports(caps, "ls-refs") { return Unsupported("v2 ls-refs unavailable") }
+    for cap in caps {
+        if cap.starts_with("object-format=") && cap != "object-format=sha1" {
+            return Unsupported("remote object format")
+        }
+    }
+    var args = ["symrefs", "peel"]
+    for prefix in prefixes { (mut args).push("ref-prefix {prefix}") }
+    let request = wire.request("ls-refs", args)?
+    let response = transport.exchange(mut p, request, 2097152)?
+    let received = wire.parse_refs(response)?
+    transport.end_peer(p)?
+    let status = transport.close_peer(mut p)?
+    active = false
+    if status != 0 { return io }
+    received
+}
+
+fn listing(args: List[str]) -> int ! object.StoreErrors {
+    var heads = false,
+        tags = false,
+        refs_only = false,
+        quiet = false,
+        exit_code = false,
+        symref = false
+    var upload = "", operands = List[str](), literal = false
+    for arg in args[1..] {
+        if literal {
+            (mut operands).push(copy arg)
+        } else if arg == "--" {
+            literal = true
+        } else if arg == "--heads" ||
+            arg == "--branches" ||
+            arg == "-b" ||
+            arg == "-h" && args.len > 2 {
+            heads = true
+        } else if arg == "--tags" || arg == "-t" {
+            tags = true
+        } else if arg == "--refs" {
+            refs_only = true
+        } else if arg == "-q" || arg == "--quiet" {
+            quiet = true
+        } else if arg == "--exit-code" {
+            exit_code = true
+        } else if arg == "--symref" {
+            symref = true
+        } else if arg.starts_with("--upload-pack=") {
+            upload = arg[14..]
+            if upload == "" { return Unsupported("empty upload-pack service path") }
+        } else if arg.starts_with("-") {
+            return Unsupported("ls-remote option {arg}")
+        } else {
+            (mut operands).push(copy arg)
+        }
+    }
+    let found = repository.discover(".") else |_| {
+        repository.Repo { gitdir: "", config: Map[str, str]() }
+    }
+    let config = if found.gitdir == "" then repository.global_config()? else copy found.config
+    var url = "", name = "", announce = false
+    if operands.len == 0 {
+        if found.gitdir == "" {
+            eprint("fatal: No remote configured to list refs from.")
+            return 128
+        }
+        name = remote.default_name(found, false)?
+        url = found.config["remote.{name}.url"] else ""
+        if url == "" {
+            eprint("fatal: No remote configured to list refs from.")
+            return 128
+        }
+        announce = true
+    } else if found.gitdir != "" && (found.config["remote.{operands[0]}.url"] else "") != "" {
+        name = copy operands[0]
+        url = remote.url(found, name, false)?
+    } else {
+        url = copy operands[0]
+    }
+    let patterns = if operands.len > 1 then operands[1..] else List[str]()
+    let program = if upload != "" {
+        copy upload
+    } else if name != "" {
+        found.config["remote.{name}.uploadpack"] else ""
+    } else {
+        ""
+    }
+    let service_state = override_service("DEN_UPLOAD_PACK", program)?
+    defer restore_service(take service_state)
+    var prefixes = List[str]()
+    if heads { (mut prefixes).push("refs/heads/") }
+    if tags { (mut prefixes).push("refs/tags/") }
+    let received = listed(url, config, prefixes) else |e| match e {
+        Unsupported(message) => {
+            if startup_diagnostic(message) { return 128 }
+            return Unsupported(message)
+        },
+        _ => { return Unsupported("ls-remote: {e}") },
+    }
+    if announce && !quiet { eprint("From {transport.redact(url)}") }
+    var shown = 0
+    for reference in received {
+        if reference.id == "unborn" { continue }
+        let full = reference.name.starts_with("refs/")
+        if (refs_only || heads || tags) && !full { continue }
+        if heads || tags {
+            let wanted = heads && reference.name.starts_with("refs/heads/") ||
+                tags && reference.name.starts_with("refs/tags/")
+            if !wanted { continue }
+        }
+        if tail_match(patterns, reference.name) {
+            if symref && reference.target != "" {
+                print("ref: {reference.target}\t{reference.name}")
+            }
+            print("{reference.id}\t{reference.name}")
+            shown += 1
+        }
+        if reference.peeled != "" && !refs_only && tail_match(patterns, "{reference.name}^{{}}") {
+            print("{reference.peeled}\t{reference.name}^{{}}")
+            shown += 1
+        }
+    }
+    if exit_code && shown == 0 then 2 else 0
+}
+
+/// `den ls-remote`; named refusals print as den's other wire commands do.
+pub fn ls_remote_command(args: List[str]) -> int {
+    if args.len == 2 && args[1] == "-h" {
+        eprint("den: wire: Unsupported(ls-remote -h is Git's help)")
+        return 2
+    }
+    listing(args) else |e| match e {
+        Unsupported(message) => {
+            eprint("den: wire: Unsupported({transport.redact(message)})")
+            2
+        },
+        _ => { eprint("den: wire: {transport.redact("{e}")}"); 2 },
+    }
+}
