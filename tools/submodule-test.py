@@ -766,6 +766,69 @@ def family_fetch():
     compare('fetch-abs-pull-submodule-error', ['pull'], 'fetch-abs', cwd='c', extra=ALLOW_FILE, prepare=gone)
 
 
+def family_recurse():
+    """--recurse-submodules and submodule.recurse on checkout, switch, reset
+    and pull (git-checkout(1), git-switch(1), git-reset(1), git-pull(1)): the
+    active submodules' worktrees follow the recorded commits, detached."""
+    recurse = with_config(('submodule.recurse', 'true'))
+
+    def fresh(then=None):
+        """A world copy changes every file's stat, so a submodule's index
+        would read as stale; Git refreshes each one first (a checkout that
+        recurses does not), then THEN runs."""
+        def prepare(w):
+            g('submodule', 'foreach', '-q', '--recursive', 'git update-index -q --refresh || true', cwd=w / 'c',
+              extra=ALLOW_FILE)
+            if then:
+                then(w)
+        return prepare
+
+    s = named_seed('moved')
+    for argv in (['checkout', '--recurse-submodules', 'HEAD~1'], ['checkout', '-q', '--recurse-submodules', 'HEAD~1'],
+                 ['switch', '--recurse-submodules', '--detach', 'HEAD~1'],
+                 ['reset', '--hard', '--recurse-submodules', 'HEAD~1'], ['reset', '--recurse-submodules', 'HEAD~1'],
+                 ['reset', '--soft', '--recurse-submodules', 'HEAD~1'],
+                 ['checkout', '--no-recurse-submodules', 'HEAD~1'], ['reset', '-q', '--hard', '--recurse-submodules', 'HEAD~1']):
+        compare('recurse-moved-' + '-'.join(x.strip('-').replace('~', '') for x in argv), argv, s, cwd='c',
+                extra=ALLOW_FILE, prepare=fresh())
+    for argv in (['checkout', 'HEAD~1'], ['switch', '--detach', 'HEAD~1'], ['reset', '--hard', 'HEAD~1'],
+                 ['checkout', '--no-recurse-submodules', 'HEAD~1']):
+        compare('recurse-config-moved-' + '-'.join(x.strip('-').replace('~', '') for x in argv), argv, s, cwd='c',
+                extra=recurse, prepare=fresh())
+
+    def dirty(w):
+        (w / 'c/mid/mid.txt').write_text('mine\n')
+
+    def untracked(w):
+        (w / 'c/mid/u.txt').write_text('u\n')
+
+    for label, prepare in (('dirty', dirty), ('untracked', untracked)):
+        for argv in (['checkout', '--recurse-submodules', 'HEAD~1'], ['checkout', '-f', '--recurse-submodules', 'HEAD~1'],
+                     ['reset', '--hard', '--recurse-submodules', 'HEAD~1']):
+            compare('recurse-%s-%s' % (label, '-'.join(x.strip('-').replace('~', '') for x in argv)), argv, s,
+                    cwd='c', extra=ALLOW_FILE, prepare=fresh(prepare))
+    s = named_seed('nosub')
+    for argv in (['checkout', '--recurse-submodules', 'nosub'], ['switch', '--recurse-submodules', 'nosub']):
+        compare('recurse-nosub-' + '-'.join(x.strip('-') for x in argv), argv, s, cwd='c', extra=ALLOW_FILE,
+                prepare=fresh())
+
+    def on_nosub(w):
+        g('checkout', '-q', '--recurse-submodules', 'nosub', cwd=w / 'c', extra=ALLOW_FILE)
+
+    for argv in (['checkout', '--recurse-submodules', 'main'], ['switch', '--recurse-submodules', 'main']):
+        compare('recurse-back-' + '-'.join(x.strip('-') for x in argv), argv, s, cwd='c', extra=ALLOW_FILE,
+                prepare=fresh(on_nosub))
+    seed('fetch-abs', fetch_seed(False))
+    seed('fetch-nested', fetch_seed(True))
+    for seed_name in ('fetch-abs', 'fetch-nested'):
+        label = seed_name[6:]
+        for argv in (['pull', '--recurse-submodules'], ['pull', '-q', '--recurse-submodules'],
+                     ['pull', '--recurse-submodules=on-demand']):
+            compare('recurse-pull-%s-%s' % (label, '-'.join(x.strip('-') for x in argv)), argv, seed_name,
+                    cwd='c', extra=ALLOW_FILE, prepare=fresh())
+        compare('recurse-pull-%s-config' % label, ['pull'], seed_name, cwd='c', extra=recurse, prepare=fresh())
+
+
 REFUSALS = [
     ['submodule', 'add', '../x.git', 'x'], ['submodule', 'deinit', 'abs'], ['submodule', 'set-url', 'abs', '../x'],
     ['submodule', 'set-branch', '-b', 'main', 'abs'], ['submodule', 'summary'], ['submodule', 'absorbgitdirs'],
@@ -773,7 +836,6 @@ REFUSALS = [
     ['clone', '--shallow-submodules', '--recurse-submodules', 'x', 'y'], ['clone', '--remote-submodules', 'x', 'y'],
     ['mv', 'abs', 'abs2'], ['restore', 'abs'], ['stash'],
     ['push', '--recurse-submodules=check', 'origin', 'main'], ['push', '--recurse-submodules=on-demand', 'origin', 'main'],
-    ['pull', '--recurse-submodules'], ['pull', '--recurse-submodules=on-demand'],
 ]
 RECURSE = {'GIT_CONFIG_COUNT': '2', 'GIT_CONFIG_KEY_0': 'protocol.file.allow', 'GIT_CONFIG_VALUE_0': 'always',
            'GIT_CONFIG_KEY_1': 'submodule.recurse', 'GIT_CONFIG_VALUE_1': 'true'}
@@ -785,7 +847,6 @@ def family_refusals():
     seed('clone', recursive_clone)
     cases = [(argv, ALLOW_FILE, 'refusal-' + '-'.join(x.strip('-') for x in argv[:3]), None) for argv in REFUSALS]
     cases.append((['push', 'origin', 'main'], RECURSE, 'refusal-push-submodule-recurse-true', None))
-    cases.append((['pull'], RECURSE, 'refusal-pull-submodule-recurse-true', None))
     # Checkout runs where branches have upstreams; making a tracking branch
     # (from a remote-tracking start, or by guessing a remote's branch) stays
     # refused by name.
@@ -810,7 +871,7 @@ def family_refusals():
         print('PASS' if ok else 'FAIL', name, '' if ok else json.dumps(q), flush=True)
 
 
-FAMILIES = {'read': family_read, 'status': family_status, 'diff': family_diff, 'clone': family_clone, 'hostile': family_hostile, 'transport': family_transport, 'work': family_work, 'fetch': family_fetch, 'refusals': family_refusals}
+FAMILIES = {'read': family_read, 'status': family_status, 'diff': family_diff, 'clone': family_clone, 'hostile': family_hostile, 'transport': family_transport, 'work': family_work, 'fetch': family_fetch, 'recurse': family_recurse, 'refusals': family_refusals}
 
 try:
     FAMILIES[a.family]()
