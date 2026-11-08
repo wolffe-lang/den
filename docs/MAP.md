@@ -177,6 +177,37 @@ updates to `refs/stash` as `funny refname`, including forced creation; local sta
 storage is unaffected. Its 770-group typed matrix compares acceptance and refs,
 not exact failure text or status; raw outputs remain retained separately.
 
+vc24 (den#71): `push_specs` became `push_source`, which resolves each source
+before any connection by gitrevisions(7)'s `<refname>` order (refused `src
+refspec X matches more than one` or `does not match any`, exit 1, with Git's
+failed-push line) and records a `PushPlan` (the source as typed, its ref, the
+namespace an attached HEAD lends, its id and type, the destination as typed).
+`push_plans` places a short destination against the receive-pack advertisement
+(`place_destination`: one remote match, `dst refspec X matches more than one`,
+the source's `refs/heads/` or `refs/tags/`, else Git's eleven-line refusal and
+its type-specific hint unless `advice.pushUnqualifiedRefname` is false), then
+takes any leases and continues as `push_reported` did; `push_reported` wraps it
+for full refspecs.
+
+vc24 (den#70): `explicit_fetch_command` serves `fetch [-q] [-f] REMOTE
+REFSPEC...` for a configured remote. It lists the remote with `ls-refs`
+(`listed`, shared with `ls-remote`), maps each refspec (`mapped_of`: full or
+short sources, one-star globs, negative refspecs, `tag NAME`), fetches exactly
+the mapped sources' objects (`fetch_names` over `fetch_selected`'s new `names`),
+updates each destination with Git's fast-forward and tag rules
+(`update_mapped`), applies the opportunistic remote-tracking update through the
+default branch wildcard, follows tags as the configured fetch does, writes
+FETCH_HEAD with every explicit entry for merge, and prints the report, unpadded
+when it holds a rejection (`fetch_report_width`). `ls_remote_command` (den#68)
+lists any transport's refs with Git's filters, tail-matched globs, peeled
+lines, `--symref` and `--exit-code`.
+
+vc24 (den#72): `clone_name` derives a clone's directory from its URL when none
+is given; `clone_mode` fills an existing empty destination and empties it again
+on failure, and reports an empty repository for Git's warning. A local clone's
+source is found as `PATH/.git`, `PATH`, then `PATH.git`, and an unborn HEAD is
+named only when the source's `lsrefs.unborn` would advertise it.
+
 Pull reads CLI/config rebase and ff policy, performs the configured fetch and
 reuses the existing merge/replay engines, including their conflicts and named
 limits. Explicit --rebase/--no-rebase overrides configured pull.ff=only; explicit
@@ -1452,3 +1483,12 @@ Foreign index locks and dirty files stay present and immutable in read matrices.
 Expanded refs (632 exact / 17 named), merge (132 / 12) and replay (96 / 20)
 matrices run on both native tiers and again over packed fixture copies. No history
 read calls `index.write_tree`; no new production subprocess dependency exists.
+
+vc24 (den#69): `reflog` resolves `@{upstream}`/`@{u}` (any case) through
+`upstream_of`: the current or named branch's `branch.<b>.remote` and `.merge`
+mapped by `tracking_reference`, or the merge ref itself for remote `.`, with
+Git's refusals (`no upstream configured for branch`, `HEAD does not point to a
+branch`, `no such branch`, `not stored as a remote-tracking branch`) and a gone
+upstream as not found. `short_name` is `tracking_name` made public. `revparse`
+(the root package) is `rev-parse`'s command edge over `revision.evaluate`;
+`repository.discover` honours `GIT_CEILING_DIRECTORIES`.
