@@ -167,7 +167,23 @@ pub fn inner(
     var inner_options = copy options
     inner_options.paths = []
     inner_options.revisions = []
-    var changed = changes(prefixed_files(old, name), prefixed_files(new, name), inner_options)?
+    // Files print under the gitlink's path; a nested submodule keeps its
+    // path within this one, where its own summary looks it up (vc25 rows).
+    var changed = List[Change]()
+    for change in changes(old, new, inner_options)? {
+        let nested = change.before.len > 0 && change.before[0].mode == 0o160000 ||
+            change.after.len > 0 && change.after[0].mode == 0o160000
+        (mut changed).push(if nested {
+            copy change
+        } else {
+            Change {
+                before: prefixed_files(change.before, name),
+                after: prefixed_files(change.after, name),
+                status: copy change.status,
+                percent: change.percent,
+            }
+        })
+    }
     let bytes = render(sub, changed, inner_options)?
     // The submodule's worktree diff refreshes its index as den's own diff
     // does (diff.autoRefreshIndex), as the pinned Git's does (vc25 rows).
