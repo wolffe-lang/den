@@ -18,5 +18,6 @@ pkg {
         wire: {path: "../wire"},
         index: {path: "../index"},
         worktree: {path: "../worktree"},
+        gitmodules: {path: "../gitmodules"},
     },
 }

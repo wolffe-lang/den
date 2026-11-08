@@ -195,8 +195,9 @@ pub fn push_plans(
     if plans.len == 0 || plans.len > 10000 || given.len > 10000 || outcomes.len != 0 {
         return invalid
     }
-    transport.check_http_configuration(url, repo.config)?
-    var p = transport.peer(url, "receive-pack")?
+    let opened = wire_url(repo.gitdir, repo.config, url, true)?
+    transport.check_http_configuration(opened, repo.config)?
+    var p = transport.peer(opened, "receive-pack")?
     var active = true, started = false, advertised = false
     defer {
         if active {

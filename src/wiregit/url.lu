@@ -1,0 +1,53 @@
+// url.<base>.insteadOf / pushInsteadOf and protocol.allow / protocol.<name>.allow
+// (git-config(1) of Git v2.56.0), held to the pinned Git (vc25's rows): the
+// rewrite applies before the policy, the stored URL stays the original, and a
+// protocol whose policy is "user" is refused when GIT_PROTOCOL_FROM_USER is 0,
+// as it is for the clones and fetches the submodule machinery runs.
+use gitmodules
+use object
+use repository
+use transport
+
+/// The protocol name protocol.<name>.allow uses for URL.
+fn protocol_name(url: str) -> str {
+    let lower = url.lower()
+    if lower.starts_with("https://") { return "https" }
+    if lower.starts_with("http://") { return "http" }
+    if lower.starts_with("git://") { return "git" }
+    if lower.starts_with("ssh://") || lower.starts_with("git+ssh://") || lower.starts_with("ssh+git://") {
+        return "ssh"
+    }
+    if lower.starts_with("file://") || transport.local_path(url) { return "file" }
+    if transport.ssh_form(url) { return "ssh" }
+    let at = url.find("://") else { return "file" }
+    url[0..at].lower()
+}
+
+/// Refuse URL when its protocol's policy does not admit it here.
+pub fn protocol_check(config: Map[str, str], url: str) -> () ! object.StoreErrors {
+    let name = protocol_name(url)
+    var policy = config["protocol.{name}.allow"] else ""
+    if policy == "" { policy = config["protocol.allow"] else "" }
+    if policy == "" {
+        policy = if name == "http" || name == "https" || name == "git" || name == "ssh" {
+            "always"
+        } else if name == "ext" {
+            "never"
+        } else {
+            "user"
+        }
+    }
+    let user = (env_get("GIT_PROTOCOL_FROM_USER") else "1") != "0"
+    if policy == "always" || policy == "user" && user { return }
+    Unsupported("transport '{name}' not allowed")
+}
+
+/// The URL a transport opens for URL: rewritten by insteadOf (pushInsteadOf
+/// first for a push) from GITDIR's configuration ("" outside a repository),
+/// then admitted by the protocol policy.
+pub fn wire_url(gitdir: str, config: Map[str, str], url: str, push: bool) -> str ! object.StoreErrors {
+    let entries = repository.configuration(gitdir)?
+    let rewritten = gitmodules.rewrite(url, entries, push)
+    protocol_check(config, rewritten)?
+    rewritten
+}

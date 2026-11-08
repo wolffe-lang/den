@@ -14,6 +14,10 @@ fn read_failure() {
 
 fn startup_diagnostic(message: str) -> bool {
     if message == "remote service unavailable" { read_failure(); return true }
+    if message.starts_with("transport '") && message.ends_with("' not allowed") {
+        eprint("fatal: {message}")
+        return true
+    }
     if message.starts_with("remote error: ") || message.starts_with("couldn't find remote ref ") {
         eprint("fatal: {transport.redact(message)}")
         return true
