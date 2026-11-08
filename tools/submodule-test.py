@@ -248,7 +248,7 @@ def family_read():
                  ['diff', '--submodule=diff', 'HEAD~1', 'HEAD'], ['diff', '--stat', 'HEAD~1', 'HEAD'],
                  ['diff', '--numstat', 'HEAD~1', 'HEAD'], ['diff', '--name-status', 'HEAD~1', 'HEAD'],
                  ['diff', '--name-only', 'HEAD~1', 'HEAD'], ['diff', '--shortstat', 'HEAD~1', 'HEAD'],
-                 ['diff', '--submodule=log', 'HEAD', 'HEAD~1'], ['log', '-p', '--root', '--submodule=log'],
+                 ['diff', '--submodule=log', 'HEAD', 'HEAD~1'], ['log', '-p', '--submodule=log'],
                  ['diff', '--submodule=diff', 'HEAD', 'HEAD~1'], ['show', '--submodule=log', 'HEAD~1'],
                  ['diff', '-c', 'diff.submodule=log', 'HEAD~1', 'HEAD'],
                  ['show', 'HEAD:mid'], ['log', '-p', '--submodule=log', '-2']):
