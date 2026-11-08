@@ -1,0 +1,104 @@
+# tools/clone-work-test.py --family upstream,refusals --field against den built at
+# 304757b (vc24, before checkout, switch and reset ran where branches have
+# upstreams), macOS field Git 2.56.0; https excluded by name in field mode.
+FAIL upstream-switch-create-local step 1 switch -c topic HEAD~1: den exit 2 den: not yet implemented: switch branch configuration branch.main.remote
+FAIL upstream-switch-back-local step 1 switch -c topic HEAD~1: den exit 2 den: not yet implemented: switch branch configuration branch.main.remote
+FAIL upstream-switch-detach-local step 1 switch --detach HEAD~1: den exit 2 den: not yet implemented: switch branch configuration branch.main.remote
+FAIL upstream-switch-behind-local step 1 reset -q --hard HEAD~1: den exit 2 den: not yet implemented: reset branch configuration branch.main.remote
+FAIL upstream-switch-ahead-local step 1 switch -c topic HEAD~1: den exit 2 den: not yet implemented: switch branch configuration branch.main.remote
+FAIL upstream-checkout-branch-local step 1 checkout -b topic HEAD~1: den exit 2 den: not yet implemented: checkout branch configuration branch.main.remote
+FAIL upstream-checkout-same-local step 1 checkout main: den exit 2 den: not yet implemented: checkout branch configuration branch.main.remote
+FAIL upstream-checkout-detach-local step 1 checkout HEAD~1: den exit 2 den: not yet implemented: checkout branch configuration branch.main.remote
+FAIL upstream-checkout-behind-local step 1 reset -q --hard HEAD~2: den exit 2 den: not yet implemented: reset branch configuration branch.main.remote
+FAIL upstream-checkout-paths-local step 1 checkout HEAD~1 -- a.txt: den exit 2 den: not yet implemented: checkout (only -- <paths> alias)
+FAIL upstream-checkout-path-dot-local step 1 checkout HEAD~2 -- .: den exit 2 den: not yet implemented: checkout (only -- <paths> alias)
+FAIL upstream-reset-soft-local step 1 reset --soft HEAD~1: den exit 2 den: not yet implemented: reset branch configuration branch.main.remote
+FAIL upstream-reset-mixed-local step 1 reset HEAD~1: den exit 2 den: not yet implemented: reset branch configuration branch.main.remote
+FAIL upstream-reset-hard-local step 1 reset --hard HEAD~1: den exit 2 den: not yet implemented: reset branch configuration branch.main.remote
+FAIL upstream-reset-hard-back-local step 1 reset --hard HEAD~1: den exit 2 den: not yet implemented: reset branch configuration branch.main.remote
+FAIL upstream-switch-create-file step 1 switch -c topic HEAD~1: den exit 2 den: not yet implemented: switch branch configuration branch.main.remote
+FAIL upstream-switch-back-file step 1 switch -c topic HEAD~1: den exit 2 den: not yet implemented: switch branch configuration branch.main.remote
+FAIL upstream-switch-detach-file step 1 switch --detach HEAD~1: den exit 2 den: not yet implemented: switch branch configuration branch.main.remote
+FAIL upstream-switch-behind-file step 1 reset -q --hard HEAD~1: den exit 2 den: not yet implemented: reset branch configuration branch.main.remote
+FAIL upstream-switch-ahead-file step 1 switch -c topic HEAD~1: den exit 2 den: not yet implemented: switch branch configuration branch.main.remote
+FAIL upstream-checkout-branch-file step 1 checkout -b topic HEAD~1: den exit 2 den: not yet implemented: checkout branch configuration branch.main.remote
+FAIL upstream-checkout-same-file step 1 checkout main: den exit 2 den: not yet implemented: checkout branch configuration branch.main.remote
+FAIL upstream-checkout-detach-file step 1 checkout HEAD~1: den exit 2 den: not yet implemented: checkout branch configuration branch.main.remote
+FAIL upstream-checkout-behind-file step 1 reset -q --hard HEAD~2: den exit 2 den: not yet implemented: reset branch configuration branch.main.remote
+FAIL upstream-checkout-paths-file step 1 checkout HEAD~1 -- a.txt: den exit 2 den: not yet implemented: checkout (only -- <paths> alias)
+FAIL upstream-checkout-path-dot-file step 1 checkout HEAD~2 -- .: den exit 2 den: not yet implemented: checkout (only -- <paths> alias)
+FAIL upstream-reset-soft-file step 1 reset --soft HEAD~1: den exit 2 den: not yet implemented: reset branch configuration branch.main.remote
+FAIL upstream-reset-mixed-file step 1 reset HEAD~1: den exit 2 den: not yet implemented: reset branch configuration branch.main.remote
+FAIL upstream-reset-hard-file step 1 reset --hard HEAD~1: den exit 2 den: not yet implemented: reset branch configuration branch.main.remote
+FAIL upstream-reset-hard-back-file step 1 reset --hard HEAD~1: den exit 2 den: not yet implemented: reset branch configuration branch.main.remote
+FAIL upstream-switch-create-git step 1 switch -c topic HEAD~1: den exit 2 den: not yet implemented: switch branch configuration branch.main.remote
+FAIL upstream-switch-back-git step 1 switch -c topic HEAD~1: den exit 2 den: not yet implemented: switch branch configuration branch.main.remote
+FAIL upstream-switch-detach-git step 1 switch --detach HEAD~1: den exit 2 den: not yet implemented: switch branch configuration branch.main.remote
+FAIL upstream-switch-behind-git step 1 reset -q --hard HEAD~1: den exit 2 den: not yet implemented: reset branch configuration branch.main.remote
+FAIL upstream-switch-ahead-git step 1 switch -c topic HEAD~1: den exit 2 den: not yet implemented: switch branch configuration branch.main.remote
+FAIL upstream-checkout-branch-git step 1 checkout -b topic HEAD~1: den exit 2 den: not yet implemented: checkout branch configuration branch.main.remote
+FAIL upstream-checkout-same-git step 1 checkout main: den exit 2 den: not yet implemented: checkout branch configuration branch.main.remote
+FAIL upstream-checkout-detach-git step 1 checkout HEAD~1: den exit 2 den: not yet implemented: checkout branch configuration branch.main.remote
+FAIL upstream-checkout-behind-git step 1 reset -q --hard HEAD~2: den exit 2 den: not yet implemented: reset branch configuration branch.main.remote
+FAIL upstream-checkout-paths-git step 1 checkout HEAD~1 -- a.txt: den exit 2 den: not yet implemented: checkout (only -- <paths> alias)
+FAIL upstream-checkout-path-dot-git step 1 checkout HEAD~2 -- .: den exit 2 den: not yet implemented: checkout (only -- <paths> alias)
+FAIL upstream-reset-soft-git step 1 reset --soft HEAD~1: den exit 2 den: not yet implemented: reset branch configuration branch.main.remote
+FAIL upstream-reset-mixed-git step 1 reset HEAD~1: den exit 2 den: not yet implemented: reset branch configuration branch.main.remote
+FAIL upstream-reset-hard-git step 1 reset --hard HEAD~1: den exit 2 den: not yet implemented: reset branch configuration branch.main.remote
+FAIL upstream-reset-hard-back-git step 1 reset --hard HEAD~1: den exit 2 den: not yet implemented: reset branch configuration branch.main.remote
+FAIL upstream-switch-create-ssh step 1 switch -c topic HEAD~1: den exit 2 den: not yet implemented: switch branch configuration branch.main.remote
+FAIL upstream-switch-back-ssh step 1 switch -c topic HEAD~1: den exit 2 den: not yet implemented: switch branch configuration branch.main.remote
+FAIL upstream-switch-detach-ssh step 1 switch --detach HEAD~1: den exit 2 den: not yet implemented: switch branch configuration branch.main.remote
+FAIL upstream-switch-behind-ssh step 1 reset -q --hard HEAD~1: den exit 2 den: not yet implemented: reset branch configuration branch.main.remote
+FAIL upstream-switch-ahead-ssh step 1 switch -c topic HEAD~1: den exit 2 den: not yet implemented: switch branch configuration branch.main.remote
+FAIL upstream-checkout-branch-ssh step 1 checkout -b topic HEAD~1: den exit 2 den: not yet implemented: checkout branch configuration branch.main.remote
+FAIL upstream-checkout-same-ssh step 1 checkout main: den exit 2 den: not yet implemented: checkout branch configuration branch.main.remote
+FAIL upstream-checkout-detach-ssh step 1 checkout HEAD~1: den exit 2 den: not yet implemented: checkout branch configuration branch.main.remote
+FAIL upstream-checkout-behind-ssh step 1 reset -q --hard HEAD~2: den exit 2 den: not yet implemented: reset branch configuration branch.main.remote
+FAIL upstream-checkout-paths-ssh step 1 checkout HEAD~1 -- a.txt: den exit 2 den: not yet implemented: checkout (only -- <paths> alias)
+FAIL upstream-checkout-path-dot-ssh step 1 checkout HEAD~2 -- .: den exit 2 den: not yet implemented: checkout (only -- <paths> alias)
+FAIL upstream-reset-soft-ssh step 1 reset --soft HEAD~1: den exit 2 den: not yet implemented: reset branch configuration branch.main.remote
+FAIL upstream-reset-mixed-ssh step 1 reset HEAD~1: den exit 2 den: not yet implemented: reset branch configuration branch.main.remote
+FAIL upstream-reset-hard-ssh step 1 reset --hard HEAD~1: den exit 2 den: not yet implemented: reset branch configuration branch.main.remote
+FAIL upstream-reset-hard-back-ssh step 1 reset --hard HEAD~1: den exit 2 den: not yet implemented: reset branch configuration branch.main.remote
+EXCLUDED upstream-switch-create-https
+EXCLUDED upstream-switch-back-https
+EXCLUDED upstream-switch-detach-https
+EXCLUDED upstream-switch-behind-https
+EXCLUDED upstream-switch-ahead-https
+EXCLUDED upstream-checkout-branch-https
+EXCLUDED upstream-checkout-same-https
+EXCLUDED upstream-checkout-detach-https
+EXCLUDED upstream-checkout-behind-https
+EXCLUDED upstream-checkout-paths-https
+EXCLUDED upstream-checkout-path-dot-https
+EXCLUDED upstream-reset-soft-https
+EXCLUDED upstream-reset-mixed-https
+EXCLUDED upstream-reset-hard-https
+EXCLUDED upstream-reset-hard-back-https
+PASS refusal-checkout-b-remote-local
+PASS refusal-checkout-b-remote-full-local
+PASS refusal-switch-c-remote-local
+PASS refusal-checkout-guess-local
+PASS refusal-switch-guess-local
+PASS refusal-checkout-b-remote-file
+PASS refusal-checkout-b-remote-full-file
+PASS refusal-switch-c-remote-file
+PASS refusal-checkout-guess-file
+PASS refusal-switch-guess-file
+PASS refusal-checkout-b-remote-git
+PASS refusal-checkout-b-remote-full-git
+PASS refusal-switch-c-remote-git
+PASS refusal-checkout-guess-git
+PASS refusal-switch-guess-git
+PASS refusal-checkout-b-remote-ssh
+PASS refusal-checkout-b-remote-full-ssh
+PASS refusal-switch-c-remote-ssh
+PASS refusal-checkout-guess-ssh
+PASS refusal-switch-guess-ssh
+EXCLUDED refusal-checkout-b-remote-https
+EXCLUDED refusal-checkout-b-remote-full-https
+EXCLUDED refusal-switch-c-remote-https
+EXCLUDED refusal-checkout-guess-https
+EXCLUDED refusal-switch-guess-https
+# exact=20 failed=60 excluded=20 rows=100
