@@ -142,6 +142,38 @@ for case in range(96):
     delta=size(len(source))+size(len(target))+bytes([mask])+operands+b'\x03end'
     pp,ii,_=make([(3,source,source,b''),(6,target,delta,0)])
     check('copy-fields-'+str(case),repo('copy-fields-'+str(case),pp,ii),target)
+# A batch reader (a checkout's, den#63) opened before its pack changes: its
+# second read answers as a fresh read of the changed pack does, and a reader
+# whose packs cannot open up front still serves loose objects.
+def fresh_answer(r, full, cap):
+    p = subprocess.run([str(CLIENT), str(r), full, str(cap)], capture_output=True, timeout=60)
+    if p.returncode == 0: return p.stdout.split(b'\n', 1)[0].decode()
+    return 'error ' + p.stderr.decode(errors='replace').strip()
+def session_row(name, r, body, mutate=None, cap=16777216, must=None):
+    full = oid('blob', body).hex(); argv = [str(CLIENT), '--session', str(r), full, str(cap)]
+    first = fresh_answer(r, full, cap)
+    if mutate is not None:
+        pack_path = r/'objects'/'pack'/'pack-fixture.pack'; source = OUT/(name + '.source')
+        source.write_bytes(mutate(pack_path.read_bytes())); argv += [str(pack_path), str(source)]
+    p = subprocess.run(argv, capture_output=True, timeout=60)
+    expected = 'first ' + first + '\n'
+    if mutate is not None: expected += 'second ' + fresh_answer(r, full, cap) + '\n'
+    # must: the answer the fixture is built to give, so a row cannot pass on
+    # an unintended agreement.
+    good = p.returncode == 0 and p.stdout.decode(errors='replace') == expected and not p.stderr and (must is None or must in expected)
+    rows.append(dict(name=name, ok=good, code=p.returncode, stdout=p.stdout.decode(errors='replace'), expected=expected, stderr=p.stderr.decode(errors='replace')))
+    if not good: print(name, p.returncode, p.stdout[:300], 'expected', expected, p.stderr, flush=True)
+def flip(at): return lambda b: b[:at] + bytes([b[at] ^ 1]) + b[at+1:]
+for name, mutate, must in [('same', lambda b: b, 'second blob 9 '), ('shorter', lambda b: b[:-1], 'second error'),
+                           ('longer', lambda b: b + b'\0', 'second error'),
+                           ('header', flip(7), 'pack version'), ('count', flip(11), 'pack object count'),
+                           ('trailer', flip(-1), 'pack index binding'), ('entry', flip(-25), 'pack entry CRC')]:
+    session_row('session-reread-' + name, repo('session-' + name, pack, idx), last, mutate, must=must)
+session_row('session-read', repo('session-read', pack, idx), middle, must='first blob')
+rr = repo('session-bitmap', pack, idx); (rr/'objects'/'pack'/'pack-fixture.bitmap').write_bytes(b'unsupported')
+loose = rr/'objects'/oid('blob',last).hex()[:2]; loose.mkdir(); (loose/oid('blob',last).hex()[2:]).write_bytes(zlib.compress(b'blob 9\0'+last))
+session_row('session-unopened-loose', rr, last, must='first blob 9 ')
+session_row('session-unopened-packed', rr, base, must='pack bitmap')
 (OUT/'results.json').write_text(json.dumps(rows,indent=2)+'\n')
 print(f'pack structural: {sum(x["ok"] for x in rows)}/{len(rows)}; zero skips',flush=True)
 raise SystemExit(not all(x['ok'] for x in rows))
