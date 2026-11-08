@@ -300,13 +300,15 @@ pub fn import_pack(repo: repository.Repo, bytes: List[byte]) -> () ! object.Stor
 
 /// den#73: a pushed pack through the streamed indexer that fetch uses: it is
 /// installed (a pack of 100 objects or more is kept, as Git's receive-pack
-/// keeps one), then the typed closure of the pushed tips is checked. A thin pack, whose bases are local objects, takes the
-/// whole-stream decoder, which resolves them.
+/// keeps one), then the typed closure of the pushed tips is checked, and the
+/// answer is true. A thin pack, whose bases are local objects, takes the
+/// whole-stream decoder, which resolves them, and the answer is false: its
+/// tips' closure is the caller's to check.
 pub fn receive_import(
     repo: repository.Repo,
     bytes: List[byte],
     roots: List[str],
-) -> () ! object.StoreErrors {
+) -> bool ! object.StoreErrors {
     var receiver = pack.receive_begin(repo.gitdir)?
     defer pack.receive_abort(mut receiver)
     var pos = 0
@@ -319,7 +321,7 @@ pub fn receive_import(
         Unsupported(text) => {
             if text == "pack delta base missing" {
                 import_pack(repo, bytes)?
-                return
+                return false
             }
             return Unsupported(text)
         },
@@ -331,6 +333,7 @@ pub fn receive_import(
     // store), then check the pushed tips' typed closure.
     publish_received(repo, ix, false)?
     closure_received(repo, roots, ix)?
+    true
 }
 
 /// Test commit ancestry with shared header parsing and bounded graph traversal; not a general revision evaluator.

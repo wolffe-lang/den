@@ -541,12 +541,15 @@ pub fn receive(repo: repository.Repo, c: transport.Channel) -> () ! object.Store
         seen[fields[2]] = true
         (mut updates).push(PushUpdate { name: copy fields[2], before: before, after: after })
     }
-    var unpack_error = ""
+    var unpack_error = "", checked = false
     if needs_pack {
         let bytes = receive_pack_bytes(c)?
         var roots = List[str]()
         for u in updates { if u.after != zero() { (mut roots).push(copy u.after) } }
-        receive_import(repo, bytes, roots) else |e| { unpack_error = "{e}" }
+        checked = receive_import(repo, bytes, roots) else |e| {
+            unpack_error = "{e}"
+            false
+        }
     }
     var reasons = List[str](), changes = List[refs.AtomicUpdate](), any_failed = unpack_error != ""
     for u in updates {
@@ -578,7 +581,12 @@ pub fn receive(repo: repository.Repo, c: transport.Channel) -> () ! object.Store
                     !ancestor(repo, u.before, u.after)? {
                     reason = "non-fast-forward"
                 }
-                if reason == "" { let _ = closure(repo, [u.after], [])? }
+                // den#73: the streamed path checked every tip's typed closure
+                // (closure_received); a thin pack's whole-stream decode did
+                // not, so its tips are walked here, kept as a plan.
+                if reason == "" && !checked {
+                    let _ = walk_plan(repo, [u.after], pack.nameset())?
+                }
             }
         }
         if reason != "" { any_failed = true }
