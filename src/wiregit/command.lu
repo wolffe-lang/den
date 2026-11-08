@@ -185,6 +185,44 @@ fn run_inner(args: List[str]) -> int {
         return explicit_fetch_command(args)
     }
     if args.len > 0 && args[0] == "pull" { return pull_command(args) }
+    if args.len > 0 && args[0] == "fetch" && configured_form(args) {
+        return fetch_with_submodules(args)
+    }
+    execute_status(args)
+}
+
+// A configured fetch, then its submodules as git-fetch(1)'s
+// --recurse-submodules and the configuration select them (vc25).
+fn fetch_with_submodules(args: List[str]) -> int {
+    var rest = List[str](), cli = "", quiet = false
+    for arg in args {
+        let flag = recursion_flag(arg)
+        if flag.len == 1 {
+            if flag[0] == "invalid" {
+                eprint("fatal: bad recurse-submodules argument: {arg[21..]}")
+                return 128
+            }
+            cli = copy flag[0]
+            continue
+        }
+        if arg == "-q" || arg == "--quiet" { quiet = true }
+        (mut rest).push(copy arg)
+    }
+    let found = repository.discover(".") else |_| { return execute_status(rest) }
+    if cli == "" && setting(found.config["submodule.recurse"] else "false") == "yes" { cli = "yes" }
+    let before = tips(found) else |e| {
+        eprint("den: wire: Unsupported(submodule fetch: {e})")
+        return 2
+    }
+    let status = execute_status(rest)
+    if status != 0 { return status }
+    recurse(before, cli, quiet) else |e| {
+        eprint("den: wire: Unsupported(submodule fetch: {transport.redact("{e}")})")
+        return 2
+    }
+}
+
+fn execute_status(args: List[str]) -> int {
     execute(args) else |e| match e {
         Unsupported(message) => {
             if startup_diagnostic(message) { return 128 }
