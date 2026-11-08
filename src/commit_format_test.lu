@@ -17,7 +17,269 @@ fn date_rejected(text: str) -> bool {
     rejected
 }
 
+fn raw_case(
+    value: str,
+    split: bool,
+    name: str,
+    email: str,
+    stamp: str,
+    seconds: str,
+    zone: str,
+    problem: str,
+) {
+    let r = commit_format.raw_identity(value.bytes())
+    let (id, _) = commit_format.identity_problem(value.bytes())
+    let good = r.split == split &&
+        bytes_equal(r.name, name.bytes()) &&
+        bytes_equal(r.email, email.bytes()) &&
+        r.dated == (stamp != "") &&
+        bytes_equal(r.stamp, stamp.bytes()) &&
+        r.seconds_text == (if stamp == "" then "0" else seconds) &&
+        bytes_equal(r.zone_text, zone.bytes()) &&
+        id == problem
+    if !good { print("FAIL raw identity row: {value} -> {id}") }
+    assert(good)
+}
+
+fn shown_case(seconds: int, zone: int, style: str, text: str, fatal: str) -> () ! {
+    Unsupported(str),
+} {
+    let shown = commit_format.shown_date(seconds, zone, style)?
+    let good = shown.text == text && shown.fatal == fatal
+    if !good {
+        print("FAIL shown date row: {seconds} {zone} {style} -> {shown.text} / {shown.fatal}")
+    }
+    assert(good)
+}
+
+// vc26: identities split and checked as the pinned Git reads them back
+// (notes/vc26-evidence/measured-base.txt), and dates shown as it shows them.
+fn raw_rows() -> () ! commit_format.FormatErrors {
+    let full = "1700000000"
+    raw_case(
+        "A U Thor <author@example.invalid> 1700000000 +0000",
+        true,
+        "A U Thor",
+        "author@example.invalid",
+        full,
+        full,
+        "+0000",
+        "",
+    )
+    raw_case(
+        "walker0643 <> 1519250155 -0500",
+        true,
+        "walker0643",
+        "",
+        "1519250155",
+        "1519250155",
+        "-0500",
+        "",
+    )
+    raw_case(" <e@x> 1700000000 +0000", true, "", "e@x", full, full, "+0000", "")
+    raw_case("   <e@x> 1700000000 +0000", true, "", "e@x", full, full, "+0000", "")
+    raw_case(
+        "<e@x> 1700000000 +0000",
+        true,
+        "",
+        "e@x",
+        full,
+        full,
+        "+0000",
+        "missingNameBeforeEmail",
+    )
+    raw_case("<> 1700000000 +0000", true, "", "", full, full, "+0000", "missingNameBeforeEmail")
+    raw_case("A U Thor 1700000000 +0000", false, "", "", "", "", "", "missingEmail")
+    raw_case(
+        "A U Thor<a@x> 1700000000 +0000",
+        true,
+        "A U Thor",
+        "a@x",
+        full,
+        full,
+        "+0000",
+        "missingSpaceBeforeEmail",
+    )
+    raw_case(
+        "A U Thor\t<a@x> 1700000000 +0000",
+        true,
+        "A U Thor",
+        "a@x",
+        full,
+        full,
+        "+0000",
+        "missingSpaceBeforeEmail",
+    )
+    raw_case(
+        "  A U Thor   <a@x> 1700000000 +0000",
+        true,
+        "  A U Thor",
+        "a@x",
+        full,
+        full,
+        "+0000",
+        "",
+    )
+    raw_case(
+        "A <a@x>1700000000 +0000",
+        true,
+        "A",
+        "a@x",
+        full,
+        full,
+        "+0000",
+        "missingSpaceBeforeDate",
+    )
+    raw_case(
+        "A <a@x>\t1700000000 +0000",
+        true,
+        "A",
+        "a@x",
+        full,
+        full,
+        "+0000",
+        "missingSpaceBeforeDate",
+    )
+    raw_case("A <a@x>  1700000000 +0000", true, "A", "a@x", full, full, "+0000", "")
+    raw_case("A <a@x> \t1700000000 +0000", true, "A", "a@x", full, full, "+0000", "")
+    raw_case("A <a@x>", true, "A", "a@x", "", "", "", "missingSpaceBeforeDate")
+    raw_case("A <a@x> ", true, "A", "a@x", "", "", "", "badDate")
+    raw_case("A <a@x> 0 +0000", true, "A", "a@x", "0", "0", "+0000", "")
+    raw_case("A <a@x> 0", true, "A", "a@x", "", "", "", "zeroPaddedDate")
+    raw_case("A <a@x> 00 +0000", true, "A", "a@x", "00", "0", "+0000", "zeroPaddedDate")
+    raw_case(
+        "A <a@x> 01700000000 +0000",
+        true,
+        "A",
+        "a@x",
+        "01700000000",
+        full,
+        "+0000",
+        "zeroPaddedDate",
+    )
+    raw_case(
+        "A <a@x>  01700000000 +0000",
+        true,
+        "A",
+        "a@x",
+        "01700000000",
+        full,
+        "+0000",
+        "zeroPaddedDate",
+    )
+    raw_case("A <a@x> -1 +0000", true, "A", "a@x", "", "", "", "badDate")
+    raw_case("A <a@x> 1700000000", true, "A", "a@x", "", "", "", "badDate")
+    raw_case("A <a@x> 1700000000+0000", true, "A", "a@x", full, full, "+0000", "badDate")
+    raw_case(
+        "A <a@x> 9223372036854775807 +0000",
+        true,
+        "A",
+        "a@x",
+        "9223372036854775807",
+        "9223372036854775807",
+        "+0000",
+        "",
+    )
+    raw_case(
+        "A <a@x> 9223372036854775808 +0000",
+        true,
+        "A",
+        "a@x",
+        "9223372036854775808",
+        "9223372036854775808",
+        "+0000",
+        "badDateOverflow",
+    )
+    raw_case(
+        "A <a@x> 18446744073709551616 -0500",
+        true,
+        "A",
+        "a@x",
+        "18446744073709551616",
+        "18446744073709551615",
+        "-0500",
+        "badDateOverflow",
+    )
+    raw_case("A <a@x> 1700000000 +00000", true, "A", "a@x", full, full, "+00000", "badTimezone")
+    raw_case("A <a@x> 1700000000 +000", true, "A", "a@x", full, full, "+000", "badTimezone")
+    raw_case("A <a@x> 1700000000 0000", true, "A", "a@x", "", "", "", "badTimezone")
+    raw_case("A <a@x> 1700000000 +00a0", true, "A", "a@x", full, full, "+00", "badTimezone")
+    raw_case("A <a@x> 1700000000  +0000", true, "A", "a@x", full, full, "+0000", "badTimezone")
+    raw_case(
+        "A <a@x> 1700000000 +0000 garbage",
+        true,
+        "A",
+        "a@x",
+        full,
+        full,
+        "+0000",
+        "badTimezone",
+    )
+    raw_case("A <a@x> 1700000000 +0000\r", true, "A", "a@x", full, full, "+0000", "badTimezone")
+    raw_case("A <a@x> 1700000000 +0099", true, "A", "a@x", full, full, "+0099", "")
+    raw_case(
+        "Jo<e <a@x> 1700000000 +0000",
+        true,
+        "Jo",
+        "e <a@x",
+        full,
+        full,
+        "+0000",
+        "missingSpaceBeforeEmail",
+    )
+    raw_case("Jo>e <a@x> 1700000000 +0000", true, "Jo>e", "a@x", full, full, "+0000", "badName")
+    raw_case("A <a<b@x> 1700000000 +0000", true, "A", "a<b@x", full, full, "+0000", "badEmail")
+    raw_case(
+        "A <a>b@x> 1700000000 +0000",
+        true,
+        "A",
+        "a",
+        full,
+        full,
+        "+0000",
+        "missingSpaceBeforeDate",
+    )
+    raw_case(
+        "A <a@x>> 1700000000 +0000",
+        true,
+        "A",
+        "a@x",
+        full,
+        full,
+        "+0000",
+        "missingSpaceBeforeDate",
+    )
+    raw_case("A <a@x 1700000000 +0000", false, "", "", "", "", "", "badEmail")
+    let five = commit_format.raw_identity("A <a@x> 1 +12345".bytes())
+    let minus = commit_format.raw_identity("A <a@x> 1 -5".bytes())
+    assert(five.zone == 12345 && minus.zone == -5 && five.fits && five.seconds == 1)
+    assert(!commit_format.raw_identity("A <a@x> 9223372036854775808 +0000".bytes()).fits)
+
+    shown_case(1700000000, 0, "default", "Tue Nov 14 22:13:20 2023 +0000", "")?
+    shown_case(1700000000, 99, "default", "Tue Nov 14 23:52:20 2023 +0099", "")?
+    shown_case(1700000000, 1, "rfc", "Tue, 14 Nov 2023 22:14:20 +0001", "")?
+    shown_case(1700000000, -5, "iso", "2023-11-14 22:08:20 -0005", "")?
+    shown_case(1700000000, 12345, "iso-strict", "2023-11-20T01:58:20+123:45", "")?
+    shown_case(1700000000, -1230, "iso-strict", "2023-11-14T09:43:20-12:30", "")?
+    shown_case(1700000000, 0, "iso-strict", "2023-11-14T22:13:20Z", "")?
+    shown_case(1700000000, 9999, "short", "2023-11-19", "")?
+    shown_case(253402300800, 0, "default", "Sat Jan 1 00:00:00 10000 +0000", "")?
+    shown_case(100000000000000, 0, "default", "Sat Nov 7 09:46:40 3170843 +0000", "")?
+    shown_case(67767976233532799, 0, "iso", "2147483647-12-31 23:59:59 +0000", "")?
+    shown_case(67767976233532800, 0, "default", "Wed Jan 1 00:00:00 -2147483648 +0000", "")?
+    shown_case(67768036191676799, 0, "default", "Wed Dec 31 23:59:59 -2147481749 +0000", "")?
+    shown_case(67768036191676800, 0, "default", "Thu Jan 1 00:00:00 1970 +0000", "")?
+    shown_case(9223372036854775807, -500, "rfc", "Thu, 1 Jan 1970 00:00:00 +0000", "")?
+    shown_case(9223372036854775807, -500, "raw", "9223372036854775807 -0500", "")?
+    shown_case(0, -500, "default", "", "Timestamp before Unix epoch: 0 -500")?
+    shown_case(0, -500, "raw", "0 -0500", "")?
+    shown_case(1700000000, 530, "default-local", "Tue Nov 14 22:13:20 2023", "")?
+    assert(commit_format.zone_shown(0) == "+0000" && commit_format.zone_shown(-1230) == "-1230")
+    print("PASS vc26 raw identities, Git's identity checks and shown dates")
+}
+
 fn main() -> int ! commit_format.FormatErrors {
+    raw_rows()?
     assert(
         commit_format.identity_text(commit_format.parse_identity("Name <n> 1 +10039")?)? ==
             "Name <n> 1 +10039",
@@ -278,7 +540,11 @@ fn main() -> int ! commit_format.FormatErrors {
         copy ident
     }
     assert(pattern)
-    for text in ["A <a", "A <a> suffix", "A <>", "<a>", "A <a> <b>"] {
+    // vc26: Git writes an explicitly empty email (measured: --author='X <>').
+    assert(commit_format.parse_author("A <>", date)?.email == "")
+    assert(commit_format.make_identity(",J. R.;", " <e>. ", date)?.name == "J. R.")
+    assert(commit_format.make_identity(",J. R.;", " <e>. ", date)?.email == "e>.".replace(">", ""))
+    for text in ["A <a", "A <a> suffix", "<a>", "A <a> <b>"] {
         var invalid = false
         let _ = commit_format.parse_author(text, date) else |_| {
             invalid = true
