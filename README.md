@@ -47,7 +47,7 @@ oracle builds are in `notes/vc00-evidence/`.
 | Commit | Ordered `-m`, `-F`, `-a`, `--amend`, `--reset-author`, `--author`, fixed `--date`, cleanup modes, quiet and allow-empty options; attached/detached HEAD and loose-over-packed branch updates |
 | Diff | Worktree/index, `--cached`, two commits/trees or blobs; unified context, final-newline markers, modes, binary patches, stat/name forms, rename/copy detection and common pathspec magic |
 | History | `log` default/oneline/short/full/fuller, `-n`, `--skip`, `--reverse`, `--first-parent`, fixed date formats, patch/stat, short/full/no/terminal-auto decorations; `show` commits, trees, blobs, annotated tags and `REV:path`; default-format display of `refs/notes/commits` notes |
-| Restore | Index-to-worktree `restore`, `--staged`, `--worktree`, `--source`; `checkout -- <paths>` |
+| Restore | Index-to-worktree `restore`, `--staged`, `--worktree`, `--source`; `checkout [<tree-ish>] -- <paths>` |
 | Refs | Loose and packed refs with peeled tag records; branch list/create/force/delete/rename, lightweight and message-supplied annotated tags, command reflogs |
 | Branch worktree | `switch` and branch `checkout`, `-c`/`-b` creation, explicit and implicit detached HEAD, dirty-worktree protection; `reset --soft/--mixed/--hard` |
 | Merge | Fast-forward, already-up-to-date, bounded regular-file three-way merges, conflict stages and merge/diff3/zdiff3 markers; `--no-ff`, `--ff-only`, `--squash`, `--no-commit`, `--no-edit`, `-m`, `-F`, `--abort` |
@@ -341,7 +341,8 @@ switch and reset leave submodule worktrees alone, as Git does by default. They
 run where branches have upstreams, as every clone's do: checkout and switch
 print the upstream lines Git prints, while making a tracking branch, from a
 remote-tracking start point or by guessing a remote's branch, stays a named
-refusal.
+refusal. `tools/clone-work-test.py` holds a plain clone and these commands to
+Git byte for byte over every transport.
 `.gitmodules` is checked as Git checks it: suspicious names, values that could
 be read as options and invalid values warn or refuse with Git's messages.
 
