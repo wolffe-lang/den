@@ -68,9 +68,16 @@ fn main() -> int {
                         }
                     }
                 }
+                if args[0] == "pull" && submodule.wanted(args) {
+                    return submodule.recursive_pull(args)
+                }
                 return wiregit.run(args)
             },
-            "branch" | "tag" | "switch" | "reset" | "merge" | "revert" | "cherry-pick" | "rebase" => {
+            "switch" | "reset" => {
+                if submodule.wanted(args) { return submodule.recursive_worktree(args) }
+                return refcmd.run(args)
+            },
+            "branch" | "tag" | "merge" | "revert" | "cherry-pick" | "rebase" => {
                 return refcmd.run(args)
             },
             "fsck" | "count-objects" | "verify-pack" | "pack-objects" | "repack" | "prune-packed" | "gc" => {
@@ -88,6 +95,7 @@ fn main() -> int {
             },
             "checkout" => {
                 for argument in args { if argument == "--" { return worktree.run(args) } }
+                if submodule.wanted(args) { return submodule.recursive_worktree(args) }
                 return refcmd.run(args)
             },
             "init" | "hash-object" | "cat-file" | "write-tree" | "commit-tree" | "mktag" | "mktree" | "config" | "ls-tree" | "ls-files" => {
