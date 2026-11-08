@@ -31,5 +31,48 @@ fn main() -> int ! {
     assert(rejected(input, 2, 100) == "unsupported_level")
     assert(rejected(input, 1, -1) == "invalid")
     print("PASS encoder levels, binary data, exact and short caps")
+    // den#73: deflate_with gives deflate's bytes from tables it keeps, after
+    // an input past one 32 KiB block, a short one, an empty one and a refused
+    // cap alike.
+    var t = zlib.tables()
+    var seed = 7
+    var calls = 0
+    for round in 0..12 {
+        region one {
+            var src = List[byte]()
+            let n = match round % 6 {
+                0 => 0,
+                1 => 2,
+                2 => 33000,
+                3 => round * 37,
+                4 => 5000,
+                _ => 300,
+            }
+            for i in 0..n {
+                seed = (seed * 1103515245 + 12345) % 2147483648
+                let b = if round % 2 == 0 {
+                    seed / 65536 % 4 * 61
+                } else {
+                    (i / 3 + seed / 65536 % 3) % 256
+                }
+                (mut src).push(b as byte)
+            }
+            for level in [1, -1, 0] {
+                let plain = zlib.deflate(src, level, n + n / 8 + 65536)?
+                let kept = zlib.deflate_with(mut t, src, level, n + n / 8 + 65536)?
+                assert(plain.len == kept.len)
+                for i in 0..plain.len { assert(plain[i] == kept[i]) }
+                if plain.len > 2 {
+                    let short = zlib.deflate_with(mut t, src, level, plain.len / 2) else |e| {
+                        assert("{e}" == "limit")
+                        List[byte]()
+                    }
+                    assert(short.len == 0)
+                }
+                calls += 1
+            }
+        }
+    }
+    print("PASS deflate_with matches deflate across {calls} calls and refused caps")
     0
 }
