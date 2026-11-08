@@ -328,6 +328,20 @@ class Harness:
         if self.https_errors:
             self.verdict('wire-gaps-https-fixture', ['fixture errors: ' + ', '.join(self.https_errors)])
 
+    def no_private_keys(self):
+        """target/runs is published evidence (tools/evidence-modes.py): after
+        every fixture has stopped, this run's tree holds no private key, by
+        name (*.key) or by content."""
+        left = []
+        for path in sorted(self.out.rglob('*')):
+            if not path.is_file() or path.is_symlink():
+                continue
+            with open(path, 'rb') as handle:
+                head = handle.read(65536)
+            if path.suffix == '.key' or b'PRIVATE KEY-----' in head:
+                left.append(path.relative_to(self.root).as_posix())
+        self.verdict('wire-gaps-no-private-keys', ['private key left in the evidence tree: ' + p for p in left])
+
     def transports(self):
         return [t for t in TRANSPORTS if not (self.field and t == 'https')]
 
@@ -839,6 +853,7 @@ def main():
             h.stop_https()
     finally:
         h.stop()
+    h.no_private_keys()
     left = ' (https and memory not run: field leg)' if args.field else ''
     if h.failed:
         raise SystemExit('FAIL wire-gaps: %d of %d rows: %s' % (len(h.failed), len(h.failed) + h.passed,
