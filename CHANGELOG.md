@@ -19,7 +19,10 @@
 - `add`, `commit -a`, `reset`, `checkout`, `switch` and `rm` handle gitlinks
   without entering a submodule; `rm` of a submodule removes its worktree and
   its `.gitmodules` section. `checkout` and `switch` print the local changes
-  and tracking lines Git prints.
+  and tracking lines Git prints: a staged change too, by how the worktree
+  differs from HEAD, and no list after `switch` or `checkout -b` names no
+  start point. A staged change a switch keeps leaves its trees invalid in the
+  index, as Git's does.
 - `checkout`, `switch` and `reset` work in any clone: they run where
   branches have upstreams, held to Git over every transport by
   `tools/clone-work-test.py`. Making a tracking branch from a remote-tracking
