@@ -109,10 +109,11 @@ pub fn remove_paths(
                 entry.stat[6] == snapshot.files[file].mode &&
                 oid.equal(entry.id, snapshot.files[file].id)
             // A submodule is locally modified when its HEAD moved or its
-            // worktree has modified content (vc25 probe 2, rm-dirty).
+            // worktree has modified or untracked content (vc25 probe 2,
+            // rm-dirty, and the work rows).
             if entry.stat[6] == 0o160000 && file >= 0 {
-                let state = submodule_state(ctx, text(path)?, entry.id, "untracked")?
-                same_disk = oid.equal(state.head, entry.id) && !state.modified
+                let state = submodule_state(ctx, text(path)?, entry.id, "")?
+                same_disk = oid.equal(state.head, entry.id) && !state.modified && !state.untracked
             }
             if options.cached {
                 if !same_head && !same_disk && entry.extended & 0x2000 == 0 {
