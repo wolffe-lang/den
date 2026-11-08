@@ -149,7 +149,11 @@ pub fn changes(
             compare(before[a].path, after[b].path)
         }
         if cmp == 0 {
-            if before[a].mode != after[b].mode || !oid.equal(before[a].id, after[b].id) {
+            // A gitlink keeps its commit but differs in its `-dirty` text when
+            // its worktree is modified (vc25): still a change.
+            let dirty = before[a].mode == 0o160000 && after[b].mode == 0o160000 &&
+                compare(before[a].data, after[b].data) != 0
+            if before[a].mode != after[b].mode || !oid.equal(before[a].id, after[b].id) || dirty {
                 let status = if before[a].mode & 0o170000 != after[b].mode & 0o170000 {
                     "T"
                 } else {
