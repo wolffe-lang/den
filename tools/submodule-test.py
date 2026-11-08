@@ -728,6 +728,17 @@ def family_fetch():
     compare('fetch-abs-already-present', ['fetch'], 'fetch-abs', cwd='c', extra=ALLOW_FILE,
             prepare=lambda w: g('fetch', '-q', cwd=w / 'c/abs', extra=ALLOW_FILE))
 
+    def local_commit(w):
+        (w / 'c/top.txt').write_text('top\nlocal\n')
+        g('commit', '-q', '-am', 'local change', cwd=w / 'c')
+
+    # One side moved the gitlink, the other changed a file: the merge takes
+    # the moved gitlink through.
+    compare('fetch-abs-pull-merge', ['pull', '--no-rebase'], 'fetch-abs', cwd='c', extra=ALLOW_FILE,
+            prepare=local_commit)
+    compare('fetch-nested-pull-merge', ['pull', '--no-rebase'], 'fetch-nested', cwd='c', extra=ALLOW_FILE,
+            prepare=local_commit)
+
     def gone(w):
         (w / 'leaf.git').rename(w / 'leaf-gone.git')
 
