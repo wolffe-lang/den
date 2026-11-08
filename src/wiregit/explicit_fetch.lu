@@ -1,0 +1,381 @@
+// git-fetch(1) REMOTE REFSPEC... for a configured remote (den#70): each
+// refspec's source matched against the remote's refs (a full name, a short
+// one by gitrevisions(7)'s <refname> order, or a one-star glob), negative
+// refspecs excluding glob matches, `tag NAME`, `+` and -f; the destinations
+// updated with Git's fast-forward and tag rules; FETCH_HEAD written with every
+// explicit entry for merge; tags followed into the fetched history; the
+// opportunistic remote-tracking update through the remote's configured
+// refspec; Git's report and exit status.
+use object
+use oid
+use refs
+use remote
+use repository
+use transport
+use wire
+use worktree
+
+struct FetchSpec { force: bool, negative: bool, source: str, destination: str }
+
+/// One remote ref an explicit refspec selected and where it goes ("" for
+/// FETCH_HEAD only).
+struct Mapped { force: bool, source: str, id: str, destination: str }
+
+fn star_match(pattern: str, name: str) -> str {
+    let parts = pattern.split("*")
+    if parts.len != 2 { return if pattern == name then "" else "\0" }
+    if name.len < parts[0].len + parts[1].len ||
+        !name.starts_with(parts[0]) ||
+        !name.ends_with(parts[1]) {
+        return "\0"
+    }
+    name[parts[0].len..name.len - parts[1].len]
+}
+
+fn specs_of(operands: List[str]) -> List[FetchSpec] ! object.StoreErrors {
+    var out = List[FetchSpec](), at = 0
+    while at < operands.len {
+        var text = copy operands[at]
+        at += 1
+        if text == "tag" {
+            if at >= operands.len { return Unsupported("fetch tag requires a name") }
+            text = "refs/tags/{operands[at]}:refs/tags/{operands[at]}"
+            at += 1
+        }
+        let negative = text.starts_with("^")
+        if negative { text = text[1..] }
+        let force = text.starts_with("+")
+        if force { text = text[1..] }
+        let parts = text.split(":")
+        if parts.len > 2 || parts[0] == "" {
+            return Unsupported("fetch refspec {operands[at - 1]}")
+        }
+        if negative && (parts.len == 2 || force) {
+            return Unsupported("fetch negative refspec {operands[at - 1]}")
+        }
+        let source = parts[0]
+        let destination = if parts.len == 2 then copy parts[1] else ""
+        if source.contains("*") != destination.contains("*") && !negative && destination != "" {
+            return Unsupported("fetch refspec {operands[at - 1]}")
+        }
+        if source.split("*").len > 2 { return Unsupported("fetch refspec {operands[at - 1]}") }
+        (mut out).push(FetchSpec {
+            force: force,
+            negative: negative,
+            source: source,
+            destination: destination,
+        })
+    }
+    out
+}
+
+// The remote ref a short source names: the first of gitrevisions(7)'s
+// <refname> spellings the remote advertises.
+fn remote_named(advertised: List[wire.Ref], name: str) -> wire.Ref {
+    var spellings = List[str]()
+    if name == "HEAD" || name.starts_with("refs/") { (mut spellings).push(copy name) }
+    for prefix in ["refs/", "refs/tags/", "refs/heads/", "refs/remotes/"] {
+        (mut spellings).push("{prefix}{name}")
+    }
+    (mut spellings).push("refs/remotes/{name}/HEAD")
+    for spelling in spellings {
+        for reference in advertised {
+            if reference.name == spelling && reference.id != "unborn" { return copy reference }
+        }
+    }
+    wire.Ref { name: "", id: "", target: "", peeled: "" }
+}
+
+fn local_destination(destination: str) -> str {
+    if destination == "" || destination.starts_with("refs/") { return copy destination }
+    "refs/heads/{destination}"
+}
+
+fn excluded(specs: List[FetchSpec], name: str) -> bool {
+    for spec in specs {
+        if spec.negative && star_match(spec.source, name) != "\0" { return true }
+    }
+    false
+}
+
+// Each positive refspec's mapped refs, in refspec order (a glob's in the
+// server's order), and every source a glob matched, excluded or not, whose
+// objects Git still downloads; or the source no remote ref matches.
+fn mapped_of(
+    specs: List[FetchSpec],
+    advertised: List[wire.Ref],
+    mut out: List[Mapped],
+    mut wanted: List[str],
+) -> str {
+    for spec in specs {
+        if spec.negative { continue }
+        if spec.source.contains("*") {
+            for reference in advertised {
+                if reference.id == "unborn" { continue }
+                let middle = star_match(spec.source, reference.name)
+                if middle == "\0" { continue }
+                (mut wanted).push(copy reference.name)
+                if excluded(specs, reference.name) { continue }
+                let parts = spec.destination.split("*")
+                (mut out).push(Mapped {
+                    force: spec.force,
+                    source: copy reference.name,
+                    id: copy reference.id,
+                    destination: if spec.destination == "" {
+                        ""
+                    } else {
+                        "{parts[0]}{middle}{parts[1]}"
+                    },
+                })
+            }
+            continue
+        }
+        let found = remote_named(advertised, spec.source)
+        if found.name == "" { return copy spec.source }
+        (mut wanted).push(copy found.name)
+        (mut out).push(Mapped {
+            force: spec.force,
+            source: copy found.name,
+            id: copy found.id,
+            destination: local_destination(spec.destination),
+        })
+    }
+    ""
+}
+
+fn description(source: str) -> str {
+    if source.starts_with("refs/heads/") { return "branch '{source[11..]}' of " }
+    if source.starts_with("refs/tags/") { return "tag '{source[10..]}' of " }
+    if source == "HEAD" { return "" }
+    "'{source}' of "
+}
+
+fn explicit_fetch(
+    repo: repository.Repo,
+    name: str,
+    operands: List[str],
+    quiet: bool,
+    force: bool,
+    action: str,
+    upload: str,
+) -> int ! object.StoreErrors {
+    let specs = specs_of(operands)?
+    let url = remote.url(repo, name, false)?
+    let program = if upload == "" {
+        repo.config["remote.{name}.uploadpack"] else ""
+    } else {
+        copy upload
+    }
+    let service_state = override_service("DEN_UPLOAD_PACK", program)?
+    defer restore_service(take service_state)
+    let configured = repo.config["remote.{name}.fetch"] else ""
+    let tracking = configured == "+refs/heads/*:refs/remotes/{name}/*" ||
+        configured == "refs/heads/*:refs/remotes/{name}/*"
+    if configured != "" && !tracking {
+        return Unsupported("explicit fetch with a nondefault configured refspec")
+    }
+    let identity = remote.reflog_identity(repo)?
+    write_fetch_head(repo, "")?
+    let advertised = listed(url, repo.config, [])?
+    var mapped = List[Mapped](), wanted = List[str]()
+    let missing = mapped_of(specs, advertised, mut mapped, mut wanted)
+    if missing != "" {
+        eprint("fatal: couldn't find remote ref {missing}")
+        return 128
+    }
+    if (repo.config["core.bare"] else "false") != "true" {
+        let head = str_from_utf8(repository.read_bytes("{repo.gitdir}/HEAD", 4096)?) else |_| {
+            return invalid
+        }
+        for item in mapped {
+            if head.trim() == "ref: {item.destination}" {
+                let root = worktree.discover(".") else |_| { return Unsupported("fetch worktree") }
+                eprint(
+                    "fatal: refusing to fetch into branch '{item.destination}' checked out at '{root.root}'",
+                )
+                return 128
+            }
+        }
+    }
+    var roots = List[str]()
+    if wanted.len > 0 {
+        for reference in fetch_names(repo, url, wanted)? { (mut roots).push(copy reference.id) }
+    }
+    var rows = List[TransportRow](), later = List[TransportRow](), fetch_head = "", rejected = false
+    var stores = false
+    for item in mapped {
+        fetch_head = "{fetch_head}{item.id}\t\t{description(item.source)}{fetch_url(url)}\n"
+        let short = short_ref(item.source)
+        let kind = if item.source.starts_with("refs/heads/") || item.source == "HEAD" {
+            "branch"
+        } else if item.source.starts_with("refs/tags/") {
+            "tag"
+        } else {
+            ""
+        }
+        if item.destination == "" {
+            (mut rows).push(TransportRow {
+                flag: "*",
+                summary: kind,
+                source: short,
+                destination: "FETCH_HEAD",
+                reason: "",
+            })
+        } else {
+            stores = true
+            let row = update_mapped(repo, item, force, identity, action)?
+            if row.flag == "!" { rejected = true }
+            if row.flag != "=" { (mut rows).push(row) }
+        }
+        if tracking && item.source.starts_with("refs/heads/") {
+            let local = "refs/remotes/{name}/{item.source[11..]}"
+            if local != item.destination {
+                let row = update_mapped(
+                    repo,
+                    Mapped {
+                        force: true,
+                        source: copy item.source,
+                        id: copy item.id,
+                        destination: local,
+                    },
+                    true,
+                    identity,
+                    action,
+                )?
+                if row.flag != "=" { (mut later).push(row) }
+            }
+        }
+    }
+    if stores {
+        let followed = fetch_tags(repo, url, roots, identity, action, mut rows)?
+        fetch_head = "{fetch_head}{followed}"
+    }
+    for row in later { (mut rows).push(row) }
+    write_fetch_head(repo, fetch_head)?
+    if !quiet {
+        // A report with a rejection is printed without padding the summary
+        // column, as Git prints it.
+        fetch_report_width(url, rows, if rejected then 0 else 17)
+    }
+    if rejected then 1 else 0
+}
+
+// Update one destination as git-fetch(1) does; the row's flag is "=" when
+// nothing changed.
+fn update_mapped(
+    repo: repository.Repo,
+    item: Mapped,
+    force: bool,
+    identity: str,
+    action: str,
+) -> TransportRow ! object.StoreErrors {
+    let before = refs.optional(repo, item.destination)?
+    let old = if before.len == 0 then "" else oid.hex(before[0])?
+    let short = short_ref(item.source), target = short_ref(item.destination)
+    var row = TransportRow {
+        flag: "=",
+        summary: "",
+        source: short,
+        destination: target,
+        reason: "",
+    }
+    if old == item.id { return row }
+    var log = ""
+    if old == "" {
+        row.flag = "*"
+        row.summary = if item.source.starts_with("refs/heads/") {
+            "[new branch]"
+        } else if item.source.starts_with("refs/tags/") {
+            "[new tag]"
+        } else {
+            "[new ref]"
+        }
+        log = if item.source.starts_with("refs/tags/") then "storing tag" else "storing head"
+    } else if item.destination.starts_with("refs/tags/") {
+        if !force && !item.force {
+            row.flag = "!"
+            row.summary = "[rejected]"
+            row.reason = "would clobber existing tag"
+            return row
+        }
+        row.flag = "t"
+        row.summary = "[tag update]"
+        log = "updating tag"
+    } else if ancestor(repo, old, item.id)? {
+        row.flag = " "
+        row.summary = "{report_id(repo, old)?}..{report_id(repo, item.id)?}"
+        log = "fast-forward"
+    } else if force || item.force {
+        row.flag = "+"
+        row.summary = "{report_id(repo, old)?}...{report_id(repo, item.id)?}"
+        row.reason = "forced update"
+        log = "forced-update"
+    } else {
+        row.flag = "!"
+        row.summary = "[rejected]"
+        row.reason = "non-fast-forward"
+        return row
+    }
+    refs.update(
+        repo,
+        item.destination,
+        before,
+        [oid.parse("sha1", item.id)?],
+        identity,
+        "{action}: {log}",
+        false,
+    )?
+    row
+}
+
+// The refspec operands after a configured remote's name, when any: a fetch
+// that takes this path (`fetch [-q] [-f] REMOTE REFSPEC...`).
+fn explicit_operands(args: List[str]) -> List[str] {
+    var operands = List[str]()
+    for arg in args[1..] {
+        if !arg.starts_with("-") { (mut operands).push(copy arg) }
+    }
+    if operands.len < 2 then List[str]() else operands[1..]
+}
+
+fn explicit_fetch_args(args: List[str]) -> int ! object.StoreErrors {
+    var name = "",
+        quiet = false,
+        force = false,
+        action = "fetch",
+        upload = "",
+        operands = List[str]()
+    for arg in args[1..] {
+        action = "{action} {arg}"
+        if arg == "-q" || arg == "--quiet" {
+            quiet = true
+        } else if arg == "-f" || arg == "--force" {
+            force = true
+        } else if arg.starts_with("--upload-pack=") {
+            upload = arg[14..]
+            if upload == "" { return Unsupported("empty upload-pack service path") }
+        } else if arg == "--prune" || arg == "-p" {
+            return Unsupported("fetch --prune with an explicit refspec")
+        } else if arg.starts_with("-") {
+            return Unsupported("explicit fetch option {arg}")
+        } else if name == "" {
+            name = copy arg
+        } else {
+            (mut operands).push(copy arg)
+        }
+    }
+    let repo = repository.discover(".")?
+    explicit_fetch(repo, name, operands, quiet, force, action, upload)?
+}
+
+/// `den fetch [-q] [-f] REMOTE REFSPEC...`; returns the exit status.
+pub fn explicit_fetch_command(args: List[str]) -> int {
+    explicit_fetch_args(args) else |e| match e {
+        Unsupported(message) => {
+            if startup_diagnostic(message) { return 128 }
+            eprint("den: wire: Unsupported({transport.redact(message)})")
+            2
+        },
+        _ => { eprint("den: wire: {transport.redact("{e}")}"); 2 },
+    }
+}

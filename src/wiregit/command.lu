@@ -178,6 +178,12 @@ fn run_inner(args: List[str]) -> int {
     if missing >= 0 { return missing }
     if args.len > 0 && args[0] == "push" { return push_command(args) }
     if args.len > 0 && args[0] == "ls-remote" { return ls_remote_command(args) }
+    if args.len > 0 &&
+        args[0] == "fetch" &&
+        configured_form(args) &&
+        explicit_operands(args).len > 0 {
+        return explicit_fetch_command(args)
+    }
     if args.len > 0 && args[0] == "pull" { return pull_command(args) }
     execute(args) else |e| match e {
         Unsupported(message) => {
