@@ -302,10 +302,13 @@ pub fn clone_recursive(args: List[str]) -> int {
     // The destination is clone's last operand, as clone reads it.
     var operands = List[str]()
     for arg in plain[1..] { if !arg.starts_with("-") { (mut operands).push(copy arg) } }
-    for arg in plain[1..] { if arg == "--bare" || arg == "--mirror" || arg == "-n" || arg == "--no-checkout" { return 0 } }
+    // A bare clone records submodule.active and checks nothing out, as
+    // Git's does (vc25 rows).
+    var bare = false
+    for arg in plain[1..] { if arg == "--bare" { bare = true } }
     if operands.len == 0 { return rc }
     let destination = operands[operands.len - 1]
-    let code = run_recursion(destination, if specs.len == 0 then ["."] else specs, quiet) else |e| match e {
+    let code = run_recursion(destination, if specs.len == 0 then ["."] else specs, quiet, bare) else |e| match e {
         Fatal(message) => { eprint("fatal: {message}"); return 128 },
         Failure(message) => { eprint("error: {message}"); return 1 },
         Unsupported(feature) => { eprint("den: not yet implemented: {feature} (vc25b)"); return 2 },
@@ -314,14 +317,15 @@ pub fn clone_recursive(args: List[str]) -> int {
     code
 }
 
-fn run_recursion(destination: str, specs: List[str], quiet: bool) -> int ! worktree.WorkErrors {
-    let ctx = worktree.discover(destination)?
-    let before = config_text(ctx.repo)?
+fn run_recursion(destination: str, specs: List[str], quiet: bool, bare: bool) -> int ! worktree.WorkErrors {
+    let repo = repository.discover(destination)?
+    let before = config_text(repo)?
     let core_end = before.find("\n[") else before.len - 1
     var lines = "[submodule]\n"
     for spec in specs { lines = "{lines}\tactive = {spec}\n" }
     let after = "{before[0..core_end + 1]}{lines}{before[core_end + 1..]}"
-    repository.publish_config(ctx.repo, before, after)?
+    repository.publish_config(repo, before, after)?
+    if bare { return 0 }
     let fresh_ctx = worktree.discover(destination)?
     update(
         fresh_ctx,
