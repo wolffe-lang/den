@@ -29,6 +29,15 @@
   start point, or by guessing a remote's branch, is refused by name.
   `checkout <tree-ish> -- <paths>` is new. `stash` in a superproject is
   refused by name.
+- `fetch` and `pull` fetch submodules on demand, by
+  `--recurse-submodules[=yes|on-demand|no]`, `fetch.recurseSubmodules`,
+  `submodule.<name>.fetchRecurseSubmodules` and `submodule.recurse`, nested
+  submodules included, with Git's error list. `pull` merges a gitlink moved
+  on one side through; both sides moved is refused by name.
+- `checkout`, `switch`, `reset --hard` and `pull` with `--recurse-submodules`
+  or `submodule.recurse` move the active submodules with the superproject,
+  refuse first over a submodule's local changes unless forced, and empty a
+  submodule the target drops.
 - Hostile `.gitmodules` input is refused or warned about as Git does:
   suspicious names, dash URLs and paths, missing URLs or commits, invalid
   values, bad config lines (`bad config line N in file ...`, naming the
