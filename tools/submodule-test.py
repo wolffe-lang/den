@@ -155,13 +155,28 @@ def gitlink_proof(raw, rows):
     return out
 
 
+def settle(base):
+    """Date every index under BASE one second after the newest file there. A
+    seed's indexes are written in the same clock tick as its files, so every
+    entry was racily clean (its mtime equal to the index's), and Git's
+    refresh of a racily clean entry in a nested submodule kept or replaced
+    its stat by timing: one row's index then differed from run to run on a
+    loaded machine. The bytes stay as Git wrote them."""
+    newest = max(os.lstat(f).st_mtime_ns for f in base.rglob('*'))
+    for f in base.rglob('index'):
+        if f.is_file() and not f.is_symlink():
+            os.utime(f, ns=(newest + 10**9, newest + 10**9))
+
+
 def seed(name, build):
-    """Build a seed world once (with the pinned Git) and keep a copy."""
+    """Build a seed world once (with the pinned Git), settle its indexes and
+    keep a copy."""
     if name not in seeds:
         if world.exists():
             shutil.rmtree(world)
         world.mkdir()
         build(world)
+        settle(world)
         kept = root / ('seed-' + name)
         shutil.copytree(world, kept, symlinks=True)
         seeds[name] = kept
