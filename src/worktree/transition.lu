@@ -30,6 +30,7 @@ pub fn merge_check(ctx: Context, value: index.Index, target: List[FlatEntry]) ->
 // data refreshed from the written file when it matches the target.
 fn transition_path(
     ctx: Context,
+    reader: object.Reader,
     snapshot: Snapshot,
     previous: index.Index,
     at: int,
@@ -46,7 +47,7 @@ fn transition_path(
         if disk < 0 ||
             snapshot.files[disk].mode != desired.mode ||
             !oid.equal(snapshot.files[disk].id, desired.id) {
-            install(ctx, desired)?
+            install(ctx, reader, desired)?
         }
     }
     let file = read_file(ctx, path, [copy entry]) else |e| match e {
@@ -81,13 +82,16 @@ fn transition_mode(
             id: copy entry.id,
         })
     }
+    // One reader for the whole transition (den#63): its pack indexes are
+    // parsed once, where a read per blob parsed them once a file.
+    let reader = object.reader_batch(ctx.repo)
     for entry in target {
         if entry.mode == 0o160000 { return Unsupported("submodule tree transition") }
         if !dry {
             // One blob at a time (vc23): a clone's checkout holds one file's
             // body, never the whole worktree's.
             region verify {
-                let data = object.read_object(ctx.repo, entry.id, 1000000000)?
+                let data = object.read_loaded(reader, entry.id, 1000000000)?
                 if data.kind != "blob" { return bad_oid }
             }
         }
@@ -170,7 +174,7 @@ fn transition_mode(
         if next < 0 { continue }
         // Each path's blob, written file and read-back live in one region.
         region one {
-            let entry = transition_path(ctx, snapshot, previous, at, target[next], path, mode)?
+            let entry = transition_path(ctx, reader, snapshot, previous, at, target[next], path, mode)?
             (mut entries).push(copy entry)
         }
     }

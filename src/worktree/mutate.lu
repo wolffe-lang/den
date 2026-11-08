@@ -142,9 +142,10 @@ pub fn remove_paths(
 
 // The temporary is exclusively ours; publication replaces the final link itself,
 // not its referent. Ancestor validation is lstat-based, not a portable openat API.
-fn install(ctx: Context, entry: FlatEntry) -> () ! WorkErrors {
+// The blob is read through the caller's batch reader (object.reader_batch).
+fn install(ctx: Context, reader: object.Reader, entry: FlatEntry) -> () ! WorkErrors {
     if entry.mode == 0o160000 { return Unsupported("submodule restore") }
-    let stored = object.read_object(ctx.repo, entry.id, 1000000000)?
+    let stored = object.read_loaded(reader, entry.id, 1000000000)?
     if stored.kind != "blob" { return bad_oid }
     safe_parents(ctx, entry.path, true)?
     let destination = absolute(ctx, entry.path)?
@@ -261,13 +262,17 @@ pub fn restore_paths(
             return Failure("error: pathspec '{text(path)?}' did not match any file(s) known to git")
         }
     }
-    // Verify every blob before deleting or replacing even one worktree file.
+    // Verify every blob before deleting or replacing even one worktree file,
+    // through one reader for the whole restore.
+    let reader = object.reader_batch(ctx.repo)
     for path in targets {
         let src = flat_at(source, path)
         if src >= 0 {
             if source[src].mode == 0o160000 { return Unsupported("submodule restore") }
-            let stored = object.read_object(ctx.repo, source[src].id, 1000000000)?
-            if stored.kind != "blob" { return bad_oid }
+            region verify {
+                let stored = object.read_loaded(reader, source[src].id, 1000000000)?
+                if stored.kind != "blob" { return bad_oid }
+            }
         }
     }
     for path in targets {
@@ -284,7 +289,7 @@ pub fn restore_paths(
         let old = index_at(previous.entries, path)
         var prior = List[index.Entry]()
         if old >= 0 { (mut prior).push(copy previous.entries[old]) }
-        if options.worktree { install(ctx, entry)? }
+        if options.worktree { install(ctx, reader, entry)? }
         if options.staged {
             var replacement = cached_entry(entry, prior)
             if options.worktree {

@@ -1,4 +1,5 @@
 use index
+use object
 use oid
 
 /// Restore HEAD after a merge, retaining unchanged dirty paths. Unmerged paths
@@ -36,6 +37,7 @@ pub fn abort_merge(
         for i in 0..10 { if entry.stat[i] != fresh.stat[i] { same = false } }
         if !same { return Failure("Entry '{text(path)?}' not uptodate. Cannot merge.") }
     }
+    let reader = object.reader_batch(ctx.repo)
     for path in paths {
         let at = index_at(value.entries, path), next = flat_at(target, path)
         let unresolved = conflicts[text(path)?] else false
@@ -46,7 +48,7 @@ pub fn abort_merge(
             oid.equal(value.entries[at].id, target[next].id) {
             continue
         }
-        install(ctx, target[next])?
+        install(ctx, reader, target[next])?
     }
     var entries = List[index.Entry]()
     for desired in target {
