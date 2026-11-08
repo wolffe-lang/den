@@ -45,6 +45,10 @@ The rows are `tools/submodule-test.py` through `tools/check-submodule`, native a
 - The same harness compares a plain clone and a bare clone over every transport byte for byte: packed refs, `config` and its quoting, HEAD, the pack with its idx and reverse index, the index and the worktree. Git writes the same bytes over each transport, and den now does too.
 - `submodule update` clones every submodule before checking any out, and the first clone that fails twice ends it, so the others stay cloned but not checked out, as in Git.
 
+### The live self-clone row and den's origin
+
+`http-live-self` (vc23's row, in the http leaf) clones den's own public repository with both tools and compares the clones ref for ref. A clone takes HEAD, every branch and every tag, so the row's guard holds all of them: a lane pushing any branch to den's origin while the row runs moves what the two clones took, and the row fails by name (`den's refs moved during the row`), as a development take of this branch did. The guard also counted GitHub's `refs/pull/*`, which no clone fetches and which GitHub rewrites on its own; it no longer does (`tools/http-live-test.py`'s `http-live-guard` self-check, red first). A record therefore needs a quiet window on den's origin, with no branch or tag pushed there, while the http leaf runs.
+
 ## Done-when
 
 - [x] Census and prediction first; the census aggregates only in tracked text.
