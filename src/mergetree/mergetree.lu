@@ -45,6 +45,16 @@ pub fn bases(
 pub fn files(repo: repository.Repo, id: oid.Oid) -> List[diff.File] ! worktree.WorkErrors {
     var out = List[diff.File](), total = 0
     for entry in worktree.flatten_tree(repo, id)? {
+        // A gitlink merges by its recorded commit alone (vc25): no blob.
+        if entry.mode == 0o160000 {
+            (mut out).push(diff.File {
+                path: copy entry.path,
+                mode: entry.mode,
+                id: copy entry.id,
+                data: List[byte](),
+            })
+            continue
+        }
         if entry.mode != 0o100644 && entry.mode != 0o100755 {
             return Unsupported("merge nonregular tree entry")
         }
@@ -121,6 +131,13 @@ pub fn plan(
         if same(base, b, ours, o) {
             if t >= 0 { (mut result.files).push(copy theirs[t]) }
             continue
+        }
+        // A submodule moved on one side passes through above; moved on both
+        // sides, or against a file, it stays a named refusal (vc25).
+        if o >= 0 && ours[o].mode == 0o160000 ||
+            t >= 0 && theirs[t].mode == 0o160000 ||
+            b >= 0 && base[b].mode == 0o160000 {
+            return Unsupported("merge of a submodule changed on both sides")
         }
         if o < 0 || t < 0 { return Unsupported("merge modify/delete conflict") }
         if ours[o].mode != theirs[t].mode &&
