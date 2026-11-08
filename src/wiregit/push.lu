@@ -37,7 +37,7 @@ fn receive_advertisement(data: List[byte]) -> (List[wire.Ref], List[str]) ! obje
         let p = pktline.decode(data, pos)?
         pos = p.next
         if p.kind == 0 { if pos != data.len { return invalid }; return (out, caps) }
-        if p.kind != 4 || out.len > 10000 { return invalid }
+        if p.kind != 4 { return invalid }
         let text = str_from_utf8(p.data) else |_| {
             return Unsupported("non-UTF-8 push advertisement")
         }
@@ -100,7 +100,7 @@ pub fn push_reported(
     leases: List[PushLease],
     mut outcomes: List[PushOutcome],
 ) -> () ! object.StoreErrors {
-    if specs.len == 0 || specs.len > 10000 { return invalid }
+    if specs.len == 0 { return invalid }
     var plans = List[PushPlan]()
     for raw in specs {
         let override = raw.starts_with("+")
@@ -192,7 +192,7 @@ pub fn push_plans(
     mut outcomes: List[PushOutcome],
     mut refused: List[str],
 ) -> () ! object.StoreErrors {
-    if plans.len == 0 || plans.len > 10000 || given.len > 10000 || outcomes.len != 0 {
+    if plans.len == 0 || outcomes.len != 0 {
         return invalid
     }
     let opened = wire_url(repo.gitdir, repo.config, url, true)?
@@ -341,8 +341,20 @@ pub fn push_plans(
     }
     wire.append(mut request, "0000".bytes())
     started = true
-    if roots.len > 0 { wire.append(mut request, pack_for(repo, roots, [], "ofs")?) }
-    var response = transport.exchange(mut p, request, 2097152)?
+    // den#73: over a stream (local, ssh, git://) the pack goes from its
+    // written file in windows; HTTP sends one request body, so its pack is
+    // read whole.
+    var response = List[byte]()
+    if roots.len > 0 && p.stream.len == 1 {
+        let file = pack_file(repo, roots, [], "ofs")?
+        defer fs.remove(file.path) else |_| {}
+        transport.write(p.stream[0], request)?
+        send_raw_pack(p.stream[0], file)?
+        response = transport.message(p.stream[0], 2097152)?
+    } else {
+        if roots.len > 0 { wire.append(mut request, pack_for(repo, roots, [], "ofs")?) }
+        response = transport.exchange(mut p, request, 2097152)?
+    }
     if sideband {
         let decoded = transport.http_receive_sideband(response)?
         if decoded.progress.len > 0 {
@@ -414,21 +426,43 @@ fn receive_configuration(repo: repository.Repo) -> () ! object.StoreErrors {
     if fs.is_dir(hooks) && fs.entries(hooks)?.len != 0 { return Unsupported("receive-pack hooks") }
 }
 
+// den#73: the pushed pack, held whole up to receive_limit bytes (stated in
+// the wire notes), its end found by an incremental scan that inflates each
+// entry once.
+fn receive_limit() -> int { 2147483648 }
+
 fn receive_pack_bytes(c: transport.Channel) -> List[byte] ! object.StoreErrors {
-    var bytes = List[byte]()
+    var bytes = List[byte](), scan = pack.scan_begin()
     loop {
         let chunk = transport.read(c, 65536)?
         if chunk.len == 0 { return truncated }
-        if chunk.len > 134217728 - bytes.len { return limit }
+        if chunk.len > receive_limit() - bytes.len { return limit }
         wire.append(mut bytes, chunk)
-        let end = pack.stream_length(bytes) else |e| match e {
+        let end = pack.scan_more(mut scan, bytes) else |e| match e {
             truncated => { continue },
             invalid => { return invalid },
             limit => { return limit },
             Unsupported(text) => { return Unsupported(text) },
         }
+        if end < 0 { continue }
         if end != bytes.len { return invalid }
         return bytes
+    }
+}
+
+// A written pack to a stream, in 64 KiB windows.
+fn send_raw_pack(c: transport.Channel, file: PackFile) -> () ! object.StoreErrors {
+    let fd = fs_open(file.path) else |_| { return io }
+    defer fs_close(fd) else |_| {}
+    var pos = 0
+    while pos < file.size {
+        region window {
+            let want = if file.size - pos > 65536 then 65536 else file.size - pos
+            let bytes = fs_read_at(fd, pos, want) else |_| { return io }
+            if bytes.len == 0 { return truncated }
+            transport.write(c, bytes)?
+            pos += bytes.len
+        }
     }
 }
 
@@ -506,12 +540,13 @@ pub fn receive(repo: repository.Repo, c: transport.Channel) -> () ! object.Store
         if after != zero() { needs_pack = true }
         seen[fields[2]] = true
         (mut updates).push(PushUpdate { name: copy fields[2], before: before, after: after })
-        if updates.len > 10000 { return limit }
     }
     var unpack_error = ""
     if needs_pack {
         let bytes = receive_pack_bytes(c)?
-        import_pack(repo, bytes) else |e| { unpack_error = "{e}" }
+        var roots = List[str]()
+        for u in updates { if u.after != zero() { (mut roots).push(copy u.after) } }
+        receive_import(repo, bytes, roots) else |e| { unpack_error = "{e}" }
     }
     var reasons = List[str](), changes = List[refs.AtomicUpdate](), any_failed = unpack_error != ""
     for u in updates {
