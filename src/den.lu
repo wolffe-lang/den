@@ -9,6 +9,7 @@ use packcmd
 use plumbing
 use refcmd
 use remote
+use revparse
 use stash
 use worktree
 use wiregit
@@ -62,6 +63,7 @@ fn main() -> int {
                 return packcmd.run(args)
             },
             "blame" => { return blame.run(args) },
+            "rev-parse" => { return revparse.run(args) },
             "notes" => { return notes.run(args) },
             "stash" => { return stash.run(args) },
             "commit" => { return commit.run(args) },

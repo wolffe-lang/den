@@ -1,0 +1,301 @@
+// git-rev-parse(1), the forms scripts use to read a ref and find a
+// repository (den#69): revisions, --verify and -q, --abbrev-ref,
+// --symbolic-full-name, --short, --show-toplevel, --git-dir,
+// --absolute-git-dir, --is-inside-work-tree, --is-inside-git-dir,
+// --is-bare-repository, --show-prefix, --show-cdup and `--`. Any other
+// option is a named not-yet refusal.
+use std.fs
+use history
+use oid
+use repository
+use revision
+use revsyntax
+use worktree
+
+fn not_yet() -> int {
+    eprint("den: not yet implemented: rev-parse (M3, vc10)")
+    2
+}
+
+fn known(arg: str) -> bool {
+    for option in [
+        "--verify",
+        "-q",
+        "--quiet",
+        "--abbrev-ref",
+        "--symbolic-full-name",
+        "--short",
+        "--show-toplevel",
+        "--git-dir",
+        "--absolute-git-dir",
+        "--is-inside-work-tree",
+        "--is-inside-git-dir",
+        "--is-bare-repository",
+        "--show-prefix",
+        "--show-cdup",
+    ] {
+        if arg == option { return true }
+    }
+    arg.starts_with("--short=")
+}
+
+// Where the command runs: the git directory, the worktree's root and the
+// prefix within it (empty root outside a worktree), and the flags Git reports.
+struct Place {
+    repo: repository.Repo,
+    cwd: str,
+    root: str,
+    prefix: str,
+    inside_git: bool,
+    bare: bool,
+}
+
+fn place() -> Place ! repository.RepoErrors {
+    let repo = repository.discover(".")?
+    let cwd = fs.realpath(".")?
+    let inside_git = cwd == repo.gitdir || cwd.starts_with("{repo.gitdir}/")
+    let bare = (repo.config["core.bare"] else "false").lower() == "true"
+    var root = "", prefix = ""
+    if !bare && !inside_git {
+        let ctx = worktree.discover(".") else |_| {
+            return Place {
+                repo: repo,
+                cwd: cwd,
+                root: "",
+                prefix: "",
+                inside_git: inside_git,
+                bare: bare,
+            }
+        }
+        root = copy ctx.root
+        prefix = copy ctx.prefix
+    }
+    Place { repo: repo, cwd: cwd, root: root, prefix: prefix, inside_git: inside_git, bare: bare }
+}
+
+// The full ref a revision argument names, or "" for any other expression
+// (steps, a path, an object id). An attached HEAD names its branch.
+fn named(p: Place, text: str, resolved: revision.Resolved) -> str ! revision.RevisionErrors {
+    let expression = revsyntax.parse(text) else { return "" }
+    if expression.kind != "single" { return "" }
+    let atom = expression.left
+    if atom.steps.len > 0 || atom.has_path { return "" }
+    let selector = atom.selector.lower()
+    if selector != "" && selector != "u" && selector != "upstream" { return "" }
+    if resolved.reference == "" { return "" }
+    if resolved.reference == "HEAD" {
+        let state = revision.provenance(p.repo)?
+        return if state.detached then "HEAD" else copy state.reference
+    }
+    copy resolved.reference
+}
+
+// One revision argument as rev-parse prints it.
+fn shown(
+    p: Place,
+    text: str,
+    resolved: revision.Resolved,
+    abbrev: bool,
+    symbolic: bool,
+    short: int,
+) -> List[str] ! revision.RevisionErrors {
+    if abbrev || symbolic {
+        let reference = named(p, text, resolved)?
+        if reference == "" { return List[str]() }
+        if symbolic || reference == "HEAD" { return [reference] }
+        return [revision.short_name(p.repo, reference)?]
+    }
+    if short > 0 {
+        let text = history.abbreviate(
+            p.repo,
+            resolved.id,
+            if short < 4 then 4 else short,
+        ) else |_| {
+            return Unsupported("rev-parse abbreviation")
+        }
+        return [text]
+    }
+    [oid.hex(resolved.id)?]
+}
+
+// Resolve one argument: the resolution, or the error and any warnings,
+// which the caller prints as Git does.
+fn evaluate(
+    p: Place,
+    text: str,
+    mut warnings: List[str],
+) -> revision.Resolved ! revision.RevisionErrors {
+    let expression = revsyntax.parse(text) else |e| match e {
+        Unsupported(feature) => { return Unsupported(feature) },
+        _ => { return not_found },
+    }
+    if expression.kind != "single" { return Unsupported("rev-parse revision ranges") }
+    revision.evaluate(p.repo, expression.left, mut warnings)?
+}
+
+// A short name that matched two refs (the evaluator's warning): Git names
+// no symbolic ref for it.
+fn ambiguous_ref(warnings: List[str]) -> bool {
+    for line in warnings {
+        if line.starts_with("warning: refname '") && line.ends_with("' is ambiguous.") {
+            return true
+        }
+    }
+    false
+}
+
+fn location(p: Place, arg: str) -> int {
+    if arg == "--git-dir" {
+        print(
+            if p.cwd == p.repo.gitdir {
+                "."
+            } else if "{p.cwd}/.git" == p.repo.gitdir {
+                ".git"
+            } else {
+                copy p.repo.gitdir
+            },
+        )
+    } else if arg == "--absolute-git-dir" {
+        print(p.repo.gitdir)
+    } else if arg == "--show-toplevel" {
+        if p.root == "" {
+            eprint("fatal: this operation must be run in a work tree")
+            return 128
+        }
+        print(p.root)
+    } else if arg == "--is-inside-work-tree" {
+        print(if p.root != "" then "true" else "false")
+    } else if arg == "--is-inside-git-dir" {
+        print(if p.inside_git then "true" else "false")
+    } else if arg == "--is-bare-repository" {
+        print(if p.bare then "true" else "false")
+    } else if arg == "--show-prefix" {
+        print(if p.prefix == "" then "" else "{p.prefix}/")
+    } else if arg == "--show-cdup" {
+        var up = ""
+        if p.prefix != "" { for _ in p.prefix.split("/") { up = "{up}../" } }
+        print(up)
+    }
+    0
+}
+
+/// `den rev-parse ARG...`; returns the exit status.
+pub fn run(args: List[str]) -> int {
+    var verify = false, quiet = false, abbrev = false, symbolic = false, short = 0
+    for arg in args[1..] {
+        if arg == "--" { break }
+        if arg.starts_with("-") && !known(arg) { return not_yet() }
+    }
+    let p = place() else |e| match e {
+        not_found => {
+            eprint("fatal: not a git repository (or any of the parent directories): .git")
+            return 128
+        },
+        Unsupported(feature) => {
+            eprint("den: not yet implemented: rev-parse {feature}")
+            return 2
+        },
+        _ => { eprint("fatal: den: {e}"); return 128 },
+    }
+    var revisions = List[str](), paths = false, files = false, rest = List[str]()
+    for arg in args[1..] {
+        if paths { (mut rest).push(copy arg); continue }
+        if files && arg != "--" { print(arg); continue }
+        if arg == "--" {
+            paths = true
+            continue
+        }
+        if arg == "--verify" {
+            verify = true
+        } else if arg == "-q" || arg == "--quiet" {
+            quiet = true
+        } else if arg == "--abbrev-ref" {
+            abbrev = true
+        } else if arg == "--symbolic-full-name" {
+            symbolic = true
+        } else if arg == "--short" {
+            short = (p.repo.config["core.abbrev"] else "7").to_int() else 7
+        } else if arg.starts_with("--short=") {
+            short = arg[8..].to_int() else 7
+        } else if arg.starts_with("-") {
+            let status = location(p, arg)
+            if status != 0 { return status }
+        } else if verify {
+            (mut revisions).push(copy arg)
+        } else {
+            var warnings = List[str]()
+            let resolved = evaluate(p, arg, mut warnings) else |e| {
+                for line in warnings { eprint(line) }
+                match e {
+                    Fatal(message) => {
+                        // A missing path in a tree is reported after the
+                        // argument itself; ref errors die before it.
+                        if message.starts_with("path '") { print(arg) }
+                        eprint("fatal: {message}")
+                        return 128
+                    },
+                    Unsupported(feature) => {
+                        eprint("den: not yet implemented: {feature}")
+                        return 2
+                    },
+                    _ => {
+                        // Not a revision: a path that exists is printed as
+                        // one, and from here on every argument is a path.
+                        print(arg)
+                        if fs.exists(arg) {
+                            files = true
+                            continue
+                        }
+                        eprint("fatal: {revision.unknown(arg)}")
+                        return 128
+                    },
+                }
+            }
+            for line in warnings { eprint(line) }
+            if (abbrev || symbolic) && ambiguous_ref(warnings) {
+                eprint("error: refname '{arg}' is ambiguous")
+                continue
+            }
+            let lines = shown(p, arg, resolved, abbrev, symbolic, short) else |e| match e {
+                Fatal(message) => { eprint("fatal: {message}"); return 128 },
+                _ => { eprint("fatal: {revision.unknown(arg)}"); return 128 },
+            }
+            for line in lines { print(line) }
+        }
+    }
+    if verify {
+        if revisions.len != 1 {
+            if !quiet { eprint("fatal: Needed a single revision") }
+            return if quiet then 1 else 128
+        }
+        var warnings = List[str]()
+        let resolved = evaluate(p, revisions[0], mut warnings) else |e| {
+            if quiet { return 1 }
+            for line in warnings { eprint(line) }
+            match e {
+                Fatal(message) => { eprint("fatal: {message}"); return 128 },
+                Unsupported(feature) => {
+                    eprint("den: not yet implemented: {feature}")
+                    return 2
+                },
+                _ => { eprint("fatal: Needed a single revision"); return 128 },
+            }
+        }
+        if !quiet { for line in warnings { eprint(line) } }
+        if (abbrev || symbolic) && ambiguous_ref(warnings) {
+            eprint("error: refname '{revisions[0]}' is ambiguous")
+            return 0
+        }
+        let lines = shown(p, revisions[0], resolved, abbrev, symbolic, short) else |e| match e {
+            Fatal(message) => { eprint("fatal: {message}"); return 128 },
+            _ => { eprint("fatal: Needed a single revision"); return 128 },
+        }
+        for line in lines { print(line) }
+        return 0
+    }
+    if paths {
+        print("--")
+        for arg in rest { print(arg) }
+    }
+    0
+}
