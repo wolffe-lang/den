@@ -1,0 +1,153 @@
+// Clean-room: Git v2.56.0 Documentation/rev-list-options.adoc (--date) and
+// pretty-formats.adoc; the edges are black-box runs of the pinned Git over
+// tools/identity-test.py's date shapes. No implementation consulted.
+
+/// A stored date as Git shows it, or the fatal line Git ends with instead.
+pub struct ShownDate {
+    text: str,
+    fatal: str,
+}
+
+/// A calendar reading of seconds since the epoch (proleptic Gregorian).
+struct Civil {
+    year: int,
+    month: int,
+    day: int,
+    hour: int,
+    minute: int,
+    second: int,
+    weekday: int,
+}
+
+fn shown_floor(a: int, b: int) -> int {
+    let q = a / b
+    if a % b != 0 && a < 0 then q - 1 else q
+}
+
+// Days to a civil date: the era/day-of-era decomposition of the proleptic
+// Gregorian calendar, in 64-bit arithmetic for any 64-bit second count.
+fn shown_civil(t: int) -> Civil {
+    let days = shown_floor(t, 86400)
+    let rest = t - days * 86400
+    let z = days + 719468
+    let era = shown_floor(z, 146097)
+    let doe = z - era * 146097
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100)
+    let mp = (5 * doy + 2) / 153
+    let day = doy - (153 * mp + 2) / 5 + 1
+    let month = if mp < 10 then mp + 3 else mp - 9
+    let year = yoe + era * 400 + (if month <= 2 then 1 else 0)
+    Civil {
+        year: year,
+        month: month,
+        day: day,
+        hour: rest / 3600,
+        minute: rest % 3600 / 60,
+        second: rest % 60,
+        weekday: days - shown_floor(days + 4, 7) * 7 + 4,
+    }
+}
+
+fn shown_two(n: int) -> str { if n < 10 then "0{n}" else "{n}" }
+
+fn shown_four(n: int) -> str {
+    if n < 0 { return "{n}" }
+    var text = "{n}"
+    while text.len < 4 { text = "0{text}" }
+    text
+}
+
+/// A zone value as Git prints it: its sign (`+` for zero) and at least four
+/// digits: 530 is +0530, -5 is -0005, 12345 is +12345.
+pub fn zone_shown(zone: int) -> str {
+    let sign = if zone < 0 then "-" else "+"
+    let magnitude = if zone < 0 then -zone else zone
+    "{sign}{shown_four(magnitude)}"
+}
+
+/// The seconds a zone value moves the clock: hundreds are hours, the rest
+/// minutes, so +0099 is 99 minutes and +12345 is 123 hours 45 minutes.
+pub fn zone_seconds(zone: int) -> int {
+    let magnitude = if zone < 0 then -zone else zone
+    let seconds = (magnitude / 100 * 60 + magnitude % 100) * 60
+    if zone < 0 then -seconds else seconds
+}
+
+fn shown_weekday(n: int) -> str {
+    ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][n]
+}
+
+fn shown_month(n: int) -> str {
+    ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][n - 1]
+}
+
+/// Show seconds and a zone value in a --date style, as Git does:
+///   - raw and unix print the numbers;
+///   - a local time before the epoch is Git's fatal
+///     `Timestamp before Unix epoch: SECONDS ZONE`;
+///   - a year the C calendar cannot hold (past 2147485547) shows the epoch
+///     at +0000; years past 2147483647 print wrapped to 32 bits, as Git's
+///     do.
+/// The caller passes 0 and 0 for a date Git could not read.
+pub fn shown_date(seconds: int, zone: int, style: str) -> ShownDate ! {Unsupported(str)} {
+    let local = style == "local" || style.ends_with("-local")
+    let kind = if style == "local" {
+        "default"
+    } else if local {
+        style[0..style.len - 6]
+    } else {
+        style
+    }
+    let shown_zone = if local then 0 else zone
+    let z = zone_shown(shown_zone)
+    if kind == "raw" { return ShownDate { text: "{seconds} {z}", fatal: "" } }
+    if kind == "unix" { return ShownDate { text: "{seconds}", fatal: "" } }
+    if kind != "default" &&
+        kind != "short" &&
+        kind != "iso" &&
+        kind != "iso8601" &&
+        kind != "iso-strict" &&
+        kind != "iso8601-strict" &&
+        kind != "rfc" &&
+        kind != "rfc2822" {
+        return Unsupported("history date format {style}")
+    }
+    let offset = zone_seconds(shown_zone)
+    if offset > 0 && seconds > 9223372036854775807 - offset {
+        return Unsupported("history date past the 64-bit range")
+    }
+    let t = seconds + offset
+    if t < 0 {
+        return ShownDate { text: "", fatal: "Timestamp before Unix epoch: {seconds} {zone}" }
+    }
+    var c = shown_civil(t)
+    var zone_text = z
+    var zone_value = shown_zone
+    if c.year - 1900 > 2147483647 {
+        c = shown_civil(0)
+        zone_text = "+0000"
+        zone_value = 0
+    }
+    let year = if c.year > 2147483647 then c.year - 4294967296 else c.year
+    let clock = "{shown_two(c.hour)}:{shown_two(c.minute)}:{shown_two(c.second)}"
+    let calendar = "{shown_four(year)}-{shown_two(c.month)}-{shown_two(c.day)}"
+    let text = if kind == "default" {
+        let value = "{shown_weekday(c.weekday)} {shown_month(c.month)} {c.day} {clock} {year}"
+        if local then value else "{value} {zone_text}"
+    } else if kind == "short" {
+        calendar
+    } else if kind == "iso" || kind == "iso8601" {
+        "{calendar} {clock} {zone_text}"
+    } else if kind == "iso-strict" || kind == "iso8601-strict" {
+        if zone_value == 0 {
+            "{calendar}T{clock}Z"
+        } else {
+            let magnitude = if zone_value < 0 then -zone_value else zone_value
+            "{calendar}T{clock}{zone_text[0..1]}{shown_two(magnitude / 100)}:{shown_two(magnitude % 100)}"
+        }
+    } else {
+        "{shown_weekday(c.weekday)}, {c.day} {shown_month(c.month)} {year} {clock} {zone_text}"
+    }
+    ShownDate { text: text, fatal: "" }
+}
