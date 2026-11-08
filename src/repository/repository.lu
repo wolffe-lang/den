@@ -77,6 +77,18 @@ pub fn discover(start: str) -> Repo ! RepoErrors {
     }
     let explicit = env_get("GIT_DIR") else ""
     if explicit != "" { return open(explicit)? }
+    // git(1) GIT_CEILING_DIRECTORIES: absolute directories discovery does
+    // not move up into.
+    var ceilings = List[str]()
+    for entry in (env_get("GIT_CEILING_DIRECTORIES") else "").split(":") {
+        if entry.starts_with("/") {
+            var trimmed = copy entry
+            while trimmed.len > 1 && trimmed.ends_with("/") {
+                trimmed = trimmed[0..trimmed.len - 1]
+            }
+            (mut ceilings).push(fs.realpath(trimmed) else trimmed)
+        }
+    }
     var dir = fs.realpath(start)?
     loop {
         if fs.is_dir("{dir}/.git") { return open("{dir}/.git")? }
@@ -84,6 +96,7 @@ pub fn discover(start: str) -> Repo ! RepoErrors {
         if fs.is_file("{dir}/HEAD") && fs.is_dir("{dir}/objects") { return open(dir)? }
         let parent = fs.parent(dir) else |_| { return not_found }
         if parent == dir { return not_found }
+        for ceiling in ceilings { if parent == ceiling { return not_found } }
         dir = parent
     }
 }
