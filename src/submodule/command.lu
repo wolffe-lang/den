@@ -230,7 +230,7 @@ fn dispatch(args: List[str]) -> int ! worktree.WorkErrors {
         return 0
     }
     if sub == "init" {
-        init(ctx, worktree.modules(ctx)?, paths, "")?
+        init(ctx, worktree.modules(ctx)?, paths, "", quiet)?
         return 0
     }
     if sub == "sync" {

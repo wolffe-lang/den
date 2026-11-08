@@ -131,7 +131,7 @@ fn resolved(ctx: worktree.Context, url: str) -> str ! worktree.WorkErrors {
     }
 }
 
-fn init(ctx: worktree.Context, parsed: gitmodules.Parsed, paths: List[str], parent: str) -> () ! worktree.WorkErrors {
+fn init(ctx: worktree.Context, parsed: gitmodules.Parsed, paths: List[str], parent: str, quiet: bool) -> () ! worktree.WorkErrors {
     var repo = copy ctx.repo
     var has_active = false
     for entry in repository.configuration(repo.gitdir)? { if entry.key == "submodule.active" { has_active = true } }
@@ -149,7 +149,7 @@ fn init(ctx: worktree.Context, parsed: gitmodules.Parsed, paths: List[str], pare
             set_config(repo, "submodule.{sub.name}.update", mode)?
         }
         repo = fresh(repo)?
-        eprint("Submodule '{sub.name}' ({url}) registered for path '{shown}'")
+        if !quiet { eprint("Submodule '{sub.name}' ({url}) registered for path '{shown}'") }
     }
 }
 
@@ -247,7 +247,7 @@ fn update(
     parent: str,
 ) -> int ! worktree.WorkErrors {
     let parsed = worktree.modules(ctx)?
-    if options.init { init(ctx, parsed, options.paths, parent)? }
+    if options.init { init(ctx, parsed, options.paths, parent, options.quiet)? }
     let repo = fresh(ctx.repo)?
     var status = 0
     var retry = List[Sub](), done = List[Sub]()
@@ -269,7 +269,7 @@ fn update(
             var whole = false
             if !fs.exists("{full}/.git") {
                 if !fs.is_dir(gitdir) {
-                    eprint("Cloning into '{full}'...")
+                    if !options.quiet { eprint("Cloning into '{full}'...") }
                     if !clone_one(url, gitdir, full) {
                         if pass == 0 {
                             eprint("Failed to clone '{shown}'. Retry scheduled")
