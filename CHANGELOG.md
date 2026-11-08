@@ -126,9 +126,23 @@
   longer synced one by one, as the pinned Git syncs none and git-config(1)'s
   core.fsync names no component for them; the received pack, refs, the index
   and the configuration keep their syncs.
+- No fixed object count on the wire (den#73): serving a clone or fetch,
+  pushing and receiving a push have no 10,000-object bound and no aggregate
+  body cap. The closure walk reads through one reader whose cache rebuilds a
+  delta chain's bases once, keeps its sets hashed and each object as bytes and
+  ints; the served or pushed pack streams to a temporary and goes out in
+  windows; a pushed pack goes through the streamed indexer and is kept as a
+  pack at 100 objects or more, as Git's receive-pack keeps it. The protocol's
+  want, have, ref and command counts are gone; each request stays bounded in
+  bytes. Deflate keeps its match tables across a writer's objects and builds
+  its codes in linear time, inflate builds its tables in one pass, and the delta
+  encoder rolls its fingerprint, each with the same bytes as before.
 - `tools/wire-gaps-test.py` holds push, clone, ls-remote, fetch and clone
   memory to the pinned Git on every transport, a pelt clone's CPU to at most
   ten times the pinned Git's, and that clone's sync calls to Git's (Linux);
+  its scale rows clone, fetch, push and serve 50,000 objects and i3's public
+  history with Git's result under 64 MiB plus 1 KiB an object, and hold
+  serving and den's own clone of 50,000 objects to at most 30 times Git's CPU;
   `tools/rev-parse-test.py` holds rev-parse. The oracle's `rev-parse` case is a parity row and
   `rev-parse-parseopt` keeps the strict not-yet witness.
 
