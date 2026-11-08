@@ -76,8 +76,7 @@ fn module_at(modules: List[Module], name: str) -> int {
 }
 
 /// Parse .gitmodules text, naming FILE in a syntax error. Keys are checked in
-/// file order, as Git checks them: a suspicious name warns once per path or
-/// url key; a path or url starting with `-` warns and stays unset; an unknown
+/// file order, as Git checks them: a suspicious name warns once per key; a path or url starting with `-` warns and stays unset; an unknown
 /// ignore value warns; a bad fetchRecurseSubmodules or update value is fatal.
 pub fn parse(text: str, file: str) -> Parsed ! Errors {
     let entries = repository.parse_config_named(text, file) else |e| match e {
@@ -93,9 +92,9 @@ pub fn parse(text: str, file: str) -> Parsed ! Errors {
         let (name, field) = key_parts(entry.key)
         if name == "" { continue }
         if suspicious(name) {
-            if field == "path" || field == "url" {
-                (mut warnings).push("ignoring suspicious submodule name: {name}")
-            }
+            // One warning per key of the section (vc25 rows: three keys,
+            // three warnings; a url-only section, one).
+            (mut warnings).push("ignoring suspicious submodule name: {name}")
             continue
         }
         var at = module_at(modules, name)
