@@ -239,7 +239,9 @@ fn switch_branch(args: List[str]) -> int ! commit.CommitErrors {
             _ => { return Fatal("unable to update HEAD: {e}") },
         }
     }
-    if !quiet {
+    // A recursing caller prints the report once its submodules have moved.
+    let deferred = (env_get("DEN_DEFER_CHECKOUT_REPORT") else "") == "1"
+    if !quiet && !deferred {
         // Local changes and the tracking lines, as Git prints them (vc25).
         let changes = lists_changes(args)
         var report_warnings = List[str]()
