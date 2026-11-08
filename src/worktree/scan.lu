@@ -310,8 +310,11 @@ fn walk_submodules(
                 let at = gitlink_at(value, path)
                 if parsed.len == 0 { (mut parsed).push(modules(ctx)?) }
                 let name = text(path)?
-                // A full walk (add, commit -a) needs only the HEAD to stage.
-                let setting = if status then ignore_for(ctx, parsed[0], name, ignore_option) else "dirty"
+                // A full walk (add, commit) stages only the HEAD; commit's
+                // status shows modified content but never untracked content,
+                // as Git's does (vc25 work rows).
+                let configured = ignore_for(ctx, parsed[0], name, ignore_option)
+                let setting = if status || configured != "" then configured else "untracked"
                 let state = if setting == "all" {
                     unpopulated(value.entries[at].id)
                 } else {
