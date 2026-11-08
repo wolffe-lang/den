@@ -1,4 +1,5 @@
 use std.fs
+use commit_format
 use index
 use object
 use oid
@@ -249,10 +250,19 @@ fn cat_file(args: List[str]) -> int ! Errors {
 }
 
 fn identity(repo: repository.Repo, role: str) -> str ! Errors {
-    let name = env_get("GIT_{role}_NAME") else (repo.config["user.name"] else "")
-    let email = env_get("GIT_{role}_EMAIL") else (repo.config["user.email"] else "")
+    let key = role.lower()
+    var from_environment = true
+    let name = env_get("GIT_{role}_NAME") else {
+        from_environment = false
+        repo.config["{key}.name"] else (repo.config["user.name"] else "\0")
+    }
+    let email = env_get("GIT_{role}_EMAIL") else (
+        repo.config["{key}.email"] else (repo.config["user.email"] else "\0")
+    )
     var date = env_get("GIT_{role}_DATE") else ""
-    if name == "" || email == "" || date == "" { return Unsupported("commit-tree identity/date") }
+    if name == "\0" || email == "\0" || date == "" {
+        return Unsupported("commit-tree identity/date")
+    }
     if date.starts_with("@") { date = date[1..] }
     let parts = date.split(" ")
     if parts.len != 2 ||
@@ -266,15 +276,25 @@ fn identity(repo: repository.Repo, role: str) -> str ! Errors {
     for b in parts[1].bytes()[1..] {
         if b as int < 48 || b as int > 57 { return Unsupported("commit-tree date format") }
     }
-    for value in [name, email] {
-        if value.contains("\n") ||
-            value.contains("<") ||
-            value.contains(">") ||
-            value.contains("\0") {
-            return Unsupported("commit-tree identity characters")
-        }
+    // vc26: Git's cleanup and its refusals of a name it cannot write, as
+    // commit makes them (commit.empty_name_check).
+    let clean_name = commit_format.ident_clean(name) else |_| {
+        return Unsupported("commit-tree identity characters")
     }
-    "{name} <{email}> {date}"
+    let clean_email = commit_format.ident_clean(email) else |_| {
+        return Unsupported("commit-tree identity characters")
+    }
+    if name == "" {
+        if !from_environment {
+            let who = if role == "AUTHOR" then "Author" else "Committer"
+            eprint(
+                "{who} identity unknown\n\n*** Please tell me who you are.\n\nRun\n\n  git config --global user.email \"you@example.com\"\n  git config --global user.name \"Your Name\"\n\nto set your account's default identity.\nOmit --global to set the identity only in this repository.\n",
+            )
+        }
+        return Fatal("empty ident name (for <{clean_email}>) not allowed")
+    }
+    if clean_name == "" { return Fatal("name consists only of disallowed characters: {name}") }
+    "{clean_name} <{clean_email}> {date}"
 }
 
 fn append_paragraph(mut message: List[byte], paragraph: List[byte]) {
