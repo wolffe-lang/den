@@ -1,0 +1,439 @@
+vc25: submodules, cloned and worked in as with Git
+Base: 474a926ae2242d1227d46c27977370bbc9a93b08
+Prediction committed before implementation; observations do not replace it.
+
+Sources read: Git v2.56.0 documentation, rendered from the 2.56.0 manual
+pages: gitsubmodules(7) (forms, active submodules, the third-party and
+split-repository workflows), git-submodule(1) (every subcommand and option),
+gitmodules(5) (path, url, update, branch, fetchRecurseSubmodules, ignore,
+shallow; the symlink note), gitrepository-layout(5) (modules/), git-clone(1)
+(--recurse-submodules[=<pathspec>], --shallow-submodules,
+--remote-submodules, init.defaultSubmodulePathConfig), git-config(1)
+(submodule.*, submodule.recurse and the commands it governs,
+extensions.submodulePathConfig, url.<base>.insteadOf, pushInsteadOf,
+protocol.allow and protocol.<name>.allow, fetch.recurseSubmodules,
+push.recurseSubmodules, diff.submodule, status.submoduleSummary),
+git-status(1) (the submodule short codes, --ignore-submodules),
+git-diff(1) (--submodule, --ignore-submodules), git-fetch(1) and git-pull(1)
+(--recurse-submodules), git-checkout(1), git-switch(1), git-reset(1),
+git-rm(1), git-add(1), git-commit(1), git-ls-tree(1), git-ls-files(1),
+git-push(1). Black-box runs of the pinned Git 2.56.0 (executable sha256
+c4848492938c4ebfffbefe1fbbaa68b9af90c86d1f6a20e76816c5ff37fcfa60, read twice)
+under tools/environment.py in the pinned oracle image, no network:
+two probes of 383 and 118 steps, every step's argv, status, stdout and
+stderr in notes/vc25-evidence/oracle-probe-{1,2}.jsonl (the scripts beside
+them). Own code: den's tree, index, worktree walk, transition, status, diff,
+history, commit, merge, replay, wire, transport, HTTP, config and
+repository modules at the base. No Git, libgit2, JGit or other
+implementation source consulted.
+
+== 1. The census (public metadata only; nothing cloned) ==
+
+Method: every public repository under thirteen GitHub owners (298
+repositories; a fourteenth owner scanned has none). .gitmodules from each
+default branch, mode 160000 entries from the recursive tree, activity
+from the commits API over the 90 days before 2026-11-08. The
+per-repository table is kept outside the repository; tracked text carries
+the aggregate (notes/vc25-evidence/census.json) and names repositories of
+this organisation only.
+
+16 superprojects, 71 .gitmodules entries, 70 gitlinks; submodules per
+superproject: eight with 1, then 2, 3, 4, 4, 6, 6, 16 and 22.
+
+URL forms: https:// 38, relative 21 (all `../x`; one `../../owner/repo`
+across owners; none `./`), scp-like `git@github.com:` 12; ssh:// 0,
+git:// 0, file and local paths 0. 27 URLs have no `.git` suffix.
+Nesting: depth 2 in one superproject (wolffe-lang/wolf-web, whose
+wolf-interp and wolf-std submodules each carry an `upstream` submodule);
+a recursive wolf-web clone holds six submodule repositories, three of
+them wolf-lang. The other 15 are depth 1.
+Settings: branch = 39 (trunk 38, another branch 1); ignore = untracked 2;
+update =, shallow = and fetchRecurseSubmodules = 0.
+Names: 29 contain `/` (so `.git/modules/a/b`), 3 differ from their path
+(all three in wolf-web: book, interp, lang). One .gitmodules has comment
+lines inside a section, one a blank line between sections.
+Odd inputs found in the wild: a .gitmodules entry with no gitlink (in a
+fork) and two gitlinks with no .gitmodules entry (in one repository).
+Activity: 251 single-parent commits moved a gitlink in 90 days, 231 of
+them in four wolffe-lang repositories (wolf-interp 60, wolf-std 50,
+wolf-web 96, wolf-lsp 25: release pins). .gitmodules changed 7 times in
+90 days in all 16: three submodule additions and four URL changes (one
+organisation move across three repositories, one ssh-to-https form
+change). In the last 30 days, one: an addition in wolf-web.
+
+What it decides, in order:
+  1. absolute https first: anonymous recursive clone and update over https
+     (38 of 71, every actively moved superproject);
+  2. relative `../` resolution against an https remote (21), cross-owner
+     `../../` included;
+  3. scp-like ssh (12), both over ssh and rewritten to anonymous https by
+     url.<base>.insteadOf (`url.https://github.com/.insteadOf=git@github.com:`);
+  4. depth-2 nesting, names unlike paths, names with `/`;
+  5. moved gitlinks: status/diff `(new commits)`, `add <path>`,
+     `commit -a`, `pull` of an upstream pin move; update --remote with
+     `branch = trunk`;
+  6. ignore = untracked.
+  Item 7's authoring commands are not daily (R-vc25-1).
+
+Live rows (public wolffe-lang repositories only, compared with Git's
+clone of the same URL at the same time; named SKIPs without network):
+  wolffe-lang/wolf-web (depth 2, names unlike paths; the timed row);
+  wolffe-lang/wolf-std, wolf-interp and wolf-lsp (release-pinned gitlinks:
+    a superproject commit that moves its gitlink, read with log/show/diff
+    --submodule=log and checked out with and without recursion);
+  wolf-std through `url.git@github.com:.insteadOf=https://github.com/`
+    (scp-like ssh, where a key is configured; a named SKIP otherwise).
+Relative URLs, scp-like rewrites and ignore = untracked are held by
+fixtures, not live rows: no wolffe-lang superproject uses them.
+
+== 2. The on-disk layout (measured from the pinned Git; den writes the same) ==
+
+After `clone --recurse-submodules URL DIR` (probe 1 steps clone-recurse,
+dump-clone-recurse):
+  DIR/.git/config: `[submodule]` `active = .` immediately after `[core]`
+    (before `[remote "origin"]`); `--recurse-submodules=P` writes
+    `active = P` per pathspec (a pathspec that matches nothing clones none,
+    probe 2 clone-pathspec-none). Then one `[submodule "<name>"]` with only
+    `url = <resolved>` per submodule, in index (path) order.
+  `submodule init` without submodule.active writes `active = true` and
+    `url = <resolved>` per submodule, in index order.
+  DIR/<path>/.git: a file, `gitdir: <relative path to the gitdir>\n`, e.g.
+    `gitdir: ../.git/modules/abs`, `gitdir: ../../../.git/modules/midname/modules/leafsub`.
+  DIR/.git/modules/<name>/: a non-bare gitdir (HEAD, config, index, logs,
+    objects, packed-refs, refs; the empty template adds nothing else),
+    keyed by name, not path; a name with `/` nests directories. Nested
+    submodules live under the parent's gitdir:
+    .git/modules/<name>/modules/<nested-name>.
+  .git/modules/<name>/config: [core] repositoryformatversion 0, filemode,
+    bare = false, logallrefupdates, `worktree = <relative path from the
+    gitdir to the worktree>` (`../../../abs`, `../../../../../mid/deps/leaf`);
+    [remote "origin"] with the resolved URL and the default fetch refspec;
+    [branch "<remote HEAD's branch>"] tracking it; and, in a superproject
+    submodule, its own nested `[submodule "<n>"] active = true url = …`.
+  The submodule's HEAD is detached at the gitlink (`<sha>\n`); its
+    refs/heads/<default> exists (made by the clone), refs/remotes/origin/HEAD
+    is symbolic, packed-refs holds refs/remotes/origin/<branch>. Its HEAD
+    reflog has `clone: from <url>` then `checkout: moving from <branch> to <sha>`.
+  extensions.submodulePathConfig and submodule.<name>.gitdir: not written
+    (init.defaultSubmodulePathConfig is false by default); a repository with
+    the extension stays refused by name (den refuses unknown extensions).
+  The superproject's index: a gitlink entry carries the submodule
+    directory's own lstat words (ctime, mtime, dev, ino, uid, gid, size;
+    4096 on the probe's file system), mode 160000, the commit id; a fresh
+    empty directory for an unpopulated submodule; all stat words zero after
+    a mixed reset re-reads it from the tree (probe 2 idx-*).
+  den's reflogs in .git/modules/*/logs inherit R-vc18-2 (den's transport
+    identity, a zero date, bare messages): those paths are KNOWN, named
+    differences, as .git/logs is today; every other byte is compared.
+
+Relative URLs (probe 1 rel-*, 171 resolutions): resolved against the
+remote of the current branch's upstream (`branch.<b>.remote`), else
+origin, else the superproject's own top-level directory with
+`warning: could not look up configuration 'remote.origin.url'. Assuming this
+repository is its own authoritative upstream.`; nested relatives against
+the immediate superproject's resolved URL. Rules the rows hold, each from
+the matrix: one trailing `/` of the remote is dropped; `./` appends;
+each leading `../` strips one component, through `scheme://host`
+(https://h.example + ../x.git -> https://x.git, + ../../y -> https:/y/x.git)
+and through an scp-like host (git@h:o/top.git + ../../../x.git ->
+`.:x.git`); a relative remote strips to `.` and then fails
+`fatal: cannot strip one component off url '.'` (or `'..'`), exit 128;
+`../x/` loses its trailing slash; inner `./` and `../` after the first
+non-dot component are kept verbatim; `.././x` == `../x`; file:// and plain
+paths follow the same component rules.
+
+== 3. Refusal sites at the base (every one; file:line, the refused name) ==
+
+  src/worktree/scan.lu:239       Unsupported("submodule worktree")    any gitlink in the index, every walk (status, add, commit -a, stash)
+  src/worktree/scan.lu:255       Unsupported("embedded repository …") a .git below the root (a populated submodule, or any nested repository)
+  src/worktree/scan.lu:311       Unsupported("submodule worktree")    a gitlink at a walked path
+  src/worktree/transition.lu:85  Unsupported("submodule tree transition") every tree change with a gitlink: clone's checkout, switch, checkout, reset --hard/--mixed, merge fast-forward, pull
+  src/worktree/mutate.lu:90      Unsupported("submodule removal")     rm
+  src/worktree/mutate.lu:146     Unsupported("submodule restore")     restore / checkout -- <path>
+  src/worktree/mutate.lu:268     Unsupported("submodule restore")     restore --source
+  src/worktree/mutate.lu:360     Unsupported("submodule move")        mv
+  src/commit/lifecycle.lu:118    Unsupported("commit submodule")      any commit whose index has a gitlink
+  src/commit/summary.lu:250      Unsupported("commit submodule summary") the commit summary line
+  src/diff/endpoints.lu:9        Unsupported("diff submodule")        diff of any kind with a gitlink endpoint
+  src/history/command.lu:40      Unsupported("history submodule diff") log -p/--stat, show of a root commit
+  src/diff/combined.lu:454,458   Unsupported("history submodule diff") show of a merge
+  src/mergetree/mergetree.lu:49  Unsupported("merge nonregular tree entry") merge, pull (merge and rebase), rebase, cherry-pick, revert: any tree holding a gitlink, changed or not
+  src/stash/apply.lu:39          Unsupported("merge nonregular tree entry") stash apply/pop
+  src/blame/attribute.lu:74,92   Unsupported("blame nonregular path…") blame of a gitlink path
+  src/wiregit/command.lu         Unsupported("clone option --recurse-submodules"), likewise fetch/pull `--recurse-submodules`
+  src/den.lu (no entry)          `submodule`, `ls-tree`, `ls-files`, `describe` are unknown commands
+Already gitlink-aware (no change): object/tree.lu (mode text and kind,
+`160000 commit <id>`), plumbing.lu:481 (mktree skips the object check),
+index/storage.lu:144 (write-tree skips the blob read), packcmd/fsck.lu:38
+and :325 (links and the index skip gitlinks), packcmd/housekeeping.lu:41,
+wiregit/objects.lu (clone/fetch/push closures follow packcmd.links, so they
+never want a gitlink's commit), repository.lu (follows a `.git` gitfile),
+worktree/model.lu:174 (core.worktree sets the root).
+Silent today, a divergence once a submodule exists: fetch's default
+on-demand recursion (fetch.recurseSubmodules), push's on-demand default
+under submodule.recurse=true; .gitmodules is read by nothing.
+
+== 4. Behaviour, per command (git's form measured; den's the same unless named) ==
+
+Reading (item 3):
+  ls-tree [-r] [-t] [-d] [--name-only] [-z] TREE-ISH [PATH…] and
+    ls-files [-s] [-z] [PATH…]: new bounded commands; a gitlink prints
+    `160000 commit <id>\t<path>` and `160000 <id> 0\t<path>`.
+  cat-file -p of a tree: unchanged (already exact). cat-file -t/-p of a
+    gitlink's id absent from the store: `fatal: git cat-file: could not get
+    object info` / `fatal: Not a valid object name <id>`, exit 128 (rows
+    check den's existing missing-object forms against these).
+  show REV:<gitlink path>: `fatal: bad object REV:path`, exit 128.
+  diff/log/show: a gitlink side is the text `Subproject commit <id>\n`,
+    `-dirty` appended for a worktree side with modified tracked content;
+    `index a..b 160000`, `new file mode 160000`, `deleted file mode
+    160000`; a typechange prints a deletion and an addition, `T` in
+    --raw/--name-status; --stat counts the one line (`sub | 2 +-`, a
+    dirty-only side `mid | 0`); --raw shows the worktree side as 0000000.
+    Untracked content alone produces no diff.
+  --submodule=short (default), =log and =diff, and diff.submodule:
+    `Submodule <path> <a7>..<b7>:` then `  > subject` per commit (`  <` and
+    ` (rewind):` backwards), `<a7>...<b7> (commits not present)`,
+    `0000000...<b7> (new submodule)`, `<a7>...0000000 (submodule deleted)`,
+    `Submodule <path> contains modified content` (untracked content
+    alone prints nothing by default; its form under
+    --ignore-submodules=none is measured before its row is written);
+    =diff prints the submodule's own diff with `<path>/` prefixes. The log
+    walk is the submodule's own repository.
+  --ignore-submodules[=none|untracked|dirty|all] and submodule.<name>.ignore
+    (.gitmodules, overridden by .git/config, overridden by the option).
+  status, long: `modified:   <path> (new commits[, modified content][,
+    untracked content])`, and the extra hint line `(commit or discard the
+    untracked or modified content in submodules)` when content is dirty;
+    short: ` M` new commits, ` m` modified content only, ` ?` untracked
+    only, applied recursively (a nested submodule's untracked file is `?`
+    or rolls into `M`); porcelain v1 (and -z): ` M` for every change;
+    staged gitlinks `M ` / `A ` / `D `; `MD` when the directory is gone.
+    An uninitialised submodule (empty directory) is clean. status.submoduleSummary
+    stays a named refusal (R-vc25-8).
+  An untracked nested repository is an untracked directory `dir/`, as Git
+    shows it (the scan.lu:255 refusal goes, R-vc25-11).
+Clone and the submodule command (item 4):
+  clone --recurse-submodules[=<pathspec>] URL DIR: the superproject clone
+    as today, `submodule.active` as above, then `submodule update --init
+    --recursive`. stderr: `Submodule '<name>' (<url>) registered for path
+    '<path>'` for each, `Cloning into '<absolute path>'...` for each, nested
+    after their parent; stdout: `Submodule path '<path>': checked out
+    '<sha>'`. -q silences both. A failed submodule leaves the superproject
+    clone in place and exits nonzero: a clone failure retries once
+    (`Failed to clone '<path>'. Retry scheduled`, then `Failed to clone
+    '<path>' a second time, aborting`, exit 1); a missing commit exits 128.
+    --shallow-submodules, --remote-submodules, -j/--jobs and --reference stay
+    named refusals.
+  submodule [status [--cached] [--recursive] [PATH…]]: ` `/`-`/`+`/`U`,
+    the id, the path relative to the cwd, and ` (<describe>)` when
+    populated: an annotated tag (`v1`, `v1-2-g750544b`), else any ref
+    (`heads/main`, `remotes/origin/HEAD`, `heads/main-2-g39f0fa7`), else
+    the abbreviated id; den gains an internal describe for this (R-vc25-6).
+    No mapping for a gitlink: `fatal: no submodule mapping found in
+    .gitmodules for path '<p>'`, exit 128.
+  submodule init [PATH…]: `Submodule '<name>' (<url>) registered for path
+    '<path>'`, existing entries untouched, update copied unless `!cmd`.
+  submodule update [--init] [--recursive] [--remote] [-N] [--checkout]
+    [--force] [PATH…]: clones a missing submodule into .git/modules/<name>,
+    checks out the recorded commit on a detached HEAD (`Submodule path
+    '<p>': checked out '<sha>'`), does nothing for one already there; a
+    recorded commit not reachable from any ref is fetched first, then
+    fetched directly by id (`Unable to fetch in submodule path '<p>';
+    trying to directly fetch <sha>:`, `fatal: Fetched in submodule path
+    '<p>', but it did not contain <sha>. Direct fetching of that commit
+    failed.`, exit 128); local changes in the way: the checkout refusal then
+    `fatal: Unable to checkout '<sha>' in submodule path '<p>'`, exit 1;
+    --force checks out anyway. --remote fetches and uses
+    origin/<submodule.<name>.branch, .git/config over .gitmodules, else the
+    remote HEAD>; `branch = .` follows the superproject's branch.
+    --merge, --rebase, update = merge|rebase|!cmd stay named refusals;
+    update = none skips (R-vc25-7). An unknown path: `error: pathspec
+    '<p>' did not match any file(s) known to git`, exit 1.
+  submodule sync [--recursive] [PATH…]: `Synchronizing submodule url for
+    '<displaypath>'`, rewriting submodule.<name>.url and the submodule's
+    remote.origin.url from .gitmodules (relative URLs re-resolved); only
+    initialised submodules.
+  submodule foreach [--recursive] [-q] COMMAND: `Entering '<displaypath>'`,
+    the command through `sh -c` with $name, $sm_path, $path, $displaypath,
+    $sha1 and $toplevel; a nonzero exit stops with `fatal: run_command
+    returned non-zero status for <displaypath>\n.`, exit 128. Without a
+    /bin/sh, a named refusal.
+  Relative URLs as in section 2; `submodule.<name>.url` written after init.
+  Every transport den speaks for the submodule clone and fetch: file://,
+    local paths, git://, ssh (scp-like and ssh://) and https, under the
+    protocol policy below.
+Transports (item 5):
+  protocol.allow / protocol.<name>.allow (always, never, user) and
+    GIT_PROTOCOL_FROM_USER, for every den transport; commands the
+    submodule machinery runs are not from the user, so file:// and plain
+    paths refuse by default exactly as Git does (`fatal: transport 'file'
+    not allowed`). Every file-transport row passes protocol.file.allow=always.
+  url.<base>.insteadOf (longest match; the stored URL stays the original,
+    probe 1 insteadof-*) and url.<base>.pushInsteadOf (push only; ignored
+    for a remote with pushurl), for clone, fetch, pull, push and the
+    submodule machinery; `remote get-url --push` shows the rewrite.
+  Anonymous https: already prompts only on a 401 (http/client.lu); rows
+    prove a public recursive clone sends no Authorization and never reads
+    the terminal.
+Working in the repository (item 6):
+  checkout/switch/reset/pull without recursion: the gitlink changes in the
+    index; the submodule's worktree is never touched; a newly appearing
+    gitlink gets an empty directory; a disappearing one keeps a populated
+    directory with `warning: unable to rmdir '<p>': Directory not empty`
+    (it is then untracked `<p>/`); checkout's path list prints `M\t<p>`.
+  --recurse-submodules or submodule.recurse=true on checkout, switch,
+    reset and pull: populated, active submodules follow the recorded commit
+    (detached), recursively; a removed gitlink's worktree goes, its gitdir
+    stays; refusals as measured (`error: Submodule '<p>' could not be
+    updated.`). pull --recurse-submodules prints `Fetching submodule <p>`
+    and the update's `checked out` lines; submodule.recurse=true pull
+    updates silently (both measured).
+  fetch (and pull's fetch): on-demand by default: after the superproject's
+    fetch, each populated submodule whose newly fetched gitlinks name a
+    commit it lacks is fetched (`Fetching submodule <displaypath>`);
+    --recurse-submodules[=yes|on-demand|no], --no-recurse-submodules,
+    fetch.recurseSubmodules, submodule.<name>.fetchRecurseSubmodules.
+  merge (pull's merge and rebase, rebase, cherry-pick, revert): a gitlink
+    changed on one side only takes that side; unchanged passes through;
+    both moved differently stays a named refusal (R-vc25-9).
+  add <path> / add -A / add . / commit -a: stage the submodule's HEAD as
+    the gitlink when it moved; modified or untracked content alone stages
+    nothing; `add <submodule>/<file>`: `fatal: Pathspec '<p>' is in
+    submodule '<s>'`.
+  reset --hard: restores gitlinks, never the submodule's worktree, unless
+    recursing.
+  rm <path>: refuses local modifications as measured; removes the
+    gitlink, the worktree and the `[submodule]` section of .gitmodules
+    (staging it; an emptied .gitmodules stays, empty); keeps
+    .git/modules/<name>; --cached keeps the worktree (`?? <p>/`); -f forces.
+  mv of a submodule, restore of a gitlink path and stash with submodules
+    stay named refusals.
+  push under submodule.recurse=true or push.recurseSubmodules other than
+    no: a named refusal (R-vc25-3); `--no-recurse-submodules` and
+    `--recurse-submodules=no` push as today.
+Hostile and odd inputs (item 8), each red first:
+  a name with a `..` component: `warning: ignoring suspicious submodule
+    name: <name>` (twice in clone and status, as Git prints it), the entry
+    ignored; a `.gitmodules` path with `../` never matches a gitlink (the
+    entry is ignored, the gitlink has no mapping); a URL or path beginning
+    with `-`: `warning: ignoring 'submodule.<name>.url' which may be
+    interpreted as a command-line option: <value>`, then `fatal: No url
+    found for submodule path '<p>' in .gitmodules`, exit 128; a commit
+    missing on the remote: the upload-pack refusal relayed, then the
+    direct-fetch fatal, exit 128, superproject kept; a gitlink with no
+    entry: `fatal: No url found for submodule path '<p>' in .gitmodules`
+    (update) and `fatal: no submodule mapping found…` (status), exit 128;
+    an invalid .gitmodules: `fatal: bad config line <n> in file
+    <absolute>/.gitmodules`, exit 128, in clone, status and update; a
+    missing url: as no entry; case-colliding paths: both cloned on Linux,
+    as Git does there (the macOS leg records the field Git); a symlinked
+    .gitmodules in a tree: refused at checkout as gitmodules(5) says
+    (fixture by plumbing, since Git will not add one).
+
+== 5. Refusals that remain, by name ==
+
+  submodule add, deinit, set-url, set-branch, absorbgitdirs, summary;
+  push --recurse-submodules=check|on-demand|only and their configured
+  forms; clone --shallow-submodules, --remote-submodules, -j, --reference;
+  update --merge/--rebase and update = merge|rebase|!command; shallow =
+  true; status.submoduleSummary; mv of a submodule; restore of a gitlink
+  path; stash with a gitlink; blame of a gitlink path; a merge where both
+  sides moved one gitlink; extensions.submodulePathConfig; old-form
+  submodules (an embedded .git directory) for update and sync; ls-files
+  --recurse-submodules; foreach without /bin/sh.
+
+== 6. Rows, the plant and the gate ==
+
+New harness tools/submodule-test.py through tools/check-submodule, native
+and release, every row comparing argv, environment, stdout, stderr,
+status, and the complete superproject, .git/modules and submodule
+worktree state with Git's under tools/env (KNOWN only for den's reflog
+identity, R-vc18-2). Families: layout, read (ls-tree, ls-files, cat-file,
+log, show, diff forms, status forms, ignore), url (the 171-resolution
+matrix plus nested and upstream-remote cases), clone/init/update/sync/
+status/foreach over file://, git://, ssh (owned fixture) and http
+(loopback, the pinned git-http-backend), protocol policy, insteadOf,
+work (checkout, switch, reset, pull, fetch on demand, add, commit -a, rm,
+merge pass-through), hostile, pure units on the checked machine. Live rows
+(github.com, named SKIPs without network) as in section 1.
+Every family is red first at the base by name. The plant: one commit, one
+file, one hunk off the line on vc25-plant-*, breaking relative-URL
+resolution (one trailing component kept), red by name at a url row.
+Expected size: about 300 to 400 compared rows per tier.
+
+== 7. Measured (item 10) ==
+
+The tracked timed row: a recursive clone of wolffe-lang/wolf-web over
+https (its four submodules and two nested ones, about 258 MB of packs,
+three of them wolf-lang), den against Git on one Linux machine,
+interleaved, three runs each, wall time and child CPU (rusage) recorded.
+Predicted from vc23's self-clone (1.57x wall, 9.6x CPU): wall 1.6x
+(1.3x to 2.2x), CPU 9x (6x to 13x); den's clones and Git's both run one
+submodule at a time (submodule.fetchJobs defaults to 1). The row records
+the ratio and its spread; it is not a parity gate. Measured locally only
+and described by shape in the note: a public superproject of about 485 MB
+whose largest submodule is llama.cpp, with two scp-like URLs through
+insteadOf. Open risk: den#63 (memory with history length) if it still
+holds after vc23.
+
+== 8. Others' issues ==
+
+den#72 (clone's directory operand): clone gains its submodule options in
+the existing option loop, and every later use of the destination reads
+one variable assigned where operands are checked today, so a humanish
+default is a change to that one assignment. The operand-count check is
+not touched. den#71 (push's refs/heads/ inference) is not touched; the
+submodule.recurse refusal runs before refspec parsing. den#70 (fetch
+REMOTE REFSPEC on the command line) is not touched: submodule fetches call
+the fetch layer directly. den#68 and den#69 are not touched; foreach users
+who run `git rev-parse` inside a submodule still need den#69.
+
+== 9. R-vc25 recommendations (implemented as recommended unless ruled) ==
+
+R-vc25-1 (vc25b items into this lane): (A) none, recommended: the daily
+  work is clone, update, status, diff, staging a moved gitlink and pull
+  (231 gitlink moves in 90 days); .gitmodules changed 7 times in 90 days
+  across all 16 superprojects (three additions, four URL changes) and once
+  in the last 30; (B) submodule add (three additions in 90 days);
+  (C) add and set-url (the URL changes were one organisation move and one
+  form change). All seven stay named refusals here; vc25b's first item is
+  submodule add.
+R-vc25-2 (defaults): Git's: submodule.recurse false; clone not recursive;
+  fetch on demand; push no. Nothing in the census says otherwise.
+R-vc25-3 (push under submodule.recurse=true): (a) refuse by name,
+  recommended; (b) push as if `no` (silently wrong); (c) implement check
+  here (pulls vc25b forward).
+R-vc25-4 (the measured row): the tracked timed row is wolf-web; the
+  largest census superproject (about 485 MB) is measured locally and
+  described by shape only.
+R-vc25-5 (ls-tree, ls-files): den has neither; (a) bounded forms here,
+  recommended (item 3 names them); (b) a later lane, gitlinks proven by
+  cat-file only.
+R-vc25-6 (describe for submodule status): (a) an internal describe subset
+  measured black-box, recommended; (b) a `den describe` command too
+  (larger surface, not asked for); (c) print no annotation (not Git's).
+R-vc25-7 (update modes): checkout only; none honoured as a skip;
+  merge, rebase and !command refused by name (census: no update = anywhere).
+R-vc25-8 (status.submoduleSummary, submodule summary): refused by name;
+  diff --submodule=log carries the same information.
+R-vc25-9 (merges): one-sided gitlink changes and unchanged gitlinks pass
+  through; both sides moved: (a) a named refusal, recommended; (b) Git's
+  fast-forward resolution inside the submodule (larger, rare).
+R-vc25-10 (protocol policy): (a) for every transport, as git-config(1)
+  describes, recommended; (b) only inside submodule operations.
+R-vc25-11 (embedded repositories): an untracked nested repository is an
+  untracked `dir/` row, as Git shows it; `add` of one stays refused by
+  name (Git's embedded-repository add is submodule add's territory).
+R-vc25-12 (update's direct fetch by id): (a) implement the fetch by id
+  for a commit no advertised ref reaches, recommended (GitHub serves it);
+  (b) a named refusal.
+
+== 10. On PAX (item 9) ==
+
+A typed session on a dev image clones a fixture superproject with two
+submodules, one nested, from a git daemon on the host, with den's
+`clone --recurse-submodules`, then runs submodule status --recursive,
+status, diff, and an update after the host moves a gitlink; every output
+and the resulting tree are held to Linux's den byte for byte. The px
+lane's items are drafted in the note.
