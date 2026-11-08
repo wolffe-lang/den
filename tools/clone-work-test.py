@@ -16,6 +16,10 @@ Families (rows are named FAMILY-CASE-TRANSPORT):
   refusals  making a tracking branch, from a remote-tracking start point or
             by guessing a remote's branch: den alone, refused by name (exit 2,
             nothing changed)
+  report    the local-change list and tracking lines checkout and switch
+            print after a move, over the local transport: which commands
+            print no list (switch naming no start point, checkout -b naming
+            none), and the letter each staged or unstaged change is listed by
 
 Transports: a plain local path, file://, git:// (the pinned git daemon), ssh
 (a local stand-in that drops the client's options and the host and runs the
@@ -45,6 +49,7 @@ import re
 import runpy
 import shutil
 import socket
+import stat
 import subprocess
 import time
 import zlib
@@ -70,7 +75,7 @@ LOGS = re.compile(r'(^|/)(\.git|[^/]+\.git)/logs(/|$)')
 
 p = argparse.ArgumentParser()
 p.add_argument('--tier', choices=('native', 'release'), default='native')
-p.add_argument('--family', default='bytes,upstream,refusals')
+p.add_argument('--family', default='bytes,upstream,refusals,report')
 p.add_argument('--field', action='store_true')
 p.add_argument('--only', default='')
 a = p.parse_args()
@@ -128,12 +133,41 @@ def state(path):
     return result
 
 
-def indexes(base):
+def lstats(base):
+    """The timing and identity words of every worktree file under BASE, as
+    tools/index-proof.py reads them from lstat."""
+    found = {}
+    for f in base.rglob('*'):
+        rel = f.relative_to(base)
+        if '.git' in rel.parts:
+            continue
+        st = os.lstat(f)
+        if not stat.S_ISDIR(st.st_mode):
+            found[rel.as_posix()] = [x & 0xffffffff for x in (
+                st.st_ctime_ns // 10**9, st.st_ctime_ns % 10**9, st.st_mtime_ns // 10**9,
+                st.st_mtime_ns % 10**9, st.st_dev, st.st_ino)]
+    return found
+
+
+def indexes(base, seen=()):
+    """Every index under BASE with its proof. SEEN holds the tool's own
+    lstats after each of its steps: an entry a row's setup edit left stale
+    (the file changed, or was renamed, after the tool wrote its stat) is
+    proven by an lstat the tool saw before the edit with the same six words,
+    so the same file by device and inode."""
     found = {}
     for f in base.rglob('index'):
         if f.is_file() and f.parent.name == '.git':
             raw = f.read_bytes()
-            found[f.relative_to(base).as_posix()] = (raw, proof['proof'](f.parent.parent, raw))
+            rows = proof['proof'](f.parent.parent, raw)
+            for row in rows:
+                if row['proven']:
+                    continue
+                want = row['index_stat'][:6]
+                if any(want in words.values() for words in seen):
+                    row['proven'] = True
+                    row['own_worktree_stat'] = want
+            found[f.relative_to(base).as_posix()] = (raw, rows)
     return found
 
 
@@ -147,6 +181,21 @@ def shown(value):
         return [value[0], raw.hex()[:1500]]
 
 
+def step(exe, argv, cwd):
+    """One row step. Setup steps are the same on both sides: ':write PATH
+    TEXT' and ':rm PATH' edit the worktree, ':git ARGS' runs Git whichever
+    tool the row is for."""
+    if argv[0] == ':write':
+        (cwd / argv[1]).write_text(argv[2])
+        return dict(status=0, stdout='', stderr='')
+    if argv[0] == ':rm':
+        (cwd / argv[1]).unlink()
+        return dict(status=0, stdout='', stderr='')
+    if argv[0] == ':git':
+        return run(G, argv[1:], cwd)
+    return run(exe, argv, cwd)
+
+
 def compare(name, steps):
     """STEPS: (argv, cwd relative to the world) pairs, run by each tool in a
     fresh empty world."""
@@ -157,8 +206,11 @@ def compare(name, steps):
         if world.exists():
             shutil.rmtree(world)
         world.mkdir()
-        results = [run(exe, argv, world / cwd) for argv, cwd in steps]
-        outcomes.append(dict(results=results, after=state(world), indexes=indexes(world)))
+        results, seen = [], []
+        for argv, cwd in steps:
+            results.append(step(exe, argv, world / cwd))
+            seen.append(lstats(world))
+        outcomes.append(dict(results=results, after=state(world), indexes=indexes(world, seen)))
     left, right = outcomes
     if a.field:
         # macOS only: Git probes the case-insensitive file system and writes
@@ -382,7 +434,49 @@ def family_refusals():
             print('PASS' if ok else 'FAIL', name, '' if ok else json.dumps(q), flush=True)
 
 
-FAMILIES = {'bytes': family_bytes, 'upstream': family_upstream, 'refusals': family_refusals}
+# A local change to b.txt, which every commit leaves alone, so each move
+# below carries it.
+EDIT = [':write', 'b.txt', 'local\n']
+MOVE = ['switch', '--detach', 'HEAD~1']
+REPORT = {
+    # Which moves print the list: none after switch names no start point, or
+    # after checkout -b names none; checkout -B and checkout --detach without
+    # one still print it. The tracking lines print either way.
+    'switch-create': [EDIT, ['switch', '-c', 'topic']],
+    'switch-create-head': [EDIT, ['switch', '-c', 'topic', 'HEAD']],
+    'switch-force-create': [EDIT, ['switch', '-C', 'main']],
+    'switch-force-create-head': [EDIT, ['switch', '-C', 'main', 'HEAD']],
+    'switch-detach': [EDIT, ['switch', '--detach']],
+    'switch-detach-head': [EDIT, ['switch', '--detach', 'HEAD']],
+    'switch-same': [EDIT, ['switch', 'main']],
+    'checkout-create': [EDIT, ['checkout', '-b', 'topic']],
+    'checkout-create-head': [EDIT, ['checkout', '-b', 'topic', 'HEAD']],
+    'checkout-force-create': [EDIT, ['checkout', '-B', 'main']],
+    'checkout-detach': [EDIT, ['checkout', '--detach']],
+    'checkout-same': [EDIT, ['checkout', 'main']],
+    # The letter: how the worktree differs from HEAD, staged or not.
+    'letter-modified': [EDIT, MOVE],
+    'letter-staged-modified': [EDIT, [':git', 'add', 'b.txt'], MOVE],
+    'letter-staged-then-modified': [EDIT, [':git', 'add', 'b.txt'], [':write', 'b.txt', 'more\n'], MOVE],
+    'letter-staged-reverted': [EDIT, [':git', 'add', 'b.txt'], [':write', 'b.txt', 'b\n'], MOVE],
+    'letter-staged-new': [[':write', 'c.txt', 'new\n'], [':git', 'add', 'c.txt'], MOVE],
+    'letter-staged-new-gone': [[':write', 'c.txt', 'new\n'], [':git', 'add', 'c.txt'], [':rm', 'c.txt'], MOVE],
+    'letter-deleted': [[':rm', 'b.txt'], MOVE],
+    'letter-staged-deleted': [[':git', 'rm', '-q', 'b.txt'], MOVE],
+    'letter-staged-renamed': [[':git', 'mv', 'b.txt', 'z.txt'], MOVE],
+    'letter-staged-renamed-quiet': [[':git', 'mv', 'b.txt', 'z.txt'], ['switch', '-q', '--detach', 'HEAD~1']],
+}
+
+
+def family_report():
+    for case, argv in REPORT.items():
+        steps = [(['clone', '-q', url('local', srv / 'name.git'), 'c'], '.')]
+        steps += [(arg, 'c') for arg in argv]
+        compare('report-%s-local' % case, steps)
+
+
+FAMILIES = {'bytes': family_bytes, 'upstream': family_upstream, 'refusals': family_refusals,
+            'report': family_report}
 families = a.family.split(',')
 assert families and set(families) <= set(FAMILIES), 'families'
 try:
