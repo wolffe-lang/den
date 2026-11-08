@@ -2,6 +2,7 @@ use std.fs
 use ignore
 use index
 use object
+use oid
 
 /// Add policy independent of command parsing; chmod is -1 (unchanged), 0 or 1.
 pub struct AddOptions {
@@ -119,6 +120,15 @@ pub fn stage_paths_with_warnings(
 ) -> List[List[byte]] ! WorkErrors {
     validate_specs(paths)?
     let _ = index.serialize(value)?
+    // A path inside a submodule belongs to the submodule's own index (vc25
+    // work rows).
+    for path in paths {
+        for entry in value.entries {
+            if entry.stat[6] == 0o160000 && path.len > entry.path.len + 1 && under(path, entry.path) {
+                return Fatal("Pathspec '{text(path)?}' is in submodule '{text(entry.path)?}'")
+            }
+        }
+    }
     if options.chmod < -1 || options.chmod > 1 { return invalid }
     if paths.len == 0 && !options.all && !options.update { return List[List[byte]]() }
     ensure_filters(ctx)?
@@ -233,6 +243,15 @@ pub fn stage_paths_with_warnings(
             (mut prior).push(copy current.entries[at])
         }
         let file = copy walked.files[disk]
+        if file.mode == 0o160000 {
+            // A gitlink stages its submodule's HEAD and writes no object; an
+            // unchanged one keeps its entry, stat and all (vc25 work rows).
+            if prior.len == 1 && prior[0].stat[6] == 0o160000 && oid.equal(prior[0].id, file.id) { continue }
+            let entry = entry_for(file, prior, options)?
+            if !options.dry_run { value = stage_entry(value, entry)? }
+            (mut changed).push(copy path)
+            continue
+        }
         let entry = entry_for(file, prior, options)?
         if !options.dry_run {
             let _ = object.write_object(
