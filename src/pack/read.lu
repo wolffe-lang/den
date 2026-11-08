@@ -87,6 +87,24 @@ fn bounds(fd: int, index: Index) -> int ! PackErrors {
     size - 20
 }
 
+/// bounds' answer for a pack whose bounds answered end when its session
+/// loaded. The offset scan depends only on the index and the pack's size, so
+/// while the size is unchanged only the header and the trailer binding are
+/// read again; a changed size takes bounds' full check and its errors.
+fn rebound(fd: int, index: Index, end: int) -> int ! PackErrors {
+    let size = file_size(fd)?
+    if size != end + 20 { return bounds(fd, index)? }
+    let header = range_bytes(fd, 0, 12)?
+    if !same(header[0..4], "PACK".bytes()) || be32(header, 4) != 2 {
+        return Unsupported("pack version (requires v2)")
+    }
+    if be32(header, 8) != index.entries.len { return Unsupported("pack object count") }
+    let trailer = range_bytes(fd, size - 20, 20)?
+    if !same(trailer, index.pack_sum) { return Unsupported("pack index binding") }
+    if file_size(fd)? != size { return Unsupported("pack changed") }
+    end
+}
+
 fn verify(fd: int, index: Index) -> int ! PackErrors {
     let size = structure(fd, index)?
     var state = hash.new1(), pos: int = 0
@@ -305,12 +323,25 @@ pub fn prefix(gitdir: str, prefix: str) -> List[str] ! PackErrors {
 /// Indexes parsed once for a batch of reads (a tree walk, a history walk).
 /// Every pack is structure- and binding-checked when the session loads, as
 /// read_object checks each pack it passes; each read reopens its pack and
-/// re-checks those bounds, so a replaced or truncated pack is never misread.
-pub struct Session { gitdir: str, paths: List[str], indexes: List[Index], loaded: bool }
+/// re-checks those bounds (rebound), so a replaced or truncated pack is never
+/// misread. ends holds each pack's bounds answer at load.
+pub struct Session {
+    gitdir: str,
+    paths: List[str],
+    indexes: List[Index],
+    ends: List[int],
+    loaded: bool,
+}
 
 /// An unloaded session; indexes are listed and checked on the first read.
 pub fn session(gitdir: str) -> Session {
-    Session { gitdir: copy gitdir, paths: List[str](), indexes: List[Index](), loaded: false }
+    Session {
+        gitdir: copy gitdir,
+        paths: List[str](),
+        indexes: List[Index](),
+        ends: List[int](),
+        loaded: false,
+    }
 }
 
 fn load_session(mut s: Session) -> () ! PackErrors {
@@ -318,9 +349,10 @@ fn load_session(mut s: Session) -> () ! PackErrors {
         let index = load_index(path)?
         let fd = open_pack("{path[0..path.len - 4]}.pack")?
         defer fs_close(fd) else |_| {}
-        let _ = bounds(fd, index)?
+        let end = bounds(fd, index)?
         (mut s.paths).push(copy path)
         (mut s.indexes).push(index)
+        (mut s.ends).push(end)
     }
     s.loaded = true
 }
@@ -343,7 +375,7 @@ pub fn session_peek(s: Session, name: str, cap: int) -> Body ! PackErrors {
         region candidate {
             let fd = open_pack("{s.paths[i][0..s.paths[i].len - 4]}.pack")?
             defer fs_close(fd) else |_| {}
-            let end = bounds(fd, s.indexes[i])?
+            let end = rebound(fd, s.indexes[i], s.ends[i])?
             var seen = Map[int, bool](), total: int = 0
             let value = unpack(fd, end, s.indexes[i], slot, mut seen, mut total, 0)?
             result = copy value
@@ -364,7 +396,7 @@ pub fn session_read(mut s: Session, name: str, cap: int) -> Body ! PackErrors {
         region candidate {
             let fd = open_pack("{s.paths[i][0..s.paths[i].len - 4]}.pack")?
             defer fs_close(fd) else |_| {}
-            let end = bounds(fd, s.indexes[i])?
+            let end = rebound(fd, s.indexes[i], s.ends[i])?
             var seen = Map[int, bool](), total: int = 0
             let value = unpack(fd, end, s.indexes[i], slot, mut seen, mut total, 0)?
             result = copy value
