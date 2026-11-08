@@ -108,6 +108,8 @@ class Harness:
         self.failed, self.passed, self.results = [], 0, {}
         self.daemon = None
         self.https = None
+        self.https_starts = 0
+        self.https_errors = []
         self.extra = {}
 
     # -- processes ------------------------------------------------------
@@ -260,7 +262,11 @@ class Harness:
         fixture = runpy.run_path(str(self.root / 'tools/http-git-test.py'))
         for path, digest in fixture['OPENSSL_PINS'].items():
             assert hashlib.sha256(Path(path).read_bytes()).hexdigest() == digest, 'pinned TLS oracle digest'
-        pki = self.out / 'pki'
+        # A fixture for each family that uses https (url starts it, main stops
+        # it after the family): its bridge waits at most 60 s for each next
+        # request, so it must not sit idle through another family's rows.
+        self.https_starts += 1
+        pki = self.out / ('pki-%d' % self.https_starts)
         pki.mkdir()
 
         def openssl(*argv):
@@ -280,10 +286,10 @@ class Harness:
                 '-CAcreateserial', '-days', '1', '-sha256', '-extfile', pki / 'leaf.cnf', '-out', pki / 'leaf.pem')
         # The fixture serves one repository, <root>/remote.git; a row points
         # that name at its own repository by a symbolic link.
-        self.https_root = self.out / 'https-root'
+        self.https_root = self.out / ('https-root-%d' % self.https_starts)
         self.https_root.mkdir()
         self.https = fixture['Server'](self.https_root, self.git, self.env, 'tls', pki, '', lambda data: None)
-        self.extra = dict(GIT_SSL_CAINFO=str(pki / 'ca.pem'), DEN_TLS_ROOTS=str(pki / 'ca.der'))
+        self.extra.update(GIT_SSL_CAINFO=str(pki / 'ca.pem'), DEN_TLS_ROOTS=str(pki / 'ca.der'))
 
     def url(self, transport, repo):
         repo = Path(repo)
@@ -295,20 +301,27 @@ class Harness:
             return 'git://127.0.0.1:%d/%s' % (self.daemon_port, repo.relative_to(self.srv).as_posix())
         if transport == 'ssh':
             return 'ssh://localhost' + str(repo)
+        if self.https is None:
+            self.start_https()
         link = self.https_root / 'remote.git'
         if link.is_symlink():
             link.unlink()
         link.symlink_to(repo)
         return self.https.url
 
+    def stop_https(self):
+        if self.https:
+            self.https.close()
+            self.https_errors += self.https.errors
+            self.https = None
+
     def stop(self):
         if self.daemon:
             self.daemon.terminate()  # This fixture's pid only.
             self.daemon.wait(timeout=30)
-        if self.https:
-            self.https.close()
-            if self.https.errors:
-                self.verdict('wire-gaps-https-fixture', ['fixture errors: ' + ', '.join(self.https.errors)])
+        self.stop_https()
+        if self.https_errors:
+            self.verdict('wire-gaps-https-fixture', ['fixture errors: ' + ', '.join(self.https_errors)])
 
     def transports(self):
         return [t for t in TRANSPORTS if not (self.field and t == 'https')]
@@ -815,11 +828,10 @@ def main():
     h = Harness(args)
     try:
         h.start_daemon()
-        if not args.field and set(families) & {'push', 'clone', 'ls-remote', 'fetch'}:
-            h.start_https()
         for family in families:
             {'push': family_push, 'clone': family_clone, 'ls-remote': family_ls_remote,
              'fetch': family_fetch, 'memory': family_memory}[family](h)
+            h.stop_https()
     finally:
         h.stop()
     left = ' (https and memory not run: field leg)' if args.field else ''
