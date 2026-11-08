@@ -444,6 +444,11 @@ def family_clone():
     compare('clone-recurse-pathspec-none', ['clone', '--recurse-submodules=nomatch', top, 'c'], 'remotes', extra=ALLOW_FILE)
     compare('clone-plain', ['clone', top, 'c'], 'remotes', extra=ALLOW_FILE)
     compare('clone-recurse-bare', ['clone', '--bare', '--recurse-submodules', top, 'c.git'], 'remotes', extra=ALLOW_FILE)
+    # The destination as clone derives it: the humanish name, or an existing
+    # empty directory.
+    compare('clone-recurse-humanish', ['clone', '--recurse-submodules', top], 'remotes', extra=ALLOW_FILE)
+    compare('clone-recurse-empty-directory', ['clone', '--recurse-submodules', top, 'c'], 'remotes', extra=ALLOW_FILE,
+            prepare=lambda w: (w / 'c').mkdir())
     seed('plain', plain_clone)
     seed('clone', recursive_clone)
     for name, argv in (('status', ['submodule', 'status']), ('bare', ['submodule']), ('init', ['submodule', 'init']),
