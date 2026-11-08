@@ -80,15 +80,41 @@ fn execute(args: List[str]) -> () ! object.StoreErrors {
     let service_state = override_service("DEN_UPLOAD_PACK", upload)?
     defer restore_service(take service_state)
     if args[0] == "clone" {
-        if operands.len != 2 { return invalid }
+        if operands.len == 0 { return Unsupported("clone requires a repository") }
+        if operands.len > 2 {
+            return Unsupported("clone takes a repository and at most one directory")
+        }
+        // A local source is checked before a name is guessed, as Git does.
+        if transport.local_path(operands[0]) &&
+            !fs.exists(operands[0]) &&
+            !fs.exists("{operands[0]}.git") {
+            return Unsupported("fatal: repository '{operands[0]}' does not exist")
+        }
+        // git-clone(1) <directory>: the URL's humanish part when none is given.
+        let destination = if operands.len == 2 {
+            copy operands[1]
+        } else {
+            clone_name(operands[0], bare)
+        }
+        if destination == "" {
+            return Unsupported(
+                "fatal: No directory name could be guessed.\nPlease specify a directory on the command line",
+            )
+        }
+        if fs.exists(destination) && (!fs.is_dir(destination) || fs.entries(destination)?.len > 0) {
+            return Unsupported(
+                "fatal: destination path '{destination}' already exists and is not an empty directory.",
+            )
+        }
         if !quiet {
             if bare {
-                eprint("Cloning into bare repository '{operands[1]}'...")
+                eprint("Cloning into bare repository '{destination}'...")
             } else {
-                eprint("Cloning into '{operands[1]}'...")
+                eprint("Cloning into '{destination}'...")
             }
         }
-        clone_mode(operands[0], operands[1], bare, local)?
+        let empty = clone_mode(operands[0], destination, bare, local)?
+        if empty { eprint("warning: You appear to have cloned an empty repository.") }
         // The local copy reports its completion; the transport path does not.
         if !quiet && local && transport.local_path(operands[0]) { eprint("done.") }
         return
@@ -155,6 +181,8 @@ fn run_inner(args: List[str]) -> int {
     execute(args) else |e| match e {
         Unsupported(message) => {
             if startup_diagnostic(message) { return 128 }
+            // Git's own fatal diagnostics, printed as Git prints them.
+            if message.starts_with("fatal: ") { eprint(transport.redact(message)); return 128 }
             eprint("den: wire: Unsupported({transport.redact(message)})")
             return 2
         },

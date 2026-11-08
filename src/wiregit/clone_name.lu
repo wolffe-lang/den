@@ -1,0 +1,78 @@
+// git-clone(1) <directory>: the "humanish" part of a repository's URL when no
+// directory is given, as the pinned Git derives it (measured black-box over
+// local paths, file://, git://, https://, ssh:// and scp-like spellings).
+
+fn blank(b: byte) -> bool { b as int <= 32 || b as int == 127 }
+
+fn digits(text: str) -> bool {
+    for b in text.bytes() { if b as int < 48 || b as int > 57 { return false } }
+    true
+}
+
+// The text after the last "/" or ":", or all of it.
+fn last_component(text: str) -> str {
+    let bytes = text.bytes()
+    var at = bytes.len
+    while at > 0 {
+        let b = bytes[at - 1] as int
+        if b == 47 || b == 58 { break }
+        at -= 1
+    }
+    text[at..]
+}
+
+// Runs of whitespace and control characters become one space; the ends are
+// trimmed.
+fn collapse(text: str) -> str {
+    var out = List[byte](), pending = false
+    for b in text.bytes() {
+        if blank(b) {
+            pending = out.len > 0
+            continue
+        }
+        if pending { (mut out).push(32 as byte); pending = false }
+        (mut out).push(b)
+    }
+    str_from_utf8(out) else ""
+}
+
+/// The directory a clone of url makes when none is named (".git" appended for
+/// a bare clone), or "" when no name can be guessed.
+fn clone_name(url: str, bare: bool) -> str {
+    var rest = copy url
+    let scheme = rest.find("://") else -1
+    if scheme >= 0 {
+        rest = rest[scheme + 3..]
+        // The authority's user information goes.
+        let slash = rest.find("/") else rest.len
+        let authority = rest[0..slash]
+        var at = -1
+        let bytes = authority.bytes()
+        for i in 0..bytes.len { if bytes[i] as int == 64 { at = i } }
+        if at >= 0 { rest = rest[at + 1..] }
+    } else {
+        // scp-like user@host:path: the user goes.
+        let at = rest.find("@") else -1
+        let colon = rest.find(":") else -1
+        let slash = rest.find("/") else rest.len
+        if at >= 0 && colon > at && slash > at { rest = rest[at + 1..] }
+    }
+    // Trailing whitespace and slashes, one trailing "/.git", slashes again.
+    while rest.len > 0 && (blank(rest.bytes()[rest.len - 1]) || rest.ends_with("/")) {
+        rest = rest[0..rest.len - 1]
+    }
+    if rest.ends_with("/.git") { rest = rest[0..rest.len - 5] }
+    while rest.ends_with("/") { rest = rest[0..rest.len - 1] }
+    // With no path left, a ":port" (digits, possibly none) goes.
+    if !rest.contains("/") {
+        var colon = -1
+        let bytes = rest.bytes()
+        for i in 0..bytes.len { if bytes[i] as int == 58 { colon = i } }
+        if colon >= 0 && digits(rest[colon + 1..]) { rest = rest[0..colon] }
+    }
+    var name = last_component(rest)
+    if name.ends_with(".git") { name = name[0..name.len - 4] }
+    name = collapse(name)
+    if name == "" { return "" }
+    if bare then "{name}.git" else name
+}

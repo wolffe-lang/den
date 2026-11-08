@@ -186,20 +186,42 @@ fn checkout_clone(repo: repository.Repo, root: str, id: oid.Oid) -> () ! worktre
 /// A failed clone removes the directory this call created, as the pinned Git
 /// does (R-vc22-6, measured black-box); nothing it did not create is touched.
 pub fn clone_repository(url: str, destination: str, bare: bool) -> () ! object.StoreErrors {
-    clone_mode(url, destination, bare, true)?
+    let _ = clone_mode(url, destination, bare, true)?
 }
 
-fn clone_mode(url: str, destination: str, bare: bool, local: bool) -> () ! object.StoreErrors {
+// True when the cloned repository had no refs (Git's empty-repository
+// warning). An existing empty directory is filled, and on failure emptied
+// again but kept, as Git keeps it; one this call creates is removed.
+fn clone_mode(url: str, destination: str, bare: bool, local: bool) -> bool ! object.StoreErrors {
     if url.contains("\n") || url.contains("\r") { return invalid }
-    if fs.exists(destination) { return exists }
-    fs.create_dir(destination)?
+    let existed = fs.exists(destination)
+    if existed && (!fs.is_dir(destination) || fs.entries(destination)?.len > 0) { return exists }
+    if !existed { fs.create_dir(destination)? }
     var complete = false
-    defer { if !complete { fs.remove_dir_all(destination) else |_| {} } }
-    clone_created(url, destination, bare, local)?
+    defer {
+        if !complete {
+            if existed {
+                for entry in fs.entries(destination) else List[fs.Entry]() {
+                    let name = str_from_utf8(entry.name) else ""
+                    let path = "{destination}/{name}"
+                    if name == "" { continue }
+                    if fs.is_dir(path) {
+                        fs.remove_dir_all(path) else |_| {}
+                    } else {
+                        fs.remove(path) else |_| {}
+                    }
+                }
+            } else {
+                fs.remove_dir_all(destination) else |_| {}
+            }
+        }
+    }
+    let empty = clone_created(url, destination, bare, local)?
     complete = true
+    empty
 }
 
-fn clone_created(url: str, destination: str, bare: bool, local: bool) -> () ! object.StoreErrors {
+fn clone_created(url: str, destination: str, bare: bool, local: bool) -> bool ! object.StoreErrors {
     let (repo, _) = repository.init(destination, bare, "main")?
     let plain = transport.local_path(url)
     let advertised = if plain && local {
@@ -305,6 +327,8 @@ fn clone_created(url: str, destination: str, bare: bool, local: bool) -> () ! ob
             return Unsupported("clone checkout: {e}")
         }
     }
+    for reference in advertised { if reference.id != "unborn" { return false } }
+    true
 }
 
 /// Fetch a single fully-qualified source ref into a single fully-qualified destination; preserve errors.
