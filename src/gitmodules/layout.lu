@@ -1,0 +1,28 @@
+// The basic submodule form of gitsubmodules(7) and gitrepository-layout(5)
+// (`modules/`), as the pinned Git writes it (vc25 probe 1, dump-clone-recurse):
+// the gitdir is $GIT_DIR/modules/<name>, the worktree's `.git` file holds the
+// relative path to it, and core.worktree the relative path back.
+
+fn parts(path: str) -> List[str] {
+    var out = List[str]()
+    for part in path.split("/") { if part != "" { (mut out).push(copy part) } }
+    out
+}
+
+/// The relative path from directory FROM to TO, both absolute and
+/// normalised (no `.` or `..` components): `../.git/modules/abs`.
+pub fn relative_path(from: str, to: str) -> str {
+    let a = parts(from), b = parts(to)
+    var common = 0
+    while common < a.len && common < b.len && a[common] == b[common] { common += 1 }
+    var out = ""
+    for _ in common..a.len { out = if out == "" then ".." else "{out}/.." }
+    for i in common..b.len { out = if out == "" then copy b[i] else "{out}/{b[i]}" }
+    if out == "" then "." else out
+}
+
+/// A submodule's gitdir under its immediate superproject's gitdir.
+pub fn module_gitdir(super_gitdir: str, name: str) -> str { "{super_gitdir}/modules/{name}" }
+
+/// The `.git` file's bytes in a submodule worktree.
+pub fn gitfile_text(worktree: str, gitdir: str) -> str { "gitdir: {relative_path(worktree, gitdir)}\n" }

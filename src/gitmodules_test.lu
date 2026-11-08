@@ -1,0 +1,249 @@
+//! member: false
+
+// vc25: relative submodule URLs, every case the pinned Git resolved in vc25's
+// probe 1 (notes/vc25-evidence/oracle-probe-1.jsonl, steps *-rel-*), plus
+// insteadOf, suspicious names and the layout's relative paths.
+use gitmodules
+use repository
+
+fn url_rows() -> int {
+    let cases = [
+        ["/probe/out-p1/w/rel/1", "../x.git", "/probe/out-p1/w/rel/x.git"],
+        ["/probe/out-p1/w/rel/2", "./x.git", "/probe/out-p1/w/rel/2/x.git"],
+        ["/probe/out-p1/w/rel/3", "../../y/x.git", "/probe/out-p1/w/y/x.git"],
+        ["/probe/out-p1/w/rel/4", "../../../x.git", "/probe/out-p1/x.git"],
+        ["/probe/out-p1/w/rel/5", "./x", "/probe/out-p1/w/rel/5/x"],
+        ["/probe/out-p1/w/rel/6", "../x/", "/probe/out-p1/w/rel/x"],
+        ["/probe/out-p1/w/rel/7", ".././x", "/probe/out-p1/w/rel/x"],
+        ["/probe/out-p1/w/rel/8", "../x/./y", "/probe/out-p1/w/rel/x/./y"],
+        ["/probe/out-p1/w/rel/9", "../x/../y", "/probe/out-p1/w/rel/x/../y"],
+        ["file:///probe/out-p1/w/top.git", "../x.git", "file:///probe/out-p1/w/x.git"],
+        ["file:///probe/out-p1/w/top.git", "./x.git", "file:///probe/out-p1/w/top.git/x.git"],
+        ["file:///probe/out-p1/w/top.git", "../../y/x.git", "file:///probe/out-p1/y/x.git"],
+        ["file:///probe/out-p1/w/top.git", "../../../x.git", "file:///probe/x.git"],
+        ["file:///probe/out-p1/w/top.git", "./x", "file:///probe/out-p1/w/top.git/x"],
+        ["file:///probe/out-p1/w/top.git", "../x/", "file:///probe/out-p1/w/x"],
+        ["file:///probe/out-p1/w/top.git", ".././x", "file:///probe/out-p1/w/x"],
+        ["file:///probe/out-p1/w/top.git", "../x/./y", "file:///probe/out-p1/w/x/./y"],
+        ["file:///probe/out-p1/w/top.git", "../x/../y", "file:///probe/out-p1/w/x/../y"],
+        ["file:///probe/out-p1/w/top", "../x.git", "file:///probe/out-p1/w/x.git"],
+        ["file:///probe/out-p1/w/top", "./x.git", "file:///probe/out-p1/w/top/x.git"],
+        ["file:///probe/out-p1/w/top", "../../y/x.git", "file:///probe/out-p1/y/x.git"],
+        ["file:///probe/out-p1/w/top", "../../../x.git", "file:///probe/x.git"],
+        ["file:///probe/out-p1/w/top", "./x", "file:///probe/out-p1/w/top/x"],
+        ["file:///probe/out-p1/w/top", "../x/", "file:///probe/out-p1/w/x"],
+        ["file:///probe/out-p1/w/top", ".././x", "file:///probe/out-p1/w/x"],
+        ["file:///probe/out-p1/w/top", "../x/./y", "file:///probe/out-p1/w/x/./y"],
+        ["file:///probe/out-p1/w/top", "../x/../y", "file:///probe/out-p1/w/x/../y"],
+        ["/probe/out-p1/w/top.git", "../x.git", "/probe/out-p1/w/x.git"],
+        ["/probe/out-p1/w/top.git", "./x.git", "/probe/out-p1/w/top.git/x.git"],
+        ["/probe/out-p1/w/top.git", "../../y/x.git", "/probe/out-p1/y/x.git"],
+        ["/probe/out-p1/w/top.git", "../../../x.git", "/probe/x.git"],
+        ["/probe/out-p1/w/top.git", "./x", "/probe/out-p1/w/top.git/x"],
+        ["/probe/out-p1/w/top.git", "../x/", "/probe/out-p1/w/x"],
+        ["/probe/out-p1/w/top.git", ".././x", "/probe/out-p1/w/x"],
+        ["/probe/out-p1/w/top.git", "../x/./y", "/probe/out-p1/w/x/./y"],
+        ["/probe/out-p1/w/top.git", "../x/../y", "/probe/out-p1/w/x/../y"],
+        ["/probe/out-p1/w/top/", "../x.git", "/probe/out-p1/w/x.git"],
+        ["/probe/out-p1/w/top/", "./x.git", "/probe/out-p1/w/top/x.git"],
+        ["/probe/out-p1/w/top/", "../../y/x.git", "/probe/out-p1/y/x.git"],
+        ["/probe/out-p1/w/top/", "../../../x.git", "/probe/x.git"],
+        ["/probe/out-p1/w/top/", "./x", "/probe/out-p1/w/top/x"],
+        ["/probe/out-p1/w/top/", "../x/", "/probe/out-p1/w/x"],
+        ["/probe/out-p1/w/top/", ".././x", "/probe/out-p1/w/x"],
+        ["/probe/out-p1/w/top/", "../x/./y", "/probe/out-p1/w/x/./y"],
+        ["/probe/out-p1/w/top/", "../x/../y", "/probe/out-p1/w/x/../y"],
+        ["https://h.example/o/top.git", "../x.git", "https://h.example/o/x.git"],
+        ["https://h.example/o/top.git", "./x.git", "https://h.example/o/top.git/x.git"],
+        ["https://h.example/o/top.git", "../../y/x.git", "https://h.example/y/x.git"],
+        ["https://h.example/o/top.git", "../../../x.git", "https://x.git"],
+        ["https://h.example/o/top.git", "./x", "https://h.example/o/top.git/x"],
+        ["https://h.example/o/top.git", "../x/", "https://h.example/o/x"],
+        ["https://h.example/o/top.git", ".././x", "https://h.example/o/x"],
+        ["https://h.example/o/top.git", "../x/./y", "https://h.example/o/x/./y"],
+        ["https://h.example/o/top.git", "../x/../y", "https://h.example/o/x/../y"],
+        ["https://h.example/o/top", "../x.git", "https://h.example/o/x.git"],
+        ["https://h.example/o/top", "./x.git", "https://h.example/o/top/x.git"],
+        ["https://h.example/o/top", "../../y/x.git", "https://h.example/y/x.git"],
+        ["https://h.example/o/top", "../../../x.git", "https://x.git"],
+        ["https://h.example/o/top", "./x", "https://h.example/o/top/x"],
+        ["https://h.example/o/top", "../x/", "https://h.example/o/x"],
+        ["https://h.example/o/top", ".././x", "https://h.example/o/x"],
+        ["https://h.example/o/top", "../x/./y", "https://h.example/o/x/./y"],
+        ["https://h.example/o/top", "../x/../y", "https://h.example/o/x/../y"],
+        ["https://h.example/o/top/", "../x.git", "https://h.example/o/x.git"],
+        ["https://h.example/o/top/", "./x.git", "https://h.example/o/top/x.git"],
+        ["https://h.example/o/top/", "../../y/x.git", "https://h.example/y/x.git"],
+        ["https://h.example/o/top/", "../../../x.git", "https://x.git"],
+        ["https://h.example/o/top/", "./x", "https://h.example/o/top/x"],
+        ["https://h.example/o/top/", "../x/", "https://h.example/o/x"],
+        ["https://h.example/o/top/", ".././x", "https://h.example/o/x"],
+        ["https://h.example/o/top/", "../x/./y", "https://h.example/o/x/./y"],
+        ["https://h.example/o/top/", "../x/../y", "https://h.example/o/x/../y"],
+        ["https://h.example/top", "../x.git", "https://h.example/x.git"],
+        ["https://h.example/top", "./x.git", "https://h.example/top/x.git"],
+        ["https://h.example/top", "../../y/x.git", "https://y/x.git"],
+        ["https://h.example/top", "../../../x.git", "https:/x.git"],
+        ["https://h.example/top", "./x", "https://h.example/top/x"],
+        ["https://h.example/top", "../x/", "https://h.example/x"],
+        ["https://h.example/top", ".././x", "https://h.example/x"],
+        ["https://h.example/top", "../x/./y", "https://h.example/x/./y"],
+        ["https://h.example/top", "../x/../y", "https://h.example/x/../y"],
+        ["https://h.example", "../x.git", "https://x.git"],
+        ["https://h.example", "./x.git", "https://h.example/x.git"],
+        ["https://h.example", "../../y/x.git", "https:/y/x.git"],
+        ["https://h.example", "../../../x.git", "https:x.git"],
+        ["https://h.example", "./x", "https://h.example/x"],
+        ["https://h.example", "../x/", "https://x"],
+        ["https://h.example", ".././x", "https://x"],
+        ["https://h.example", "../x/./y", "https://x/./y"],
+        ["https://h.example", "../x/../y", "https://x/../y"],
+        ["git@h.example:o/top.git", "../x.git", "git@h.example:o/x.git"],
+        ["git@h.example:o/top.git", "./x.git", "git@h.example:o/top.git/x.git"],
+        ["git@h.example:o/top.git", "../../y/x.git", "git@h.example:y/x.git"],
+        ["git@h.example:o/top.git", "../../../x.git", ".:x.git"],
+        ["git@h.example:o/top.git", "./x", "git@h.example:o/top.git/x"],
+        ["git@h.example:o/top.git", "../x/", "git@h.example:o/x"],
+        ["git@h.example:o/top.git", ".././x", "git@h.example:o/x"],
+        ["git@h.example:o/top.git", "../x/./y", "git@h.example:o/x/./y"],
+        ["git@h.example:o/top.git", "../x/../y", "git@h.example:o/x/../y"],
+        ["h.example:top.git", "../x.git", "h.example:x.git"],
+        ["h.example:top.git", "./x.git", "h.example:top.git/x.git"],
+        ["h.example:top.git", "../../y/x.git", ".:y/x.git"],
+        ["h.example:top.git", "../../../x.git", "FATAL cannot strip one component off url '.'"],
+        ["h.example:top.git", "./x", "h.example:top.git/x"],
+        ["h.example:top.git", "../x/", "h.example:x"],
+        ["h.example:top.git", ".././x", "h.example:x"],
+        ["h.example:top.git", "../x/./y", "h.example:x/./y"],
+        ["h.example:top.git", "../x/../y", "h.example:x/../y"],
+        ["h.example:top", "../x.git", "h.example:x.git"],
+        ["h.example:top", "./x.git", "h.example:top/x.git"],
+        ["h.example:top", "../../y/x.git", ".:y/x.git"],
+        ["h.example:top", "../../../x.git", "FATAL cannot strip one component off url '.'"],
+        ["h.example:top", "./x", "h.example:top/x"],
+        ["h.example:top", "../x/", "h.example:x"],
+        ["h.example:top", ".././x", "h.example:x"],
+        ["h.example:top", "../x/./y", "h.example:x/./y"],
+        ["h.example:top", "../x/../y", "h.example:x/../y"],
+        ["h.example:o/p/top", "../x.git", "h.example:o/p/x.git"],
+        ["h.example:o/p/top", "./x.git", "h.example:o/p/top/x.git"],
+        ["h.example:o/p/top", "../../y/x.git", "h.example:o/y/x.git"],
+        ["h.example:o/p/top", "../../../x.git", "h.example:x.git"],
+        ["h.example:o/p/top", "./x", "h.example:o/p/top/x"],
+        ["h.example:o/p/top", "../x/", "h.example:o/p/x"],
+        ["h.example:o/p/top", ".././x", "h.example:o/p/x"],
+        ["h.example:o/p/top", "../x/./y", "h.example:o/p/x/./y"],
+        ["h.example:o/p/top", "../x/../y", "h.example:o/p/x/../y"],
+        ["ssh://u@h.example:2222/o/top.git", "../x.git", "ssh://u@h.example:2222/o/x.git"],
+        ["ssh://u@h.example:2222/o/top.git", "./x.git", "ssh://u@h.example:2222/o/top.git/x.git"],
+        ["ssh://u@h.example:2222/o/top.git", "../../y/x.git", "ssh://u@h.example:2222/y/x.git"],
+        ["ssh://u@h.example:2222/o/top.git", "../../../x.git", "ssh://x.git"],
+        ["ssh://u@h.example:2222/o/top.git", "./x", "ssh://u@h.example:2222/o/top.git/x"],
+        ["ssh://u@h.example:2222/o/top.git", "../x/", "ssh://u@h.example:2222/o/x"],
+        ["ssh://u@h.example:2222/o/top.git", ".././x", "ssh://u@h.example:2222/o/x"],
+        ["ssh://u@h.example:2222/o/top.git", "../x/./y", "ssh://u@h.example:2222/o/x/./y"],
+        ["ssh://u@h.example:2222/o/top.git", "../x/../y", "ssh://u@h.example:2222/o/x/../y"],
+        ["git://h.example/o/top.git", "../x.git", "git://h.example/o/x.git"],
+        ["git://h.example/o/top.git", "./x.git", "git://h.example/o/top.git/x.git"],
+        ["git://h.example/o/top.git", "../../y/x.git", "git://h.example/y/x.git"],
+        ["git://h.example/o/top.git", "../../../x.git", "git://x.git"],
+        ["git://h.example/o/top.git", "./x", "git://h.example/o/top.git/x"],
+        ["git://h.example/o/top.git", "../x/", "git://h.example/o/x"],
+        ["git://h.example/o/top.git", ".././x", "git://h.example/o/x"],
+        ["git://h.example/o/top.git", "../x/./y", "git://h.example/o/x/./y"],
+        ["git://h.example/o/top.git", "../x/../y", "git://h.example/o/x/../y"],
+        ["../top.git", "../x.git", "../x.git"],
+        ["../top.git", "./x.git", "../top.git/x.git"],
+        ["../top.git", "../../y/x.git", "FATAL cannot strip one component off url '..'"],
+        ["../top.git", "../../../x.git", "FATAL cannot strip one component off url '..'"],
+        ["../top.git", "./x", "../top.git/x"],
+        ["../top.git", "../x/", "../x"],
+        ["../top.git", ".././x", "../x"],
+        ["../top.git", "../x/./y", "../x/./y"],
+        ["../top.git", "../x/../y", "../x/../y"],
+        ["./top", "../x.git", "x.git"],
+        ["./top", "./x.git", "top/x.git"],
+        ["./top", "../../y/x.git", "FATAL cannot strip one component off url '.'"],
+        ["./top", "../../../x.git", "FATAL cannot strip one component off url '.'"],
+        ["./top", "./x", "top/x"],
+        ["./top", "../x/", "x"],
+        ["./top", ".././x", "x"],
+        ["./top", "../x/./y", "x/./y"],
+        ["./top", "../x/../y", "x/../y"],
+        ["top", "../x.git", "x.git"],
+        ["top", "./x.git", "top/x.git"],
+        ["top", "../../y/x.git", "FATAL cannot strip one component off url '.'"],
+        ["top", "../../../x.git", "FATAL cannot strip one component off url '.'"],
+        ["top", "./x", "top/x"],
+        ["top", "../x/", "x"],
+        ["top", ".././x", "x"],
+        ["top", "../x/./y", "x/./y"],
+        ["top", "../x/../y", "x/../y"],
+    ]
+    var failed = 0
+    var i = 0
+    for c in cases {
+        i += 1
+        let got = gitmodules.resolve(c[0], c[1]) else |e| match e {
+            Fatal(message) => "FATAL {message}",
+            _ => "ERROR {e}",
+        }
+        if got != c[2] {
+            print("FAIL submodule-url-{i} {c[0]} + {c[1]}: {got}, want {c[2]}")
+            failed += 1
+        }
+    }
+    print("submodule-url: {cases.len - failed}/{cases.len}")
+    failed
+}
+
+fn entry(key: str, value: str) -> repository.ConfigEntry {
+    repository.ConfigEntry { key: key, value: value, implicit: false }
+}
+
+fn check(row: str, got: str, want: str) -> int {
+    if got == want { print("PASS {row}"); return 0 }
+    print("FAIL {row} {got}, want {want}")
+    1
+}
+
+fn rewrite_rows() -> int {
+    let rules = [
+        entry("url.https://github.com/.insteadof", "git@github.com:"),
+        entry("url.file:///w/.insteadof", "https://forge.example/o/"),
+        entry("url.file:///short/.insteadof", "https://forge.example/"),
+        entry("url.ssh://push.example/.pushinsteadof", "https://forge.example/"),
+    ]
+    var failed = 0
+    failed += check("submodule-insteadof-scp", gitmodules.rewrite("git@github.com:o/r.git", rules, false), "https://github.com/o/r.git")
+    failed += check("submodule-insteadof-longest", gitmodules.rewrite("https://forge.example/o/leaf.git", rules, false), "file:///w/leaf.git")
+    failed += check("submodule-insteadof-none", gitmodules.rewrite("https://other.example/x", rules, false), "https://other.example/x")
+    failed += check("submodule-pushinsteadof", gitmodules.rewrite("https://forge.example/o/leaf.git", rules, true), "ssh://push.example/o/leaf.git")
+    failed
+}
+
+fn layout_rows() -> int {
+    var failed = 0
+    failed += check("submodule-gitfile", gitmodules.gitfile_text("/w/c/abs", "/w/c/.git/modules/abs"), "gitdir: ../.git/modules/abs\n")
+    failed += check("submodule-gitfile-nested", gitmodules.gitfile_text("/w/c/mid/deps/leaf", "/w/c/.git/modules/midname/modules/leafsub"), "gitdir: ../../../.git/modules/midname/modules/leafsub\n")
+    failed += check("submodule-worktree-nested", gitmodules.relative_path("/w/c/.git/modules/midname/modules/leafsub", "/w/c/mid/deps/leaf"), "../../../../../mid/deps/leaf")
+    failed += check("submodule-worktree", gitmodules.relative_path("/w/c/.git/modules/abs", "/w/c/abs"), "../../../abs")
+    failed
+}
+
+fn name_rows() -> int {
+    var failed = 0
+    for name in ["..", "a/..", "a/../b", "../"] {
+        if !gitmodules.suspicious(name) { print("FAIL submodule-name-suspicious {name}"); failed += 1 }
+    }
+    for name in ["/abs", "a//b", ".git", "a\\..\\b", "x/", "-x", "ok", "a/./b", ".", "a/.", "..b", "b.."] {
+        if gitmodules.suspicious(name) { print("FAIL submodule-name-plain {name}"); failed += 1 }
+    }
+    if failed == 0 { print("PASS submodule-names") }
+    failed
+}
+
+fn main() -> int {
+    let failed = url_rows() + rewrite_rows() + layout_rows() + name_rows()
+    if failed == 0 { 0 } else { 1 }
+}

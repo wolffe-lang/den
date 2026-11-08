@@ -1,0 +1,93 @@
+// Relative submodule URLs and url.<base>.insteadOf / pushInsteadOf, from
+// gitmodules(5), git-submodule(1) and git-config(1) of Git v2.56.0, every rule
+// held to the pinned Git's resolutions (vc25 probe 1, 171 cases; vc25's rows).
+use repository
+
+/// gitmodules(5): a URL beginning with `./` or `../` is relative to the
+/// superproject's remote.
+pub fn is_relative(url: str) -> bool { url.starts_with("./") || url.starts_with("../") }
+
+fn last_byte(text: str, b: int) -> int {
+    var at = -1
+    var i = 0
+    for x in text.bytes() {
+        if x as int == b { at = i }
+        i += 1
+    }
+    at
+}
+
+// Strip one component: after the last `/`, else after the last `:` (an
+// scp-like host), else the whole word becomes `.`; `.` and `..` cannot lose
+// a component (measured: `fatal: cannot strip one component off url '.'`).
+fn chop(remote: str, sep: str) -> (str, str) ! Errors {
+    if remote == "." || remote == ".." {
+        return Fatal("cannot strip one component off url '{remote}'")
+    }
+    let slash = last_byte(remote, 47)
+    if slash >= 0 { return (remote[0..slash], "/") }
+    let colon = last_byte(remote, 58)
+    if colon >= 0 { return (remote[0..colon], ":") }
+    (".", copy sep)
+}
+
+/// Resolve a relative URL against BASE, the superproject remote's URL (or the
+/// superproject's top-level directory when it has none). Leading `./` and
+/// `../` segments are consumed, one remote component per `../`; inner ones
+/// are kept verbatim; one trailing `/` of each side is dropped.
+pub fn resolve(base: str, url: str) -> str ! Errors {
+    var remote = copy base
+    if remote.ends_with("/") { remote = remote[0..remote.len - 1] }
+    while remote.starts_with("./") { remote = remote[2..] }
+    var rest = copy url
+    var sep = "/"
+    loop {
+        if rest.starts_with("../") {
+            rest = rest[3..]
+            let (next, mark) = chop(remote, sep)?
+            remote = next
+            sep = mark
+        } else if rest.starts_with("./") {
+            rest = rest[2..]
+        } else {
+            break
+        }
+    }
+    if rest.ends_with("/") { rest = rest[0..rest.len - 1] }
+    if remote == "." && sep == "/" { return rest }
+    "{remote}{sep}{rest}"
+}
+
+fn rule_base(key: str, suffix: str) -> str {
+    if !key.starts_with("url.") || !key.ends_with(suffix) { return "" }
+    key[4..key.len - suffix.len]
+}
+
+/// git-config(1) url.<base>.insteadOf: the longest matching prefix wins; for a
+/// push URL pushInsteadOf is tried first (unless the remote has a pushurl).
+/// ENTRIES are the ordered config assignments (repository.configuration).
+pub fn rewrite(url: str, entries: List[repository.ConfigEntry], push: bool) -> str {
+    if push {
+        let pushed = longest(url, entries, ".pushinsteadof")
+        if pushed != "" { return pushed }
+    }
+    let fetched = longest(url, entries, ".insteadof")
+    if fetched != "" { return fetched }
+    copy url
+}
+
+fn longest(url: str, entries: List[repository.ConfigEntry], suffix: str) -> str {
+    var best = -1
+    var out = ""
+    for entry in entries {
+        let base = rule_base(entry.key, suffix)
+        if base == "" && !entry.key.starts_with("url.") { continue }
+        if !entry.key.ends_with(suffix) { continue }
+        let prefix = entry.value
+        if prefix.len > best && url.starts_with(prefix) {
+            best = prefix.len
+            out = "{base}{url[prefix.len..]}"
+        }
+    }
+    out
+}

@@ -1,0 +1,8 @@
+pkg {
+    name: "gitmodules",
+    edition: "1",
+    capabilities: [env, fs],
+    deps: {
+        repository: {path: "../repository"},
+    },
+}

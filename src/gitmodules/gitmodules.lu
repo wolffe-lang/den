@@ -1,0 +1,158 @@
+// Clean-room: gitmodules(5), gitsubmodules(7), git-submodule(1) and
+// git-config(1) of Git v2.56.0, and black-box runs of the pinned Git
+// (notes/vc25-evidence/oracle-probe-*.jsonl and vc25's rows). No
+// implementation source consulted.
+use repository
+
+/// A diagnostic Git prints and dies on (exit 128), or a named refusal.
+pub error Errors = {invalid, limit, Fatal(str), Unsupported(str)}
+
+/// One `[submodule "<name>"]` section after Git's per-key checks. Empty
+/// strings are unset values; ignore/update/fetch_recurse are canonical.
+pub struct Module {
+    name: str,
+    path: str,
+    url: str,
+    branch: str,
+    update: str,
+    ignore: str,
+    shallow: str,
+    fetch_recurse: str,
+}
+
+/// Modules in first-appearance order and the warnings Git prints while
+/// reading them, in the order it prints them (without `warning: `).
+pub struct Parsed { modules: List[Module], warnings: List[str] }
+
+fn blank(name: str) -> Module {
+    Module {
+        name: copy name,
+        path: "",
+        url: "",
+        branch: "",
+        update: "",
+        ignore: "",
+        shallow: "",
+        fetch_recurse: "",
+    }
+}
+
+/// A name with a `..` path component is ignored with a warning (measured:
+/// `..`, `a/..`, `a/../b`, `../`; not `/abs`, `a//b`, `.git`, `..b`).
+pub fn suspicious(name: str) -> bool {
+    for part in name.split("/") { if part == ".." { return true } }
+    false
+}
+
+fn boolean(value: str) -> int {
+    let lower = value.lower()
+    if lower == "true" || lower == "yes" || lower == "on" || lower == "1" { return 1 }
+    if lower == "false" || lower == "no" || lower == "off" || lower == "0" || lower == "" { return 0 }
+    -1
+}
+
+/// Split `submodule.<name>.<var>` (section and variable already lowercased by
+/// the config reader; the subsection is literal and may contain dots).
+fn key_parts(key: str) -> (str, str) {
+    if !key.starts_with("submodule.") { return ("", "") }
+    let rest = key[10..]
+    var last = -1
+    var i = 0
+    for b in rest.bytes() {
+        if b == 46 as byte { last = i }
+        i += 1
+    }
+    if last <= 0 { return ("", "") }
+    (rest[0..last], rest[last + 1..])
+}
+
+fn module_at(modules: List[Module], name: str) -> int {
+    var i = 0
+    for m in modules {
+        if m.name == name { return i }
+        i += 1
+    }
+    -1
+}
+
+/// Parse .gitmodules text, naming FILE in a syntax error. Keys are checked in
+/// file order, as Git checks them: a suspicious name warns once per path or
+/// url key; a path or url starting with `-` warns and stays unset; an unknown
+/// ignore value warns; a bad fetchRecurseSubmodules or update value is fatal.
+pub fn parse(text: str, file: str) -> Parsed ! Errors {
+    let entries = repository.parse_config_named(text, file) else |e| match e {
+        ConfigDiagnostic(message) => { return Fatal(message) },
+        limit => { return limit },
+        Unsupported(feature) => { return Unsupported(feature) },
+        _ => { return invalid },
+    }
+    var modules = List[Module](), warnings = List[str]()
+    for entry in entries {
+        let (name, field) = key_parts(entry.key)
+        if name == "" { continue }
+        if suspicious(name) {
+            if field == "path" || field == "url" {
+                (mut warnings).push("ignoring suspicious submodule name: {name}")
+            }
+            continue
+        }
+        var at = module_at(modules, name)
+        if at < 0 {
+            (mut modules).push(blank(name))
+            at = modules.len - 1
+        }
+        let value = copy entry.value
+        if field == "path" || field == "url" {
+            if value.starts_with("-") {
+                (mut warnings).push(
+                    "ignoring 'submodule.{name}.{field}' which may be interpreted as a command-line option: {value}",
+                )
+                continue
+            }
+            if field == "path" { modules[at].path = value } else { modules[at].url = value }
+        } else if field == "branch" {
+            modules[at].branch = value
+        } else if field == "ignore" {
+            if value == "none" || value == "untracked" || value == "dirty" || value == "all" {
+                modules[at].ignore = value
+            } else {
+                (mut warnings).push("Invalid parameter '{value}' for config option 'submodule.{name}.ignore'")
+            }
+        } else if field == "fetchrecursesubmodules" {
+            let b = boolean(value)
+            if value.lower() == "on-demand" {
+                modules[at].fetch_recurse = "on-demand"
+            } else if b == 1 {
+                modules[at].fetch_recurse = "yes"
+            } else if b == 0 {
+                modules[at].fetch_recurse = "no"
+            } else {
+                return Fatal("bad submodule.{name}.fetchrecursesubmodules argument: {value}")
+            }
+        } else if field == "update" {
+            if value == "checkout" || value == "rebase" || value == "merge" || value == "none" {
+                modules[at].update = value
+            } else {
+                return Fatal("invalid value for 'submodule.{name}.update'")
+            }
+        } else if field == "shallow" {
+            let b = boolean(value)
+            if b < 0 { return Fatal("bad boolean config value '{value}' for 'submodule.{name}.shallow'") }
+            modules[at].shallow = if b == 1 then "true" else "false"
+        }
+    }
+    Parsed { modules: modules, warnings: warnings }
+}
+
+/// The module whose path is PATH, or -1 (paths are compared exactly).
+pub fn by_path(parsed: Parsed, path: str) -> int {
+    var i = 0
+    for m in parsed.modules {
+        if m.path == path { return i }
+        i += 1
+    }
+    -1
+}
+
+/// The module named NAME, or -1.
+pub fn by_name(parsed: Parsed, name: str) -> int { module_at(parsed.modules, name) }
