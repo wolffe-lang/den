@@ -143,6 +143,9 @@ pub fn remove_paths(
 // The temporary is exclusively ours; publication replaces the final link itself,
 // not its referent. Ancestor validation is lstat-based, not a portable openat API.
 // The blob is read through the caller's batch reader (object.reader_batch).
+// Worktree files are not synced, as git-config(1)'s core.fsync names no
+// component for them and the pinned Git syncs none (den#63: a sync of each
+// file and of its directory was most of a large checkout's wall time).
 fn install(ctx: Context, reader: object.Reader, entry: FlatEntry) -> () ! WorkErrors {
     if entry.mode == 0o160000 { return Unsupported("submodule restore") }
     let stored = object.read_loaded(reader, entry.id, 1000000000)?
@@ -192,12 +195,10 @@ fn install(ctx: Context, reader: object.Reader, entry: FlatEntry) -> () ! WorkEr
             var closed = false
             defer { if !closed { fs_close(fd) else |_| {} } }
             fs_write_chunk(fd, stored.data)?
-            fs_sync(fd)?
             fs_close(fd)?
             closed = true
             fs_rename(temporary, destination)?
         }
-        fs.sync_dir(parent)?
         return
     }
     exists
