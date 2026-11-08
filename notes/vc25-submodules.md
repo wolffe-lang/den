@@ -68,6 +68,10 @@ The macOS record now also runs the gate's own leaves over the commands this bran
 
 `tools/submodule-live-test.py`, natively through `tools/check-submodule`, over https against github.com, read-only: `live-wolf-web` clones wolf-web with `--recurse-submodules` by each tool (four submodules two levels down, names unlike their paths) and compares the process bytes and, for the superproject and every repository under `.git/modules`, refs, HEAD, every reachable object, the config file's bytes and the worktree; its guard holds what the clones take, the superproject's and every submodule remote's branches and tags, and retries once. `live-wolf-interp-gitlinks`, `live-wolf-std-gitlinks` and `live-wolf-lsp-gitlinks` read the commit that last moved each release-pinned gitlink (`submodule status` and `--cached`, `ls-tree` at that commit, its parent and HEAD, `ls-files -s`, `cat-file -p` of its tree, `rev-parse <commit>:upstream`) in one clone, by both tools, byte for byte. These repositories carry `.gitattributes`, so `log -- <path>`, `diff` and `status` there meet den limits for every repository (path-limited history, worktree attributes) and are left out of the rows. `live-wolf-std-ssh` runs only with `DEN_LIVE_SSH=1`, where an ssh key for github.com answers, and is a named SKIP otherwise. Every row is a named SKIP without github.com or a root bundle.
 
+### A refusal during the work
+
+Before the timed row ran, I asked to stop my own queued timed job (it was only waiting for the build lock) so the row families could run first on the new build. The session's permission classifier refused it ("Interfere With Workloads"). The job was left to run, and the families were run after it instead, so neither perturbed the other's timing; no other way of stopping it was tried.
+
 ### PAX: the px lane's items (item 9, draft)
 
 A px lane wires a submodule witness into the next stick. Its items, for that lane to take as written or amend:
