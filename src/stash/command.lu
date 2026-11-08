@@ -71,6 +71,14 @@ fn controls(ctx: worktree.Context) -> () ! commit.CommitErrors {
     }
 }
 
+// Stashing and applying in a superproject are unmeasured: refused by name
+// while the index holds a gitlink (vc25).
+fn no_gitlinks(ctx: worktree.Context) -> () ! commit.CommitErrors {
+    for entry in worktree.read_index(ctx)?.entries {
+        if entry.stat[6] == 0o160000 { return Unsupported("stash with a gitlink") }
+    }
+}
+
 fn push(args: List[str], start: int, mode: str) -> int ! commit.CommitErrors {
     var quiet = false, keep = false, literal = false
     var message = List[byte](), words = List[str]()
@@ -122,6 +130,7 @@ fn push(args: List[str], start: int, mode: str) -> int ! commit.CommitErrors {
         }
     }
     let ctx = worktree.discover(".")?
+    no_gitlinks(ctx)?
     // Measured order: the index is refreshed and written before the unborn,
     // no-change and publication checks, so each of those sees it written.
     var refresh = index.begin(ctx.repo, 1000000000, worktree.index_version(ctx)?) else |e| match e {
@@ -273,6 +282,7 @@ fn recover(args: List[str], pop: bool) -> int ! commit.CommitErrors {
     }
     let ctx = worktree.discover(".")?
     controls(ctx)?
+    no_gitlinks(ctx)?
     let selected = choose(ctx, operands, command)?
     if !selected.found { return 128 }
     if pop && selected.n < 0 { return Unsupported("stash pop non-reflog operand") }
