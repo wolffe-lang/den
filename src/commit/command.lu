@@ -128,6 +128,26 @@ fn editor_message(
     out
 }
 
+// vc26: a kept author's display in the summary, as Git prints it: the
+// split name and email (both empty when the line does not split), and its
+// date, empty when the line has none Git can read.
+struct Shown { raw: commit_format.RawIdentity, keep: bool }
+
+// The date is Git's text, or its fatal line: Git writes the commit and
+// moves HEAD before it fails on the summary (measured).
+fn shown_author(raw: commit_format.RawIdentity) -> (
+    List[byte],
+    List[byte],
+    commit_format.ShownDate,
+) ! CommitErrors {
+    let none = commit_format.ShownDate { text: "", fatal: "" }
+    if !raw.split { return (List[byte](), List[byte](), none) }
+    if !raw.dated { return (owned(raw.name), owned(raw.email), none) }
+    let (seconds, zone) = if raw.fits then (raw.seconds, raw.zone) else (0, 0)
+    if !raw.zone_fits { return Unsupported("commit summary timezone with more than nine digits") }
+    (owned(raw.name), owned(raw.email), commit_format.shown_date(seconds, zone, "default")?)
+}
+
 fn commit_summary(
     ctx: worktree.Context,
     value: Options,
@@ -135,9 +155,10 @@ fn commit_summary(
     id: oid.Oid,
     message: List[byte],
     author: commit_format.Identity,
+    shown: Shown,
     committer: commit_format.Identity,
     changes: List[byte],
-) -> List[byte] ! CommitErrors {
+) -> (List[byte], str) ! CommitErrors {
     var out = List[byte]()
     let hex = oid.hex(id)?
     let initial = if parents.len == 0 && !value.amend then " (root-commit)" else ""
@@ -146,16 +167,30 @@ fn commit_summary(
     add_bytes(mut out, "[{label}{initial} {hex[0..7]}] ".bytes())
     add_bytes(mut out, subject(message)?)
     (mut out).push(10 as byte)
-    if author.name != committer.name || author.email != committer.email {
-        add_bytes(mut out, " Author: {author.name} <{author.email}>\n".bytes())
-    }
-    if value.date != "" ||
+    let dated = value.date != "" ||
         value.amend && !value.reset_author ||
-        fs.exists("{ctx.repo.gitdir}/CHERRY_PICK_HEAD") {
-        add_bytes(mut out, " Date: {summary_date(author.date)?}\n".bytes())
+        fs.exists("{ctx.repo.gitdir}/CHERRY_PICK_HEAD")
+    if shown.keep {
+        let (name, email, date) = shown_author(shown.raw)?
+        if dated && date.fatal != "" { return (List[byte](), copy date.fatal) }
+        let name_text = str_from_utf8(name) else "\0"
+        let email_text = str_from_utf8(email) else "\0"
+        if name_text != committer.name || email_text != committer.email {
+            add_bytes(mut out, " Author: ".bytes())
+            add_bytes(mut out, name)
+            add_bytes(mut out, " <".bytes())
+            add_bytes(mut out, email)
+            add_bytes(mut out, ">\n".bytes())
+        }
+        if dated { add_bytes(mut out, " Date: {date.text}\n".bytes()) }
+    } else {
+        if author.name != committer.name || author.email != committer.email {
+            add_bytes(mut out, " Author: {author.name} <{author.email}>\n".bytes())
+        }
+        if dated { add_bytes(mut out, " Date: {summary_date(author.date)?}\n".bytes()) }
     }
     add_bytes(mut out, changes)
-    out
+    (out, "")
 }
 
 fn dispatch(
@@ -292,15 +327,27 @@ fn dispatch(
     } else if !merging && !value.allow_empty && oid.equal(trees.root, old_tree) {
         return nothing(snapshot, mut warnings)?
     }
-    var author = commit_author(ctx, value, previous)?
+    let (chosen_author, chosen_repaired) = commit_author(ctx, value, previous)?
+    var author = chosen_author, repaired_author = chosen_repaired
+    // vc26: a picked or replayed commit keeps its author's stored bytes, as
+    // Git does (measured); only bytes that are not UTF-8 are repaired.
+    var kept = commit_format.raw_identity(List[byte]()), keep_raw = false, author_line = ""
     if (picking || replay_action != "") && !value.reset_author && value.author == "" {
         let marker = if picking then "CHERRY_PICK_HEAD" else "REBASE_HEAD"
         let pick_id = oid.parse(
             "sha1",
             str_from_utf8(repository.read_bytes("{ctx.repo.gitdir}/{marker}", 128)?)?.trim(),
         )?
-        author = commit_format.parse_identity(header(read_commit(ctx.repo, pick_id)?, "author")?)?
-        if value.date != "" { author.date = selected_date(value.date)? }
+        let stored = kept_bytes(header_bytes(read_commit(ctx.repo, pick_id)?, "author")?)
+        if value.date != "" {
+            author = commit_format.parse_identity(text(stored.bytes)?)?
+            author.date = selected_date(value.date)?
+        } else {
+            author_line = text(stored.bytes)?
+            kept = commit_format.raw_identity(stored.bytes)
+            keep_raw = true
+        }
+        if stored.repaired { repaired_author = true }
     }
     let committer = environment_identity(ctx, "COMMITTER", "")?
     if edited {
@@ -335,13 +382,19 @@ fn dispatch(
         }
     }
     if encoding == "" || encoding.lower() == "utf-8" {
+        var repair = repaired_author
         let _ = str_from_utf8(message) else |_| {
+            message = repaired_message(message)
+            repair = true
+            ""
+        }
+        if repair {
             eprint(
                 "Warning: commit message did not conform to UTF-8.\nYou may want to amend it after fixing the message, or set the config\nvariable i18n.commitEncoding to the encoding your project uses.",
             )
-            message = repaired_message(message)
-            ""
         }
+    } else if repaired_author {
+        return Unsupported("commit non-UTF-8 author under i18n.commitEncoding")
     }
     let staged = flat_index(tx.value)?
     var change_text = List[byte]()
@@ -349,15 +402,27 @@ fn dispatch(
     let bytes = object.build_commit(
         trees.root,
         parents,
-        commit_format.identity_text(author)?,
+        if keep_raw then author_line else commit_format.identity_text(author)?,
         commit_format.identity_text(committer)?,
         encoding,
         message,
     )?
     let id = object.identify("commit", bytes)?
-    var summary = List[byte]()
+    var summary = List[byte](), late = ""
     if !value.quiet {
-        summary = commit_summary(ctx, value, parents, id, message, author, committer, change_text)?
+        let (summary_bytes, summary_fatal) = commit_summary(
+            ctx,
+            value,
+            parents,
+            id,
+            message,
+            author,
+            Shown { raw: kept, keep: keep_raw },
+            committer,
+            change_text,
+        )?
+        summary = summary_bytes
+        late = summary_fatal
     }
     if !oid.equal(object.write_object(ctx.repo, "commit", bytes)?, id) { return bad_oid }
     let action = if replay_action != "" {
@@ -394,6 +459,7 @@ fn dispatch(
         }
         if !fast_revert { refs.remove_auto_merge(ctx.repo)? }
     }
+    if late != "" { return Fatal(late) }
     if !value.quiet { output(summary)? }
     0
 }

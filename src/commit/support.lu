@@ -137,57 +137,137 @@ pub fn environment_identity(
     override_date: str,
 ) -> commit_format.Identity ! CommitErrors {
     let key = role.lower()
-    let name = environment_or(
-        "GIT_{role}_NAME",
-        ctx.repo.config["{key}.name"] else (ctx.repo.config["user.name"] else ""),
-    )?
-    let email = identity_environment("GIT_{role}_EMAIL") else |e| match e {
-        missing => configured_email(ctx, key) else |_| { environment_or("EMAIL", "")? },
+    var from_environment = true, configured = true
+    let name = identity_environment("GIT_{role}_NAME") else |e| match e {
+        missing => {
+            from_environment = false
+            ctx.repo.config["{key}.name"] else (
+                ctx.repo.config["user.name"] else {
+                    configured = false
+                    ""
+                }
+            )
+        },
         Unsupported(reason) => { return Unsupported(reason) },
     }
-    if name == "" || email == "" { return Unsupported("commit missing {key} identity") }
+    let email = identity_environment("GIT_{role}_EMAIL") else |e| match e {
+        missing =>
+            configured_email(ctx, key) else |_| {
+                identity_environment("EMAIL") else |f| match f {
+                    missing => {
+                        configured = false
+                        ""
+                    },
+                    Unsupported(reason) => { return Unsupported(reason) },
+                }
+            },
+        Unsupported(reason) => { return Unsupported(reason) },
+    }
+    // No identity is guessed from the host; Git's measured refusals of an
+    // explicitly empty or disallowed name are kept (vc26).
+    if !configured { return Unsupported("commit missing {key} identity") }
+    empty_name_check(role, name, email, !from_environment)?
     let date = if override_date != "" then selected_date(override_date)? else role_date(role)?
     commit_format.make_identity(name, email, date)?
 }
 
-fn preserved_identity(value: str) -> commit_format.Identity ! CommitErrors {
-    // Stored identities contain canonical offsets, whose +10039 representation
-    // is deliberately not accepted by the raw command-date input grammar.
-    let left = value.find("<") else |_| { return invalid_identity }
-    let right = value.rfind(">") else |_| { return invalid_identity }
-    if right <= left { return invalid_identity }
-    let parts = value[right + 1..].trim().words()
-    if parts.len != 2 { return invalid_identity }
-    for b in parts[0].bytes() {
-        if b as int < 48 || b as int > 57 { return invalid_date }
+/// vc26: Git's refusals of a name it cannot write, as measured: an empty
+/// name is `empty ident name (for <EMAIL>) not allowed`, after Git's
+/// "identity unknown" advice when the name came from configuration; a name
+/// of disallowed characters alone is refused naming them.
+pub fn empty_name_check(role: str, name: str, email: str, advice: bool) -> () ! CommitErrors {
+    if name == "" {
+        if advice {
+            let who = if role == "AUTHOR" then "Author" else "Committer"
+            eprint(
+                "{who} identity unknown\n\n*** Please tell me who you are.\n\nRun\n\n  git config --global user.email \"you@example.com\"\n  git config --global user.name \"Your Name\"\n\nto set your account's default identity.\nOmit --global to set the identity only in this repository.\n",
+            )
+        }
+        return Fatal("empty ident name (for <{commit_format.ident_clean(email)?}>) not allowed")
     }
-    let seconds = parts[0].to_int() else |_| { return invalid_date }
-    let date = commit_format.Date { seconds: seconds, offset: parts[1] }
-    commit_format.parse_author(value[0..right + 1], date)?
+    if commit_format.ident_clean(name)? == "" {
+        return Fatal("name consists only of disallowed characters: {name}")
+    }
 }
 
-fn commit_author(
-    ctx: worktree.Context,
-    value: Options,
-    previous: List[object.Headers],
-) -> commit_format.Identity ! CommitErrors {
+// An explicit --author `Name <email>`: an empty name part is Git's
+// empty-name refusal (measured: `--author=' <a@x>'`).
+fn author_option(text: str, date: commit_format.Date) -> commit_format.Identity ! CommitErrors {
+    let left = text.find("<") else |_| { return commit_format.parse_author(text, date)? }
+    let right = text.rfind(">") else |_| { return commit_format.parse_author(text, date)? }
+    if right > left && text[0..left].trim() == "" {
+        return Fatal(
+            "empty ident name (for <{commit_format.ident_clean(text[left + 1..right])?}>) not allowed",
+        )
+    }
+    commit_format.parse_author(text, date)?
+}
+
+fn header_bytes(headers: object.Headers, key: str) -> List[byte] ! CommitErrors {
+    for field in headers.fields { if field.key == key { return owned(field.value) } }
+    invalid_header
+}
+
+/// vc26: stored identity bytes as Git writes them back: unchanged when they
+/// are UTF-8, else repaired (repaired_message) with Git's warning owed.
+pub struct Kept { bytes: List[byte], repaired: bool }
+
+/// Stored bytes kept for writing back: unchanged, or repaired when they
+/// are not UTF-8 (Git's measured repair of a Latin-1 author).
+pub fn kept_bytes(value: List[byte]) -> Kept {
+    let _ = str_from_utf8(value) else |_| {
+        return Kept { bytes: repaired_message(value), repaired: true }
+    }
+    Kept { bytes: owned(value), repaired: false }
+}
+
+// vc26: an amended commit's author as Git re-reads and re-writes it
+// (measured): the name and email of Git's split, cleaned as on any commit;
+// the stored date re-read as `@SECONDS ZONE`, where a zone of other than
+// four digits is the local one; with no readable date, the commit's own.
+fn preserved_identity(kept: Kept) -> commit_format.Identity ! CommitErrors {
+    let raw = commit_format.raw_identity(kept.bytes)
+    if !raw.split { return Fatal("commit 'HEAD' has malformed author line") }
+    let name = text(raw.name)?, email = text(raw.email)?
+    empty_name_check("AUTHOR", name, email, false)?
+    if !raw.dated { return commit_format.make_identity(name, email, role_date("AUTHOR")?)? }
+    let zone_text = text(raw.zone_text)?
+    if !raw.fits {
+        if raw.seconds_text == "18446744073709551615" {
+            return Fatal("invalid date format: @{text(raw.stamp)?} {zone_text}")
+        }
+        return Unsupported("commit amend date past 9223372036854775807")
+    }
+    let zone = if zone_text.len == 5 then zone_text else "+0000"
+    commit_format.make_identity(name, email, selected_date("@{raw.seconds} {zone}")?)?
+}
+
+fn commit_author(ctx: worktree.Context, value: Options, previous: List[object.Headers]) -> (
+    commit_format.Identity,
+    bool,
+) ! CommitErrors {
+    var repaired = false
     var author = if value.amend && !value.reset_author {
         if previous.len != 1 { return invalid_header }
-        preserved_identity(header(previous[0], "author")?)?
+        let kept = kept_bytes(header_bytes(previous[0], "author")?)
+        repaired = kept.repaired
+        preserved_identity(kept)?
     } else if value.author != "" {
         let date = if value.date != "" then selected_date(value.date)? else role_date("AUTHOR")?
-        commit_format.parse_author(value.author, date)?
+        author_option(value.author, date)?
     } else {
         environment_identity(ctx, "AUTHOR", value.date)?
     }
     if value.date != "" { author.date = selected_date(value.date)? }
-    if value.author != "" { author = commit_format.parse_author(value.author, author.date)? }
-    author
+    if value.author != "" { author = author_option(value.author, author.date)? }
+    (author, repaired)
 }
 
 // Inherited own-code policy from src/plumbing/plumbing.lu (R-vc02-2): keep
 // valid UTF-8 sequences, encode isolated invalid octets as Latin-1 scalars.
-fn repaired_message(data: List[byte]) -> List[byte] {
+/// Valid UTF-8 kept, each other byte written as the Latin-1 character it
+/// names: Git's repair of a commit that does not conform to UTF-8.
+pub fn repaired_message(data: List[byte]) -> List[byte] {
     var out = List[byte]()
     var pos = 0
     while pos < data.len {
