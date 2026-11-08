@@ -189,39 +189,91 @@ pub fn publish_received(
 /// The typed closure check after a received pack, without the aggregate
 /// body cap: commits, trees and tags are read one at a time and their links
 /// followed; a link into the received pack is typed from its table, so a
-/// blob there is never read. Objects outside it are read and typed.
+/// blob there is never read. Objects outside it are read and typed. The
+/// walk queues received objects by rank (an int each) and does each step in
+/// its own region, so it keeps no per-link name (den#63).
 pub fn closure_received(
     repo: repository.Repo,
     roots: List[str],
     ix: pack.Indexed,
 ) -> () ! object.StoreErrors {
     let reader = object.reader_open(repo)?
+    let count = pack.received_count(ix)
     var seen = List[bool]()
-    for _ in 0..pack.received_count(ix) { (mut seen).push(false) }
-    var other = Map[str, str](), pending = List[packcmd.Link](), pos = 0
-    for name in roots { (mut pending).push(packcmd.Link { name: copy name, kind: "" }) }
-    while pos < pending.len {
-        let link = copy pending[pos]
-        pos += 1
-        let rank = pack.received_rank(ix, link.name)?
-        var kind = ""
+    (mut seen).reserve(count)
+    for _ in 0..count { (mut seen).push(false) }
+    // Received objects wait by rank with the type their link expects
+    // (kind_code; 0 for a root), others by link.
+    var ranks = List[int](), expected = List[int](), outside = List[packcmd.Link]()
+    var other = Map[str, str]()
+    for name in roots {
+        let rank = pack.received_rank(ix, name)?
         if rank >= 0 {
-            kind = pack.received_rank_kind(ix, rank)
-            if link.kind != "" && link.kind != kind { return invalid }
-            if seen[rank] { continue }
-            seen[rank] = true
-            if kind == "blob" { continue }
+            (mut ranks).push(rank)
+            (mut expected).push(0)
         } else {
-            let prior = other[link.name] else ""
-            if prior != "" {
-                if link.kind != "" && link.kind != prior { return invalid }
-                continue
+            (mut outside).push(packcmd.Link { name: copy name, kind: "" })
+        }
+    }
+    while ranks.len > 0 || outside.len > 0 {
+        region step {
+            if ranks.len > 0 {
+                let rank = (mut ranks).pop() else |_| { return invalid }
+                let wanted = (mut expected).pop() else |_| { return invalid }
+                let kind = pack.received_rank_kind(ix, rank)
+                if wanted != 0 && wanted != kind_code(kind) { return invalid }
+                if !seen[rank] {
+                    seen[rank] = true
+                    if kind != "blob" {
+                        let name = pack.received_rank_name(ix, rank)?
+                        let link = packcmd.Link { name: name, kind: kind }
+                        follow(
+                            reader,
+                            ix,
+                            link,
+                            rank,
+                            kind,
+                            seen,
+                            mut other,
+                            mut ranks,
+                            mut expected,
+                            mut outside,
+                        )?
+                    }
+                }
+            } else {
+                let link = (mut outside).pop() else |_| { return invalid }
+                let prior = other[link.name] else ""
+                if prior != "" {
+                    if link.kind != "" && link.kind != prior { return invalid }
+                } else {
+                    if other.len >= 10000 { return limit }
+                    follow(
+                        reader,
+                        ix,
+                        link,
+                        -1,
+                        "",
+                        seen,
+                        mut other,
+                        mut ranks,
+                        mut expected,
+                        mut outside,
+                    )?
+                }
             }
-            if other.len >= 10000 { return limit }
         }
-        region body_read {
-            follow(reader, ix, link, rank, kind, seen, mut other, mut pending)?
-        }
+    }
+}
+
+// A link's expected type as a small int, so a queued link holds no string.
+fn kind_code(kind: str) -> int {
+    match kind {
+        "commit" => 1,
+        "tree" => 2,
+        "blob" => 3,
+        "tag" => 4,
+        _ => 0,
     }
 }
 
@@ -234,18 +286,23 @@ fn follow(
     kind: str,
     seen: List[bool],
     mut other: Map[str, str],
-    mut pending: List[packcmd.Link],
+    mut ranks: List[int],
+    mut expected: List[int],
+    mut outside: List[packcmd.Link],
 ) -> () ! object.StoreErrors {
     let body = object.read_loaded(reader, oid.parse("sha1", link.name)?, pack.object_limit())?
     if link.kind != "" && link.kind != body.kind { return invalid }
     if rank >= 0 && body.kind != kind { return invalid }
-    if rank < 0 { other[link.name] = copy body.kind }
+    if rank < 0 { other[copy link.name] = copy body.kind }
     for child in packcmd.links(body)? {
         let at = pack.received_rank(ix, child.name)?
         if at >= 0 {
             if child.kind != "" && child.kind != pack.received_rank_kind(ix, at) { return invalid }
             if seen[at] { continue }
+            (mut ranks).push(at)
+            (mut expected).push(kind_code(child.kind))
+        } else {
+            (mut outside).push(copy child)
         }
-        (mut pending).push(copy child)
     }
 }

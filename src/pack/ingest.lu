@@ -621,6 +621,12 @@ pub fn received_rank(ix: Indexed, name: str) -> int ! PackErrors {
     -1
 }
 
+/// The name, in hex, of the object at a rank from received_rank.
+pub fn received_rank_name(ix: Indexed, rank: int) -> str ! PackErrors {
+    if rank < 0 || rank >= ix.order.len { return Unsupported("pack received rank") }
+    slot_hex(ix.table, ix.order[rank])?
+}
+
 /// The type of the object at a rank from received_rank.
 pub fn received_rank_kind(ix: Indexed, rank: int) -> str {
     kind_name(ix.table.types[ix.order[rank]])
