@@ -232,8 +232,10 @@ History readers never write the index, objects, refs or reflogs. Root patches
 compare with an in-memory empty endpoint; ordinary patches reuse the shared
 diff collector and renderer. Unique abbreviations grow past collisions.
 History caps each object at 16 MiB, discovered commit data and rendered output
-at 128 MiB, and the CLI walk at 10,000 commits. The public walker accepts an
-explicit node budget. It is a bounded whole-history reader, not a streaming walk.
+at 128 MiB, and the CLI walk at 10,000 commits. With a count (`-n`) and no
+exclusion the walk stops after the count plus the skip, so `log -1` reads one
+commit of any history. The public walker accepts an explicit node budget. It is
+a bounded whole-history reader, not a streaming walk.
 
 Default `log -p` omits merge patches as Git does. `show` of a merge prints the
 dense combined diff (`--cc`, the default) or `-c`, with `-U<n>`; `show -s`
