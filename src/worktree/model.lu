@@ -330,30 +330,38 @@ pub fn head(ctx: Context) -> Head ! WorkErrors {
 }
 
 fn tree_id(repo: repository.Repo, id: oid.Oid) -> oid.Oid ! WorkErrors {
-    var current = copy id
-    // One reader for the chain (commit or tag, then the tree): one idx parse.
-    var reader = object.reader(repo)
-    for _ in 0..64 {
-        let stored = object.read_with(mut reader, current, 1000000000)?
-        if stored.kind == "tree" { return current }
-        if stored.kind != "commit" && stored.kind != "tag" { return invalid_tree }
-        let headers = if stored.kind == "commit" {
-            object.parse_commit(stored.data, "sha1")?
-        } else {
-            object.parse_tag(stored.data, "sha1")?
-        }
-        let key = if stored.kind == "commit" then "tree" else "object"
-        var found = false
-        for field in headers.fields {
-            if field.key == key {
-                current = oid.parse("sha1", text(field.value)?)?
-                found = true
+    // One reader for the chain (commit or tag, then the tree): one idx parse,
+    // reclaimed with the walk's region (den#63).
+    var found = List[oid.Oid]()
+    region walk {
+        var current = copy id
+        var reader = object.reader(repo)
+        for _ in 0..64 {
+            let stored = object.read_with(mut reader, current, 1000000000)?
+            if stored.kind == "tree" {
+                (mut found).push(copy current)
                 break
             }
+            if stored.kind != "commit" && stored.kind != "tag" { return invalid_tree }
+            let headers = if stored.kind == "commit" {
+                object.parse_commit(stored.data, "sha1")?
+            } else {
+                object.parse_tag(stored.data, "sha1")?
+            }
+            let key = if stored.kind == "commit" then "tree" else "object"
+            var linked = false
+            for field in headers.fields {
+                if field.key == key {
+                    current = oid.parse("sha1", text(field.value)?)?
+                    linked = true
+                    break
+                }
+            }
+            if !linked { return invalid_header }
         }
-        if !found { return invalid_header }
     }
-    limit
+    if found.len == 0 { return limit }
+    copy found[0]
 }
 
 struct PendingTree { path: List[byte], id: oid.Oid, ancestors: List[oid.Oid] }
@@ -362,41 +370,53 @@ struct PendingTree { path: List[byte], id: oid.Oid, ancestors: List[oid.Oid] }
 /// Detect cycles and reject .git entries before any consumer can reach disk.
 /// One pack session serves every tree of the walk; one stable sort orders it.
 pub fn flatten_tree(repo: repository.Repo, id: oid.Oid) -> List[FlatEntry] ! WorkErrors {
-    var pending = [
-        PendingTree { path: List[byte](), id: tree_id(repo, id)?, ancestors: List[oid.Oid]() },
-    ]
-    var reader = object.reader(repo)
-    var entries = List[FlatEntry]()
-    while pending.len > 0 {
-        let next = (mut pending).pop() else |_| { return invalid_tree }
-        for ancestor in next.ancestors { if oid.equal(ancestor, next.id) { return invalid_tree } }
-        var ancestors = copy next.ancestors
-        (mut ancestors).push(copy next.id)
-        if ancestors.len > 1024 { return limit }
-        let stored = object.read_with(mut reader, next.id, 1000000000)?
-        if stored.kind != "tree" { return invalid_tree }
-        let children = object.parse_tree(stored.data, "sha1")?
-        for child in children {
-            if compare(child.name, ".git".bytes()) == 0 { return invalid_tree }
-            var path = copy next.path
-            if path.len > 0 { (mut path).push(47 as byte) }
-            bytes_add(mut path, child.name)
-            if child.mode == 0o40000 {
-                (mut pending).push(PendingTree {
-                    path: path,
-                    id: copy child.id,
-                    ancestors: copy ancestors,
-                })
-            } else {
-                (mut entries).push(FlatEntry { path: path, mode: child.mode, id: copy child.id })
+    let root = tree_id(repo, id)?
+    var result = List[FlatEntry]()
+    // The walk's reader, trees and scratch live in a region, so its idx parse
+    // is reclaimed when the walk ends (den#63); only the result is kept.
+    region walk {
+        var pending = [
+            PendingTree { path: List[byte](), id: copy root, ancestors: List[oid.Oid]() },
+        ]
+        var reader = object.reader(repo)
+        var entries = List[FlatEntry]()
+        while pending.len > 0 {
+            let next = (mut pending).pop() else |_| { return invalid_tree }
+            for ancestor in next.ancestors {
+                if oid.equal(ancestor, next.id) { return invalid_tree }
+            }
+            var ancestors = copy next.ancestors
+            (mut ancestors).push(copy next.id)
+            if ancestors.len > 1024 { return limit }
+            let stored = object.read_with(mut reader, next.id, 1000000000)?
+            if stored.kind != "tree" { return invalid_tree }
+            let children = object.parse_tree(stored.data, "sha1")?
+            for child in children {
+                if compare(child.name, ".git".bytes()) == 0 { return invalid_tree }
+                var path = copy next.path
+                if path.len > 0 { (mut path).push(47 as byte) }
+                bytes_add(mut path, child.name)
+                if child.mode == 0o40000 {
+                    (mut pending).push(PendingTree {
+                        path: path,
+                        id: copy child.id,
+                        ancestors: copy ancestors,
+                    })
+                } else {
+                    (mut entries).push(FlatEntry {
+                        path: path,
+                        mode: child.mode,
+                        id: copy child.id,
+                    })
+                }
             }
         }
+        var paths = List[List[byte]]()
+        for entry in entries { (mut paths).push(copy entry.path) }
+        (mut result).reserve(entries.len)
+        for i in path_order(paths) { (mut result).push(copy entries[i]) }
     }
-    var paths = List[List[byte]]()
-    for entry in entries { (mut paths).push(copy entry.path) }
-    var sorted = List[FlatEntry]()
-    for i in path_order(paths) { (mut sorted).push(copy entries[i]) }
-    sorted
+    result
 }
 
 /// Stable bottom-up merge sort of positions by unsigned path order: the
