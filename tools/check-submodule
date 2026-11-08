@@ -1,0 +1,30 @@
+#!/bin/sh
+# vc25 submodule rows against the pinned git: .gitmodules parsing, relative
+# URLs and insteadOf as units (native, release, checked); reading gitlinks,
+# status and diff of submodule worktrees, clone --recurse-submodules and the
+# submodule command, hostile inputs and the protocol policy as exact
+# black-box rows on both tiers. Each step's exit code is read directly.
+set -eu
+DEN_ROOT=$(cd "$(dirname "$0")/.." && pwd)
+export DEN_ROOT
+cd "$DEN_ROOT"
+. tools/lib-toolchain.sh
+tools/build --all
+for tier in native release; do
+    flag=$([ "$tier" = release ] && echo --release || echo)
+    "$WOLF" build $flag --deny-warnings src/gitmodules_test.lu -o "target/$tier/gitmodules-test"
+    "target/$tier/gitmodules-test"
+done
+"$WOLF" conform-run src/gitmodules_test.lu --checked --json > target/gitmodules-checked.json
+python3 -I - target/gitmodules-checked.json <<'PY'
+import json, sys
+rows = [json.loads(line) for line in open(sys.argv[1]) if line.startswith('{')]
+assert len(rows) == 1 and rows[0]['verdict'] == 'exit(0)', rows
+print('gitmodules-checked: exit(0)')
+PY
+for tier in native release; do
+    for family in read status diff clone hostile transport; do
+        tools/env python3 -I tools/submodule-test.py --tier "$tier" --family "$family"
+    done
+done
+echo 'submodule: native/release units, actual checked units, exact rows (reflog identity KNOWN only); zero skips'
