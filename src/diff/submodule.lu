@@ -71,7 +71,12 @@ fn one_side(
         seen[key] = true
         if seen.len > 10000 { return limit }
         let commit = walk.read(repo, id)?
-        (mut out).push(Marked { mark: mark, subject: subject(commit), timestamp: commit.timestamp, order: out.len })
+        (mut out).push(Marked {
+            mark: mark,
+            subject: subject(commit),
+            timestamp: commit.timestamp,
+            order: out.len,
+        })
         for parent in commit.parents { (mut pending).push(copy parent) }
     }
 }
@@ -93,7 +98,8 @@ pub fn summary(
         return "{out}Submodule {name} 0000000...{short_id(after[0])?} (new submodule)\n".bytes()
     }
     if after.len == 0 {
-        return "{out}Submodule {name} {short_id(before[0])?}...0000000 (submodule deleted)\n".bytes()
+        return "{out}Submodule {name} {short_id(before[0])?}...0000000 (submodule deleted)\n".
+            bytes()
     }
     if oid.equal(before[0], after[0]) { return out.bytes() }
     let a = short_id(before[0])?, b = short_id(after[0])?
@@ -117,8 +123,12 @@ pub fn summary(
     // Newest first across both sides; equal times keep discovery order.
     for i in 1..marked.len {
         var n = i
-        while n > 0 && (marked[n - 1].timestamp < marked[n].timestamp ||
-            marked[n - 1].timestamp == marked[n].timestamp && marked[n - 1].order > marked[n].order) {
+        while n > 0 &&
+            (
+                marked[n - 1].timestamp < marked[n].timestamp ||
+                    marked[n - 1].timestamp == marked[n].timestamp &&
+                        marked[n - 1].order > marked[n].order
+            ) {
             let temp = copy marked[n - 1]
             marked[n - 1] = copy marked[n]
             marked[n] = temp
@@ -173,16 +183,18 @@ pub fn inner(
     for change in changes(old, new, inner_options)? {
         let nested = change.before.len > 0 && change.before[0].mode == 0o160000 ||
             change.after.len > 0 && change.after[0].mode == 0o160000
-        (mut changed).push(if nested {
-            copy change
-        } else {
-            Change {
-                before: prefixed_files(change.before, name),
-                after: prefixed_files(change.after, name),
-                status: copy change.status,
-                percent: change.percent,
-            }
-        })
+        (mut changed).push(
+            if nested {
+                copy change
+            } else {
+                Change {
+                    before: prefixed_files(change.before, name),
+                    after: prefixed_files(change.after, name),
+                    status: copy change.status,
+                    percent: change.percent,
+                }
+            },
+        )
     }
     let bytes = render(sub, changed, inner_options)?
     // The submodule's worktree diff refreshes its index as den's own diff
@@ -196,7 +208,12 @@ fn prefixed_files(files: List[File], name: str) -> List[File] {
     for file in files {
         var path = owned("{name}/".bytes())
         add(mut path, file.path)
-        (mut out).push(File { path: path, mode: file.mode, id: copy file.id, data: owned(file.data) })
+        (mut out).push(File {
+            path: path,
+            mode: file.mode,
+            id: copy file.id,
+            data: owned(file.data),
+        })
     }
     out
 }

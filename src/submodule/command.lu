@@ -3,8 +3,8 @@
 use std.env
 use std.fs
 use std.process
-use object
 use gitmodules
+use object
 use oid
 use refs
 use repository
@@ -27,7 +27,9 @@ fn ancestors_of(repo: repository.Repo, start: oid.Oid) -> List[str] ! worktree.W
         if value.kind != "commit" { continue }
         let headers = object.parse_commit(value.data, "sha1") else |_| { continue }
         for field in headers.fields {
-            if field.key == "parent" { (mut pending).push(oid.parse("sha1", bytes_text(field.value)?)?) }
+            if field.key == "parent" {
+                (mut pending).push(oid.parse("sha1", bytes_text(field.value)?)?)
+            }
         }
     }
     order
@@ -59,13 +61,19 @@ fn describe(repo: repository.Repo, id: oid.Oid) -> str ! worktree.WorkErrors {
     for record in refs.list(repo, "refs/")? {
         let short = record.name[5..]
         // A tag object, packed with its peel or loose without one, is annotated.
-        var target = if record.peeled.len == 1 then oid.hex(record.peeled[0])? else oid.hex(record.id)?
+        var target = if record.peeled.len == 1 {
+            oid.hex(record.peeled[0])?
+        } else {
+            oid.hex(record.id)?
+        }
         var annotated_tag = record.peeled.len == 1
         if record.name.starts_with("refs/tags/") && record.peeled.len == 0 {
             let stored = object.read_object(repo, record.id, 16777216) else |_| { continue }
             if stored.kind == "tag" {
                 let headers = object.parse_tag(stored.data, "sha1") else |_| { continue }
-                for field in headers.fields { if field.key == "object" { target = bytes_text(field.value)? } }
+                for field in headers.fields {
+                    if field.key == "object" { target = bytes_text(field.value)? }
+                }
                 annotated_tag = true
             }
         }
@@ -107,16 +115,26 @@ fn has_gitlinks(ctx: worktree.Context) -> bool ! worktree.WorkErrors {
 }
 
 fn lazy_modules(ctx: worktree.Context) -> gitmodules.Parsed ! worktree.WorkErrors {
-    if !has_gitlinks(ctx)? { return gitmodules.Parsed { modules: List[gitmodules.Module](), warnings: List[str]() } }
+    if !has_gitlinks(ctx)? {
+        return gitmodules.Parsed { modules: List[gitmodules.Module](), warnings: List[str]() }
+    }
     worktree.modules(ctx)?
 }
 
-fn status_lines(ctx: worktree.Context, cached: bool, recursive: bool, paths: List[str], parent: str) -> () ! worktree.WorkErrors {
+fn status_lines(
+    ctx: worktree.Context,
+    cached: bool,
+    recursive: bool,
+    paths: List[str],
+    parent: str,
+) -> () ! worktree.WorkErrors {
     let parsed = lazy_modules(ctx)?
     for sub in submodules(ctx, parsed)? {
         if !selected(ctx, sub, paths) { continue }
         let shown = display(ctx, parent, sub.path)
-        if !sub.mapped { return Fatal("no submodule mapping found in .gitmodules for path '{shown}'") }
+        if !sub.mapped {
+            return Fatal("no submodule mapping found in .gitmodules for path '{shown}'")
+        }
         let found = populated(ctx, sub)?
         if found.len == 0 {
             print("-{oid.hex(sub.id)?} {shown}")
@@ -131,7 +149,12 @@ fn status_lines(ctx: worktree.Context, cached: bool, recursive: bool, paths: Lis
     }
 }
 
-fn sync(ctx: worktree.Context, recursive: bool, paths: List[str], parent: str) -> () ! worktree.WorkErrors {
+fn sync(
+    ctx: worktree.Context,
+    recursive: bool,
+    paths: List[str],
+    parent: str,
+) -> () ! worktree.WorkErrors {
     let parsed = worktree.modules(ctx)?
     for sub in submodules(ctx, parsed)? {
         if !selected(ctx, sub, paths) || !sub.mapped { continue }
@@ -162,7 +185,13 @@ fn restore_env(name: str, saved: str) {
     if saved == "\0" { env_set(name, "") else |_| {} } else { env_set(name, saved) else |_| {} }
 }
 
-fn foreach(ctx: worktree.Context, recursive: bool, quiet: bool, command: str, parent: str) -> int ! worktree.WorkErrors {
+fn foreach(
+    ctx: worktree.Context,
+    recursive: bool,
+    quiet: bool,
+    command: str,
+    parent: str,
+) -> int ! worktree.WorkErrors {
     if !fs.exists("/bin/sh") { return Unsupported("foreach without /bin/sh") }
     let parsed = worktree.modules(ctx)?
     for sub in submodules(ctx, parsed)? {
@@ -172,8 +201,12 @@ fn foreach(ctx: worktree.Context, recursive: bool, quiet: bool, command: str, pa
         if !quiet { print("Entering '{shown}'") }
         var saved = Map[str, str]()
         let values = [
-            ["name", copy sub.name], ["sm_path", copy sub.path], ["path", copy sub.path],
-            ["displaypath", copy shown], ["sha1", oid.hex(sub.id)?], ["toplevel", copy ctx.root],
+            ["name", copy sub.name],
+            ["sm_path", copy sub.path],
+            ["path", copy sub.path],
+            ["displaypath", copy shown],
+            ["sha1", oid.hex(sub.id)?],
+            ["toplevel", copy ctx.root],
         ]
         for pair in values {
             saved[pair[0]] = env_get(pair[0]) else "\0"
@@ -184,7 +217,9 @@ fn foreach(ctx: worktree.Context, recursive: bool, quiet: bool, command: str, pa
         var c = process.command("/bin/sh")
         process.push_arg(mut c, "-c")
         process.push_arg(mut c, command)
-        let child = process.start(c) else |_| { return Unsupported("foreach could not start /bin/sh") }
+        let child = process.start(c) else |_| {
+            return Unsupported("foreach could not start /bin/sh")
+        }
         let status = process.wait_status(take child) else |_| { return io }
         env.set_cwd(here) else |_| { return io }
         for pair in values { restore_env(pair[0], saved[pair[0]] else "\0") }
@@ -210,7 +245,15 @@ fn dispatch(args: List[str]) -> int ! worktree.WorkErrors {
     }
     let ctx = worktree.discover(".")?
     var cached = false, recursive = false, paths = List[str](), literal = false
-    var options = UpdateOptions { init: false, recursive: false, remote: false, fetch: true, force: false, quiet: quiet, paths: [] }
+    var options = UpdateOptions {
+        init: false,
+        recursive: false,
+        remote: false,
+        fetch: true,
+        force: false,
+        quiet: quiet,
+        paths: [],
+    }
     if sub == "foreach" {
         var command = List[str]()
         for arg in rest {
@@ -226,14 +269,23 @@ fn dispatch(args: List[str]) -> int ! worktree.WorkErrors {
     for arg in rest {
         if !literal && arg == "--" { literal = true; continue }
         if !literal && arg.starts_with("-") {
-            if arg == "--cached" && sub == "status" { cached = true }
-            else if arg == "--recursive" { recursive = true }
-            else if arg == "--init" && sub == "update" { options.init = true }
-            else if (arg == "--checkout") && sub == "update" { continue }
-            else if (arg == "-f" || arg == "--force") && sub == "update" { options.force = true }
-            else if (arg == "-N" || arg == "--no-fetch") && sub == "update" { options.fetch = false }
-            else if arg == "--remote" && sub == "update" { return Unsupported("update --remote") }
-            else { return Unsupported("{sub} option {arg}") }
+            if arg == "--cached" && sub == "status" {
+                cached = true
+            } else if arg == "--recursive" {
+                recursive = true
+            } else if arg == "--init" && sub == "update" {
+                options.init = true
+            } else if arg == "--checkout" && sub == "update" {
+                continue
+            } else if (arg == "-f" || arg == "--force") && sub == "update" {
+                options.force = true
+            } else if (arg == "-N" || arg == "--no-fetch") && sub == "update" {
+                options.fetch = false
+            } else if arg == "--remote" && sub == "update" {
+                return Unsupported("update --remote")
+            } else {
+                return Unsupported("{sub} option {arg}")
+            }
             continue
         }
         (mut paths).push(copy arg)
@@ -275,7 +327,10 @@ pub fn run(args: List[str]) -> int {
         Fatal(message) => { eprint("fatal: {message}"); 128 },
         Failure(message) => { eprint("error: {message}"); 1 },
         Unsupported(feature) => { eprint("den: not yet implemented: {feature} (vc25b)"); 2 },
-        not_found => { eprint("fatal: not a git repository (or any of the parent directories): .git"); 128 },
+        not_found => {
+            eprint("fatal: not a git repository (or any of the parent directories): .git")
+            128
+        },
         _ => { eprint("fatal: den: {e}"); 128 },
     }
 }
@@ -288,9 +343,16 @@ pub fn clone_recursive(args: List[str]) -> int {
     var plain = List[str](), specs = List[str](), recurse = false, quiet = false
     for arg in args {
         if arg == "--recurse-submodules" || arg == "--recursive" { recurse = true; continue }
-        if arg.starts_with("--recurse-submodules=") { recurse = true; (mut specs).push(arg[21..]); continue }
+        if arg.starts_with("--recurse-submodules=") {
+            recurse = true
+            (mut specs).push(arg[21..])
+            continue
+        }
         if arg == "--no-recurse-submodules" { recurse = false; continue }
-        if arg == "--shallow-submodules" || arg == "--remote-submodules" || arg.starts_with("--jobs") || arg == "-j" {
+        if arg == "--shallow-submodules" ||
+            arg == "--remote-submodules" ||
+            arg.starts_with("--jobs") ||
+            arg == "-j" {
             eprint("den: not yet implemented: clone option {arg} (vc25b)")
             return 2
         }
@@ -309,7 +371,12 @@ pub fn clone_recursive(args: List[str]) -> int {
     for arg in plain[1..] { if arg == "--bare" { bare = true } }
     let destination = wiregit.clone_destination(operands, bare)
     if destination == "" { return rc }
-    let code = run_recursion(destination, if specs.len == 0 then ["."] else specs, quiet, bare) else |e| match e {
+    let code = run_recursion(
+        destination,
+        if specs.len == 0 then ["."] else specs,
+        quiet,
+        bare,
+    ) else |e| match e {
         Fatal(message) => { eprint("fatal: {message}"); return 128 },
         Failure(message) => { eprint("error: {message}"); return 1 },
         Unsupported(feature) => { eprint("den: not yet implemented: {feature} (vc25b)"); return 2 },
@@ -318,7 +385,12 @@ pub fn clone_recursive(args: List[str]) -> int {
     code
 }
 
-fn run_recursion(destination: str, specs: List[str], quiet: bool, bare: bool) -> int ! worktree.WorkErrors {
+fn run_recursion(
+    destination: str,
+    specs: List[str],
+    quiet: bool,
+    bare: bool,
+) -> int ! worktree.WorkErrors {
     let repo = repository.discover(destination)?
     let before = config_text(repo)?
     let core_end = before.find("\n[") else before.len - 1
@@ -330,7 +402,15 @@ fn run_recursion(destination: str, specs: List[str], quiet: bool, bare: bool) ->
     let fresh_ctx = worktree.discover(destination)?
     update(
         fresh_ctx,
-        UpdateOptions { init: true, recursive: true, remote: false, fetch: true, force: false, quiet: quiet, paths: [] },
+        UpdateOptions {
+            init: true,
+            recursive: true,
+            remote: false,
+            fetch: true,
+            force: false,
+            quiet: quiet,
+            paths: [],
+        },
         "",
     )?
 }

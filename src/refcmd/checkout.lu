@@ -76,10 +76,7 @@ fn switch_branch(args: List[str]) -> int ! commit.CommitErrors {
             force = true
         } else if arg == "--no-guess" || arg == "--no-track" {
             no_track = true
-        } else if arg == "-c" ||
-            arg == "-C" ||
-            arg == "-b" ||
-            arg == "-B" {
+        } else if arg == "-c" || arg == "-C" || arg == "-b" || arg == "-B" {
             if at == args.len { return Unsupported("{args[0]} missing branch name") }
             create = args[at]
             at += 1
@@ -224,7 +221,10 @@ fn switch_branch(args: List[str]) -> int ! commit.CommitErrors {
         // Local changes and the tracking lines, as Git prints them (vc25).
         var report_warnings = List[str]()
         let after_switch = worktree.scan_status(ctx, false, false, mut report_warnings)?
-        let report = worktree.checkout_report(after_switch, worktree.config_bool(ctx, "advice.statushints", true)?)?
+        let report = worktree.checkout_report(
+            after_switch,
+            worktree.config_bool(ctx, "advice.statushints", true)?,
+        )?
         if report.len > 0 { print_raw(str_from_utf8(report) else "") }
         if implicit_detach &&
             !old.detached &&

@@ -184,7 +184,9 @@ fn validate_side(files: List[File]) -> () ! worktree.WorkErrors {
         if file.path.len == 0 { return invalid }
         for b in file.path { if b == 0 as byte { return invalid } }
         if file.data.len > 16777216 { return limit }
-        if file.mode != 0o100644 && file.mode != 0o100755 && file.mode != 0o120000 &&
+        if file.mode != 0o100644 &&
+            file.mode != 0o100755 &&
+            file.mode != 0o120000 &&
             file.mode != 0o160000 {
             return invalid
         }
@@ -279,13 +281,27 @@ fn submodule_patch(
     change: Change,
     options: Options,
 ) -> () ! worktree.WorkErrors {
-    let path = if change.after.len > 0 then owned(change.after[0].path) else owned(change.before[0].path)
+    let path = if change.after.len > 0 {
+        owned(change.after[0].path)
+    } else {
+        owned(change.before[0].path)
+    }
     if change.status == "T" {
         if change.before[0].mode == 0o160000 {
             add(mut out, summary(ctx, path, side_ids(change.before), [], false)?)
-            patch_one(mut out, ctx, Change { before: [], after: copy change.after, status: "A", percent: 0 }, options)?
+            patch_one(
+                mut out,
+                ctx,
+                Change { before: [], after: copy change.after, status: "A", percent: 0 },
+                options,
+            )?
         } else {
-            patch_one(mut out, ctx, Change { before: copy change.before, after: [], status: "D", percent: 0 }, options)?
+            patch_one(
+                mut out,
+                ctx,
+                Change { before: copy change.before, after: [], status: "D", percent: 0 },
+                options,
+            )?
             add(mut out, summary(ctx, path, [], side_ids(change.after), false)?)
         }
         return

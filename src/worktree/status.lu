@@ -436,9 +436,14 @@ pub fn render_status(snapshot: Snapshot, options: StatusOptions) -> List[byte] !
                 "  (use \"git restore <file>...\" to discard changes in working directory)",
             )
             var content = false
-            for row in rows { if !row.untracked && !row.ignored && row.sub & 6 != 0 { content = true } }
+            for row in rows {
+                if !row.untracked && !row.ignored && row.sub & 6 != 0 { content = true }
+            }
             if content {
-                line(mut out, "  (commit or discard the untracked or modified content in submodules)")
+                line(
+                    mut out,
+                    "  (commit or discard the untracked or modified content in submodules)",
+                )
             }
         }
         for row in rows {
@@ -451,7 +456,9 @@ pub fn render_status(snapshot: Snapshot, options: StatusOptions) -> List[byte] !
                 if row.sub & 2 != 0 { (mut parts).push("modified content") }
                 if row.sub & 4 != 0 { (mut parts).push("untracked content") }
                 var joined = ""
-                for part in parts { joined = if joined == "" then copy part else "{joined}, {part}" }
+                for part in parts {
+                    joined = if joined == "" then copy part else "{joined}, {part}"
+                }
                 bytes_add(mut out, " ({joined})".bytes())
             }
             line(mut out, "")

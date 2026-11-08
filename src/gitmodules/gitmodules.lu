@@ -47,7 +47,9 @@ pub fn suspicious(name: str) -> bool {
 fn boolean(value: str) -> int {
     let lower = value.lower()
     if lower == "true" || lower == "yes" || lower == "on" || lower == "1" { return 1 }
-    if lower == "false" || lower == "no" || lower == "off" || lower == "0" || lower == "" { return 0 }
+    if lower == "false" || lower == "no" || lower == "off" || lower == "0" || lower == "" {
+        return 0
+    }
     -1
 }
 
@@ -117,7 +119,9 @@ pub fn parse(text: str, file: str) -> Parsed ! Errors {
             if value == "none" || value == "untracked" || value == "dirty" || value == "all" {
                 modules[at].ignore = value
             } else {
-                (mut warnings).push("Invalid parameter '{value}' for config option 'submodule.{name}.ignore'")
+                (mut warnings).push(
+                    "Invalid parameter '{value}' for config option 'submodule.{name}.ignore'",
+                )
             }
         } else if field == "fetchrecursesubmodules" {
             let b = boolean(value)
@@ -138,7 +142,9 @@ pub fn parse(text: str, file: str) -> Parsed ! Errors {
             }
         } else if field == "shallow" {
             let b = boolean(value)
-            if b < 0 { return Fatal("bad boolean config value '{value}' for 'submodule.{name}.shallow'") }
+            if b < 0 {
+                return Fatal("bad boolean config value '{value}' for 'submodule.{name}.shallow'")
+            }
             modules[at].shallow = if b == 1 then "true" else "false"
         }
     }

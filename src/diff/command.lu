@@ -65,7 +65,10 @@ fn parse(ctx: worktree.Context, args: List[str]) -> Options ! worktree.WorkError
             options.submodule = if arg == "--submodule" then "log" else submodule_format(arg[12..])?
         } else if arg == "--ignore-submodules" || arg.starts_with("--ignore-submodules=") {
             let setting = if arg == "--ignore-submodules" then "all" else arg[20..]
-            if setting != "none" && setting != "untracked" && setting != "dirty" && setting != "all" {
+            if setting != "none" &&
+                setting != "untracked" &&
+                setting != "dirty" &&
+                setting != "all" {
                 return Fatal("bad --ignore-submodules argument: {setting}")
             }
             options.ignore_submodules = setting

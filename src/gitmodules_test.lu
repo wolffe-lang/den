@@ -215,28 +215,76 @@ fn rewrite_rows() -> int {
         entry("url.ssh://push.example/.pushinsteadof", "https://forge.example/"),
     ]
     var failed = 0
-    failed += check("submodule-insteadof-scp", gitmodules.rewrite("git@github.com:o/r.git", rules, false), "https://github.com/o/r.git")
-    failed += check("submodule-insteadof-longest", gitmodules.rewrite("https://forge.example/o/leaf.git", rules, false), "file:///w/leaf.git")
-    failed += check("submodule-insteadof-none", gitmodules.rewrite("https://other.example/x", rules, false), "https://other.example/x")
-    failed += check("submodule-pushinsteadof", gitmodules.rewrite("https://forge.example/o/leaf.git", rules, true), "ssh://push.example/o/leaf.git")
+    failed += check(
+        "submodule-insteadof-scp",
+        gitmodules.rewrite("git@github.com:o/r.git", rules, false),
+        "https://github.com/o/r.git",
+    )
+    failed += check(
+        "submodule-insteadof-longest",
+        gitmodules.rewrite("https://forge.example/o/leaf.git", rules, false),
+        "file:///w/leaf.git",
+    )
+    failed += check(
+        "submodule-insteadof-none",
+        gitmodules.rewrite("https://other.example/x", rules, false),
+        "https://other.example/x",
+    )
+    failed += check(
+        "submodule-pushinsteadof",
+        gitmodules.rewrite("https://forge.example/o/leaf.git", rules, true),
+        "ssh://push.example/o/leaf.git",
+    )
     failed
 }
 
 fn layout_rows() -> int {
     var failed = 0
-    failed += check("submodule-gitfile", gitmodules.gitfile_text("/w/c/abs", "/w/c/.git/modules/abs"), "gitdir: ../.git/modules/abs\n")
-    failed += check("submodule-gitfile-nested", gitmodules.gitfile_text("/w/c/mid/deps/leaf", "/w/c/.git/modules/midname/modules/leafsub"), "gitdir: ../../../.git/modules/midname/modules/leafsub\n")
-    failed += check("submodule-worktree-nested", gitmodules.relative_path("/w/c/.git/modules/midname/modules/leafsub", "/w/c/mid/deps/leaf"), "../../../../../mid/deps/leaf")
-    failed += check("submodule-worktree", gitmodules.relative_path("/w/c/.git/modules/abs", "/w/c/abs"), "../../../abs")
+    failed += check(
+        "submodule-gitfile",
+        gitmodules.gitfile_text("/w/c/abs", "/w/c/.git/modules/abs"),
+        "gitdir: ../.git/modules/abs\n",
+    )
+    failed += check(
+        "submodule-gitfile-nested",
+        gitmodules.gitfile_text("/w/c/mid/deps/leaf", "/w/c/.git/modules/midname/modules/leafsub"),
+        "gitdir: ../../../.git/modules/midname/modules/leafsub\n",
+    )
+    failed += check(
+        "submodule-worktree-nested",
+        gitmodules.relative_path("/w/c/.git/modules/midname/modules/leafsub", "/w/c/mid/deps/leaf"),
+        "../../../../../mid/deps/leaf",
+    )
+    failed += check(
+        "submodule-worktree",
+        gitmodules.relative_path("/w/c/.git/modules/abs", "/w/c/abs"),
+        "../../../abs",
+    )
     failed
 }
 
 fn name_rows() -> int {
     var failed = 0
     for name in ["..", "a/..", "a/../b", "../"] {
-        if !gitmodules.suspicious(name) { print("FAIL submodule-name-suspicious {name}"); failed += 1 }
+        if !gitmodules.suspicious(name) {
+            print("FAIL submodule-name-suspicious {name}")
+            failed += 1
+        }
     }
-    for name in ["/abs", "a//b", ".git", "a\\..\\b", "x/", "-x", "ok", "a/./b", ".", "a/.", "..b", "b.."] {
+    for name in [
+        "/abs",
+        "a//b",
+        ".git",
+        "a\\..\\b",
+        "x/",
+        "-x",
+        "ok",
+        "a/./b",
+        ".",
+        "a/.",
+        "..b",
+        "b..",
+    ] {
         if gitmodules.suspicious(name) { print("FAIL submodule-name-plain {name}"); failed += 1 }
     }
     if failed == 0 { print("PASS submodule-names") }

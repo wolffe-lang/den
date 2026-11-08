@@ -14,7 +14,9 @@ fn protocol_name(url: str) -> str {
     if lower.starts_with("https://") { return "https" }
     if lower.starts_with("http://") { return "http" }
     if lower.starts_with("git://") { return "git" }
-    if lower.starts_with("ssh://") || lower.starts_with("git+ssh://") || lower.starts_with("ssh+git://") {
+    if lower.starts_with("ssh://") ||
+        lower.starts_with("git+ssh://") ||
+        lower.starts_with("ssh+git://") {
         return "ssh"
     }
     if lower.starts_with("file://") || transport.local_path(url) { return "file" }
@@ -45,7 +47,12 @@ pub fn protocol_check(config: Map[str, str], url: str) -> () ! object.StoreError
 /// The URL a transport opens for URL: rewritten by insteadOf (pushInsteadOf
 /// first for a push) from GITDIR's configuration ("" outside a repository),
 /// then admitted by the protocol policy.
-pub fn wire_url(gitdir: str, config: Map[str, str], url: str, push: bool) -> str ! object.StoreErrors {
+pub fn wire_url(
+    gitdir: str,
+    config: Map[str, str],
+    url: str,
+    push: bool,
+) -> str ! object.StoreErrors {
     let entries = repository.configuration(gitdir)?
     let rewritten = gitmodules.rewrite(url, entries, push)
     protocol_check(config, rewritten)?

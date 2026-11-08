@@ -162,7 +162,9 @@ pub fn init_with(path: str, bare: bool, branch: str, worktree: str) -> (Repo, bo
         fs.close(take head)?
         var config = fs.create_new_with_mode("{dir}/config", 0o644)?
         var tail = if bare then "\tbare = true\n" else "\tbare = false\n\tlogallrefupdates = true\n"
-        if worktree != "" { tail = "\tbare = false\n\tlogallrefupdates = true\n\tworktree = {worktree}\n" }
+        if worktree != "" {
+            tail = "\tbare = false\n\tlogallrefupdates = true\n\tworktree = {worktree}\n"
+        }
         fs.write(mut config, "[core]\n\trepositoryformatversion = 0\n\tfilemode = true\n{tail}")?
         fs.sync(mut config)?
         fs.close(take config)?

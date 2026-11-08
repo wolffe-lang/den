@@ -174,12 +174,18 @@ fn remove_submodule_worktree(ctx: Context, path: List[byte]) -> () ! WorkErrors 
         io => { return io },
     }
     if record[0] != 1 { return remove_file(ctx, path)? }
-    if fs.is_dir("{full}/.git") { return Unsupported("rm of an old-form submodule with its own .git directory") }
+    if fs.is_dir("{full}/.git") {
+        return Unsupported("rm of an old-form submodule with its own .git directory")
+    }
     fs.remove_dir_all(full)?
     clean_parents(ctx, path)
 }
 
-fn drop_gitmodules_sections(ctx: Context, mut value: index.Index, paths: List[str]) -> () ! WorkErrors {
+fn drop_gitmodules_sections(
+    ctx: Context,
+    mut value: index.Index,
+    paths: List[str],
+) -> () ! WorkErrors {
     let file = "{ctx.root}/.gitmodules"
     if !fs.is_file(file) { return }
     let parsed = modules(ctx)?
@@ -209,7 +215,6 @@ fn drop_gitmodules_sections(ctx: Context, mut value: index.Index, paths: List[st
     let entry = entry_for(state, prior, add_options())?
     value = index.replace_entry(value, entry)?
 }
-
 
 // The temporary is exclusively ours; publication replaces the final link itself,
 // not its referent. Ancestor validation is lstat-based, not a portable openat API.

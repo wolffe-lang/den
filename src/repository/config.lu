@@ -127,7 +127,9 @@ fn config_header(text: str, start: int) -> (str, int) ! ConfigSyntaxErrors {
     if pos == text.len || text.bytes()[pos] != 93 as byte {
         // Git counts the newline it stops on (vc25: an unterminated header
         // on line 1 is reported as line 2).
-        if pos < text.len && text.bytes()[pos] == 10 as byte { return ConfigLine(config_line(text, pos + 1)) }
+        if pos < text.len && text.bytes()[pos] == 10 as byte {
+            return ConfigLine(config_line(text, pos + 1))
+        }
         return ConfigLine(config_line(text, pos))
     }
     config_include(section)?
@@ -250,7 +252,9 @@ pub fn parse_config(input: str) -> List[ConfigEntry] ! ConfigErrors {
 /// for .gitmodules (vc25): `fatal: bad config line N in file FILE`.
 pub fn parse_config_named(input: str, file: str) -> List[ConfigEntry] ! ConfigReadErrors {
     parse_config_at(input) else |e| match e {
-        ConfigLine(line) => { return ConfigDiagnostic("fatal: bad config line {line} in file {file}") },
+        ConfigLine(line) => {
+            return ConfigDiagnostic("fatal: bad config line {line} in file {file}")
+        },
         limit => { return limit },
         Unsupported(feature) => { return Unsupported(feature) },
     }

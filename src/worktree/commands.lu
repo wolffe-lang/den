@@ -50,9 +50,13 @@ fn status_command(ctx: Context, args: List[str]) -> int ! WorkErrors {
             options.ignored = true
         } else if !literal && arg == "--ignored=no" {
             options.ignored = false
-        } else if !literal && (arg == "--ignore-submodules" || arg.starts_with("--ignore-submodules=")) {
+        } else if !literal &&
+            (arg == "--ignore-submodules" || arg.starts_with("--ignore-submodules=")) {
             let setting = if arg == "--ignore-submodules" then "all" else arg[20..]
-            if setting != "none" && setting != "untracked" && setting != "dirty" && setting != "all" {
+            if setting != "none" &&
+                setting != "untracked" &&
+                setting != "dirty" &&
+                setting != "all" {
                 return Fatal("bad --ignore-submodules argument: {setting}")
             }
             ignore_option = setting
@@ -93,10 +97,22 @@ fn status_command(ctx: Context, args: List[str]) -> int ! WorkErrors {
     if summary != "false" && summary != "0" && summary != "no" && summary != "off" {
         return Unsupported("status.submoduleSummary")
     }
-    let snapshot = scan_status_ignoring(ctx, options.untracked != "no", options.ignored, ignore_option, mut warnings)?
+    let snapshot = scan_status_ignoring(
+        ctx,
+        options.untracked != "no",
+        options.ignored,
+        ignore_option,
+        mut warnings,
+    )?
     if version2 {
-        for row in snapshot.rows { if row.sub != 0 { return Unsupported("status --porcelain=v2 of a submodule") } }
-        for entry in snapshot.index.entries { if entry.stat[6] == 0o160000 { return Unsupported("status --porcelain=v2 of a submodule") } }
+        for row in snapshot.rows {
+            if row.sub != 0 { return Unsupported("status --porcelain=v2 of a submodule") }
+        }
+        for entry in snapshot.index.entries {
+            if entry.stat[6] == 0o160000 {
+                return Unsupported("status --porcelain=v2 of a submodule")
+            }
+        }
     }
     let bytes = if version2 {
         render_status_v2(snapshot, options)?

@@ -345,16 +345,22 @@ pub fn push_command(args: List[str]) -> int {
     // refuses those forms by name rather than push without the check.
     var recurse = ""
     for arg in args[1..] {
-        if arg == "--no-recurse-submodules" { recurse = "no" }
-        else if arg.starts_with("--recurse-submodules=") { recurse = arg[21..] }
-        else if arg == "--recurse-submodules" { recurse = "on-demand" }
+        if arg == "--no-recurse-submodules" {
+            recurse = "no"
+        } else if arg.starts_with("--recurse-submodules=") {
+            recurse = arg[21..]
+        } else if arg == "--recurse-submodules" {
+            recurse = "on-demand"
+        }
     }
     if recurse == "" {
         let repo = repository.discover(".") else |_| { return push_rest(args) }
         recurse = (repo.config["push.recursesubmodules"] else "").lower()
         if recurse == "" {
             let general = (repo.config["submodule.recurse"] else "false").lower()
-            if general == "true" || general == "yes" || general == "on" || general == "1" { recurse = "on-demand" }
+            if general == "true" || general == "yes" || general == "on" || general == "1" {
+                recurse = "on-demand"
+            }
         }
     }
     if recurse != "" && recurse != "no" && recurse != "false" {

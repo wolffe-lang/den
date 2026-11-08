@@ -1,10 +1,10 @@
 use std.fs
+use gitmodules
 use hash
 use ignore
 use index
 use object
 use oid
-use gitmodules
 
 fn stable(a: List[int], b: List[int]) -> bool {
     if a.len != 20 || b.len != 20 { return false }
@@ -237,7 +237,17 @@ fn walk_mode(
     mut ignores: ignore.Cache,
     mut warnings: List[str],
 ) -> Walk ! WorkErrors {
-    walk_submodules(ctx, value, include_untracked, paths, status, show_ignored, "", mut ignores, mut warnings)?
+    walk_submodules(
+        ctx,
+        value,
+        include_untracked,
+        paths,
+        status,
+        show_ignored,
+        "",
+        mut ignores,
+        mut warnings,
+    )?
 }
 
 // walk_mode with --ignore-submodules' value (empty when not given). A gitlink

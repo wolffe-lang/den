@@ -1,9 +1,9 @@
 use std.fs
+use gitmodules
 use index
 use object
 use oid
 use rename
-use gitmodules
 use worktree
 
 fn blob(ctx: worktree.Context, entry: worktree.FlatEntry) -> File ! worktree.WorkErrors {
@@ -81,7 +81,12 @@ fn from_worktree_ignoring(
                 (mut out).push(blob(ctx, worktree.FlatEntry { path: owned(entry.path), mode: entry.stat[6], id: copy entry.id })?)
                 continue
             }
-            let state = worktree.submodule_state(ctx, text(entry.path)?, entry.id, if setting == "" then "untracked" else setting)?
+            let state = worktree.submodule_state(
+                ctx,
+                text(entry.path)?,
+                entry.id,
+                if setting == "" then "untracked" else setting,
+            )?
             let dirty = state.modified || setting == "none" && state.untracked
             (mut out).push(File {
                 path: owned(entry.path),
@@ -151,7 +156,8 @@ pub fn changes(
         if cmp == 0 {
             // A gitlink keeps its commit but differs in its `-dirty` text when
             // its worktree is modified (vc25): still a change.
-            let dirty = before[a].mode == 0o160000 && after[b].mode == 0o160000 &&
+            let dirty = before[a].mode == 0o160000 &&
+                after[b].mode == 0o160000 &&
                 compare(before[a].data, after[b].data) != 0
             if before[a].mode != after[b].mode || !oid.equal(before[a].id, after[b].id) || dirty {
                 let status = if before[a].mode & 0o170000 != after[b].mode & 0o170000 {

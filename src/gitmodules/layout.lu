@@ -25,4 +25,6 @@ pub fn relative_path(from: str, to: str) -> str {
 pub fn module_gitdir(super_gitdir: str, name: str) -> str { "{super_gitdir}/modules/{name}" }
 
 /// The `.git` file's bytes in a submodule worktree.
-pub fn gitfile_text(worktree: str, gitdir: str) -> str { "gitdir: {relative_path(worktree, gitdir)}\n" }
+pub fn gitfile_text(worktree: str, gitdir: str) -> str {
+    "gitdir: {relative_path(worktree, gitdir)}\n"
+}

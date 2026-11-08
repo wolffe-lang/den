@@ -78,7 +78,8 @@ fn context_or_repo() -> (repository.Repo, str, bool) ! Errors {
 }
 
 fn matches(path: str, pattern: str) -> bool {
-    path == pattern || pattern.ends_with("/") && path.starts_with(pattern) ||
+    path == pattern ||
+        pattern.ends_with("/") && path.starts_with(pattern) ||
         path.starts_with("{pattern}/")
 }
 
@@ -86,13 +87,21 @@ fn ls_tree(args: List[str]) -> int ! Errors {
     var recurse = false, trees = false, only_trees = false, name_only = false, nul = false
     var operands = List[str]()
     for arg in args[1..] {
-        if arg == "-r" { recurse = true }
-        else if arg == "-t" { trees = true }
-        else if arg == "-d" { only_trees = true }
-        else if arg == "--name-only" { name_only = true }
-        else if arg == "-z" { nul = true }
-        else if arg.starts_with("-") { return Unsupported("ls-tree option {arg}") }
-        else { (mut operands).push(copy arg) }
+        if arg == "-r" {
+            recurse = true
+        } else if arg == "-t" {
+            trees = true
+        } else if arg == "-d" {
+            only_trees = true
+        } else if arg == "--name-only" {
+            name_only = true
+        } else if arg == "-z" {
+            nul = true
+        } else if arg.starts_with("-") {
+            return Unsupported("ls-tree option {arg}")
+        } else {
+            (mut operands).push(copy arg)
+        }
     }
     if operands.len == 0 { return Unsupported("ls-tree requires a tree-ish") }
     let (repo, prefix, _) = context_or_repo()?
@@ -105,7 +114,9 @@ fn ls_tree(args: List[str]) -> int ! Errors {
     walk_tree(repo, tree, "", true, true, mut listed)?
     var patterns = List[str]()
     for path in operands[1..] {
-        if path.starts_with("/") || path.contains("..") { return Unsupported("ls-tree path {path}") }
+        if path.starts_with("/") || path.contains("..") {
+            return Unsupported("ls-tree path {path}")
+        }
         (mut patterns).push(if path == "." then copy prefix else "{prefix}{path}")
     }
     let high = (repo.config["core.quotepath"] else "true").lower() != "false"
@@ -123,7 +134,9 @@ fn ls_tree(args: List[str]) -> int ! Errors {
                     shown = recurse || !entry.path.contains("/")
                 } else if entry.path == unslash(pattern) && !pattern.ends_with("/") {
                     shown = true
-                } else if entry.path.starts_with(if pattern.ends_with("/") then copy pattern else "{pattern}/") {
+                } else if entry.path.starts_with(
+                    if pattern.ends_with("/") then copy pattern else "{pattern}/",
+                ) {
                     let base = if pattern.ends_with("/") then pattern.len else pattern.len + 1
                     shown = recurse || !entry.path[base..].contains("/")
                 }
@@ -138,7 +151,11 @@ fn ls_tree(args: List[str]) -> int ! Errors {
         }
         // -d keeps directory-like entries: trees and gitlinks (measured).
         if only_trees && entry.kind != "tree" && entry.kind != "commit" { continue }
-        let display = if entry.path.starts_with(prefix) then entry.path[prefix.len..] else copy entry.path
+        let display = if entry.path.starts_with(prefix) {
+            entry.path[prefix.len..]
+        } else {
+            copy entry.path
+        }
         let name = quoted(display, high, nul)?
         let line = if name_only {
             name
@@ -156,16 +173,21 @@ fn unslash(path: str) -> str {
     out
 }
 
-
 fn ls_files(args: List[str]) -> int ! Errors {
     var staged = false, nul = false
     var paths = List[str]()
     for arg in args[1..] {
-        if arg == "-s" || arg == "--stage" { staged = true }
-        else if arg == "-z" { nul = true }
-        else if arg == "--" { continue }
-        else if arg.starts_with("-") { return Unsupported("ls-files option {arg}") }
-        else { (mut paths).push(copy arg) }
+        if arg == "-s" || arg == "--stage" {
+            staged = true
+        } else if arg == "-z" {
+            nul = true
+        } else if arg == "--" {
+            continue
+        } else if arg.starts_with("-") {
+            return Unsupported("ls-files option {arg}")
+        } else {
+            (mut paths).push(copy arg)
+        }
     }
     let ctx = worktree.discover(".") else |e| match e {
         Fatal(message) => { return Fatal(message) },
@@ -174,7 +196,9 @@ fn ls_files(args: List[str]) -> int ! Errors {
     let value = worktree.read_index(ctx) else |_| { return invalid }
     var patterns = List[str]()
     for path in paths {
-        if path.starts_with("/") || path.contains("..") { return Unsupported("ls-files path {path}") }
+        if path.starts_with("/") || path.contains("..") {
+            return Unsupported("ls-files path {path}")
+        }
         let full = if path == "." then copy ctx.prefix else "{ctx.prefix}{path}"
         (mut patterns).push(unslash(full))
     }

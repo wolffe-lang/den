@@ -58,9 +58,12 @@ fn main() -> int {
             "clone" | "fetch" | "push" | "pull" | "ls-remote" | "upload-pack" | "receive-pack" | "daemon" => {
                 if args[0] == "clone" {
                     for arg in args {
-                        if arg == "--recurse-submodules" || arg == "--recursive" ||
-                            arg.starts_with("--recurse-submodules=") || arg == "--no-recurse-submodules" ||
-                            arg == "--shallow-submodules" || arg == "--remote-submodules" {
+                        if arg == "--recurse-submodules" ||
+                            arg == "--recursive" ||
+                            arg.starts_with("--recurse-submodules=") ||
+                            arg == "--no-recurse-submodules" ||
+                            arg == "--shallow-submodules" ||
+                            arg == "--remote-submodules" {
                             return submodule.clone_recursive(args)
                         }
                     }

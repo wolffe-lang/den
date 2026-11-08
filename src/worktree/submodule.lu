@@ -41,7 +41,10 @@ pub fn ignore_for(ctx: Context, parsed: gitmodules.Parsed, path: str, option: st
     if at < 0 { return "" }
     let name = parsed.modules[at].name
     let configured = ctx.repo.config["submodule.{name}.ignore"] else ""
-    if configured == "none" || configured == "untracked" || configured == "dirty" || configured == "all" {
+    if configured == "none" ||
+        configured == "untracked" ||
+        configured == "dirty" ||
+        configured == "all" {
         return configured
     }
     if parsed.modules[at].ignore != "" { return copy parsed.modules[at].ignore }
@@ -55,7 +58,12 @@ fn unpopulated(recorded: oid.Oid) -> SubState {
 /// Inspect the submodule worktree at PATH (relative to the superproject root)
 /// whose gitlink records RECORDED. IGNORE "dirty"/"all" skips its worktree;
 /// "untracked" skips untracked files (Git still scans tracked content).
-pub fn submodule_state(ctx: Context, path: str, recorded: oid.Oid, ignore: str) -> SubState ! WorkErrors {
+pub fn submodule_state(
+    ctx: Context,
+    path: str,
+    recorded: oid.Oid,
+    ignore: str,
+) -> SubState ! WorkErrors {
     let full = "{ctx.root}/{path}"
     if !fs.exists("{full}/.git") { return unpopulated(recorded) }
     let real = fs.realpath(full) else |_| { return unpopulated(recorded) }
@@ -95,7 +103,9 @@ pub fn subproject_text(id: oid.Oid, dirty: bool) -> List[byte] ! WorkErrors {
 pub fn gitlink_at(value: index.Index, path: List[byte]) -> int {
     var i = 0
     for entry in value.entries {
-        if entry.stat[6] == 0o160000 && index.stage(entry) == 0 && compare(entry.path, path) == 0 { return i }
+        if entry.stat[6] == 0o160000 && index.stage(entry) == 0 && compare(entry.path, path) == 0 {
+            return i
+        }
         i += 1
     }
     -1
