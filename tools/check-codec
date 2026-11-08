@@ -22,9 +22,14 @@ for tier in native release; do
     mkdir -p "target/$tier"
     if [ "$tier" = release ]; then
         "$WOLF" build --release --deny-warnings src/zpipe.lu -o "target/$tier/zpipe"
+        "$WOLF" build --release --deny-warnings src/zlib/kept_test.lu -o "target/$tier/zlib-kept-test"
     else
         "$WOLF" build --deny-warnings src/zpipe.lu -o "target/$tier/zpipe"
+        "$WOLF" build --deny-warnings src/zlib/kept_test.lu -o "target/$tier/zlib-kept-test"
     fi
+    # den#73's rows against the codec's first forms; native and release
+    # only, as the checked machine's step budget does not reach them.
+    "target/$tier/zlib-kept-test"
     python3 -I tools/codec-test.py --binary "target/$tier/zpipe" >"target/codec-$tier.log"
     tail -n 1 "target/codec-$tier.log"
     cp target/codec/summary.json "target/codec/$tier.json"
@@ -34,4 +39,4 @@ for tier in native release; do
 done
 # The checked program tests all block forms and malformed classes without fs.
 # Large file/100-MB tests are separate native measurements, not checked claims.
-echo 'codec: checked 4 programs pass; native and release independent gates pass; unsupported=0'
+echo 'codec: checked 4 programs pass; native and release independent gates and first-form rows pass; unsupported=0'
