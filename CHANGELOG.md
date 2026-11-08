@@ -31,7 +31,9 @@
   refused by name.
 - Hostile `.gitmodules` input is refused or warned about as Git does:
   suspicious names, dash URLs and paths, missing URLs or commits, invalid
-  values, bad config lines (`bad config line N in file ...`).
+  values, bad config lines (`bad config line N in file ...`, naming the
+  line Git names for a broken section header; a blank between a
+  subsection's closing quote and its bracket is refused, as Git refuses it).
 - A clone over a URL transport packs its remote-tracking refs, quotes a URL
   in `config` only when needed and leaves no empty `hooks/`, as Git does.
 - `submodule add`, `deinit`, `set-url`, `set-branch`, `summary`,
