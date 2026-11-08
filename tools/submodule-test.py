@@ -344,7 +344,82 @@ def family_diff():
                 cwd='c', prepare=lambda w: g('update-index', '--cacheinfo', '160000,' + '1' * 40 + ',mid', cwd=w / 'c'))
 
 
-FAMILIES = {'read': family_read, 'status': family_status, 'diff': family_diff}
+def detach(w, path, rev):
+    g('-c', 'advice.detachedHead=false', 'checkout', '-q', '--detach', rev, cwd=w / 'c' / path)
+
+
+SEEDS = {
+    'plain-init': lambda w: (plain_clone(w), g('submodule', 'init', cwd=w / 'c', extra=ALLOW_FILE)),
+    'plain-updated': lambda w: (plain_clone(w), g('submodule', 'update', '--init', cwd=w / 'c', extra=ALLOW_FILE)),
+    'abs-behind': lambda w: (recursive_clone(w), detach(w, 'abs', 'HEAD~1')),
+    'abs-behind-dirty': lambda w: (recursive_clone(w), detach(w, 'abs', 'HEAD~1'), write(w / 'c/abs/leaf.txt', 'mine\n')),
+    'url-moved': lambda w: (recursive_clone(w), shutil.copytree(w / 'mid.git', w / 'mid-moved.git'),
+                            g('config', '-f', '.gitmodules', 'submodule.midname.url', '../mid-moved.git', cwd=w / 'c')),
+    'sub-dir': lambda w: (recursive_clone(w), (w / 'c/x').mkdir()),
+}
+
+
+def named_seed(name):
+    seed(name, SEEDS[name])
+    return name
+
+
+def family_clone():
+    seed('remotes', remotes)
+    top = 'file://' + str(root / 'world/top.git')
+    compare('clone-recurse-default-policy', ['clone', '--recurse-submodules', top, 'c'], 'remotes')
+    compare('clone-recurse', ['clone', '--recurse-submodules', top, 'c'], 'remotes', extra=ALLOW_FILE)
+    compare('clone-recursive-alias', ['clone', '--recursive', top, 'c'], 'remotes', extra=ALLOW_FILE)
+    compare('clone-recurse-quiet', ['clone', '-q', '--recurse-submodules', top, 'c'], 'remotes', extra=ALLOW_FILE)
+    compare('clone-recurse-pathspec', ['clone', '--recurse-submodules=abs', top, 'c'], 'remotes', extra=ALLOW_FILE)
+    compare('clone-recurse-pathspec-none', ['clone', '--recurse-submodules=nomatch', top, 'c'], 'remotes', extra=ALLOW_FILE)
+    compare('clone-plain', ['clone', top, 'c'], 'remotes', extra=ALLOW_FILE)
+    compare('clone-recurse-bare', ['clone', '--bare', '--recurse-submodules', top, 'c.git'], 'remotes', extra=ALLOW_FILE)
+    seed('plain', plain_clone)
+    seed('clone', recursive_clone)
+    for name, argv in (('status', ['submodule', 'status']), ('bare', ['submodule']), ('init', ['submodule', 'init']),
+                       ('init-path', ['submodule', 'init', 'abs']), ('update', ['submodule', 'update']),
+                       ('update-init', ['submodule', 'update', '--init']),
+                       ('update-init-recursive', ['submodule', 'update', '--init', '--recursive']),
+                       ('update-init-path', ['submodule', 'update', '--init', '--', 'mid']),
+                       ('update-unknown-path', ['submodule', 'update', '--', 'nope']),
+                       ('update-nonsubmodule-path', ['submodule', 'update', '--', 'top.txt']),
+                       ('status-recursive', ['submodule', 'status', '--recursive']),
+                       ('sync', ['submodule', 'sync']), ('foreach', ['submodule', 'foreach', 'echo $name'])):
+        compare('submodule-plain-' + name, argv, 'plain', cwd='c', extra=ALLOW_FILE)
+    for name, argv in (('status', ['submodule', 'status']), ('update', ['submodule', 'update']),
+                       ('update-recursive', ['submodule', 'update', '--init', '--recursive']),
+                       ('status-recursive', ['submodule', 'status', '--recursive'])):
+        compare('submodule-init-' + name, argv, named_seed('plain-init'), cwd='c', extra=ALLOW_FILE)
+        compare('submodule-updated-' + name, argv, named_seed('plain-updated'), cwd='c', extra=ALLOW_FILE)
+    for name, argv in (('status', ['submodule', 'status']), ('status-cached', ['submodule', 'status', '--cached']),
+                       ('status-recursive', ['submodule', 'status', '--recursive']),
+                       ('status-path', ['submodule', 'status', 'mid']),
+                       ('update', ['submodule', 'update']), ('update-recursive', ['submodule', 'update', '--recursive']),
+                       ('sync', ['submodule', 'sync']), ('sync-recursive', ['submodule', 'sync', '--recursive']),
+                       ('foreach', ['submodule', 'foreach', 'echo "$name|$sm_path|$displaypath|$sha1|$toplevel"']),
+                       ('foreach-recursive', ['submodule', 'foreach', '--recursive', 'echo "$name|$sm_path|$displaypath|$sha1|$toplevel"']),
+                       ('foreach-quiet', ['submodule', '--quiet', 'foreach', 'echo $name']),
+                       ('foreach-fail', ['submodule', 'foreach', 'exit 3']),
+                       ('foreach-path-variable', ['submodule', 'foreach', 'echo "$path"']),
+                       ('foreach-two-words', ['submodule', 'foreach', 'echo', 'a', 'b'])):
+        compare('submodule-clone-' + name, argv, 'clone', cwd='c', extra=ALLOW_FILE)
+    compare('submodule-clone-foreach-subdirectory', ['submodule', 'foreach', 'echo "$displaypath"'], named_seed('sub-dir'), cwd='c/x')
+    compare('submodule-clone-status-subdirectory', ['submodule', 'status'], named_seed('sub-dir'), cwd='c/x')
+    compare('submodule-clone-foreach-inside', ['submodule', 'foreach', 'echo in $displaypath'], 'clone', cwd='c/mid')
+    for state in ('new-commits', 'nested-new-commits'):
+        for argv in (['submodule', 'status'], ['submodule', 'status', '--recursive'], ['submodule', 'status', '--cached']):
+            compare('submodule-%s-%s' % (state, '-'.join(argv[1:])), argv, state_seed(state), cwd='c')
+    for argv in (['submodule', 'status'], ['submodule', 'update'], ['submodule', 'update', '--force']):
+        compare('submodule-abs-behind-' + '-'.join(argv[1:]), argv, named_seed('abs-behind'), cwd='c', extra=ALLOW_FILE)
+        compare('submodule-abs-behind-dirty-' + '-'.join(argv[1:]), argv, named_seed('abs-behind-dirty'), cwd='c', extra=ALLOW_FILE)
+    for argv in (['submodule', 'sync'], ['submodule', 'sync', '--recursive'], ['submodule', 'sync', 'mid']):
+        compare('submodule-url-moved-' + '-'.join(argv[1:]), argv, named_seed('url-moved'), cwd='c', extra=ALLOW_FILE)
+    for refused in ('add', 'deinit', 'set-url', 'set-branch', 'summary', 'absorbgitdirs'):
+        pass
+
+
+FAMILIES = {'read': family_read, 'status': family_status, 'diff': family_diff, 'clone': family_clone}
 
 try:
     FAMILIES[a.family]()
