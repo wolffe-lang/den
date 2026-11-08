@@ -91,7 +91,7 @@ fn transition_mode(
             // One blob at a time (vc23): a clone's checkout holds one file's
             // body, never the whole worktree's.
             region verify {
-                let data = object.read_loaded(reader, entry.id, 1000000000)?
+                let data = object.read_object(ctx.repo, entry.id, 1000000000)?
                 if data.kind != "blob" { return bad_oid }
             }
         }
