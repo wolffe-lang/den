@@ -57,7 +57,8 @@ pub fn wanted(args: List[str]) -> bool {
     value == "true" || value == "yes" || value == "on" || value == "1"
 }
 
-fn stripped(args: List[str]) -> List[str] {
+/// ARGS without the recursion options, for a command that does not recurse.
+pub fn without_recursion(args: List[str]) -> List[str] {
     var out = List[str]()
     for arg in args {
         if arg == "--recurse-submodules" ||
@@ -148,6 +149,7 @@ fn follow(
         var whole = false
         if !fs.exists("{full}/.git") {
             fs.create_dir_all(full)?
+            restore_worktree(gitdir, full)?
             write_gitfile(full, gitdir)?
             whole = true
         }
@@ -169,7 +171,7 @@ fn follow(
     for link in before {
         if link_at(after, link.path) >= 0 { continue }
         let full = "{ctx.root}/{link.path}"
-        if fs.is_file("{full}/.git") { remove_submodule_tree(full)? }
+        if fs.is_file("{full}/.git") { empty_submodule(worktree.discover(full)?, full)? }
     }
 }
 
@@ -188,10 +190,33 @@ fn sub_at(
     Unsupported("submodule at {link.path}")
 }
 
-// A submodule dropped from the superproject's tree: its worktree goes, its
-// repository under .git/modules stays (vc25 recurse rows).
-fn remove_submodule_tree(full: str) -> () ! worktree.WorkErrors {
-    fs.remove_dir_all(full)?
+// A submodule dropped from the superproject's tree: its tracked files and
+// its index entries go, its `.git` file and core.worktree too; its
+// repository under .git/modules stays, as Git leaves it (vc25 recurse rows).
+fn empty_submodule(sub: worktree.Context, full: str) -> () ! worktree.WorkErrors {
+    var tx = index.begin(sub.repo, 16777216, worktree.index_version(sub)?)?
+    defer index.abort(mut tx)
+    worktree.transition(sub, mut tx.value, List[worktree.FlatEntry](), "hard")?
+    index.commit(mut tx)?
+    let before = config_text(sub.repo)?
+    var after = ""
+    for line in before.split("\n") {
+        if line.trim().starts_with("worktree = ") || line.trim().starts_with("worktree=") {
+            continue
+        }
+        after = if after == "" then copy line else "{after}\n{line}"
+    }
+    repository.publish_config(sub.repo, before, after)?
+    fs.remove("{full}/.git")?
+    if fs.entries(full)?.len == 0 { fs.remove_dir(full)? }
+}
+
+// Git writes core.worktree back when it fills a submodule again.
+fn restore_worktree(gitdir: str, full: str) -> () ! worktree.WorkErrors {
+    let repo = repository.open(gitdir)?
+    if (repo.config["core.worktree"] else "") == "" {
+        set_config(repo, "core.worktree", gitmodules.relative_path(gitdir, full))?
+    }
 }
 
 /// `checkout`, `switch` or `reset` with submodule recursion.
@@ -205,7 +230,7 @@ pub fn recursive_worktree(args: List[str]) -> int {
 }
 
 fn recursive_worktree_inner(args: List[str]) -> int ! worktree.WorkErrors {
-    let plain = stripped(args)
+    let plain = without_recursion(args)
     var force = false, quiet = false, hard = false, soft_or_mixed = args[0] == "reset"
     for arg in plain[1..] {
         if arg == "-f" || arg == "--force" || arg == "--discard-changes" { force = true }
@@ -247,6 +272,14 @@ fn recursive_worktree_inner(args: List[str]) -> int ! worktree.WorkErrors {
             return 1
         }
     }
+    // A submodule the target no longer records is emptied first, as Git
+    // empties it: its files, its index and core.worktree go, its repository
+    // stays (vc25 recurse rows).
+    for link in before {
+        if link_at(after, link.path) >= 0 { continue }
+        let full = "{ctx.root}/{link.path}"
+        if fs.is_file("{full}/.git") { empty_submodule(worktree.discover(full)?, full)? }
+    }
     // The superproject's report waits until the submodules have moved.
     env_set("DEN_DEFER_CHECKOUT_REPORT", "1") else |_| {}
     let status = refcmd.run(plain)
@@ -277,7 +310,7 @@ pub fn recursive_pull(args: List[str]) -> int {
     }
     let ctx = worktree.discover(".") else |e| { eprint("fatal: {e}"); return 128 }
     let before = index_links(ctx) else |e| { eprint("fatal: den: {e}"); return 128 }
-    var plain = stripped(args)
+    var plain = without_recursion(args)
     (mut plain).push("--recurse-submodules={mode}")
     env_set("DEN_PULL_RECURSION", "1") else |_| {}
     let status = wiregit.run(plain)
