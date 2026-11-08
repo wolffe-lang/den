@@ -1,0 +1,116 @@
+vc26: the measured table (the lane's specification)
+Rows: tools/identity-test.py --measure at 9500e0d (den's sources are the base's,
+474a926), native tier, in the pinned oracle container (Git 2.56.0, executable
+c4848492...), on a Linux x86-64 host. 62 shapes, 1,292 rows; 563 equal, 729 differ.
+Each shape is the whole identity value, in a commit's author and committer and an
+annotated tag's tagger (tools/identity-test.py, SHAPES).
+
+Per shape. git columns: the pinned Git 2.56.0. den columns: "=" when den's status, stdout and
+stderr equal Git's byte for byte (and, on the wire, the received objects and refs), else den's answer.
+Read rows: cat-file -p (commit, tag), log (medium, fuller, --date=raw, --date=iso-strict), show -s
+(commit, tag), --format placeholders, blame (default, --porcelain, -e). "read =" counts equal rows of 12.
+
+shape             git fsck (= --strict)    clone   clone, fsckObjects       | den clone (= push, serve)      den fsck                       den read  den differs at
+control           ok                       ok      ok                       | =                              =                              11/12     format
+empty-email       ok                       ok      ok                       | refused (fsck identity diagnos refused (fsck identity diagnos 11/12     format
+empty-name        ok                       ok      ok                       | refused (fsck identity diagnos refused (fsck identity diagnos 11/12     format
+no-name           missingNameBeforeEmail   ok      missingNameBeforeEmail   | refused (fsck identity diagnos refused (fsck identity diagnos 2/12      log,log-fuller,log-raw-date,log-iso-date,show,show-tag,format,blame,blame-porcelain,blame-email
+empty-both        ok                       ok      ok                       | refused (fsck identity diagnos refused (fsck identity diagnos 11/12     format
+no-email          missingEmail             ok      missingEmail             | refused (fsck identity diagnos refused (fsck identity diagnos 2/12      log,log-fuller,log-raw-date,log-iso-date,show,show-tag,format,blame,blame-porcelain,blame-email
+glued-email       missingSpaceBeforeEmail  ok      missingSpaceBeforeEmail  | =                              ok                             5/12      log,log-fuller,log-raw-date,log-iso-date,show,show-tag,format
+glued-date        missingSpaceBeforeDate   ok      missingSpaceBeforeDate   | =                              ok                             11/12     format
+two-spaces        ok                       ok      ok                       | =                              =                              11/12     format
+no-date           missingSpaceBeforeDate   ok      missingSpaceBeforeDate   | refused (fsck identity diagnos refused (fsck identity diagnos 2/12      log,log-fuller,log-raw-date,log-iso-date,show,show-tag,format,blame,blame-porcelain,blame-email
+zero-date         ok                       ok      ok                       | =                              =                              11/12     format
+zero-padded       zeroPaddedDate           ok      zeroPaddedDate           | =                              ok                             11/12     format
+negative          badDate                  ok      badDate                  | refused (fsck identity diagnos refused (fsck identity diagnos 2/12      log,log-fuller,log-raw-date,log-iso-date,show,show-tag,format,blame,blame-porcelain,blame-email
+over-i64          badDateOverflow          ok      badDateOverflow          | refused (fsck identity diagnos refused (fsck identity diagnos 2/12      log,log-fuller,log-raw-date,log-iso-date,show,show-tag,format,blame,blame-porcelain,blame-email
+over-u64          badDateOverflow          ok      badDateOverflow          | refused (fsck identity diagnos refused (fsck identity diagnos 2/12      log,log-fuller,log-raw-date,log-iso-date,show,show-tag,format,blame,blame-porcelain,blame-email
+zone-long         badTimezone              ok      badTimezone              | =                              ok                             3/12      log,log-fuller,log-raw-date,log-iso-date,show,show-tag,format,blame,blame-email
+zone-short        badTimezone              ok      badTimezone              | refused (fsck identity diagnos refused (fsck identity diagnos 3/12      log,log-fuller,log-raw-date,log-iso-date,show,show-tag,format,blame,blame-email
+zone-unsigned     badTimezone              ok      badTimezone              | refused (fsck identity diagnos refused (fsck identity diagnos 2/12      log,log-fuller,log-raw-date,log-iso-date,show,show-tag,format,blame,blame-porcelain,blame-email
+zone-minutes      ok                       ok      ok                       | refused (fsck identity diagnos refused (fsck identity diagnos 3/12      log,log-fuller,log-raw-date,log-iso-date,show,show-tag,format,blame,blame-email
+lt-in-name        missingSpaceBeforeEmail  ok      missingSpaceBeforeEmail  | refused (fsck identity diagnos refused (fsck identity diagnos 2/12      log,log-fuller,log-raw-date,log-iso-date,show,show-tag,format,blame,blame-porcelain,blame-email
+gt-in-name        badName                  ok      badName                  | refused (fsck identity diagnos refused (fsck identity diagnos 11/12     format
+lt-in-email       badEmail                 ok      badEmail                 | refused (fsck identity diagnos refused (fsck identity diagnos 8/12      format,blame,blame-porcelain,blame-email
+gt-in-email       missingSpaceBeforeDate   ok      missingSpaceBeforeDate   | refused (fsck identity diagnos refused (fsck identity diagnos 3/12      log,log-fuller,log-raw-date,log-iso-date,show,show-tag,format,blame-porcelain,blame-email
+trailing          badTimezone              ok      badTimezone              | refused (fsck identity diagnos refused (fsck identity diagnos 2/12      log,log-fuller,log-raw-date,log-iso-date,show,show-tag,format,blame,blame-porcelain,blame-email
+latin1-name       ok                       ok      ok                       | refused (fsck identity bytes)  refused (fsck identity bytes)  2/12      log,log-fuller,log-raw-date,log-iso-date,show,show-tag,format,blame,blame-porcelain,blame-email
+cr                badTimezone              ok      badTimezone              | =                              ok                             11/12     format
+name-spaces       ok                       ok      ok                       | =                              =                              5/12      log,log-fuller,log-raw-date,log-iso-date,show,show-tag,format
+name-leading      ok                       ok      ok                       | =                              =                              11/12     format
+name-blank        ok                       ok      ok                       | refused (fsck identity diagnos refused (fsck identity diagnos 5/12      log,log-fuller,log-raw-date,log-iso-date,show,show-tag,format
+name-utf8         ok                       ok      ok                       | =                              =                              10/12     format,blame
+tab-email         missingSpaceBeforeEmail  ok      missingSpaceBeforeEmail  | =                              ok                             3/12      log,log-fuller,log-raw-date,log-iso-date,show,show-tag,format,blame,blame-porcelain
+tab-date          missingSpaceBeforeDate   ok      missingSpaceBeforeDate   | =                              ok                             11/12     format
+email-open        badEmail                 ok      badEmail                 | refused (fsck identity diagnos refused (fsck identity diagnos 2/12      log,log-fuller,log-raw-date,log-iso-date,show,show-tag,format,blame,blame-porcelain,blame-email
+email-space       ok                       ok      ok                       | =                              =                              11/12     format
+email-latin1      ok                       ok      ok                       | refused (fsck identity bytes)  refused (fsck identity bytes)  2/12      log,log-fuller,log-raw-date,log-iso-date,show,show-tag,format,blame,blame-porcelain,blame-email
+email-gt-gt       missingSpaceBeforeDate   ok      missingSpaceBeforeDate   | refused (fsck identity diagnos refused (fsck identity diagnos 3/12      log,log-fuller,log-raw-date,log-iso-date,show,show-tag,format,blame-porcelain,blame-email
+bare-empty        missingNameBeforeEmail   ok      missingNameBeforeEmail   | refused (fsck identity diagnos refused (fsck identity diagnos 2/12      log,log-fuller,log-raw-date,log-iso-date,show,show-tag,format,blame,blame-porcelain,blame-email
+date-zone-glued   badDate                  ok      badDate                  | refused (fsck identity diagnos refused (fsck identity diagnos 2/12      log,log-fuller,log-raw-date,log-iso-date,show,show-tag,format,blame,blame-porcelain,blame-email
+date-zone-spaces  badTimezone              ok      badTimezone              | =                              ok                             11/12     format
+no-zone           badDate                  ok      badDate                  | refused (fsck identity diagnos refused (fsck identity diagnos 2/12      log,log-fuller,log-raw-date,log-iso-date,show,show-tag,format,blame,blame-porcelain,blame-email
+date-space-only   badDate                  ok      badDate                  | refused (fsck identity diagnos refused (fsck identity diagnos 2/12      log,log-fuller,log-raw-date,log-iso-date,show,show-tag,format,blame,blame-porcelain,blame-email
+zone-space-after  badTimezone              ok      badTimezone              | =                              ok                             11/12     format
+double-zero       zeroPaddedDate           ok      zeroPaddedDate           | =                              ok                             11/12     format
+max-i64           ok                       ok      ok                       | =                              =                              3/12      log,log-fuller,log-raw-date,log-iso-date,show,show-tag,format,blame,blame-email
+max-u64           badDateOverflow          ok      badDateOverflow          | refused (fsck identity diagnos refused (fsck identity diagnos 2/12      log,log-fuller,log-raw-date,log-iso-date,show,show-tag,format,blame,blame-porcelain,blame-email
+year-9999         ok                       ok      ok                       | =                              =                              3/12      log,log-fuller,log-raw-date,log-iso-date,show,show-tag,format,blame,blame-email
+year-10000        ok                       ok      ok                       | =                              =                              3/12      log,log-fuller,log-raw-date,log-iso-date,show,show-tag,format,blame,blame-email
+zone-max          ok                       ok      ok                       | refused (fsck identity diagnos refused (fsck identity diagnos 3/12      log,log-fuller,log-raw-date,log-iso-date,show,show-tag,format,blame,blame-email
+zone-west         ok                       ok      ok                       | =                              =                              11/12     format
+zone-negzero      ok                       ok      ok                       | =                              =                              4/12      log,log-fuller,log-raw-date,show,show-tag,format,blame,blame-email
+zone-letter       badTimezone              ok      badTimezone              | refused (fsck identity diagnos refused (fsck identity diagnos 2/12      log,log-fuller,log-raw-date,log-iso-date,show,show-tag,format,blame,blame-porcelain,blame-email
+zone-five         badTimezone              ok      badTimezone              | refused (fsck identity diagnos refused (fsck identity diagnos 3/12      log,log-fuller,log-raw-date,log-iso-date,show,show-tag,format,blame,blame-email
+zone-one          badTimezone              ok      badTimezone              | refused (fsck identity diagnos refused (fsck identity diagnos 3/12      log,log-fuller,log-raw-date,log-iso-date,show,show-tag,format,blame,blame-email
+zone-minus-five   badTimezone              ok      badTimezone              | refused (fsck identity diagnos refused (fsck identity diagnos 3/12      log,log-fuller,log-raw-date,log-iso-date,show,show-tag,format,blame,blame-email
+spaces-padded     zeroPaddedDate           ok      zeroPaddedDate           | =                              ok                             11/12     format
+space-tab-date    ok                       ok      ok                       | =                              =                              11/12     format
+zero-no-zone      zeroPaddedDate           ok      zeroPaddedDate           | refused (fsck identity diagnos refused (fsck identity diagnos 2/12      log,log-fuller,log-raw-date,log-iso-date,show,show-tag,format,blame,blame-porcelain,blame-email
+over-west         badDateOverflow          ok      badDateOverflow          | refused (fsck identity diagnos refused (fsck identity diagnos 2/12      log,log-fuller,log-raw-date,log-iso-date,show,show-tag,format,blame,blame-porcelain,blame-email
+far-year          ok                       ok      ok                       | =                              =                              3/12      log,log-fuller,log-raw-date,log-iso-date,show,show-tag,format,blame,blame-email
+gmtime-edge       ok                       ok      ok                       | =                              =                              3/12      log,log-fuller,log-raw-date,log-iso-date,show,show-tag,format,blame,blame-email
+gmtime-past       ok                       ok      ok                       | =                              =                              3/12      log,log-fuller,log-raw-date,log-iso-date,show,show-tag,format,blame,blame-email
+
+Writing (git, then den):
+  email-empty-config       git: ok                           author Den Tester <> 1700000000 +0000    den: refused (commit missing author identity)
+  name-empty-config        git: x128 fatal: empty ident name (for <den@exampl                                          den: refused (commit missing author identity)
+  email-empty-env          git: ok                           author Den Tester <> 1700000000 +0000    den: refused (commit missing author identity)
+  name-empty-env           git: x128 fatal: empty ident name (for <den@exampl                                          den: refused (commit missing author identity)
+  author-empty-email       git: ok                           author Some One <> 1700000000 +0000      den: x128 fatal: invalid_identity
+  author-empty-name        git: x128 fatal: empty ident name (for <a@example.                                          den: x128 fatal: invalid_identity
+  name-brackets-config     git: ok                           author Joe Q <den@example.invalid> 1700000000 +0000 den: =
+  commit-tree-email-empty  git: ok                           author Den Tester <> 1700000000 +0000    den: refused (commit-tree identity/date)
+  commit-tree-name-empty   git: x128 fatal: empty ident name (for <den@exampl                                          den: refused (commit-tree identity/date)
+  tag-email-empty          git: ok                           tagger Den Tester <> 1700000000 +0000    den: refused (commit missing committer identity)
+  tag-name-empty           git: x128 fatal: empty ident name (for <den@exampl                                          den: refused (commit missing committer identity)
+
+Git fsck's text, every identity id at its default severity (ERROR), one line per
+object, exit 1; in these loose-object fixtures, in ascending object id order:
+  error in <commit|tag> <id>: <msgId>: invalid author/committer line - <what>
+    badDate                  bad date
+    badDateOverflow          date causes integer overflow
+    badEmail                 bad email
+    badName                  bad name
+    badTimezone              bad time zone
+    missingEmail             missing email
+    missingNameBeforeEmail   missing space before email
+    missingSpaceBeforeDate   missing space before date
+    missingSpaceBeforeEmail  missing space before email
+    zeroPaddedDate           zero-padded date
+With transfer.fsckObjects=true, git clone refuses at the first such object, exit 128:
+  error: object <id>: <msgId>: invalid author/committer line - <what>
+  fatal: fsck error in packed object
+  fatal: fetch-pack: invalid index-pack output
+
+The checks, as the 62 shapes show them (black box; the first that applies):
+  1. the value starts with `<`: missingNameBeforeEmail;
+  2. before any `<`, a `>`: badName; no `<` at all: missingEmail;
+  3. the byte before the first `<` is not a space: missingSpaceBeforeEmail;
+  4. after it, a `<` or the end before any `>`: badEmail;
+  5. the byte after that `>` is not a space: missingSpaceBeforeDate;
+  6. then any whitespace; `0` followed by anything but a space: zeroPaddedDate;
+  7. no digit: badDate; digits above 9223372036854775807: badDateOverflow;
+  8. the digits not followed by one space: badDate;
+  9. not `+` or `-`, four digits and the end of the line: badTimezone.
