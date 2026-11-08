@@ -13,7 +13,22 @@ fn remote_identity(repo: repository.Repo) -> str ! repository.RepoErrors {
             prefix: "",
         }
     } else {
-        worktree.discover(".") else |e| { return Unsupported("remote context: {e}") }
+        worktree.discover(".") else |e| match e {
+            // A submodule fetched where it has only its repository (vc25):
+            // the identity needs only configuration, as in a bare repository.
+            Fatal(message) => {
+                if message != "current directory is outside the work tree" {
+                    return Unsupported("remote context: {e}")
+                }
+                worktree.Context {
+                    repo: copy repo,
+                    root: copy repo.gitdir,
+                    cwd: copy repo.gitdir,
+                    prefix: "",
+                }
+            },
+            _ => { return Unsupported("remote context: {e}") },
+        }
     }
     let identity = commit.environment_identity(ctx, "COMMITTER", "") else |e| {
         return Unsupported("remote identity: {e}")
