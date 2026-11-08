@@ -419,7 +419,97 @@ def family_clone():
         pass
 
 
-FAMILIES = {'read': family_read, 'status': family_status, 'diff': family_diff, 'clone': family_clone}
+def hostile_world(text, links, missing=False):
+    """remotes plus a bare superproject h.git whose .gitmodules is TEXT and
+    whose gitlinks are LINKS (paths), all at leaf's first commit (or an
+    absent commit when MISSING); a plain clone of it at c."""
+    def build(w):
+        remotes(w)
+        leaf = 'file://' + str(w / 'leaf.git')
+        g('init', '-q', '--bare', str(w / 'h.git'), cwd=w)
+        src = w / 'hsrc'
+        g('init', '-q', str(src), cwd=w)
+        write(src / 'x', 'x\n')
+        g('add', 'x', cwd=src)
+        if text is not None:
+            write(src / '.gitmodules', text.replace('LEAF', leaf))
+            g('add', '.gitmodules', cwd=src)
+        first = g('rev-list', '--max-parents=0', 'main', cwd=w / 'leaf.git').strip()
+        for link in links:
+            g('update-index', '--add', '--cacheinfo', '160000,%s,%s' % ('1' * 40 if missing else first, link), cwd=src)
+        g('commit', '-q', '-m', 'hostile', cwd=src)
+        g('push', '-q', str(w / 'h.git'), 'main', cwd=src)
+        shutil.rmtree(src)
+        g('clone', '-q', 'file://' + str(w / 'h.git'), 'c', cwd=w)
+    return build
+
+
+HOSTILE = {
+    'escape-path': ('[submodule "e"]\n\tpath = ../escape\n\turl = LEAF\n', ['inside']),
+    'dotdot-name': ('[submodule "../evil"]\n\tpath = evil\n\turl = LEAF\n', ['evil']),
+    'dotdot-name-mid': ('[submodule "a/../../evil"]\n\tpath = evil\n\turl = LEAF\n', ['evil']),
+    'dotdot-name-three-keys': ('[submodule "../evil"]\n\tpath = evil\n\turl = LEAF\n\tbranch = main\n', ['evil']),
+    'dotdot-name-url-only': ('[submodule "../evil"]\n\turl = LEAF\n', ['evil']),
+    'dash-url': ('[submodule "d"]\n\tpath = d\n\turl = -oProxyCommand=false\n', ['d']),
+    'dash-path': ('[submodule "d"]\n\tpath = -d\n\turl = LEAF\n', ['-d']),
+    'no-entry': (None, ['orphan']),
+    'stale-entry': ('[submodule "s"]\n\tpath = s\n\turl = LEAF\n', []),
+    'invalid-config': ('[submodule "bad"\n\tpath = bad\n\turl = LEAF\n', ['bad']),
+    'invalid-config-no-gitlink': ('[submodule "bad"\n\tpath = bad\n\turl = LEAF\n', []),
+    'invalid-update': ('[submodule "u"]\n\tpath = u\n\turl = LEAF\n\tupdate = !echo hi\n', ['u']),
+    'invalid-fetch-recurse': ('[submodule "f"]\n\tpath = f\n\turl = LEAF\n\tfetchRecurseSubmodules = maybe\n', ['f']),
+    'invalid-ignore': ('[submodule "i"]\n\tpath = i\n\turl = LEAF\n\tignore = bogus\n', ['i']),
+    'case-collide': ('[submodule "A"]\n\tpath = A\n\turl = LEAF\n[submodule "a"]\n\tpath = a\n\turl = LEAF\n', ['A', 'a']),
+    'missing-url': ('[submodule "m"]\n\tpath = m\n', ['m']),
+    'name-slash': ('[submodule "a/b"]\n\tpath = deep/b\n\turl = LEAF\n', ['deep/b']),
+    'comments-and-blank': ('[submodule "s"]\n\tpath = s\n\t# a comment\n\turl = LEAF\n\n[submodule "t"]\n\tpath = t\n\turl = LEAF\n', ['s', 't']),
+}
+
+
+def family_hostile():
+    for name, (text, links) in HOSTILE.items():
+        seed('hostile-' + name, hostile_world(text, links))
+        h = 'file://' + str(root / 'world/h.git')
+        compare('hostile-%s-clone' % name, ['clone', '--recurse-submodules', h, 'd'], 'hostile-' + name, extra=ALLOW_FILE)
+        for argv in (['submodule', 'update', '--init'], ['status', '--porcelain'], ['submodule', 'status'],
+                     ['submodule', 'init'], ['diff'], ['status']):
+            compare('hostile-%s-%s' % (name, '-'.join(x.strip('-') for x in argv)), argv, 'hostile-' + name,
+                    cwd='c', extra=ALLOW_FILE)
+    seed('hostile-missing', hostile_world('[submodule "m"]\n\tpath = m\n\turl = LEAF\n', ['m'], missing=True))
+    compare('hostile-missing-commit-clone', ['clone', '--recurse-submodules', 'file://' + str(root / 'world/h.git'), 'd'],
+            'hostile-missing', extra=ALLOW_FILE)
+    compare('hostile-missing-commit-update', ['submodule', 'update', '--init'], 'hostile-missing', cwd='c', extra=ALLOW_FILE)
+
+
+def family_transport():
+    seed('remotes', remotes)
+    top = 'file://' + str(root / 'world/top.git')
+    rewrite = dict(ALLOW_FILE)
+    rewrite.update({'GIT_CONFIG_COUNT': '2', 'GIT_CONFIG_KEY_1': 'url.file://%s/.insteadOf' % (root / 'world'),
+                    'GIT_CONFIG_VALUE_1': 'https://forge.example/o/'})
+    def https_urls(w):
+        recursive_clone(w)
+        c = w / 'c'
+        g('config', '-f', '.gitmodules', 'submodule.abs.url', 'https://forge.example/o/leaf.git', cwd=c)
+        g('commit', '-q', '-am', 'https url', cwd=c)
+        g('push', '-q', 'origin', 'HEAD:main', cwd=c)
+        shutil.rmtree(c)
+    seed('https-urls', https_urls)
+    compare('transport-insteadof-clone', ['clone', '--recurse-submodules', top, 'c'], 'https-urls', extra=rewrite)
+    compare('transport-insteadof-unrewritten', ['clone', '-q', '--recurse-submodules', top, 'c'], 'https-urls',
+            extra=dict(ALLOW_FILE, GIT_CONFIG_COUNT='2', GIT_CONFIG_KEY_1='url.zzz://never/.insteadOf',
+                       GIT_CONFIG_VALUE_1='https://nomatch.example/'))
+    compare('transport-file-never', ['clone', '--recurse-submodules', top, 'c'], 'remotes',
+            extra={'GIT_CONFIG_COUNT': '1', 'GIT_CONFIG_KEY_0': 'protocol.file.allow', 'GIT_CONFIG_VALUE_0': 'never'})
+    compare('transport-file-user-from-user-0', ['clone', '-q', top, 'c'], 'remotes', extra={'GIT_PROTOCOL_FROM_USER': '0'})
+    compare('transport-file-user-top-level', ['clone', '-q', top, 'c'], 'remotes')
+    compare('transport-protocol-allow-always', ['clone', '-q', '--recurse-submodules', top, 'c'], 'remotes',
+            extra={'GIT_CONFIG_COUNT': '1', 'GIT_CONFIG_KEY_0': 'protocol.allow', 'GIT_CONFIG_VALUE_0': 'always'})
+    compare('transport-local-path-recurse', ['clone', '-q', '--recurse-submodules', str(root / 'world/top.git'), 'c'],
+            'remotes', extra=ALLOW_FILE)
+
+
+FAMILIES = {'read': family_read, 'status': family_status, 'diff': family_diff, 'clone': family_clone, 'hostile': family_hostile, 'transport': family_transport}
 
 try:
     FAMILIES[a.family]()
