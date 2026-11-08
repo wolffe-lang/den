@@ -100,7 +100,7 @@ fn recorded(repo: repository.Repo, before: List[str]) -> Map[str, List[str]] ! w
                 trees[key] = worktree.flatten_tree(repo, parent)?
                 have[key] = true
             }
-            (mut parents).push(trees[key] else List[worktree.FlatEntry]())
+            (mut parents).push(copy trees[key] else List[worktree.FlatEntry]())
         }
         for entry in mine {
             if entry.mode != 0o160000 { continue }
@@ -162,7 +162,7 @@ pub fn recurse(before: List[str], cli: str, quiet: bool) -> int ! worktree.WorkE
         }
         var ids = List[str]()
         if mode == "on-demand" {
-            for hex in wanted[module.path] else List[str]() {
+            for hex in copy wanted[module.path] else List[str]() {
                 if !present(gitdir, hex) { (mut ids).push(hex) }
             }
             if ids.len == 0 { continue }
