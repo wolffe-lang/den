@@ -1595,6 +1595,10 @@ never changes its bytes or its id.
   (repairing bytes that are not UTF-8, with Git's warning); amend re-reads the
   author as Git does; `commit.empty_name_check` is Git's refusal of an empty
   or disallowed name.
+- `revset.collect` with a count and no exclusion stops `walk.collect` after the
+  count plus the skip: the walk's order does not depend on how far it goes, so
+  `log -1 5f453914` on a clone of i3 reads one commit, not its 6,060
+  ancestors.
 
 `tools/identity-test.py` (in `tools/check-commit`, both tiers) holds every
 row to the pinned Git byte for byte: read, format, fsck, wire, replay and
