@@ -22,7 +22,10 @@ fn linked_name(bytes: List[byte]) -> str ! object.StoreErrors {
     oid.hex(id)?
 }
 
-/// Validate shared tree/header/identity formats and return typed links.
+/// Validate shared tree and header formats and return typed links. vc26:
+/// identity lines are not validated here: receiving, serving and pushing
+/// take every identity Git takes with its defaults (transfer.fsckObjects is
+/// false), and `fsck` reports them through identity_diagnostic.
 pub fn links(body: object.Object) -> List[Link] ! object.StoreErrors {
     var out = List[Link]()
     if body.kind == "blob" { return out }
@@ -62,13 +65,6 @@ pub fn links(body: object.Object) -> List[Link] ! object.StoreErrors {
                 return Unsupported("fsck tag type")
             }
             (mut out).push(Link { name: linked_name(field.value)?, kind: kind })
-        } else if field.key == "author" || field.key == "committer" || field.key == "tagger" {
-            let text = str_from_utf8(field.value) else |_| {
-                return Unsupported("fsck identity bytes")
-            }
-            let _ = commit_format.parse_identity(text) else |_| {
-                return Unsupported("fsck identity diagnostics")
-            }
         } else if body.kind == "tag" && field.key == "tag" {
             let text = str_from_utf8(field.value) else |_| {
                 return Unsupported("fsck tag name bytes")
@@ -77,6 +73,31 @@ pub fn links(body: object.Object) -> List[Link] ! object.StoreErrors {
         }
     }
     out
+}
+
+/// Git fsck's line for the first author, committer or tagger line of a
+/// commit or tag that it reports (every identity id is an ERROR by
+/// default), or "" (notes/vc26-evidence/measured-base.txt).
+pub fn identity_diagnostic(name: str, body: object.Object) -> str ! object.StoreErrors {
+    if body.kind != "commit" && body.kind != "tag" { return "" }
+    let parsed = if body.kind == "commit" {
+        object.parse_commit(body.data, "sha1") else |_| {
+            return Unsupported("fsck malformed commit diagnostics")
+        }
+    } else {
+        object.parse_tag(body.data, "sha1") else |_| {
+            return Unsupported("fsck malformed tag diagnostics")
+        }
+    }
+    for field in parsed.fields {
+        if field.key == "author" || field.key == "committer" || field.key == "tagger" {
+            let (id, what) = commit_format.identity_problem(field.value)
+            if id != "" {
+                return "error in {body.kind} {name}: {id}: invalid author/committer line - {what}"
+            }
+        }
+    }
+    ""
 }
 
 fn reflog_roots(path: str, depth: int, mut roots: Map[str, bool]) -> () ! object.StoreErrors {
@@ -187,6 +208,40 @@ fn checked_reflogs(
     }
 }
 
+// Git fsck's order for identity lines, as measured: loose objects first,
+// by object directory (one line per directory, or a named refusal: within
+// a directory the order is the file system's), then one pack's objects in
+// pack order.
+fn identity_order(items: Inventory, lines: Map[str, str]) -> List[str] ! object.StoreErrors {
+    var loose = List[str](), loose_set = Map[str, bool](), dirs = Map[str, bool]()
+    for name in items.loose {
+        if (lines[name] else "") == "" { continue }
+        if dirs[name[0..2]] else false {
+            return Unsupported("fsck identity diagnostics within one object directory")
+        }
+        dirs[name[0..2]] = true
+        loose_set[name] = true
+        (mut loose).push(copy name)
+    }
+    var out = List[str]()
+    for name in sorted_names(loose) { (mut out).push(copy lines[name] else "") }
+    var packs = 0
+    for path in items.indexes {
+        var found = false
+        for entry in pack.inspect(path)?.objects {
+            if (lines[entry.name] else "") == "" { continue }
+            if loose_set[entry.name] else false {
+                return Unsupported("fsck identity diagnostics for an object both loose and packed")
+            }
+            found = true
+            (mut out).push(copy lines[entry.name] else "")
+        }
+        if found { packs += 1 }
+    }
+    if packs > 1 { return Unsupported("fsck identity diagnostics across packs") }
+    out
+}
+
 fn fsck(args: List[str]) -> int ! object.StoreErrors {
     var dangling = true, logs = true
     for arg in args[1..] {
@@ -223,7 +278,7 @@ fn fsck(args: List[str]) -> int ! object.StoreErrors {
         if !(seen[name] else false) { seen[name] = true; (mut names).push(copy name) }
     }
     if names.len > 10000 { return Unsupported("fsck object count limit") }
-    var total = 0
+    var total = 0, identities = Map[str, str]()
     for name in names {
         let body = object.read_object(repo, oid.parse("sha1", name)?, 16777216) else |_| {
             corrupt_diagnostic(repo, name, mut messages)?
@@ -232,6 +287,8 @@ fn fsck(args: List[str]) -> int ! object.StoreErrors {
         }
         if body.data.len > 134217728 - total { return Unsupported("fsck payload limit") }
         total += body.data.len
+        let identity = identity_diagnostic(name, body)?
+        if identity != "" { identities[name] = identity }
         kinds[name] = copy body.kind
         for link in links(body)? {
             (mut all_links).push(ValidationLink {
@@ -361,6 +418,13 @@ fn fsck(args: List[str]) -> int ! object.StoreErrors {
         return Unsupported("fsck multiple dangling or missing object order")
     }
     if broken.len > 1 { return Unsupported("fsck multiple broken-link order") }
+    if identities.len > 0 {
+        if messages.len > 0 {
+            return Unsupported("fsck identity diagnostics beside other diagnostics")
+        }
+        for line in identity_order(items, identities)? { eprint(line) }
+        status |= 1
+    }
     for message in messages { eprint(message) }
     if default_references == 0 { eprint("notice: No default references") }
     for line in broken { print(line) }
