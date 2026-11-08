@@ -1,7 +1,9 @@
 use std.fs
+use gitmodules
 use index
 use object
 use oid
+use repository
 use revision
 
 /// Removal controls; force bypasses content checks but not index format checks.
@@ -87,7 +89,6 @@ pub fn remove_paths(
                 return Fatal("not removing '{text(path)?}' recursively without -r")
             }
             if index.stage(entry) != 0 { return unmerged }
-            if entry.stat[6] == 0o160000 { return Unsupported("submodule removal") }
             matched = true
             var seen = false
             for prior in targets { if compare(prior, entry.path) == 0 { seen = true; break } }
@@ -104,9 +105,15 @@ pub fn remove_paths(
             let previous = flat_at(snapshot.head_entries, path)
             let file = file_at(snapshot.files, path)
             let same_head = previous >= 0 && same_entry(entry, snapshot.head_entries[previous])
-            let same_disk = file >= 0 &&
+            var same_disk = file >= 0 &&
                 entry.stat[6] == snapshot.files[file].mode &&
                 oid.equal(entry.id, snapshot.files[file].id)
+            // A submodule is locally modified when its HEAD moved or its
+            // worktree has modified content (vc25 probe 2, rm-dirty).
+            if entry.stat[6] == 0o160000 && file >= 0 {
+                let state = submodule_state(ctx, text(path)?, entry.id, "untracked")?
+                same_disk = oid.equal(state.head, entry.id) && !state.modified
+            }
             if options.cached {
                 if !same_head && !same_disk && entry.extended & 0x2000 == 0 {
                     (mut both).push(copy path)
@@ -131,14 +138,77 @@ pub fn remove_paths(
         problems += remove_error(local, "local", options.cached)?
     }
     if problems != "" { return Failure(problems) }
+    var removed_modules = List[str]()
     for path in targets {
         if !options.dry_run {
-            if !options.cached { remove_file(ctx, path)? }
+            let at = index_at(value.entries, path)
+            let gitlink = at >= 0 && value.entries[at].stat[6] == 0o160000
+            if !options.cached {
+                if gitlink {
+                    remove_submodule_worktree(ctx, path)?
+                    (mut removed_modules).push(text(path)?)
+                } else {
+                    remove_file(ctx, path)?
+                }
+            }
             value = index.remove_path(value, path)?
         }
     }
+    // git-rm(1) of a submodule also drops its .gitmodules section and stages
+    // the file (left empty when it was the last); .git/modules stays.
+    if removed_modules.len > 0 { drop_gitmodules_sections(ctx, mut value, removed_modules)? }
     targets
 }
+
+// A submodule's worktree goes whole; its gitdir under .git/modules stays.
+fn remove_submodule_worktree(ctx: Context, path: List[byte]) -> () ! WorkErrors {
+    safe_parents(ctx, path, false) else |e| match e {
+        not_found => { return },
+        _ => { return Fatal("cannot remove '{text(path)?}': unsafe parent") },
+    }
+    let full = absolute(ctx, path)?
+    let record = fs_lstat(full) else |e| match e {
+        not_found => { return },
+        denied => { return denied },
+        io => { return io },
+    }
+    if record[0] != 1 { return remove_file(ctx, path)? }
+    if fs.is_dir("{full}/.git") { return Unsupported("rm of an old-form submodule with its own .git directory") }
+    fs.remove_dir_all(full)?
+    clean_parents(ctx, path)
+}
+
+fn drop_gitmodules_sections(ctx: Context, mut value: index.Index, paths: List[str]) -> () ! WorkErrors {
+    let file = "{ctx.root}/.gitmodules"
+    if !fs.is_file(file) { return }
+    let parsed = modules(ctx)?
+    let raw = str_from_utf8(repository.read_bytes(file, 1048576)?) else |_| { return invalid }
+    var names = List[str]()
+    for path in paths {
+        let at = gitmodules.by_path(parsed, path)
+        if at >= 0 { (mut names).push(copy parsed.modules[at].name) }
+    }
+    if names.len == 0 { return }
+    var out = "", skipping = false
+    for line in raw.split("\n") {
+        let trimmed = line.trim()
+        if trimmed.starts_with("[") {
+            skipping = false
+            for name in names { if trimmed == "[submodule \"{name}\"]" { skipping = true } }
+        }
+        if !skipping { out = "{out}{line}\n" }
+    }
+    if out.ends_with("\n\n") || out == "\n" { out = out[0..out.len - 1] }
+    fs.write_text(file, out) else |_| { return io }
+    let state = read_file(ctx, ".gitmodules".bytes(), [])?
+    let _ = object.write_object(ctx.repo, "blob", state.data)?
+    let at = index_at(value.entries, ".gitmodules".bytes())
+    var prior = List[index.Entry]()
+    if at >= 0 { (mut prior).push(copy value.entries[at]) }
+    let entry = entry_for(state, prior, add_options())?
+    value = index.replace_entry(value, entry)?
+}
+
 
 // The temporary is exclusively ours; publication replaces the final link itself,
 // not its referent. Ancestor validation is lstat-based, not a portable openat API.
