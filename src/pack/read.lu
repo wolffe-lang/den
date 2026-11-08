@@ -365,9 +365,10 @@ pub fn session_open(gitdir: str) -> Session ! PackErrors {
     s
 }
 
-/// read_object's answer through an opened session's indexes, unchanged.
+/// read_object's answer through an opened session's indexes, unchanged; an
+/// unopened session answers through read_object itself.
 pub fn session_peek(s: Session, name: str, cap: int) -> Body ! PackErrors {
-    if !s.loaded { return Unsupported("pack session not opened") }
+    if !s.loaded { return read_object(s.gitdir, name, cap)? }
     for i in 0..s.paths.len {
         let slot = slot_named(s.indexes[i], name)
         if slot < 0 { continue }
