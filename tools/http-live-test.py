@@ -53,6 +53,37 @@ SECRETS = ('DEN_HTTP_TOKEN', 'DEN_HTTP_USER', 'DEN_LIVE_HTTPS_URL', 'DEN_LIVE_HT
            'GIT_ASKPASS', 'SSH_ASKPASS', 'DEN_TLS_ROOTS', 'GIT_SSL_CAINFO', 'GIT_SSL_CAPATH')
 
 
+def moved(before, after):
+    """Whether the remote's refs moved between two `ls-remote` listings (hex
+    stdout), as the clone rows compare them."""
+    return before != after
+
+
+def guard_selftest():
+    """The guard holds what a clone takes. A change GitHub makes outside it
+    (refs/pull/*, which no clone fetches) must not count as moved; a branch or
+    tag that moves must."""
+    base = b'1111111111111111111111111111111111111111\tHEAD\n' \
+        b'1111111111111111111111111111111111111111\trefs/heads/main\n' \
+        b'2222222222222222222222222222222222222222\trefs/pull/1/head\n' \
+        b'3333333333333333333333333333333333333333\trefs/tags/v1\n'
+    pull = base.replace(b'2222222222222222222222222222222222222222', b'4444444444444444444444444444444444444444') + \
+        b'5555555555555555555555555555555555555555\trefs/pull/2/head\n'
+    branch = base + b'6666666666666666666666666666666666666666\trefs/heads/lane\n'
+    tag = base.replace(b'3333333333333333333333333333333333333333', b'7777777777777777777777777777777777777777')
+    problems = []
+    if moved(base.hex(), pull.hex()):
+        problems.append('a refs/pull change counts as moved')
+    if not moved(base.hex(), branch.hex()):
+        problems.append('a new branch does not count as moved')
+    if not moved(base.hex(), tag.hex()):
+        problems.append('a moved tag does not count as moved')
+    print(('PASS ' if not problems else 'FAIL ') + 'http-live-guard' + ('' if not problems else ' ' + '; '.join(problems)),
+          flush=True)
+    if problems:
+        raise SystemExit(1)
+
+
 def pem_roots(path):
     """Concatenated DER from a PEM bundle, strictly per RFC 7468 section 2."""
     text = path.read_bytes()
@@ -159,6 +190,7 @@ def main():
     args = parser.parse_args()
     rows = args.rows.split(',')
     assert set(rows) <= {'read', 'self', 'push'} and rows, 'rows'
+    guard_selftest()
     root = Path(__file__).resolve().parent.parent
     git = str(Path(os.environ['DEN_GIT']).resolve())
     assert hashlib.sha256(Path(git).read_bytes()).hexdigest() == GIT_SHA256, 'pinned Git digest'
@@ -304,7 +336,7 @@ def main():
             if before['exit'] or after['exit'] or oracle['exit']:
                 why = 'pinned Git could not read the public repository'
                 break
-            if before['stdout'] != after['stdout']:
+            if moved(before['stdout'], after['stdout']):
                 why = 'public refs moved during the row'
                 continue
             fields = [field for field in ('exit', 'stdout', 'stderr') if candidate[field] != oracle[field]]
@@ -345,7 +377,7 @@ def main():
                         git_user=oracle['user'], bound_kib=SELF_RSS_KIB)
         if oracle['exit'] or before['exit'] or after['exit']:
             problems.append('pinned Git could not read den\'s repository')
-        elif before['stdout'] != after['stdout']:
+        elif moved(before['stdout'], after['stdout']):
             problems.append('den\'s refs moved during the row')
         for field in ('exit', 'stdout', 'stderr'):
             if candidate[field] != oracle[field]:
