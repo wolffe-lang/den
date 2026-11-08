@@ -259,7 +259,67 @@ def family_read():
                                    for x in argv), argv, 'moved', cwd='c')
 
 
-FAMILIES = {'read': family_read}
+def write(path, text):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text)
+
+
+def sub_commit(w, path, message):
+    c = w / 'c' / path
+    g('commit', '-q', '--allow-empty', '-m', message, cwd=c)
+
+
+# Worktree states of the recursive clone, each applied to both copies alike.
+STATES = {
+    'clean': lambda w: None,
+    'untracked': lambda w: write(w / 'c/mid/untracked.txt', 'u\n'),
+    'modified': lambda w: write(w / 'c/mid/mid.txt', 'mid\nchanged\n'),
+    'modified-untracked': lambda w: (write(w / 'c/mid/mid.txt', 'mid\nchanged\n'), write(w / 'c/mid/u', 'u\n')),
+    'new-commits': lambda w: sub_commit(w, 'mid', 'mid two'),
+    'new-commits-untracked': lambda w: (sub_commit(w, 'mid', 'mid two'), write(w / 'c/mid/u', 'u\n')),
+    'new-commits-modified': lambda w: (sub_commit(w, 'mid', 'mid two'), write(w / 'c/mid/mid.txt', 'x\n')),
+    'nested-untracked': lambda w: write(w / 'c/mid/deps/leaf/deep.txt', 'deep\n'),
+    'nested-new-commits': lambda w: sub_commit(w, 'mid/deps/leaf', 'leaf moved'),
+    'staged-in-sub': lambda w: (write(w / 'c/mid/s.txt', 's\n'), g('add', 's.txt', cwd=w / 'c/mid')),
+    'staged-gitlink': lambda w: (sub_commit(w, 'mid', 'mid two'), g('add', 'mid', cwd=w / 'c')),
+    'staged-and-dirty': lambda w: (sub_commit(w, 'mid', 'mid two'), g('add', 'mid', cwd=w / 'c'), write(w / 'c/mid/u', 'u\n')),
+    'two-subs': lambda w: (sub_commit(w, 'mid', 'mid two'), write(w / 'c/abs/u', 'u\n')),
+}
+STATUS_FORMS = [['status'], ['status', '-s'], ['status', '--porcelain'], ['status', '--porcelain', '-z'],
+                ['status', '-sb']]
+
+
+def family_status():
+    seed('clone', recursive_clone)
+    seed('plain', plain_clone)
+    for state, prepare in STATES.items():
+        for argv in STATUS_FORMS:
+            compare('status-%s-%s' % (state, '-'.join(x.strip('-') for x in argv[1:]) or 'long'), argv, 'clone',
+                    cwd='c', prepare=prepare)
+    for when in ('none', 'untracked', 'dirty', 'all'):
+        for state in ('modified-untracked', 'new-commits-untracked', 'untracked'):
+            compare('status-ignore-%s-%s' % (when, state), ['status', '-s', '--ignore-submodules=' + when],
+                    'clone', cwd='c', prepare=STATES[state])
+            compare('status-config-ignore-%s-%s' % (when, state), ['status', '-s'], 'clone', cwd='c',
+                    prepare=STATES[state], extra={'GIT_CONFIG_COUNT': '1', 'GIT_CONFIG_KEY_0': 'submodule.midname.ignore',
+                                                  'GIT_CONFIG_VALUE_0': when})
+        compare('status-gitmodules-ignore-%s' % when, ['status'], 'clone', cwd='c',
+                prepare=lambda w, when=when: (STATES['modified-untracked'](w),
+                                              g('config', '-f', '.gitmodules', 'submodule.midname.ignore', when, cwd=w / 'c')))
+    compare('status-ignore-bare-flag', ['status', '-s', '--ignore-submodules'], 'clone', cwd='c',
+            prepare=STATES['new-commits'])
+    for argv in STATUS_FORMS:
+        compare('status-unpopulated-' + ('-'.join(x.strip('-') for x in argv[1:]) or 'long'), argv, 'plain', cwd='c')
+    compare('status-unpopulated-moved', ['status'], 'plain', cwd='c',
+            prepare=lambda w: g('update-index', '--cacheinfo', '160000,' + '1' * 40 + ',mid', cwd=w / 'c'))
+    compare('status-unpopulated-missing-dir', ['status', '-s'], 'plain', cwd='c',
+            prepare=lambda w: (w / 'c/mid').rmdir())
+    compare('status-from-subdirectory', ['status'], 'clone', cwd='c/mid/deps',
+            prepare=STATES['nested-untracked'])
+    compare('status-inside-submodule', ['status', '-s'], 'clone', cwd='c/mid', prepare=STATES['nested-new-commits'])
+
+
+FAMILIES = {'read': family_read, 'status': family_status}
 
 try:
     FAMILIES[a.family]()
