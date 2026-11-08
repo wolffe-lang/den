@@ -79,7 +79,7 @@ pub fn request(command: str, args: List[str]) -> List[byte] ! Errors {
 
 /// Encode wants/haves/done and negotiated thin/OFS support; enforce identity and count bounds.
 pub fn fetch_request(wants: List[str], haves: List[str], thin: bool) -> List[byte] ! Errors {
-    if wants.len == 0 || wants.len > 10000 || haves.len > 10000 { return limit }
+    if wants.len == 0 { return limit }
     var args = List[str]()
     if thin { (mut args).push("thin-pack") }
     (mut args).push("ofs-delta")
@@ -97,7 +97,7 @@ pub fn parse_refs(data: List[byte]) -> List[Ref] ! Errors {
         let p = pktline.decode(data, pos)?
         pos = p.next
         if p.kind == 0 { if pos != data.len { return invalid }; return out }
-        if p.kind != 4 || out.len >= 10000 { return invalid }
+        if p.kind != 4 { return invalid }
         let parts = pktline.text(p.data)?.split(" ")
         if parts.len < 2 { return invalid }
         if parts[0] != "unborn" { object_id(parts[0])? }
