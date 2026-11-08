@@ -282,8 +282,10 @@ fn recursive_worktree_inner(args: List[str]) -> int ! worktree.WorkErrors {
     }
     // The superproject's report waits until the submodules have moved.
     env_set("DEN_DEFER_CHECKOUT_REPORT", "1") else |_| {}
+    env_set("DEN_SUBMODULE_RECURSING", "1") else |_| {}
     let status = refcmd.run(plain)
     env_set("DEN_DEFER_CHECKOUT_REPORT", "") else |_| {}
+    env_set("DEN_SUBMODULE_RECURSING", "") else |_| {}
     if status != 0 { return status }
     follow(worktree.discover(".")?, before, force || hard, false, "")?
     if args[0] != "reset" && !quiet && !force {

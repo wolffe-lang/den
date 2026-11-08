@@ -58,6 +58,9 @@ fn transition_path(
         // checkout, keeps no stat, as Git's does (vc25 work rows); only a
         // directory made here takes its lstat.
         if existed { return entry }
+        // So does one whose submodule a recursing command fills right after
+        // (vc25 recurse rows): only a clone's checkout keeps the lstat.
+        if (env_get("DEN_SUBMODULE_RECURSING") else "") == "1" { return entry }
         return index.entry_from_directory(record, path, desired.id, 0, 0)?
     }
     if mode != "mixed" {
