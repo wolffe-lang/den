@@ -485,5 +485,5 @@ fn object_id(text: str) -> bool {
 /// serve it (vc25).
 pub fn fetch_commit(repo: repository.Repo, url: str, sha: str) -> () ! object.StoreErrors {
     if !object_id(sha) { return invalid }
-    let _ = fetch_selected(repo, url, sha, true, false)?
+    let _ = fetch_selected(repo, url, sha, [], true, false)?
 }
