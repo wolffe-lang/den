@@ -15,17 +15,29 @@ struct Bits {
     bit: int,
 }
 
-// Never reads ahead into a following stream or the zlib checksum.
+// Never reads ahead into a following stream or the zlib checksum. Takes as
+// many bits from each byte as the width still wants (den#73: a bit at a time
+// was a large part of every read), least significant first, as before.
 fn bits(src: List[byte], mut r: Bits, width: int) -> int ! {truncated} {
     var value: int = 0
     var shift: int = 0
     while shift < width {
         if r.pos >= src.len { return truncated }
-        value = value | (src[r.pos] as int >> r.bit & 1) << shift
-        r.bit += 1
+        let avail = 8 - r.bit
+        let n = if width - shift < avail then width - shift else avail
+        value = value | (src[r.pos] as int >> r.bit & (1 << n) - 1) << shift
+        r.bit += n
         if r.bit == 8 { r.pos += 1; r.bit = 0 }
-        shift += 1
+        shift += n
     }
+    value
+}
+
+fn bit(src: List[byte], mut r: Bits) -> int ! {truncated} {
+    if r.pos >= src.len { return truncated }
+    let value = src[r.pos] as int >> r.bit & 1
+    r.bit += 1
+    if r.bit == 8 { r.pos += 1; r.bit = 0 }
     value
 }
 
@@ -64,11 +76,14 @@ fn tree(lengths: List[int], alphabet: int) -> Tree ! {invalid} {
             return invalid
         }
     }
-    var symbols = List[int]()
-    for n in 1..16 {
-        for i in 0..lengths.len {
-            if lengths[i] == n { (mut symbols).push(i) }
-        }
+    // Symbols by code length, then by value: each length's run starts after
+    // the shorter ones, and one pass over the lengths places every symbol.
+    var next = zeros(16)
+    for n in 2..16 { next[n] = next[n - 1] + counts[n - 1] }
+    var symbols = zeros(used)
+    for i in 0..lengths.len {
+        let n = lengths[i]
+        if n != 0 { symbols[next[n]] = i; next[n] += 1 }
     }
     Tree { counts: counts, symbols: symbols }
 }
@@ -79,7 +94,7 @@ fn symbol(src: List[byte], mut r: Bits, t: Tree) -> int ! {truncated, invalid} {
     var first = 0
     var offset = 0
     for n in 1..16 {
-        code = code * 2 + bits(src, mut r, 1)?
+        code = code * 2 + bit(src, mut r)?
         let delta = code - first
         if delta >= 0 && delta < t.counts[n] {
             return t.symbols[offset + delta]
@@ -90,18 +105,27 @@ fn symbol(src: List[byte], mut r: Bits, t: Tree) -> int ! {truncated, invalid} {
     invalid
 }
 
-fn fixed_lengths() -> List[int] {
-    var result = List[int]()
-    for i in 0..288 {
-        (mut result).push(if i < 144 then 8 else if i < 256 then 9 else if i < 280 then 7 else 8)
-    }
-    result
+// RFC 1951 §3.2.6's fixed literal/length code, read a bit at a time as
+// symbol reads it, without building its table for every block: 7-bit codes
+// 0-23 are 256-279, 8-bit 48-191 are 0-143 and 192-199 are 280-287, 9-bit
+// 400-511 are 144-255. Every 9-bit code is used, so no code is invalid here.
+fn fixed_symbol(src: List[byte], mut r: Bits) -> int ! {truncated, invalid} {
+    var code = 0
+    for _ in 0..7 { code = code * 2 + bit(src, mut r)? }
+    if code < 24 { return code + 256 }
+    code = code * 2 + bit(src, mut r)?
+    if code >= 48 && code < 192 { return code - 48 }
+    if code >= 192 && code < 200 { return code - 192 + 280 }
+    code = code * 2 + bit(src, mut r)?
+    code - 400 + 144
 }
 
-fn fixed_distances() -> List[int] {
-    var result = List[int]()
-    for _ in 0..32 { (mut result).push(5) }
-    result
+// The fixed distance code: five bits, the code itself (30 and 31 decode and
+// are refused by the caller, as through the table).
+fn fixed_distance(src: List[byte], mut r: Bits) -> int ! {truncated, invalid} {
+    var code = 0
+    for _ in 0..5 { code = code * 2 + bit(src, mut r)? }
+    code
 }
 
 fn code_order() -> List[int] {
@@ -194,12 +218,13 @@ fn compressed(
     mut out: List[byte],
     lt: Tree,
     dt: Tree,
+    fixed: bool,
     cap: int,
     window: int,
 ) -> () ! {invalid, truncated, limit} {
     let bases = length_base()
     loop {
-        let s = symbol(src, mut r, lt)?
+        let s = if fixed then fixed_symbol(src, mut r)? else symbol(src, mut r, lt)?
         if s < 256 {
             if out.len == cap { return limit }
             (mut out).push(s as byte)
@@ -209,7 +234,7 @@ fn compressed(
             if s > 285 { return invalid }
             let li = s - 257
             let length = bases[li] + bits(src, mut r, length_extra(li))?
-            let dc = symbol(src, mut r, dt)?
+            let dc = if fixed then fixed_distance(src, mut r)? else symbol(src, mut r, dt)?
             if dc > 29 { return invalid }
             let distance = distance_base(dc) + bits(src, mut r, distance_extra(dc))?
             if distance > out.len || distance > window { return invalid }
@@ -253,12 +278,11 @@ fn decode(
         } else {
             region block_tables {
                 if kind == 1 {
-                    let lt = tree(fixed_lengths(), 1)?
-                    let dt = tree(fixed_distances(), 2)?
-                    compressed(src, mut r, mut out, lt, dt, cap, window)?
+                    let none = Tree { counts: List[int](), symbols: List[int]() }
+                    compressed(src, mut r, mut out, none, none, true, cap, window)?
                 } else {
                     let (lt, dt) = dynamic(src, mut r)?
-                    compressed(src, mut r, mut out, lt, dt, cap, window)?
+                    compressed(src, mut r, mut out, lt, dt, false, cap, window)?
                 }
             }
         }
