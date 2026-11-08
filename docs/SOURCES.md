@@ -874,6 +874,22 @@ its path and time) and under a preloaded library counting its sync calls
 (`tools/sync-census.c`, own code); macOS `sample` profiles of den's own
 clone. No implementation source was read.
 
+The bounds at scale (den#73): `gitformat-pack(5)` (entry headers, OFS and REF
+deltas, the trailer), `gitprotocol-v2(5)` (`fetch`: `include-tag`,
+`ofs-delta`, the `packfile` section and its side band), `gitprotocol-pack(5)`
+(receive-pack's pack after the commands), `git-config(1)`'s
+`receive.unpackLimit` and `transfer.unpackLimit` (a push of 100 objects or
+more is kept as a pack) and `core.deltaBaseCacheLimit` (a cache of bases
+rebuilt along delta chains, the idea den's reader cache follows), RFC 1951
+(the Huffman construction, rewritten as two queues with the same lengths) and
+RFC 1950. Fixtures: 50,000 objects written by the pinned Git's fast-import
+from own generators, and i3's public history (https://github.com/i3/i3, a
+bundle of `next` at `8a97b0f`, 41,341 objects, pinned by its sha256), cloned
+offline from the bundle. Black boxes: the pinned Git and the field Git as
+clients and servers of every row, `git fsck`, `cat-file --batch-check` and
+`rev-list --objects`; macOS `sample` profiles of den's own processes. No
+implementation source was read.
+
 ## Submodules (vc25)
 
 Git 2.56.0 documentation, read as published text:
