@@ -42,6 +42,7 @@ tools/check-index
 tools/check-ignore
 tools/check-worktree
 tools/check-everyday
+tools/check-submodule
 tools/check-status-speed
 tools/check-commit
 tools/check-delta

@@ -132,6 +132,7 @@ leaf index tools/check-index
 leaf ignore tools/check-ignore
 leaf worktree tools/check-worktree
 leaf everyday tools/check-everyday
+leaf submodule tools/check-submodule
 leaf status-speed tools/check-status-speed
 leaf commit tools/check-commit
 leaf delta tools/check-delta
