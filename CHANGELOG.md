@@ -38,9 +38,14 @@
   pack's size, header and trailer binding without rescanning every offset. A
   reader whose packs cannot open up front still serves loose objects, and
   fails a packed read with the error a single read gives.
+- Checkout syncs (den#63): checked-out files and their directories are no
+  longer synced one by one, as the pinned Git syncs none and git-config(1)'s
+  core.fsync names no component for them; the received pack, refs, the index
+  and the configuration keep their syncs.
 - `tools/wire-gaps-test.py` holds push, clone, ls-remote, fetch and clone
-  memory to the pinned Git on every transport, and a pelt clone's CPU to at
-  most ten times the pinned Git's; `tools/rev-parse-test.py` holds rev-parse. The oracle's `rev-parse` case is a parity row and
+  memory to the pinned Git on every transport, a pelt clone's CPU to at most
+  ten times the pinned Git's, and that clone's sync calls to Git's (Linux);
+  `tools/rev-parse-test.py` holds rev-parse. The oracle's `rev-parse` case is a parity row and
   `rev-parse-parseopt` keeps the strict not-yet witness.
 
 ## Unreleased — den clones itself
