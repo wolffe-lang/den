@@ -1,0 +1,340 @@
+// --recurse-submodules and submodule.recurse for checkout, switch, reset and
+// pull (git-checkout(1), git-switch(1), git-reset(1), git-pull(1),
+// git-config(1) submodule.recurse), held to the pinned Git black-box (vc25's
+// recurse rows): after the superproject's own command, every active
+// submodule whose recorded commit changed follows it on a detached HEAD;
+// local changes it would overwrite refuse the checkout first, unless forced.
+// No implementation source consulted.
+use std.fs
+use gitmodules
+use index
+use oid
+use refcmd
+use refs
+use repository
+use revision
+use wiregit
+use worktree
+
+struct Link { path: str, id: oid.Oid }
+
+fn links_of(entries: List[worktree.FlatEntry]) -> List[Link] ! worktree.WorkErrors {
+    var out = List[Link]()
+    for entry in entries {
+        if entry.mode == 0o160000 { (mut out).push(Link { path: bytes_text(entry.path)?, id: copy entry.id }) }
+    }
+    out
+}
+
+fn index_links(ctx: worktree.Context) -> List[Link] ! worktree.WorkErrors {
+    var out = List[Link]()
+    for entry in worktree.read_index(ctx)?.entries {
+        if entry.stat[6] == 0o160000 && index.stage(entry) == 0 {
+            (mut out).push(Link { path: bytes_text(entry.path)?, id: copy entry.id })
+        }
+    }
+    out
+}
+
+fn link_at(links: List[Link], path: str) -> int {
+    for i in 0..links.len { if links[i].path == path { return i } }
+    -1
+}
+
+/// Whether ARGS ask for recursion: the flag, or submodule.recurse=true
+/// unless --no-recurse-submodules.
+pub fn wanted(args: List[str]) -> bool {
+    var flag = ""
+    for arg in args {
+        if arg == "--recurse-submodules" { flag = "yes" }
+        if arg == "--no-recurse-submodules" { flag = "no" }
+        if arg.starts_with("--recurse-submodules=") { flag = arg[21..] }
+    }
+    if flag == "no" { return false }
+    if flag != "" { return true }
+    let repo = repository.discover(".") else |_| { return false }
+    let value = repo.config["submodule.recurse"] else "false"
+    value == "true" || value == "yes" || value == "on" || value == "1"
+}
+
+fn stripped(args: List[str]) -> List[str] {
+    var out = List[str]()
+    for arg in args {
+        if arg == "--recurse-submodules" ||
+            arg == "--no-recurse-submodules" ||
+            arg.starts_with("--recurse-submodules=") {
+            continue
+        }
+        (mut out).push(copy arg)
+    }
+    out
+}
+
+// The commit a checkout, switch or hard reset moves to, as its operands name
+// it (a branch, else any revision; HEAD when none).
+fn target(ctx: worktree.Context, args: List[str]) -> oid.Oid ! worktree.WorkErrors {
+    var operands = List[str](), at = 1
+    while at < args.len {
+        let arg = args[at]
+        at += 1
+        if arg == "-b" || arg == "-B" || arg == "-c" || arg == "-C" { at += 1; continue }
+        if arg == "--orphan" { return Unsupported("{args[0]} --orphan with submodules") }
+        if arg.starts_with("-") { continue }
+        (mut operands).push(copy arg)
+    }
+    let name = if operands.len > 0 then copy operands[0] else "HEAD"
+    let branch = "refs/heads/{name}"
+    if args[0] != "reset" && refs.valid(branch) {
+        let found = refs.optional(ctx.repo, branch)?
+        if found.len == 1 { return copy found[0] }
+    }
+    let id = revision.resolve_typed(ctx.repo, name, "commit") else |_| {
+        return Unsupported("{args[0]} {name}")
+    }
+    revision.peel(ctx.repo, id, "commit")?
+}
+
+// Tracked files a switch of SUB to ID would overwrite: modified in the
+// worktree and changed between the submodule's HEAD and ID.
+fn conflicts(sub: worktree.Context, id: oid.Oid, shown: str) -> List[str] ! worktree.WorkErrors {
+    var out = List[str]()
+    var warnings = List[str]()
+    let snapshot = worktree.scan_status(sub, false, false, mut warnings)?
+    let head = worktree.head(sub)?
+    if head.commits.len != 1 { return out }
+    let before = worktree.flatten_tree(sub.repo, head.commits[0])?
+    let after = worktree.flatten_tree(sub.repo, id)?
+    for row in snapshot.rows {
+        if row.untracked || row.ignored || row.y == " " || row.sub != 0 { continue }
+        var old = -1, new = -1
+        for i in 0..before.len { if same_bytes(before[i].path, row.path) { old = i } }
+        for i in 0..after.len { if same_bytes(after[i].path, row.path) { new = i } }
+        let same = old >= 0 &&
+            new >= 0 &&
+            before[old].mode == after[new].mode &&
+            oid.equal(before[old].id, after[new].id) ||
+            old < 0 && new < 0
+        if !same { (mut out).push("{shown}/{bytes_text(row.path)?}") }
+    }
+    out
+}
+
+fn same_bytes(a: List[byte], b: List[byte]) -> bool {
+    if a.len != b.len { return false }
+    for i in 0..a.len { if a[i] != b[i] { return false } }
+    true
+}
+
+// Move every active submodule whose recorded commit changed from BEFORE to
+// the index's, detached; populate one newly recorded whose repository
+// exists; empty one no longer recorded. LINES prints `Submodule path`
+// lines, as pull's update does.
+fn follow(
+    ctx: worktree.Context,
+    before: List[Link],
+    force: bool,
+    lines: bool,
+    parent: str,
+) -> () ! worktree.WorkErrors {
+    let after = index_links(ctx)?
+    let parsed = worktree.modules(ctx)?
+    let repo = fresh(ctx.repo)?
+    for link in after {
+        let sub = sub_at(ctx, parsed, link)?
+        if !active(repo, sub)? { continue }
+        let gitdir = gitmodules.module_gitdir(repo.gitdir, sub.name)
+        if !fs.is_dir(gitdir) { continue }
+        let full = "{ctx.root}/{link.path}"
+        var whole = false
+        if !fs.exists("{full}/.git") {
+            fs.create_dir_all(full)?
+            write_gitfile(full, gitdir)?
+            whole = true
+        }
+        let sub_ctx = worktree.discover(full)?
+        let current = worktree.head(sub_ctx)?
+        let at = link_at(before, link.path)
+        let moved = at < 0 || !oid.equal(before[at].id, link.id)
+        let behind = current.commits.len != 1 ||
+            !oid.equal(current.commits[0], link.id) ||
+            !current.detached
+        if !whole && !(moved && behind) { continue }
+        checkout_detached(sub_ctx, link.id, whole, force)?
+        let shown = display(ctx, parent, link.path)
+        if lines { print("Submodule path '{shown}': checked out '{oid.hex(link.id)?}'") }
+        // The submodule's own submodules follow as Git's recursion does.
+        let nested_before = index_links_at(sub_ctx, current)?
+        follow(sub_ctx, nested_before, force, lines, shown)?
+    }
+    for link in before {
+        if link_at(after, link.path) >= 0 { continue }
+        let full = "{ctx.root}/{link.path}"
+        if fs.is_file("{full}/.git") { remove_submodule_tree(full)? }
+    }
+}
+
+// The gitlinks SUB recorded at its HEAD before it moved.
+fn index_links_at(sub: worktree.Context, head: worktree.Head) -> List[Link] ! worktree.WorkErrors {
+    if head.commits.len != 1 { return List[Link]() }
+    links_of(worktree.flatten_tree(sub.repo, head.commits[0])?)
+}
+
+fn sub_at(
+    ctx: worktree.Context,
+    parsed: gitmodules.Parsed,
+    link: Link,
+) -> Sub ! worktree.WorkErrors {
+    for sub in submodules(ctx, parsed)? { if sub.path == link.path { return sub } }
+    Unsupported("submodule at {link.path}")
+}
+
+// A submodule dropped from the superproject's tree: its worktree goes, its
+// repository under .git/modules stays (vc25 recurse rows).
+fn remove_submodule_tree(full: str) -> () ! worktree.WorkErrors {
+    fs.remove_dir_all(full)?
+}
+
+/// `checkout`, `switch` or `reset` with submodule recursion.
+pub fn recursive_worktree(args: List[str]) -> int {
+    recursive_worktree_inner(args) else |e| match e {
+        Fatal(message) => { eprint("fatal: {message}"); 128 },
+        Failure(message) => { eprint("error: {message}"); 1 },
+        Unsupported(feature) => { eprint("den: not yet implemented: {feature}"); 2 },
+        _ => { eprint("fatal: den: {e}"); 128 },
+    }
+}
+
+fn recursive_worktree_inner(args: List[str]) -> int ! worktree.WorkErrors {
+    let plain = stripped(args)
+    var force = false, quiet = false, hard = false, soft_or_mixed = args[0] == "reset"
+    for arg in plain[1..] {
+        if arg == "-f" || arg == "--force" || arg == "--discard-changes" { force = true }
+        if arg == "-q" || arg == "--quiet" { quiet = true }
+        if arg == "--hard" { hard = true; soft_or_mixed = false }
+        if arg == "--keep" || arg == "--merge" { return Unsupported("reset {arg} with submodules") }
+        if arg == "--" { return Unsupported("{args[0]} of paths with submodules") }
+    }
+    // A soft or mixed reset leaves every worktree alone.
+    if soft_or_mixed { return refcmd.run(plain) }
+    let ctx = worktree.discover(".")?
+    let before = index_links(ctx)?
+    let goal = target(ctx, plain)?
+    let after = links_of(worktree.flatten_tree(ctx.repo, goal)?)?
+    if !force && !hard {
+        let parsed = worktree.modules(ctx)?
+        let repo = fresh(ctx.repo)?
+        var blocked = List[str](), messages = List[str]()
+        for link in after {
+            let at = link_at(before, link.path)
+            if at < 0 || oid.equal(before[at].id, link.id) { continue }
+            let full = "{ctx.root}/{link.path}"
+            if !fs.exists("{full}/.git") { continue }
+            let sub = sub_at(ctx, parsed, link)?
+            if !active(repo, sub)? { continue }
+            let found = conflicts(worktree.discover(full)?, link.id, link.path)?
+            if found.len == 0 { continue }
+            for file in found {
+                (mut messages).push("error: Entry '{file}' not uptodate. Cannot merge.")
+            }
+            (mut messages).push("error: Submodule '{link.path}' could not be updated.")
+            (mut blocked).push(copy link.path)
+        }
+        if blocked.len > 0 {
+            for message in messages { eprint(message) }
+            var text = "error: Cannot update submodule:"
+            for path in blocked { text = "{text}\n\t{path}" }
+            eprint("{text}\n\nAborting")
+            return 1
+        }
+    }
+    // The superproject's report waits until the submodules have moved.
+    env_set("DEN_DEFER_CHECKOUT_REPORT", "1") else |_| {}
+    let status = refcmd.run(plain)
+    env_set("DEN_DEFER_CHECKOUT_REPORT", "") else |_| {}
+    if status != 0 { return status }
+    follow(worktree.discover(".")?, before, force || hard, false, "")?
+    if args[0] != "reset" && !quiet && !force {
+        let fresh_ctx = worktree.discover(".")?
+        var warnings = List[str]()
+        let snapshot = worktree.scan_status(fresh_ctx, false, false, mut warnings)?
+        let report = worktree.checkout_report(
+            snapshot,
+            refcmd.lists_changes(plain),
+            worktree.config_bool(fresh_ctx, "advice.statushints", true)?,
+        )?
+        if report.len > 0 { print_raw(str_from_utf8(report) else "") }
+    }
+    0
+}
+
+/// `pull` with submodule recursion: its fetch recurses as asked, then the
+/// submodules follow the merge, with update's `Submodule path` lines.
+pub fn recursive_pull(args: List[str]) -> int {
+    var mode = "yes", quiet = false
+    for arg in args {
+        if arg == "--recurse-submodules=on-demand" { mode = "on-demand" }
+        if arg == "-q" || arg == "--quiet" { quiet = true }
+    }
+    let ctx = worktree.discover(".") else |e| { eprint("fatal: {e}"); return 128 }
+    let before = index_links(ctx) else |e| { eprint("fatal: den: {e}"); return 128 }
+    var plain = stripped(args)
+    (mut plain).push("--recurse-submodules={mode}")
+    env_set("DEN_PULL_RECURSION", "1") else |_| {}
+    let status = wiregit.run(plain)
+    env_set("DEN_PULL_RECURSION", "") else |_| {}
+    if status != 0 { return status }
+    // With submodule.recurse set, each submodule's own checkout recurses and
+    // prints nothing for its submodules; with the option, update's
+    // recursion prints them too (vc25 recurse rows).
+    let configured = !args_flag(args)
+    follow_pull(
+        worktree.discover(".") else |e| { eprint("fatal: {e}"); return 128 },
+        before,
+        quiet,
+        configured,
+        "",
+    ) else |e| {
+        eprint("fatal: den: {e}")
+        return 128
+    }
+    0
+}
+
+fn args_flag(args: List[str]) -> bool {
+    for arg in args {
+        if arg == "--recurse-submodules" || arg.starts_with("--recurse-submodules=") { return true }
+    }
+    false
+}
+
+fn follow_pull(
+    ctx: worktree.Context,
+    before: List[Link],
+    quiet: bool,
+    configured: bool,
+    parent: str,
+) -> () ! worktree.WorkErrors {
+    let after = index_links(ctx)?
+    let parsed = worktree.modules(ctx)?
+    let repo = fresh(ctx.repo)?
+    for link in after {
+        let sub = sub_at(ctx, parsed, link)?
+        if !active(repo, sub)? { continue }
+        let full = "{ctx.root}/{link.path}"
+        if !fs.exists("{full}/.git") { continue }
+        let sub_ctx = worktree.discover(full)?
+        let current = worktree.head(sub_ctx)?
+        if current.commits.len == 1 && oid.equal(current.commits[0], link.id) && current.detached {
+            continue
+        }
+        checkout_detached(sub_ctx, link.id, false, false)?
+        let shown = display(ctx, parent, link.path)
+        if !quiet { print("Submodule path '{shown}': checked out '{oid.hex(link.id)?}'") }
+        let nested_before = index_links_at(sub_ctx, current)?
+        if configured {
+            follow(sub_ctx, nested_before, false, false, shown)?
+        } else {
+            follow_pull(sub_ctx, nested_before, quiet, false, shown)?
+        }
+    }
+}
