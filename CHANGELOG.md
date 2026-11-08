@@ -1,5 +1,42 @@
 # Changes
 
+## Unreleased — everyday wire gaps
+
+- Push places a short destination as git-push(1) does (den#71): each source
+  resolves first by gitrevisions(7)'s order (`src refspec X does not match
+  any`, `matches more than one`), a short destination is the one remote ref it
+  names (`dst refspec X matches more than one` for two), else the source's
+  `refs/heads/` or `refs/tags/`, else Git's refusal with its type-specific hint.
+  A source no longer has to be a branch or tag: object ids, `X~0` and remote
+  tracking refs push to a full or remote-matched destination.
+- Clone with no directory clones into the URL's humanish name, `NAME.git`
+  under `--bare` (den#72); an existing empty directory is filled; an occupied
+  destination refuses with Git's diagnostic; an empty repository's clone
+  prints Git's warning; operand errors are named refusals. A local clone finds
+  `PATH`, `PATH/.git` or `PATH.git`, and honours the source's `lsrefs.unborn`.
+- `ls-remote` (den#68) over ls-refs on every transport: `--heads`/`--branches`,
+  `--tags`, `--refs`, `--symref`, `--exit-code`, `-q`, `--upload-pack` and
+  tail-matched glob patterns, with Git's output and exit codes.
+- `rev-parse` (den#69): revisions, `--verify`, `-q`, `--abbrev-ref`,
+  `--symbolic-full-name`, `--short`, `--show-toplevel`, `--git-dir`,
+  `--absolute-git-dir`, `--is-inside-work-tree`, `--is-inside-git-dir`,
+  `--is-bare-repository`, `--show-prefix`, `--show-cdup` and `--`. The revision
+  grammar resolves `B@{upstream}` and `@{u}` with Git's refusals. Discovery
+  honours `GIT_CEILING_DIRECTORIES`.
+- `fetch REMOTE REFSPEC...` for a configured remote (den#70): full and short
+  sources, globs, negative refspecs, `tag NAME`, no destination, `+` and `-f`,
+  Git's fast-forward and tag-clobber rejections, the opportunistic
+  remote-tracking update, followed tags, FETCH_HEAD and Git's report.
+- Clone memory (den#63): the issue's quadratic was gone since the streamed
+  indexer; what remained was linear but large, from the pack index parsed per
+  read outside a reader and kept outside a region, and from the closure walk's
+  queue of names. The idx parse keeps one name an object, tree walks reclaim
+  their readers, and the closure walk queues ranks.
+- `tools/wire-gaps-test.py` holds push, clone, ls-remote, fetch and clone
+  memory to the pinned Git on every transport; `tools/rev-parse-test.py` holds
+  rev-parse. The oracle's `rev-parse` case is a parity row and
+  `rev-parse-parseopt` keeps the strict not-yet witness.
+
 ## Unreleased — den clones itself
 
 - Clone and fetch stream the fetch response to a temporary under
