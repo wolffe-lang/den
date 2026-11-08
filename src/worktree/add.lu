@@ -56,7 +56,9 @@ fn entry_for(
     var extended = if prior.len == 1 then prior[0].extended & 0x4000 else 0
     if options.intent { extended = extended | 0x2000 }
     let id = if options.intent then object.identify("blob", [])? else copy file.id
-    var entry = if file.kind == 3 {
+    var entry = if file.mode == 0o160000 {
+        index.entry_from_directory(file.stat, file.path, id, flags, extended)?
+    } else if file.kind == 3 {
         index.entry_from_lstat(file.stat, file.path, id, flags, extended)?
     } else {
         index.entry_from_stat(

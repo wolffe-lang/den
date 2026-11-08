@@ -115,7 +115,8 @@ fn prepare_commit_index(
     let entries = owned_entries(tx.value.entries)
     for entry in entries {
         if entry.extended & 0x2000 != 0 { continue }
-        if entry.stat[6] == 0o160000 { return Unsupported("commit submodule") }
+        // A gitlink names a commit in its submodule, never this store (vc25).
+        if entry.stat[6] == 0o160000 { continue }
         let stored = object.read_object(ctx.repo, entry.id, 1000000000)?
         if stored.kind != "blob" { return invalid_index }
     }

@@ -1,3 +1,4 @@
+use std.fs
 use index
 use object
 use oid
@@ -42,6 +43,18 @@ fn transition_path(
     var prior = List[index.Entry]()
     if at >= 0 { (mut prior).push(copy previous.entries[at]) }
     var entry = cached_entry(desired, prior)
+    // A gitlink (vc25): its directory is made when missing, never entered;
+    // the entry takes the directory's lstat, as the pinned Git's clone does.
+    if desired.mode == 0o160000 {
+        if mode == "mixed" { return entry }
+        safe_parents(ctx, path, true)?
+        let full = absolute(ctx, path)?
+        if !fs.exists(full) { fs.create_dir(full)? }
+        let record = fs_lstat(full)?
+        if record[0] != 1 { return Unsupported("submodule path {text(path)?} is not a directory") }
+        if prior.len == 1 && same_entry(prior[0], desired) && prior[0].stat[0] != 0 { return entry }
+        return index.entry_from_directory(record, path, desired.id, 0, 0)?
+    }
     if mode != "mixed" {
         let disk = file_at(snapshot.files, path)
         if disk < 0 ||
@@ -86,7 +99,7 @@ fn transition_mode(
     // parsed once, where a read per blob parsed them once a file.
     let reader = object.reader_batch(ctx.repo)
     for entry in target {
-        if entry.mode == 0o160000 { return Unsupported("submodule tree transition") }
+        if entry.mode == 0o160000 { continue }
         if !dry {
             // One blob at a time (vc23): a clone's checkout holds one file's
             // body, never the whole worktree's.
@@ -118,7 +131,10 @@ fn transition_mode(
                 (mut untracked).push(copy path)
                 continue
             }
+            // A submodule's own worktree never blocks a superproject switch
+            // (vc25 probe 1, co-old): only its staged gitlink can.
             let clean = disk < 0 ||
+                at >= 0 && indexed[at].mode == 0o160000 ||
                 at >= 0 &&
                     snapshot.files[disk].mode == indexed[at].mode &&
                     oid.equal(snapshot.files[disk].id, indexed[at].id)
@@ -151,7 +167,14 @@ fn transition_mode(
     if mode != "mixed" {
         for path in paths {
             if keep[text(path)?] else false { continue }
-            if flat_at(target, path) < 0 { remove_file(ctx, path)? }
+            if flat_at(target, path) < 0 {
+                let was = flat_at(indexed, path)
+                if was >= 0 && indexed[was].mode == 0o160000 {
+                    remove_gitlink_directory(ctx, path)?
+                } else {
+                    remove_file(ctx, path)?
+                }
+            }
         }
     }
     var entries = List[index.Entry]()
@@ -210,4 +233,22 @@ fn transition_mode(
         let tree = index.build_trees(value)?
         value.extensions = [index.Extension { signature: "TREE", data: copy tree.cache }]
     }
+}
+
+// A disappearing gitlink's directory goes only when empty; a populated one
+// stays with Git's warning (vc25 probe 2, co-remove).
+fn remove_gitlink_directory(ctx: Context, path: List[byte]) -> () ! WorkErrors {
+    let full = absolute(ctx, path)?
+    let record = fs_lstat(full) else |e| match e {
+        not_found => { return },
+        denied => { return denied },
+        io => { return io },
+    }
+    if record[0] != 1 { return remove_file(ctx, path)? }
+    if fs.entries(full)?.len == 0 {
+        fs.remove_dir(full)?
+        clean_parents(ctx, path)
+        return
+    }
+    eprint("warning: unable to rmdir '{text(path)?}': Directory not empty")
 }

@@ -222,6 +222,20 @@ pub fn fresh_entry(
     entry_from_stat(fs_fstat_record(fd)?, path, id, mode, flags, extended)?
 }
 
+/// A gitlink's entry (vc25): the submodule directory's own lstat words, as
+/// the pinned Git records them after a checkout or `add` (vc25 probe 2).
+pub fn entry_from_directory(
+    record: List[int],
+    path: List[byte],
+    id: oid.Oid,
+    flags: int,
+    extended: int,
+) -> Entry ! IndexErrors {
+    if record.len != 20 { return invalid_index }
+    if record[0] != 1 { return Unsupported("gitlink index entry requires a directory") }
+    stat_entry(record, path, id, 0o160000, flags, extended)?
+}
+
 /// A separate lstat-only boundary for actual symlinks. A following stat/fstat
 /// record is rejected by kind; core.symlinks=false regular-file emulation uses
 /// entry_from_stat instead, and the caller must apply its existing index policy.

@@ -247,7 +247,8 @@ fn renamed_path(before: List[byte], after: List[byte]) -> List[byte] {
 }
 
 fn blob(ctx: worktree.Context, entry: worktree.FlatEntry) -> List[byte] ! CommitErrors {
-    if entry.mode == 0o160000 { return Unsupported("commit submodule summary") }
+    // A gitlink counts as Git's `Subproject commit` text (vc25).
+    if entry.mode == 0o160000 { return worktree.subproject_text(entry.id, false)? }
     let stored = object.read_object(ctx.repo, entry.id, 16777216)?
     if stored.kind != "blob" { return invalid_tree }
     owned(stored.data)
