@@ -54,9 +54,10 @@ fn transition_path(
         let record = fs_lstat(full)?
         if record[0] != 1 { return Unsupported("submodule path {text(path)?} is not a directory") }
         if prior.len == 1 && same_entry(prior[0], desired) && prior[0].stat[0] != 0 { return entry }
-        // A hard reset that moves a gitlink over its existing directory
-        // leaves the entry without stat, as Git's does (vc25 work rows).
-        if mode == "hard" && existed { return entry }
+        // A gitlink moved over its existing directory, by a reset or a
+        // checkout, keeps no stat, as Git's does (vc25 work rows); only a
+        // directory made here takes its lstat.
+        if existed { return entry }
         return index.entry_from_directory(record, path, desired.id, 0, 0)?
     }
     if mode != "mixed" {
@@ -238,6 +239,16 @@ fn transition_mode(
         value.extensions = []
         let tree = index.build_trees(value)?
         value.extensions = [index.Extension { signature: "TREE", data: copy tree.cache }]
+        // A staged gitlink kept through a switch leaves its trees invalid,
+        // as Git's does (vc25 work rows).
+        for path in paths {
+            if !(keep[text(path)?] else false) { continue }
+            let at = flat_at(indexed, path)
+            if at < 0 || indexed[at].mode != 0o160000 { continue }
+            if !same_flat(indexed, at, target, flat_at(target, path)) {
+                value = index.invalidate_tree(value, path)?
+            }
+        }
     }
 }
 
