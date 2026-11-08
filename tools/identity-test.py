@@ -13,8 +13,7 @@ for byte, and the object bytes and ids a clone receives.
                by that name (and Git's answer is recorded).
   --family F   read, format, fsck, wire, replay or write (repeatable).
   --field      Git is not the pinned one (the macOS field leg): its digest
-               is not checked, and the rows in FIELD are named differences,
-               never passes.
+               is not checked; every row holds as it does for the pinned Git.
 """
 import argparse
 import hashlib
@@ -99,6 +98,9 @@ SHAPES = [
     ('one-west', b'A U Thor <a@example.invalid> 1 -0100'),
     ('gmtime-last', b'A U Thor <a@example.invalid> 67768036191676799 +0000'),
     ('gmtime-fail', b'A U Thor <a@example.invalid> 67768036191676800 +0000'),
+    ('zone-10039', b'A U Thor <a@example.invalid> 1700000000 +10039'),
+    ('zone-10040', b'A U Thor <a@example.invalid> 1700000000 +10040'),
+    ('zone-0960', b'A U Thor <a@example.invalid> 1700000000 +0960'),
 ]
 
 PLACEHOLDERS = ('%an|%ae|%al|%aN|%aE|%aL|%ad|%aD|%at|%ai|%aI|%as%n'
@@ -118,12 +120,10 @@ REFUSED = {
     ('wire', 'clone-fetch-fsck-objects'): 'fetch.fsckObjects' + CHECKS,
     ('wire', 'serve-push-fsck-objects'): 'receive.fsckObjects' + CHECKS,
     ('fsck', 'fsck-strict'): 'not yet implemented: fsck --strict',
+    # Git amends a date above 9223372036854775807 that den's 64-bit dates
+    # cannot hold.
+    ('replay', 'amend', 'over-i64'): 'not yet implemented: commit amend date past 9223372036854775807',
 }
-
-# The macOS field Git prints a Latin-1 byte in an identity as UTF-8, where
-# the pinned Git prints the byte (measured at the base). Named per row.
-FIELD_LATIN1 = ('latin1-name', 'email-latin1')
-
 
 def parse_args():
     p = argparse.ArgumentParser()
@@ -150,7 +150,6 @@ ROOT.mkdir(parents=True)
 TOOLS = {'git': str(GIT), 'den': str(DEN)}
 rows = []
 failures = []
-named = []
 
 
 def run(argv, cwd, data=None, env=None):
@@ -198,12 +197,12 @@ def record(shape, family, op, git_res, den_res, extra=None):
     if extra is not None:
         row['received'] = extra
     name = '%s/%s/%s' % (family, shape, op)
-    want = REFUSED.get((family, op))
+    want = REFUSED.get((family, op, shape), REFUSED.get((family, op)))
     row['refusal'] = want
     rows.append(row)
     if want is not None:
         ok = den_res['status'] != 0 and want in den_res['stderr']
-        if extra is not None:
+        if extra is not None and family == 'wire':
             ok = ok and extra.get('den') is None
         row['passed'] = ok
         if ok:
@@ -213,10 +212,6 @@ def record(shape, family, op, git_res, den_res, extra=None):
         row['passed'] = same
         if same:
             print('PASS', name, flush=True)
-            return
-        if A.field and shape in FIELD_LATIN1:
-            named.append(name)
-            print('NAMED', name, 'field Git re-encodes a Latin-1 identity byte', flush=True)
             return
     failures.append(name)
     print(('DIFF ' if A.measure else 'FAIL ') + name, 'git=' + json.dumps(git_res), 'den=' + json.dumps(den_res),
@@ -272,9 +267,38 @@ def read_family(name, src, ids):
         record(name, 'read', op, res['git'], res['den'])
 
 
+def fsck_copy(name, src, ids, op):
+    """A copy of the source for one fsck row: `fsck-packed` holds every
+    object in one pack, `fsck-mixed` the shaped commit in a pack and the
+    tag loose, `fsck-committer` a shaped committer under a control author."""
+    work = ROOT / 'fsck' / name / op
+    shutil.copytree(src, work)
+    if op == 'fsck-packed':
+        g(work, 'repack', '-adq')
+        g(work, 'prune-packed')
+    elif op == 'fsck-mixed':
+        g(work, 'pack-objects', '-q', '.git/objects/pack/pack', data=(ids['commit'] + '\n').encode())
+        (work / '.git/objects' / ids['commit'][:2] / ids['commit'][2:]).unlink()
+    elif op == 'fsck-committer':
+        value = bytes.fromhex(ids['commit_bytes']).split(b'\ncommitter ', 1)[1].split(b'\n', 1)[0]
+        tree = g(work, 'rev-parse', ids['commit'] + '^{tree}')
+        body = (b'tree ' + tree.encode() + b'\nparent ' + ids['root'].encode() + b'\nauthor ' + CONTROL +
+                b'\ncommitter ' + value + b'\n\ncommitter only\n')
+        c = g(work, 'hash-object', '--literally', '-w', '-t', 'commit', '--stdin', data=body)
+        g(work, 'update-ref', 'refs/heads/main', c)
+        g(work, 'update-ref', '-d', 'refs/tags/t')
+        g(work, 'reflog', 'expire', '--expire=all', '--all')
+        g(work, 'prune', '--expire=now')
+    return work
+
+
 def fsck_family(name, src, ids):
     for op, args in [('fsck', ['fsck']), ('fsck-strict', ['fsck', '--strict'])]:
         res = both(args, src)
+        record(name, 'fsck', op, res['git'], res['den'])
+    for op in ('fsck-packed', 'fsck-mixed', 'fsck-committer'):
+        work = fsck_copy(name, src, ids, op)
+        res = both(['fsck'], work)
         record(name, 'fsck', op, res['git'], res['den'])
 
 
@@ -526,7 +550,6 @@ finally:
     (ROOT / 'rows.json').write_text(json.dumps(rows, indent=1))
     (ROOT / 'table.txt').write_text(table())
 print(table(), end='')
-print('IDENTITY rows=%d passed=%d named=%d failed=%d' % (len(rows), len(rows) - len(failures) - len(named),
-                                                           len(named), len(failures)))
+print('IDENTITY rows=%d passed=%d failed=%d' % (len(rows), len(rows) - len(failures), len(failures)))
 if failures and not A.measure:
     sys.exit(1)
