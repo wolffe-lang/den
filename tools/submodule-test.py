@@ -48,7 +48,9 @@ root.mkdir(parents=True)
 world = root / 'world'
 proof = runpy.run_path(str(R / 'tools/index-proof.py'))
 LOOSE = re.compile(r'(^|/)objects/[0-9a-f]{2}/[0-9a-f]{38}$')
-LOGS = re.compile(r'(^|/)(\.git|modules/[^/]+(/modules/[^/]+)*)/logs(/|$)')
+# A gitdir's reflogs: .git/logs, and modules/<name>/logs at any depth, where
+# a name may hold '/'.
+LOGS = re.compile(r'(^|/)\.git(/modules/.+)?/logs(/|$)')
 ALLOW_FILE = {'GIT_CONFIG_COUNT': '1', 'GIT_CONFIG_KEY_0': 'protocol.file.allow',
               'GIT_CONFIG_VALUE_0': 'always'}
 rows = []
@@ -109,7 +111,9 @@ def worktree_of(index_path):
 def indexes(base):
     found = {}
     for f in base.rglob('index'):
-        if f.is_file() and not f.is_symlink() and (f.parent.name == '.git' or f.parent.parent.name == 'modules'):
+        rel = f.relative_to(base).parts
+        in_modules = 'modules' in rel[:-1] and (f.parent / 'HEAD').is_file()
+        if f.is_file() and not f.is_symlink() and (f.parent.name == '.git' or in_modules):
             tree = worktree_of(f)
             raw = f.read_bytes()
             found[f.relative_to(base).as_posix()] = (raw, gitlink_proof(raw, proof['proof'](tree, raw)) if tree else None)
@@ -194,9 +198,12 @@ def compare(name, args, seed_name, cwd='.', extra=None, data=None, prepare=None)
                        if left['after'].get(k) != right['after'].get(k))
     known = (not ok and left['result'] == right['result'] and not index_errors and differing
              and all(LOGS.search(k) for k in differing))
+    details = {} if ok or known else {
+        k: [shown(left['after'].get(k)), shown(right['after'].get(k))]
+        for k in [k for k in differing if not LOGS.search(k)][:4]}
     rows.append(dict(name=name, argv=args, cwd=cwd, extra=extra or {}, equal=ok, known=known,
                      expected=dict(result=left['result']), actual=dict(result=right['result']),
-                     differing_paths=differing, index_errors=index_errors))
+                     differing_paths=differing, index_errors=index_errors, details=details))
     verdict = 'PASS' if ok else 'KNOWN' if known else 'FAIL'
     print(verdict, name + ((' reflog-paths=' + ','.join(differing)) if known else ''), flush=True)
     if verdict == 'FAIL':
@@ -205,6 +212,23 @@ def compare(name, args, seed_name, cwd='.', extra=None, data=None, prepare=None)
             print('  expected', json.dumps(left['result']), flush=True)
             print('  actual  ', json.dumps(right['result']), flush=True)
         print('  differing_paths', differing[:12], 'index_errors', index_errors, flush=True)
+        for k, (l, r) in details.items():
+            print('  git', k, l, flush=True)
+            print('  den', k, r, flush=True)
+
+
+def shown(value):
+    """A differing path's value for the record: text when it decodes,
+    bounded; hex otherwise."""
+    if value is None:
+        return None
+    if value[0] in ('directory', 'symlink'):
+        return value
+    raw = bytes.fromhex(value[-1])
+    try:
+        return [value[0], raw.decode('utf-8')[:2000]]
+    except UnicodeDecodeError:
+        return [value[0], raw.hex()[:2000]]
 
 
 # ---- fixtures ---------------------------------------------------------------
@@ -529,9 +553,14 @@ def family_transport():
         shutil.rmtree(c)
     seed('https-urls', https_urls)
     compare('transport-insteadof-clone', ['clone', '--recurse-submodules', top, 'c'], 'https-urls', extra=rewrite)
+    # A rule for another prefix leaves the URL alone: the https URL itself is
+    # attempted, and refused by policy before any network (a rewrite would
+    # have cloned from the file remote).
     compare('transport-insteadof-unrewritten', ['clone', '-q', '--recurse-submodules', top, 'c'], 'https-urls',
-            extra=dict(ALLOW_FILE, GIT_CONFIG_COUNT='2', GIT_CONFIG_KEY_1='url.zzz://never/.insteadOf',
-                       GIT_CONFIG_VALUE_1='https://nomatch.example/'))
+            extra=dict(ALLOW_FILE, GIT_CONFIG_COUNT='3',
+                       GIT_CONFIG_KEY_1='url.file://%s/.insteadOf' % (root / 'world'),
+                       GIT_CONFIG_VALUE_1='https://nomatch.example/o/',
+                       GIT_CONFIG_KEY_2='protocol.https.allow', GIT_CONFIG_VALUE_2='never'))
     compare('transport-file-never', ['clone', '--recurse-submodules', top, 'c'], 'remotes',
             extra={'GIT_CONFIG_COUNT': '1', 'GIT_CONFIG_KEY_0': 'protocol.file.allow', 'GIT_CONFIG_VALUE_0': 'never'})
     compare('transport-file-user-from-user-0', ['clone', '-q', top, 'c'], 'remotes', extra={'GIT_PROTOCOL_FROM_USER': '0'})
