@@ -28,6 +28,8 @@ pub fn refresh_index(mut value: index.Index, files: List[worktree.FileState]) ->
             entries[pos].flags & 0x8000 != 0 {
             continue
         }
+        // A gitlink keeps the stat it has; Git never refreshes one (vc25).
+        if entries[pos].stat[6] == 0o160000 { continue }
         while disk < files.len && compare_path(files[disk].path, entries[pos].path) < 0 {
             disk += 1
         }
