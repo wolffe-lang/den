@@ -543,6 +543,11 @@ def family_clone(h):
         if oracle['exit'] != 129:
             problems.append('pinned Git exit %d, want 129 (a usage error)' % oracle['exit'])
         h.verdict('clone-operands-%s' % case, problems)
+    # A missing source: a local path is refused before a name is guessed; a
+    # file:// URL after it, by the service.
+    for case, spelling in (('missing-local', str(h.srv / 'missing.git')), ('missing-relative', 'missing'),
+                           ('missing-file', (h.srv / 'missing.git').as_uri())):
+        h.compare('clone-%s' % case, [(['clone', spelling], cwd)], [cwd], [])
     nameless = h.run([h.den, 'clone', 'file:///'], cwd)
     oracle = h.run([h.git, 'clone', 'file:///'], cwd)
     problems = []
