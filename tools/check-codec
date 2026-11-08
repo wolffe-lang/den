@@ -22,14 +22,15 @@ for tier in native release; do
     mkdir -p "target/$tier"
     if [ "$tier" = release ]; then
         "$WOLF" build --release --deny-warnings src/zpipe.lu -o "target/$tier/zpipe"
-        "$WOLF" build --release --deny-warnings src/zlib/kept_test.lu -o "target/$tier/zlib-kept-test"
+        "$WOLF" build --release --deny-warnings src/zlib_first_form_test.lu -o "target/$tier/zlib-first-form-test"
     else
         "$WOLF" build --deny-warnings src/zpipe.lu -o "target/$tier/zpipe"
-        "$WOLF" build --deny-warnings src/zlib/kept_test.lu -o "target/$tier/zlib-kept-test"
+        "$WOLF" build --deny-warnings src/zlib_first_form_test.lu -o "target/$tier/zlib-first-form-test"
     fi
-    # den#73's rows against the codec's first forms; native and release
-    # only, as the checked machine's step budget does not reach them.
-    "target/$tier/zlib-kept-test"
+    # den#73: the encoder's bytes against its first form's, by digest;
+    # native and release only, as the checked machine's step budget does
+    # not reach the corpus.
+    "target/$tier/zlib-first-form-test"
     python3 -I tools/codec-test.py --binary "target/$tier/zpipe" >"target/codec-$tier.log"
     tail -n 1 "target/codec-$tier.log"
     cp target/codec/summary.json "target/codec/$tier.json"
