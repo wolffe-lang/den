@@ -1,0 +1,308 @@
+// `den submodule` status, sync and foreach, the dispatcher with its named
+// refusals, describe for status, and clone --recurse-submodules (vc25).
+use std.env
+use std.fs
+use std.process
+use object
+use oid
+use refs
+use repository
+use wiregit
+use worktree
+
+fn abbrev(id: oid.Oid) -> str ! worktree.WorkErrors { oid.hex(id)?[0..7] }
+
+fn ancestors_of(repo: repository.Repo, start: oid.Oid) -> List[str] ! worktree.WorkErrors {
+    var seen = Map[str, bool](), order = List[str](), pending = [copy start], pos = 0
+    while pos < pending.len {
+        let id = copy pending[pos]
+        pos += 1
+        let key = oid.hex(id)?
+        if seen[key] else false { continue }
+        seen[key] = true
+        (mut order).push(key)
+        if order.len > 10000 { return limit }
+        let value = object.read_object(repo, id, 16777216) else |_| { continue }
+        if value.kind != "commit" { continue }
+        let headers = object.parse_commit(value.data, "sha1") else |_| { continue }
+        for field in headers.fields {
+            if field.key == "parent" { (mut pending).push(oid.parse("sha1", bytes_text(field.value)?)?) }
+        }
+    }
+    order
+}
+
+// The nearest name among NAMES (commit hex -> name) reachable from ID, with
+// git-describe(1)'s `<name>-<n>-g<abbrev>` form, or "" when none is.
+fn nearest(repo: repository.Repo, id: oid.Oid, names: Map[str, str]) -> str ! worktree.WorkErrors {
+    let walk = ancestors_of(repo, id)?
+    for key in walk {
+        let name = names[key] else ""
+        if name == "" { continue }
+        if key == oid.hex(id)? { return name }
+        let theirs = ancestors_of(repo, oid.parse("sha1", key)?)?
+        var reach = Map[str, bool]()
+        for k in theirs { reach[k] = true }
+        var count = 0
+        for k in walk { if !(reach[k] else false) { count += 1 } }
+        return "{name}-{count}-g{abbrev(id)?}"
+    }
+    ""
+}
+
+// submodule status's annotation (measured): an annotated tag, else any ref
+// (`heads/main`, `remotes/origin/HEAD`, the smallest name at one commit),
+// else the abbreviated id.
+fn describe(repo: repository.Repo, id: oid.Oid) -> str ! worktree.WorkErrors {
+    var annotated = Map[str, str](), any = Map[str, str]()
+    for record in refs.list(repo, "refs/")? {
+        let short = record.name[5..]
+        let target = if record.peeled.len == 1 then oid.hex(record.peeled[0])? else oid.hex(record.id)?
+        if record.name.starts_with("refs/tags/") && record.peeled.len == 1 {
+            let tag = record.name[10..]
+            let prior = annotated[target] else ""
+            if prior == "" || tag < prior { annotated[target] = tag }
+        }
+        let prior = any[target] else ""
+        if prior == "" || short < prior { any[target] = short }
+    }
+    let symbolic = refs.symbolic(repo, "refs/remotes/origin/HEAD") else ""
+    if symbolic != "" {
+        let target = oid.hex(refs.read(repo, "refs/remotes/origin/HEAD")?)?
+        let prior = any[target] else ""
+        if prior == "" || "remotes/origin/HEAD" < prior { any[target] = "remotes/origin/HEAD" }
+    }
+    let tag = nearest(repo, id, annotated)?
+    if tag != "" { return tag }
+    let named = nearest(repo, id, any)?
+    if named != "" { return named }
+    abbrev(id)
+}
+
+fn populated(ctx: worktree.Context, sub: Sub) -> List[worktree.Context] ! worktree.WorkErrors {
+    let full = "{ctx.root}/{sub.path}"
+    if !fs.exists("{full}/.git") { return List[worktree.Context]() }
+    let real = fs.realpath(full) else |_| { return List[worktree.Context]() }
+    let found = worktree.discover(real) else |_| { return List[worktree.Context]() }
+    if found.root != real { return List[worktree.Context]() }
+    [found]
+}
+
+fn status_lines(ctx: worktree.Context, cached: bool, recursive: bool, paths: List[str], parent: str) -> () ! worktree.WorkErrors {
+    let parsed = worktree.modules(ctx)?
+    for sub in submodules(ctx, parsed)? {
+        if !selected(ctx, sub, paths) { continue }
+        let shown = display(ctx, parent, sub.path)
+        if !sub.mapped { return Fatal("no submodule mapping found in .gitmodules for path '{shown}'") }
+        let found = populated(ctx, sub)?
+        if found.len == 0 {
+            print("-{oid.hex(sub.id)?} {shown}")
+            continue
+        }
+        let head = worktree.head(found[0])?
+        let current = if head.commits.len == 1 then copy head.commits[0] else copy sub.id
+        let mark = if oid.equal(current, sub.id) then " " else "+"
+        let shown_id = if cached then copy sub.id else copy current
+        print("{mark}{oid.hex(shown_id)?} {shown} ({describe(found[0].repo, shown_id)?})")
+        if recursive { status_lines(found[0], cached, recursive, [], shown)? }
+    }
+}
+
+fn sync(ctx: worktree.Context, recursive: bool, paths: List[str], parent: str) -> () ! worktree.WorkErrors {
+    let parsed = worktree.modules(ctx)?
+    for sub in submodules(ctx, parsed)? {
+        if !selected(ctx, sub, paths) || !sub.mapped { continue }
+        let repo = repository.open(ctx.repo.gitdir)?
+        if (repo.config["submodule.{sub.name}.url"] else "") == "" { continue }
+        let shown = display(ctx, parent, sub.path)
+        print("Synchronizing submodule url for '{shown}'")
+        let url = resolved(ctx, sub.module.url)?
+        set_config(repo, "submodule.{sub.name}.url", url)?
+        let found = populated(ctx, sub)?
+        if found.len == 0 { continue }
+        let inner = found[0].repo
+        let head = refs.symbolic(inner, "HEAD") else ""
+        var name = "origin"
+        if head.starts_with("refs/heads/") {
+            let configured = inner.config["branch.{head[11..]}.remote"] else ""
+            if configured != "" { name = configured }
+        }
+        set_config(inner, "remote.{name}.url", url)?
+        if recursive {
+            let refreshed = worktree.discover(found[0].root)?
+            sync(refreshed, recursive, [], shown)?
+        }
+    }
+}
+
+fn restore_env(name: str, saved: str) {
+    if saved == "\0" { env_set(name, "") else |_| {} } else { env_set(name, saved) else |_| {} }
+}
+
+fn foreach(ctx: worktree.Context, recursive: bool, quiet: bool, command: str, parent: str) -> int ! worktree.WorkErrors {
+    if !fs.exists("/bin/sh") { return Unsupported("foreach without /bin/sh") }
+    let parsed = worktree.modules(ctx)?
+    for sub in submodules(ctx, parsed)? {
+        let found = populated(ctx, sub)?
+        if found.len == 0 { continue }
+        let shown = display(ctx, parent, sub.path)
+        if !quiet { print("Entering '{shown}'") }
+        var saved = Map[str, str]()
+        let values = [
+            ["name", copy sub.name], ["sm_path", copy sub.path], ["path", copy sub.path],
+            ["displaypath", copy shown], ["sha1", oid.hex(sub.id)?], ["toplevel", copy ctx.root],
+        ]
+        for pair in values {
+            saved[pair[0]] = env_get(pair[0]) else "\0"
+            env_set(pair[0], pair[1]) else |_| {}
+        }
+        let here = env.cwd() else |_| { return io }
+        env.set_cwd(found[0].root) else |_| { return io }
+        var c = process.command("/bin/sh")
+        process.push_arg(mut c, "-c")
+        process.push_arg(mut c, command)
+        let child = process.start(c) else |_| { return Unsupported("foreach could not start /bin/sh") }
+        let status = process.wait_status(take child) else |_| { return io }
+        env.set_cwd(here) else |_| { return io }
+        for pair in values { restore_env(pair[0], saved[pair[0]] else "\0") }
+        if process.shell_code(process.status_from(status)) != 0 {
+            eprint("fatal: run_command returned non-zero status for {shown}\n.")
+            return 128
+        }
+        if recursive {
+            let rc = foreach(found[0], recursive, quiet, command, shown)?
+            if rc != 0 { return rc }
+        }
+    }
+    0
+}
+
+fn dispatch(args: List[str]) -> int ! worktree.WorkErrors {
+    var quiet = false, at = 1
+    while at < args.len && (args[at] == "--quiet" || args[at] == "-q") { quiet = true; at += 1 }
+    let sub = if at < args.len then copy args[at] else "status"
+    let rest = if at < args.len then copy args[at + 1..] else List[str]()
+    for refused in ["add", "deinit", "set-url", "set-branch", "summary", "absorbgitdirs"] {
+        if sub == refused { return Unsupported("submodule {sub}") }
+    }
+    let ctx = worktree.discover(".")?
+    var cached = false, recursive = false, paths = List[str](), literal = false
+    var options = UpdateOptions { init: false, recursive: false, remote: false, fetch: true, force: false, quiet: quiet, paths: [] }
+    if sub == "foreach" {
+        var command = List[str]()
+        for arg in rest {
+            if command.len == 0 && arg == "--recursive" { recursive = true; continue }
+            if command.len == 0 && (arg == "-q" || arg == "--quiet") { quiet = true; continue }
+            (mut command).push(copy arg)
+        }
+        if command.len == 0 { return Unsupported("foreach requires a command") }
+        var joined = ""
+        for word in command { joined = if joined == "" then copy word else "{joined} {word}" }
+        return foreach(ctx, recursive, quiet, joined, "")?
+    }
+    for arg in rest {
+        if !literal && arg == "--" { literal = true; continue }
+        if !literal && arg.starts_with("-") {
+            if arg == "--cached" && sub == "status" { cached = true }
+            else if arg == "--recursive" { recursive = true }
+            else if arg == "--init" && sub == "update" { options.init = true }
+            else if (arg == "--checkout") && sub == "update" { continue }
+            else if (arg == "-f" || arg == "--force") && sub == "update" { options.force = true }
+            else if (arg == "-N" || arg == "--no-fetch") && sub == "update" { options.fetch = false }
+            else if arg == "--remote" && sub == "update" { return Unsupported("update --remote") }
+            else { return Unsupported("{sub} option {arg}") }
+            continue
+        }
+        (mut paths).push(copy arg)
+    }
+    if sub == "status" {
+        status_lines(ctx, cached, recursive, paths, "")?
+        return 0
+    }
+    if sub == "init" {
+        init(ctx, worktree.modules(ctx)?, paths, "")?
+        return 0
+    }
+    if sub == "sync" {
+        sync(ctx, recursive, paths, "")?
+        return 0
+    }
+    if sub == "update" {
+        options.recursive = recursive
+        // An unknown path is git's pathspec error before any work (probe 2).
+        for path in paths {
+            var hit = false
+            for entry in worktree.read_index(ctx)?.entries {
+                let name = bytes_text(entry.path)?
+                let full = "{ctx.prefix}{path}"
+                if name == full || name.starts_with("{full}/") || full == "." { hit = true }
+            }
+            if !hit { return Failure("pathspec '{path}' did not match any file(s) known to git") }
+        }
+        options.paths = paths
+        return update(ctx, options, "")?
+    }
+    Unsupported("submodule {sub}")
+}
+
+/// `den submodule ...`: Git's messages, exit 128 for a fatal, 2 for a
+/// named refusal.
+pub fn run(args: List[str]) -> int {
+    dispatch(args) else |e| match e {
+        Fatal(message) => { eprint("fatal: {message}"); 128 },
+        Failure(message) => { eprint("error: {message}"); 1 },
+        Unsupported(feature) => { eprint("den: not yet implemented: {feature} (vc25b)"); 2 },
+        not_found => { eprint("fatal: not a git repository (or any of the parent directories): .git"); 128 },
+        _ => { eprint("fatal: den: {e}"); 128 },
+    }
+}
+
+/// `den clone --recurse-submodules[=<pathspec>] ...`: the clone as den's
+/// clone makes it, submodule.active written after [core] as Git writes it,
+/// then `submodule update --init --recursive` in the new worktree. Other
+/// submodule options of clone are named refusals (vc25b).
+pub fn clone_recursive(args: List[str]) -> int {
+    var plain = List[str](), specs = List[str](), recurse = false, quiet = false
+    for arg in args {
+        if arg == "--recurse-submodules" || arg == "--recursive" { recurse = true; continue }
+        if arg.starts_with("--recurse-submodules=") { recurse = true; (mut specs).push(arg[21..]); continue }
+        if arg == "--no-recurse-submodules" { recurse = false; continue }
+        if arg == "--shallow-submodules" || arg == "--remote-submodules" || arg.starts_with("--jobs") || arg == "-j" {
+            eprint("den: not yet implemented: clone option {arg} (vc25b)")
+            return 2
+        }
+        if arg == "-q" || arg == "--quiet" { quiet = true }
+        (mut plain).push(copy arg)
+    }
+    let rc = wiregit.run(plain)
+    if rc != 0 || !recurse { return rc }
+    // The destination is clone's last operand, as clone reads it.
+    var operands = List[str]()
+    for arg in plain[1..] { if !arg.starts_with("-") { (mut operands).push(copy arg) } }
+    for arg in plain[1..] { if arg == "--bare" || arg == "--mirror" || arg == "-n" || arg == "--no-checkout" { return 0 } }
+    if operands.len == 0 { return rc }
+    let destination = operands[operands.len - 1]
+    let code = run_recursion(destination, if specs.len == 0 then ["."] else specs, quiet) else |e| match e {
+        Fatal(message) => { eprint("fatal: {message}"); return 128 },
+        Failure(message) => { eprint("error: {message}"); return 1 },
+        Unsupported(feature) => { eprint("den: not yet implemented: {feature} (vc25b)"); return 2 },
+        _ => { eprint("fatal: den: {e}"); return 128 },
+    }
+    code
+}
+
+fn run_recursion(destination: str, specs: List[str], quiet: bool) -> int ! worktree.WorkErrors {
+    let ctx = worktree.discover(destination)?
+    let before = config_text(ctx.repo)?
+    let core_end = before.find("\n[") else before.len - 1
+    var lines = "[submodule]\n"
+    for spec in specs { lines = "{lines}\tactive = {spec}\n" }
+    let after = "{before[0..core_end + 1]}{lines}{before[core_end + 1..]}"
+    repository.publish_config(ctx.repo, before, after)?
+    let fresh_ctx = worktree.discover(destination)?
+    update(
+        fresh_ctx,
+        UpdateOptions { init: true, recursive: true, remote: false, fetch: true, force: false, quiet: quiet, paths: [] },
+        "",
+    )?
+}

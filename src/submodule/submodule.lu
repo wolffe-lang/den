@@ -1,0 +1,316 @@
+// `den submodule` (status, init, update, sync, foreach) and clone's
+// --recurse-submodules, from git-submodule(1), gitsubmodules(7),
+// gitmodules(5) and git-clone(1) of Git v2.56.0, held to the pinned Git as a
+// black box (vc25's probes and rows). add, deinit, set-url, set-branch,
+// summary and absorbgitdirs are named refusals for a later lane. No
+// implementation source consulted.
+use std.fs
+use gitmodules
+use index
+use object
+use oid
+use refs
+use remote
+use repository
+use wiregit
+use worktree
+
+struct Sub { name: str, path: str, id: oid.Oid, mapped: bool, module: gitmodules.Module }
+
+fn bytes_text(b: List[byte]) -> str ! worktree.WorkErrors {
+    str_from_utf8(b) else |_| { return Unsupported("non-UTF-8 submodule path") }
+}
+
+// Every stage-zero gitlink in index order, with its .gitmodules entry.
+fn submodules(ctx: worktree.Context, parsed: gitmodules.Parsed) -> List[Sub] ! worktree.WorkErrors {
+    let value = worktree.read_index(ctx)?
+    var out = List[Sub]()
+    for entry in value.entries {
+        if entry.stat[6] != 0o160000 || index.stage(entry) != 0 { continue }
+        let path = bytes_text(entry.path)?
+        let at = gitmodules.by_path(parsed, path)
+        (mut out).push(Sub {
+            name: if at >= 0 then copy parsed.modules[at].name else "",
+            path: path,
+            id: copy entry.id,
+            mapped: at >= 0,
+            module: if at >= 0 then copy parsed.modules[at] else gitmodules.Module {
+                name: "", path: "", url: "", branch: "", update: "", ignore: "", shallow: "", fetch_recurse: "",
+            },
+        })
+    }
+    out
+}
+
+// Path arguments, relative to the cwd, select submodules at or under them.
+fn selected(ctx: worktree.Context, sub: Sub, paths: List[str]) -> bool {
+    if paths.len == 0 { return true }
+    for path in paths {
+        var full = if path == "." then copy ctx.prefix else "{ctx.prefix}{path}"
+        while full.ends_with("/") { full = full[0..full.len - 1] }
+        if full == "" || sub.path == full || sub.path.starts_with("{full}/") { return true }
+    }
+    false
+}
+
+// The path shown for a submodule: relative to the cwd at the top level, its
+// parent's display path joined with its own path below it.
+fn display(ctx: worktree.Context, parent: str, path: str) -> str {
+    if parent != "" { return "{parent}/{path}" }
+    if ctx.prefix == "" { return copy path }
+    let up = ctx.prefix.split("/")
+    var common = 0
+    let parts = path.split("/")
+    var dirs = List[str]()
+    for p in up { if p != "" { (mut dirs).push(copy p) } }
+    while common < dirs.len && common < parts.len - 1 && dirs[common] == parts[common] { common += 1 }
+    var out = ""
+    for _ in common..dirs.len { out = "{out}../" }
+    for i in common..parts.len { out = if i == common then "{out}{parts[i]}" else "{out}/{parts[i]}" }
+    out
+}
+
+fn config_text(repo: repository.Repo) -> str ! worktree.WorkErrors {
+    let raw = repository.read_bytes("{repo.gitdir}/config", 1048576)?
+    str_from_utf8(raw) else |_| { return invalid }
+}
+
+fn set_config(repo: repository.Repo, key: str, value: str) -> () ! worktree.WorkErrors {
+    let before = config_text(repo)?
+    let after = repository.config_set(before, key, value)?
+    repository.publish_config(repo, before, after)?
+}
+
+fn fresh(repo: repository.Repo) -> repository.Repo ! worktree.WorkErrors { repository.open(repo.gitdir)? }
+
+// gitsubmodules(7) ACTIVE SUBMODULES: submodule.<name>.active, else the
+// submodule.active pathspecs, else submodule.<name>.url being set.
+fn active(repo: repository.Repo, sub: Sub) -> bool ! worktree.WorkErrors {
+    let own = repo.config["submodule.{sub.name}.active"] else ""
+    if own != "" { return own.lower() == "true" || own == "1" || own.lower() == "yes" || own.lower() == "on" }
+    var specs = List[str]()
+    for entry in repository.configuration(repo.gitdir)? {
+        if entry.key == "submodule.active" { (mut specs).push(copy entry.value) }
+    }
+    if specs.len > 0 {
+        var hit = false
+        for spec in specs {
+            if spec.starts_with(":(exclude)") {
+                let ex = spec[10..]
+                if sub.path == ex || sub.path.starts_with("{ex}/") { return false }
+            } else if spec == "." || spec == "*" || sub.path == spec || sub.path.starts_with("{spec}/") {
+                hit = true
+            }
+        }
+        return hit
+    }
+    (repo.config["submodule.{sub.name}.url"] else "") != ""
+}
+
+// The base a relative URL resolves against (git-submodule(1) add): the
+// remote of the current branch's upstream, else origin, else this top level.
+fn base_url(ctx: worktree.Context) -> str ! worktree.WorkErrors {
+    let head = refs.symbolic(ctx.repo, "HEAD") else ""
+    var name = "origin"
+    if head.starts_with("refs/heads/") {
+        let configured = ctx.repo.config["branch.{head[11..]}.remote"] else ""
+        if configured != "" { name = configured }
+    }
+    let url = ctx.repo.config["remote.{name}.url"] else ""
+    if url != "" { return url }
+    eprint("warning: could not look up configuration 'remote.{name}.url'. Assuming this repository is its own authoritative upstream.")
+    copy ctx.root
+}
+
+fn resolved(ctx: worktree.Context, url: str) -> str ! worktree.WorkErrors {
+    if !gitmodules.is_relative(url) { return copy url }
+    gitmodules.resolve(base_url(ctx)?, url) else |e| match e {
+        Fatal(message) => { return Fatal(message) },
+        _ => { return invalid },
+    }
+}
+
+fn init(ctx: worktree.Context, parsed: gitmodules.Parsed, paths: List[str], parent: str) -> () ! worktree.WorkErrors {
+    var repo = copy ctx.repo
+    var has_active = false
+    for entry in repository.configuration(repo.gitdir)? { if entry.key == "submodule.active" { has_active = true } }
+    for sub in submodules(ctx, parsed)? {
+        if !selected(ctx, sub, paths) { continue }
+        let shown = display(ctx, parent, sub.path)
+        if !sub.mapped || sub.module.url == "" { return Fatal("No url found for submodule path '{shown}' in .gitmodules") }
+        if paths.len == 0 && has_active && !active(repo, sub)? { continue }
+        if (repo.config["submodule.{sub.name}.url"] else "") != "" { continue }
+        let url = resolved(ctx, sub.module.url)?
+        if !has_active { set_config(repo, "submodule.{sub.name}.active", "true")? }
+        set_config(repo, "submodule.{sub.name}.url", url)?
+        let mode = sub.module.update
+        if mode != "" && (repo.config["submodule.{sub.name}.update"] else "") == "" {
+            set_config(repo, "submodule.{sub.name}.update", mode)?
+        }
+        repo = fresh(repo)?
+        eprint("Submodule '{sub.name}' ({url}) registered for path '{shown}'")
+    }
+}
+
+fn head_text(repo: repository.Repo) -> str ! worktree.WorkErrors {
+    let raw = repository.read_bytes("{repo.gitdir}/HEAD", 4096)?
+    str_from_utf8(raw) else |_| { return invalid }
+}
+
+// Detach the submodule's HEAD at ID and check it out; a fresh clone (no
+// index yet) is checked out whole, a populated one keeps local changes
+// unless FORCE, as `checkout` does.
+fn checkout_detached(sub: worktree.Context, id: oid.Oid, whole: bool, force: bool) -> () ! worktree.WorkErrors {
+    let current = worktree.head(sub)?
+    let tree = worktree.flatten_tree(sub.repo, id)?
+    var tx = index.begin(sub.repo, 16777216, worktree.index_version(sub)?)?
+    defer index.abort(mut tx)
+    worktree.transition(sub, mut tx.value, tree, if whole || force then "hard" else "switch")?
+    index.commit(mut tx)?
+    let before = head_text(sub.repo)?
+    let from = if current.detached || current.branch == "" {
+        if current.commits.len == 1 then oid.hex(current.commits[0])? else "HEAD"
+    } else {
+        copy current.branch
+    }
+    let hex = oid.hex(id)?
+    refs.set_head(
+        sub.repo,
+        before,
+        "{hex}\n",
+        current.commits,
+        [copy id],
+        remote.reflog_identity(sub.repo)?,
+        "checkout: moving from {from} to {hex}",
+    )?
+}
+
+fn commit_present(repo: repository.Repo, id: oid.Oid) -> bool {
+    let value = object.read_object(repo, id, 16777216) else |_| { return false }
+    value.kind == "commit"
+}
+
+struct UpdateOptions {
+    init: bool,
+    recursive: bool,
+    remote: bool,
+    fetch: bool,
+    force: bool,
+    quiet: bool,
+    paths: List[str],
+}
+
+fn write_gitfile(worktree_path: str, gitdir: str) -> () ! worktree.WorkErrors {
+    let file = "{worktree_path}/.git"
+    if fs.exists(file) { return }
+    var f = fs.create_new_with_mode(file, 0o644)?
+    defer fs.close(take f) else |_| {}
+    fs.write(mut f, gitmodules.gitfile_text(worktree_path, gitdir))?
+    fs.sync(mut f)?
+}
+
+// One clone of a submodule under the protocol policy of a command Git runs
+// for the user, not one the user typed (GIT_PROTOCOL_FROM_USER=0). True on
+// success; a failure prints Git's two fatal lines.
+fn clone_one(url: str, gitdir: str, full: str) -> bool {
+    let saved = env_get("GIT_PROTOCOL_FROM_USER") else "\0"
+    env_set("GIT_PROTOCOL_FROM_USER", "0") else |_| {}
+    let parent = fs.parent(gitdir) else "."
+    fs.create_dir_all(parent) else |_| {}
+    let worktree_rel = gitmodules.relative_path(gitdir, full)
+    var ok = true
+    wiregit.clone_submodule(url, gitdir, worktree_rel) else |e| {
+        ok = false
+        let message = "{e}"
+        eprint(if message.starts_with("Unsupported(transport '") {
+            "fatal: {message[12..message.len - 1]}"
+        } else {
+            "fatal: {message}"
+        })
+        eprint("fatal: clone of '{url}' into submodule path '{full}' failed")
+    }
+    if saved == "\0" { env_set("GIT_PROTOCOL_FROM_USER", "1") else |_| {} } else { env_set("GIT_PROTOCOL_FROM_USER", saved) else |_| {} }
+    ok
+}
+
+fn update(
+    ctx: worktree.Context,
+    options: UpdateOptions,
+    parent: str,
+) -> int ! worktree.WorkErrors {
+    let parsed = worktree.modules(ctx)?
+    if options.init { init(ctx, parsed, options.paths, parent)? }
+    let repo = fresh(ctx.repo)?
+    var status = 0
+    var retry = List[Sub](), done = List[Sub]()
+    for pass in 0..2 {
+        let candidates = if pass == 0 then submodules(ctx, parsed)? else copy retry
+        retry = []
+        for sub in candidates {
+            if pass == 0 && !selected(ctx, sub, options.paths) { continue }
+            let shown = display(ctx, parent, sub.path)
+            if !sub.mapped { return Fatal("No url found for submodule path '{shown}' in .gitmodules") }
+            if !active(repo, sub)? { continue }
+            let url = repo.config["submodule.{sub.name}.url"] else ""
+            if url == "" { return Fatal("No url found for submodule path '{shown}' in .gitmodules") }
+            let mode = repo.config["submodule.{sub.name}.update"] else "checkout"
+            if mode == "none" { continue }
+            if mode != "checkout" { return Unsupported("update mode {mode}") }
+            let full = "{ctx.root}/{sub.path}"
+            let gitdir = gitmodules.module_gitdir(repo.gitdir, sub.name)
+            var whole = false
+            if !fs.exists("{full}/.git") {
+                if !fs.is_dir(gitdir) {
+                    eprint("Cloning into '{full}'...")
+                    if !clone_one(url, gitdir, full) {
+                        if pass == 0 {
+                            eprint("Failed to clone '{shown}'. Retry scheduled")
+                            (mut retry).push(copy sub)
+                        } else {
+                            eprint("Failed to clone '{shown}' a second time, aborting")
+                            status = 1
+                        }
+                        continue
+                    }
+                }
+                fs.create_dir_all(full)?
+                write_gitfile(full, gitdir)?
+                whole = true
+            }
+            let sub_ctx = worktree.discover(full)?
+            let target = copy sub.id
+            if !commit_present(sub_ctx.repo, target) {
+                return Fatal("Fetched in submodule path '{shown}', but it did not contain {oid.hex(target)?}. Direct fetching of that commit failed.")
+            }
+            let current = worktree.head(sub_ctx)?
+            let moved = current.commits.len != 1 || !oid.equal(current.commits[0], target) || !current.detached
+            if whole || moved || options.force {
+                checkout_detached(sub_ctx, target, whole, options.force) else |e| match e {
+                    Failure(message) => {
+                        // vc25 probe 2, upd-dirty-conflict: checkout's refusal,
+                        // then the submodule's, exit 1.
+                        eprint("error: {message}")
+                        eprint("fatal: Unable to checkout '{oid.hex(target)?}' in submodule path '{shown}'")
+                        return 1
+                    },
+                    _ => { return Fatal("submodule checkout: {e}") },
+                }
+                if !options.quiet { print("Submodule path '{shown}': checked out '{oid.hex(target)?}'") }
+            }
+            (mut done).push(copy sub)
+        }
+        if retry.len == 0 { break }
+    }
+    if options.recursive {
+        for sub in done {
+            let full = "{ctx.root}/{sub.path}"
+            let sub_ctx = worktree.discover(full)?
+            var nested = copy options
+            nested.paths = []
+            nested.init = true
+            let rc = update(sub_ctx, nested, display(ctx, parent, sub.path))?
+            if rc != 0 { status = rc }
+        }
+    }
+    status
+}
