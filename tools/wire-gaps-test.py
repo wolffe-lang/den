@@ -265,9 +265,13 @@ class Harness:
         # A fixture for each family that uses https (url starts it, main stops
         # it after the family): its bridge waits at most 60 s for each next
         # request, so it must not sit idle through another family's rows.
+        # Its keys live outside target/runs, which is published evidence, and
+        # are removed when the fixture stops (tools/evidence-modes.py).
         self.https_starts += 1
-        pki = self.out / ('pki-%d' % self.https_starts)
-        pki.mkdir()
+        pki = self.root / 'target/pki' / ('%s-%d' % (self.out.name, self.https_starts))
+        shutil.rmtree(pki, ignore_errors=True)
+        pki.mkdir(parents=True)
+        self.https_pki = pki
 
         def openssl(*argv):
             result = subprocess.run(['/usr/bin/openssl', *map(str, argv)], env=self.env, capture_output=True,
@@ -314,6 +318,7 @@ class Harness:
             self.https.close()
             self.https_errors += self.https.errors
             self.https = None
+            shutil.rmtree(self.https_pki, ignore_errors=True)
 
     def stop(self):
         if self.daemon:
