@@ -832,3 +832,35 @@ children's argv), a field Git 2.56.0 from Homebrew, and the pinned OpenSSL
 Organisation-owned: the wolf book's chapters on lists (a list slice is a copy)
 and regions, and wolf-std's `fs` (`read_at`, `read_into`). No Git, libgit2,
 JGit or other implementation source was read.
+
+## Everyday wire gaps (vc24)
+
+Git 2.56.0 documentation, read as published text:
+
+- `git-push(1)`: `<refspec>`, how a destination outside `refs/` is placed
+  against the remote's refs or from the source's namespace, the refusal when
+  neither works, `-u`; `git-config(1)`: `advice.pushUnqualifiedRefname`,
+  `push.default`, `lsrefs.unborn`, `remote.<name>.fetch`.
+- `git-clone(1)`: `<directory>` and its "humanish" default, `--bare`, an
+  existing empty destination.
+- `git-ls-remote(1)`: every option, `<patterns>` matched against a ref's tail,
+  the output format, `--exit-code`; `gitglossary(7)`: glob.
+- `git-rev-parse(1)`: `--verify`, `-q`, `--abbrev-ref`, `--symbolic-full-name`,
+  `--short`, `--show-toplevel`, `--git-dir`, `--absolute-git-dir`,
+  `--is-inside-work-tree`, `--is-inside-git-dir`, `--is-bare-repository`,
+  `--show-prefix`, `--show-cdup`; `gitrevisions(7)`: the `<refname>` order and
+  `<branchname>@{upstream}`; `git(1)`: `GIT_CEILING_DIRECTORIES`.
+- `git-fetch(1)`: `<refspec>` (globs, negative refspecs, `tag <tag>`, no
+  destination), the configured remote-tracking branches and the opportunistic
+  update, FETCH_HEAD, the output format and exit status.
+- `gitprotocol-v2(5)`: `ls-refs` (`symrefs`, `peel`, `ref-prefix`, `unborn`).
+
+Black boxes: the pinned Git 2.56.0 (push, clone, ls-remote, rev-parse, fetch,
+daemon, http-backend, fast-import, repack) and a field Git 2.56.0 from Homebrew.
+The humanish rule, the placement of a short push destination, the fetch
+report's unpadded form after a rejection and which tags a fetch follows were
+measured black-box and are described in the note in den's own words.
+Organisation-owned: burrow's `tools/measure-den` fixture generator (den#63's
+fixture, by value), the wolf book's chapters on lists and regions, wolf-std's
+`list` (`reserve`). No Git, libgit2, JGit or other implementation source was
+read.
