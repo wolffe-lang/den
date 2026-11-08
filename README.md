@@ -337,7 +337,11 @@ refused (`fatal: transport 'file' not allowed`) unless its policy is `always`.
 Status and diff read a submodule's worktree with den's own scan: new commits,
 modified content and untracked content, nested submodules rolled up, under the
 `ignore` settings of `.gitmodules`, config and `--ignore-submodules`. Checkout,
-switch and reset leave submodule worktrees alone, as Git does by default.
+switch and reset leave submodule worktrees alone, as Git does by default. They
+run where branches have upstreams, as every clone's do: checkout and switch
+print the upstream lines Git prints, while making a tracking branch, from a
+remote-tracking start point or by guessing a remote's branch, stays a named
+refusal.
 `.gitmodules` is checked as Git checks it: suspicious names, values that could
 be read as options and invalid values warn or refuse with Git's messages.
 
@@ -345,7 +349,7 @@ The authoring commands (`submodule add`, `deinit`, `set-url`, `set-branch`,
 `summary`, `absorbgitdirs`), `push --recurse-submodules`, clone's
 `--shallow-submodules`, `--remote-submodules` and `-j`, `update --remote`,
 `--merge` and `--rebase`, `status.submoduleSummary`, `mv` of a submodule,
-`restore` of a gitlink path, `stash` with a gitlink and
+`restore` of a gitlink path, `stash` in a superproject and
 `extensions.submodulePathConfig` are named refusals. `tools/check-submodule`
 compares every supported form with the pinned Git on both tiers.
 
