@@ -41,10 +41,6 @@
 - Live rows clone wolf-web with `--recurse-submodules` by both tools and
   compare every repository, and read wolf-interp's, wolf-std's and
   wolf-lsp's release-pinned gitlinks, over https (named SKIPs offline).
-- A tree transition (checkout, reset, clone's checkout) reads its blobs
-  through one opened reader: it no longer loads the pack index once per blob,
-  which made a checkout of a large repository's tens of thousands of files
-  take tens of minutes.
 - Hostile `.gitmodules` input is refused or warned about as Git does:
   suspicious names, dash URLs and paths, missing URLs or commits, invalid
   values, bad config lines (`bad config line N in file ...`, naming the
