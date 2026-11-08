@@ -63,6 +63,16 @@ The next two finals passed every row and failed at the last leaf, the guard over
 
 The macOS record now also runs the gate's own leaves over the commands this branch changes that run against a field Git (refs, merge, replay, diff units, index, ignore, worktree and commit) and the config leaf's units and `tools/config-test.py`, besides the submodule and plain-clone families. The stash, revision, history, everyday and status-speed leaves, and the config leaf's day-to-day rows, assert the pinned Linux Git's digest, so they run in the Linux final only, and a check against the pinned Git runs the config and refs leaves whole before each final.
 
+### PAX: the px lane's items (item 9, draft)
+
+A px lane wires a submodule witness into the next stick. Its items, for that lane to take as written or amend:
+
+1. **Fixture:** a superproject with two submodules, one of them holding a nested submodule, built on the Linux host with the pinned Git and served from the stick's own file system (no network), with relative URLs for the nested one and an absolute `file://` URL for the other, as `tools/submodule-test.py`'s remotes are.
+2. **Session:** a typed session on a dev image runs the image's den: `clone --recurse-submodules` with `protocol.file.allow=always`, then `submodule status --recursive`, `status`, and `diff --submodule=log` after a commit moved in one submodule.
+3. **Held to Linux's den byte for byte:** the session's stdout and stderr, and the whole clone (superproject, `.git/modules/*` at both depths, the worktree files and `.git` files, `core.worktree`), against the same commands run by den on Linux over the same fixture at the same path. Reflogs differ only by den's own identity on both sides, so they are compared too.
+4. **Red first:** the stick's witness is red against an image whose den predates submodule support (`den: not yet implemented: submodule`), then green.
+5. **Limits carried over:** everything named in this note's remaining limits; no network transport on the stick.
+
 ## Done-when
 
 - [x] Census and prediction first; the census aggregates only in tracked text.
