@@ -44,7 +44,7 @@ fn lower(value: str) -> str {
     str_from_utf8(out) else ""
 }
 
-fn same(a: List[byte], b: List[byte]) -> bool {
+fn same_path(a: List[byte], b: List[byte]) -> bool {
     if a.len != b.len { return false }
     for i in 0..a.len { if a[i] != b[i] { return false } }
     true
@@ -110,7 +110,7 @@ fn recorded(repo: repository.Repo, before: List[str]) -> Map[str, List[str]] ! w
                 var same = false
                 for other in list {
                     if other.mode == 0o160000 &&
-                        same(other.path, entry.path) &&
+                        same_path(other.path, entry.path) &&
                         oid.equal(other.id, entry.id) {
                         same = true
                         break
