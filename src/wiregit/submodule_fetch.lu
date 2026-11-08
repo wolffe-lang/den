@@ -74,9 +74,11 @@ fn present(gitdir: str, hex: str) -> bool {
     true
 }
 
+struct Recorded { path: str, id: str }
+
 // The gitlinks the fetched commits record that differ from a parent's.
-fn recorded(repo: repository.Repo, before: List[str]) -> Map[str, List[str]] ! worktree.WorkErrors {
-    var out = Map[str, List[str]]()
+fn recorded(repo: repository.Repo, before: List[str]) -> List[Recorded] ! worktree.WorkErrors {
+    var out = List[Recorded]()
     var names = List[str]()
     let listed = refs.list(repo, "refs/") else |e| {
         return Unsupported("submodule fetch refs: {e}")
@@ -112,11 +114,9 @@ fn recorded(repo: repository.Repo, before: List[str]) -> Map[str, List[str]] ! w
             }
             if !changed { continue }
             let path = str_from_utf8(entry.path) else |_| { continue }
-            var ids = out[path] else List[str]()
             var seen = false
-            for id in ids { if id == hex { seen = true } }
-            if !seen { (mut ids).push(hex) }
-            out[path] = ids
+            for r in out { if r.path == path && r.id == hex { seen = true } }
+            if !seen { (mut out).push(Recorded { path: path, id: hex }) }
         }
     }
     out
@@ -135,7 +135,7 @@ pub fn recurse(before: List[str], cli: str, quiet: bool) -> int ! worktree.WorkE
     let repo = repository.open(ctx.repo.gitdir)?
     let global = setting(repo.config["fetch.recursesubmodules"] else "on-demand")
     var candidates = List[Target]()
-    var wanted = Map[str, List[str]]()
+    var wanted = List[Recorded]()
     var demanded = false
     for module in parsed.modules {
         if module.path == "" { continue }
