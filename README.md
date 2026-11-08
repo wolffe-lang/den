@@ -346,6 +346,18 @@ Git byte for byte over every transport.
 `.gitmodules` is checked as Git checks it: suspicious names, values that could
 be read as options and invalid values warn or refuse with Git's messages.
 
+A superproject's `fetch` and `pull` fetch submodules on demand, as
+`fetch.recurseSubmodules` defaults: a submodule is fetched when a fetched
+commit records a commit its repository lacks (`Fetching submodule <path>`);
+`--recurse-submodules[=yes|on-demand|no]`, `fetch.recurseSubmodules`,
+`submodule.<name>.fetchRecurseSubmodules` and `submodule.recurse` select it.
+`pull` merges a gitlink one side moved through and refuses one both sides
+moved by name. With `--recurse-submodules` or `submodule.recurse`, checkout,
+switch, a hard reset and pull move every active submodule to its recorded
+commit on a detached HEAD, refuse first when that would overwrite a
+submodule's local changes (unless forced), and empty a submodule the target
+no longer records.
+
 The authoring commands (`submodule add`, `deinit`, `set-url`, `set-branch`,
 `summary`, `absorbgitdirs`), `push --recurse-submodules`, clone's
 `--shallow-submodules`, `--remote-submodules` and `-j`, `update --remote`,
