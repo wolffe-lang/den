@@ -109,27 +109,32 @@ fn config_header(text: str, start: int) -> (str, int) ! ConfigSyntaxErrors {
         while pos < text.len {
             var b = text.bytes()[pos]
             pos += 1
-            if b == 10 as byte { return ConfigLine(config_line(text, pos)) }
+            // A newline inside the quotes is reported on its own line.
+            if b == 10 as byte { return ConfigLine(config_line(text, pos - 1)) }
             if b == 34 as byte { closed = true; break }
             if b == 92 as byte {
                 if pos == text.len { return ConfigLine(config_line(text, pos)) }
                 b = text.bytes()[pos]
                 pos += 1
-                if b == 10 as byte { return ConfigLine(config_line(text, pos)) }
+                if b == 10 as byte { return ConfigLine(config_line(text, pos - 1)) }
             }
             (mut subsection).push(b)
         }
         if !closed { return ConfigLine(config_line(text, pos)) }
         let sub = str_from_utf8(subsection) else |_| { return ConfigLine(config_line(text, pos)) }
         section = "{name}.{sub}"
-        while pos < text.len && config_space(text.bytes()[pos]) { pos += 1 }
+        // The closing quote takes "]" at once, no blank between. A newline
+        // (or CRLF) or the end of the file in its place is counted as a line,
+        // as Git counts it (vc25, measured against the pinned Git).
+        if pos == text.len { return ConfigLine(config_line(text, pos) + 1) }
+        if text.bytes()[pos] == 10 as byte { return ConfigLine(config_line(text, pos + 1)) }
+        if text.bytes()[pos] == 13 as byte &&
+            pos + 1 < text.len &&
+            text.bytes()[pos + 1] == 10 as byte {
+            return ConfigLine(config_line(text, pos + 2))
+        }
     }
     if pos == text.len || text.bytes()[pos] != 93 as byte {
-        // Git counts the newline it stops on (vc25: an unterminated header
-        // on line 1 is reported as line 2).
-        if pos < text.len && text.bytes()[pos] == 10 as byte {
-            return ConfigLine(config_line(text, pos + 1))
-        }
         return ConfigLine(config_line(text, pos))
     }
     config_include(section)?
