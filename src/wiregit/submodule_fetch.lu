@@ -154,8 +154,8 @@ pub fn recurse(before: List[str], cli: str, quiet: bool) -> int ! worktree.WorkE
         }
         var ids = List[str]()
         if mode == "on-demand" {
-            for hex in copy wanted[module.path] else List[str]() {
-                if !present(gitdir, hex) { (mut ids).push(hex) }
+            for r in wanted {
+                if r.path == module.path && !present(gitdir, r.id) { (mut ids).push(copy r.id) }
             }
             if ids.len == 0 { continue }
         }
