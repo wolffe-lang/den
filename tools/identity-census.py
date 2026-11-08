@@ -169,13 +169,16 @@ for mirror_arg in A.mirrors:
     # from a repository holding the mirror's objects loose: den reads a
     # pack's index again for each object it reads from that pack, which is
     # a cost question, not this census's.
-    read, read_bytes, compared, unusual = True, 0, 0, 0
+    read, read_bytes, compared, unusual, odd_values = True, 0, 0, 0, []
     if receive:
         chosen, plain = [], []
         for oid, kind, body in found:
             odd = any(not CANONICAL.match(v) for v in identities(body))
             (chosen if odd else plain).append((oid, kind))
         unusual = len(chosen)
+        by_id = {o: b for o, _, b in found}
+        odd_values = sorted({v.decode('utf-8', 'backslashreplace') for oid, kind in chosen
+                             for v in identities(by_id[oid]) if not CANONICAL.match(v)})
         chosen += plain[::max(1, len(plain) // SAMPLE)][:SAMPLE]
         # Every object of the mirror, unpacked loose (`git show -s` reads
         # trees and blobs to settle its diff even when it prints none).
@@ -201,7 +204,7 @@ for mirror_arg in A.mirrors:
         shutil.rmtree(mini)
     row = dict(mirror=name, objects=len(found), identities=len(values), fsck_ids=dict(tally), shapes=dict(marks),
                objects_reported=len(git_ids), checker=checker, receive=receive, read=read,
-               unusual_objects=unusual, read_commands=compared, read_bytes=read_bytes)
+               unusual_objects=unusual, unusual_lines=odd_values, read_commands=compared, read_bytes=read_bytes)
     summary.append(row)
     print('CENSUS %s objects=%d identities=%d ids=%s shapes=%s checker=%s receive=%s read=%s '
           '(%d unusual objects, %d commands, %d bytes)' % (
