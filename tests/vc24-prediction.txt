@@ -1,0 +1,305 @@
+vc24: den's everyday wire gaps: push to a new remote branch (den#71),
+clone with no directory (den#72), ls-remote (den#68), rev-parse (den#69),
+fetch with a remote and explicit refspecs (den#70), clone memory against
+history length (den#63)
+Base: 474a926ae2242d1227d46c27977370bbc9a93b08
+Prediction committed before implementation; observations do not replace it.
+
+Sources read: Git v2.56.0 documentation: git-push(1) (<refspec>, the
+destination's inference, -u), git-clone(1) (<directory>, the "humanish"
+part, --bare), git-ls-remote(1) (every option, <patterns>, OUTPUT),
+git-rev-parse(1) (--verify, -q, --abbrev-ref, --symbolic-full-name,
+--short, --show-toplevel, --git-dir, --is-inside-work-tree,
+--is-bare-repository, --show-prefix, --show-cdup), git-fetch(1)
+(<refspec>, negative refspecs, the opportunistic remote-tracking update,
+FETCH_HEAD, the output format, exit status), gitrevisions(7)
+(<refname> lookup order, <branchname>@{upstream}), gitglossary(7) (glob),
+gitprotocol-v2(5) (ls-refs: symrefs, peel, ref-prefix, unborn),
+git-config(1) (advice.pushUnqualifiedRefname, push.default,
+remote.<name>.fetch). Black-box runs of the pinned Git 2.56.0 and of a
+field Git 2.56.0. Own code: den's wire command edge, configured push and
+fetch, the push planner, the fetch selector, clone, the revision
+evaluator and its upstream mapping, refs, the pack indexer and closure
+check, and burrow's den#63 fixture generator (organisation code).
+No Git, libgit2, JGit or other implementation source consulted.
+
+Measured before any change, trunk 474a926, on a Linux x86-64 desktop in
+the pinned oracle container (a six-CPU block, 12 GiB cap; the memory
+probes in a two-CPU light slot, each run under prlimit --as), and on an
+Apple silicon laptop with the field Git for the command surfaces.
+
+  den#71: `den push origin trunk` with a local branch trunk and an empty
+  bare remote over file:// already creates refs/heads/trunk, -u included;
+  so does `HEAD:new` on a branch. The refusal the issue quotes,
+  `den: wire: Unsupported(push destination requires full refname)`
+  (exit 2), is den's answer whenever the source does not resolve to a
+  local branch or tag: a misspelt or absent source (Git: `error: src
+  refspec X does not match any`, exit 1), a detached HEAD, an object id,
+  `trunk~0`, a remote-tracking ref (Git: its "not a full refname" error
+  with a hint, exit 1), and a destination that already exists on the
+  remote under a short name (Git pushes there). den never reads the
+  remote's refs to place a short destination, and never refuses a
+  destination that matches two remote refs.
+  den#72: `den clone URL` refuses `den: wire: invalid` (exit 2) for every
+  URL form; so do zero and three operands. An existing empty directory is
+  refused `den: wire: exists` (Git clones into it); an existing non-empty
+  one likewise (Git: `fatal: destination path 'X' already exists and is
+  not an empty directory.`, exit 128). A clone of an empty repository
+  omits Git's `warning: You appear to have cloned an empty repository.`
+  den#68: `den: not yet implemented: ls-remote (unplanned command)`.
+  den#69: `den: not yet implemented: rev-parse (M3, vc10)`, and the
+  revision evaluator refuses `@{u}`, `@{upstream}` and `B@{u}`
+  (`not yet implemented: revision upstream tracking`).
+  den#70: `den fetch origin SRC:DST` refuses `Unsupported(configured
+  fetch option/refspec SRC:DST)`, exit 2, for every refspec form; the URL
+  form `den fetch -q URL SRC:DST` (one full refspec) is the only explicit
+  form.
+  den#63 (the issue measured den ef0bb0c: 348 MiB at 30 commits, 954 MiB
+  at 60, 3.3 GiB at 120, 12.2 GiB at 300; the issue's numbers are
+  commits, not thousands of commits), at trunk, each den run's peak RSS
+  from a small launcher (floor 7,856 KiB), file://:
+    issue fixture, 30 commits (502 objects): clone 8,348 KiB
+    issue fixture, 300 commits (3,202 objects): --bare 13,108 KiB,
+      clone 23,796 KiB
+    issue fixture, 300 commits and 40 incompressible 256 KiB files
+      (3,243 objects, 17 MB pack): --bare 21,944, clone 26,892 KiB
+    long history (one small file rewritten a commit; 4 objects a commit):
+      1,000 commits (4,000 objects): --bare 15,472, clone 27,292 KiB
+      5,000 commits (20,000 objects): --bare 63,492, clone 124,220 KiB
+      20,000 commits (80,000 objects): --bare 243,380, clone 488,344 KiB
+      (Git: 19,176 and 19,308 KiB; den 12.7 s and 21.1 s CPU, Git 0.4 s)
+  So the issue's quadratic is gone at trunk: vc23's streamed indexer
+  (den#61) removed it. What remains grows linearly with the number of
+  objects, at about 3 KiB an object for --bare and twice that with a
+  checkout, where Git's is about 0.15 KiB.
+
+P1. den#71, push. The rule, from git-push(1) and black-box runs:
+  a. The source resolves first, before any connection: empty (a
+     deletion); HEAD; a ref name by gitrevisions(7)'s <refname> order
+     (refs/X, refs/tags/X, refs/heads/X, refs/remotes/X,
+     refs/remotes/X/HEAD), refused `error: src refspec X matches more
+     than one` when two of them exist; otherwise any revision (an object
+     id, `X~0`, `v2^{}`). Nothing resolves: `error: src refspec X does
+     not match any`. Both end with `error: failed to push some refs to
+     'URL'` and exit 1, with nothing sent.
+  b. With no colon, the destination is the source as typed (HEAD on a
+     branch gives that branch).
+  c. A destination under refs/ is used as typed. Otherwise it is matched
+     against the remote's advertised refs by the same five patterns: one
+     match is the destination; two or more refuse `error: dst refspec X
+     matches more than one`; none infers refs/heads/X for a source that
+     resolved to a ref under refs/heads/ (or HEAD on a branch) and
+     refs/tags/X for one under refs/tags/. Any other source refuses with
+     Git's eleven-line `The destination you provided is not a full
+     refname` error, its hint naming the source object's type (commit:
+     "create a new branch" and refs/heads/; tag: "create a new tag";
+     tree or blob: "tag a new tree"/"blob", refs/tags/), and the hint
+     omitted under advice.pushUnqualifiedRefname=false. Exit 1.
+  d. -u records the upstream for a source branch exactly as today.
+  Rows (tools/wire-gaps-test.py, family push), held byte for byte with
+  Git's stdout, stderr and exit, then the remote's refs and the local
+  configuration and remote-tracking refs, over a local path, file://,
+  git:// (the pinned daemon, receive-pack enabled), ssh (the stand-in)
+  and https (the pinned TLS fixture), each into a fresh empty bare
+  repository: `push origin trunk`, `push -u origin trunk`, `push origin
+  trunk:other`, `push origin HEAD:new`, `push origin v1`, `push origin
+  v2:v2x` (annotated), and refusals: `push origin nosuch`, detached
+  `push origin HEAD:det`, `push origin <commit>:new`, `push origin
+  refs/remotes/origin/x:new`, `push origin <tree>:t`, `push origin
+  <tag object>:t`, an ambiguous source, and on a remote holding both
+  refs/heads/both and refs/tags/both, `push origin trunk:both`; on a
+  remote holding refs/other/q, `push origin <commit>:other/q`
+  (up to date, so Git and den both print `Everything up-to-date`).
+  Red on trunk: every refusal row (den exit 2, its own text) and the
+  remote-match rows; the plain new-branch rows pass already on every
+  transport (expected; the issue's case is the source that did not
+  resolve).
+
+P2. den#72, clone with no directory. The humanish rule, from
+  git-clone(1) and black-box runs over 70 spellings: take the URL with
+  its scheme and authority's user information removed; drop trailing
+  whitespace and slashes, then one trailing "/.git", then slashes again;
+  when no "/" is left, drop a ":port" (digits, possibly none); take what
+  follows the last "/" or ":"; drop one ".git" suffix; collapse runs of
+  whitespace and control characters into one space and trim. Empty:
+  `fatal: No directory name could be guessed.` and `Please specify a
+  directory on the command line`, exit 128. --bare appends ".git".
+  Examples Git gives: file:///p/repo.git, file:///p/repo/.git/ and
+  /p/repo give repo; git://h:1/x/name.git/ gives name; https://h:1 and
+  https://u:p@h:1/ give h; ssh://u@h:22/~/name.git and h:o/name.git give
+  name; h: gives h; h:.git and file:/// refuse; name.git.git gives
+  name.git; name.bundle and name.GIT stay as they are.
+  A local path is checked before the name is guessed (`fatal: repository
+  '/' does not exist`), as today.
+  The destination may exist as an empty directory, which the clone
+  fills; anything else at that path refuses `fatal: destination path 'X'
+  already exists and is not an empty directory.`, exit 128. A failed
+  clone into an existing empty directory leaves the directory and
+  removes what it wrote (measured in the rows, not assumed).
+  An empty repository's clone prints `warning: You appear to have cloned
+  an empty repository.` as Git does, before `done.` on a local clone.
+  Operand errors keep named refusals (R-vc24-1): zero operands
+  `den: wire: Unsupported(clone requires a repository)`, three or more
+  `den: wire: Unsupported(clone takes a repository and at most one
+  directory)`, exit 2; never a bare `invalid`.
+  Only the destination's derivation changes; the option loop and the
+  two-operand path stay as they are (vc25 adds options to that loop).
+  Rows (family clone): every spelling above that den speaks, through
+  `den clone` and `den clone --bare` with only the URL, over a local
+  path, file://, git://, ssh and https, compared with Git's `Cloning
+  into` line, exit, and the cloned repository; the refusals; the empty
+  and non-empty existing directory; the empty-repository warning.
+  Red on trunk: all of them but the two-operand controls.
+
+P3. den#68, ls-remote. `den ls-remote [--heads|-h|--branches|-b]
+  [--tags|-t] [--refs] [-q|--quiet] [--exit-code] [--symref]
+  [--upload-pack=EXEC] [REPOSITORY [PATTERN...]]`, over ls-refs (v2) on
+  every transport: `oid TAB name` lines in the server's order; a peeled
+  `name^{}` line after each annotated tag unless --refs; HEAD unless
+  --refs, --heads or --tags; `ref: TARGET TAB HEAD` before HEAD under
+  --symref; patterns are globs matched against each name's tails (the
+  whole name or after any "/"; `*` crosses "/"), the peeled line by its
+  own name; no REPOSITORY uses the default remote and prints `From URL`
+  on stderr unless -q; outside a repository with none, `fatal: No remote
+  configured to list refs from.`, exit 128; a missing repository, Git's
+  `does not appear to be a git repository` lines, exit 128; --exit-code
+  and nothing listed, exit 2. Works outside a repository given a URL.
+  `-h` alone is Git's help and stays a refusal; --get-url, --sort and
+  -o/--server-option refuse by name (R-vc24-2).
+  Rows (family ls-remote): the forms above against a remote with
+  branches, a nested branch, lightweight, annotated and nested annotated
+  tags, notes and a pull ref, on all five transports, plus an empty
+  repository. Red on trunk: every row (`not yet implemented`).
+
+P4. den#69, rev-parse, local and exact: revisions (every form the
+  evaluator speaks, and @{u}, @{upstream}, B@{u}, B@{upstream}, which it
+  gains through the existing upstream mapping, with Git's refusals: `no
+  upstream configured for branch 'B'`, `HEAD does not point to a
+  branch`, `no such branch: 'B'`, `upstream branch 'R' not stored as a
+  remote-tracking branch`, and a gone upstream's ambiguous-argument
+  error); --verify with -q/--quiet (`fatal: Needed a single revision`,
+  exit 128; quiet: nothing, exit 1); an unknown argument printed to
+  stdout then the ambiguous-argument error, exit 128, unless it names an
+  existing path; `--`; --abbrev-ref (a branch's short name, HEAD when
+  detached, the upstream's short name, nothing for a non-ref);
+  --symbolic-full-name; --short[=N]; --show-toplevel (`fatal: this
+  operation must be run in a work tree` in a bare repository or inside
+  .git); --git-dir (`.git` at the top, `.` inside the git directory,
+  absolute elsewhere); --absolute-git-dir; --is-inside-work-tree;
+  --is-inside-git-dir; --is-bare-repository; --show-prefix; --show-cdup;
+  outside a repository, `fatal: not a git repository (or any of the
+  parent directories): .git`, exit 128. Any other option stays
+  `den: not yet implemented: rev-parse (M3, vc10)` (R-vc24-3).
+  The oracle's strict not-yet witness (`tools/oracle --filter rev-parse
+  --strict`, which tools/gate and CI's tier test require to stay red)
+  keeps a not-yet case: a new `rev-parse-parseopt` case; the existing
+  `rev-parse` case (`rev-parse HEAD^{tree}` in an empty repository)
+  becomes a parity row (R-vc24-4). No CI file changes.
+  Rows (family rev-parse): each form at the worktree's top, in a
+  subdirectory, inside .git, in a bare repository, detached, unborn, and
+  outside a repository. Red on trunk: all of them.
+
+P5. den#70, `den fetch [-q] [-f] REMOTE REFSPEC...` for a configured
+  remote, as git-fetch(1) describes and the pinned Git does:
+  - SRC is a full ref, a short name matched against the remote's refs by
+    the <refname> order, or a glob `refs/X/*:refs/Y/*`; `+` forces;
+    `^REF` excludes from the globs; `tag NAME` means
+    refs/tags/NAME:refs/tags/NAME; a short DST is placed under the
+    source's namespace (refs/heads/ or refs/tags/).
+  - No DST: FETCH_HEAD only (`* branch X -> FETCH_HEAD`, `* tag X ->
+    FETCH_HEAD`).
+  - Every explicit refspec's entries are for merge in FETCH_HEAD; tags
+    followed into the fetched history are added not-for-merge, as
+    today's configured fetch does.
+  - The opportunistic remote-tracking update: a source the remote's
+    configured refspec maps also updates that remote-tracking ref.
+  - Rejections without force: a non-fast-forward branch `! [rejected] …
+    (non-fast-forward)`, an existing tag `(would clobber existing tag)`;
+    exit 1, the other updates kept.
+  - `fatal: couldn't find remote ref X`, exit 128; a destination checked
+    out in the worktree, `fatal: refusing to fetch into branch 'R'
+    checked out at 'PATH'`, exit 128.
+  - The report on stderr in Git's columns, unless -q.
+  The configured fetch with no refspec keeps its path; `--prune` with an
+  explicit refspec refuses by name (R-vc24-5).
+  Rows (family fetch): each case above, byte for byte (stdout, stderr,
+  exit) and by state (every ref, FETCH_HEAD, reachable objects, Git's
+  fsck), over file://, git://, ssh and https. Red on trunk: all of them.
+
+P6. den#63, the memory model.
+  a. The quadratic at the issue's commit (ef0bb0c, re-measured there by
+     the same probe before any change): the pre-vc23 whole-pack decoder
+     inflated each entry from a copy of the rest of the pack, so its
+     copies summed to about entries x pack / 2; both factors grow with
+     history, which is quadratic in it. vc23's streamed indexer removed
+     that term; nothing in this lane depends on it.
+  b. At trunk, an RSS timeline of the 80,000-object clone (VmRSS and the
+     open files sampled every 5 ms) splits the peak into phases:
+       receive (pack to disk)                       ~4.5 MiB
+       index and resolve (the indexer's tables)    +32 MiB (0.4 KiB/object)
+       idx and rev written, pack installed         +18 MiB
+       the closure's reader parses the idx         +56 MiB (0.7 KiB/object)
+       the closure walk (--bare ends here)         +78 MiB (1 KiB/object)
+       checkout setup: about a dozen more parses of
+         the idx, each ~20 MiB, retained          +245 MiB
+       each checked-out file parses the idx again  +20 to +50 MiB, freed
+     So the term that grows with history is the pack index: parsed into
+     about 0.7 KiB an object (a hex string, an Oid and a slice per
+     entry, and a copied order list per merge pass, all in the caller's
+     region), once for every object read outside an opened reader, and
+     kept whenever that read is outside a region. With F files checked
+     out, CPU is O(F x objects). The closure walk's queue keeps every
+     link it ever queued, and copies each one outside the per-object
+     region.
+  c. The fix: the idx parse does each entry's work in a region, reserves
+     its lists to the object count and sorts without a copy a pass
+     (predicted: at most 0.2 KiB an object a parse); the clone's
+     checkout reads through one opened reader, so the idx is parsed once
+     for the whole checkout; the closure walk takes each link inside its
+     region and drops the queue's consumed prefix.
+  d. The bound: 64 MiB plus 1.5 KiB an object for a clone with a
+     checkout, and 64 MiB plus 1 KiB an object for --bare, plus the
+     largest object's window. For the 80,000-object fixture: at most
+     192 MiB with a checkout (488 MiB today) and 144 MiB bare (243 MiB
+     today). The row (family memory) clones it both ways under
+     `prlimit --as` at the bound plus 128 MiB of address space (VmPeak
+     ran about 120 MiB over VmRSS at trunk), checks RSS against the
+     bound, and checks each clone with the pinned Git's fsck and against
+     Git's clone; the issue's own 300-commit, 40-file fixture runs under
+     the same caps. Red on trunk: both 80,000-object clones over the
+     bound.
+
+P7. On PAX (drafted for a px lane, not run here): at a dev image's
+  console, against a loopback `den daemon --enable-receive-pack` fixture
+  holding an empty bare repository and one with history, type `den
+  clone git://127.0.0.1:9418/fix.git` (no directory) and `den push
+  origin <new-branch>`, each held to the same keys typed on Linux.
+
+P8. Refusals that remain, by name: clone's zero and extra operands
+  (R-vc24-1); ls-remote --get-url, --sort, -o and `-h` alone; rev-parse's
+  other options; fetch --prune with explicit refspecs; push to an
+  unconfigured local path (`missing remote PATH`, unchanged here).
+
+P9. The gate: the rows above in tools/wire-gaps-test.py, run by
+  tools/check-http for both tiers (it already holds the https fixture
+  and den's other multi-transport rows) and rev-parse's in
+  tools/check-revision; the full gauntlet at the head; one plant
+  (vc24-plant-*, one commit, one file, one hunk, red by name at the #71
+  row `push-infer-heads-file`).
+
+Rulings (recommended and implemented):
+  R-vc24-1 clone's operand errors: (A) named den refusals, exit 2
+    (recommended: Git's usage block lists options den does not take);
+    (B) Git's `fatal:` line and usage, exit 129.
+  R-vc24-2 ls-remote's --get-url, --sort and -o: (A) named refusals
+    (recommended; --get-url depends on insteadOf, which is another
+    lane's); (B) implement --get-url without insteadOf.
+  R-vc24-3 rev-parse's surface: (A) the forms scripts use, listed in P4,
+    and every other option `not yet implemented` (recommended); (B) the
+    listed forms only.
+  R-vc24-4 the oracle's strict not-yet witness: (A) a new still-refused
+    rev-parse case beside the existing one, which becomes a parity row
+    (recommended; no CI file changes); (B) change the witness in
+    tools/gate and ci/tiers-test.py (cross-cutting).
+  R-vc24-5 fetch --prune with explicit refspecs: (A) a named refusal
+    (recommended); (B) Git's prune within the refspecs.
