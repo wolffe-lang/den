@@ -5,6 +5,7 @@ use packcmd
 use pktline
 use repository
 use transport
+use wire
 
 /// Typed closure rooted only at explicitly requested objects. Shared validator
 /// parsers enforce link types; excluded objects are validated separately first.
@@ -135,6 +136,11 @@ pub fn receive_pack(
     var receiver = pack.receive_begin(repo.gitdir)?
     defer pack.receive_abort(mut receiver)
     let first = transport.stream_packet(mut s)?
+    // A server that will not serve a want answers ERR (gitprotocol-v2(5)).
+    if first.kind == 4 && wire.error_payload(first.data) {
+        let line = pktline.text(first.data)?
+        return Unsupported("remote error: {line[4..].trim()}")
+    }
     if first.kind != 4 || pktline.text(first.data)? != "packfile" { return invalid }
     var finished = false
     while !finished {

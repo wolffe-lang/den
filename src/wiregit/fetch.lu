@@ -150,6 +150,12 @@ fn fetch_selected(
     for reference in advertised {
         if reference.id != "unborn" { (mut roots).push(copy reference.id) }
     }
+    // A full object id as the source is wanted directly, as a submodule
+    // update asks for a recorded commit no advertised ref reaches (vc25).
+    if object_id(source) {
+        (mut wants).push(copy source)
+        (mut roots).push(copy source)
+    }
     if wants.len > 0 {
         // vc23 (den#61): the response streams to disk and is indexed there,
         // never held. No thin-pack: the received pack is self-contained, so
@@ -455,4 +461,21 @@ fn fetch_into_context(
         }
     }
     not_found
+}
+
+fn object_id(text: str) -> bool {
+    if text.len != 40 { return false }
+    for b in text.bytes() {
+        let n = b as int
+        if !(n >= 48 && n <= 57 || n >= 97 && n <= 102) { return false }
+    }
+    true
+}
+
+/// Fetch the commit SHA by id from URL into REPO (git-submodule(1) update's
+/// direct fetch), refusing by the server's own words when it will not
+/// serve it (vc25).
+pub fn fetch_commit(repo: repository.Repo, url: str, sha: str) -> () ! object.StoreErrors {
+    if !object_id(sha) { return invalid }
+    let _ = fetch_selected(repo, url, sha, true, false)?
 }
