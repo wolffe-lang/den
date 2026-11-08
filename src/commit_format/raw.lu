@@ -1,0 +1,167 @@
+// Clean-room: Git v2.56.0 Documentation/fsck-msgids.adoc (the author and
+// committer ids and their default severities) and pretty-formats.adoc. The
+// rules are black-box runs of the pinned Git over the shapes in
+// tools/identity-test.py (notes/vc26-evidence). No implementation consulted.
+
+/// An identity line as Git reads it back. Every part is a copy of stored
+/// bytes; nothing is re-spelled, so reading never changes an object.
+pub struct RawIdentity {
+    /// A `<` and a later `>`: the line splits into a name and an email.
+    split: bool,
+    /// The bytes before the first `<`, trailing whitespace dropped.
+    name: List[byte],
+    /// The bytes between the first `<` and the next `>`.
+    email: List[byte],
+    /// After the last `>`: whitespace, digits, whitespace, then `+` or `-`.
+    dated: bool,
+    /// The date's digits as stored (`%at`).
+    stamp: List[byte],
+    /// The digits read as an unsigned 64-bit number, saturated, in decimal.
+    seconds_text: str,
+    /// The value, when it is at most 9223372036854775807.
+    fits: bool,
+    seconds: int,
+    /// The zone's sign and the digits after it, as stored.
+    zone_text: List[byte],
+    /// The zone read as a signed number (+0530 is 530, -5 is -5), when it
+    /// has at most nine digits.
+    zone_fits: bool,
+    zone: int,
+}
+
+fn raw_space(b: byte) -> bool { b == 32 as byte || b as int >= 9 && b as int <= 13 }
+
+fn raw_digit(b: byte) -> bool { b as int >= 48 && b as int <= 57 }
+
+fn raw_copy(data: List[byte], start: int, end: int) -> List[byte] {
+    var out = List[byte]()
+    for i in start..end { (mut out).push(data[i]) }
+    out
+}
+
+// True when canonical decimal `left` is greater than `right`.
+fn raw_greater(left: str, right: str) -> bool {
+    if left.len != right.len { return left.len > right.len }
+    let a = left.bytes(), b = right.bytes()
+    for i in 0..a.len {
+        if a[i] != b[i] { return a[i] > b[i] }
+    }
+    false
+}
+
+/// The decimal text of digits read as an unsigned 64-bit number, saturated
+/// at 18446744073709551615, without leading zeros.
+fn raw_unsigned(digits: List[byte]) -> str {
+    let max = "18446744073709551615"
+    var start = 0
+    while start + 1 < digits.len && digits[start] == 48 as byte { start += 1 }
+    if digits.len - start > max.len { return max }
+    let text = str_from_utf8(raw_copy(digits, start, digits.len)) else "0"
+    if text == "" { return "0" }
+    if raw_greater(text, max) { return max }
+    text
+}
+
+/// True when a canonical decimal text is at most 9223372036854775807.
+fn raw_fits(text: str) -> bool { !raw_greater(text, "9223372036854775807") }
+
+/// Split one stored identity as Git's readers do (log, show, blame and the
+/// format placeholders). Total: every byte string has an answer.
+pub fn raw_identity(value: List[byte]) -> RawIdentity {
+    var out = RawIdentity {
+        split: false,
+        name: List[byte](),
+        email: List[byte](),
+        dated: false,
+        stamp: List[byte](),
+        seconds_text: "0",
+        fits: true,
+        seconds: 0,
+        zone_text: List[byte](),
+        zone_fits: true,
+        zone: 0,
+    }
+    var lt = 0
+    while lt < value.len && value[lt] != 60 as byte { lt += 1 }
+    if lt == value.len { return out }
+    var gt = lt + 1
+    while gt < value.len && value[gt] != 62 as byte { gt += 1 }
+    if gt == value.len { return out }
+    var end = lt
+    while end > 0 && raw_space(value[end - 1]) { end -= 1 }
+    out.split = true
+    out.name = raw_copy(value, 0, end)
+    out.email = raw_copy(value, lt + 1, gt)
+    var last = value.len - 1
+    while value[last] != 62 as byte { last -= 1 }
+    var pos = last + 1
+    while pos < value.len && raw_space(value[pos]) { pos += 1 }
+    let start = pos
+    while pos < value.len && raw_digit(value[pos]) { pos += 1 }
+    if pos == start { return out }
+    let digits = raw_copy(value, start, pos)
+    while pos < value.len && raw_space(value[pos]) { pos += 1 }
+    if pos == value.len || value[pos] != 43 as byte && value[pos] != 45 as byte { return out }
+    let sign = pos
+    pos += 1
+    let zone_start = pos
+    while pos < value.len && raw_digit(value[pos]) { pos += 1 }
+    out.dated = true
+    out.stamp = digits
+    out.seconds_text = raw_unsigned(out.stamp)
+    out.fits = raw_fits(out.seconds_text)
+    if out.fits { out.seconds = out.seconds_text.to_int() else 0 }
+    out.zone_text = raw_copy(value, sign, pos)
+    if pos - zone_start > 9 {
+        out.zone_fits = false
+    } else {
+        var magnitude = 0
+        for i in zone_start..pos { magnitude = magnitude * 10 + (value[i] as int - 48) }
+        out.zone = if value[sign] == 45 as byte then -magnitude else magnitude
+    }
+    out
+}
+
+/// Git fsck's verdict on one author, committer or tagger value, at the
+/// default severities (every identity id is an ERROR): ("", "") when clean,
+/// else the message id and its text.
+pub fn identity_problem(value: List[byte]) -> (str, str) {
+    let n = value.len
+    if n > 0 && value[0] == 60 as byte {
+        return ("missingNameBeforeEmail", "missing space before email")
+    }
+    var i = 0
+    while i < n && value[i] != 60 as byte && value[i] != 62 as byte { i += 1 }
+    if i == n { return ("missingEmail", "missing email") }
+    if value[i] == 62 as byte { return ("badName", "bad name") }
+    if value[i - 1] != 32 as byte {
+        return ("missingSpaceBeforeEmail", "missing space before email")
+    }
+    i += 1
+    while i < n && value[i] != 60 as byte && value[i] != 62 as byte { i += 1 }
+    if i == n || value[i] == 60 as byte { return ("badEmail", "bad email") }
+    i += 1
+    if i >= n || value[i] != 32 as byte {
+        return ("missingSpaceBeforeDate", "missing space before date")
+    }
+    i += 1
+    while i < n && raw_space(value[i]) { i += 1 }
+    if i < n && value[i] == 48 as byte && (i + 1 >= n || value[i + 1] != 32 as byte) {
+        return ("zeroPaddedDate", "zero-padded date")
+    }
+    if i >= n || !raw_digit(value[i]) { return ("badDate", "bad date") }
+    let start = i
+    while i < n && raw_digit(value[i]) { i += 1 }
+    if !raw_fits(raw_unsigned(raw_copy(value, start, i))) {
+        return ("badDateOverflow", "date causes integer overflow")
+    }
+    if i >= n || value[i] != 32 as byte { return ("badDate", "bad date") }
+    i += 1
+    if n - i != 5 || value[i] != 43 as byte && value[i] != 45 as byte {
+        return ("badTimezone", "bad time zone")
+    }
+    for j in i + 1..n {
+        if !raw_digit(value[j]) { return ("badTimezone", "bad time zone") }
+    }
+    ("", "")
+}
