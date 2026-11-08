@@ -141,7 +141,13 @@ fn init(ctx: worktree.Context, parsed: gitmodules.Parsed, paths: List[str], pare
         // With submodule.active set (a recursive clone), a gitlink .gitmodules
         // does not name is passed over in silence (vc25 rows).
         if has_active && !sub.mapped { continue }
-        if !sub.mapped || sub.module.url == "" { return Fatal("No url found for submodule path '{shown}' in .gitmodules") }
+        if !sub.mapped { return Fatal("No url found for submodule path '{shown}' in .gitmodules") }
+        if sub.module.url == "" {
+            // A mapped submodule without a usable URL is marked active before
+            // the refusal, as in Git (vc25 hostile rows).
+            if !has_active { set_config(repo, "submodule.{sub.name}.active", "true")? }
+            return Fatal("No url found for submodule path '{shown}' in .gitmodules")
+        }
         if paths.len == 0 && has_active && !active(repo, sub)? { continue }
         if (repo.config["submodule.{sub.name}.url"] else "") != "" { continue }
         let url = resolved(ctx, sub.module.url)?
