@@ -37,6 +37,8 @@ Clean room: git's documentation and black-box runs of the pinned Git and a field
 - **P9, the gate:** as predicted; the records are in the PR body.
 - **P10, the checkout's reader (a second change):** the cap held and the estimate did not. After the reader alone den's clone CPU was 8.3 times Git's on macOS, not about 5: the per-file syncs' system time, which the estimate left out, was most of the difference. After P11's change too, 6.5 times. Below, "The checkout's cost".
 - **P11, the checkout's syncs:** held. The pinned Git's pelt clone makes 3 sync calls, all on the received pack; den's fell from 19,390 to 20, none on the worktree. On a disk under strace den's clone fell from 294.4 s to 11.0 s; it was not measured in a tmpfs here.
+- **P12, den#73's bounds and their costs:** held, with two findings not predicted. Every path completes at 50,000 objects with Git's result; serving a clone and den's own clone through den's server cost 8.2 and 9.6 times Git's CPU on macOS, under the 30-times cap and under 10; each den process stays under 64 MiB plus 1 KiB an object. The prediction's order held, and the reader's cache was a lever it did not name: a read along a delta chain rebuilt and hashed every base. The findings: receive walked each tip's history twice, and the transfer walks refused i3's history with fsck's strict checks. Below, "The bounds at scale".
+- **P13, the rows:** as predicted, and red first by name at PR 2's head (8 of 10 on macOS; `scale-clone-git-server` is the regression row).
 
 ## Evidence index
 
@@ -127,6 +129,66 @@ The Linux timed rows' figures, before and after, are the gauntlet's and are in t
 
 **The next term** is den's own per-object work: each blob is inflated and hashed in wolf when the received pack is indexed, again when the checkout checks it and again when it writes it (each through its delta chain), and the written file is read back and hashed once more, where Git inflates each object once. On macOS a bare clone (the receive alone, which neither change touches) took 2.4 s of CPU against Git's 0.32 s, and the sample of the whole clone is led by SHA-1, inflate and delta application. In system calls, den's checkout still makes about 16 `statx`, 14 `pread64` and 7 `openat` a file where Git makes about 1, 0.6 and 2: the pack is opened and re-checked for each of a blob's two reads, each ancestor directory is checked before a file is written, and the written file is read back.
 
+### The bounds at scale (den#73, a third change)
+
+den#73: serving a clone, den's clone from den's server, fetch, push and receive each stopped at a fixed count of 10,000 objects, and each count sat in front of work that grew with the square of the objects (P12, `tests/vc24-prediction.txt`, measured before any change: refusals after about 244 s of CPU each at 50,000 objects). Predicted and committed first (`ef88130`); the rows (`e616060`) red first by name at PR 2's head.
+
+What changed, in the order P12 gave:
+
+1. **The closure walk** (`walk_plan`) reads through one batch reader and keeps its queued, typed and omitted names in a hashed set (`pack.NameSet`), each object as its name's 40 bytes, a type code and a size, each step in its own region. Include-tag walks the wants once and then only the tags it adds; it walked the whole closure twice before the pack's own walk.
+2. **The reader's cache** (`pack.Cache`): a read along a delta chain rebuilt every base from the pack and hashed each one, so a tree 25 deltas deep cost 25 inflates and 25 SHA-1s for every read of it. Rebuilt bases are kept by pack and offset (256 slots of at most 16 KiB) and only the object returned is hashed.
+3. **The writer** (`pack.Writer`) writes the pack to a temporary one object at a time, weighing the last ten objects of its type below fifty links: the shortest raw delta is deflated and kept when smaller than the whole object, a base stops being weighed once it cannot beat the best so far, and the trailer is summed by reading the file back. Serving sends the file in side-band windows; push streams it to a stream peer.
+4. **Receive** finds the pack's end as it arrives (`pack.scan_more`, each entry inflated once), indexes it with the streamed indexer and keeps it as a pack at 100 objects or more, as Git's receive-pack does; a thin pack falls back to the whole-stream decoder.
+5. **The counts**: the protocol's wants, haves, refs and push commands, the received closure's bound on objects already present, the decoder's 10,000 and every walk's are gone; a request stays bounded by its bytes.
+6. **The codec**, each with the same bytes as before (rows against the first forms and against zlib): deflate keeps its 64 Ki-entry match tables across a writer's objects instead of building them for each; the Huffman join takes two queues instead of scanning every node; inflate reads a byte's worth of bits at once and decodes fixed blocks without building their tables; the delta encoder indexes its base by open addressing and rolls its fingerprint.
+
+The rows, `tools/wire-gaps-test.py` family `scale` (both tiers; in `tools/check-http`'s wire-gap steps) and two timed rows in family `cost` (the `release-clone-cost` step), each held to the pinned Git's result (refs, reachable objects and their digest), each den process launched from a small parent and its peak RSS held under P12's bound, 64 MiB plus 1 KiB an object (on Linux also under `prlimit --as` at the bound plus 128 MiB):
+
+- `scale-serve-clone`: the pinned Git clones 50,000 objects (12,500 commits, 25,000 trees, 12,500 blobs, from fast-import) through den upload-pack;
+- `scale-clone-den-server` and `scale-clone-git-server`: den clones them through den's and Git's upload-pack;
+- `scale-fetch-history`: den fetches 46,000 new objects into a 4,000-object repository; `scale-fetch-wide`: one commit over a 15,000-blob flat tree den already holds;
+- `scale-push`: den pushes the 50,000 into an empty repository through Git's receive-pack; `scale-receive`: Git pushes them into den receive-pack;
+- `scale-clone-i3`, `scale-push-i3`: i3's public history (41,341 objects; a bundle of `next` at `8a97b0f`, pinned by its sha256, cloned offline) cloned through den upload-pack and pushed into an empty repository;
+- `scale-serve-cost` and `scale-den-cost` (release): the pinned Git's clone through den upload-pack and den's clone through den upload-pack, each at most 30 times the pinned Git's clone through Git's upload-pack, CPU of the whole process tree, three runs in turn, the least.
+
+At 50,000 objects on macOS (release, the field Git; each figure CPU of the row's process tree from `wait4`, and the peak RSS of its largest process, the bound 115,536 KiB; i3's 106,877 KiB):
+
+| row | before (PR 2's head) | after | peak RSS after |
+|---|---|---|---|
+| scale-serve-clone | refused after 243.5 s | 6.50 s | 76,272 KiB |
+| scale-clone-den-server | refused after 244.0 s | 7.50 s | 76,176 KiB |
+| scale-clone-git-server | 7.9 s | 1.81 s | 58,224 KiB |
+| scale-fetch-history | refused after 243.6 s | 2.52 s | 79,440 KiB |
+| scale-fetch-wide | refused after 1.0 s | 1.09 s | 31,920 KiB |
+| scale-push | refused after 245.8 s | 6.30 s | 65,344 KiB |
+| scale-receive | refused at once | 1.97 s | 73,888 KiB |
+| scale-clone-i3 | refused (`fsck identity diagnostics`) after 128.9 s | 60.17 s | 100,832 KiB |
+| scale-push-i3 | refused (the same) after 131.4 s | 53.94 s | 93,456 KiB |
+
+The cost rows, the least of three runs each in turn: serving 6.43 s against the field Git's 0.78 s, 8.2 times; den's own clone through den's server 7.50 s, 9.6 times; both under 10, so the 30-times cap holds with room. pelt's clone (PR 2's row) fell from 6.4 to 4.7 times with the codec changes. Linux's figures are the gauntlet's, in the PR body.
+
+Each process's peak is the largest of its tree's (for the serving and receiving rows, Git's processes too); the launcher's own floor, `den --version` from the same parent, is about 2,000 KiB. On Linux every den process also runs under `prlimit --as`.
+
+**Not predicted, found on the way.** Git's `receive-pack` keeps a push's pack, and so does den now; but den's receive checked each pushed tip's closure twice, once in the received closure (`closure_received`) and once more by walking all of history into a list of names, which was most of its memory (119,328 KiB against the 115,536 KiB bound in the first take, red by name); the second walk now runs only for a thin pack, whose decode checks nothing (`42f66c2`). i3's history refused at PR 2's head with `fsck identity diagnostics`: the transfer walks applied fsck's strict checks (unsafe paths, identities, tag names), which Git's transfers leave to `transfer.fsckObjects`, off by default, and Git's `fsck --full` (the field Git) reports nothing in i3; transfer walks now take links without them (`packcmd.wire_links`), and den's fsck keeps them.
+
+**Where den's CPU goes now** (macOS `sample` of the release processes, top-of-stack samples by class; blocking reads left out):
+
+| class | serving 50,000 (den upload-pack) | den's clone of them (client) | serving i3 |
+|---|---|---|---|
+| reading objects: opens and preads, the cache, unpack | 35.0% | 49.4% | 11.9% |
+| inflate | 3.7% | 15.9% | 17.9% |
+| delta application | 1.5% | 4.5% | 14.2% |
+| SHA-1 | 1.8% | 8.6% | 4.1% |
+| delta search | 19.5% | — | 31.7% |
+| deflate | 19.8% | 2.3% | 13.4% |
+| writing the pack (and its trailer read back) | 5.0% | — | 3.8% |
+| indexing the received pack | — | 4.8% | — |
+| memory moves and the rest | 13.7% | 14.6% | 2.9% |
+
+At 50,000 small objects the largest single term is system calls: each read opens the object's loose path (absent) and then its pack, and re-checks the pack's bounds, so a serve opens about 200,000 files. On i3's history, with 5,569 blobs over 16 KiB (beyond the cache) and chains averaging 6.8 deltas, rebuilding blobs (inflate and delta application) and weighing ten bases for each are most of it.
+
+**The next step: copying stored entries.** Git serves a clone by copying each stored entry, its delta included, whose base is also sent; den rebuilds every object, deflates it and searches its window again. Copying the entries would remove the delta search, the deflate and the write side's reads (about half of the reading, inflate, delta application and SHA-1 terms), leaving the walk's reads and the copying: predicted about 60 percent of serving 50,000 objects (6.5 s to about 2.6 s, some 3 times Git's) and about 70 percent of serving i3 (54 s to about 16 s, some 10 times Git's 1.6 s), and the pack would be Git's size (den's i3 pack is 34.7 MB to Git's 15.9 MB, as its window pairs objects by size, not by path). Reading the pack index by offset, and probing packs before loose paths in a batch, would take the opens out of the 50,000-object figures.
+
 ### On PAX: a px lane's items (drafted, not run)
 
 1. Pin den at this lane's merge in `user/den.pin` and rebuild `/bin/den` with `tools/mkden`, twice, refusing two digests, as the pin's earlier sweeps did.
@@ -140,12 +202,22 @@ The Linux timed rows' figures, before and after, are the gauntlet's and are in t
 ### Remaining limits
 
 - Push to an unconfigured local path stays `missing remote PATH`; a deletion whose short destination names no remote ref refuses as Git does (`unable to delete`), and any other unmatched deletion keeps its old named refusal.
-- Explicit fetch refspecs need the remote's configured refspec to be the default branch wildcard (or none); another configured mapping refuses by name. `--prune` with explicit refspecs refuses by name (R-vc24-5). Tag following still walks history through the shared closure, with its 10,000-object bound.
+- Explicit fetch refspecs need the remote's configured refspec to be the default branch wildcard (or none); another configured mapping refuses by name. `--prune` with explicit refspecs refuses by name (R-vc24-5). Tag following walks history through the shared closure, which has no count bound since den#73.
 - `ls-remote --get-url`, `--sort` and `-o` refuse by name (R-vc24-2).
 - `rev-parse` options other than P4's are not yet implemented (R-vc24-3); `GIT_DIR` and `GIT_WORK_TREE` overrides are not row-tested.
 - Clone's operand errors are named refusals, not Git's usage text (R-vc24-1).
 - `init` and an empty clone with no `init.defaultBranch` (R-vc24-6).
-- A clone's CPU after the second change is about six times Git's on macOS, in den's own inflate and SHA-1 (below, "the next term").
+- A clone's CPU after the second change is about six times Git's on macOS, in den's own inflate and SHA-1 (above, "the next term"); 4.7 times after den#73's codec changes.
+- The bounds that remain after den#73, each with its reason:
+  - `pack.encode`, the in-memory writer behind `pack-objects` and `repack`: 10,000 objects, 16 MiB a body and 128 MiB in all. These local commands hold every body; moving them to the streaming writer is a follow-on, and no clone, fetch, push or serve uses them now.
+  - A thin pushed pack (one whose deltas name bases outside it, as Git's push sends when the receiver holds the bases) falls back to the whole-stream decoder, which holds the stream and its bodies: 128 MiB of each, 16 MiB a body and 64 links (its count bound is gone). The streamed indexer does not yet resolve outside bases. A push into an empty repository, as in the rows, is never thin.
+  - receive-pack holds the pushed pack in memory, to 2 GiB, before feeding the indexer in 1 MiB windows: the pack follows the commands on one stream and is read whole. Feeding the indexer as the pack arrives is the follow-on.
+  - Push over smart HTTP sends its request body whole, so the pack is held in memory there, to the HTTP client's 140,000,000-byte request cap (over every other transport it streams from the temporary).
+  - A pack holds at most 400,000 objects: the reader parses an index whole, from a file of at most 16 MiB, and keeps a string a name, and the streamed indexer keeps the reader's limit so that every index it writes reads back (vc23). A larger pack refuses by name (`pack index object count limit`); the rows' 50,000 objects are an eighth of it. Reading the index by offset, as the pack is read, would lift both.
+  - A local path clone copies at most 100,000 files of the source's object directory (a file count, not an object count: a pack is three files).
+  - One object is at most 512 MiB (R-vc23-2); the delta encoder takes bodies up to 16 MiB and stores larger ones whole; the reader's cache keeps objects of at most 16 KiB.
+  - A fetch request is read whole to 2 MiB (about 40,000 `have` lines a round), as before; every count inside it is gone.
+  - Outside the wire: `fsck`'s 10,000 roots and objects, the commit-graph's 10,000 objects, the object inventory's 10,000 loose objects and the walker's 100,000 nodes stay as they were; den#73 named the wire.
 - den hardens a clone's refs, index and configuration, which Git's default leaves to the system: pelt's clone makes 20 sync calls against Git's 3, by `clone-syncs-pelt`'s classes: 9 on the repository's own files (its configuration, reflogs and directory), 6 on refs, 4 on the pack and its directory, 1 on the index.
 
 ## Done-when
@@ -156,3 +228,4 @@ The Linux timed rows' figures, before and after, are the gauntlet's and are in t
 - [x] PAX: the px lane's items drafted above.
 - [ ] The final gauntlet, the plant and the macOS record at the head: their records and every END line are in the PR body.
 - [x] The checkout's reader and syncs (den#63, second change): predicted (P10, P11), the rows red first at `304757b`, then green.
+- [x] den#73's bounds (third change): predicted (P12, P13), the rows red first at PR 2's head, then green on both tiers; the remaining bounds listed with their reasons; the CPU broken down and the next step named with its predicted gain.
