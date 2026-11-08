@@ -251,6 +251,14 @@ fn clone_created(url: str, destination: str, bare: bool, local: bool) -> bool ! 
     clone_into(repo, url, destination, bare, local, true)?
 }
 
+/// The directory `clone` makes from its operands (a repository and at most
+/// one directory), as the clone command derives it; "" when there is none.
+pub fn clone_destination(operands: List[str], bare: bool) -> str {
+    if operands.len == 2 { return copy operands[1] }
+    if operands.len == 1 { return clone_name(operands[0], bare) }
+    ""
+}
+
 /// Clone URL into a submodule's own gitdir GITDIR, whose core.worktree is
 /// WORKTREE (relative to GITDIR), without a checkout: the submodule layer
 /// detaches HEAD at the recorded commit (vc25). A failure removes GITDIR.
@@ -260,7 +268,7 @@ pub fn clone_submodule(url: str, gitdir: str, worktree: str) -> () ! object.Stor
     var complete = false
     defer { if !complete { fs.remove_dir_all(gitdir) else |_| {} } }
     let (repo, _) = repository.init_with(gitdir, false, "main", worktree)?
-    clone_into(repo, url, gitdir, false, true, false)?
+    let _ = clone_into(repo, url, gitdir, false, true, false)?
     complete = true
 }
 
@@ -271,7 +279,7 @@ fn clone_into(
     bare: bool,
     local: bool,
     checkout: bool,
-) -> () ! object.StoreErrors {
+) -> bool ! object.StoreErrors {
     let plain = transport.local_path(url)
     if plain { protocol_check(repo.config, url)? }
     let advertised = if plain && local {
