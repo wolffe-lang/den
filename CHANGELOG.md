@@ -1,5 +1,31 @@
 # Changes
 
+## Unreleased — identities as Git reads them
+
+- Clone, fetch, push, `upload-pack` and `receive-pack` validate no author,
+  committer or tagger line, as Git's defaults do: a history holding
+  `walker0643 <>` (i3's commit 5f453914) clones, as it does with Git.
+  `fetch.fsckObjects`, `receive.fsckObjects` and `transfer.fsckObjects` set
+  true are refused by name: den does not run Git's full object checks.
+- `fsck` reports identity lines as `git fsck` does: the ten author/committer
+  message ids and their text, the first one of each object, in Git's order,
+  exit 1.
+- `log`, `show`, tags and `blame` read identities from their stored bytes,
+  split as Git splits them, with Git's dates for every stored form (zones
+  outside the clock, years past 9999, dates it cannot read) and Git's fatal
+  lines; a line Git cannot split prints as Git prints it.
+- User formats: `--format=`, `format:` and `tformat:` with `%H %h %T %t %P %p
+  %s %b %B %n %%` and the author and committer placeholders; any other
+  placeholder is refused by name.
+- Writing: an explicitly empty email is written as `<>`; an empty name is
+  refused with Git's message, after its identity advice when it came from
+  configuration; names and emails are cleaned as Git cleans them.
+  cherry-pick and rebase keep a picked author's stored bytes; amend re-reads
+  the author as Git does.
+- `tools/identity-test.py` holds every identity shape to the pinned Git, and
+  `tools/identity-census.py` runs the checker, a clone and the readers over
+  real histories; the live row clones i3's public repository.
+
 ## Unreleased — submodules
 
 - Every reader knows a gitlink: `ls-tree` and `ls-files -s` (new, bounded),
