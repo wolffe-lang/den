@@ -1316,7 +1316,8 @@ measured attempts, and its failures can be diagnostics on a successful command.
 
 Revision inputs share `revsyntax` and `revision`, including required pseudorefs,
 ordered ancestry/peels, literal tree paths and numeric/previous-checkout selectors.
-Single-object consumers reject set operands by name. Tracking configuration,
+Single-object consumers reject set operands by name. Tracking configuration
+(beyond an existing upstream, which checkout, switch and reset accept since vc25),
 list glob patterns, orphan branches,
 overlapping rename paths, merge-mode checkout, tag editors/signing/stdin and
 reflog management commands remain outside the bounded surface. Tree transitions
