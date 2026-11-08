@@ -16,6 +16,9 @@ no transport):
   ls-remote  den#68: ls-remote's listing, filters, patterns and exit codes
   fetch      den#70: fetch REMOTE REFSPEC... for a configured remote
   memory     den#63: clone memory against history length, under a hard cap
+  cost       den#63: a clone's CPU against the pinned Git's on a real
+             repository (pelt's trunk at a pinned commit), git:// and runs
+             in turn, at most COST_RATIO times Git's
 The rev-parse rows (den#69) are tools/rev-parse-test.py's.
 
 Transports: a plain local path, file://, git:// (the pinned git daemon, with
@@ -45,7 +48,10 @@ import sys
 import time
 
 GIT_SHA256 = 'c4848492938c4ebfffbefe1fbbaa68b9af90c86d1f6a20e76816c5ff37fcfa60'
-FAMILIES = ('push', 'clone', 'ls-remote', 'fetch', 'memory')
+FAMILIES = ('push', 'clone', 'ls-remote', 'fetch', 'memory', 'cost')
+# The cost row is timed and runs alone, on the release tier (tools/check-http's
+# release-clone-cost step); every other family is the default.
+DEFAULT_FAMILIES = ('push', 'clone', 'ls-remote', 'fetch', 'memory')
 TRANSPORTS = ('local', 'file', 'git', 'ssh', 'https')
 MIB = 1 << 20
 
@@ -91,7 +97,7 @@ class Harness:
         self.den = str(self.root / 'target' / args.tier / 'den')
         if not Path(self.den).is_file():
             raise SystemExit('FAIL wire-gaps-input: build target/' + args.tier + '/den first')
-        self.out = self.root / 'target/runs' / ('wire-gaps-' + args.tier)
+        self.out = self.root / 'target/runs' / (('clone-cost-' if args.family == 'cost' else 'wire-gaps-') + args.tier)
         if self.out.exists():
             raise SystemExit('FAIL wire-gaps-fresh-output: select a fresh build directory')
         self.out.mkdir(parents=True)
@@ -826,6 +832,93 @@ def family_memory(h):
         shutil.rmtree(repo, ignore_errors=True)
 
 
+# -- den#63, a clone's CPU ----------------------------------------------------
+# pelt (https://github.com/wolffe-lang/pelt) at trunk PELT_TRUNK: 12,038
+# objects, 9,685 files. The fixture is a bundle of that trunk, pinned by its
+# digest, from DEN_PELT_BUNDLE or the archive directory; without one, the
+# pinned Git fetches that commit from github.com. Either way the served
+# repository is repacked by the pinned Git on one thread, so both clients
+# receive the same pack on every host.
+PELT_URL = 'https://github.com/wolffe-lang/pelt.git'
+PELT_BUNDLE = 'pelt-b80d657.bundle'
+PELT_SHA256 = '11f95d10a5ea987fcd466726d2a9e43aaaaba5162fcee0c2f6a356fed7484c3e'
+PELT_TRUNK = 'b80d6570a4611d7977e4cf489c192849b32a6a7f'
+PELT_OBJECTS = 12038
+PELT_FILES = 9685
+# tests/vc24-prediction.txt P10: den's clone CPU (user plus system, its own
+# and its children's) at most this many times the pinned Git's, the minimum
+# of COST_RUNS runs each, run in turn.
+COST_RATIO = 10
+COST_RUNS = 3
+
+
+def pelt_fixture(h, repo):
+    """The served pelt repository at repo, or the reason there is none."""
+    shutil.rmtree(repo, ignore_errors=True)
+    named = os.environ.get('DEN_PELT_BUNDLE') or os.path.join(os.environ.get('DEN_ARCHIVE_DIR', ''), PELT_BUNDLE)
+    bundle = Path(named)
+    if bundle.is_file():
+        if hashlib.sha256(bundle.read_bytes()).hexdigest() != PELT_SHA256:
+            return 'fixture %s digest differs from the pinned one' % bundle
+        h.git_out(h.srv, 'clone', '-q', '--bare', str(bundle), str(repo))
+    else:
+        h.git_out(h.srv, 'init', '-q', '--bare', '-b', 'trunk', str(repo))
+        fetched = subprocess.run([h.git, '-C', str(repo), 'fetch', '-q', PELT_URL, PELT_TRUNK + ':refs/heads/trunk'],
+                                 env=h.env, capture_output=True, timeout=600)
+        if fetched.returncode:
+            return 'no %s (sha256 %s) in DEN_PELT_BUNDLE or DEN_ARCHIVE_DIR, and fetching %s failed: %s' % (
+                PELT_BUNDLE, PELT_SHA256, PELT_URL, fetched.stderr.decode(errors='replace').strip()[-200:])
+    for key, value in (('gc.auto', '0'), ('maintenance.auto', 'false'), ('repack.writeBitmaps', 'false')):
+        h.git_out(repo, 'config', key, value)
+    h.git_out(repo, '-c', 'pack.threads=1', 'repack', '-a', '-d', '-f', '-q')
+    trunk = h.git_out(repo, 'rev-parse', 'refs/heads/trunk').decode().strip()
+    objects = len(h.git_out(repo, 'rev-list', '--objects', '--all').splitlines())
+    files = len(h.git_out(repo, 'ls-tree', '-r', '--name-only', 'refs/heads/trunk').splitlines())
+    if (trunk, objects, files) != (PELT_TRUNK, PELT_OBJECTS, PELT_FILES):
+        return 'fixture shape: trunk %s, %d objects, %d files' % (trunk, objects, files)
+    return None
+
+
+def family_cost(h):
+    name = 'clone-cost-pelt'
+    repo = h.srv / 'pelt.git'
+    problem = pelt_fixture(h, repo)
+    if problem:
+        h.verdict(name, [problem])
+        return
+    url = h.url('git', repo)
+    ours, theirs = h.out / 'cost-den', h.out / 'cost-git'
+    runs = dict(git=[], den=[])
+    problems = []
+    for turn in range(COST_RUNS):
+        for tool, path in (('git', theirs), ('den', ours)):
+            shutil.rmtree(path, ignore_errors=True)
+            binary = h.git if tool == 'git' else h.den
+            measured = launched(h, [binary, 'clone', '-q', url, str(path)], 1 << 40)
+            runs[tool].append({k: v for k, v in measured.items() if k != 'stderr'})
+            if measured['exit'] != 0:
+                problems.append('%s clone run %d: exit %d %r' % (tool, turn, measured['exit'], measured['stderr']))
+            if turn < COST_RUNS - 1:
+                shutil.rmtree(path, ignore_errors=True)
+    if not problems:
+        a, b = h.state(theirs), h.state(ours)
+        keys = [key for key in a if a[key] != b.get(key)]
+        if keys:
+            problems.append('clone differs from the pinned Git\'s: ' + ', '.join(keys))
+    git_cpu = min(run['cpu'] for run in runs['git'])
+    den_cpu = min(run['cpu'] for run in runs['den'])
+    ratio = round(den_cpu / git_cpu, 1) if git_cpu > 0 else None
+    if ratio is None or ratio > COST_RATIO:
+        problems.append('den clone CPU %.2f s is %s times the pinned Git\'s %.2f s, over %d' % (
+            den_cpu, ratio, git_cpu, COST_RATIO))
+    detail = dict(objects=PELT_OBJECTS, files=PELT_FILES, git_cpu=git_cpu, den_cpu=den_cpu, ratio=ratio,
+                  ratio_cap=COST_RATIO, runs=runs)
+    h.verdict(name, problems, detail)
+    print('COST %s %s' % (name, json.dumps(detail)), flush=True)
+    for path in (ours, theirs, repo):
+        shutil.rmtree(path, ignore_errors=True)
+
+
 def launched(h, argv, cap):
     result = subprocess.run([sys.executable, '-I', '-S', '-c', LAUNCH, *map(str, argv)], env=h.env,
                             capture_output=True, stdin=subprocess.DEVNULL, timeout=1800)
@@ -837,19 +930,21 @@ def launched(h, argv, cap):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--tier', choices=('native', 'release'), default='native')
-    parser.add_argument('--family', default=','.join(FAMILIES))
+    parser.add_argument('--family', default=','.join(DEFAULT_FAMILIES))
     parser.add_argument('--field', action='store_true', help='a Git other than the pinned one (macOS field leg)')
     args = parser.parse_args()
     families = args.family.split(',')
     assert families and set(families) <= set(FAMILIES), 'families'
     if args.field and 'memory' in families:
         raise SystemExit('FAIL wire-gaps-field: the memory rows need prlimit and the Linux container')
+    if 'cost' in families and (families != ['cost'] or args.tier != 'release'):
+        raise SystemExit('FAIL clone-cost-alone: the cost row runs by itself on the release tier')
     h = Harness(args)
     try:
         h.start_daemon()
         for family in families:
             {'push': family_push, 'clone': family_clone, 'ls-remote': family_ls_remote,
-             'fetch': family_fetch, 'memory': family_memory}[family](h)
+             'fetch': family_fetch, 'memory': family_memory, 'cost': family_cost}[family](h)
             h.stop_https()
     finally:
         h.stop()
