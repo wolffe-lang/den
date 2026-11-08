@@ -28,9 +28,20 @@ fn perform_pull(args: List[str]) -> int ! object.StoreErrors {
         rebase = "",
         ff = "",
         rebase_cli = false,
+        recursion = "",
         operands = List[str]()
     for arg in args[1..] {
         action = "{action} {arg}"
+        let flag = recursion_flag(arg)
+        if flag.len == 1 {
+            if flag[0] == "invalid" {
+                return Unsupported("fatal: bad recurse-submodules argument: {arg[21..]}")
+            }
+            // Updating submodule worktrees after the merge is not yet den's.
+            if flag[0] != "no" { return Unsupported("pull {arg}") }
+            recursion = "no"
+            continue
+        }
         if arg == "--rebase" {
             rebase = "true"
             rebase_cli = true
@@ -87,6 +98,10 @@ fn perform_pull(args: List[str]) -> int ! object.StoreErrors {
             return Unsupported("pull rebase index refresh: {e}")
         }
     }
+    if recursion == "" && setting(repo.config["submodule.recurse"] else "false") == "yes" {
+        return Unsupported("pull with submodule.recurse")
+    }
+    let before = tips(repo)?
     let previous = refs.optional(repo, destination)?
     named_fetch(
         repo,
@@ -104,6 +119,12 @@ fn perform_pull(args: List[str]) -> int ! object.StoreErrors {
         Unsupported(message) => { return Unsupported(message) },
         _ => { return Unsupported("pull fetch: {e}") },
     }
+    // The submodules a fetch brings commits for are fetched before the
+    // merge; an error there ends the pull with 1, as in Git (vc25 rows).
+    let fetched = recurse(before, recursion, quiet) else |e| {
+        return Unsupported("submodule fetch: {e}")
+    }
+    if fetched != 0 { return 1 }
     let current = oid.hex(refs.read(repo, "HEAD")?)?
     let upstream = oid.hex(refs.read(repo, destination)?)?
     let forward = ancestor(repo, current, upstream)?
