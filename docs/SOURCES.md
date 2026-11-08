@@ -902,3 +902,31 @@ Black boxes: the pinned Git 2.56.0 (two probes, 501 steps, kept as
 2.56.0 from Homebrew for development rows. The census read public repository
 metadata through the GitHub API; only aggregates are kept. No Git, libgit2,
 JGit or other implementation source was read.
+
+## Identities as Git reads them (vc26)
+
+Git 2.56.0 documentation, read from the release tarball (Documentation/
+only, digest checked against `den-oracle.toml`):
+
+- `git-fsck(1)`: `--strict`, FSCK MESSAGES, and `fsck-msgids`: the
+  author/committer ids (`badDate`, `badDateOverflow`, `badEmail`, `badName`,
+  `badTimezone`, `missingEmail`, `missingNameBeforeEmail`,
+  `missingSpaceBeforeDate`, `missingSpaceBeforeEmail`, `zeroPaddedDate`) and
+  their default severities.
+- `git-config(1)`: `fsck.<msg-id>`, `fsck.skipList`, `fetch.fsckObjects`,
+  `receive.fsckObjects`, `transfer.fsckObjects` (each defaults to false; fetch
+  and receive fall back to transfer), `user.name`, `user.email`,
+  `author.*`, `committer.*`.
+- `git-commit(1)`, COMMIT INFORMATION (`<`, `>` and LF stripped);
+  `git-commit-tree(1)`; `git-var(1)` (`GIT_AUTHOR_IDENT`).
+- `pretty-formats` (the placeholders `%H %h %T %t %P %p %s %b %B %n %%` and
+  the author and committer ones; `format:` and `tformat:`);
+  `rev-list-options` (`--date`).
+
+Black box: the pinned Git 2.56.0 over the shapes in `tools/identity-test.py`
+(fsck plain and `--strict`, clone and push with and without the fsckObjects
+settings, cat-file, log, show, the placeholders, blame, amend, cherry-pick,
+rebase, commit, commit-tree and tag), and a field Git 2.56.0 from Homebrew.
+The checks, the readers' split and the date rules are inferred from those
+runs and written in den's own words (`notes/vc26-evidence/measured-base.txt`).
+No Git, libgit2, JGit or other implementation source was read.
