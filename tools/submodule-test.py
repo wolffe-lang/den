@@ -15,8 +15,11 @@ gitrepository-layout(5), git-clone(1), git-config(1), git-status(1),
 git-diff(1), git-ls-tree(1), git-ls-files(1) of Git v2.56.0. No Git source.
 
 DEN_SUBMODULE_FIELD=1 runs against a field Git (macOS Homebrew) without the
-oracle digest check, for development only; its summary says FIELD and the
-gate never sets it.
+oracle digest check: a field observation for development and the macOS leg,
+never oracle parity. Its summary says FIELD and the gate never sets it. On a
+case-insensitive file system the case-colliding rows are excluded by name,
+printed and counted as excluded, never as passes: they observe
+core.ignorecase, which den does not implement.
 """
 import argparse
 import hashlib
@@ -46,6 +49,10 @@ if root.exists():
     shutil.rmtree(root)
 root.mkdir(parents=True)
 world = root / 'world'
+(root / 'CaseProbe').write_text('')
+FOLDS = (root / 'caseprobe').exists()
+(root / 'CaseProbe').unlink()
+CASE_ROWS = re.compile(r'^hostile-case-collide-')
 proof = runpy.run_path(str(R / 'tools/index-proof.py'))
 LOOSE = re.compile(r'(^|/)objects/[0-9a-f]{2}/[0-9a-f]{38}$')
 # A gitdir's reflogs: .git/logs, and modules/<name>/logs at any depth, where
@@ -159,6 +166,11 @@ def seed(name, build):
 
 def compare(name, args, seed_name, cwd='.', extra=None, data=None, prepare=None):
     if a.only and not re.search(a.only, name):
+        return
+    if FIELD and FOLDS and CASE_ROWS.search(name):
+        rows.append(dict(name=name, argv=args, cwd=cwd, extra=extra or {}, equal=False, known=False,
+                         excluded='case-insensitive file system (core.ignorecase)'))
+        print('EXCLUDED', name, 'reason=case-insensitive file system (core.ignorecase)', flush=True)
         return
     outcomes = []
     for exe in [G, D]:
@@ -590,6 +602,7 @@ SEEDS.update({
 
 
 def family_work():
+    seed('clone', recursive_clone)
     for state in ('new-commits', 'modified', 'untracked', 'staged-gitlink', 'clean'):
         s = state_seed(state)
         for argv in (['add', 'mid'], ['add', '-A'], ['add', '.'], ['add', '-u'], ['commit', '-q', '-a', '-m', 'all'],
@@ -626,14 +639,25 @@ def family_refusals():
     """Named refusals that remain (vc25b and later): den alone, each must
     refuse by name with exit 2 and change nothing."""
     seed('clone', recursive_clone)
-    cases = [(argv, ALLOW_FILE, 'refusal-' + '-'.join(x.strip('-') for x in argv[:3])) for argv in REFUSALS]
-    cases.append((['push', 'origin', 'main'], RECURSE, 'refusal-push-submodule-recurse-true'))
-    for argv, extra, name in cases:
+    cases = [(argv, ALLOW_FILE, 'refusal-' + '-'.join(x.strip('-') for x in argv[:3]), None) for argv in REFUSALS]
+    cases.append((['push', 'origin', 'main'], RECURSE, 'refusal-push-submodule-recurse-true', None))
+    # Checkout runs where branches have upstreams; making a tracking branch
+    # (from a remote-tracking start, or by guessing a remote's branch) stays
+    # refused by name.
+    def remote_only(w):
+        g('update-ref', 'refs/remotes/origin/feature', 'HEAD', cwd=w / 'c')
+    for argv in (['checkout', '-b', 'x', 'origin/main'], ['switch', '-c', 'x', 'origin/main']):
+        cases.append((argv, None, 'refusal-upstream-' + '-'.join(x.strip('-') for x in argv), None))
+    for argv in (['checkout', 'feature'], ['switch', 'feature']):
+        cases.append((argv, None, 'refusal-guess-' + argv[0], remote_only))
+    for argv, extra, name, prepare in cases:
         if a.only and not re.search(a.only, name):
             continue
         if world.exists():
             shutil.rmtree(world)
         shutil.copytree(seeds['clone'], world, symlinks=True)
+        if prepare:
+            prepare(world)
         before = state(world)
         q = run(D, argv, world / 'c', extra)
         ok = q['status'] == 2 and 'not yet implemented' in q['stderr'] and state(world) == before
@@ -651,7 +675,9 @@ finally:
     output.write_text(json.dumps(dict(rows=rows, field=FIELD), indent=1) + '\n')
 exact = sum(r['equal'] for r in rows)
 known = sum(r['known'] for r in rows)
-failed = len(rows) - exact - known
-print('submodule %s %s exact=%d known=%d failed=%d rows=%d%s' % (
-    a.tier, a.family, exact, known, failed, len(rows), ' FIELD' if FIELD else ''), flush=True)
+excluded = sum(bool(r.get('excluded')) for r in rows)
+failed = len(rows) - exact - known - excluded
+print('submodule %s %s exact=%d known=%d failed=%d rows=%d%s%s' % (
+    a.tier, a.family, exact, known, failed, len(rows), ' excluded=%d' % excluded if excluded else '',
+    ' FIELD' if FIELD else ''), flush=True)
 raise SystemExit(0 if rows and failed == 0 else 1)
