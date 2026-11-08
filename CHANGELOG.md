@@ -1,5 +1,37 @@
 # Changes
 
+## Unreleased — submodules
+
+- Every reader knows a gitlink: `ls-tree` and `ls-files -s` (new, bounded),
+  diff's `Subproject commit <id>` pseudo-blob with `-dirty`,
+  `--submodule=short|log|diff`, `diff.submodule`, `--ignore-submodules` and
+  `submodule.<name>.ignore`; status's long, short and porcelain v1 forms with
+  Git's `(new commits, modified content, untracked content)` and its hint.
+- `clone --recurse-submodules[=<pathspec>]` and `submodule status`, `init`,
+  `update`, `sync` and `foreach`, with the layout Git writes:
+  `.git/modules/<name>`, the worktree's `.git` file and `core.worktree`.
+  Relative URLs resolve as Git resolves them (171 measured resolutions are
+  units); a recorded commit no ref reaches is fetched by id.
+- `url.<base>.insteadOf` and `pushInsteadOf` on every transport, and
+  `protocol.allow`, `protocol.<name>.allow` and `GIT_PROTOCOL_FROM_USER`: a
+  `file://` submodule is refused by default exactly as Git refuses it, while
+  a `file://` clone the user typed still works.
+- `add`, `commit -a`, `reset`, `checkout`, `switch` and `rm` handle gitlinks
+  without entering a submodule; `rm` of a submodule removes its worktree and
+  its `.gitmodules` section. `checkout` and `switch` print the local changes
+  and tracking lines Git prints.
+- Hostile `.gitmodules` input is refused or warned about as Git does:
+  suspicious names, dash URLs and paths, missing URLs or commits, invalid
+  values, bad config lines (`bad config line N in file ...`).
+- A clone over a URL transport packs its remote-tracking refs, quotes a URL
+  in `config` only when needed and leaves no empty `hooks/`, as Git does.
+- `submodule add`, `deinit`, `set-url`, `set-branch`, `summary`,
+  `absorbgitdirs`, `push --recurse-submodules`, `update --remote`,
+  `--merge` and `--rebase`, and clone's `--shallow-submodules` are refusals
+  by name.
+- `tools/check-submodule` runs the units and every row family natively and
+  in release; the gate runs it after the everyday step.
+
 ## Unreleased — everyday wire gaps
 
 - Push places a short destination as git-push(1) does (den#71): each source
