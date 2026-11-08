@@ -54,6 +54,13 @@ fn controls_tracking(
                             key.ends_with(".merge") ||
                             key.ends_with(".rebase")
                     )
+            ) &&
+            // An upstream is read by checkout's and switch's report and
+            // ignored by reset, as in Git; creating a tracking branch stays
+            // refused in checkout.lu (vc25: every superproject is a clone).
+            !(
+                (command == "checkout" || command == "switch" || command == "reset") &&
+                    (key.ends_with(".remote") || key.ends_with(".merge"))
             ) {
             return Unsupported("{command} branch configuration {key}")
         }
