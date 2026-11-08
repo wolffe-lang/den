@@ -93,6 +93,14 @@ pub fn reader_open(repo: repository.Repo) -> Reader ! StoreErrors {
     Reader { repo: copy repo, packs: pack.session_open(repo.gitdir)? }
 }
 
+/// A reader for a batch that reads inside its own regions (a checkout): opened
+/// when its packs load now, otherwise unopened, and then each packed read takes
+/// read_object's path, so only a read that needs such a pack fails, and with
+/// read_object's error.
+pub fn reader_batch(repo: repository.Repo) -> Reader {
+    reader_open(repo) else |_| reader(repo)
+}
+
 /// read_with's answer through an opened reader, which it never changes, so
 /// a caller may read inside its own region (one object's memory at a time).
 pub fn read_loaded(r: Reader, id: oid.Oid, max_output: int) -> Object ! StoreErrors {
