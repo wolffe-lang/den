@@ -57,6 +57,7 @@ oracle builds are in `notes/vc00-evidence/`.
 | Blame | Default columns, numeric/offset `-L` unions, `-w`, ordered merge parents and `--first-parent`, whole-file renames, raw line bytes, `--porcelain` and `--line-porcelain`; conservative alignment limits below |
 | Stash | `push`/bare/`save` with `-m`, `-q`, `--keep-index`; `list`; `show` (diffstat default, any diff option); `apply`/`pop` over the shared merge plan against the index tree; `drop` (reflog record rewrite) and `clear`; `stash@{N}` and bare `N` through the shared evaluator |
 | Notes | `notes add` (`-m`, `-f`, `--allow-empty`), `show`, `list`, `remove` (`--ignore-missing`) and `get-ref` over `refs/notes/commits`; any permitted fan-out read, the measured fan-out written |
+| Submodules | `clone --recurse-submodules[=<pathspec>]`; `submodule status`, `init`, `update [--init] [--recursive]`, `sync`, `foreach`; gitlinks in `ls-tree`, `ls-files`, `cat-file`, `log`, `show`, `diff` (`--submodule=short|log|diff`, `--ignore-submodules`) and `status`; `add`, `commit -a`, `reset`, `checkout`, `switch` and `rm` of gitlinks; within the limits below |
 | Rebase | Linear current-branch replay with explicit upstream, `--onto`, `--reapply-cherry-picks`, durable `rebase-merge` state, conflict stops, skip/abort and continuation after an explicit resolution commit; editor-dependent continuation remains refused |
 
 Status, commit summaries and diff share one rename/copy pairer. Exact OIDs are
@@ -168,8 +169,9 @@ The SHA-1 store reads and writes loose objects and pack-v2/idx-v2 pairs.
 Binary object/tree names are preserved, but filesystem path arguments
 remain UTF-8 `str`; raw non-UTF-8 OS paths have named upstream limitations.
 SHA-256 IDs are representable, but SHA-256 repositories are refused before writes.
-GC expiry/reflog/ref-packing policy, on-disk thin packs, multi-pack-index, bitmaps, alternates, linked worktrees,
-submodules and unstaged revision forms remain unsupported.
+GC expiry/reflog/ref-packing policy, on-disk thin packs, multi-pack-index, bitmaps, alternates, linked worktrees
+and unstaged revision forms remain unsupported. Submodules are supported within the bounds under
+"Submodules" below.
 `log` accepts inclusions, `^REV` exclusions and two-/three-dot sets. `diff` treats
 a dotted range as endpoints, with one merge base required for three-dot. Other
 consumers take single objects (or explicit lists of single objects), not sets.
@@ -263,7 +265,7 @@ Ref commands share the revision evaluator, including ancestry, peels, numeric
 reflogs and previous-checkout inputs where appropriate. Set operands refuse by
 name rather than selecting an arbitrary tip. Packed-ref files are bounded at 16 MiB and
 100,000 records; a listing is bounded at 4,096 entries. Tree transitions refuse
-higher-stage or flagged index entries and submodules rather than losing their
+higher-stage or flagged index entries rather than losing their
 metadata. `switch` protects in-progress operations; `reset --soft` refuses an
 in-progress merge. Reflog management/expiry commands remain future work.
 
@@ -317,6 +319,35 @@ keeps its prepared index unpublished until ref publication succeeds. FORMATS
 records these lifecycle differences and the possible earlier object/message
 side effects. Unsupported-command refusals must not be confused with rollback
 of every ordinary commit failure.
+
+## Submodules
+
+A submodule takes Git's basic form (gitsubmodules(7)): its repository at
+`.git/modules/<name>`, its worktree's `.git` file pointing there, and
+`core.worktree` pointing back, written byte for byte as the pinned Git writes
+them. `clone --recurse-submodules` and `submodule update` clone each submodule,
+check out the recorded commit on a detached HEAD and recurse; a recorded commit
+no advertised ref reaches is fetched by id. Relative URLs resolve against the
+superproject's remote as Git resolves them, including its edge cases.
+`url.<base>.insteadOf` and `pushInsteadOf` rewrite every transport's URL, and
+`protocol.allow` / `protocol.<name>.allow` apply as git-config(1) describes: a
+file URL the user types is admitted, the same URL inside submodule recursion is
+refused (`fatal: transport 'file' not allowed`) unless its policy is `always`.
+
+Status and diff read a submodule's worktree with den's own scan: new commits,
+modified content and untracked content, nested submodules rolled up, under the
+`ignore` settings of `.gitmodules`, config and `--ignore-submodules`. Checkout,
+switch and reset leave submodule worktrees alone, as Git does by default.
+`.gitmodules` is checked as Git checks it: suspicious names, values that could
+be read as options and invalid values warn or refuse with Git's messages.
+
+The authoring commands (`submodule add`, `deinit`, `set-url`, `set-branch`,
+`summary`, `absorbgitdirs`), `push --recurse-submodules`, clone's
+`--shallow-submodules`, `--remote-submodules` and `-j`, `update --remote`,
+`--merge` and `--rebase`, `status.submoduleSummary`, `mv` of a submodule,
+`restore` of a gitlink path, `stash` with a gitlink and
+`extensions.submodulePathConfig` are named refusals. `tools/check-submodule`
+compares every supported form with the pinned Git on both tiers.
 
 ## Blame boundaries
 
