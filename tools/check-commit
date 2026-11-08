@@ -18,6 +18,9 @@ for tier in native release; do
     tools/env python3 -I tools/commit-oracle.py --tier "$tier"
     tools/env python3 -I tools/commit-ref-test.py --tier "$tier"
     tools/env python3 -I tools/rename-scope-test.py --tier "$tier"
+    # vc26: identity shapes read, checked, received, replayed and written as
+    # the pinned Git does (tools/identity-test.py).
+    tools/env python3 -I tools/identity-test.py --tier "$tier"
 done
 for test in commit_format_test commit_test; do
     "$WOLF" conform-run "src/$test.lu" --checked --json > "target/$test-checked.json"
@@ -28,4 +31,4 @@ rows=[json.loads(line) for line in open(sys.argv[1]) if line.startswith('{')]
 assert len(rows)==1 and rows[0]['verdict']=='exit(0)',rows
 PY
 done
-echo 'commit: native/release API, object-byte dates/messages, full CLI state and ref failures; checked exits verified'
+echo 'commit: native/release API, object-byte dates/messages, identity shapes, full CLI state and ref failures; checked exits verified'
