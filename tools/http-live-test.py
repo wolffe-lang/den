@@ -53,10 +53,21 @@ SECRETS = ('DEN_HTTP_TOKEN', 'DEN_HTTP_USER', 'DEN_LIVE_HTTPS_URL', 'DEN_LIVE_HT
            'GIT_ASKPASS', 'SSH_ASKPASS', 'DEN_TLS_ROOTS', 'GIT_SSL_CAINFO', 'GIT_SSL_CAPATH')
 
 
+def cloned(listing):
+    """The lines of an `ls-remote` listing (hex stdout) a clone takes: HEAD,
+    branches and tags (with their peeled lines)."""
+    keep = []
+    for line in bytes.fromhex(listing).split(b'\n'):
+        name = line.split(b'\t', 1)[1] if b'\t' in line else b''
+        if name == b'HEAD' or name.startswith(b'refs/heads/') or name.startswith(b'refs/tags/'):
+            keep.append(line)
+    return keep
+
+
 def moved(before, after):
-    """Whether the remote's refs moved between two `ls-remote` listings (hex
-    stdout), as the clone rows compare them."""
-    return before != after
+    """Whether what a clone takes moved between two `ls-remote` listings (hex
+    stdout): GitHub's refs/pull/* are no clone's, and change on their own."""
+    return cloned(before) != cloned(after)
 
 
 def guard_selftest():
