@@ -347,3 +347,95 @@ P11. den#63's syncs, asked after P10: match what the pinned Git does.
   than Git's. Predicted after: den's pelt clone on a disk within a few
   seconds of the same clone in a tmpfs. Also reported: an strace
   census of each clone's system calls, before and after.
+
+den#73, fixed object-count bounds (a third change, after the second was
+recorded). Written before any code; every "before" figure below was
+measured first, on the macOS arm64 machine against the field Git, with
+den at the second change's head and a generated 50,000-object history
+(12,500 commits, four objects each).
+
+P12. The bounds and what they cost. Each fixed count of 10,000 sits in
+  front of work that grows with the square of the object count: the
+  closure walk (wiregit/objects.lu `closure`) reads each object through
+  read_object, which parses the pack index each time, and keeps its seen
+  and omitted sets in Maps that are scanned linearly; `pack_for` holds
+  every body in memory; `pack.encode` orders by insertion sort,
+  de-duplicates through a linearly scanned Map and builds the whole pack
+  in memory under 128 MiB caps; the receive side (`import_pack`) decodes
+  a whole pack in memory (`pack/stream.lu`, a count of 10,000 and 128
+  MiB) and writes every object loose. Measured before:
+    - serving a clone (Git's clone through den upload-pack): refused,
+      `fatal: the remote end hung up`, after 243.5 s of CPU;
+    - den clone served by den upload-pack: refused (`invalid`) after
+      244.0 s;
+    - den clone served by Git: completes, 7.9 s (the vc23 streamed
+      indexer; its closure check has no count bound for a clone);
+    - den fetch of 46,000 new objects into a 4,000-object repository:
+      refused (`fetch: limit`) after 243.6 s;
+    - den fetch of one commit touching one blob of a 15,000-blob flat
+      tree the repository already holds: refused (`fetch: limit`) after
+      1.0 s (the received closure's bound on objects already present);
+    - den push of 50,000 objects into an empty repository (Git's
+      receive-pack): refused (`push: limit`) after 245.8 s;
+    - Git's push of the same into den receive-pack: refused (`limit`) at
+      once.
+  So removing the counts alone would turn a refusal into a run of tens
+  of minutes, or into the 128 MiB caps. The change, in this order:
+    (a) the closure walk reads through one opened reader and keeps its
+        seen, omitted and queued sets in a sorted or hashed set, so it is
+        linear in objects (n log n at worst);
+    (b) the pack writer streams to a temporary file: objects ordered by
+        a stable merge sort (type, then size, as now), de-duplicated by
+        a sorted set, each body read when it is written and deltas
+        against a bounded window read back from the reader, with no
+        aggregate payload or output cap and the per-object cap kept;
+        serving and push write from that file in windows;
+    (c) receive-pack takes the pushed pack through the streamed indexer
+        that fetch already uses and installs it as a pack, as Git's
+        receive-pack keeps a pack of 100 objects or more;
+    (d) the received closure's bound on objects already present, the
+        fetch path's and push's count bounds, and the protocol counts
+        (wants, haves, advertised refs, push commands) are removed or
+        replaced by byte bounds on what they read: a pkt-line stream's
+        total, stated with the cap and measured.
+  Predicted after, at 50,000 objects on the same machine: each path
+  completes and its result equals Git's; serving a clone and den's
+  clone through den's server each within 30 times Git's CPU for the
+  same operation (Git copies its stored deltas; den still deflates each
+  object and tries deltas against a window of 10, and copying stored
+  entries whose bases are also sent is the next lever if this misses);
+  peak memory of each den process under 64 MiB plus 1
+  KiB an object (the den#63 rows' bound for a bare clone), held under
+  `prlimit --as` on Linux. Bounds that remain are listed, with their
+  reason, in the wire notes.
+
+P13. The rows (tools/wire-gaps-test.py, family scale, Linux, both tiers;
+  each red first at the second change's head, by name, and each held to
+  the pinned Git's result: refs, reachable objects and their digest):
+    - scale-serve-clone: the pinned Git clones a 50,000-object
+      repository through den upload-pack (file://, --upload-pack);
+    - scale-clone-den-server: den clones it through den upload-pack;
+    - scale-clone-git-server: den clones it through Git's upload-pack
+      (a regression row: passes before);
+    - scale-fetch-history: den fetches 46,000 new objects into a
+      4,000-object clone;
+    - scale-fetch-wide: den fetches one commit over a 15,000-blob tree
+      it already holds;
+    - scale-push: den pushes 50,000 objects into an empty repository
+      (the pinned Git's receive-pack);
+    - scale-receive: the pinned Git pushes them into den receive-pack;
+    - scale-clone-i3 and scale-push-i3 (added at review): den clones a
+      pinned, digest-checked bundle of i3's public history (41,341
+      objects, offline) through den upload-pack, and pushes it into an
+      empty repository, each held to the pinned Git's result;
+    - in every row, each den process runs under `prlimit --as` at the
+      P12 bound plus 128 MiB and is launched from a small parent, so the
+      row reports the peak RSS it actually reached and holds it under
+      the bound (a serving row measures the client's process tree);
+  and two timed rows in the release-clone-cost step, scale-serve-cost
+  (the pinned Git's clone through den upload-pack) and scale-den-cost
+  (den's clone through den upload-pack), each at most 30 times the
+  pinned Git's clone through Git's upload-pack, CPU of the whole
+  process tree, runs in turn, the least of three. The note breaks down
+  where den's CPU goes at 50,000 objects (deflate, delta search,
+  indexing, writing) and predicts the gain of copying stored entries.
