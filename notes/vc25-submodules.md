@@ -64,6 +64,8 @@ The next two finals passed every row and failed at the last leaf, the guard over
 
 In this branch's final the same guard also found the live rows' clones under `target/runs`: wolf-std vendors TLS test vectors, keys among them. The clones now go under `target/live`; only the rows' reports stay in `target/runs`.
 
+The next final of this branch failed one hostile row, `hostile-missing-commit-update`, on stderr alone: the two `not our ref` lines in the other order. Over a local transport the server (`git upload-pack`) writes its own fatal line to the stderr it shares with the client, while the client relays the same error from the server's ERR packet, so the two processes' lines interleave by scheduling, in the pinned Git as in den: run twenty times, the row failed once, with Git's lines in the other order from its usual one. `tools/submodule-test.py` now compares a result's stderr with the server's lines after the client's, each process's own lines in their order.
+
 The macOS record now also runs the gate's own leaves over the commands this branch changes that run against a field Git (refs, merge, replay, diff units, index, ignore, worktree and commit) and the config leaf's units and `tools/config-test.py`, besides the submodule and plain-clone families. The stash, revision, history, everyday and status-speed leaves, and the config leaf's day-to-day rows, assert the pinned Linux Git's digest, so they run in the Linux final only, and a check against the pinned Git runs the config and refs leaves whole before each final.
 
 ### Live rows (public wolffe-lang superprojects)
