@@ -805,9 +805,12 @@ def family_recurse():
     def untracked(w):
         (w / 'c/mid/u.txt').write_text('u\n')
 
+    # The last two move nowhere: switch -c names no start point, so Git
+    # lists no local changes after it, and checkout --detach still does.
     for label, prepare in (('dirty', dirty), ('untracked', untracked)):
         for argv in (['checkout', '--recurse-submodules', 'HEAD~1'], ['checkout', '-f', '--recurse-submodules', 'HEAD~1'],
-                     ['reset', '--hard', '--recurse-submodules', 'HEAD~1']):
+                     ['reset', '--hard', '--recurse-submodules', 'HEAD~1'],
+                     ['switch', '--recurse-submodules', '-c', 'topic'], ['checkout', '--recurse-submodules', '--detach']):
             compare('recurse-%s-%s' % (label, '-'.join(x.strip('-').replace('~', '') for x in argv)), argv, s,
                     cwd='c', extra=ALLOW_FILE, prepare=fresh(prepare, first=True))
     s = named_seed('nosub')
