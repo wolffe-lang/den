@@ -772,14 +772,17 @@ def family_recurse():
     active submodules' worktrees follow the recorded commits, detached."""
     recurse = with_config(('submodule.recurse', 'true'))
 
-    def fresh(then=None):
+    def fresh(then=None, first=False):
         """A world copy changes every file's stat, so a submodule's index
-        would read as stale; Git refreshes each one first (a checkout that
-        recurses does not), then THEN runs."""
+        would read as stale; Git refreshes each one (a checkout that recurses
+        does not). THEN runs after, or with FIRST before, so a file it
+        changes keeps the seed's bytes in its index on both sides."""
         def prepare(w):
+            if then and first:
+                then(w)
             g('submodule', 'foreach', '-q', '--recursive', 'git update-index -q --refresh || true', cwd=w / 'c',
               extra=ALLOW_FILE)
-            if then:
+            if then and not first:
                 then(w)
         return prepare
 
@@ -806,7 +809,7 @@ def family_recurse():
         for argv in (['checkout', '--recurse-submodules', 'HEAD~1'], ['checkout', '-f', '--recurse-submodules', 'HEAD~1'],
                      ['reset', '--hard', '--recurse-submodules', 'HEAD~1']):
             compare('recurse-%s-%s' % (label, '-'.join(x.strip('-').replace('~', '') for x in argv)), argv, s,
-                    cwd='c', extra=ALLOW_FILE, prepare=fresh(prepare))
+                    cwd='c', extra=ALLOW_FILE, prepare=fresh(prepare, first=True))
     s = named_seed('nosub')
     for argv in (['checkout', '--recurse-submodules', 'nosub'], ['switch', '--recurse-submodules', 'nosub']):
         compare('recurse-nosub-' + '-'.join(x.strip('-') for x in argv), argv, s, cwd='c', extra=ALLOW_FILE,
