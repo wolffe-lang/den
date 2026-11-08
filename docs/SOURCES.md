@@ -864,3 +864,12 @@ Organisation-owned: burrow's `tools/measure-den` fixture generator (den#63's
 fixture, by value), the wolf book's chapters on lists and regions, wolf-std's
 `list` (`reserve`). No Git, libgit2, JGit or other implementation source was
 read.
+
+The checkout's reader and syncs (den#63, after the first change):
+`git-config(1)`'s `core.fsync` (its components and the default on most
+platforms, `committed,-loose-object`) and `core.fsyncMethod`, read as
+published text. Black boxes: the pinned Git's clone of a public organisation
+repository (pelt) under strace (a system call census, and each sync call with
+its path and time) and under a preloaded library counting its sync calls
+(`tools/sync-census.c`, own code); macOS `sample` profiles of den's own
+clone. No implementation source was read.
