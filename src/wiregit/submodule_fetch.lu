@@ -183,8 +183,8 @@ pub fn recurse(before: List[str], cli: str, quiet: bool) -> int ! worktree.WorkE
         let full = "{ctx.root}/{target.path}"
         let place = if fs.exists("{full}/.git") then full else copy target.gitdir
         let here = env.cwd() else |_| { return io }
-        let saved = env_get("GIT_PROTOCOL_FROM_USER") else "1"
-        env_set("GIT_PROTOCOL_FROM_USER", "0") else |_| {}
+        // A submodule's fetch keeps the user's protocol policy: unlike the
+        // clone in an update, Git's fetches a file:// submodule by default.
         env_set("DEN_SUBMODULE_PREFIX", shown) else |_| {}
         env.set_cwd(place) else |_| { return io }
         var argv = ["fetch"]
@@ -204,7 +204,6 @@ pub fn recurse(before: List[str], cli: str, quiet: bool) -> int ! worktree.WorkE
             }
         }
         env.set_cwd(here) else |_| { return io }
-        env_set("GIT_PROTOCOL_FROM_USER", saved) else |_| {}
         env_set("DEN_SUBMODULE_PREFIX", prefix) else |_| {}
     }
     if errors.len == 0 { return 0 }
