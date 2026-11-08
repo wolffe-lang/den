@@ -340,5 +340,35 @@ fn push_planned(
 /// Push porcelain keeps deterministic local rejection status separate from
 /// unmeasured transport/IO diagnostics, which remain named refusals.
 pub fn push_command(args: List[str]) -> int {
-    perform_push(args) else |e| { eprint("den: wire: {transport.redact("{e}")}"); 2 }
+    // R-vc25-3: Git's push recurses into submodules on demand under
+    // submodule.recurse=true or push.recurseSubmodules (git-config(1)); den
+    // refuses those forms by name rather than push without the check.
+    var recurse = ""
+    for arg in args[1..] {
+        if arg == "--no-recurse-submodules" { recurse = "no" }
+        else if arg.starts_with("--recurse-submodules=") { recurse = arg[21..] }
+        else if arg == "--recurse-submodules" { recurse = "on-demand" }
+    }
+    if recurse == "" {
+        let repo = repository.discover(".") else |_| { return push_rest(args) }
+        recurse = (repo.config["push.recursesubmodules"] else "").lower()
+        if recurse == "" {
+            let general = (repo.config["submodule.recurse"] else "false").lower()
+            if general == "true" || general == "yes" || general == "on" || general == "1" { recurse = "on-demand" }
+        }
+    }
+    if recurse != "" && recurse != "no" && recurse != "false" {
+        eprint("den: not yet implemented: push --recurse-submodules={recurse} (vc25b)")
+        return 2
+    }
+    push_rest(args)
+}
+
+fn push_rest(args: List[str]) -> int {
+    var plain = List[str]()
+    for arg in args {
+        if arg == "--no-recurse-submodules" || arg == "--recurse-submodules=no" { continue }
+        (mut plain).push(copy arg)
+    }
+    perform_push(plain) else |e| { eprint("den: wire: {transport.redact("{e}")}"); 2 }
 }
