@@ -38,7 +38,7 @@ oracle builds are in `notes/vc00-evidence/`.
 | Area | Commands and supported surface |
 |---|---|
 | Objects | `init`, `hash-object`, `cat-file -p/-t/-s`, `mktree`, `commit-tree`, `mktag` |
-| Wire | `clone [-q] [--bare] URL DIRECTORY`; explicit `fetch -q URL SRC:DST`; configured/default `fetch [--prune]`, `pull` merge/rebase and `push`, `push -u`, plain/explicit `--force-with-lease`, `--force` and `--atomic`; `upload-pack`, bare `receive-pack`, and one-session loopback `daemon` within the limits below |
+| Wire | `clone [-q] [--bare] URL [DIRECTORY]`; explicit `fetch -q URL SRC:DST`; configured/default `fetch [--prune]`, `fetch [-q] [-f] REMOTE REFSPEC...`, `pull` merge/rebase and `push`, `push -u`, short push destinations placed as Git places them, plain/explicit `--force-with-lease`, `--force` and `--atomic`; `ls-remote` with `--heads`/`--branches`, `--tags`, `--refs`, `--symref`, `--exit-code` and patterns; `upload-pack`, bare `receive-pack`, and one-session loopback `daemon` within the limits below |
 | Packs | `pack-objects` from stdin object IDs to `objects/pack/pack`, OFS/REF deltas or no deltas; `verify-pack [-v]`; `count-objects [-v]`; bounded `fsck --full`; `repack -a -n -q [-d] [-k]` and `prune-packed [-n] [-q]` within the limits below |
 | Index | `write-tree` over nested index v2/v3/v4 entries; exclusive `index.lock` writes, stat fields, flags and TREE cache updates |
 | Config / ignore | `config --get`, set/`--add`/`--unset`/`--unset-all`/`--replace-all` with local/global/file destinations; bounded `remote add/remove/rename/-v/get-url/set-url` and `branch --set-upstream-to`; `check-ignore` with provenance, negation, tracked-file bypass and `--no-index` |
@@ -53,7 +53,7 @@ oracle builds are in `notes/vc00-evidence/`.
 | Merge | Fast-forward, already-up-to-date, bounded regular-file three-way merges, conflict stages and merge/diff3/zdiff3 markers; `--no-ff`, `--ff-only`, `--squash`, `--no-commit`, `--no-edit`, `-m`, `-F`, `--abort` |
 | Revert / resolution | Single ordinary or root commit, `--no-edit`, `--no-commit`; merge-parent refusal; `add` saves REUC when resolving/deleting higher stages, and `commit` completes a resolved merge |
 | Cherry-pick | Single commits and explicit commit lists; preserved source author/date, current committer, durable todo/head/options, conflicts, resolved `--continue`, `--skip`, `--abort`, `--allow-empty`, `--keep-redundant-commits` and `--empty=keep/drop/stop` |
-| Revisions | Shared bounded parser/evaluator: documented ref precedence, full/prefix OIDs, pseudorefs, parent/ancestor chains, object peels, literal `REV:path`, numeric reflogs and previous checkout; `log` exclusions/ranges and `diff` dotted endpoints |
+| Revisions | Shared bounded parser/evaluator: documented ref precedence, full/prefix OIDs, pseudorefs, parent/ancestor chains, object peels, literal `REV:path`, numeric reflogs, previous checkout and `B@{upstream}`; `log` exclusions/ranges and `diff` dotted endpoints; `rev-parse` revisions, `--verify`, `-q`, `--abbrev-ref`, `--symbolic-full-name`, `--short`, `--show-toplevel`, `--git-dir`, `--absolute-git-dir`, `--is-inside-work-tree`, `--is-inside-git-dir`, `--is-bare-repository`, `--show-prefix` and `--show-cdup` |
 | Blame | Default columns, numeric/offset `-L` unions, `-w`, ordered merge parents and `--first-parent`, whole-file renames, raw line bytes, `--porcelain` and `--line-porcelain`; conservative alignment limits below |
 | Stash | `push`/bare/`save` with `-m`, `-q`, `--keep-index`; `list`; `show` (diffstat default, any diff option); `apply`/`pop` over the shared merge plan against the index tree; `drop` (reflog record rewrite) and `clear`; `stash@{N}` and bare `N` through the shared evaluator |
 | Notes | `notes add` (`-m`, `-f`, `--allow-empty`), `show`, `list`, `remove` (`--ignore-missing`) and `get-ref` over `refs/notes/commits`; any permitted fan-out read, the measured fan-out written |
@@ -504,10 +504,24 @@ den clone -q --upload-pack=/owned/fixture/upload ssh://kasumi/owned/repo.git des
 den daemon --enable-receive-pack /dedicated/export/base 9418
 ```
 
-Clone requires a new destination. Normal checkout uses the existing verified
-worktree/index transaction; bare clone preserves the selected HEAD and branch/tag
-refs. Fetch accepts one fully qualified source/destination refspec, with `+` or
-`--force` for deliberate rewrites. Push accepts explicit refspecs, deletion and
+Clone with no directory clones into the URL's "humanish" name, as git-clone(1)
+derives it for every URL form den speaks (`NAME.git` for `--bare`); a guessless
+URL refuses as Git does. The destination may be an existing empty directory,
+which a failed clone empties again and keeps; anything else at that path refuses
+with Git's diagnostic. A clone of an empty repository prints Git's warning.
+Clone's operand errors (none, or more than two) are named refusals. Normal
+checkout uses the existing verified worktree/index transaction; bare clone
+preserves the selected HEAD and branch/tag refs. Fetch by URL accepts one fully
+qualified source/destination refspec, with `+` or `--force` for deliberate
+rewrites. Fetch of a configured remote takes explicit refspecs as git-fetch(1)
+does: full or short sources, one-star globs, negative refspecs, `tag NAME`, a
+short destination under `refs/heads/`, none at all (FETCH_HEAD only), Git's
+fast-forward and tag-clobber rejections, the opportunistic remote-tracking
+update and followed tags; `--prune` with explicit refspecs is a named refusal.
+`ls-remote` lists over ls-refs on every transport. Push resolves each source by
+gitrevisions(7)'s order and places a short destination against the remote's refs
+before inferring `refs/heads/` or `refs/tags/` from the source, refusing as Git
+refuses otherwise. Push accepts explicit refspecs, deletion and
 force; local fast-forward/tag checks precede transmission, and receive-side policy
 and expected-old-id checks precede reference publication. Outside `refs/heads` and `refs/tags`, unforced updates require both values to
 peel to commits and fast-forward; distinct tags of the same commit are allowed.
