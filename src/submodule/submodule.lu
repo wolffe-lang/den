@@ -298,7 +298,23 @@ fn update(
             let sub_ctx = worktree.discover(full)?
             let target = copy sub.id
             if !commit_present(sub_ctx.repo, target) {
-                return Fatal("Fetched in submodule path '{shown}', but it did not contain {oid.hex(target)?}. Direct fetching of that commit failed.")
+                // R-vc25-12: fetch the recorded commit by id, as Git does;
+                // the server's refusal is relayed before Git's own fatal.
+                let fetch_head = "{sub_ctx.repo.gitdir}/FETCH_HEAD"
+                if !fs.exists(fetch_head) {
+                    var f = fs.create_new_with_mode(fetch_head, 0o644)?
+                    fs.close(take f) else |_| {}
+                }
+                let saved = env_get("GIT_PROTOCOL_FROM_USER") else "\0"
+                env_set("GIT_PROTOCOL_FROM_USER", "0") else |_| {}
+                wiregit.fetch_commit(sub_ctx.repo, url, oid.hex(target)?) else |e| {
+                    let message = "{e}"
+                    if message.starts_with("Unsupported(") { eprint("fatal: {message[12..message.len - 1]}") }
+                }
+                if saved == "\0" { env_set("GIT_PROTOCOL_FROM_USER", "1") else |_| {} } else { env_set("GIT_PROTOCOL_FROM_USER", saved) else |_| {} }
+                if !commit_present(repository.open(sub_ctx.repo.gitdir)?, target) {
+                    return Fatal("Fetched in submodule path '{shown}', but it did not contain {oid.hex(target)?}. Direct fetching of that commit failed.")
+                }
             }
             let current = worktree.head(sub_ctx)?
             let moved = current.commits.len != 1 || !oid.equal(current.commits[0], target) || !current.detached
