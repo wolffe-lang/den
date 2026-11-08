@@ -16,18 +16,22 @@ fn rebase_help() -> str {
     "#\n# Commands:\n# p, pick <commit> = use commit\n# r, reword <commit> = use commit, but edit the commit message\n# e, edit <commit> = use commit, but stop for amending\n# s, squash <commit> = use commit, but meld into previous commit\n# f, fixup [-C | -c] <commit> = like \"squash\" but keep only the previous\n#                    commit's log message, unless -C is used, in which case\n#                    keep only this commit's message; -c is same as -C but\n#                    opens the editor\n# x, exec <command> = run command (the rest of the line) using shell\n# b, break = stop here (continue rebase later with 'git rebase --continue')\n# d, drop <commit> = remove commit\n# l, label <label> = label current HEAD with a name\n# t, reset <label> = reset HEAD to a label\n# m, merge [-C <commit> | -c <commit>] <label> [# <oneline>]\n#         create a merge commit using the original merge commit's\n#         message (or the oneline, if no original merge commit was\n#         specified); use -c <commit> to reword the commit message\n# u, update-ref <ref> = track a placeholder for the <ref> to be updated\n#                       to this position in the new commits. The <ref> is\n#                       updated at the end of the rebase\n#\n# These lines can be re-ordered; they are executed from top to bottom.\n#\n# If you remove a line here THAT COMMIT WILL BE LOST.\n#\n# However, if you remove everything, the rebase will be aborted.\n#\n"
 }
 
+// vc26: the author script from the stored author as Git splits it (bytes
+// that are not UTF-8 repaired, as the replayed commit's are); den reads
+// the author back from REBASE_HEAD, never from this file.
 fn rebase_author(ctx: worktree.Context, item: walk.Commit) -> () ! commit.CommitErrors {
-    var author = ""
+    var author = List[byte]()
     for field in item.headers.fields {
-        if field.key == "author" { author = str_from_utf8(field.value)? }
+        if field.key == "author" { author = commit.kept_bytes(field.value).bytes }
     }
-    let who = commit_format.parse_identity(author)?
-    let name = who.name.replace("'", "'\\''"), email = who.email.replace("'", "'\\''")
+    let raw = commit_format.raw_identity(author)
+    let name = str_from_utf8(raw.name)?.replace("'", "'\\''"),
+        email = str_from_utf8(raw.email)?.replace("'", "'\\''")
+    let date = if raw.dated then "@{raw.seconds_text} {str_from_utf8(raw.zone_text)?}" else ""
     replay_write(
         ctx,
         "rebase-merge/author-script",
-        "GIT_AUTHOR_NAME='{name}'\nGIT_AUTHOR_EMAIL='{email}'\nGIT_AUTHOR_DATE='@{commit_format.date_text(who.date)?}'\n".
-            bytes(),
+        "GIT_AUTHOR_NAME='{name}'\nGIT_AUTHOR_EMAIL='{email}'\nGIT_AUTHOR_DATE='{date}'\n".bytes(),
     )?
 }
 
