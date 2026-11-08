@@ -1,4 +1,4 @@
 pkg {
     name: "pretty", edition: "1", capabilities: [env, fs],
-    deps: {commit: {path: "../commit"}, oid: {path: "../oid"}, walk: {path: "../walk"}, worktree: {path: "../worktree"}},
+    deps: {commit: {path: "../commit"}, commit_format: {path: "../commit_format"}, oid: {path: "../oid"}, walk: {path: "../walk"}, worktree: {path: "../worktree"}},
 }

@@ -1,6 +1,6 @@
 // Original presentation from Git 2.56.0 pretty-formats and --date documentation.
-use std.time
 use commit
+use commit_format
 use oid
 use walk
 use worktree
@@ -11,61 +11,46 @@ fn line(mut out: List[byte], text: str) { add(mut out, text.bytes()); (mut out).
 
 fn whitespace(b: byte) -> bool { b == 32 as byte || b as int >= 9 && b as int <= 13 }
 
-/// Explicit numeric timestamp/offset rendering; no clock-relative output.
-pub fn date(seconds: int, zone: str, style: str) -> str ! worktree.WorkErrors {
-    if seconds < 0 || seconds > 253401938459 { return Unsupported("history date range") }
-    if zone.len != 5 || !zone.starts_with("+") && !zone.starts_with("-") { return invalid }
-    for b in zone.bytes()[1..] { if b < 48 as byte || b > 57 as byte { return invalid } }
-    let hours = zone[1..3].to_int() else |_| { return invalid }
-    let minutes = zone[3..].to_int() else |_| { return invalid }
-    if hours < 0 || minutes < 0 || minutes > 59 {
-        return Unsupported("history noncanonical timezone")
+fn zone_value(zone: str) -> int ! worktree.WorkErrors {
+    if zone.len < 2 || !zone.starts_with("+") && !zone.starts_with("-") { return invalid }
+    var magnitude = 0
+    for b in zone.bytes()[1..] {
+        if b < 48 as byte || b > 57 as byte || magnitude > 99999999 { return invalid }
+        magnitude = magnitude * 10 + (b as int - 48)
     }
-    let local = style == "local" || style.ends_with("-local")
-    let kind = if style == "local" {
-        "default"
-    } else if local {
-        style[0..style.len - 6]
-    } else {
-        style
-    }
-    let offset = if local {
-        0
-    } else {
-        (hours * 60 + minutes) * (if zone.starts_with("-") then -60 else 60)
-    }
-    let z = if local then "+0000" else zone
-    if kind == "raw" { return "{seconds} {z}" }
-    if kind == "unix" { return "{seconds}" }
-    if seconds + offset < 0 {
-        let numeric = zone.to_int() else 0
-        return Fatal("Timestamp before Unix epoch: {seconds} {numeric}")
-    }
-    let civil = time.local_in("UTC0", seconds + offset) else |_| { return invalid }
-    let format = match kind {
-        "default" => "%a %b %-d %H:%M:%S %Y",
-        "short" => "%Y-%m-%d",
-        "iso" | "iso8601" => "%Y-%m-%d %H:%M:%S",
-        "iso-strict" | "iso8601-strict" => "%Y-%m-%dT%H:%M:%S",
-        "rfc" | "rfc2822" => "%a, %-d %b %Y %H:%M:%S",
-        _ => { return Unsupported("history date format {style}") },
-    }
-    let value = time.format(civil, format) else |_| { return invalid }
-    if kind == "short" || kind == "default" && local { return value }
-    if kind == "iso-strict" || kind == "iso8601-strict" {
-        return if z == "+0000" || z == "-0000" then "{value}Z" else "{value}{z[0..3]}:{z[3..]}"
-    }
-    "{value} {z}"
+    if zone.starts_with("-") then -magnitude else magnitude
 }
 
-/// Parse an existing raw identity without commit-creation cleanup.
-pub fn identity(value: List[byte]) -> (str, int, str) ! worktree.WorkErrors {
-    let text = str_from_utf8(value)?
-    let end = text.rfind(">") else |_| { return invalid_header }
-    let words = text[end + 1..].words()
-    if words.len != 2 { return invalid_header }
-    let seconds = words[0].to_int() else |_| { return invalid_header }
-    (text[0..end + 1], seconds, words[1])
+/// Show seconds and a zone value in a --date style as Git does; Git's
+/// fatal (a local time before the epoch) is Fatal.
+pub fn shown(seconds: int, zone: int, style: str) -> str ! worktree.WorkErrors {
+    let value = commit_format.shown_date(seconds, zone, style)?
+    if value.fatal != "" { return Fatal(value.fatal) }
+    value.text
+}
+
+/// Explicit numeric timestamp/offset rendering; no clock-relative output.
+pub fn date(seconds: int, zone: str, style: str) -> str ! worktree.WorkErrors {
+    shown(seconds, zone_value(zone)?, style)?
+}
+
+/// vc26: Git's Author:, Commit: and Tagger: text of a split identity: the
+/// stored name, a space, and the stored email in angle brackets.
+pub fn person(raw: commit_format.RawIdentity) -> List[byte] {
+    var out = List[byte]()
+    add(mut out, raw.name)
+    add(mut out, " <".bytes())
+    add(mut out, raw.email)
+    (mut out).push(62 as byte)
+    out
+}
+
+/// The seconds and zone value Git shows for an identity's date: 0 and 0
+/// when it cannot read one, or the date is above 9223372036854775807.
+pub fn identity_time(raw: commit_format.RawIdentity) -> (int, int) ! worktree.WorkErrors {
+    if !raw.dated || !raw.fits { return (0, 0) }
+    if !raw.zone_fits { return Unsupported("history timezone with more than nine digits") }
+    (raw.seconds, raw.zone)
 }
 
 /// Pure message rendering. Raw storage remains untouched; display truncates at
@@ -152,17 +137,24 @@ pub fn render(
             return Unsupported("history message encoding")
         }
         if field.key != "author" && field.key != "committer" { continue }
-        let (person, seconds, zone) = identity(field.value)?
+        // vc26: a line Git cannot split prints no lines at all.
+        let raw = commit_format.raw_identity(field.value)
+        if !raw.split { continue }
+        let (seconds, zone) = identity_time(raw)?
         if field.key == "author" {
-            line(mut out, if format == "fuller" then "Author:     {person}" else "Author: {person}")
-            if format == "medium" { line(mut out, "Date:   {date(seconds, zone, date_style)?}") }
+            add(mut out, (if format == "fuller" then "Author:     " else "Author: ").bytes())
+            add(mut out, person(raw))
+            (mut out).push(10 as byte)
+            if format == "medium" { line(mut out, "Date:   {shown(seconds, zone, date_style)?}") }
             if format == "fuller" {
-                line(mut out, "AuthorDate: {date(seconds, zone, date_style)?}")
+                line(mut out, "AuthorDate: {shown(seconds, zone, date_style)?}")
             }
         } else if format == "full" || format == "fuller" {
-            line(mut out, if format == "fuller" then "Commit:     {person}" else "Commit: {person}")
+            add(mut out, (if format == "fuller" then "Commit:     " else "Commit: ").bytes())
+            add(mut out, person(raw))
+            (mut out).push(10 as byte)
             if format == "fuller" {
-                line(mut out, "CommitDate: {date(seconds, zone, date_style)?}")
+                line(mut out, "CommitDate: {shown(seconds, zone, date_style)?}")
             }
         }
     }
@@ -186,6 +178,172 @@ pub fn render(
         }
     } else {
         add(mut out, message(value.headers.message, false)?)
+    }
+    out
+}
+
+fn until_nul(bytes: List[byte]) -> List[byte] {
+    var out = List[byte]()
+    for b in bytes { if b == 0 as byte { break }; (mut out).push(b) }
+    out
+}
+
+// The stored bytes after the subject paragraph and the blank lines after
+// it (%b); a line of whitespace alone is blank, as for the subject.
+fn body_bytes(message: List[byte]) -> List[byte] {
+    var pos = 0, started = false, ended = false
+    while pos < message.len {
+        let begin = pos
+        while pos < message.len && message[pos] != 10 as byte { pos += 1 }
+        var blank = true
+        for i in begin..pos { if !whitespace(message[i]) { blank = false } }
+        if pos < message.len { pos += 1 }
+        if !started {
+            if !blank { started = true }
+        } else if !ended {
+            if blank { ended = true }
+        } else if !blank {
+            var out = List[byte]()
+            for i in begin..message.len { (mut out).push(message[i]) }
+            return out
+        }
+    }
+    List[byte]()
+}
+
+fn local_part(email: List[byte]) -> List[byte] {
+    var out = List[byte]()
+    for b in email { if b == 64 as byte { break }; (mut out).push(b) }
+    out
+}
+
+// One identity placeholder (%a? or %c?), as Git expands it: a line it
+// cannot split expands %?n and %?e to nothing and leaves %?l, %?N, %?E and
+// %?L as written; a date it cannot read expands %?d, %?D, %?t and %?i to
+// nothing and leaves %?I and %?s as written.
+fn identity_placeholder(
+    mut out: List[byte],
+    value: walk.Commit,
+    role: byte,
+    key: byte,
+    date_style: str,
+) -> () ! worktree.WorkErrors {
+    let field_name = if role == 97 as byte then "author" else "committer"
+    var raw = commit_format.raw_identity(List[byte]())
+    for field in value.headers.fields {
+        if field.key == field_name { raw = commit_format.raw_identity(field.value); break }
+    }
+    var written = List[byte]()
+    (mut written).push(37 as byte)
+    (mut written).push(role)
+    (mut written).push(key)
+    let k = key as int
+    // n N e E l L d D t i I s
+    if k == 110 || k == 78 || k == 101 || k == 69 || k == 108 || k == 76 {
+        if !raw.split {
+            if k != 110 && k != 101 { add(mut out, written) }
+            return
+        }
+        if k == 110 || k == 78 {
+            add(mut out, raw.name)
+        } else if k == 101 || k == 69 {
+            add(mut out, raw.email)
+        } else {
+            add(mut out, local_part(raw.email))
+        }
+        return
+    }
+    if !raw.split || !raw.dated {
+        if k == 73 || k == 115 { add(mut out, written) }
+        return
+    }
+    if k == 116 { add(mut out, raw.stamp); return }
+    let (seconds, zone) = identity_time(raw)?
+    let style = if k == 100 {
+        date_style
+    } else if k == 68 {
+        "rfc"
+    } else if k == 105 {
+        "iso"
+    } else if k == 73 {
+        "iso-strict"
+    } else {
+        "short"
+    }
+    add(mut out, shown(seconds, zone, style)?.bytes())
+}
+
+/// vc26: a user format (`--format=`, `format:`, `tformat:`) over the
+/// placeholders this engine knows: %H %h %T %t %P %p %s %b %B %n %%, the
+/// author and committer names, emails and dates (%an %ae %al %aN %aE %aL
+/// %ad %aD %at %ai %aI %as, and %c?), and literal text. Every other
+/// placeholder, and the clock-relative %ar %ah %cr %ch, is refused by
+/// name. short_ids holds the commit then its parents, abbreviated.
+pub fn user_format(
+    value: walk.Commit,
+    format: str,
+    date_style: str,
+    short_ids: List[str],
+    tree_short: str,
+) -> List[byte] ! worktree.WorkErrors {
+    if short_ids.len != value.parents.len + 1 { return invalid }
+    let spec = format.bytes()
+    var out = List[byte](), i = 0
+    while i < spec.len {
+        let b = spec[i]
+        i += 1
+        if b != 37 as byte { (mut out).push(b); continue }
+        if i == spec.len { return Unsupported("history format placeholder %") }
+        let c = spec[i] as int
+        i += 1
+        if c == 110 {
+            (mut out).push(10 as byte)
+        } else if c == 37 {
+            (mut out).push(37 as byte)
+        } else if c == 72 {
+            add(mut out, oid.hex(value.id)?.bytes())
+        } else if c == 104 {
+            add(mut out, short_ids[0].bytes())
+        } else if c == 84 {
+            add(mut out, oid.hex(value.tree)?.bytes())
+        } else if c == 116 {
+            add(mut out, tree_short.bytes())
+        } else if c == 80 || c == 112 {
+            for n in 0..value.parents.len {
+                if n > 0 { (mut out).push(32 as byte) }
+                let id = if c == 80 then oid.hex(value.parents[n])? else short_ids[n + 1]
+                add(mut out, id.bytes())
+            }
+        } else if c == 115 {
+            add(mut out, message(value.headers.message, true)?)
+        } else if c == 98 {
+            add(mut out, body_bytes(until_nul(value.headers.message)))
+        } else if c == 66 {
+            add(mut out, until_nul(value.headers.message))
+        } else if (c == 97 || c == 99) && i < spec.len {
+            let k = spec[i] as int
+            if k == 110 ||
+                k == 78 ||
+                k == 101 ||
+                k == 69 ||
+                k == 108 ||
+                k == 76 ||
+                k == 100 ||
+                k == 68 ||
+                k == 116 ||
+                k == 105 ||
+                k == 73 ||
+                k == 115 {
+                identity_placeholder(mut out, value, c as byte, spec[i], date_style)?
+                i += 1
+            } else {
+                let name = str_from_utf8(spec[i - 2..i + 1]) else "%?"
+                return Unsupported("history format placeholder {name}")
+            }
+        } else {
+            let name = str_from_utf8(spec[i - 2..i]) else "%?"
+            return Unsupported("history format placeholder {name}")
+        }
     }
     out
 }
