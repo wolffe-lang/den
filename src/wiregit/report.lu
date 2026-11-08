@@ -35,11 +35,15 @@ fn fetch_url(url: str) -> str {
     out
 }
 
-fn fetch_report(url: str, rows: List[TransportRow]) {
+fn fetch_report(url: str, rows: List[TransportRow]) { fetch_report_width(url, rows, 17) }
+
+// summary_width is the least width of the summary column (17, or 0 for a
+// report Git prints unpadded, one with a rejection).
+fn fetch_report_width(url: str, rows: List[TransportRow], least: int) {
     if rows.len == 0 { return }
-    var summary_width = 17, source_width = 10
+    var summary_width = least, source_width = 10
     for row in rows {
-        if row.summary.len > summary_width { summary_width = row.summary.len }
+        if least > 0 && row.summary.len > summary_width { summary_width = row.summary.len }
         if row.source.len > source_width { source_width = row.source.len }
     }
     eprint("From {fetch_url(url)}")
