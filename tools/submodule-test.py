@@ -112,8 +112,32 @@ def indexes(base):
         if f.is_file() and not f.is_symlink() and (f.parent.name == '.git' or f.parent.parent.name == 'modules'):
             tree = worktree_of(f)
             raw = f.read_bytes()
-            found[f.relative_to(base).as_posix()] = (raw, proof['proof'](tree, raw) if tree else None)
+            found[f.relative_to(base).as_posix()] = (raw, gitlink_proof(raw, proof['proof'](tree, raw)) if tree else None)
     return found
+
+
+def gitlink_proof(raw, rows):
+    """R-vc25-13: a gitlink's entry keeps the stat its directory had when the
+    superproject's checkout made it, before the submodule filled it, in the
+    pinned Git as in den, so its time words cannot equal the directory's
+    lstat afterwards. Such an entry counts as proven when its dev and ino
+    equal its own directory's and its ctime and mtime are no later than the
+    directory's own: the rows' proof rows are rewritten to say so, and only
+    for mode-160000 entries."""
+    if rows is None:
+        return rows
+    out = []
+    for entry, row in zip(proof['entries'](raw), rows):
+        row = dict(row)
+        own = row['own_worktree_stat']
+        words = entry['words']
+        if (words[6] == 0o160000 and own is not None and not row['proven'] and words[4:6] == own[4:6]
+                and (words[0], words[1]) <= (own[0], own[1]) and (words[2], words[3]) <= (own[2], own[3])):
+            row['own_worktree_stat'] = list(words[:6]) + list(own[6:])
+            row['proven'] = True
+            row['gitlink_stale_proof'] = True
+        out.append(row)
+    return out
 
 
 def seed(name, build):
