@@ -568,6 +568,9 @@ def family_ls_remote(h):
     empty = bare(h, 'ls-empty.git', 'trunk')
     outside = h.out / 'ls-outside'
     outside.mkdir(exist_ok=True)
+    # git(1) GIT_CEILING_DIRECTORIES keeps the outside directory outside the
+    # checkout this harness runs in, for both tools.
+    h.extra['GIT_CEILING_DIRECTORIES'] = str(h.out)
     for transport in h.transports():
         w = work(h, 'ls-w', 'main')
         url = h.url(transport, remote)
