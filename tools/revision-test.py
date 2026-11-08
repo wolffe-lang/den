@@ -92,7 +92,7 @@ for mode in ['loose','packed']:
    clients.append(dict(mode=mode,name='provenance-'+heading.decode().strip(),expected=expected,actual=actual,unchanged=before==state(repo)))
    if expected!=actual or state(repo)!=before:fail.append(['provenance',mode,heading.decode()])
   (repo/'.git/HEAD').write_bytes(saved_head)
-  for name,feature in [('@{yesterday}','revision date selector'),(':/text','revision message search'),('HEAD^@','revision parent-set shorthand'),('HEAD^!','revision parent-set shorthand'),('HEAD^-2','revision parent-set shorthand'),(':0:file','revision index expression'),('@{upstream}','revision upstream tracking'),('@{push}','revision push tracking')]:
+  for name,feature in [('@{yesterday}','revision date selector'),(':/text','revision message search'),('HEAD^@','revision parent-set shorthand'),('HEAD^!','revision parent-set shorthand'),('HEAD^-2','revision parent-set shorthand'),(':0:file','revision index expression'),('@{push}','revision push tracking')]:
    before=state(repo);actual=run(D,['show','-s',name],repo);expected=dict(status=2,stdout='',stderr=f'den: not yet implemented: {feature}\n'.encode().hex())
    scopes.append(dict(mode=mode,name=name,actual=actual,expected=expected,unchanged=state(repo)==before))
    if actual!=expected or state(repo)!=before:fail.append(['scope',mode,name])

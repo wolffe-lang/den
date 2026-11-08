@@ -33,6 +33,12 @@ fn tracking_name(repo: repository.Repo, reference: str) -> str ! RevisionErrors 
     reference
 }
 
+/// A ref's shortest unambiguous name, as git-rev-parse(1) --abbrev-ref and
+/// upstream displays spell it.
+pub fn short_name(repo: repository.Repo, reference: str) -> str ! RevisionErrors {
+    tracking_name(repo, reference)?
+}
+
 fn tracking_reference(repo: repository.Repo, branch: str) -> str ! RevisionErrors {
     let remote = repo.config["branch.{branch}.remote"] else ""
     let merge = repo.config["branch.{branch}.merge"] else ""

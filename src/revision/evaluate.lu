@@ -300,10 +300,9 @@ fn reflog(
     mut warnings: List[str],
 ) -> Resolved ! RevisionErrors {
     let selector = value.selector
-    if selector == "upstream" || selector == "u" {
-        return Unsupported("revision upstream tracking")
-    }
-    if selector == "push" { return Unsupported("revision push tracking") }
+    let lowered = selector.lower()
+    if lowered == "upstream" || lowered == "u" { return upstream_of(repo, value.base)? }
+    if lowered == "push" { return Unsupported("revision push tracking") }
     if selector.starts_with("-") {
         return base(repo, previous(repo, selector)?, "", mut warnings)?
     }
@@ -327,6 +326,33 @@ fn reflog(
         reference: reference.reference,
         detached: reference.detached,
     }
+}
+
+// gitrevisions(7) <branchname>@{upstream}: the branch's configured upstream
+// through the remote's fetch mapping (or itself for remote "."), with Git's
+// refusals; a mapped ref that is gone is not found.
+fn upstream_of(repo: repository.Repo, name: str) -> Resolved ! RevisionErrors {
+    var branch = copy name
+    if branch == "" || branch == "HEAD" {
+        let state = provenance(repo)?
+        if state.detached || !state.reference.starts_with("refs/heads/") {
+            return Fatal("HEAD does not point to a branch")
+        }
+        branch = state.reference[11..]
+    }
+    if !refs.valid("refs/heads/{branch}") || refs.optional(repo, "refs/heads/{branch}")?.len == 0 {
+        return Fatal("no such branch: '{branch}'")
+    }
+    let remote = repo.config["branch.{branch}.remote"] else ""
+    let merge = repo.config["branch.{branch}.merge"] else ""
+    if remote == "" || merge == "" { return Fatal("no upstream configured for branch '{branch}'") }
+    let reference = tracking_reference(repo, branch)?
+    if reference == "" {
+        return Fatal("upstream branch '{merge}' not stored as a remote-tracking branch")
+    }
+    let found = refs.optional(repo, reference)?
+    if found.len == 0 { return not_found }
+    Resolved { id: copy found[0], reference: reference, detached: provenance(repo)?.detached }
 }
 
 fn charged(repo: repository.Repo, id: oid.Oid, mut used: int) -> object.Object ! RevisionErrors {

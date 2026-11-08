@@ -63,9 +63,9 @@ fn atom(text: str, has_path: bool, path: List[byte]) -> Atom ! ParseErrors {
         if out.selector == "" { return invalid }
         if out.selector.starts_with("-") {
             if out.base != "" || decimal(out.selector[1..])? == 0 { return invalid }
-        } else if out.selector == "upstream" ||
-            out.selector == "u" ||
-            out.selector == "push" {} else {
+        } else if out.selector.lower() == "upstream" ||
+            out.selector.lower() == "u" ||
+            out.selector.lower() == "push" {} else {
             let _ = decimal(out.selector) else |e| match e {
                 limit => { return limit },
                 _ => { return Unsupported("revision date selector") },
