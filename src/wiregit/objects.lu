@@ -1,3 +1,4 @@
+use std.fs
 use object
 use oid
 use pack
@@ -7,64 +8,258 @@ use repository
 use transport
 use wire
 
-/// Typed closure rooted only at explicitly requested objects. Shared validator
-/// parsers enforce link types; excluded objects are validated separately first.
+/// den#73: a closure in walk order as bytes and ints: 40 hex bytes a name, a
+/// type code (kind_code) and a size each, so a walk of any length keeps no
+/// string for an object.
+pub struct Plan { names: List[byte], kinds: List[int], sizes: List[int] }
+
+fn plan_empty() -> Plan { Plan { names: List[byte](), kinds: List[int](), sizes: List[int]() } }
+
+/// The number of objects planned.
+pub fn plan_len(p: Plan) -> int { p.kinds.len }
+
+/// The name of the i-th object planned.
+pub fn plan_name(p: Plan, i: int) -> str ! object.StoreErrors {
+    if i < 0 || i >= p.kinds.len { return invalid }
+    str_from_utf8(p.names[i * 40..i * 40 + 40]) else |_| { return invalid }
+}
+
+// A walk's state, all bytes, ints and hashed sets: queue holds every name
+// ever queued (40 bytes each) and queued the same as a set; expect the first
+// type a link gave a name; kinds a read object's type. Every link to a name is
+// checked against its type, whichever comes first.
+struct Walk {
+    queue: List[byte],
+    queued: pack.NameSet,
+    expect: pack.NameSet,
+    kinds: pack.NameSet,
+}
+
+fn walk_queue(mut w: Walk, name: str) -> () ! object.StoreErrors {
+    if name.len != 40 { return invalid }
+    if pack.names_add(mut w.queued, name, "") { for b in name.bytes() { (mut w.queue).push(b) } }
+}
+
+// One step: read name, check it and its links' types, queue its unseen links
+// and append it to the plan.
+fn walk_one(
+    mut reader: object.Reader,
+    name: str,
+    mut w: Walk,
+    mut plan: Plan,
+) -> () ! object.StoreErrors {
+    let body = object.read_cached(mut reader, oid.parse("sha1", name)?, pack.object_limit())?
+    let expected = pack.names_value(w.expect, name)
+    if expected != "" && expected != body.kind { return invalid }
+    let _ = pack.names_add(mut w.kinds, name, body.kind)
+    for child in packcmd.wire_links(body)? {
+        let known = pack.names_value(w.kinds, child.name)
+        if known != "" {
+            if child.kind != "" && child.kind != known { return invalid }
+        } else if child.kind != "" {
+            if !pack.names_add(mut w.expect, child.name, child.kind) &&
+                pack.names_value(w.expect, child.name) != child.kind {
+                return invalid
+            }
+        }
+        walk_queue(mut w, child.name)?
+    }
+    for b in name.bytes() { (mut plan.names).push(b) }
+    (mut plan.kinds).push(kind_code(body.kind))
+    (mut plan.sizes).push(body.data.len)
+}
+
+/// Typed closure rooted only at explicitly requested objects, less the names
+/// in omit. Shared validator parsers enforce link types. den#73: one reader
+/// serves every read (one pack-index parse, bases through its cache), the
+/// queued, typed and omitted names are hashed sets, and each step is a region
+/// of its own, so the walk is linear in objects and keeps only bytes and ints
+/// for each; there is no count bound.
+pub fn walk_plan(
+    repo: repository.Repo,
+    roots: List[str],
+    omit: pack.NameSet,
+) -> Plan ! object.StoreErrors {
+    var reader = object.reader_batch(repo)
+    var w = Walk {
+        queue: List[byte](),
+        queued: pack.nameset(),
+        expect: pack.nameset(),
+        kinds: pack.nameset(),
+    }
+    var plan = plan_empty()
+    for name in roots { walk_queue(mut w, name)? }
+    var pos = 0
+    while pos < w.queue.len {
+        region step {
+            let name = str_from_utf8(w.queue[pos..pos + 40]) else |_| { return invalid }
+            pos += 40
+            if !pack.names_has(omit, name) { walk_one(mut reader, name, mut w, mut plan)? }
+        }
+    }
+    plan
+}
+
+/// Add a plan's names to a set.
+pub fn plan_into(p: Plan, mut set: pack.NameSet) {
+    for i in 0..p.kinds.len {
+        region one {
+            let name = str_from_utf8(p.names[i * 40..i * 40 + 40]) else ""
+            let _ = pack.names_add(mut set, name, "")
+        }
+    }
+}
+
+/// The closure of haves, as the set a walk omits.
+pub fn have_set(repo: repository.Repo, haves: List[str]) -> pack.NameSet ! object.StoreErrors {
+    var set = pack.nameset()
+    if haves.len == 0 { return set }
+    plan_into(walk_plan(repo, haves, pack.nameset())?, mut set)
+    set
+}
+
+/// walk_plan's names, in walk order, less excluded's.
 pub fn closure(
     repo: repository.Repo,
     roots: List[str],
     excluded: List[str],
 ) -> List[str] ! object.StoreErrors {
-    var pending = List[packcmd.Link](), seen = Map[str, str](), omit = Map[str, bool]()
-    for name in excluded { omit[name] = true }
-    for name in roots { (mut pending).push(packcmd.Link { name: copy name, kind: "" }) }
-    var pos = 0, out = List[str]()
-    while pos < pending.len {
-        let link = copy pending[pos]
-        pos += 1
-        if omit[link.name] else false { continue }
-        let prior = seen[link.name] else ""
-        if prior != "" {
-            if link.kind != "" && link.kind != prior { return invalid }
-            continue
-        }
-        if out.len >= 10000 || pending.len > 100000 { return limit }
-        // vc23: each body lives in its own region, so no aggregate cap; the
-        // per-object cap is the pack reader's. A link to an object already
-        // seen is type-checked here, not queued again.
-        region body_read {
-            let body = object.read_object(repo, oid.parse("sha1", link.name)?, pack.object_limit())?
-            if link.kind != "" && link.kind != body.kind { return invalid }
-            seen[link.name] = copy body.kind
-            for child in packcmd.links(body)? {
-                let known = seen[child.name] else ""
-                if known != "" {
-                    if child.kind != "" && child.kind != known { return invalid }
-                    continue
-                }
-                (mut pending).push(copy child)
-            }
-        }
-        (mut out).push(copy link.name)
+    var omit = pack.nameset()
+    for name in excluded { let _ = pack.names_add(mut omit, name, "") }
+    let plan = walk_plan(repo, roots, omit)?
+    var names = List[str]()
+    for i in 0..plan_len(plan) { (mut names).push(plan_name(plan, i)?) }
+    names
+}
+
+/// den#73: a written pack, a temporary the caller removes.
+pub struct PackFile { path: str, size: int }
+
+// Where an outgoing pack is written: TMPDIR, as a served repository may be
+// read-only.
+fn out_dir() -> str { env_get("TMPDIR") else "/tmp" }
+
+// Planned objects ordered by type (in the order of the type names: blob,
+// commit, tag, tree), then size descending: a stable bottom-up merge sort of
+// positions (encode's order, in n log n).
+fn type_rank(code: int) -> int {
+    match code {
+        3 => 0,
+        1 => 1,
+        4 => 2,
+        _ => 3,
     }
+}
+
+fn planned_order(plan: Plan) -> List[int] {
+    var order = List[int](), kinds = List[int](), sizes = List[int]()
+    for i in 0..plan.kinds.len {
+        (mut order).push(i)
+        (mut kinds).push(type_rank(plan.kinds[i]))
+        (mut sizes).push(plan.sizes[i])
+    }
+    var scratch = copy order
+    var width = 1
+    while width < order.len {
+        var lo = 0
+        while lo < order.len {
+            let mid = if lo + width < order.len then lo + width else order.len
+            let hi = if lo + 2 * width < order.len then lo + 2 * width else order.len
+            var i = lo, j = mid, k = lo
+            while i < mid && j < hi {
+                let a = order[i], b = order[j]
+                if kinds[b] < kinds[a] || kinds[b] == kinds[a] && sizes[b] > sizes[a] {
+                    scratch[k] = order[j]
+                    j += 1
+                } else {
+                    scratch[k] = order[i]
+                    i += 1
+                }
+                k += 1
+            }
+            while i < mid {
+                scratch[k] = order[i]
+                i += 1
+                k += 1
+            }
+            while j < hi {
+                scratch[k] = order[j]
+                j += 1
+                k += 1
+            }
+            lo = hi
+        }
+        for n in 0..order.len { order[n] = scratch[n] }
+        width *= 2
+    }
+    order
+}
+
+/// The pack of roots minus the closure of haves, written to a temporary by
+/// pack.Writer: each body read through one reader, one at a time, so a
+/// served or pushed pack holds no aggregate of bodies (den#73).
+pub fn pack_file(
+    repo: repository.Repo,
+    roots: List[str],
+    haves: List[str],
+    mode: str,
+) -> PackFile ! object.StoreErrors {
+    write_plan(repo, walk_plan(repo, roots, have_set(repo, haves)?)?, mode)?
+}
+
+/// A planned closure written as pack_file writes it.
+pub fn write_plan(repo: repository.Repo, plan: Plan, mode: str) -> PackFile ! object.StoreErrors {
+    let order = planned_order(plan)
+    var w = pack.writer_begin(out_dir(), plan_len(plan), mode)?
+    var finished = false
+    defer { if !finished { pack.writer_discard(mut w) } }
+    var reader = object.reader_batch(repo)
+    for i in order {
+        region one {
+            let name = plan_name(plan, i)?
+            write_one(mut w, mut reader, name)?
+        }
+    }
+    let (path, size) = pack.writer_finish(mut w)?
+    finished = true
+    PackFile { path: path, size: size }
+}
+
+/// plan with walk_plan's closure of more roots appended, less omit and the
+/// names already planned.
+pub fn plan_more(
+    repo: repository.Repo,
+    plan: Plan,
+    roots: List[str],
+    omit: pack.NameSet,
+) -> Plan ! object.StoreErrors {
+    var seen = copy omit
+    plan_into(plan, mut seen)
+    let more = walk_plan(repo, roots, seen)?
+    var out = copy plan
+    for b in more.names { (mut out.names).push(b) }
+    for k in more.kinds { (mut out.kinds).push(k) }
+    for n in more.sizes { (mut out.sizes).push(n) }
     out
 }
 
-/// Validate selected typed closures and encode only roots minus common-have closure; shared pack bounds apply.
+// One object read through the writer's batch reader and appended.
+fn write_one(mut w: pack.Writer, mut reader: object.Reader, name: str) -> () ! object.StoreErrors {
+    let body = object.read_cached(mut reader, oid.parse("sha1", name)?, pack.object_limit())?
+    pack.writer_add(mut w, pack.Body { kind: body.kind, data: body.data }, name)?
+}
+
+/// pack_file's bytes, for a transport that sends a request whole (HTTP);
+/// the temporary is removed.
 pub fn pack_for(
     repo: repository.Repo,
     roots: List[str],
     haves: List[str],
     mode: str,
 ) -> List[byte] ! object.StoreErrors {
-    let omitted = closure(repo, haves, [])?
-    let names = closure(repo, roots, omitted)?
-    var bodies = List[pack.Body]()
-    for name in names {
-        let body = object.read_object(repo, oid.parse("sha1", name)?, 16777216)?
-        (mut bodies).push(pack.Body { kind: copy body.kind, data: copy body.data })
-    }
-    let encoded = pack.encode(bodies, mode)?
-    copy encoded.data
+    let file = pack_file(repo, roots, haves, mode)?
+    defer fs.remove(file.path) else |_| {}
+    repository.read_bytes(file.path, file.size)?
 }
 
 /// Decode and validate the whole stream before any object is published. Loose
@@ -103,25 +298,68 @@ pub fn import_pack(repo: repository.Repo, bytes: List[byte]) -> () ! object.Stor
     for body in bodies { let _ = object.write_object(repo, body.kind, body.data)? }
 }
 
+/// den#73: a pushed pack through the streamed indexer that fetch uses: it is
+/// installed (a pack of 100 objects or more is kept, as Git's receive-pack
+/// keeps one), then the typed closure of the pushed tips is checked. A thin pack, whose bases are local objects, takes the
+/// whole-stream decoder, which resolves them.
+pub fn receive_import(
+    repo: repository.Repo,
+    bytes: List[byte],
+    roots: List[str],
+) -> () ! object.StoreErrors {
+    var receiver = pack.receive_begin(repo.gitdir)?
+    defer pack.receive_abort(mut receiver)
+    var pos = 0
+    while pos < bytes.len {
+        let end = if bytes.len - pos > 1048576 then pos + 1048576 else bytes.len
+        pack.receive_write(mut receiver, bytes[pos..end])?
+        pos = end
+    }
+    let ix = pack.received_index(mut receiver) else |e| match e {
+        Unsupported(text) => {
+            if text == "pack delta base missing" {
+                import_pack(repo, bytes)?
+                return
+            }
+            return Unsupported(text)
+        },
+        denied => { return denied },
+        io => { return io },
+        not_found => { return not_found },
+    }
+    // As fetch does: install (the walk reads received objects through the
+    // store), then check the pushed tips' typed closure.
+    publish_received(repo, ix, false)?
+    closure_received(repo, roots, ix)?
+}
+
 /// Test commit ancestry with shared header parsing and bounded graph traversal; not a general revision evaluator.
 pub fn ancestor(repo: repository.Repo, older: str, newer: str) -> bool ! object.StoreErrors {
     if older == newer { return true }
-    var pending = [newer], seen = Map[str, bool](), pos = 0
+    // den#73: one reader and a hashed seen set; no count bound.
+    let reader = object.reader_batch(repo)
+    var pending = [newer], seen = pack.nameset(), pos = 0
+    let _ = pack.names_add(mut seen, newer, "")
     while pos < pending.len {
         let name = copy pending[pos]
         pos += 1
-        if seen[name] else false { continue }
-        seen[name] = true
-        if pos > 10000 || pending.len > 100000 { return limit }
-        let body = object.read_object(repo, oid.parse("sha1", name)?, 16777216)?
-        if body.kind != "commit" { return false }
-        let headers = object.parse_commit(body.data, "sha1") else |_| { return invalid }
-        for field in headers.fields {
-            if field.key != "parent" { continue }
-            let parent = str_from_utf8(field.value) else |_| { return invalid }
-            if parent == older { return true }
-            (mut pending).push(parent)
+        var found = false, commit = true
+        region commit_read {
+            let body = object.read_loaded(reader, oid.parse("sha1", name)?, 16777216)?
+            if body.kind != "commit" {
+                commit = false
+            } else {
+                let headers = object.parse_commit(body.data, "sha1") else |_| { return invalid }
+                for field in headers.fields {
+                    if field.key != "parent" { continue }
+                    let parent = str_from_utf8(field.value) else |_| { return invalid }
+                    if parent == older { found = true }
+                    if pack.names_add(mut seen, parent, "") { (mut pending).push(copy parent) }
+                }
+            }
         }
+        if !commit { return false }
+        if found { return true }
     }
     false
 }
@@ -203,7 +441,7 @@ pub fn closure_received(
     roots: List[str],
     ix: pack.Indexed,
 ) -> () ! object.StoreErrors {
-    let reader = object.reader_open(repo)?
+    var reader = object.reader_open(repo)?
     let count = pack.received_count(ix)
     var seen = List[bool]()
     (mut seen).reserve(count)
@@ -211,7 +449,9 @@ pub fn closure_received(
     // Received objects wait by rank with the type their link expects
     // (kind_code; 0 for a root), others by link.
     var ranks = List[int](), expected = List[int](), outside = List[packcmd.Link]()
-    var other = Map[str, str]()
+    // den#73: the objects outside the pack, read and typed, in a hashed set
+    // with no count bound.
+    var other = pack.nameset()
     for name in roots {
         let rank = pack.received_rank(ix, name)?
         if rank >= 0 {
@@ -234,7 +474,7 @@ pub fn closure_received(
                         let name = pack.received_rank_name(ix, rank)?
                         let link = packcmd.Link { name: name, kind: kind }
                         follow(
-                            reader,
+                            mut reader,
                             ix,
                             link,
                             rank,
@@ -249,13 +489,12 @@ pub fn closure_received(
                 }
             } else {
                 let link = (mut outside).pop() else |_| { return invalid }
-                let prior = other[link.name] else ""
+                let prior = pack.names_value(other, link.name)
                 if prior != "" {
                     if link.kind != "" && link.kind != prior { return invalid }
                 } else {
-                    if other.len >= 10000 { return limit }
                     follow(
-                        reader,
+                        mut reader,
                         ix,
                         link,
                         -1,
@@ -272,6 +511,17 @@ pub fn closure_received(
     }
 }
 
+// kind_code's inverse.
+fn kind_name(code: int) -> str {
+    match code {
+        1 => "commit",
+        2 => "tree",
+        3 => "blob",
+        4 => "tag",
+        _ => "",
+    }
+}
+
 // A link's expected type as a small int, so a queued link holds no string.
 fn kind_code(kind: str) -> int {
     match kind {
@@ -285,22 +535,22 @@ fn kind_code(kind: str) -> int {
 
 // Read one closure object, check its type, and queue its unseen links.
 fn follow(
-    reader: object.Reader,
+    mut reader: object.Reader,
     ix: pack.Indexed,
     link: packcmd.Link,
     rank: int,
     kind: str,
     seen: List[bool],
-    mut other: Map[str, str],
+    mut other: pack.NameSet,
     mut ranks: List[int],
     mut expected: List[int],
     mut outside: List[packcmd.Link],
 ) -> () ! object.StoreErrors {
-    let body = object.read_loaded(reader, oid.parse("sha1", link.name)?, pack.object_limit())?
+    let body = object.read_cached(mut reader, oid.parse("sha1", link.name)?, pack.object_limit())?
     if link.kind != "" && link.kind != body.kind { return invalid }
     if rank >= 0 && body.kind != kind { return invalid }
-    if rank < 0 { other[copy link.name] = copy body.kind }
-    for child in packcmd.links(body)? {
+    if rank < 0 { let _ = pack.names_add(mut other, link.name, body.kind) }
+    for child in packcmd.wire_links(body)? {
         let at = pack.received_rank(ix, child.name)?
         if at >= 0 {
             if child.kind != "" && child.kind != pack.received_rank_kind(ix, at) { return invalid }
