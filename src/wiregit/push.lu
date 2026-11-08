@@ -74,9 +74,23 @@ pub fn push(
     push_reported(repo, url, specs, force, atomic, [], mut outcomes)?
 }
 
-/// Push with checked leases and retained per-ref outcomes. The output list must
-/// start empty. Local rejections precede transmission; the wire CAS still uses
-/// the advertisement's old value, never the tracking ref's unchecked value.
+/// One push refspec resolved locally (git-push(1) <refspec>): the source as
+/// typed; the full ref it names, or HEAD, or empty for another revision or a
+/// deletion; the ref a short destination's namespace is inferred from (a
+/// branch for an attached HEAD); the object id and type (empty for a
+/// deletion); the destination as typed or full.
+pub struct PushPlan {
+    force: bool,
+    typed: str,
+    source: str,
+    namespace: str,
+    id: str,
+    kind: str,
+    destination: str,
+}
+
+/// Push fully qualified "SRC:DST" refspecs with checked leases and retained
+/// per-ref outcomes; the output list must start empty.
 pub fn push_reported(
     repo: repository.Repo,
     url: str,
@@ -86,14 +100,100 @@ pub fn push_reported(
     leases: List[PushLease],
     mut outcomes: List[PushOutcome],
 ) -> () ! object.StoreErrors {
-    if specs.len == 0 || specs.len > 10000 || leases.len > 10000 || outcomes.len != 0 {
-        return invalid
+    if specs.len == 0 || specs.len > 10000 { return invalid }
+    var plans = List[PushPlan]()
+    for raw in specs {
+        let override = raw.starts_with("+")
+        let spec = if override then raw[1..] else copy raw
+        let parts = spec.split(":")
+        if parts.len != 2 || !refs.valid(parts[1]) { return invalid }
+        var id = "", kind = ""
+        if parts[0] != "" {
+            let resolved = object.resolve(repo, parts[0])?
+            id = oid.hex(resolved)?
+            kind = copy object.read_object(repo, resolved, 16777216)?.kind
+        }
+        (mut plans).push(PushPlan {
+            force: override,
+            typed: copy parts[0],
+            source: copy parts[0],
+            namespace: copy parts[0],
+            id: id,
+            kind: kind,
+            destination: copy parts[1],
+        })
     }
-    var leased_names = Map[str, bool]()
-    for lease in leases {
-        if !refs.valid(lease.name) || (leased_names[lease.name] else false) { return invalid }
-        let _ = oid.parse("sha1", lease.expected)?
-        leased_names[lease.name] = true
+    var refused = List[str]()
+    push_plans(repo, url, plans, force, atomic, leases, "", [], mut outcomes, mut refused)?
+    if refused.len > 0 { return Unsupported(refused[0]) }
+}
+
+// gitrevisions(7)'s <refname> order after the name itself: the remote's refs
+// a short push destination names, at most one of each spelling.
+fn remote_matches(remote: List[wire.Ref], name: str) -> List[str] {
+    var out = List[str]()
+    for spelling in [
+        "refs/{name}",
+        "refs/tags/{name}",
+        "refs/heads/{name}",
+        "refs/remotes/{name}",
+        "refs/remotes/{name}/HEAD",
+    ] {
+        for reference in remote {
+            if reference.name == spelling { (mut out).push(copy spelling); break }
+        }
+    }
+    out
+}
+
+// git-push(1) <refspec>: a destination outside refs/ is the one remote ref
+// it names, else the source's namespace (refs/heads/ or refs/tags/), else
+// Git's refusal (returned as its lines; the caller adds the failed-push line).
+fn place_destination(repo: repository.Repo, remote: List[wire.Ref], plan: PushPlan) -> (str, str) {
+    let wanted = plan.destination
+    if wanted.starts_with("refs/") { return (copy wanted, "") }
+    let found = remote_matches(remote, wanted)
+    if found.len > 1 { return ("", "error: dst refspec {wanted} matches more than one") }
+    if found.len == 1 { return (copy found[0], "") }
+    if plan.namespace.starts_with("refs/heads/") { return ("refs/heads/{wanted}", "") }
+    if plan.namespace.starts_with("refs/tags/") { return ("refs/tags/{wanted}", "") }
+    if plan.id == "" {
+        return ("", "error: unable to delete '{wanted}': remote ref does not exist")
+    }
+    var text = "error: The destination you provided is not a full refname (i.e.,\nstarting with \"refs/\"). We tried to guess what you meant by:\n\n- Looking for a ref that matches '{wanted}' on the remote side.\n- Checking if the <src> being pushed ('{plan.typed}')\n  is a ref in \"refs/{{heads,tags}}/\". If so we add a corresponding\n  refs/{{heads,tags}}/ prefix on the remote side.\n\nNeither worked, so we gave up. You must fully qualify the ref."
+    if (repo.config["advice.pushunqualifiedrefname"] else "true") != "false" {
+        let (verb, space) = match plan.kind {
+            "commit" => ("create a new branch", "heads"),
+            "tag" => ("create a new tag", "tags"),
+            "tree" => ("tag a new tree", "tags"),
+            _ => ("tag a new blob", "tags"),
+        }
+        text = "{text}\nhint: The <src> part of the refspec is a {plan.kind} object.\nhint: Did you mean to {verb} by pushing to\nhint: '{plan.typed}:refs/{space}/{wanted}'?"
+    }
+    ("", text)
+}
+
+/// Push resolved plans with checked leases and retained per-ref outcomes. The
+/// output list must start empty. Short destinations are placed against the
+/// advertisement (place_destination); Git's refusals are collected in
+/// refused and nothing is sent. Leases named by requests (push_leases) are
+/// taken once every destination is placed. Local rejections precede
+/// transmission; the wire CAS still uses the advertisement's old value,
+/// never the tracking ref's unchecked value.
+pub fn push_plans(
+    repo: repository.Repo,
+    url: str,
+    plans: List[PushPlan],
+    force: bool,
+    atomic: bool,
+    given: List[PushLease],
+    name: str,
+    requests: List[str],
+    mut outcomes: List[PushOutcome],
+    mut refused: List[str],
+) -> () ! object.StoreErrors {
+    if plans.len == 0 || plans.len > 10000 || given.len > 10000 || outcomes.len != 0 {
+        return invalid
     }
     transport.check_http_configuration(url, repo.config)?
     var p = transport.peer(url, "receive-pack")?
@@ -127,21 +227,40 @@ pub fn push_reported(
         positions = Map[str, int](),
         roots = List[str]()
     for reference in remote { before[reference.name] = copy reference.id }
-    for raw in specs {
-        let override = raw.starts_with("+")
-        let spec = if override then raw[1..] else copy raw
-        let parts = spec.split(":")
-        if parts.len != 2 || !refs.valid(parts[1]) { return invalid }
-        let destination = parts[1]
+    var placed = List[str](), specs = List[str]()
+    for plan in plans {
+        let (destination, refusal) = place_destination(repo, remote, plan)
+        if refusal != "" {
+            (mut refused).push(refusal)
+            (mut placed).push("")
+            continue
+        }
+        if !refs.valid(destination) { return invalid }
+        (mut placed).push(copy destination)
+        (mut specs).push("{plan.source}:{destination}")
+    }
+    if refused.len > 0 { return }
+    var leases = copy given
+    if requests.len > 0 {
+        leases = push_leases(repo, name, specs, requests)?
+    }
+    var leased_names = Map[str, bool]()
+    for lease in leases {
+        if !refs.valid(lease.name) || (leased_names[lease.name] else false) { return invalid }
+        let _ = oid.parse("sha1", lease.expected)?
+        leased_names[lease.name] = true
+    }
+    for at in 0..plans.len {
+        let plan = copy plans[at]
+        let override = plan.force
+        let destination = placed[at]
         if seen[destination] else false { return invalid }
         seen[destination] = true
         let old = before[destination] else zero()
         var next = copy zero()
-        if parts[0] != "" {
-            let id = object.resolve(repo, parts[0])?
-            next = oid.hex(id)?
-            let body = object.read_object(repo, id, 16777216)?
-            if destination.starts_with("refs/heads/") && body.kind != "commit" {
+        if plan.id != "" {
+            next = copy plan.id
+            if destination.starts_with("refs/heads/") && plan.kind != "commit" {
                 return Unsupported("push branch target must be a commit")
             }
         } else if !wire.supports(caps, "delete-refs") {
@@ -150,7 +269,7 @@ pub fn push_reported(
         if next == zero() && old == zero() { return Unsupported("remote ref does not exist") }
         positions[destination] = outcomes.len
         (mut outcomes).push(PushOutcome {
-            source: copy parts[0],
+            source: if plan.source == "" then copy plan.typed else copy plan.source,
             name: copy destination,
             before: copy old,
             after: copy next,

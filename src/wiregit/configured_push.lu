@@ -23,48 +23,82 @@ fn tracking_expectation(
     if before.len == 0 { zero() } else { oid.hex(before[0])? }
 }
 
-fn push_specs(
+// git-push(1) <refspec>'s <src>: HEAD; else a ref by gitrevisions(7)'s
+// <refname> order (the full name itself, refs/X, refs/tags/X, refs/heads/X,
+// refs/remotes/X, refs/remotes/X/HEAD), refused when two exist; else any
+// revision. Git's refusal text is returned for a source that names nothing.
+fn push_source(
     repo: repository.Repo,
-    input: List[str],
+    raw: str,
     branch: str,
-) -> List[str] ! object.StoreErrors {
-    var out = List[str]()
-    for raw in input {
-        let plus = raw.starts_with("+")
-        let text = if plus then raw[1..] else copy raw
-        let parts = text.split(":")
-        if parts.len > 2 { return invalid }
-        var source = copy parts[0], destination = if parts.len == 2 then copy parts[1] else ""
-        if source != "" && source != "HEAD" && !source.starts_with("refs/") {
-            if refs.valid("refs/heads/{source}") &&
-                refs.optional(repo, "refs/heads/{source}")?.len > 0 {
-                source = "refs/heads/{source}"
-            } else if refs.valid("refs/tags/{source}") &&
-                refs.optional(repo, "refs/tags/{source}")?.len > 0 {
-                source = "refs/tags/{source}"
+    mut plans: List[PushPlan],
+) -> str ! object.StoreErrors {
+    let plus = raw.starts_with("+")
+    let text = if plus then raw[1..] else copy raw
+    let parts = text.split(":")
+    if parts.len > 2 { return invalid }
+    let typed = copy parts[0]
+    var source = "", namespace = "", id = ""
+    if typed == "HEAD" {
+        let head = refs.optional(repo, "HEAD")?
+        if head.len == 0 { return "error: src refspec HEAD does not match any" }
+        source = "HEAD"
+        namespace = if branch != "" then "refs/heads/{branch}" else ""
+        id = oid.hex(head[0])?
+    } else if typed != "" {
+        var found = List[str]()
+        var spellings = List[str]()
+        if typed.starts_with("refs/") { (mut spellings).push(copy typed) }
+        for prefix in ["refs/", "refs/tags/", "refs/heads/", "refs/remotes/"] {
+            (mut spellings).push("{prefix}{typed}")
+        }
+        (mut spellings).push("refs/remotes/{typed}/HEAD")
+        for spelling in spellings {
+            if !refs.valid(spelling) { continue }
+            let value = refs.optional(repo, spelling)?
+            if value.len > 0 {
+                var again = false
+                for prior in found { if prior == spelling { again = true } }
+                if !again { (mut found).push(copy spelling) }
             }
         }
-        if destination == "" && parts.len == 1 {
-            destination = if source == "HEAD" && branch != "" {
-                "refs/heads/{branch}"
-            } else {
-                copy source
+        if found.len > 1 { return "error: src refspec {typed} matches more than one" }
+        if found.len == 1 {
+            source = copy found[0]
+            namespace = copy found[0]
+            id = oid.hex(refs.read(repo, source)?)?
+        } else {
+            let resolved = revision.resolve(repo, typed) else |_| {
+                return "error: src refspec {typed} does not match any"
             }
+            id = oid.hex(resolved)?
         }
-        if !destination.starts_with("refs/") {
-            if source.starts_with("refs/heads/") || source == "HEAD" && branch != "" {
-                destination = "refs/heads/{destination}"
-            } else if source.starts_with("refs/tags/") {
-                destination = "refs/tags/{destination}"
-            } else {
-                return Unsupported("push destination requires full refname")
-            }
-        }
-        if !refs.valid(destination) { return invalid }
-        let prefix = if plus then "+" else ""
-        (mut out).push("{prefix}{source}:{destination}")
     }
-    out
+    var kind = ""
+    if id != "" { kind = copy object.read_object(repo, oid.parse("sha1", id)?, 16777216)?.kind }
+    // With no colon the destination is the source's own ref (HEAD on a
+    // branch is that branch), or the source as typed for another revision.
+    var destination = if parts.len == 2 then copy parts[1] else ""
+    if parts.len == 1 {
+        destination = if source == "HEAD" {
+            if branch != "" then "refs/heads/{branch}" else "HEAD"
+        } else if source != "" {
+            copy source
+        } else {
+            copy typed
+        }
+    }
+    if destination == "" { return Unsupported("push refspec with an empty destination") }
+    (mut plans).push(PushPlan {
+        force: plus,
+        typed: typed,
+        source: source,
+        namespace: namespace,
+        id: id,
+        kind: kind,
+        destination: destination,
+    })
+    ""
 }
 
 fn push_leases(
@@ -227,10 +261,48 @@ fn perform_push(args: List[str]) -> int ! object.StoreErrors {
     }
     let service_state = override_service("DEN_RECEIVE_PACK", program)?
     defer restore_service(take service_state)
-    let specs = push_specs(repo, input, branch)?
-    let leases = push_leases(repo, name, specs, requests)?
-    var outcomes = List[PushOutcome](), error_text = "", remote_failure = "", http_fatal = false
-    push_reported(repo, url, specs, force, atomic, leases, mut outcomes) else |e| match e {
+    var plans = List[PushPlan](), refused = List[str]()
+    for raw in input {
+        let refusal = push_source(repo, raw, branch, mut plans)?
+        if refusal != "" { (mut refused).push(refusal) }
+    }
+    if refused.len == 0 {
+        return push_planned(repo, url, name, plans, requests, force, atomic, quiet, upstream)
+    }
+    for refusal in refused { eprint(refusal) }
+    eprint("error: failed to push some refs to '{transport.redact(url)}'")
+    1
+}
+
+// The connected half of perform_push: place, lease, send and report.
+fn push_planned(
+    repo: repository.Repo,
+    url: str,
+    name: str,
+    plans: List[PushPlan],
+    requests: List[str],
+    force: bool,
+    atomic: bool,
+    quiet: bool,
+    upstream: bool,
+) -> int ! object.StoreErrors {
+    var outcomes = List[PushOutcome](),
+        refused = List[str](),
+        error_text = "",
+        remote_failure = "",
+        http_fatal = false
+    push_plans(
+        repo,
+        url,
+        plans,
+        force,
+        atomic,
+        [],
+        name,
+        requests,
+        mut outcomes,
+        mut refused,
+    ) else |e| match e {
         Unsupported(message) => {
             if message == "HTTP receive-pack fatal" { http_fatal = true }
             if message == "remote service unavailable" || message.starts_with("remote error: ") {
@@ -249,6 +321,11 @@ fn perform_push(args: List[str]) -> int ! object.StoreErrors {
         return 1
     }
     if remote_failure != "" && startup_diagnostic(remote_failure) { return 128 }
+    if refused.len > 0 {
+        for refusal in refused { eprint(refusal) }
+        eprint("error: failed to push some refs to '{transport.redact(url)}'")
+        return 1
+    }
     var rejected = false
     for outcome in outcomes {
         if outcome.status == "rejected" || outcome.status == "remote rejected" { rejected = true }
