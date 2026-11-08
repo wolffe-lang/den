@@ -11,6 +11,10 @@ for tier in native release; do
     [ "$tier" != release ] || flag=--release
     "$WOLF" build $flag --deny-warnings src/pack_write_test.lu -o "target/$tier/pack-write-test"
     "target/$tier/pack-write-test"
+    # den#73's name set and delta rows against the encoder's first form;
+    # native and release only (the checked machine's step budget).
+    "$WOLF" build $flag --deny-warnings src/pack_scale_test.lu -o "target/$tier/pack-scale-test"
+    "target/$tier/pack-scale-test"
     "$WOLF" build $flag --deny-warnings probes/pack-write-client/main.lu -o "target/$tier/pack-write-client"
     "$WOLF" build $flag --deny-warnings probes/pack-client/main.lu -o "target/$tier/pack-client"
     tools/env python3 -I tools/pack-write-test.py --tier "$tier"
