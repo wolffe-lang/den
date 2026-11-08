@@ -61,6 +61,9 @@ pub fn expand(repo: repository.Repo, names: List[str]) -> Selection ! worktree.W
 
 /// Exclusions precede count and skip, and traverse every parent even when the
 /// positive walk is first-parent. No timestamp pruning of shared ancestry.
+/// Without exclusions the walk stops after count plus skip commits: its order
+/// does not depend on how far it goes, so `log -1` reads one commit rather
+/// than the whole history.
 pub fn collect(
     repo: repository.Repo,
     selected: Selection,
@@ -70,7 +73,12 @@ pub fn collect(
 ) -> List[walk.Commit] ! worktree.WorkErrors {
     var out = List[walk.Commit](), skipped = 0
     if count == 0 { return out }
-    for item in walk.collect(repo, selected.starts, 100000, 0, 10000, first_parent)? {
+    let enough = if selected.excluded.len == 0 && count + skip < 100000 {
+        count + skip
+    } else {
+        100000
+    }
+    for item in walk.collect(repo, selected.starts, enough, 0, 10000, first_parent)? {
         if selected.excluded[oid.hex(item.id)?] else false { continue }
         if skipped < skip { skipped += 1; continue }
         (mut out).push(copy item)
