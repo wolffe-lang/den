@@ -202,6 +202,14 @@ when it holds a rejection (`fetch_report_width`). `ls_remote_command` (den#68)
 lists any transport's refs with Git's filters, tail-matched globs, peeled
 lines, `--symref` and `--exit-code`.
 
+vc24 (den#63): `parse_index` reserves its lists to the object count, decodes
+each name in its own region (`hex_name`) and merges `offset_order` without a
+copy a pass, so a parse keeps one name and two ints an object.
+`worktree.tree_id` and `flatten_tree` walk in a region and keep only their
+result. `closure_received` queues received objects by rank with an int for the
+type each link expects (`kind_code`), names them only when read
+(`pack.received_rank_name`), and does each step in a region.
+
 vc24 (den#72): `clone_name` derives a clone's directory from its URL when none
 is given; `clone_mode` fills an existing empty destination and empties it again
 on failure, and reports an empty repository for Git's warning. A local clone's
