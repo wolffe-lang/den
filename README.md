@@ -520,7 +520,8 @@ fast-forward and tag-clobber rejections, the opportunistic remote-tracking
 update and followed tags; `--prune` with explicit refspecs is a named refusal.
 `ls-remote` lists over ls-refs on every transport. A clone's memory grows
 with its object count at about 1.2 KiB an object (an 80,000-object clone
-peaks near 100 MiB), not with its history's square (den#63). Push resolves each source by
+peaks near 100 MiB), not with its history's square (den#63), and its checkout
+parses each pack index once, not once a file. Push resolves each source by
 gitrevisions(7)'s order and places a short destination against the remote's refs
 before inferring `refs/heads/` or `refs/tags/` from the source, refusing as Git
 refuses otherwise. Push accepts explicit refspecs, deletion and
