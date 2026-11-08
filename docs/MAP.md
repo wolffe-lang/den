@@ -1238,7 +1238,9 @@ retaining enqueue order on ties. Its node budget is explicit; commit data is
 limited to 128 MiB in aggregate. Author dates never determine default order.
 No index, ref or reflog is written.
 
-`pretty.date`, `identity`, `message` and `render` are presentation boundaries.
+`pretty.date`, `shown`, `person`, `identity_time`, `message`, `render` and
+`user_format` are presentation boundaries (identities: see "Identities as Git
+reads them (vc26)").
 Raw objects remain unchanged. The renderer receives caller-computed unique
 abbreviations (commit, then ordered parents), checks their prefixes, and uses
 `commit.subject` for human one-line summaries, not `commit.reflog_subject`.
@@ -1263,7 +1265,8 @@ worktree are present throughout. The two named hunk witnesses and capture-bound
 binary representation policy remain unchanged and are not history parity.
 
 Remaining M2 surfaces: show revision limiting, history
-path simplification, graph/topological order, custom pretty formats,
+path simplification, graph/topological order, custom pretty formats beyond
+vc26's placeholders,
 relative/human dates and non-UTC local zones. ASCII tab rendering is supported;
 non-ASCII prefixes before tabs require a future display-width surface. Revision grammar is shared below; these remaining display/path limits do not
 complete M2 merely because the bounded history matrix passes.
@@ -1541,3 +1544,62 @@ branch`, `no such branch`, `not stored as a remote-tracking branch`) and a gone
 upstream as not found. `short_name` is `tracking_name` made public. `revparse`
 (the root package) is `rev-parse`'s command edge over `revision.evaluate`;
 `repository.discover` honours `GIT_CEILING_DIRECTORIES`.
+
+## Identities as Git reads them (vc26)
+
+An author, committer or tagger line is kept as its stored bytes and split the
+way the pinned Git's readers split it, never re-spelled; reading an object
+never changes its bytes or its id.
+
+- `commit_format.raw_identity(bytes) -> RawIdentity` is total: `split` when a
+  `<` and a later `>` exist; `name` (before the first `<`, trailing whitespace
+  dropped) and `email` (to the next `>`); `dated` when, after the last `>`,
+  whitespace, digits, whitespace and a sign follow; `stamp` (the digits as
+  stored), `seconds_text` (their unsigned 64-bit value, saturated), `fits` and
+  `seconds` (at most 9223372036854775807), `zone_text` (the sign and its
+  digits as stored) and `zone` (their signed value).
+- `commit_format.identity_problem(bytes) -> (id, text)` is `git fsck`'s
+  verdict at the default severities: one of the ten author/committer message
+  ids with Git's text, or `("", "")`.
+- `commit_format.shown_date(seconds, zone, style)` shows a date as Git does
+  for every `--date` style den takes: zone values outside the clock (`+0099`,
+  `+12345`), years past 9999, Git's epoch fallback for a year its C calendar
+  cannot hold, 32-bit year wrap, and the fatal line for a local time before
+  the epoch. `zone_shown` and `zone_seconds` are its zone rules.
+- `commit_format.ident_clean` is Git's cleanup when writing: `<`, `>` and LF
+  removed, then whitespace and `, : ; " \ '` trimmed from both ends; an empty
+  email is written as `<>`.
+- `packcmd.links` validates no identity: clone, fetch, push, `upload-pack` and
+  `receive-pack` take every identity Git takes with its defaults
+  (`transfer.fsckObjects` false). The tree-path and tag-name checks stay.
+  `packcmd.identity_diagnostic` is `fsck`'s line for an object; `fsck` prints
+  them in Git's order (loose objects by object directory, then one pack in
+  pack order) and refuses by name the orders it has not measured (two in one
+  object directory, both loose and packed, more than one pack, beside other
+  diagnostics).
+- `wiregit.object_checks(config, side)` refuses by name a configuration that
+  asks for Git's object checks (`fetch.fsckObjects` or
+  `receive.fsckObjects`, else `transfer.fsckObjects`, true): den does not run
+  Git's full check set, so it never claims to.
+- `pretty.person`, `pretty.identity_time` and `pretty.shown` give log, show
+  and tags their `Author:`/`Commit:`/`Tagger:` text and dates; a line Git
+  cannot split prints no lines. `pretty.user_format` is the user format
+  engine: `%H %h %T %t %P %p %s %b %B %n %%`, literal text, and `%an %ae %al
+  %aN %aE %aL %ad %aD %at %ai %aI %as` with their `%c` forms, including Git's
+  placeholders that print themselves when a line or its date cannot be read;
+  every other placeholder, and `%ar %ah %cr %ch`, is refused by name.
+- `blame.render_checked` returns the bytes Git writes before a fatal date line
+  and the line; `(unknown)` for a line Git cannot split; porcelain times and
+  zones as stored; the display width of a name that is not UTF-8 is its bytes.
+- `commit.kept_bytes` keeps a picked or replayed author's stored bytes
+  (repairing bytes that are not UTF-8, with Git's warning); amend re-reads the
+  author as Git does; `commit.empty_name_check` is Git's refusal of an empty
+  or disallowed name.
+
+`tools/identity-test.py` (in `tools/check-commit`, both tiers) holds every
+row to the pinned Git byte for byte: read, format, fsck, wire, replay and
+write families over the shapes in its table, with the named refusals listed in
+its `REFUSED`. `tools/identity-census.py` runs the checker, a bare clone and
+the readers over real histories. The live row `http-live-identity` clones
+`https://github.com/i3/i3.git`.
+
