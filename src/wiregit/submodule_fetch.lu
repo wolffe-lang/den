@@ -90,18 +90,10 @@ fn recorded(repo: repository.Repo, before: List[str]) -> Map[str, List[str]] ! w
     if names.len == 0 { return out }
     for b in before { (mut names).push("^{b}") }
     let selection = revset.expand(repo, names)?
-    var trees = Map[str, List[worktree.FlatEntry]](), have = Map[str, bool]()
     for commit in revset.collect(repo, selection, 100000, 0, false)? {
         let mine = worktree.flatten_tree(repo, commit.id)?
         var parents = List[List[worktree.FlatEntry]]()
-        for parent in commit.parents {
-            let key = oid.hex(parent)?
-            if !(have[key] else false) {
-                trees[key] = worktree.flatten_tree(repo, parent)?
-                have[key] = true
-            }
-            (mut parents).push(copy trees[key] else List[worktree.FlatEntry]())
-        }
+        for parent in commit.parents { (mut parents).push(worktree.flatten_tree(repo, parent)?) }
         for entry in mine {
             if entry.mode != 0o160000 { continue }
             let hex = oid.hex(entry.id)?
