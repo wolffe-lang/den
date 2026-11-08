@@ -57,8 +57,18 @@ fn describe(repo: repository.Repo, id: oid.Oid) -> str ! worktree.WorkErrors {
     var annotated = Map[str, str](), any = Map[str, str]()
     for record in refs.list(repo, "refs/")? {
         let short = record.name[5..]
-        let target = if record.peeled.len == 1 then oid.hex(record.peeled[0])? else oid.hex(record.id)?
-        if record.name.starts_with("refs/tags/") && record.peeled.len == 1 {
+        // A tag object, packed with its peel or loose without one, is annotated.
+        var target = if record.peeled.len == 1 then oid.hex(record.peeled[0])? else oid.hex(record.id)?
+        var annotated_tag = record.peeled.len == 1
+        if record.name.starts_with("refs/tags/") && record.peeled.len == 0 {
+            let stored = object.read_object(repo, record.id, 16777216) else |_| { continue }
+            if stored.kind == "tag" {
+                let headers = object.parse_tag(stored.data, "sha1") else |_| { continue }
+                for field in headers.fields { if field.key == "object" { target = bytes_text(field.value)? } }
+                annotated_tag = true
+            }
+        }
+        if record.name.starts_with("refs/tags/") && annotated_tag {
             let tag = record.name[10..]
             let prior = annotated[target] else ""
             if prior == "" || tag < prior { annotated[target] = tag }

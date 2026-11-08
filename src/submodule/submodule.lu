@@ -9,8 +9,9 @@ use gitmodules
 use index
 use object
 use oid
+use commit
+use commit_format
 use refs
-use remote
 use repository
 use wiregit
 use worktree
@@ -180,9 +181,16 @@ fn checkout_detached(sub: worktree.Context, id: oid.Oid, whole: bool, force: boo
         "{hex}\n",
         current.commits,
         [copy id],
-        remote.reflog_identity(sub.repo)?,
+        identity(sub)?,
         "checkout: moving from {from} to {hex}",
     )?
+}
+
+// The committer identity the checkout's reflog record carries, from the
+// submodule's own configuration and environment (not the cwd's repository).
+fn identity(sub: worktree.Context) -> str ! worktree.WorkErrors {
+    let who = commit.environment_identity(sub, "COMMITTER", "") else |e| { return Unsupported("submodule identity: {e}") }
+    commit_format.identity_text(who) else |e| { return Unsupported("submodule identity: {e}") }
 }
 
 fn commit_present(repo: repository.Repo, id: oid.Oid) -> bool {
