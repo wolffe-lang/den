@@ -75,7 +75,7 @@ fn main() -> int {
             },
             "switch" | "reset" => {
                 if submodule.wanted(args) { return submodule.recursive_worktree(args) }
-                return refcmd.run(args)
+                return refcmd.run(submodule.without_recursion(args))
             },
             "branch" | "tag" | "merge" | "revert" | "cherry-pick" | "rebase" => {
                 return refcmd.run(args)
@@ -96,7 +96,7 @@ fn main() -> int {
             "checkout" => {
                 for argument in args { if argument == "--" { return worktree.run(args) } }
                 if submodule.wanted(args) { return submodule.recursive_worktree(args) }
-                return refcmd.run(args)
+                return refcmd.run(submodule.without_recursion(args))
             },
             "init" | "hash-object" | "cat-file" | "write-tree" | "commit-tree" | "mktag" | "mktree" | "config" | "ls-tree" | "ls-files" => {
                 return plumbing.run(args)
