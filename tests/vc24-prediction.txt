@@ -329,3 +329,21 @@ P10. den#63, a clone's CPU. Before: cloning pelt (12,670 objects, 9,685
     its directory; (B) as git-config(1) documents, no per-file sync of
     the worktree, the index and refs still hardened (recommended, as a
     follow-up lane: it changes checkout, switch, reset and restore).
+
+P11. den#63's syncs, asked after P10: match what the pinned Git does.
+  Written before the black-box census of the pinned Git's clone. px108:
+  den's pelt clone into a tmpfs took 103 s, on a disk 287 to 295 s, the
+  difference its 19,636 syncs (each checked-out file, then its
+  directory). git-config(1) documents core.fsync's default on most
+  platforms as committed,-loose-object, which is pack alone, and names
+  no component for worktree files. Predicted: the pinned Git's pelt
+  clone makes a handful of sync calls, all on the received pack (its
+  data and its index or their directory), none on the worktree. The
+  change: den's checkout no longer syncs a file or its directory; the
+  pack, the refs, the index and the configuration keep their syncs, a
+  fixed number a clone. The row (clone-syncs-pelt, Linux) counts both
+  clients' sync calls through a preloaded census library, Git first:
+  den's worktree syncs at most Git's, and den's total at most 24 more
+  than Git's. Predicted after: den's pelt clone on a disk within a few
+  seconds of the same clone in a tmpfs. Also reported: an strace
+  census of each clone's system calls, before and after.
