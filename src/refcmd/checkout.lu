@@ -56,6 +56,28 @@ fn guessed(ctx: worktree.Context, name: str) -> bool ! commit.CommitErrors {
     false
 }
 
+/// Whether checkout or switch ARGS lists the local changes after its move,
+/// as Git does (vc25, black-box): not after switch names no start point
+/// (-c, -C or --detach alone) or after checkout -b names none; checkout -B
+/// and checkout --detach without one still list them. The tracking lines
+/// print either way.
+pub fn lists_changes(args: List[str]) -> bool {
+    var named = false, create = false, create_force = false
+    var at = 1
+    while at < args.len {
+        let arg = args[at]
+        at += 1
+        if arg == "-c" || arg == "-C" || arg == "-b" || arg == "-B" {
+            create = true
+            create_force = arg == "-C" || arg == "-B"
+            at += 1
+        } else if !arg.starts_with("-") {
+            named = true
+        }
+    }
+    named || args[0] == "checkout" && (!create || create_force)
+}
+
 fn switch_branch(args: List[str]) -> int ! commit.CommitErrors {
     let ctx = worktree.discover(".")?
     controls(ctx, args[0])?
@@ -219,10 +241,12 @@ fn switch_branch(args: List[str]) -> int ! commit.CommitErrors {
     }
     if !quiet {
         // Local changes and the tracking lines, as Git prints them (vc25).
+        let changes = lists_changes(args)
         var report_warnings = List[str]()
         let after_switch = worktree.scan_status(ctx, false, false, mut report_warnings)?
         let report = worktree.checkout_report(
             after_switch,
+            changes,
             worktree.config_bool(ctx, "advice.statushints", true)?,
         )?
         if report.len > 0 { print_raw(str_from_utf8(report) else "") }

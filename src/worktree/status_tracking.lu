@@ -61,15 +61,44 @@ fn tracking_long(mut out: List[byte], snapshot: Snapshot, hints: bool) -> () ! W
     line(mut out, "")
 }
 
+/// How a tracked path's worktree differs from HEAD, staged or not, as
+/// checkout lists it: "" when it does not (a path added and then deleted).
+fn head_letter(x: str, y: str) -> str {
+    if x == "A" { return if y == "D" then "" else "A" }
+    if y == "D" || y == "T" { return copy y }
+    if x != " " { return copy x }
+    if y == " " { return "" }
+    copy y
+}
+
 /// What checkout and switch print on stdout after moving HEAD (vc25, measured
-/// against the pinned Git): each unstaged local change as `<code>\t<path>`,
-/// then the branch's tracking lines, without status's trailing blank line.
-pub fn checkout_report(snapshot: Snapshot, hints: bool) -> List[byte] ! WorkErrors {
+/// against the pinned Git): each local change as `<code>\t<path>`, the code
+/// saying how the worktree differs from HEAD whether staged or not, a staged
+/// rename as its two paths, in path order; then the branch's tracking lines,
+/// without status's trailing blank line. CHANGES false leaves the list out,
+/// for the moves Git prints none after.
+pub fn checkout_report(snapshot: Snapshot, changes: bool, hints: bool) -> List[byte] ! WorkErrors {
     var out = List[byte]()
+    var paths = List[List[byte]](), letters = List[str]()
     for row in snapshot.rows {
-        if row.untracked || row.ignored || row.y == " " { continue }
-        bytes_add(mut out, "{row.y}\t".bytes())
-        bytes_add(mut out, owned_bytes(row.path))
+        if !changes || row.untracked || row.ignored { continue }
+        if row.x == "R" {
+            (mut paths).push(owned_bytes(row.original_path))
+            (mut letters).push("D")
+            if row.y != "D" {
+                (mut paths).push(owned_bytes(row.path))
+                (mut letters).push("A")
+            }
+            continue
+        }
+        let letter = head_letter(row.x, row.y)
+        if letter == "" { continue }
+        (mut paths).push(owned_bytes(row.path))
+        (mut letters).push(letter)
+    }
+    for i in path_order(paths) {
+        bytes_add(mut out, "{letters[i]}\t".bytes())
+        bytes_add(mut out, owned_bytes(paths[i]))
         (mut out).push(10 as byte)
     }
     var tracking = List[byte]()
