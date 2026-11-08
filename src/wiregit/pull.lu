@@ -37,9 +37,12 @@ fn perform_pull(args: List[str]) -> int ! object.StoreErrors {
             if flag[0] == "invalid" {
                 return Unsupported("fatal: bad recurse-submodules argument: {arg[21..]}")
             }
-            // Updating submodule worktrees after the merge is not yet den's.
-            if flag[0] != "no" { return Unsupported("pull {arg}") }
-            recursion = "no"
+            // The submodules' worktrees follow the merge only through den's
+            // submodule layer, which says so (vc25).
+            if flag[0] != "no" && (env_get("DEN_PULL_RECURSION") else "") != "1" {
+                return Unsupported("pull {arg}")
+            }
+            recursion = copy flag[0]
             continue
         }
         if arg == "--rebase" {
@@ -98,7 +101,9 @@ fn perform_pull(args: List[str]) -> int ! object.StoreErrors {
             return Unsupported("pull rebase index refresh: {e}")
         }
     }
-    if recursion == "" && setting(repo.config["submodule.recurse"] else "false") == "yes" {
+    if recursion == "" &&
+        setting(repo.config["submodule.recurse"] else "false") == "yes" &&
+        (env_get("DEN_PULL_RECURSION") else "") != "1" {
         return Unsupported("pull with submodule.recurse")
     }
     let before = tips(repo)?
