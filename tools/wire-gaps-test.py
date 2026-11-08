@@ -16,6 +16,10 @@ no transport):
   ls-remote  den#68: ls-remote's listing, filters, patterns and exit codes
   fetch      den#70: fetch REMOTE REFSPEC... for a configured remote
   memory     den#63: clone memory against history length, under a hard cap
+  scale      den#73: 50,000 objects (and i3's public history) through
+             serving, clone, fetch, push and receive, each held to the
+             pinned Git's result, den's peak RSS reported and (Linux) held
+             under prlimit at 64 MiB plus 1 KiB an object
   cost       den#63: a clone's CPU against the pinned Git's on a real
              repository (pelt's trunk at a pinned commit), git:// and runs
              in turn, at most COST_RATIO times Git's; and (Linux) the same
@@ -49,10 +53,10 @@ import sys
 import time
 
 GIT_SHA256 = 'c4848492938c4ebfffbefe1fbbaa68b9af90c86d1f6a20e76816c5ff37fcfa60'
-FAMILIES = ('push', 'clone', 'ls-remote', 'fetch', 'memory', 'cost')
+FAMILIES = ('push', 'clone', 'ls-remote', 'fetch', 'memory', 'scale', 'cost')
 # The cost row is timed and runs alone, on the release tier (tools/check-http's
 # release-clone-cost step); every other family is the default.
-DEFAULT_FAMILIES = ('push', 'clone', 'ls-remote', 'fetch', 'memory')
+DEFAULT_FAMILIES = ('push', 'clone', 'ls-remote', 'fetch', 'memory', 'scale')
 TRANSPORTS = ('local', 'file', 'git', 'ssh', 'https')
 MIB = 1 << 20
 
@@ -926,6 +930,44 @@ def family_cost(h):
     if not h.field:
         clone_syncs(h, url)
     shutil.rmtree(repo, ignore_errors=True)
+    scale_costs(h)
+
+
+# tests/vc24-prediction.txt P12: serving a 50,000-object clone, and den's
+# clone through den's server, each at most this many times the pinned Git's
+# CPU for the same clone through Git's server (the whole process tree:
+# client and the server it spawns).
+SCALE_RATIO = 30
+
+
+def scale_costs(h):
+    root, src, _, _, _, counts = scale_fixtures(h)
+    upload, url = str(h.out / 'bin/den-upload-pack'), src.as_uri()
+    plans = (('scale-serve-cost', [h.git, 'clone', '-q', '--bare', '-u', upload, url]),
+             ('scale-den-cost', [h.den, 'clone', '-q', '--bare', '--upload-pack=' + upload, url]))
+    for name, argv in plans:
+        runs = dict(git=[], den=[])
+        problems = []
+        for turn in range(COST_RUNS):
+            for tool, command in (('git', [h.git, 'clone', '-q', '--bare', url]), ('den', argv)):
+                dest = root / ('cost-' + tool)
+                shutil.rmtree(dest, ignore_errors=True)
+                measured = launched_in(h, [*command, str(dest)], root)
+                runs[tool].append({k: v for k, v in measured.items() if k != 'stderr'})
+                if measured['exit'] != 0:
+                    problems.append('%s run %d: exit %d %r' % (tool, turn, measured['exit'], measured['stderr'][-200:]))
+                shutil.rmtree(dest, ignore_errors=True)
+        git_cpu = min(run['cpu'] for run in runs['git'])
+        den_cpu = min(run['cpu'] for run in runs['den'])
+        ratio = round(den_cpu / git_cpu, 1) if git_cpu > 0 else None
+        if not problems and (ratio is None or ratio > SCALE_RATIO):
+            problems.append('%.2f s of CPU is %s times the pinned Git\'s %.2f s, over %d' % (
+                den_cpu, ratio, git_cpu, SCALE_RATIO))
+        detail = dict(objects=counts['src.git'], git_cpu=git_cpu, den_cpu=den_cpu, ratio=ratio,
+                      ratio_cap=SCALE_RATIO, runs=runs)
+        h.verdict(name, problems, detail)
+        print('COST %s %s' % (name, json.dumps(detail)), flush=True)
+    shutil.rmtree(root, ignore_errors=True)
 
 
 # den#63's syncs, from px108: on a disk, den's pelt clone spent most of its
@@ -1007,6 +1049,189 @@ def clone_syncs(h, url):
     print('SYNCS %s %s' % (name, json.dumps(detail, sort_keys=True)), flush=True)
 
 
+# -- den#73 ------------------------------------------------------------------
+# i3 (https://github.com/i3/i3) at `next` I3_NEXT: 41,341 objects. The
+# fixture is a bundle of that branch, pinned by its digest, from
+# DEN_I3_BUNDLE or the archive directory; the row fails without it.
+I3_BUNDLE = 'i3-8a97b0f.bundle'
+I3_SHA256 = '762d8e8d557af862feaddb25f2509eba22543cd4121f1a13149c0685416d85be'
+I3_NEXT = '8a97b0feaf1aefc1a3a9828c29df8d540344f741'
+I3_OBJECTS = 41341
+
+
+# tests/vc24-prediction.txt P12: 64 MiB plus 1 KiB an object.
+def scale_bound(objects):
+    return 64 * MIB + objects * 1024
+
+
+def scale_state(h, repo):
+    full = h.state(repo, worktree=False)
+    return {key: full.get(key) for key in ('refs', 'head', 'objects', 'objects_sha256')}
+
+
+def scale_fixtures(h):
+    """src: 12,500 commits, 50,000 objects; prefix: its first 1,000
+    commits; wide: one commit of a 15,000-blob flat tree and, in wide-next,
+    one more touching one blob; i3: the pinned bundle."""
+    root = h.out / 'scale'
+    shutil.rmtree(root, ignore_errors=True)
+    root.mkdir()
+    def import_stream(repo, writer):
+        h.git_out(root, 'init', '-q', '--bare', '-b', 'main', str(repo))
+        stream = root / 'stream'
+        with open(stream, 'wb') as handle:
+            writer(handle)
+        with open(stream, 'rb') as handle:
+            result = subprocess.run([h.git, '--git-dir', str(repo), 'fast-import', '--quiet'], stdin=handle,
+                                    env=h.env, capture_output=True, timeout=1200)
+        assert result.returncode == 0, 'scale fixture fast-import'
+        stream.unlink()
+        h.git_out(repo, '-c', 'repack.writeBitmaps=false', '-c', 'pack.threads=2', 'repack', '-a', '-d', '-q')
+    src = root / 'src.git'
+    import_stream(src, lambda f: write_long(f, 12500))
+    prefix = root / 'prefix.git'
+    import_stream(prefix, lambda f: write_long(f, 1000))
+    def flat(handle, touched):
+        handle.write(b'commit refs/heads/main\ncommitter Den Tester <den@example.invalid> 1700000000 +0000\n'
+                     b'data 5\nwide\n')
+        for i in range(15000):
+            data = b'blob %d\n' % i
+            handle.write(('M 100644 inline f%05d\n' % i).encode() + b'data %d\n' % len(data) + data + b'\n')
+        handle.write(b'\n')
+        if touched:
+            handle.write(b'commit refs/heads/main\ncommitter Den Tester <den@example.invalid> 1700000060 +0000\n'
+                         b'data 6\ntouch\nM 100644 inline f00000\ndata 8\nchanged\n\n')
+    wide = root / 'wide.git'
+    import_stream(wide, lambda f: flat(f, False))
+    wide_next = root / 'wide-next.git'
+    import_stream(wide_next, lambda f: flat(f, True))
+    counts = {path.name: len(h.git_out(path, 'rev-list', '--objects', '--all').splitlines())
+              for path in (src, prefix, wide, wide_next)}
+    assert counts['src.git'] == 50000, 'scale fixture: %r' % counts
+    for service in ('upload-pack', 'receive-pack'):
+        wrapper = h.out / 'bin' / ('den-' + service)
+        cap = '' if h.field else 'prlimit --as=%d -- ' % (scale_bound(50000) + 128 * MIB)
+        wrapper.write_text('#!/bin/sh\nexec %s%s %s "$@"\n' % (cap, h.den, service))
+        wrapper.chmod(0o755)
+    return root, src, prefix, wide, wide_next, counts
+
+
+def i3_fixture(h, root):
+    named = os.environ.get('DEN_I3_BUNDLE') or os.path.join(os.environ.get('DEN_ARCHIVE_DIR', ''), I3_BUNDLE)
+    bundle = Path(named)
+    if not bundle.is_file():
+        return None, 'fixture %s (sha256 %s) not found: set DEN_I3_BUNDLE or DEN_ARCHIVE_DIR' % (I3_BUNDLE, I3_SHA256)
+    if hashlib.sha256(bundle.read_bytes()).hexdigest() != I3_SHA256:
+        return None, 'fixture %s digest differs from the pinned one' % bundle
+    repo = root / 'i3.git'
+    h.git_out(root, 'clone', '-q', '--bare', str(bundle), str(repo))
+    h.git_out(repo, 'symbolic-ref', 'HEAD', 'refs/heads/next')
+    h.git_out(repo, '-c', 'repack.writeBitmaps=false', 'repack', '-a', '-d', '-q')
+    objects = len(h.git_out(repo, 'rev-list', '--objects', '--all').splitlines())
+    tip = h.git_out(repo, 'rev-parse', 'refs/heads/next').decode().strip()
+    if (tip, objects) != (I3_NEXT, I3_OBJECTS):
+        return None, 'i3 fixture shape: %s, %d objects' % (tip, objects)
+    return repo, None
+
+
+def scale_den(h, argv, cwd, objects):
+    """A den operation from a small parent, under prlimit on Linux."""
+    cap = scale_bound(objects) + 128 * MIB
+    full = ([] if h.field else ['prlimit', '--as=%d' % cap, '--']) + [h.den, *argv]
+    return launched_in(h, full, cwd)
+
+
+def scale_verdict(h, name, objects, ours, theirs, measured, problems):
+    if measured['exit'] != 0:
+        problems.append('exit %d %r' % (measured['exit'], measured['stderr'][-200:]))
+    elif scale_state(h, theirs) != scale_state(h, ours):
+        a, b = scale_state(h, theirs), scale_state(h, ours)
+        problems.append('differs from the pinned Git\'s: ' + ', '.join(k for k in a if a[k] != b[k]))
+    bound = scale_bound(objects)
+    if not h.field and measured['maxrss_kib'] * 1024 > bound:
+        problems.append('peak RSS %d KiB over the bound %d KiB' % (measured['maxrss_kib'], bound // 1024))
+    detail = dict(objects=objects, bound_kib=bound // 1024,
+                  **{k: v for k, v in measured.items() if k != 'stderr'})
+    h.verdict(name, problems, detail)
+    print('SCALE %s %s' % (name, json.dumps(detail)), flush=True)
+
+
+def family_scale(h):
+    root, src, prefix, wide, wide_next, counts = scale_fixtures(h)
+    upload, receive = str(h.out / 'bin/den-upload-pack'), str(h.out / 'bin/den-receive-pack')
+    def fresh(*paths):
+        for path in paths:
+            shutil.rmtree(path, ignore_errors=True)
+    def clone_rows(label, repo, objects):
+        url = repo.as_uri()
+        theirs, ours = root / ('git-' + label), root / ('den-' + label)
+        fresh(theirs, ours)
+        h.git_out(root, 'clone', '-q', '--bare', url, str(theirs))
+        # The pinned Git's clone served by den upload-pack, from a small parent.
+        measured = launched_in(h, [h.git, 'clone', '-q', '--bare', '-u', upload, url, str(ours)], root)
+        scale_verdict(h, 'scale-serve-clone' + label, objects, ours, theirs, measured, [])
+        fresh(ours)
+        measured = scale_den(h, ['clone', '-q', '--bare', '--upload-pack=' + upload, url, str(ours)], root, objects)
+        scale_verdict(h, 'scale-clone-den-server' + label, objects, ours, theirs, measured, [])
+        fresh(ours)
+        measured = scale_den(h, ['clone', '-q', '--bare', url, str(ours)], root, objects)
+        scale_verdict(h, 'scale-clone-git-server' + label, objects, ours, theirs, measured, [])
+        fresh(ours, theirs)
+    clone_rows('', src, counts['src.git'])
+    # fetch: 46,000 new objects into the 4,000-object prefix
+    for label, local, remote, objects in (('scale-fetch-history', prefix, src, counts['src.git']),
+                                          ('scale-fetch-wide', wide, wide_next, counts['wide-next.git'])):
+        theirs, ours = root / ('git-' + label), root / ('den-' + label)
+        fresh(theirs, ours)
+        shutil.copytree(local, theirs, symlinks=True)
+        shutil.copytree(local, ours, symlinks=True)
+        h.git_out(theirs, 'fetch', '-q', remote.as_uri(), 'refs/heads/main:refs/heads/main')
+        measured = scale_den(h, ['fetch', '-q', remote.as_uri(), 'refs/heads/main:refs/heads/main'], ours, objects)
+        scale_verdict(h, label, objects, ours, theirs, measured, [])
+        fresh(theirs, ours)
+    # push: den into the pinned Git's receive-pack; receive: Git into den's
+    for label, tool in (('scale-push', 'den'), ('scale-receive', 'git')):
+        theirs, ours = root / ('git-' + label), root / ('den-' + label)
+        fresh(theirs, ours)
+        for path in (theirs, ours):
+            h.git_out(root, 'init', '-q', '--bare', '-b', 'main', str(path))
+        h.git_out(src, 'push', '-q', theirs.as_uri(), 'refs/heads/main:refs/heads/main')
+        if tool == 'den':
+            measured = scale_den(h, ['push', ours.as_uri(), 'refs/heads/main:refs/heads/main'], src, counts['src.git'])
+        else:
+            measured = launched_in(h, [h.git, 'push', '-q', '--receive-pack=' + receive, ours.as_uri(),
+                                       'refs/heads/main:refs/heads/main'], src)
+        scale_verdict(h, label, counts['src.git'], ours, theirs, measured, [])
+        fresh(theirs, ours)
+    # i3's public history: den clones it through den upload-pack and pushes it
+    repo, problem = i3_fixture(h, root)
+    if problem:
+        for name in ('scale-clone-i3', 'scale-push-i3'):
+            h.verdict(name, [problem])
+    else:
+        url = repo.as_uri()
+        theirs, ours = root / 'git-i3', root / 'den-i3'
+        fresh(theirs, ours)
+        h.git_out(root, 'clone', '-q', '--bare', url, str(theirs))
+        measured = scale_den(h, ['clone', '-q', '--bare', '--upload-pack=' + upload, url, str(ours)], root, I3_OBJECTS)
+        scale_verdict(h, 'scale-clone-i3', I3_OBJECTS, ours, theirs, measured, [])
+        fresh(ours, theirs)
+        for path in (theirs, ours):
+            h.git_out(root, 'init', '-q', '--bare', '-b', 'next', str(path))
+        h.git_out(repo, 'push', '-q', theirs.as_uri(), 'refs/heads/next:refs/heads/next')
+        measured = scale_den(h, ['push', ours.as_uri(), 'refs/heads/next:refs/heads/next'], repo, I3_OBJECTS)
+        scale_verdict(h, 'scale-push-i3', I3_OBJECTS, ours, theirs, measured, [])
+    shutil.rmtree(root, ignore_errors=True)
+
+
+def launched_in(h, argv, cwd):
+    result = subprocess.run([sys.executable, '-I', '-S', '-c', LAUNCH, *map(str, argv)], env=h.env, cwd=str(cwd),
+                            capture_output=True, stdin=subprocess.DEVNULL, timeout=3600)
+    row = json.loads(result.stdout.decode().strip().splitlines()[-1])
+    row['stderr'] = result.stderr[-300:].decode(errors='replace')
+    return row
+
+
 def launched(h, argv, cap, extra=None):
     result = subprocess.run([sys.executable, '-I', '-S', '-c', LAUNCH, *map(str, argv)], env={**h.env, **(extra or {})},
                             capture_output=True, stdin=subprocess.DEVNULL, timeout=1800)
@@ -1032,7 +1257,8 @@ def main():
         h.start_daemon()
         for family in families:
             {'push': family_push, 'clone': family_clone, 'ls-remote': family_ls_remote,
-             'fetch': family_fetch, 'memory': family_memory, 'cost': family_cost}[family](h)
+             'fetch': family_fetch, 'memory': family_memory, 'scale': family_scale,
+             'cost': family_cost}[family](h)
             h.stop_https()
     finally:
         h.stop()
