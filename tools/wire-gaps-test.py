@@ -850,6 +850,9 @@ def pelt_fixture(h, repo):
         if fetched.returncode:
             return 'no %s (sha256 %s) in DEN_PELT_BUNDLE or DEN_ARCHIVE_DIR, and fetching %s failed: %s' % (
                 PELT_BUNDLE, PELT_SHA256, PELT_URL, fetched.stderr.decode(errors='replace').strip()[-200:])
+    # The bundle carries trunk alone, so its clone's HEAD would name the
+    # pinned configuration's default branch: point it at trunk, as pelt's is.
+    h.git_out(repo, 'symbolic-ref', 'HEAD', 'refs/heads/trunk')
     for key, value in (('gc.auto', '0'), ('maintenance.auto', 'false'), ('repack.writeBitmaps', 'false')):
         h.git_out(repo, 'config', key, value)
     h.git_out(repo, '-c', 'pack.threads=1', 'repack', '-a', '-d', '-f', '-q')
@@ -887,6 +890,8 @@ def family_cost(h):
         keys = [key for key in a if a[key] != b.get(key)]
         if keys:
             problems.append('clone differs from the pinned Git\'s: ' + ', '.join(keys))
+        if len(a['worktree']) != PELT_FILES:
+            problems.append('the pinned Git\'s clone checked out %d files, not %d' % (len(a['worktree']), PELT_FILES))
     git_cpu = min(run['cpu'] for run in runs['git'])
     den_cpu = min(run['cpu'] for run in runs['den'])
     ratio = round(den_cpu / git_cpu, 1) if git_cpu > 0 else None
@@ -938,6 +943,8 @@ def sync_census(h, binary, url, dest, library, log):
     shutil.rmtree(dest, ignore_errors=True)
     measured = launched(h, [binary, 'clone', '-q', url, str(dest)], 1 << 40,
                         extra=dict(LD_PRELOAD=str(library), DEN_SYNC_LOG=str(log)))
+    measured['files'] = sum(1 for path in Path(dest).rglob('*')
+                            if path.is_file() and '.git' not in path.relative_to(dest).parts) if Path(dest).is_dir() else 0
     loads, counts = [], {}
     for line in (log.read_text(errors='replace').splitlines() if log.exists() else []):
         call, _, target = line.partition(' ')
@@ -966,6 +973,8 @@ def clone_syncs(h, url):
             problems.append('%s clone: exit %d %r' % (tool, measured['exit'], measured['stderr']))
         if os.path.realpath(binary) not in loads:
             problems.append('the census library did not load into %s' % binary)
+        if measured['files'] != PELT_FILES:
+            problems.append('%s clone checked out %d files, not %d' % (tool, measured['files'], PELT_FILES))
     total = {tool: sum(counts[tool].values()) for tool in counts}
     if counts['den'].get('worktree', 0) > counts['git'].get('worktree', 0):
         problems.append('den synced %d worktree paths, the pinned Git %d' % (
