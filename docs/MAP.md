@@ -218,6 +218,9 @@ re-checks a read's pack with `rebound`: the size, header and trailer binding,
 and the full `bounds` only when the size moved. An unopened session's
 `session_peek` answers through `read_object`, so a reader whose packs cannot
 open up front serves loose objects and fails a packed read as one read does.
+`install` syncs neither the file it writes nor its directory (the pinned Git
+syncs no worktree path); the pack, refs, index and configuration writers keep
+theirs.
 
 vc24 (den#72): `clone_name` derives a clone's directory from its URL when none
 is given; `clone_mode` fills an existing empty destination and empties it again
