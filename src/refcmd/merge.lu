@@ -79,7 +79,8 @@ fn tree_objects(
 ) -> index.TreeAssembly ! commit.CommitErrors {
     var value = index.empty(2)?
     for file in files {
-        let _ = object.write_object(ctx.repo, "blob", file.data)?
+        // A gitlink names its submodule's commit; no blob is written (vc25).
+        if file.mode != 0o160000 { let _ = object.write_object(ctx.repo, "blob", file.data)? }
         var entry = index.conflict_entry(file.path, file.mode, file.id, 1)?
         entry.flags -= 4096
         (mut value.entries).push(entry)
