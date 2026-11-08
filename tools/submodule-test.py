@@ -542,7 +542,73 @@ def family_transport():
             'remotes', extra=ALLOW_FILE)
 
 
-FAMILIES = {'read': family_read, 'status': family_status, 'diff': family_diff, 'clone': family_clone, 'hostile': family_hostile, 'transport': family_transport}
+def nosub_branch(w):
+    """moved, plus a branch nosub (submodule abs removed) pushed and fetched."""
+    moved(w)
+    c = w / 'c'
+    g('checkout', '-q', '-b', 'nosub', cwd=c)
+    g('rm', '-q', 'abs', cwd=c)
+    commit(c, 'remove abs')
+    g('push', '-q', 'origin', 'nosub', cwd=c)
+    g('checkout', '-q', 'main', cwd=c)
+    g('submodule', 'update', '-q', '--init', '--recursive', cwd=c, extra=ALLOW_FILE)
+
+
+SEEDS.update({
+    'moved': moved,
+    'nosub': nosub_branch,
+})
+
+
+def family_work():
+    for state in ('new-commits', 'modified', 'untracked', 'staged-gitlink', 'clean'):
+        s = state_seed(state)
+        for argv in (['add', 'mid'], ['add', '-A'], ['add', '.'], ['add', '-u'], ['commit', '-q', '-a', '-m', 'all'],
+                     ['commit', '-a', '-m', 'all'], ['reset', '--hard'], ['reset'], ['reset', '-q', 'HEAD', '--', 'mid'],
+                     ['rm', 'mid'], ['rm', '--cached', 'mid'], ['rm', '-f', 'mid'], ['rm', '-n', 'mid'],
+                     ['checkout', '-q', '--detach', 'HEAD'], ['switch', '-q', '--detach', 'HEAD']):
+            compare('work-%s-%s' % (state, '-'.join(x.strip('-') for x in argv if x not in ('-m', 'all'))), argv, s, cwd='c')
+    compare('work-staged-commit', ['commit', '-m', 'move mid'], state_seed('staged-gitlink'), cwd='c')
+    compare('work-add-inside-submodule', ['add', 'mid/mid.txt'], state_seed('modified'), cwd='c')
+    compare('work-rm-recursive-all', ['rm', '-r', '-q', '.'], 'clone', cwd='c')
+    s = named_seed('moved')
+    for argv in (['checkout', 'HEAD~1'], ['checkout', '-q', 'HEAD~1'], ['switch', '--detach', 'HEAD~1'],
+                 ['reset', '--hard', 'HEAD~1'], ['reset', 'HEAD~1'], ['reset', '--soft', 'HEAD~1'],
+                 ['log', '--oneline'], ['status']):
+        compare('work-moved-' + '-'.join(x.strip('-').replace('~', '') for x in argv), argv, s, cwd='c')
+    s = named_seed('nosub')
+    for argv in (['checkout', 'nosub'], ['switch', 'nosub'], ['checkout', '-q', 'nosub']):
+        compare('work-nosub-' + '-'.join(x.strip('-') for x in argv), argv, s, cwd='c')
+
+
+REFUSALS = [
+    ['submodule', 'add', '../x.git', 'x'], ['submodule', 'deinit', 'abs'], ['submodule', 'set-url', 'abs', '../x'],
+    ['submodule', 'set-branch', '-b', 'main', 'abs'], ['submodule', 'summary'], ['submodule', 'absorbgitdirs'],
+    ['submodule', 'update', '--remote'], ['submodule', 'update', '--merge'], ['submodule', 'update', '--rebase'],
+    ['clone', '--shallow-submodules', '--recurse-submodules', 'x', 'y'], ['clone', '--remote-submodules', 'x', 'y'],
+    ['mv', 'abs', 'abs2'], ['restore', 'abs'], ['stash'],
+]
+
+
+def family_refusals():
+    """Named refusals that remain (vc25b and later): den alone, each must
+    refuse by name with exit 2 and change nothing."""
+    seed('clone', recursive_clone)
+    for argv in REFUSALS:
+        name = 'refusal-' + '-'.join(x.strip('-') for x in argv[:3])
+        if a.only and not re.search(a.only, name):
+            continue
+        if world.exists():
+            shutil.rmtree(world)
+        shutil.copytree(seeds['clone'], world, symlinks=True)
+        before = state(world)
+        q = run(D, argv, world / 'c', ALLOW_FILE)
+        ok = q['status'] == 2 and 'not yet implemented' in q['stderr'] and state(world) == before
+        rows.append(dict(name=name, argv=argv, equal=ok, known=False, refusal=True, actual=dict(result=q)))
+        print('PASS' if ok else 'FAIL', name, '' if ok else json.dumps(q), flush=True)
+
+
+FAMILIES = {'read': family_read, 'status': family_status, 'diff': family_diff, 'clone': family_clone, 'hostile': family_hostile, 'transport': family_transport, 'work': family_work, 'refusals': family_refusals}
 
 try:
     FAMILIES[a.family]()

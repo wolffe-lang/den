@@ -23,7 +23,7 @@ assert len(rows) == 1 and rows[0]['verdict'] == 'exit(0)', rows
 print('gitmodules-checked: exit(0)')
 PY
 for tier in native release; do
-    for family in read status diff clone hostile transport; do
+    for family in read status diff clone hostile transport work refusals; do
         tools/env python3 -I tools/submodule-test.py --tier "$tier" --family "$family"
     done
 done
