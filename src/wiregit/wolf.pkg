@@ -19,5 +19,6 @@ pkg {
         index: {path: "../index"},
         worktree: {path: "../worktree"},
         gitmodules: {path: "../gitmodules"},
+        revset: {path: "../revset"},
     },
 }

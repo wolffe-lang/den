@@ -1,0 +1,223 @@
+// A superproject's fetch recursing into its submodules, as git-fetch(1)'s
+// --recurse-submodules and git-config(1)'s fetch.recurseSubmodules and
+// submodule.<name>.fetchRecurseSubmodules describe it, held to the pinned Git
+// black-box (vc25's fetch rows): on demand by default, so a submodule is
+// fetched only when a fetched superproject commit records a commit its own
+// repository lacks; `yes` fetches every submodule that has a repository; `no`
+// none. No implementation source consulted.
+use std.env
+use std.fs
+use gitmodules
+use object
+use oid
+use refs
+use repository
+use revset
+use worktree
+
+/// A fetch's recursion: "" (config decides), "yes", "on-demand" or "no".
+pub fn recursion_flag(arg: str) -> List[str] {
+    if arg == "--recurse-submodules" { return ["yes"] }
+    if arg == "--no-recurse-submodules" { return ["no"] }
+    if arg.starts_with("--recurse-submodules=") {
+        let value = arg[21..]
+        if value == "yes" || value == "true" { return ["yes"] }
+        if value == "no" || value == "false" { return ["no"] }
+        if value == "on-demand" { return ["on-demand"] }
+        return ["invalid"]
+    }
+    List[str]()
+}
+
+/// Every ref's id before a fetch, the set the new commits are measured from.
+pub fn tips(repo: repository.Repo) -> List[str] ! object.StoreErrors {
+    var out = List[str]()
+    for reference in refs.list(repo, "refs/")? { (mut out).push(oid.hex(reference.id)?) }
+    out
+}
+
+fn lower(value: str) -> str {
+    var out = List[byte]()
+    for b in value.bytes() {
+        (mut out).push(if b as int >= 65 && b as int <= 90 then (b as int + 32) as byte else b)
+    }
+    str_from_utf8(out) else ""
+}
+
+fn same(a: List[byte], b: List[byte]) -> bool {
+    if a.len != b.len { return false }
+    for i in 0..a.len { if a[i] != b[i] { return false } }
+    true
+}
+
+fn before_path(a: str, b: str) -> bool {
+    let x = a.bytes(), y = b.bytes()
+    let n = if x.len < y.len then x.len else y.len
+    for i in 0..n { if x[i] != y[i] { return x[i] as int < y[i] as int } }
+    x.len < y.len
+}
+
+fn setting(value: str) -> str {
+    let v = lower(value)
+    if v == "true" || v == "yes" || v == "on" || v == "1" { return "yes" }
+    if v == "false" || v == "no" || v == "off" || v == "0" { return "no" }
+    if v == "on-demand" { return "on-demand" }
+    "invalid"
+}
+
+struct Target { path: str, name: str, gitdir: str, ids: List[str] }
+
+fn present(gitdir: str, hex: str) -> bool {
+    let repo = repository.open(gitdir) else |_| { return false }
+    let id = oid.parse("sha1", hex) else |_| { return false }
+    let _ = object.read_object(repo, id, 16777216) else |_| { return false }
+    true
+}
+
+// The gitlinks the fetched commits record that differ from a parent's.
+fn recorded(repo: repository.Repo, before: List[str]) -> Map[str, List[str]] ! worktree.WorkErrors {
+    var out = Map[str, List[str]]()
+    var names = List[str]()
+    let listed = refs.list(repo, "refs/") else |e| {
+        return Unsupported("submodule fetch refs: {e}")
+    }
+    for reference in listed {
+        let hex = oid.hex(reference.id)?
+        var old = false
+        for b in before { if b == hex { old = true; break } }
+        if !old { (mut names).push(hex) }
+    }
+    if names.len == 0 { return out }
+    for b in before { (mut names).push("^{b}") }
+    let selection = revset.expand(repo, names)?
+    var trees = Map[str, List[worktree.FlatEntry]](), have = Map[str, bool]()
+    for commit in revset.collect(repo, selection, 100000, 0, false)? {
+        let mine = worktree.flatten_tree(repo, commit.id)?
+        var parents = List[List[worktree.FlatEntry]]()
+        for parent in commit.parents {
+            let key = oid.hex(parent)?
+            if !(have[key] else false) {
+                trees[key] = worktree.flatten_tree(repo, parent)?
+                have[key] = true
+            }
+            (mut parents).push(trees[key] else List[worktree.FlatEntry]())
+        }
+        for entry in mine {
+            if entry.mode != 0o160000 { continue }
+            let hex = oid.hex(entry.id)?
+            var changed = parents.len == 0
+            for list in parents {
+                var same = false
+                for other in list {
+                    if other.mode == 0o160000 &&
+                        same(other.path, entry.path) &&
+                        oid.equal(other.id, entry.id) {
+                        same = true
+                        break
+                    }
+                }
+                if !same { changed = true }
+            }
+            if !changed { continue }
+            let path = str_from_utf8(entry.path) else |_| { continue }
+            var ids = out[path] else List[str]()
+            var seen = false
+            for id in ids { if id == hex { seen = true } }
+            if !seen { (mut ids).push(hex) }
+            out[path] = ids
+        }
+    }
+    out
+}
+
+/// After a superproject's fetch: fetch the submodules its mode selects (CLI
+/// value, else per-submodule and fetch.recurseSubmodules configuration, else
+/// on-demand), each with den's own fetch run in the submodule, printing
+/// `Fetching submodule <path>` first and Git's error list last. Returns the
+/// exit status the recursion adds: 0, or 1 after an error.
+pub fn recurse(before: List[str], cli: str, quiet: bool) -> int ! worktree.WorkErrors {
+    let prefix = env_get("DEN_SUBMODULE_PREFIX") else ""
+    let ctx = worktree.discover(".") else |_| { return 0 }
+    if !fs.exists("{ctx.root}/.gitmodules") { return 0 }
+    let parsed = worktree.modules(ctx)?
+    let repo = repository.open(ctx.repo.gitdir)?
+    let global = setting(repo.config["fetch.recursesubmodules"] else "on-demand")
+    var candidates = List[Target]()
+    var wanted = Map[str, List[str]]()
+    var demanded = false
+    for module in parsed.modules {
+        if module.path == "" { continue }
+        var mode = cli
+        if mode == "" {
+            let own = repo.config["submodule.{module.name}.fetchrecursesubmodules"] else module.
+                fetch_recurse
+            mode = if own != "" then setting(own) else global
+        }
+        if mode == "no" || mode == "invalid" { continue }
+        let gitdir = gitmodules.module_gitdir(repo.gitdir, module.name)
+        if !fs.is_dir(gitdir) { continue }
+        if mode == "on-demand" && !demanded {
+            wanted = recorded(repo, before)?
+            demanded = true
+        }
+        var ids = List[str]()
+        if mode == "on-demand" {
+            for hex in wanted[module.path] else List[str]() {
+                if !present(gitdir, hex) { (mut ids).push(hex) }
+            }
+            if ids.len == 0 { continue }
+        }
+        (mut candidates).push(Target {
+            path: copy module.path,
+            name: copy module.name,
+            gitdir: gitdir,
+            ids: ids,
+        })
+    }
+    // Path order, as the pinned Git fetches them.
+    for i in 1..candidates.len {
+        var n = i
+        while n > 0 && before_path(candidates[n].path, candidates[n - 1].path) {
+            let temp = copy candidates[n - 1]
+            candidates[n - 1] = copy candidates[n]
+            candidates[n] = temp
+            n -= 1
+        }
+    }
+    var errors = List[str]()
+    for target in candidates {
+        let shown = if prefix == "" then copy target.path else "{prefix}/{target.path}"
+        if !quiet { eprint("Fetching submodule {shown}") }
+        let full = "{ctx.root}/{target.path}"
+        let place = if fs.exists("{full}/.git") then full else copy target.gitdir
+        let here = env.cwd() else |_| { return io }
+        let saved = env_get("GIT_PROTOCOL_FROM_USER") else "1"
+        env_set("GIT_PROTOCOL_FROM_USER", "0") else |_| {}
+        env_set("DEN_SUBMODULE_PREFIX", shown) else |_| {}
+        env.set_cwd(place) else |_| { return io }
+        var argv = ["fetch"]
+        if quiet { (mut argv).push("-q") }
+        if cli == "yes" { (mut argv).push("--recurse-submodules") }
+        if cli == "no" { (mut argv).push("--no-recurse-submodules") }
+        let status = run_inner(argv)
+        if status != 0 { (mut errors).push(shown) }
+        // A recorded commit still missing is asked for by id, as Git does.
+        if target.ids.len > 0 {
+            var missing = false
+            for hex in target.ids { if !present(target.gitdir, hex) { missing = true } }
+            if missing {
+                var again = ["fetch"]
+                if quiet { (mut again).push("-q") }
+                if run_inner(again) != 0 { (mut errors).push(shown) }
+            }
+        }
+        env.set_cwd(here) else |_| { return io }
+        env_set("GIT_PROTOCOL_FROM_USER", saved) else |_| {}
+        env_set("DEN_SUBMODULE_PREFIX", prefix) else |_| {}
+    }
+    if errors.len == 0 { return 0 }
+    var message = "Errors during submodule fetch:"
+    for path in errors { message = "{message}\n\t{path}" }
+    eprint(message)
+    1
+}
