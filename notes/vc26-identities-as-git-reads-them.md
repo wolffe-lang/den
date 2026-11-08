@@ -88,7 +88,8 @@ One line per object (the first failing author, committer or tagger line), `error
 - `5e4f518` the walk's committer dates; `7f0c5b6` pretty and the user format engine; `d706d75` log and show; `594fca9` blame.
 - `ddfa632` commit (picked, amended and empty-name identities); `5b12626` commit-tree; `c7747c0` rebase's author script.
 - `7ba1b45`, `17a1bc4` the census; `0bccdcd` the live row; `08e592f` the rows in `tools/check-commit`.
-- `823f57d`, `b5b5714`, `6229146`, `348bbc4` MAP, SOURCES, README, CHANGELOG; this note.
+- `f428924` history rows past the walk's 10,000-commit bound, red (`fatal: limit`, 576 of 581 exact, Linux, the pinned Git); `e1c2538` the walk stops after the count plus the skip when nothing is excluded (581 of 581).
+- `823f57d`, `b5b5714`, `6229146`, `348bbc4` MAP, SOURCES, README, CHANGELOG; `3924114`, `26aa81f`, `6081b54` the walk's stop in MAP, README and CHANGELOG; this note.
 
 ### The rows
 
@@ -96,18 +97,29 @@ One line per object (the first failing author, committer or tagger line), `error
 
 ### The census
 
-TBD.
+`tools/identity-census.py` over bare mirrors (`git clone --mirror`, 2026-11-08) of i3, sway and curl and the organisation's 32 public repositories, den `a17eedf`. Three verdicts per history: den's identity check names, object for object, what the pinned Git's `fsck` reports; `den clone --bare` and `git clone --bare` over file:// give the same refs and objects; and every commit or tag with an identity line outside the plain canonical form, plus a fixed sample of 100 others, reads the same through `show -s --pretty=fuller`, every identity placeholder (raw and default dates) and `show -s` of a tag.
+
+| history | commits and tags | identity lines | Git's fsck | empty email | unusual objects | read commands | verdicts |
+|---|---:|---:|---|---:|---:|---:|---|
+| i3 | 9,046 | 18,058 | all clean | 2 | 1 | 301 | equal |
+| sway | 12,839 | 25,575 | all clean | 4 | 4 | 312 | equal |
+| curl | 91,768 | 183,417 | all clean | 32 | 24 | 372 | equal |
+| the organisation's 32 | 27,084 | 54,066 | all clean | 0 | 0 | 8,784 | equal |
+
+Pinned Git, Linux, a two-CPU light slot: 34 histories in 418 s, curl in 563 s. Field Git, macOS: i3, sway and burrow, equal, with the same tallies. Every identity line in these histories is clean to Git's fsck. The lines outside the plain canonical form are empty emails (the witness's two lines in i3, four lines in sway, 32 in curl) and names of one character (sway and curl). The unusual lines themselves are kept in the census's JSON, not in this repository.
 
 ### The live row
 
-TBD.
+`http-live-identity` (`tools/http-live-test.py`, in `tools/check-http`): den and the pinned Git each clone `https://github.com/i3/i3.git` (the public refs read before and after, the row taken again if they moved), the two clones have the same refs, objects and checkout, den's clone passes `git fsck --full` and its worktree is clean, and `log -1`, `show -s` and `log -1 --format=%an|%ae|%al|%ad|%at|%cn|%ce|%cd` of `5f453914` are byte for byte Git's. Without a network it prints `SKIP http-live-identity reason=no network (…)`.
+
+At `e1c2538`, Linux, the pinned Git, a two-CPU light slot, 2026-11-08: `LIVE http-live-identity objects=41515 den=72.60s/283464KiB git=5.82s/39428KiB`, `PASS http-live-identity`. At `a17eedf`, before the walk stopped after its count, `den log -1 5f453914` alone took 130.65 s on the Apple silicon laptop, over the row's 120 s for each read (see Remaining limits).
 
 ## Remaining limits
 
 - `fsck --strict` stays refused by name (it adds a file mode check den does not make); `fsck.<msg-id>`, `fsck.skipList` and their fetch/receive forms stay refused, and so do the fsckObjects settings.
 - Placeholders beyond the engine are refused by name; so are user formats with a patch or stat and `show` of a tag with a user format; a mailmap is still refused for all of history.
 - Amend of a date above 9223372036854775807 is refused by name; Git keeps it.
-- den's history walk reads a pack's index again for each object it reads, and walks up to 10,000 commits before applying `-n`; on a long packed history that is slow (minutes) or refused by name. The census reads from a loose copy for that reason.
+- den's history walk reads a pack's index again for each object it reads. With a count and no exclusions it now stops after the count plus the skip (`f428924` rows, `e1c2538`): `den log -1 5f453914` on a packed clone of i3 read all 6,060 ancestors and took 130.65 s on the Apple silicon laptop, more than the live row's 120 s, before that change. `log` without a count, or with exclusions, still walks up to 10,000 commits and refuses a longer history by name, and is slow on a long packed one. The census reads from a loose copy for that reason.
 - Tree-path and tag-name checks stay on receipt; checkout's `.git` guard is exact-case only (a follow-up).
 
 ## Done-when
@@ -115,4 +127,5 @@ TBD.
 - [x] Prediction first (`5a79fde`).
 - [x] The measured table, and R-vc26-1 ruled (b).
 - [x] Rows red first at the base, then exact on both tiers.
-- [ ] The census, the live row, the final gauntlet, the plant and the macOS record: their records and every END line are in the PR body.
+- [x] The census and the live row (above).
+- [ ] The final gauntlet, the plant and the macOS record: their records and every END line are in the PR body.
