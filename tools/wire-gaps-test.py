@@ -1115,6 +1115,13 @@ def scale_fixtures(h):
         cap = '' if h.field else 'prlimit --as=%d -- ' % (scale_bound(50000) + 128 * MIB)
         wrapper.write_text('#!/bin/sh\nexec %s%s %s "$@"\n' % (cap, h.den, service))
         wrapper.chmod(0o755)
+        # The pinned Git's service as den starts it (DEN_UPLOAD_PACK,
+        # DEN_RECEIVE_PACK), out of den's cap: the cap is den's, and a child
+        # inherits it (scale_den leaves the hard limit unlimited, so this
+        # raises the soft one back).
+        free = h.out / 'bin' / ('git-' + service + '-uncapped')
+        free.write_text('#!/bin/sh\nulimit -S -v unlimited\nexec %s %s "$@"\n' % (h.git, service))
+        free.chmod(0o755)
     return root, src, prefix, wide, wide_next, counts
 
 
@@ -1137,10 +1144,16 @@ def i3_fixture(h, root):
 
 
 def scale_den(h, argv, cwd, objects):
-    """A den operation from a small parent, under prlimit on Linux."""
+    """A den operation from a small parent, under prlimit on Linux: the soft
+    address-space limit is the cap, the hard one unlimited, so a service den
+    starts can raise its own (a den server's wrapper sets its cap; the pinned
+    Git's is uncapped), and den's own allocations stop at the cap."""
     cap = scale_bound(objects) + 128 * MIB
-    full = ([] if h.field else ['prlimit', '--as=%d' % cap, '--']) + [h.den, *argv]
-    return launched_in(h, full, cwd)
+    if h.field:
+        return launched_in(h, [h.den, *argv], cwd)
+    services = dict(DEN_UPLOAD_PACK=str(h.out / 'bin/git-upload-pack-uncapped'),
+                    DEN_RECEIVE_PACK=str(h.out / 'bin/git-receive-pack-uncapped'))
+    return launched_in(h, ['prlimit', '--as=%d:unlimited' % cap, '--', h.den, *argv], cwd, extra=services)
 
 
 def scale_verdict(h, name, objects, ours, theirs, measured, problems):
@@ -1230,8 +1243,9 @@ def family_scale(h):
     shutil.rmtree(root, ignore_errors=True)
 
 
-def launched_in(h, argv, cwd):
-    result = subprocess.run([sys.executable, '-I', '-S', '-c', LAUNCH, *map(str, argv)], env=h.env, cwd=str(cwd),
+def launched_in(h, argv, cwd, extra=None):
+    result = subprocess.run([sys.executable, '-I', '-S', '-c', LAUNCH, *map(str, argv)],
+                            env={**h.env, **(extra or {})}, cwd=str(cwd),
                             capture_output=True, stdin=subprocess.DEVNULL, timeout=3600)
     row = json.loads(result.stdout.decode().strip().splitlines()[-1])
     row['stderr'] = result.stderr[-300:].decode(errors='replace')
