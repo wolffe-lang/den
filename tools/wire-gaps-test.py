@@ -1054,11 +1054,18 @@ def clone_syncs(h, url):
 # -- den#73 ------------------------------------------------------------------
 # i3 (https://github.com/i3/i3) at `next` I3_NEXT: 41,341 objects. The
 # fixture is a bundle of that branch, pinned by its digest, from
-# DEN_I3_BUNDLE or the archive directory; the row fails without it.
+# DEN_I3_BUNDLE or the archive directory; where there is none (a hosted
+# runner) the pinned commit is fetched from i3's public repository without
+# tags, as pelt's fixture is. Either way its content is pinned:
+# I3_CONTENT_SHA256 is the state digest (objects_sha256: every reachable
+# object's `cat-file --batch` bytes, by id), the same from the bundle and
+# from two separate fetches, on any Git and any zlib.
 I3_BUNDLE = 'i3-8a97b0f.bundle'
 I3_SHA256 = '762d8e8d557af862feaddb25f2509eba22543cd4121f1a13149c0685416d85be'
+I3_URL = 'https://github.com/i3/i3.git'
 I3_NEXT = '8a97b0feaf1aefc1a3a9828c29df8d540344f741'
 I3_OBJECTS = 41341
+I3_CONTENT_SHA256 = '1ff64439cfc0802410e58a9f354220a3ed7ab0a4133d891a6928f5b120b2dc58'
 
 
 # tests/vc24-prediction.txt P12: 64 MiB plus 1 KiB an object.
@@ -1128,18 +1135,27 @@ def scale_fixtures(h):
 def i3_fixture(h, root):
     named = os.environ.get('DEN_I3_BUNDLE') or os.path.join(os.environ.get('DEN_ARCHIVE_DIR', ''), I3_BUNDLE)
     bundle = Path(named)
-    if not bundle.is_file():
-        return None, 'fixture %s (sha256 %s) not found: set DEN_I3_BUNDLE or DEN_ARCHIVE_DIR' % (I3_BUNDLE, I3_SHA256)
-    if hashlib.sha256(bundle.read_bytes()).hexdigest() != I3_SHA256:
-        return None, 'fixture %s digest differs from the pinned one' % bundle
     repo = root / 'i3.git'
-    h.git_out(root, 'clone', '-q', '--bare', str(bundle), str(repo))
+    if bundle.is_file():
+        if hashlib.sha256(bundle.read_bytes()).hexdigest() != I3_SHA256:
+            return None, 'fixture %s digest differs from the pinned one' % bundle
+        h.git_out(root, 'clone', '-q', '--bare', str(bundle), str(repo))
+    else:
+        h.git_out(root, 'init', '-q', '--bare', '-b', 'next', str(repo))
+        fetched = subprocess.run([h.git, '-C', str(repo), 'fetch', '-q', '--no-tags', I3_URL, I3_NEXT + ':refs/heads/next'],
+                                 env=h.env, capture_output=True, timeout=900)
+        if fetched.returncode:
+            return None, 'no %s (sha256 %s) in DEN_I3_BUNDLE or DEN_ARCHIVE_DIR, and fetching %s failed: %s' % (
+                I3_BUNDLE, I3_SHA256, I3_URL, fetched.stderr.decode(errors='replace').strip()[-200:])
     h.git_out(repo, 'symbolic-ref', 'HEAD', 'refs/heads/next')
     h.git_out(repo, '-c', 'repack.writeBitmaps=false', 'repack', '-a', '-d', '-q')
     objects = len(h.git_out(repo, 'rev-list', '--objects', '--all').splitlines())
     tip = h.git_out(repo, 'rev-parse', 'refs/heads/next').decode().strip()
     if (tip, objects) != (I3_NEXT, I3_OBJECTS):
         return None, 'i3 fixture shape: %s, %d objects' % (tip, objects)
+    content = h.state(repo, worktree=False)['objects_sha256']
+    if content != I3_CONTENT_SHA256:
+        return None, 'i3 fixture content digest %s differs from the pinned one' % content
     return repo, None
 
 
