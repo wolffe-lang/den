@@ -52,7 +52,7 @@ fn walk_one(
     let expected = pack.names_value(w.expect, name)
     if expected != "" && expected != body.kind { return invalid }
     let _ = pack.names_add(mut w.kinds, name, body.kind)
-    for child in packcmd.wire_links(body)? {
+    for child in packcmd.links(body)? {
         let known = pack.names_value(w.kinds, child.name)
         if known != "" {
             if child.kind != "" && child.kind != known { return invalid }
@@ -553,7 +553,7 @@ fn follow(
     if link.kind != "" && link.kind != body.kind { return invalid }
     if rank >= 0 && body.kind != kind { return invalid }
     if rank < 0 { let _ = pack.names_add(mut other, link.name, body.kind) }
-    for child in packcmd.wire_links(body)? {
+    for child in packcmd.links(body)? {
         let at = pack.received_rank(ix, child.name)?
         if at >= 0 {
             if child.kind != "" && child.kind != pack.received_rank_kind(ix, at) { return invalid }
