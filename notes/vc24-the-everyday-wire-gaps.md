@@ -131,7 +131,7 @@ The Linux timed rows' figures, before and after, are the gauntlet's and are in t
 
 ### The bounds at scale (den#73, a third change)
 
-den#73: serving a clone, den's clone from den's server, fetch, push and receive each stopped at a fixed count of 10,000 objects, and each count sat in front of work that grew with the square of the objects (P12, `tests/vc24-prediction.txt`, measured before any change: refusals after about 244 s of CPU each at 50,000 objects). Predicted and committed first (`ef88130`); the rows (`e616060`) red first by name at PR 2's head.
+den#73: serving a clone, den's clone from den's server, fetch, push and receive each stopped at a fixed count of 10,000 objects, and each count sat in front of work that grew with the square of the objects (P12, `tests/vc24-prediction.txt`, measured before any change: refusals after about 244 s of CPU each at 50,000 objects). Predicted and committed first (`264032d`); the rows (`3d7037a`) red first by name at PR 2's head.
 
 What changed, in the order P12 gave:
 
@@ -169,7 +169,7 @@ The cost rows, the least of three runs each in turn: serving 6.43 s against the 
 
 Each process's peak is the largest of its tree's (for the serving and receiving rows, Git's processes too); the launcher's own floor, `den --version` from the same parent, is about 2,000 KiB. On Linux every den process also runs under `prlimit --as`.
 
-**Not predicted, found on the way.** Git's `receive-pack` keeps a push's pack, and so does den now; but den's receive checked each pushed tip's closure twice, once in the received closure (`closure_received`) and once more by walking all of history into a list of names, which was most of its memory (119,328 KiB against the 115,536 KiB bound in the first take, red by name); the second walk now runs only for a thin pack, whose decode checks nothing (`42f66c2`). i3's history refused at PR 2's head with `fsck identity diagnostics`: the transfer walks checked identities as fsck's did, which Git's transfers leave to `transfer.fsckObjects`, off by default (Git's `fsck --full` reports nothing in i3). den#75, merged first, took identity checks out of the shared link parser, so these walks keep `packcmd.links` and i3 passes on its trunk.
+**Not predicted, found on the way.** Git's `receive-pack` keeps a push's pack, and so does den now; but den's receive checked each pushed tip's closure twice, once in the received closure (`closure_received`) and once more by walking all of history into a list of names, which was most of its memory (119,328 KiB against the 115,536 KiB bound in the first take, red by name); the second walk now runs only for a thin pack, whose decode checks nothing (`d2b217b`). i3's history refused at PR 2's head with `fsck identity diagnostics`: the transfer walks checked identities as fsck's did, which Git's transfers leave to `transfer.fsckObjects`, off by default (Git's `fsck --full` reports nothing in i3). den#75, merged first, took identity checks out of the shared link parser, so these walks keep `packcmd.links` and i3 passes on its trunk.
 
 **Where den's CPU goes now** (macOS `sample` of the release processes, top-of-stack samples by class; blocking reads left out):
 
