@@ -885,7 +885,9 @@ rebuilt along delta chains, the idea den's reader cache follows), RFC 1951
 RFC 1950. Fixtures: 50,000 objects written by the pinned Git's fast-import
 from own generators, and i3's public history (https://github.com/i3/i3, a
 bundle of `next` at `8a97b0f`, 41,341 objects, pinned by its sha256), cloned
-offline from the bundle. Black boxes: the pinned Git and the field Git as
+offline from the bundle, or, where none is staged, that commit fetched from
+the public repository without tags, its objects held to one content digest.
+Black boxes: the pinned Git and the field Git as
 clients and servers of every row, `git fsck`, `cat-file --batch-check` and
 `rev-list --objects`; macOS `sample` profiles of den's own processes. No
 implementation source was read.
