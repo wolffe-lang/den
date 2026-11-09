@@ -16,7 +16,7 @@ Clean room: Git's documentation (the 2.56.0 release tarball's `Documentation/` o
 
 ## Inputs verified
 
-- **Base:** den trunk `474a926`, branch `vc26`; rebased onto trunk `197e1f1` (vc24's merge). The conflicts were in MAP, SOURCES, README and CHANGELOG, each two sections added at one place; `src/wiregit/fetch.lu` and `push.lu` merged without one.
+- **Base:** den trunk `474a926`, branch `vc26`; rebased onto trunk `197e1f1` (vc24's first merge), then onto `ae404f6`. The conflicts were sections added at one place in SOURCES, README and CHANGELOG; `fetch_selected`, where trunk now opens the URL through `wire_url` and the fsckObjects refusal follows its HTTP configuration check; and the live rows, where the identity row now uses trunk's guard on the refs a clone takes (`refs/pull/*` changes on its own).
 - **Toolchain:** wolf 0.2.36, lupin 0.1.58 and wolf-std `d4a4d4c`, unchanged; archives checked by digest by `tools/fetch-toolchain`.
 - **Oracle:** Git 2.56.0, executable `c4848492…`, checked by digest by every row script.
 - **Field Git:** Homebrew's Git 2.56.0 on macOS (`--field`).
@@ -24,7 +24,7 @@ Clean room: Git's documentation (the 2.56.0 release tarball's `Documentation/` o
 
 ## Prediction
 
-`tests/vc26-prediction.txt`, committed first (`6a9b88d`), before any measurement.
+`tests/vc26-prediction.txt`, committed first (`686b6cc`), before any measurement.
 
 - **P1, git fsck:** 21 of 26 predicted verdicts held. Missed: an empty name with its space (` <e@x>`, ` <>`) is clean, not `badName`; two spaces before the date are clean, not `badDate`; a date of 2^63 is `badDateOverflow` (the limit is signed 64-bit), not clean. The witness's shape is clean, as predicted: Git's own fsck accepts `5f453914`.
 - **P2, `--strict`:** held; identical to plain for every shape.
@@ -82,14 +82,14 @@ One line per object (the first failing author, committer or tagger line), `error
 
 ### Commits
 
-- `6a9b88d` the prediction; `cfce574`, `994b535` the rows (`tools/identity-test.py`), red; `c08793c` the measured table; `bd03712`, `7aaf0ca` the replay, format, configuration, date, fsck-order and committer-only rows, red, with den's named refusals per row.
-- `4283d6a` `commit_format.raw_identity` and `identity_problem`; `401ad3d` `shown_date`; `4e749e5` Git's cleanup and the empty email; `4196798` their unit rows.
-- `ac197b6` no identity validation on receipt, and fsck's identity lines; `93ec900` the fsckObjects refusals.
-- `b1db3a3` the walk's committer dates; `5b4dc2f` pretty and the user format engine; `cf0da18` log and show; `6ac6a50` blame.
-- `3a1a165` commit (picked, amended and empty-name identities); `22c2b5a` commit-tree; `a6f20f0` rebase's author script.
-- `e896ddf`, `e06e486` the census; `ddb76e4` the live row; `42ee017` the rows in `tools/check-commit`.
-- `ebfa50f` history rows past the walk's 10,000-commit bound, red (`fatal: limit`, 576 of 581 exact, Linux, the pinned Git, before the rebase); `3900163` the walk stops after the count plus the skip when nothing is excluded (581 of 581).
-- `9d174ba`, `4735875`, `dd3912c`, `adcd25a` MAP, SOURCES, README, CHANGELOG; `51244d8`, `d441b2f`, `1faa540` the walk's stop in MAP, README and CHANGELOG; this note.
+- `686b6cc` the prediction; `9e76a29`, `f9a5973` the rows (`tools/identity-test.py`), red; `f33b155` the measured table; `6299ce6`, `882f3f7` the replay, format, configuration, date, fsck-order and committer-only rows, red, with den's named refusals per row.
+- `79ee5af` `commit_format.raw_identity` and `identity_problem`; `0060e0c` `shown_date`; `7509e57` Git's cleanup and the empty email; `5eb407d` their unit rows.
+- `e45f6dd` no identity validation on receipt, and fsck's identity lines; `e61c7f2` the fsckObjects refusals.
+- `e104bf6` the walk's committer dates; `856e022` pretty and the user format engine; `02cf09d` log and show; `7795be8` blame.
+- `9a3583e` commit (picked, amended and empty-name identities); `34c8c95` commit-tree; `02019ac` rebase's author script.
+- `960f7fc`, `d1adfbf` the census; `293bf07` the live row; `45ccaaf` the rows in `tools/check-commit`.
+- `f2cf529` history rows past the walk's 10,000-commit bound, red (`fatal: limit`, 576 of 581 exact, Linux, the pinned Git, before the first rebase); `8737669` the walk stops after the count plus the skip when nothing is excluded (581 of 581).
+- `567cfba`, `9ede651`, `e33b53e`, `1d89b8a` MAP, SOURCES, README, CHANGELOG; `d78c70d`, `d906f94`, `2b32049` the walk's stop in MAP, README and CHANGELOG; this note.
 
 ### The rows
 
@@ -106,25 +106,25 @@ One line per object (the first failing author, committer or tagger line), `error
 | curl | 91,768 | 183,417 | all clean | 32 | 24 | 372 | equal |
 | the organisation's 32 | 27,084 | 54,066 | all clean | 0 | 0 | 8,784 | equal |
 
-Taken before the rebase, at the pre-rebase counterpart of `631dfd1` (the same vc26 changes on `474a926`): pinned Git, Linux, a two-CPU light slot, 34 histories in 418 s, curl in 563 s. The census is taken again at the PR head; that run is in the PR body. Field Git, macOS: i3, sway and burrow, equal, with the same tallies. Every identity line in these histories is clean to Git's fsck. The lines outside the plain canonical form are empty emails (the witness's two lines in i3, four lines in sway, 32 in curl) and names of one character (sway and curl). The unusual lines themselves are kept in the census's JSON, not in this repository.
+Taken before the first rebase, at the counterpart of `8bb75ab` (the same vc26 changes on `474a926`): pinned Git, Linux, a two-CPU light slot, 34 histories in 418 s, curl in 563 s. The census is taken again at the PR head; that run is in the PR body. Field Git, macOS: i3, sway and burrow, equal, with the same tallies. Every identity line in these histories is clean to Git's fsck. The lines outside the plain canonical form are empty emails (the witness's two lines in i3, four lines in sway, 32 in curl) and names of one character (sway and curl). The unusual lines themselves are kept in the census's JSON, not in this repository.
 
 ### The live row
 
 `http-live-identity` (`tools/http-live-test.py`, in `tools/check-http`): den and the pinned Git each clone `https://github.com/i3/i3.git` (the public refs read before and after, the row taken again if they moved), the two clones have the same refs, objects and checkout, den's clone passes `git fsck --full` and its worktree is clean, and `log -1`, `show -s` and `log -1 --format=%an|%ae|%al|%ad|%at|%cn|%ce|%cd` of `5f453914` are byte for byte Git's. Without a network it prints `SKIP http-live-identity reason=no network (…)`.
 
-Before the rebase, at the counterpart of `3900163`: Linux, the pinned Git, a two-CPU light slot, 2026-11-08, `LIVE http-live-identity objects=41515 den=72.60s/283464KiB git=5.82s/39428KiB`, `PASS http-live-identity`. At the counterpart of `631dfd1`, before the walk stopped after its count, both `log -1` reads of the row timed out at 120 s on Linux, and `den log -1 5f453914` took 130.65 s on the Apple silicon laptop (see Remaining limits). The row at the PR head is in the PR body.
+Before the first rebase, at the counterpart of `8737669`: Linux, the pinned Git, a two-CPU light slot, 2026-11-08, `LIVE http-live-identity objects=41515 den=72.60s/283464KiB git=5.82s/39428KiB`, `PASS http-live-identity`. At the counterpart of `8bb75ab`, before the walk stopped after its count, both `log -1` reads of the row timed out at 120 s on Linux, and `den log -1 5f453914` took 130.65 s on the Apple silicon laptop (see Remaining limits). The row at the PR head is in the PR body.
 
 ## Remaining limits
 
 - `fsck --strict` stays refused by name (it adds a file mode check den does not make); `fsck.<msg-id>`, `fsck.skipList` and their fetch/receive forms stay refused, and so do the fsckObjects settings.
 - Placeholders beyond the engine are refused by name; so are user formats with a patch or stat and `show` of a tag with a user format; a mailmap is still refused for all of history.
 - Amend of a date above 9223372036854775807 is refused by name; Git keeps it.
-- den's history walk reads a pack's index again for each object it reads. With a count and no exclusions it now stops after the count plus the skip (`ebfa50f` rows, `3900163`): `den log -1 5f453914` on a packed clone of i3 read all 6,060 ancestors and took 130.65 s on the Apple silicon laptop, more than the live row's 120 s, before that change. `log` without a count, or with exclusions, still walks up to 10,000 commits and refuses a longer history by name, and is slow on a long packed one. The census reads from a loose copy for that reason.
+- den's history walk reads a pack's index again for each object it reads. With a count and no exclusions it now stops after the count plus the skip (`f2cf529` rows, `8737669`): `den log -1 5f453914` on a packed clone of i3 read all 6,060 ancestors and took 130.65 s on the Apple silicon laptop, more than the live row's 120 s, before that change. `log` without a count, or with exclusions, still walks up to 10,000 commits and refuses a longer history by name, and is slow on a long packed one. The census reads from a loose copy for that reason.
 - Tree-path and tag-name checks stay on receipt; checkout's `.git` guard is exact-case only (a follow-up).
 
 ## Done-when
 
-- [x] Prediction first (`6a9b88d`).
+- [x] Prediction first (`686b6cc`).
 - [x] The measured table, and R-vc26-1 ruled (b).
 - [x] Rows red first at the base, then exact on both tiers.
 - [x] The census and the live row (above).
