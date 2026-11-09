@@ -148,7 +148,7 @@ The rows, `tools/wire-gaps-test.py` family `scale` (both tiers; in `tools/check-
 - `scale-clone-den-server` and `scale-clone-git-server`: den clones them through den's and Git's upload-pack;
 - `scale-fetch-history`: den fetches 46,000 new objects into a 4,000-object repository; `scale-fetch-wide`: one commit over a 15,000-blob flat tree den already holds;
 - `scale-push`: den pushes the 50,000 into an empty repository through Git's receive-pack; `scale-receive`: Git pushes them into den receive-pack;
-- `scale-clone-i3`, `scale-push-i3`: i3's public history (41,341 objects; a bundle of `next` at `8a97b0f`, pinned by its sha256, cloned offline) cloned through den upload-pack and pushed into an empty repository;
+- `scale-clone-i3`, `scale-push-i3`: i3's public history (41,341 objects; a bundle of `next` at `8a97b0f`, pinned by its sha256, cloned offline; where no bundle is staged, as on a hosted runner, that commit fetched without tags; either way the objects held to one content digest) cloned through den upload-pack and pushed into an empty repository;
 - `scale-serve-cost` and `scale-den-cost` (release): the pinned Git's clone through den upload-pack and den's clone through den upload-pack, each at most 30 times the pinned Git's clone through Git's upload-pack, CPU of the whole process tree, three runs in turn, the least.
 
 At 50,000 objects on macOS (release, the field Git; each figure CPU of the row's process tree from `wait4`, and the peak RSS of its largest process, the bound 115,536 KiB; i3's 106,877 KiB):
