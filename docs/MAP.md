@@ -245,9 +245,7 @@ plans and writes; `upload` sends the file in band-1 windows; push streams it
 to a stream peer and sends it whole over HTTP (`pack_for`). Receive-pack finds
 the pack's end with `pack.scan_begin`/`scan_more` (each entry inflated once)
 and installs it through the streamed indexer (`receive_import`), falling back
-to `import_pack` for a thin pack. `packcmd.wire_links` is `links` without
-fsck's strict diagnostics (unsafe paths, identities, tag names), for transfer
-walks. `zlib.Tables`/`tables`/`deflate_with` keep deflate's match tables
+to `import_pack` for a thin pack. `zlib.Tables`/`tables`/`deflate_with` keep deflate's match tables
 across a writer's objects with deflate's bytes; `lengths` joins from two
 queues; inflate reads several bits a byte and decodes fixed blocks without
 tables; `encode_delta` rolls its fingerprint between matches.
