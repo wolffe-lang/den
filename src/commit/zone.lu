@@ -63,7 +63,9 @@ pub fn zone_reading(value: str, dir: str) -> LocalZone {
         return zone_spec(":{dir}/{name}")
     }
     if readable(value) { return zone_spec(value) }
-    lenient(value, fs.exists("{dir}/posixrules"))
+    let reading = lenient(value, fs.exists("{dir}/posixrules"))
+    if reading.refusal != "" || reading.spec == "" { return reading }
+    checked(value, reading.spec)
 }
 
 struct Cursor {
@@ -260,7 +262,8 @@ fn day_past(text: str) -> bool {
 ///   then any other byte: the second change, its time not written, at 00:00.
 /// Any other value (held offsets with daylight saving, malformed change
 /// rules) is refused by name: the C library reads such rules in ways den
-/// does not reproduce.
+/// does not reproduce. Pure: the spelling is checked against std.time by
+/// `zone_reading`.
 pub fn lenient(value: str, posixrules: bool) -> LocalZone {
     var c = Cursor { s: value, i: 0 }
     let std_name = designation(mut c)
@@ -268,7 +271,7 @@ pub fn lenient(value: str, posixrules: bool) -> LocalZone {
     let (std_read, std_west, std_held) = offset(mut c)
     if !std_read { return utc_zone() }
     let std_text = "{std_name}{offset_spelling(std_west)}"
-    if c.i == value.len { return checked(value, std_text) }
+    if c.i == value.len { return zone_spec(std_text) }
     if std_held { return zone_refused(value, "an out-of-range offset with daylight saving") }
     var dst_text = "<+00>0"
     let dst_name = designation(mut c)
@@ -286,7 +289,7 @@ pub fn lenient(value: str, posixrules: bool) -> LocalZone {
     } else if at(c) == 77 || at(c) == 74 {
         rules = value[c.i..]
     } else if c.i < value.len {
-        return checked(value, "{prefix},0/0,0/0")
+        return zone_spec("{prefix},0/0,0/0")
     }
     if rules == "" {
         if posixrules {
@@ -295,31 +298,31 @@ pub fn lenient(value: str, posixrules: bool) -> LocalZone {
                 "daylight saving with no change rules, read from the zone database's posixrules",
             )
         }
-        return checked(value, "{prefix},M3.2.0,M11.1.0")
+        return zone_spec("{prefix},M3.2.0,M11.1.0")
     }
     var r = Cursor { s: rules, i: 0 }
     // Measured: a first rule whose first byte is not a rule's, or a day
     // number past 365, is no rule at all.
     if !(at(r) == 77 || at(r) == 74 || digit(at(r))) || digit(at(r)) && day_past(rules) {
-        return checked(value, "{prefix},0/0,0/0")
+        return zone_spec("{prefix},0/0,0/0")
     }
     let (start_read, start, _) = rule(mut r)
     if !start_read || r.i < rules.len && at(r) != 44 {
         return zone_refused(value, "a malformed daylight-saving rule")
     }
     if r.i < rules.len { r.i += 1 }
-    if r.i == rules.len { return checked(value, "{prefix},{start},M11.1.0") }
+    if r.i == rules.len { return zone_spec("{prefix},{start},M11.1.0") }
     if !(at(r) == 77 || at(r) == 74 || digit(at(r))) {
-        return checked(value, "{prefix},{start},0/0")
+        return zone_spec("{prefix},{start},0/0")
     }
     let (end_read, end, end_timed) = rule(mut r)
     if !end_read { return zone_refused(value, "a malformed daylight-saving rule") }
     // Measured: after a complete second rule a `,` ends the value; any other
     // byte makes a change time that was not written 00:00.
     if r.i == rules.len || at(r) == 44 || end_timed {
-        return checked(value, "{prefix},{start},{end}")
+        return zone_spec("{prefix},{start},{end}")
     }
-    checked(value, "{prefix},{start},{end}/0")
+    zone_spec("{prefix},{start},{end}/0")
 }
 
 // The spelling std.time is given for `value`, when std.time reads it.
