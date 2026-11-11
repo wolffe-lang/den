@@ -1,0 +1,331 @@
+// vc23 (den#84): the local zone, as the pinned Git takes it from TZ.
+//
+// Git stamps a date it is not given (and reads a date written without a
+// zone) in the zone its C library reads from TZ, or from /etc/localtime
+// when TZ is unset. Every rule below was measured black-box on the pinned
+// Git (notes/vc23-local-time-zones.md); no Git or C library source was
+// read. std.time does the reading: this file only chooses the spelling it
+// is given, for the TZ values std.time refuses but the C library reads.
+
+use std.fs
+use std.time
+
+/// A TZ value as den reads it: the spelling std.time is given (`spec`, ""
+/// for UTC), or, when den cannot read it as Git does, the reason it refuses
+/// the value by name (`refusal`).
+pub struct LocalZone {
+    spec: str,
+    refusal: str,
+}
+
+fn utc_zone() -> LocalZone {
+    LocalZone { spec: "", refusal: "" }
+}
+
+fn zone_spec(spec: str) -> LocalZone {
+    LocalZone { spec: spec, refusal: "" }
+}
+
+fn zone_refused(value: str, why: str) -> LocalZone {
+    LocalZone { spec: "", refusal: "commit local timezone {value}: {why}" }
+}
+
+/// The zone database root the C library and std.time both read.
+pub fn zone_dir() -> str {
+    env_get("TZDIR") else "/usr/share/zoneinfo"
+}
+
+/// The local zone: TZ, or /etc/localtime when TZ is unset.
+pub fn local_zone() -> LocalZone ! CommitErrors {
+    let value = env_get("TZ") else |e| match e {
+        missing => { return zone_spec(":/etc/localtime") },
+        utf8 => { return Unsupported("commit non-UTF-8 TZ") },
+    }
+    zone_reading(value, zone_dir())
+}
+
+fn readable(spec: str) -> bool {
+    let _ = time.offset_at(spec, 0) else |_| { return false }
+    true
+}
+
+/// A TZ value as the C library under the pinned Git reads it, given the
+/// zone directory `dir` (measured): empty is UTC; `:name` and a path name a
+/// file (a relative one below `dir`, never the working directory); a value
+/// std.time reads is read as std.time reads it; any other value is read as
+/// `lenient` describes. A file that cannot be read is UTC.
+pub fn zone_reading(value: str, dir: str) -> LocalZone {
+    if value == "" { return utc_zone() }
+    if value.starts_with(":") {
+        let name = value[1..]
+        if name == "" { return utc_zone() }
+        if name.starts_with("/") { return zone_spec(value) }
+        return zone_spec(":{dir}/{name}")
+    }
+    if readable(value) { return zone_spec(value) }
+    lenient(value, fs.exists("{dir}/posixrules"))
+}
+
+struct Cursor {
+    s: str,
+    i: int,
+}
+
+fn at(c: Cursor) -> int {
+    if c.i >= c.s.len { return -1 }
+    c.s.bytes()[c.i] as int
+}
+
+fn letter(ch: int) -> bool {
+    ch >= 65 && ch <= 90 || ch >= 97 && ch <= 122
+}
+
+fn digit(ch: int) -> bool {
+    ch >= 48 && ch <= 57
+}
+
+// A designation: three or more letters, or three or more letters, digits,
+// `+` and `-` between `<` and `>`. "" when there is none.
+fn designation(mut c: Cursor) -> str {
+    let start = c.i
+    if at(c) == 60 {
+        c.i += 1
+        while at(c) >= 0 && at(c) != 62 {
+            let ch = at(c)
+            if !(letter(ch) || digit(ch) || ch == 43 || ch == 45) { return "" }
+            c.i += 1
+        }
+        if at(c) != 62 || c.i - start - 1 < 3 { return "" }
+        c.i += 1
+        return c.s[start..c.i]
+    }
+    while letter(at(c)) { c.i += 1 }
+    if c.i - start < 3 { return "" }
+    c.s[start..c.i]
+}
+
+// Decimal digits, their value held at 1000000; -1 when there are none.
+fn number(mut c: Cursor) -> int {
+    var n = 0, any = false
+    while digit(at(c)) {
+        if n < 1000000 { n = n * 10 + at(c) - 48 }
+        c.i += 1
+        any = true
+    }
+    if any then n else -1
+}
+
+// An offset `[+-]h[:mm[:ss]]`: (read, seconds as written, held), where the
+// C library holds hours above 24 at 24 and minutes or seconds above 59 at 59
+// (measured: EST25 is -2400, EST5:60 is -0559) and `held` says it did.
+fn offset(mut c: Cursor) -> (bool, int, bool) {
+    var sign = 1
+    if at(c) == 43 {
+        c.i += 1
+    } else if at(c) == 45 {
+        sign = -1
+        c.i += 1
+    }
+    var hours = number(mut c)
+    if hours < 0 { return (false, 0, false) }
+    var held = false
+    if hours > 24 {
+        hours = 24
+        held = true
+    }
+    var minutes = 0, seconds = 0
+    if at(c) == 58 {
+        c.i += 1
+        minutes = number(mut c)
+        if minutes < 0 { return (false, 0, false) }
+        if minutes > 59 {
+            minutes = 59
+            held = true
+        }
+        if at(c) == 58 {
+            c.i += 1
+            seconds = number(mut c)
+            if seconds < 0 { return (false, 0, false) }
+            if seconds > 59 {
+                seconds = 59
+                held = true
+            }
+        }
+    }
+    (true, sign * (hours * 3600 + minutes * 60 + seconds), held)
+}
+
+fn two(n: int) -> str {
+    if n < 10 then "0{n}" else "{n}"
+}
+
+fn offset_spelling(west: int) -> str {
+    let sign = if west < 0 then "-" else ""
+    let size = if west < 0 then -west else west
+    "{sign}{size / 3600}:{two(size / 60 % 60)}:{two(size % 60)}"
+}
+
+// A change rule std.time and POSIX both take: `Mm.w.d`, `Jn` or `n`, then an
+// optional `/time`, the whole of `text`.
+fn rule_complete(text: str) -> bool {
+    if text == "" { return false }
+    var c = Cursor { s: text, i: 0 }
+    if at(c) == 77 {
+        c.i += 1
+        let m = number(mut c)
+        if at(c) != 46 { return false }
+        c.i += 1
+        let w = number(mut c)
+        if at(c) != 46 { return false }
+        c.i += 1
+        let d = number(mut c)
+        if m < 1 || m > 12 || w < 1 || w > 5 || d < 0 || d > 6 { return false }
+    } else if at(c) == 74 {
+        c.i += 1
+        let n = number(mut c)
+        if n < 1 || n > 365 { return false }
+    } else {
+        let n = number(mut c)
+        if n < 0 || n > 365 { return false }
+    }
+    if at(c) == 47 {
+        c.i += 1
+        if at(c) == 43 || at(c) == 45 { c.i += 1 }
+        let h = number(mut c)
+        if h < 0 || h > 167 { return false }
+        if at(c) == 58 {
+            c.i += 1
+            let m = number(mut c)
+            if m < 0 || m > 59 { return false }
+            if at(c) == 58 {
+                c.i += 1
+                let s = number(mut c)
+                if s < 0 || s > 59 { return false }
+            }
+        }
+    }
+    c.i == text.len
+}
+
+// A rule whose first byte the C library does not read as a rule.
+fn rule_absent(text: str) -> bool {
+    if text == "" { return true }
+    let first = text.bytes()[0] as int
+    !(first == 77 || first == 74 || digit(first))
+}
+
+// Measured: a first rule that is a day number past 365 is no rule at all.
+fn day_past(text: str) -> bool {
+    var c = Cursor { s: text, i: 0 }
+    number(mut c) > 365
+}
+
+/// The C library's reading of a TZ value std.time refuses, as measured on
+/// the pinned Git (`posixrules`: the zone directory holds that file):
+/// - no designation of three or more letters, no offset after it, or
+///   anything after the offset that is not a second designation: UTC;
+/// - out-of-range offset fields, with no daylight saving: held in range;
+/// - daylight saving with no change rules: the US rules `M3.2.0,M11.1.0`
+///   (refused by name when the C library would read `posixrules` instead);
+/// - anything but `,` after the daylight part, or a first rule that is no
+///   rule at all: both changes at 00:00 on day 0 (`0/0,0/0`);
+/// - a complete first rule and no second (or one trailing `,`): `M11.1.0`;
+///   a second rule that is no rule at all: `0/0`;
+/// - both rules complete and one trailing `,`: the comma is ignored.
+/// Any other value (out-of-range daylight offsets, malformed change rules)
+/// is refused by name: the C library reads such rules in ways den does not
+/// reproduce.
+pub fn lenient(value: str, posixrules: bool) -> LocalZone {
+    var c = Cursor { s: value, i: 0 }
+    let std_name = designation(mut c)
+    if std_name == "" { return utc_zone() }
+    let (std_read, std_west, std_held) = offset(mut c)
+    if !std_read { return utc_zone() }
+    if c.i == value.len { return checked(value, "{std_name}{offset_spelling(std_west)}") }
+    if designation(mut c) == "" { return utc_zone() }
+    if std_held { return zone_refused(value, "an out-of-range offset with daylight saving") }
+    let next = at(c)
+    if next == 43 || next == 45 || digit(next) {
+        let (dst_read, _, dst_held) = offset(mut c)
+        if !dst_read { return zone_refused(value, "a malformed daylight-saving offset") }
+        if dst_held { return zone_refused(value, "an out-of-range daylight-saving offset") }
+    }
+    let prefix = value[0..c.i]
+    if c.i < value.len && at(c) != 44 { return checked(value, "{prefix},0/0,0/0") }
+    let rules = if c.i < value.len then value[c.i + 1..] else ""
+    if rules == "" {
+        if posixrules {
+            return zone_refused(
+                value,
+                "daylight saving with no change rules, read from the zone database's posixrules",
+            )
+        }
+        return checked(value, "{prefix},M3.2.0,M11.1.0")
+    }
+    let parts = rules.split(",")
+    if rule_absent(parts[0]) || digit(parts[0].bytes()[0] as int) && day_past(parts[0]) {
+        return checked(value, "{prefix},0/0,0/0")
+    }
+    if !rule_complete(parts[0]) { return zone_refused(value, "a malformed daylight-saving rule") }
+    if parts.len == 1 || parts.len == 2 && parts[1] == "" {
+        return checked(value, "{prefix},{parts[0]},M11.1.0")
+    }
+    if rule_absent(parts[1]) { return checked(value, "{prefix},{parts[0]},0/0") }
+    if !rule_complete(parts[1]) { return zone_refused(value, "a malformed daylight-saving rule") }
+    if parts.len == 3 && parts[2] == "" { return checked(value, "{prefix},{parts[0]},{parts[1]}") }
+    zone_refused(value, "a malformed daylight-saving rule")
+}
+
+// The spelling std.time is given for `value`, when std.time reads it.
+fn checked(value: str, spec: str) -> LocalZone {
+    if readable(spec) { return zone_spec(spec) }
+    zone_refused(value, "a rule den cannot read as the C library does")
+}
+
+/// Seconds east of UTC in force at `unix_s` in `zone`. A file std.time
+/// cannot open or read is UTC, as the C library reads one (measured).
+pub fn zone_offset(zone: LocalZone, unix_s: int) -> int ! CommitErrors {
+    if zone.refusal != "" { return Unsupported(zone.refusal) }
+    if zone.spec == "" { return 0 }
+    time.offset_at(zone.spec, unix_s) else 0
+}
+
+/// The local offset in force at `unix_s`: Git's offset for a date it is
+/// not given (measured exact at the instant, both sides of a change).
+pub fn local_offset(unix_s: int) -> int ! CommitErrors {
+    zone_offset(local_zone()?, unix_s)?
+}
+
+/// The instant and offset Git gives a wall-clock reading in the local zone,
+/// `wall` its fields counted as if UTC (measured over the changes of POSIX
+/// rules and zone files, east and west of Greenwich): the offset in force at
+/// `wall` read as an instant, corrected once and checked; a reading inside
+/// a change's skipped hour takes the offset in force before the change, the
+/// smaller of the two. The instant is the reading less the offset in whole
+/// minutes (measured: 00:00 at -0:44:30 is 00:44 UTC). Git reads a zone-less
+/// `@N` as the reading `N`, keeping N as its instant.
+pub fn wall_instant(wall: int) -> (int, int) ! CommitErrors {
+    let zone = local_zone()?
+    let first = zone_offset(zone, wall)?
+    let second = zone_offset(zone, wall - first)?
+    var chosen = second
+    if second != first {
+        let third = zone_offset(zone, wall - second)?
+        if third != second { chosen = if first < second then first else second }
+    }
+    (wall - whole_minutes(chosen), chosen)
+}
+
+// An offset in seconds cut to whole minutes, toward zero.
+fn whole_minutes(east: int) -> int {
+    if east < 0 then -(-east / 60 * 60) else east / 60 * 60
+}
+
+/// Git's `+HHMM` for an offset in seconds east: whole minutes, toward zero
+/// (measured: an offset of -0:44:30 is written -0044); zero is +0000.
+pub fn offset_text(east: int) -> str {
+    let minutes = (if east < 0 then -east else east) / 60
+    if minutes == 0 { return "+0000" }
+    let sign = if east < 0 then "-" else "+"
+    "{sign}{two(minutes / 60)}{two(minutes % 60)}"
+}
