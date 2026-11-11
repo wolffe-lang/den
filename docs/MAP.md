@@ -1036,6 +1036,19 @@ callers share one warnings list and flush once, including before fatal returns.
 Tracked ignore bypass includes indexed descendants under a literal directory
 prefix; `no_index=true` does not read the index at all.
 
+A directory the walk may not list (den#80) is Git's `warning: could not open
+directory 'DIR/': Permission denied` in the caller's warnings list when untracked
+files are wanted, and is walked as empty; the tracked paths below it are looked up
+by name. For status a denied lookup is `PATH: Permission denied`, placed before
+the walk's warnings, and an unchanged `FileState` (`kind` -1, no stat); a full walk
+refuses it by name. An entry a directory lists but that cannot be looked up is,
+for status, an untracked path of the listing's kind, and for a full walk
+`fatal: unable to stat 'PATH': Permission denied`. Subdirectories are entered depth
+first in the host's listing order. `stage_paths_with_warnings` leaves an ignored
+directory with no tracked descendant unopened unless `force`; the ignore reader
+warns `unable to access 'DIR/.gitignore': Permission denied` and reads no rules
+there.
+
 For edits, callers own begin/abort/commit around `stage_paths`, `remove_paths`,
 `plan_moves`/`move_paths` or `restore_paths`. `AddOptions`, `RemoveOptions`,
 `RestoreOptions` and `MovePlan` make the selection explicit. The index lock
