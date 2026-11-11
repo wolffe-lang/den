@@ -19,6 +19,11 @@ TZDIR) set as the row says, and compares den's result with Git's.
           identity and reflog line each writes.
   shell   TZ exported from a shell startup file, then a plain add, commit and
           log in a new repository, end to end.
+  corpus  240 TZ values made by a seeded mutation of well-formed ones (a byte
+          dropped, added or changed, a cut, junk appended), with no zone
+          database: each commit's dates at two instants must be Git's, or den
+          must refuse the value by name. A value den reads differently from
+          Git fails the row.
 
   --measure  run every row and write the table (target/zone-TIER/), failing
              nothing.
@@ -29,6 +34,7 @@ TZDIR) set as the row says, and compares den's result with Git's.
 import argparse
 import calendar
 import hashlib
+import random
 import json
 import os
 import pathlib
@@ -40,7 +46,7 @@ import time
 
 R = pathlib.Path(__file__).resolve().parent.parent
 ORACLE_SHA = 'c4848492938c4ebfffbefe1fbbaa68b9af90c86d1f6a20e76816c5ff37fcfa60'
-FAMILIES = ('stamp', 'dated', 'wall', 'amend', 'verbs', 'shell')
+FAMILIES = ('stamp', 'dated', 'wall', 'amend', 'verbs', 'shell', 'corpus')
 
 p = argparse.ArgumentParser()
 p.add_argument('--tier', default='native')
@@ -74,7 +80,7 @@ failures = []
 REFUSED = {
     'stamp/posixrules-rule-less': 'commit local timezone XXX3YYY: daylight saving with no change rules',
     'stamp/malformed-month-13': 'commit local timezone EST5EDT,M13.1.0,M11.1.0: a malformed daylight-saving rule',
-    'stamp/malformed-junk-after-rule': 'commit local timezone EST5EDT,M3.2.0,M11.1.0x: a malformed daylight-saving rule',
+    'stamp/malformed-junk-after-first': 'commit local timezone EST5EDT,M3.2.0;M11.1.0: a malformed daylight-saving rule',
     'stamp/held-daylight-offset': 'commit local timezone EST5EDT4:60: an out-of-range daylight-saving offset',
 }
 
@@ -263,6 +269,15 @@ def stamp_cases():
         ('malformed-rules-comma', 'EST5EDT,', EMPTY),
         ('malformed-month-13', 'EST5EDT,M13.1.0,M11.1.0', None),
         ('malformed-junk-after-rule', 'EST5EDT,M3.2.0,M11.1.0x', None),
+        ('malformed-space-after-rule', 'EST5EDT,M3.2.0,M11.1.0 ', None),
+        ('malformed-junk-after-timed-rule', 'CET-1CEST,M3.5.0,M10.5.0/3 ', None),
+        ('malformed-junk-after-first', 'EST5EDT,M3.2.0;M11.1.0', None),
+        ('malformed-junk-west', 'EST5x', None),
+        ('malformed-junk-east', 'IST-5:30x', None),
+        ('malformed-no-daylight-name', 'EST5,M3.2.0,M11.1.0', None),
+        ('malformed-no-comma', 'XXX3YYY-J60/2,J300/2', None),
+        ('malformed-two-signs', 'JST-+9', None),
+        ('malformed-rule-minutes', 'EST5EDT,M3.2.0,M11.1.0/2:60', None),
     ]
     # Both sides of a change: a rule whose change is two hours from now.
     for std, place in [(5, 'west'), (-5, 'east')]:
@@ -530,6 +545,56 @@ def shell_family():
            same=res['git'] == res['den'] and seen['git'][1] and seen['den'][1])
     record('shell/den-commit-read-by-git', {'status': 0, 'stdout': logs['den']['git'], 'stderr': ''},
            {'status': 0, 'stdout': logs['den']['den'], 'stderr': ''})
+
+
+CORPUS_BASES = ['EST5EDT,M3.2.0,M11.1.0', 'CET-1CEST,M3.5.0,M10.5.0/3', '<+1030>-10:30<+11>-11,M10.1.0,M4.1.0',
+                'XXX3YYY,J60/2,J300/2', 'AEST-10AEDT,M10.1.0,M4.1.0/3', 'JST-9', 'EST5EDT', 'IST-5:30']
+CORPUS_BYTES = ',./:;-+0123456789MJx <>'
+
+
+def corpus_values(count):
+    rng = random.Random(84)
+    out = []
+    while len(out) < count:
+        value = rng.choice(CORPUS_BASES)
+        cut = rng.randrange(len(value) + 1)
+        kind = rng.randrange(5)
+        if kind == 0 and cut < len(value):
+            value = value[:cut] + value[cut + 1:]
+        elif kind == 1:
+            value = value[:cut] + rng.choice(CORPUS_BYTES) + value[cut:]
+        elif kind == 2 and cut < len(value):
+            value = value[:cut] + rng.choice(CORPUS_BYTES) + value[cut + 1:]
+        elif kind == 3:
+            value = value[:cut]
+        else:
+            value = value + rng.choice(CORPUS_BYTES) * rng.randrange(1, 3)
+        if value and value not in out and value not in CORPUS_BASES:
+            out.append(value)
+    return out
+
+
+def corpus_family():
+    refused = 0
+    for number, zone in enumerate(corpus_values(240)):
+        name = 'corpus/%03d' % number
+        env = {'TZ': zone, 'TZDIR': str(EMPTY), 'GIT_AUTHOR_DATE': '@1700000000', 'GIT_COMMITTER_DATE': '@1720000000'}
+        res, made = {}, {}
+        for tool in ('git', 'den'):
+            work = fresh(ROOT / 'corpus' / tool / ('%03d' % number))
+            q = run([TOOLS[tool], 'commit', '-q', '--allow-empty', '-m', 'corpus'], work, env=env)
+            res[tool] = result(q)
+            made[tool] = None if q.returncode else object_dates(work, 'commit', g(work, 'rev-parse', 'HEAD').strip())
+        by_name = res['den']['status'] != 0 and 'commit local timezone ' in res['den']['stderr']
+        if by_name and res['git']['status'] == 0:
+            refused += 1
+            rows.append(dict(name=name, git=res['git'], den=res['den'], extra={'zone': zone, 'git': made['git']},
+                             same=False, refusal='commit local timezone', passed=True))
+            print('PASS', name, 'refused by name', json.dumps(zone), flush=True)
+            continue
+        made['zone'] = zone
+        record(name, res['git'], res['den'], extra=made, same=res['git'] == res['den'] and made['git'] == made['den'])
+    print('CORPUS values=240 refused-by-name=%d' % refused, flush=True)
 
 
 def table():
