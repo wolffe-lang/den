@@ -181,7 +181,8 @@ fn date_clock(text: str) -> (int, int, int) ! FormatErrors {
     (hour, minute, second)
 }
 
-fn date_absolute(year: int, month: int, day: int, clock: str, zone: str) -> Date ! FormatErrors {
+// The wall clock's fields counted as seconds since the epoch, as if at UTC.
+fn date_wall(year: int, month: int, day: int, clock: str) -> int ! FormatErrors {
     var actual_month = month, actual_day = day
     // Numeric date disambiguation: an impossible month can be the day when
     // the other component is a possible month (not a carry into another year).
@@ -192,10 +193,31 @@ fn date_absolute(year: int, month: int, day: int, clock: str, zone: str) -> Date
     }
     let days = date_days(year, actual_month, actual_day)?
     let (hour, minute, second) = date_clock(clock)?
+    days * 86400 + hour * 3600 + minute * 60 + second
+}
+
+/// A date as written, before any local zone is applied (vc23). When the
+/// input names its zone, `zoned` is true and `seconds`/`offset` are final.
+/// Otherwise `offset` is empty and `epoch` tells the two zone-less forms
+/// apart: epoch seconds as written (`@N`, or nine or more bare digits), or a
+/// wall-clock reading (calendar and RFC 2822 forms) whose fields are counted
+/// as if they were UTC. The caller applies its local zone to either.
+pub struct Reading {
+    seconds: int,
+    offset: str,
+    zoned: bool,
+    epoch: bool,
+}
+
+fn zoned_reading(wall: int, zone: str) -> Reading ! FormatErrors {
     let (offset, numeric) = date_zone(zone)?
-    let seconds: int = days * 86400 + hour * 3600 + minute * 60 + second - offset * 60
+    let seconds: int = wall - offset * 60
     if seconds < 0 { return invalid_date }
-    Date { seconds: seconds, offset: numeric }
+    Reading { seconds: seconds, offset: numeric, zoned: true, epoch: false }
+}
+
+fn wall_reading(wall: int) -> Reading {
+    Reading { seconds: wall, offset: "", zoned: false, epoch: false }
 }
 
 /// Parse deterministic raw, RFC 2822 and ISO/calendar dates. The caller supplies
@@ -203,9 +225,20 @@ fn date_absolute(year: int, month: int, day: int, clock: str, zone: str) -> Date
 /// is read. Calendar forms require a time; relative or clock-dependent forms
 /// are named refusals. Inputs are at most 1024 bytes, years 1970 through 9999.
 pub fn parse_date(input: str, default_offset: str) -> Date ! FormatErrors {
+    let (fixed, fallback) = date_zone(default_offset)?
+    let reading = read_date(input)?
+    if reading.zoned { return Date { seconds: reading.seconds, offset: reading.offset } }
+    if reading.epoch { return Date { seconds: reading.seconds, offset: fallback } }
+    let seconds: int = reading.seconds - fixed * 60
+    if seconds < 0 { return invalid_date }
+    Date { seconds: seconds, offset: fallback }
+}
+
+/// The grammar of `parse_date`, with a zone-less input left for the caller's
+/// local zone (`Reading`). No environment, zone database or clock is read.
+pub fn read_date(input: str) -> Reading ! FormatErrors {
     if input.len > 1024 { return limit }
     if input.contains("\0") || input.contains("\n") || input.contains("\r") { return invalid_date }
-    let (_, fallback) = date_zone(default_offset)?
     let text = input.trim()
     if text == "" { return invalid_date }
     let words = text.words()
@@ -213,18 +246,23 @@ pub fn parse_date(input: str, default_offset: str) -> Date ! FormatErrors {
     if first.starts_with("@") {
         if words.len > 2 { return invalid_date }
         let seconds = date_number(first[1..])?
-        var numeric = fallback
-        if words.len == 2 { let (_, parsed) = raw_zone(words[1])?; numeric = parsed }
-        return Date { seconds: seconds, offset: numeric }
+        if words.len == 2 {
+            let (_, parsed) = raw_zone(words[1])?
+            return Reading { seconds: seconds, offset: parsed, zoned: true, epoch: true }
+        }
+        return Reading { seconds: seconds, offset: "", zoned: false, epoch: true }
     }
     var all_digits = true
     for b in first.bytes() {
         if b as int < 48 || b as int > 57 { all_digits = false }
     }
-    if all_digits && first.len >= 9 && words.len == 2 {
+    if all_digits && first.len >= 9 && words.len <= 2 {
         let seconds = date_number(first)?
+        if words.len == 1 {
+            return Reading { seconds: seconds, offset: "", zoned: false, epoch: true }
+        }
         let (_, numeric) = raw_zone(words[1])?
-        return Date { seconds: seconds, offset: numeric }
+        return Reading { seconds: seconds, offset: numeric, zoned: true, epoch: true }
     }
     if all_digits && words.len >= 3 {
         let unit = words[1].lower()
@@ -256,8 +294,9 @@ pub fn parse_date(input: str, default_offset: str) -> Date ! FormatErrors {
             if words.len != begin + 4 && words.len != begin + 5 { return invalid_date }
             let day = date_number(words[begin])?
             let year = date_number(words[begin + 2])?
-            let zone = if words.len == begin + 5 then words[begin + 4] else default_offset
-            return date_absolute(year, month, day, words[begin + 3], zone)?
+            let wall = date_wall(year, month, day, words[begin + 3])?
+            if words.len == begin + 5 { return zoned_reading(wall, words[begin + 4])? }
+            return wall_reading(wall)
         }
     }
     if begin != 0 { return invalid_date }
@@ -279,7 +318,7 @@ pub fn parse_date(input: str, default_offset: str) -> Date ! FormatErrors {
         return Unsupported("commit relative or unrecognized date")
     }
     if clock == "" { return Unsupported("commit date without a fixed time") }
-    var zone = default_offset
+    var zone = ""
     var attached = false
     if clock.ends_with("Z") || clock.ends_with("z") {
         zone = "+0000"
@@ -299,7 +338,9 @@ pub fn parse_date(input: str, default_offset: str) -> Date ! FormatErrors {
         if attached || words.len != used + 1 { return invalid_date }
         zone = words[used]
     }
-    date_absolute(year, month, day, clock, zone)?
+    let wall = date_wall(year, month, day, clock)?
+    if zone == "" { return wall_reading(wall) }
+    zoned_reading(wall, zone)?
 }
 
 /// Serialize a validated date in Git's internal `seconds +HHMM` identity form.
