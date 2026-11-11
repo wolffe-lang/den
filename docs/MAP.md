@@ -30,10 +30,23 @@ OID design keeps an algorithm and a byte list from the start, never a fixed
 ## Daily history and configuration
 
 UTC civil rendering uses the explicit POSIX zone `UTC0`, not a zone-database
-lookup for `UTC`. Stored numeric offsets are still applied explicitly. Missing
-TZ data falls back to UTC for history-local dates and commit summaries; valid
-non-UTC local zones retain their existing named refusal. The command/ref/reflog
-identity boundaries remain shared, with no new reflog-management verb.
+lookup for `UTC`. Stored numeric offsets are still applied explicitly. A `TZ`
+the C library reads as UTC (missing zone data, an unparsable value) falls back
+to UTC for history-local dates; other local zones retain history's named
+refusal. The command/ref/reflog identity boundaries remain shared, with no new
+reflog-management verb.
+
+Writers take the local zone (vc23, den#84) through `commit.environment_identity`:
+`commit.local_zone()` reads `TZ` (unset: `/etc/localtime`) into a `LocalZone`,
+the spelling `std.time` is given or a named refusal; `commit.zone_reading(value,
+dir)` is that choice for a value and zone directory, and `commit.lenient(value,
+posixrules)` the pure, measured reading of a value `std.time` refuses.
+`commit.local_offset(t)` is the offset in force at t; `commit.wall_instant(w)`
+is Git's instant and offset for a zone-less wall-clock reading w counted as UTC
+(also the offset of a zone-less `@N`); `commit.offset_text(east)` writes whole
+minutes toward zero. `commit_format.read_date(input)` reads a date apart from
+its zone (`Reading { seconds, offset, zoned, epoch }`); `parse_date` keeps its
+fixed default offset.
 
 History supports `--decorate`, `--decorate=short|full|no|auto`, `--no-decorate`
 and `log.decorate`. Auto is enabled only for terminal stdout. HEAD comes first,
@@ -1111,7 +1124,7 @@ subsections); entries marked refusal controls do not imply feature support:
 The generic --get command can retrieve any well-formed key; this is not a claim
 that every Git option affects den. Environment identity/date overrides and
 EMAIL/EDITOR/VISUAL/TZ are resolved by the commit command, not the pure format
-module. User hooks/editors are never executed.
+module (TZ through `commit.local_zone`, vc23). User hooks/editors are never executed.
 
 ### Checked-machine and compiler limits
 
