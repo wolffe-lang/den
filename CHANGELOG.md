@@ -1,5 +1,30 @@
 # Changes
 
+## Unreleased — local time zones
+
+- `commit` no longer refuses a `TZ` other than UTC (den#84). A date den is
+  not given takes the offset in force at that instant in the local zone, as
+  Git does: `TZ`, or `/etc/localtime` when `TZ` is unset, read as Git's C
+  library reads it: POSIX rules with daylight saving on both sides of a
+  change, fixed offsets, zone names with and without a zone database, `:name`
+  and paths.
+- `tag -a`, `merge`, `stash`, `revert`, `cherry-pick`, `rebase`, `notes`,
+  `branch`, `switch`, `reset` and every reflog line now write the local
+  offset; before, they wrote `+0000` whatever `TZ` said.
+- A `TZ` value the standard library refuses is read as the C library reads
+  it, measured: an unreadable value is UTC, out-of-range offsets are held,
+  a rule-less daylight zone takes the US rules, and the C library's
+  readings of a missing daylight name, a missing or unreadable rule and
+  bytes after a rule are reproduced. The few malformed rules den does not
+  reproduce are refused by name, only when a date needs the local zone.
+- Dates given without a zone (`--date`, `GIT_AUTHOR_DATE`,
+  `GIT_COMMITTER_DATE`, amend's re-read author) are read in the local zone
+  as Git reads them, including the skipped and repeated hours of a change;
+  `@N` and bare epoch seconds below 100000000 are `invalid date format`, as
+  in Git.
+- `tools/zone-test.py` holds stamped, dated, wall-clock, amended,
+  every-verb, shell-startup and seeded-corpus rows to the pinned Git.
+
 ## Unreleased — directories the walk cannot open
 
 - `status`, `add -A`, `add .`, `add -u` and `commit -a` no longer stop with a
