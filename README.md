@@ -215,7 +215,11 @@ pathspecs, filters/attributes, non-false `core.autocrlf`, nonempty templates/hoo
 signing and user editor execution remain unsupported. A requested editor is never launched; the measured
 `GIT_EDITOR=false` failure is handled explicitly. Relative dates such as `now`
 are refused; deterministic raw, RFC 2822 and ISO/calendar inputs are supported
-within the formatting API's stated bounds.
+within the formatting API's stated bounds. A date not given, or given without a
+zone, is read in the local zone as Git's C library reads `TZ` (or
+`/etc/localtime`): POSIX rules, fixed offsets, zone names and paths, and the
+measured lenient readings of malformed values; the few malformed daylight-saving
+rules den does not reproduce are refused by name (`notes/vc23-local-time-zones.md`).
 
 Diff's pure `collect`/`render` API does not publish state. The CLI follows
 `diff.autoRefreshIndex`: a selected stat-only match triggers refresh of all
@@ -247,7 +251,8 @@ custom formats, relative/human dates, non-UTC local zones, message transcoding,
 mailmaps and tabs after non-ASCII text remain named unsupported surfaces.
 Fixed dates include default, short, raw, unix, ISO, strict ISO and RFC forms;
 UTC-local variants are measured. UTC rendering needs no zone database; missing
-zones fall back to UTC without changing stored numeric offsets. `--decorate`,
+zones, and any `TZ` the C library reads as UTC, fall back to UTC without
+changing stored numeric offsets. `--decorate`,
 `--decorate=short|full|no|auto`, `--no-decorate` and `log.decorate` render HEAD,
 branches, tags and remote-tracking refs. Auto decorates only at a terminal;
 the default terminal colour palette and colour-free output are measured.
