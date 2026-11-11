@@ -163,6 +163,19 @@ fn head_flat(ctx: Context, value: index.Index, commit: oid.Oid) -> List[FlatEntr
 
 struct Walk { files: List[FileState], directories: List[List[byte]] }
 
+// One path the walk visits: an entry a directory listed (`kind` its own kind
+// from the listing), or a tracked path below a directory that could not be
+// listed (`probe`), looked up by its own name.
+struct Visit { path: List[byte], kind: int, probe: bool }
+
+// A path strictly below `directory` that one of `paths` names.
+fn selector_inside(paths: List[List[byte]], directory: List[byte]) -> bool {
+    for selector in paths {
+        if selector.len > directory.len && under(selector, directory) { return true }
+    }
+    false
+}
+
 /// The index file's own mtime (seconds, nanoseconds). An entry whose mtime is
 /// at or after it is racily clean and must be content-checked, git's documented
 /// racy-git rule; [-1, -1] when unknown makes every entry content-checked.
@@ -216,9 +229,22 @@ fn walk(
     value: index.Index,
     include_untracked: bool,
     paths: List[List[byte]],
+    skip_ignored: bool,
+    mut warnings: List[str],
 ) -> Walk ! WorkErrors {
-    var warnings = List[str](), ignores = ignore.cache()
-    walk_mode(ctx, value, include_untracked, paths, false, false, mut ignores, mut warnings)?
+    var ignores = ignore.cache()
+    walk_submodules(
+        ctx,
+        value,
+        include_untracked,
+        paths,
+        false,
+        false,
+        "",
+        skip_ignored,
+        mut ignores,
+        mut warnings,
+    )?
 }
 
 /// status=false keeps the full snapshot every mutation consumer needs: every
@@ -245,6 +271,7 @@ fn walk_mode(
         status,
         show_ignored,
         "",
+        false,
         mut ignores,
         mut warnings,
     )?
@@ -253,6 +280,18 @@ fn walk_mode(
 // walk_mode with --ignore-submodules' value (empty when not given). A gitlink
 // directory becomes one entry holding its submodule's HEAD and dirt, never
 // descended (vc25); .gitmodules is read once, at the first gitlink met.
+// skip_ignored: a full walk (add) leaves an ignored directory with no tracked
+// path below it unopened, as status does and as Git does.
+//
+// den#80, as measured on the pinned Git: a directory that cannot be listed is
+// `warning: could not open directory 'DIR/': Permission denied` when untracked
+// files are looked for, and the walk goes on as if it were empty; the tracked
+// paths below it are looked up by name. One whose lookup is denied is, for
+// status, `PATH: Permission denied`, printed before the walk's warnings, and
+// unchanged; a full walk refuses it by name. An entry a directory lists but
+// that cannot be looked up is, for status, an untracked path of the kind the
+// listing gave; for a full walk, `fatal: unable to stat 'PATH': Permission
+// denied`.
 fn walk_submodules(
     ctx: Context,
     value: index.Index,
@@ -261,9 +300,12 @@ fn walk_submodules(
     status: bool,
     show_ignored: bool,
     ignore_option: str,
+    skip_ignored: bool,
     mut ignores: ignore.Cache,
     mut warnings: List[str],
 ) -> Walk ! WorkErrors {
+    let mark = warnings.len
+    var notices = List[str]()
     for entry in value.entries {
         if entry.stat.len != 10 { return invalid_index }
     }
@@ -279,7 +321,32 @@ fn walk_submodules(
     var directories = List[List[byte]]()
     while pending.len > 0 {
         let parent = (mut pending).pop() else |_| { return invalid }
-        let items = fs.entries(absolute(ctx, parent)?)?
+        var listed = true
+        let items = fs.entries(absolute(ctx, parent)?) else |e| match e {
+            denied => {
+                if parent.len == 0 { return denied }
+                listed = false
+                List[fs.Entry]()
+            },
+            not_found => { return not_found },
+            io => { return io },
+        }
+        var visits = List[Visit]()
+        if !listed {
+            if include_untracked {
+                (mut warnings).push(
+                    "warning: could not open directory '{text(parent)?}/': Permission denied",
+                )
+            }
+            for entry in value.entries {
+                if index.stage(entry) != 0 ||
+                    entry.path.len <= parent.len ||
+                    !under(entry.path, parent) {
+                    continue
+                }
+                (mut visits).push(Visit { path: copy entry.path, kind: -1, probe: true })
+            }
+        }
         for item in items {
             if compare(item.name, ".git".bytes()) == 0 {
                 if parent.len > 0 { return Unsupported("embedded repository {text(parent)?}") }
@@ -288,6 +355,13 @@ fn walk_submodules(
             var path = copy parent
             if path.len > 0 { (mut path).push(47 as byte) }
             bytes_add(mut path, item.name)
+            (mut visits).push(Visit { path: path, kind: item.kind, probe: false })
+        }
+        // Subdirectories are entered depth first in the order the host lists
+        // them, as Git enters them, so the warnings come in Git's order.
+        var deeper = List[List[byte]]()
+        for visit in visits {
+            let path = copy visit.path
             // A selected leaf may need its ancestors traversed, but unrelated
             // paths must not be opened incidentally by add <tracked> or -u.
             var relevant = selected(path, paths)
@@ -310,11 +384,82 @@ fn walk_submodules(
                 if !tracked { continue }
             }
             let full = absolute(ctx, path)?
+            var looked = true
             let info = fs_lstat(full) else |e| match e {
                 not_found => { continue },
-                denied => { return denied },
+                denied => {
+                    looked = false
+                    List[int]()
+                },
                 io => { return io },
             }
+            if !looked {
+                let tracked_at = index_at(value.entries, path)
+                if tracked_at >= 0 && index.stage(value.entries[tracked_at]) == 0 {
+                    if !status {
+                        return Unsupported("worktree tracked path {text(path)?}: Permission denied")
+                    }
+                    if !selected(path, paths) { continue }
+                    (mut notices).push("{text(path)?}: Permission denied")
+                    if files.len >= 1000000 { return limit }
+                    (mut files).push(FileState {
+                        path: owned_bytes(path),
+                        mode: value.entries[tracked_at].stat[6],
+                        id: copy value.entries[tracked_at].id,
+                        data: List[byte](),
+                        stat: List[int](),
+                        kind: -1,
+                        dirt: 0,
+                    })
+                    continue
+                }
+                if visit.probe || tracked_at >= 0 { continue }
+                if !status {
+                    // Git reads the directory's ignore file before the entry.
+                    if include_untracked {
+                        let _ = ignore.query_cached(
+                            ctx.repo,
+                            ctx.root,
+                            mut ignores,
+                            text(path)?,
+                            false,
+                            mut warnings,
+                        )?
+                    }
+                    return Fatal("unable to stat '{text(path)?}': Permission denied")
+                }
+                if visit.kind == 1 {
+                    if include_untracked && !show_ignored && !tracked_under(value.entries, path) {
+                        let decision = ignore.query_cached(
+                            ctx.repo,
+                            ctx.root,
+                            mut ignores,
+                            text(path)?,
+                            true,
+                            mut warnings,
+                        )?
+                        if decision.ignored { continue }
+                    }
+                    if directories.len >= 1000000 { return limit }
+                    (mut directories).push(copy path)
+                    (mut deeper).push(path)
+                    continue
+                }
+                if visit.kind != 0 && visit.kind != 3 || !selected(path, paths) { continue }
+                if files.len >= 1000000 { return limit }
+                (mut files).push(FileState {
+                    path: owned_bytes(path),
+                    mode: if visit.kind == 3 then 0o120000 else 0o100644,
+                    id: copy empty,
+                    data: List[byte](),
+                    stat: List[int](),
+                    kind: visit.kind,
+                    dirt: 0,
+                })
+                continue
+            }
+            // A tracked path looked up by name is a file or nothing.
+            if visit.probe && info[0] == 1 && gitlink_at(value, path) < 0 { continue }
             if info[0] == 1 && gitlink_at(value, path) >= 0 {
                 if !selected(path, paths) { continue }
                 let at = gitlink_at(value, path)
@@ -346,7 +491,7 @@ fn walk_submodules(
                 continue
             }
             if info[0] == 1 {
-                if status &&
+                if (status || skip_ignored && !selector_inside(paths, path)) &&
                     include_untracked &&
                     !show_ignored &&
                     !tracked_under(value.entries, path) {
@@ -362,7 +507,7 @@ fn walk_submodules(
                 }
                 if directories.len >= 1000000 { return limit }
                 (mut directories).push(copy path)
-                (mut pending).push(path)
+                (mut deeper).push(path)
             } else if info[0] == 0 || info[0] == 3 {
                 if !selected(path, paths) { continue }
                 let at = index_at(value.entries, path)
@@ -411,6 +556,24 @@ fn walk_submodules(
             } else if index_at(value.entries, path) >= 0 {
                 return Unsupported("tracked worktree file kind {info[0]} at {text(path)?}")
             }
+        }
+        while deeper.len > 0 {
+            let next = (mut deeper).pop() else |_| { return invalid }
+            (mut pending).push(next)
+        }
+    }
+    // Git refreshes the tracked paths before it looks for untracked ones:
+    // their notices come before the walk's own warnings.
+    if notices.len > 0 {
+        var later = List[str]()
+        while warnings.len > mark {
+            let last = (mut warnings).pop() else |_| { return invalid }
+            (mut later).push(last)
+        }
+        for notice in notices { (mut warnings).push(notice) }
+        while later.len > 0 {
+            let next = (mut later).pop() else |_| { return invalid }
+            (mut warnings).push(next)
         }
     }
     var names = List[List[byte]]()
@@ -615,7 +778,7 @@ pub fn scan_index_with_warnings(
     var entries = List[FlatEntry]()
     if current_head.commits.len == 1 { entries = flatten_tree(ctx.repo, current_head.commits[0])? }
     ensure_filters(ctx)?
-    let walked = walk(ctx, value, include_untracked, [])?
+    let walked = walk(ctx, value, include_untracked, [], false, mut warnings)?
     for file in walked.files {
         let path = text(file.path)?
         if path == ".gitattributes" || path.ends_with("/.gitattributes") {
@@ -676,6 +839,7 @@ pub fn scan_status_ignoring(
         true,
         show_ignored,
         ignore_option,
+        false,
         mut ignores,
         mut warnings,
     )?

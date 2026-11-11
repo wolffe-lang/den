@@ -153,7 +153,7 @@ pub fn stage_paths_with_warnings(
         }
         return Failure(message)
     }
-    let walked = walk(ctx, current, !options.update, paths)?
+    let walked = walk(ctx, current, !options.update, paths, !options.force, mut warnings)?
     for file in walked.files {
         let name = text(file.path)?
         if name == ".gitattributes" || name.ends_with("/.gitattributes") {
