@@ -15,6 +15,8 @@ for tier in native release; do
     rmdir "$fixture"
     "target/$tier/worktree-client" exercise "$fixture"
     tools/env python3 -I tools/worktree-oracle.py --tier "$tier"
+    # den#80: directories and paths the walk may not open, unprivileged.
+    tools/env python3 -I tools/denied-test.py --tier "$tier"
 done
 "$WOLF" conform-run src/worktree_test.lu --checked --json > target/worktree-checked.json
 cat target/worktree-checked.json
@@ -23,4 +25,4 @@ import json,sys
 rows=[json.loads(line) for line in open(sys.argv[1]) if line.startswith('{')]
 assert len(rows)==1 and rows[0]['verdict']=='exit(0)',rows
 PY
-echo 'worktree: native/release unit, API exercise and strict repository matrix; actual checked exit(0)'
+echo 'worktree: native/release unit, API exercise, strict repository matrix and unreadable-directory rows; actual checked exit(0)'
