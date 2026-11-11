@@ -93,7 +93,7 @@ The issue's loop on a machine with no zone database, in a fresh repository with 
 
 `tools/zone-test.py` (in `tools/check-commit`, both tiers), every row den's status, stdout and stderr equal to the pinned Git's plus the written objects:
 
-- `stamp`: 75 values, a commit with no dates given: the zones of the author, committer and both reflog lines, each tool's seconds inside its own run.
+- `stamp`: 71 values, a commit with no dates given: the zones of the author, committer and both reflog lines, each tool's seconds inside its own run.
 - `dated`: 7 zones × 23 date forms through `GIT_*_DATE`, and three forms through `--date`: the summary, the commit and its reflog line, byte for byte.
 - `wall`: 442 readings about each 2024 change, as calendar text and as `@N`.
 - `amend`: 15 stored zones that are not four digits.
