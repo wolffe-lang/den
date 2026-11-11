@@ -82,11 +82,27 @@ fn parents_of(headers: object.Headers) -> List[oid.Oid] ! CommitErrors {
     parents
 }
 
+// vc23: a date as Git takes it from --date or GIT_*_DATE (measured): with
+// its zone as written; without one, in the local zone (zone.lu). A zone-less
+// `@N` keeps N and takes the offset Git gives the reading N, and is no date
+// below 100000000 in any zone; a zone-less reading before the epoch is no
+// date.
 fn selected_date(value: str) -> commit_format.Date ! CommitErrors {
-    commit_format.parse_date(value, "+0000") else |e| match e {
+    let reading = commit_format.read_date(value) else |e| match e {
         Unsupported(reason) => { return Unsupported(reason) },
         _ => { return Fatal("invalid date format: {value}") },
     }
+    if reading.zoned {
+        return commit_format.Date { seconds: reading.seconds, offset: reading.offset }
+    }
+    if reading.epoch {
+        if reading.seconds < 100000000 { return Fatal("invalid date format: {value}") }
+        let (_, east) = wall_instant(reading.seconds)?
+        return commit_format.Date { seconds: reading.seconds, offset: offset_text(east) }
+    }
+    let (instant, east) = wall_instant(reading.seconds)?
+    if instant < 0 { return Fatal("invalid date format: {value}") }
+    commit_format.Date { seconds: instant, offset: offset_text(east) }
 }
 
 fn identity_environment(name: str) -> str ! {missing, Unsupported(str)} {
@@ -123,10 +139,12 @@ fn configured_email(ctx: worktree.Context, role: str) -> str ! {missing} {
     ctx.repo.config["{role}.email"] else (ctx.repo.config["user.email"] else { return missing })
 }
 
+// vc23: a date not given is now, at the local offset in force now (den#84).
 fn role_date(role: str) -> commit_format.Date ! CommitErrors {
-    var date = environment_or("GIT_{role}_DATE", "")?
-    if date == "" { date = "@{time.unix_ms() / 1000} +0000" }
-    selected_date(date)?
+    let date = environment_or("GIT_{role}_DATE", "")?
+    if date != "" { return selected_date(date)? }
+    let now = time.unix_ms() / 1000
+    commit_format.Date { seconds: now, offset: offset_text(local_offset(now)?) }
 }
 
 /// Resolve identity from environment/config using the commit date parser.
@@ -238,8 +256,21 @@ fn preserved_identity(kept: Kept) -> commit_format.Identity ! CommitErrors {
         }
         return Unsupported("commit amend date past 9223372036854775807")
     }
-    let zone = if zone_text.len == 5 then zone_text else "+0000"
-    commit_format.make_identity(name, email, selected_date("@{raw.seconds} {zone}")?)?
+    if zone_text.len == 5 {
+        return commit_format.make_identity(
+            name,
+            email,
+            selected_date("@{raw.seconds} {zone_text}")?,
+        )?
+    }
+    // vc23: the local offset Git gives the reading SECONDS; below 100000000
+    // that reading is no date in any zone (measured).
+    if raw.seconds < 100000000 {
+        return Fatal("invalid date format: @{text(raw.stamp)?} {zone_text}")
+    }
+    let (_, east) = wall_instant(raw.seconds)?
+    let date = commit_format.Date { seconds: raw.seconds, offset: offset_text(east) }
+    commit_format.make_identity(name, email, date)?
 }
 
 fn commit_author(ctx: worktree.Context, value: Options, previous: List[object.Headers]) -> (
@@ -346,13 +377,17 @@ fn summary_date(date: commit_format.Date) -> str ! CommitErrors {
     "{civil} {zone}"
 }
 
-/// UTC spellings or an unresolvable zone use UTC; valid non-UTC zones retain
-/// their existing named refusal. UTC0 itself needs no zone-database file.
+/// UTC spellings, and a value the C library reads as UTC (zone.lu: an
+/// unreadable file or a value it cannot parse), use UTC; other zones keep
+/// history's named refusal. UTC0 itself needs no zone-database file.
 pub fn utc_timezone(zone: str) -> bool ! {io} {
     if zone == "" || zone == "UTC" || zone == "UTC0" || zone == "Etc/UTC" || zone == "GMT" {
         return true
     }
-    let _ = time.offset_at(zone, 0) else |e| match e {
+    let reading = zone_reading(zone, zone_dir())
+    if reading.refusal != "" { return false }
+    if reading.spec == "" { return true }
+    let _ = time.offset_at(reading.spec, 0) else |e| match e {
         zone => { return true },
         io => { return io },
     }
@@ -367,8 +402,4 @@ fn hooks_empty(ctx: worktree.Context) -> () ! CommitErrors {
     }
     if worktree.config_bool(ctx, "commit.gpgsign", false)? { return Unsupported("commit signing") }
     if (env_get("GIT_INDEX_FILE") else "") != "" { return Unsupported("commit GIT_INDEX_FILE") }
-    let zone = env_get("TZ") else "UTC"
-    if !utc_timezone(zone)? {
-        return Unsupported("commit implicit local timezone {zone}")
-    }
 }
