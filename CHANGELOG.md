@@ -1,5 +1,21 @@
 # Changes
 
+## Unreleased — directories the walk cannot open
+
+- `status`, `add -A`, `add .`, `add -u` and `commit -a` no longer stop with a
+  bare `fatal: denied` at a directory they may not open (den#80). As Git
+  does, the walk warns `could not open directory 'DIR/': Permission denied`
+  when it looks for untracked files and goes on as if the directory were
+  empty; tracked paths below it are looked up by name, and status reports
+  one it may not look up as `PATH: Permission denied`, unchanged.
+- `add` no longer opens an ignored directory (unless `-f`), as Git does not.
+- A work-tree `.gitignore` that cannot be read is a warning, as in Git; an
+  entry that cannot be looked up is untracked for status and Git's
+  `fatal: unable to stat 'PATH': Permission denied` for add.
+- A tracked path below such a directory whose lookup is denied stays a named
+  refusal for `add` and `commit -a`.
+- `tools/denied-test.py` holds 100 unprivileged rows to the pinned Git.
+
 ## Unreleased — identities as Git reads them
 
 - Clone, fetch, push, `upload-pack` and `receive-pack` validate no author,
