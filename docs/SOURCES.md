@@ -948,3 +948,21 @@ rebase, commit, commit-tree and tag), and a field Git 2.56.0 from Homebrew.
 The checks, the readers' split and the date rules are inferred from those
 runs and written in den's own words (`notes/vc26-evidence/measured-base.txt`).
 No Git, libgit2, JGit or other implementation source was read.
+
+## Local time zones (vc23, den#84)
+
+Git 2.56.0 documentation, read from the release tarball (Documentation/
+only, digest checked against `den-oracle.toml`): `date-formats.adoc` (the
+date forms and their zones), `git-commit(1)` (`--date`, COMMIT
+INFORMATION), `git-var(1)` (`GIT_AUTHOR_IDENT`, `GIT_COMMITTER_IDENT`).
+POSIX's description of the TZ variable, and RFC 8536 for the zone files'
+layout, as wolf-std's `std.time` already cites them.
+
+Black box: the pinned Git 2.56.0 in the oracle image (Ubuntu 24.04, its C
+library 2.39) over the values and dates in `tools/zone-test.py`, through
+`git var` and `git commit`; to place a change's exact instant, the same C
+library's `localtime` in that image, each such reading then confirmed
+through Git. The lenient readings, the wall-clock correction and the epoch
+threshold are inferred from those runs and written in den's own words
+(`notes/vc23-local-time-zones.md`). No Git, C library, tzcode or other
+implementation source was read.
