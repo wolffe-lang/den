@@ -85,22 +85,32 @@ fn digit(ch: int) -> bool {
 }
 
 // A designation: three or more letters, or three or more letters, digits,
-// `+` and `-` between `<` and `>`. "" when there is none.
+// `+` and `-` between `<` and `>`. "" when there is none, the cursor where
+// it was.
 fn designation(mut c: Cursor) -> str {
     let start = c.i
     if at(c) == 60 {
         c.i += 1
         while at(c) >= 0 && at(c) != 62 {
             let ch = at(c)
-            if !(letter(ch) || digit(ch) || ch == 43 || ch == 45) { return "" }
+            if !(letter(ch) || digit(ch) || ch == 43 || ch == 45) {
+                c.i = start
+                return ""
+            }
             c.i += 1
         }
-        if at(c) != 62 || c.i - start - 1 < 3 { return "" }
+        if at(c) != 62 || c.i - start - 1 < 3 {
+            c.i = start
+            return ""
+        }
         c.i += 1
         return c.s[start..c.i]
     }
     while letter(at(c)) { c.i += 1 }
-    if c.i - start < 3 { return "" }
+    if c.i - start < 3 {
+        c.i = start
+        return ""
+    }
     c.s[start..c.i]
 }
 
@@ -115,9 +125,12 @@ fn number(mut c: Cursor) -> int {
     if any then n else -1
 }
 
-// An offset `[+-]h[:mm[:ss]]`: (read, seconds as written, held), where the
-// C library holds hours above 24 at 24 and minutes or seconds above 59 at 59
-// (measured: EST25 is -2400, EST5:60 is -0559) and `held` says it did.
+// An offset `[+-]h[:mm[:ss]]`: (read, seconds as written, held). As the C
+// library reads one (measured): a sign is taken even when no digit follows,
+// and a `+` between it and the hours is skipped (JST-+9 is +0900); a `:`
+// that no digit follows ends the offset before it; hours above 24 are held
+// at 24, minutes or seconds above 59 at 59 (EST25 is -2400, EST5:60 is
+// -0559), and `held` says so. Not read when no hour digit follows the sign.
 fn offset(mut c: Cursor) -> (bool, int, bool) {
     var sign = 1
     if at(c) == 43 {
@@ -126,6 +139,7 @@ fn offset(mut c: Cursor) -> (bool, int, bool) {
         sign = -1
         c.i += 1
     }
+    if at(c) == 43 && c.i + 1 < c.s.len && digit(c.s.bytes()[c.i + 1] as int) { c.i += 1 }
     var hours = number(mut c)
     if hours < 0 { return (false, 0, false) }
     var held = false
@@ -134,18 +148,16 @@ fn offset(mut c: Cursor) -> (bool, int, bool) {
         held = true
     }
     var minutes = 0, seconds = 0
-    if at(c) == 58 {
+    if colon_digit(c) {
         c.i += 1
         minutes = number(mut c)
-        if minutes < 0 { return (false, 0, false) }
         if minutes > 59 {
             minutes = 59
             held = true
         }
-        if at(c) == 58 {
+        if colon_digit(c) {
             c.i += 1
             seconds = number(mut c)
-            if seconds < 0 { return (false, 0, false) }
             if seconds > 59 {
                 seconds = 59
                 held = true
@@ -153,6 +165,10 @@ fn offset(mut c: Cursor) -> (bool, int, bool) {
         }
     }
     (true, sign * (hours * 3600 + minutes * 60 + seconds), held)
+}
+
+fn colon_digit(c: Cursor) -> bool {
+    at(c) == 58 && c.i + 1 < c.s.len && digit(c.s.bytes()[c.i + 1] as int)
 }
 
 fn two(n: int) -> str {
@@ -165,56 +181,61 @@ fn offset_spelling(west: int) -> str {
     "{sign}{size / 3600}:{two(size / 60 % 60)}:{two(size % 60)}"
 }
 
-// A change rule std.time and POSIX both take: `Mm.w.d`, `Jn` or `n`, then an
-// optional `/time`, the whole of `text`.
-fn rule_complete(text: str) -> bool {
-    if text == "" { return false }
-    var c = Cursor { s: text, i: 0 }
+// A change rule at the cursor: `Mm.w.d`, `Jn` or `n` in range, then an
+// optional `/time` (hours to 167; minutes and seconds count as they add up,
+// measured: /2:60 is 3:00). (read, the rule as std.time takes it, timed).
+fn rule(mut c: Cursor) -> (bool, str, bool) {
+    var text = ""
     if at(c) == 77 {
         c.i += 1
         let m = number(mut c)
-        if at(c) != 46 { return false }
+        if at(c) != 46 { return (false, "", false) }
         c.i += 1
         let w = number(mut c)
-        if at(c) != 46 { return false }
+        if at(c) != 46 { return (false, "", false) }
         c.i += 1
         let d = number(mut c)
-        if m < 1 || m > 12 || w < 1 || w > 5 || d < 0 || d > 6 { return false }
+        if m < 1 || m > 12 || w < 1 || w > 5 || d < 0 || d > 6 { return (false, "", false) }
+        text = "M{m}.{w}.{d}"
     } else if at(c) == 74 {
         c.i += 1
         let n = number(mut c)
-        if n < 1 || n > 365 { return false }
+        if n < 1 || n > 365 { return (false, "", false) }
+        text = "J{n}"
     } else {
         let n = number(mut c)
-        if n < 0 || n > 365 { return false }
+        if n < 0 || n > 365 { return (false, "", false) }
+        text = "{n}"
     }
-    if at(c) == 47 {
+    if at(c) != 47 { return (true, text, false) }
+    c.i += 1
+    var sign = 1
+    if at(c) == 43 {
         c.i += 1
-        if at(c) == 43 || at(c) == 45 { c.i += 1 }
-        let h = number(mut c)
-        if h < 0 || h > 167 { return false }
+    } else if at(c) == 45 {
+        sign = -1
+        c.i += 1
+    }
+    let h = number(mut c)
+    if h < 0 || h > 167 { return (false, "", false) }
+    var total = h * 3600
+    if at(c) == 58 {
+        c.i += 1
+        let m = number(mut c)
+        if m < 0 || m > 999 { return (false, "", false) }
+        total += m * 60
         if at(c) == 58 {
             c.i += 1
-            let m = number(mut c)
-            if m < 0 || m > 59 { return false }
-            if at(c) == 58 {
-                c.i += 1
-                let s = number(mut c)
-                if s < 0 || s > 59 { return false }
-            }
+            let s = number(mut c)
+            if s < 0 || s > 999 { return (false, "", false) }
+            total += s
         }
     }
-    c.i == text.len
+    if total > 604799 { return (false, "", false) }
+    (true, "{text}/{offset_spelling(sign * total)}", true)
 }
 
-// A rule whose first byte the C library does not read as a rule.
-fn rule_absent(text: str) -> bool {
-    if text == "" { return true }
-    let first = text.bytes()[0] as int
-    !(first == 77 || first == 74 || digit(first))
-}
-
-// Measured: a first rule that is a day number past 365 is no rule at all.
+// A day number past 365 at the start of `text`.
 fn day_past(text: str) -> bool {
     var c = Cursor { s: text, i: 0 }
     number(mut c) > 365
@@ -222,37 +243,51 @@ fn day_past(text: str) -> bool {
 
 /// The C library's reading of a TZ value std.time refuses, as measured on
 /// the pinned Git (`posixrules`: the zone directory holds that file):
-/// - no designation of three or more letters, no offset after it, or
-///   anything after the offset that is not a second designation: UTC;
-/// - out-of-range offset fields, with no daylight saving: held in range;
+/// - no designation of three or more letters, or no offset after it: UTC;
+/// - out-of-range offset fields, with nothing after them: held in range;
+/// - no daylight designation after the offset, but something else: daylight
+///   saving at UTC (`<+00>0`), under the rules below;
 /// - daylight saving with no change rules: the US rules `M3.2.0,M11.1.0`
 ///   (refused by name when the C library would read `posixrules` instead);
-/// - anything but `,` after the daylight part, or a first rule that is no
-///   rule at all: both changes at 00:00 on day 0 (`0/0,0/0`);
+/// - after the daylight part, anything but `,` or the `M` or `J` of a first
+///   rule, or a first rule that is no rule at all: both changes at 00:00 on
+///   day 0 (`0/0,0/0`), so a zone west
+///   of Greenwich reads as UTC all year but its first hours, one east of it
+///   as its standard offset;
 /// - a complete first rule and no second (or one trailing `,`): `M11.1.0`;
 ///   a second rule that is no rule at all: `0/0`;
-/// - both rules complete and one trailing `,`: the comma is ignored.
-/// Any other value (out-of-range daylight offsets, malformed change rules)
-/// is refused by name: the C library reads such rules in ways den does not
-/// reproduce.
+/// - both rules complete, then a `,` and anything: the rest is ignored;
+///   then any other byte: the second change, its time not written, at 00:00.
+/// Any other value (held offsets with daylight saving, malformed change
+/// rules) is refused by name: the C library reads such rules in ways den
+/// does not reproduce.
 pub fn lenient(value: str, posixrules: bool) -> LocalZone {
     var c = Cursor { s: value, i: 0 }
     let std_name = designation(mut c)
     if std_name == "" { return utc_zone() }
     let (std_read, std_west, std_held) = offset(mut c)
     if !std_read { return utc_zone() }
-    if c.i == value.len { return checked(value, "{std_name}{offset_spelling(std_west)}") }
-    if designation(mut c) == "" { return utc_zone() }
+    let std_text = "{std_name}{offset_spelling(std_west)}"
+    if c.i == value.len { return checked(value, std_text) }
     if std_held { return zone_refused(value, "an out-of-range offset with daylight saving") }
-    let next = at(c)
-    if next == 43 || next == 45 || digit(next) {
-        let (dst_read, _, dst_held) = offset(mut c)
-        if !dst_read { return zone_refused(value, "a malformed daylight-saving offset") }
+    var dst_text = "<+00>0"
+    let dst_name = designation(mut c)
+    if dst_name != "" {
+        dst_text = dst_name
+        let (dst_read, dst_west, dst_held) = offset(mut c)
         if dst_held { return zone_refused(value, "an out-of-range daylight-saving offset") }
+        if dst_read { dst_text = "{dst_name}{offset_spelling(dst_west)}" }
     }
-    let prefix = value[0..c.i]
-    if c.i < value.len && at(c) != 44 { return checked(value, "{prefix},0/0,0/0") }
-    let rules = if c.i < value.len then value[c.i + 1..] else ""
+    let prefix = "{std_text}{dst_text}"
+    // Measured: the comma before the first rule may be left out.
+    var rules = ""
+    if at(c) == 44 {
+        rules = value[c.i + 1..]
+    } else if at(c) == 77 || at(c) == 74 {
+        rules = value[c.i..]
+    } else if c.i < value.len {
+        return checked(value, "{prefix},0/0,0/0")
+    }
     if rules == "" {
         if posixrules {
             return zone_refused(
@@ -262,18 +297,29 @@ pub fn lenient(value: str, posixrules: bool) -> LocalZone {
         }
         return checked(value, "{prefix},M3.2.0,M11.1.0")
     }
-    let parts = rules.split(",")
-    if rule_absent(parts[0]) || digit(parts[0].bytes()[0] as int) && day_past(parts[0]) {
+    var r = Cursor { s: rules, i: 0 }
+    // Measured: a first rule whose first byte is not a rule's, or a day
+    // number past 365, is no rule at all.
+    if !(at(r) == 77 || at(r) == 74 || digit(at(r))) || digit(at(r)) && day_past(rules) {
         return checked(value, "{prefix},0/0,0/0")
     }
-    if !rule_complete(parts[0]) { return zone_refused(value, "a malformed daylight-saving rule") }
-    if parts.len == 1 || parts.len == 2 && parts[1] == "" {
-        return checked(value, "{prefix},{parts[0]},M11.1.0")
+    let (start_read, start, _) = rule(mut r)
+    if !start_read || r.i < rules.len && at(r) != 44 {
+        return zone_refused(value, "a malformed daylight-saving rule")
     }
-    if rule_absent(parts[1]) { return checked(value, "{prefix},{parts[0]},0/0") }
-    if !rule_complete(parts[1]) { return zone_refused(value, "a malformed daylight-saving rule") }
-    if parts.len == 3 && parts[2] == "" { return checked(value, "{prefix},{parts[0]},{parts[1]}") }
-    zone_refused(value, "a malformed daylight-saving rule")
+    if r.i < rules.len { r.i += 1 }
+    if r.i == rules.len { return checked(value, "{prefix},{start},M11.1.0") }
+    if !(at(r) == 77 || at(r) == 74 || digit(at(r))) {
+        return checked(value, "{prefix},{start},0/0")
+    }
+    let (end_read, end, end_timed) = rule(mut r)
+    if !end_read { return zone_refused(value, "a malformed daylight-saving rule") }
+    // Measured: after a complete second rule a `,` ends the value; any other
+    // byte makes a change time that was not written 00:00.
+    if r.i == rules.len || at(r) == 44 || end_timed {
+        return checked(value, "{prefix},{start},{end}")
+    }
+    checked(value, "{prefix},{start},{end}/0")
 }
 
 // The spelling std.time is given for `value`, when std.time reads it.
