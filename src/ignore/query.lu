@@ -16,6 +16,14 @@ fn warn_symlink(source: str, mut warnings: List[str]) {
     (mut warnings).push(message)
 }
 
+// den#80, measured: an ignore file that cannot be looked up or opened for
+// want of permission is a warning, and the directory has no rules of its own.
+fn warn_denied(source: str, mut warnings: List[str]) {
+    let message = "warning: unable to access '{source}': Permission denied"
+    for previous in warnings { if previous == message { return } }
+    (mut warnings).push(message)
+}
+
 fn append_file(
     path: str,
     source: str,
@@ -29,7 +37,7 @@ fn append_file(
     if nofollow {
         let info = fs.lstat(path) else |e| match e {
             not_found => { return },
-            denied => { return denied },
+            denied => { warn_denied(source, mut warnings); return },
             io => { return io },
         }
         if info.kind == 3 { warn_symlink(source, mut warnings); return }
@@ -38,7 +46,11 @@ fn append_file(
     let mode = if nofollow then 16 else 0
     let fd = fs_open_mode(path, mode) else |e| match e {
         not_found => { return },
-        denied => { return denied },
+        denied => {
+            if !nofollow { return denied }
+            warn_denied(source, mut warnings)
+            return
+        },
         io => { return io },
         exists => { return io },
         invalid => {
