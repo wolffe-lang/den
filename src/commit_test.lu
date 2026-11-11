@@ -156,6 +156,52 @@ fn main() -> int ! commit.CommitErrors {
         commit.LineCounts { added: 0, deleted: 0, binary: false }
     }
     assert(bounded)
+    // vc23: TZ values std.time refuses, read as the C library reads them.
+    for (value, posixrules, spelling, refused) in [
+        ("garbage", false, "", false),
+        ("E5", false, "", false),
+        ("EST", false, "", false),
+        ("EST25", false, "EST24:00:00", false),
+        ("EST5:60", false, "EST5:59:00", false),
+        ("EST5:59:60", false, "EST5:59:59", false),
+        ("EST5EDT", false, "EST5:00:00EDT,M3.2.0,M11.1.0", false),
+        ("EST5EDT", true, "", true),
+        ("EST5EDT4:30", false, "EST5:00:00EDT4:30:00,M3.2.0,M11.1.0", false),
+        ("EST5x", false, "EST5:00:00<+00>0,0/0,0/0", false),
+        ("IST-5:30x", false, "IST-5:30:00<+00>0,0/0,0/0", false),
+        ("EST5,M3.2.0,M11.1.0", false, "EST5:00:00<+00>0,M3.2.0,M11.1.0", false),
+        ("EST5EDT,garbage", false, "EST5:00:00EDT,0/0,0/0", false),
+        ("EST5EDT/2", false, "EST5:00:00EDT,0/0,0/0", false),
+        ("EST5EDT,366,300", false, "EST5:00:00EDT,0/0,0/0", false),
+        ("EST5EDT,M3.2.0", false, "EST5:00:00EDT,M3.2.0,M11.1.0", false),
+        ("EST5EDT,M3.2.0,garbage", false, "EST5:00:00EDT,M3.2.0,0/0", false),
+        ("EST5EDT,M3.2.0,M11.1.0,", false, "EST5:00:00EDT,M3.2.0,M11.1.0", false),
+        ("EST5EDT,M3.2.0,M11.1.0x", false, "EST5:00:00EDT,M3.2.0,M11.1.0/0", false),
+        ("EST5EDT,M3.2.0,M11.1.0/3x", false, "EST5:00:00EDT,M3.2.0,M11.1.0/3:00:00", false),
+        ("EST5EDT,M3.2.0,M11.1.0/2:60", false, "EST5:00:00EDT,M3.2.0,M11.1.0/3:00:00", false),
+        ("XXX3YYY-J60/2,J300/2", false, "XXX3:00:00YYY,J60/2:00:00,J300/2:00:00", false),
+        ("JST-+9", false, "JST-9:00:00", false),
+        ("EST5EDT,M13.1.0,M11.1.0", false, "", true),
+        ("EST5EDT,M3.2.0;M11.1.0", false, "", true),
+        ("EST5EDT4:60", false, "", true),
+    ] {
+        let reading = commit.lenient(value, posixrules)
+        assert(reading.spec == spelling && (reading.refusal != "") == refused)
+    }
+    for (east, text) in [
+        (0, "+0000"),
+        (30, "+0000"),
+        (-30, "+0000"),
+        (-2670, "-0044"),
+        (2670, "+0044"),
+        (-18000, "-0500"),
+        (19800, "+0530"),
+        (89999, "+2459"),
+        (-89999, "-2459"),
+    ] {
+        assert(commit.offset_text(east) == text)
+    }
     print("PASS bounded line counts, byte subjects and exact TAB/oid/date reflog framing")
+    print("PASS vc23 TZ readings and offset spellings")
     0
 }

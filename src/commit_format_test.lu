@@ -358,6 +358,30 @@ fn main() -> int ! commit_format.FormatErrors {
         commit_format.identity_text(commit_format.make_identity("A", "a", expanded)?)? ==
             "A <a> 1 +10039",
     )
+    // vc23: a date read apart from its zone.
+    for (input, seconds, offset, zoned, epoch) in [
+        ("@1700000000", 1700000000, "", false, true),
+        ("1700000000", 1700000000, "", false, true),
+        ("@1700000000 +0530", 1700000000, "+0530", true, true),
+        ("2024-03-10 02:30:00", 1710037800, "", false, false),
+        ("2024-03-10T02:30:00", 1710037800, "", false, false),
+        ("Sun, 10 Mar 2024 02:30:00", 1710037800, "", false, false),
+        ("2024-03-10 02:30:00 +0100", 1710034200, "+0100", true, false),
+        ("2024-03-10 02:30:00 EDT", 1710052200, "-0400", true, false),
+        ("2024-03-10T02:30:00Z", 1710037800, "+0000", true, false),
+    ] {
+        let reading = commit_format.read_date(input)?
+        assert(
+            reading.seconds == seconds &&
+                reading.offset == offset &&
+                reading.zoned == zoned &&
+                reading.epoch == epoch,
+        )
+    }
+    assert(
+        commit_format.date_text(commit_format.parse_date("1700000000", "-0500")?)? ==
+            "1700000000 -0500",
+    )
     let long_fraction = "2005-04-07T20:13:13.{"9".repeat(100)}Z"
     assert(commit_format.parse_date(long_fraction, "+0000")?.seconds == 1112904793)
     for input in [
