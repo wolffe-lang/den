@@ -235,7 +235,8 @@ fn add(ctx: worktree.Context, args: List[str], quiet: bool) -> int ! worktree.Wo
         if rc != 0 { return rc }
     }
     let sub = worktree.discover(full)?
-    let target = worktree.head(sub)?.commits[0]
+    let recorded = worktree.head(sub)?
+    let target = copy recorded.commits[0]
     repository.publish_config(ctx.repo, config_before, config_after)?
     var tx = index.begin(ctx.repo, 16777216, worktree.index_version(ctx)?)?
     defer index.abort(mut tx)
