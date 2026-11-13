@@ -85,7 +85,7 @@ def fixture(name, nested='nested', kind='directory', siblings=False, ignored='')
     return repo
 
 
-def compare(name, seed, args, *, warning=False, readonly=False, failed=False, refusal=''):
+def compare(name, seed, args, *, warning=False, readonly=False, failed=False, refusal='', preserve_embedded=True):
     pair = []
     states = []
     for label, exe in [('git', GIT), ('den', DEN)]:
@@ -157,10 +157,12 @@ def compare(name, seed, args, *, warning=False, readonly=False, failed=False, re
                     assert hashlib.sha1(raw).hexdigest() == parts[2] + parts[3], 'loose object identity'
                     files[path] = [value[0], raw.hex()]
         assert aa == bb, 'complete resulting file bytes/modes differ'
-        # Neither command is ever allowed to touch a nested repository's files.
+        # Only the explicitly destructive reset/restore rows may touch the
+        # inner worktree; their complete resulting state must still match Git.
         for before, after in states:
             inner = lambda x: {k: v for k, v in x.items() if '/.git/' in k or k.endswith('/.git') or k.endswith('/file') or k.startswith('.git/inner-')}
-            assert inner(before) == inner(after), 'embedded repository changed'
+            if preserve_embedded:
+                assert inner(before) == inner(after), 'embedded repository changed'
         print('PASS ' + name, flush=True)
     except AssertionError as e:
         failures.append(name)
@@ -213,6 +215,45 @@ for n, args in enumerate([
 ]):
     compare('embedded-consumer-' + str(n), seed, args, readonly=args[0] in ('status', 'diff'),
             refusal='submodule move' if args[0] == 'mv' else 'status --porcelain=v2 of a submodule' if n == 0 else '')
+
+# Tree transitions must retain the oracle's untracked-file protection even
+# though the scanner deliberately does not enumerate the embedded files.
+seed = fixture('transitions')
+shutil.rmtree(seed / 'nested')
+(seed / 'other').unlink()
+git(seed, 'reset', '--hard', 'HEAD')
+git(seed, 'branch', 'safe')
+git(seed, 'switch', '-qc', 'target')
+(seed / 'nested').mkdir()
+(seed / 'nested/file').write_bytes(b'outer target\n')
+(seed / 'tracked').write_bytes(b'outer target tracked\n')
+git(seed, 'add', '.')
+git(seed, 'commit', '-qm', 'outer target')
+git(seed, 'switch', '-q', 'main')
+git(seed, 'checkout', 'target', '--', '.')
+git(seed, 'stash', 'push', '-qm', 'outer addition')
+remote = OUT / 'transition-remote.git'
+git(seed, 'clone', '-q', '--bare', '.', str(remote))
+target = git(seed, 'rev-parse', 'target').decode().strip()
+git(remote, 'update-ref', 'refs/heads/main', target)
+git(seed, 'remote', 'add', 'origin', 'file://' + str(remote))
+git(seed, 'config', 'branch.main.remote', 'origin')
+git(seed, 'config', 'branch.main.merge', 'refs/heads/main')
+git(seed, 'fetch', '-q', 'origin')
+(seed / 'nested').mkdir()
+git(seed / 'nested', 'init', '-q')
+(seed / 'nested/file').write_bytes(b'inside\n')
+git(seed / 'nested', 'add', '.')
+git(seed / 'nested', 'commit', '-qm', 'inner')
+for name, args in [
+    ('checkout', ['checkout', 'target']), ('switch', ['switch', 'target']),
+    ('merge', ['merge', '--ff-only', 'target']), ('pull', ['pull', '--ff-only']),
+    ('stash', ['stash', 'apply']), ('hard-reset', ['reset', '--hard', 'target']),
+    ('restore', ['restore', '--source', 'target', '--', 'nested/file']),
+    ('unrelated-switch', ['switch', 'safe']),
+]:
+    compare('embedded-transition-' + name, seed, args,
+            preserve_embedded=name not in ('hard-reset', 'restore'))
 
 (OUT / 'captures.json').write_text(json.dumps(rows, indent=2) + '\n')
 (OUT / 'summary.json').write_text(json.dumps(dict(total=len(rows), failures=failures, skips=0), indent=2) + '\n')
