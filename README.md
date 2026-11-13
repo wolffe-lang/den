@@ -57,7 +57,7 @@ oracle builds are in `notes/vc00-evidence/`.
 | Blame | Default columns, numeric/offset `-L` unions, `-w`, ordered merge parents and `--first-parent`, whole-file renames, raw line bytes, `--porcelain` and `--line-porcelain`; conservative alignment limits below |
 | Stash | `push`/bare/`save` with `-m`, `-q`, `--keep-index`; `list`; `show` (diffstat default, any diff option); `apply`/`pop` over the shared merge plan against the index tree; `drop` (reflog record rewrite) and `clear`; `stash@{N}` and bare `N` through the shared evaluator |
 | Notes | `notes add` (`-m`, `-f`, `--allow-empty`), `show`, `list`, `remove` (`--ignore-missing`) and `get-ref` over `refs/notes/commits`; any permitted fan-out read, the measured fan-out written |
-| Submodules | `clone --recurse-submodules[=<pathspec>]`; `submodule status`, `init`, `update [--init] [--recursive]`, `sync`, `foreach`; gitlinks in `ls-tree`, `ls-files`, `cat-file`, `log`, `show`, `diff` (`--submodule=short|log|diff`, `--ignore-submodules`) and `status`; `add`, `commit -a`, `reset`, `checkout`, `switch` and `rm` of gitlinks; within the limits below |
+| Submodules | `clone --recurse-submodules[=<pathspec>]`; `submodule add [-b BRANCH] [--name NAME] [-f] [--] URL [PATH]`, `status`, `init`, `update [--init] [--recursive]`, `sync`, `foreach`; gitlinks in `ls-tree`, `ls-files`, `cat-file`, `log`, `show`, `diff` (`--submodule=short|log|diff`, `--ignore-submodules`) and `status`; `add`, `commit -a`, `reset`, `checkout`, `switch` and `rm` of gitlinks; within the limits below |
 | Rebase | Linear current-branch replay with explicit upstream, `--onto`, `--reapply-cherry-picks`, durable `rebase-merge` state, conflict stops, skip/abort and continuation after an explicit resolution commit; editor-dependent continuation remains refused |
 
 Status, commit summaries and diff share one rename/copy pairer. Exact OIDs are
@@ -391,7 +391,28 @@ commit on a detached HEAD, refuse first when that would overwrite a
 submodule's local changes (unless forced), and empty a submodule the target
 no longer records.
 
-The authoring commands (`submodule add`, `deinit`, `set-url`, `set-branch`,
+`submodule add` stages the gitlink and `.gitmodules`, recording the supplied
+URL there and its resolved URL in local configuration. With no path it uses
+the URL's repository name. A repository already at the path is added in place:
+its gitdir, branch, remotes and local changes are preserved, even with `-b`.
+A fresh clone uses the basic layout above but keeps an attached HEAD; `-b`
+selects its branch and records that choice in `.gitmodules`. Quoted logical
+names, nested paths, relative URLs with or without a superproject remote and
+`-f` for an ignored path are supported. Its clone uses the same protocol policy
+as recursive updates, so local clones need `protocol.file.allow=always`.
+
+Add refuses unsupported options, `-b .`, reusing a retained module gitdir,
+`--force` with a conflicting logical name, symlinked path ancestors,
+nonregular `.gitmodules`, unmerged `.gitmodules`, administrative or noncanonical
+logical names and worktree attributes before changing anything. The ordinary
+UTF-8 path, configuration and transport limits still apply. An existing directory
+that is not a repository is an error, even when empty. A failed clone leaves no
+module metadata; its administrative parent directory may remain. An empty remote
+or missing requested branch leaves the clone and gitfile, but no staged gitlink
+or `.gitmodules` entry, as Git does. Publication is not a multi-file transaction;
+a later filesystem or lock error can leave earlier successful steps visible.
+
+The remaining authoring commands (`deinit`, `set-url`, `set-branch`,
 `summary`, `absorbgitdirs`), `push --recurse-submodules`, clone's
 `--shallow-submodules`, `--remote-submodules` and `-j`, `update --remote`,
 `--merge` and `--rebase`, `status.submoduleSummary`, `mv` of a submodule,
