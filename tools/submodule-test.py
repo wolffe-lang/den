@@ -178,7 +178,11 @@ def seed(name, build):
         build(world)
         settle(world)
         kept = root / ('seed-' + name)
-        shutil.copytree(world, kept, symlinks=True)
+        # Hold the original regular-file inodes after world is removed.
+        # Otherwise the next copy can reuse an inode stored in the seed's
+        # index, leaving Git's cached ctime stale and its stat unprovable.
+        # Comparison worlds below still use independent copy2 files.
+        shutil.copytree(world, kept, symlinks=True, copy_function=os.link)
         seeds[name] = kept
     return seeds[name]
 
