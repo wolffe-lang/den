@@ -403,7 +403,7 @@ as recursive updates, so local clones need `protocol.file.allow=always`.
 
 Add refuses unsupported options, `-b .`, reusing a retained module gitdir,
 `--force` with a conflicting logical name, symlinked path ancestors,
-nonregular `.gitmodules`, unmerged `.gitmodules`, administrative or noncanonical
+nonregular `.gitmodules`, unmerged `.gitmodules`, a foreign index lock, administrative or noncanonical
 logical names and worktree attributes before changing anything. The ordinary
 UTF-8 path, configuration and transport limits still apply. An existing directory
 that is not a repository is an error, even when empty. A failed clone leaves no
