@@ -421,8 +421,9 @@ status. `FileState {kind: 1, mode: 0}` is the untracked-directory sentinel,
 not a gitlink and never a blob. Status alone appends its trailing slash. Add
 resolves all selected embedded HEADs before writing anything, converts each
 to mode 160000 and reuses the existing gitlink writer. A child-only pathspec
-inside an untracked repository is a successful no-op; once a gitlink is
-tracked, the existing named child-pathspec error applies. Linked-worktree
+inside an untracked repository is a successful no-op, unless an ignored
+parent requires the ignored-path error; once a gitlink is tracked, the
+existing named child-pathspec error applies. Linked-worktree
 stores and unsupported inner formats retain their named add refusals.
 
 Two named divergences are bound in `tests/review/embedded.json` and exercised

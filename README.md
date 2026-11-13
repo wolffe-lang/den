@@ -340,7 +340,8 @@ not copy its files or create `.gitmodules`; a clone of the outer repository
 will not know where to obtain the nested repository. A nested repository
 without a commit makes add fail before changing the outer repository. Adding
 only a file inside an untracked nested repository is a successful no-op,
-as in Git; once tracked as a gitlink, child pathspecs are rejected.
+as in Git; an ignored parent still produces the ignored-path error. Once
+tracked as a gitlink, child pathspecs are rejected.
 
 The [named reviews](tests/review/embedded.json) record the shorter advice and
 the stronger failed-add preflight. Existing gitlink command limits below
