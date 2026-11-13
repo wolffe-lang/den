@@ -10,8 +10,10 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import runpy
 import shutil
 import subprocess
+import zlib
 
 p = argparse.ArgumentParser()
 p.add_argument('--tier', choices=('native', 'release'), default='native')
@@ -20,6 +22,8 @@ ROOT = Path(__file__).resolve().parent.parent
 GIT = os.environ['DEN_GIT']
 assert hashlib.sha256(Path(GIT).read_bytes()).hexdigest() == 'c4848492938c4ebfffbefe1fbbaa68b9af90c86d1f6a20e76816c5ff37fcfa60'
 DEN = str(ROOT / 'target' / a.tier / 'den')
+PROOF = runpy.run_path(str(ROOT / 'tools/index-proof.py'))
+REVIEW = json.loads((ROOT / 'tests/review/embedded.json').read_text())
 OUT = ROOT / 'target/runs' / ('embedded-' + a.tier)
 if OUT.exists():
     shutil.rmtree(OUT)
@@ -96,6 +100,8 @@ def compare(name, seed, args, *, warning=False, readonly=False, failed=False, re
         q['after'] = after
         q['index'] = git(repo, 'ls-files', '--stage').hex()
         q['head'] = git(repo, 'rev-parse', 'HEAD').hex()
+        index = repo / '.git/index'
+        q['index_proof'] = PROOF['proof'](repo, index.read_bytes()) if index.exists() else []
     row = dict(name=name, processes=pair)
     rows.append(row)
     try:
@@ -108,18 +114,49 @@ def compare(name, seed, args, *, warning=False, readonly=False, failed=False, re
         assert left['code'] == right['code'], (left['code'], right['code'])
         assert left['out'] == right['out'], ('stdout', bytes.fromhex(left['out']), bytes.fromhex(right['out']))
         if warning:
-            expected = b'warning: adding embedded git repository: '
-            lines = bytes.fromhex(left['err']).splitlines(keepends=True)
-            warnings = b''.join(line for line in lines if line.startswith(expected))
-            assert warnings and all(line.startswith((expected, b'hint:')) for line in lines), lines
-            assert bytes.fromhex(right['err']) == warnings, bytes.fromhex(right['err'])
+            binding = REVIEW['rows'][name]
+            assert {key: left[key] for key in ('args', 'code', 'out', 'err')} == {key: binding[key] for key in ('args', 'code', 'out', 'err')}, 'reviewed Git command/result changed'
+            assert right['err'] == binding['den_err'], 'reviewed den warning changed'
+            row['review'] = REVIEW['name']
         else:
             assert left['err'] == right['err'], ('stderr', bytes.fromhex(left['err']), bytes.fromhex(right['err']))
         assert left['index'] == right['index'], 'parsed index mode/oid/stage/path'
         assert left['head'] == right['head'], 'HEAD identity'
-        if readonly or failed:
+        if readonly:
             for before, after in states:
-                assert before == after, 'read-only/failed operation changed files'
+                assert before == after, 'read-only operation changed files'
+        if failed:
+            assert states[1][0] == states[1][1], 'failed den add changed files'
+            before, after = states[0]
+            added = {k: v for k, v in after.items() if k not in before}
+            changed = {k for k in before if before[k] != after.get(k)}
+            assert not changed, 'failed Git add changed an existing file'
+            if name in REVIEW['unborn_preflight']['rows']:
+                assert added == REVIEW['unborn_preflight']['git_added'], 'unborn preflight review changed'
+                row['review'] = REVIEW['unborn_preflight']['name']
+            else:
+                assert not added, 'failed/no-op Git add added a file'
+        aa, bb = (dict(q['after']) for q in pair)
+        if name in REVIEW['unborn_preflight']['rows']:
+            for path in REVIEW['unborn_preflight']['git_added']:
+                del aa[path]
+        # Only the previously adopted six own-lstat-proven index words and
+        # loose-object compression can differ. Every other file/mode is exact.
+        if '.git/index' in aa and '.git/index' in bb:
+            x, y, count = PROOF['canonical_pair'](
+                bytes.fromhex(aa['.git/index'][1]), bytes.fromhex(bb['.git/index'][1]),
+                left['index_proof'], right['index_proof'])
+            aa['.git/index'] = [aa['.git/index'][0], x.hex()]
+            bb['.git/index'] = [bb['.git/index'][0], y.hex()]
+            row['proven_stat_words'] = count
+        for files in (aa, bb):
+            for path, value in files.items():
+                parts = path.split('/')
+                if len(parts) == 4 and parts[:2] == ['.git', 'objects'] and len(parts[2]) == 2 and len(parts[3]) == 38:
+                    raw = zlib.decompress(bytes.fromhex(value[1]))
+                    assert hashlib.sha1(raw).hexdigest() == parts[2] + parts[3], 'loose object identity'
+                    files[path] = [value[0], raw.hex()]
+        assert aa == bb, 'complete resulting file bytes/modes differ'
         # Neither command is ever allowed to touch a nested repository's files.
         for before, after in states:
             inner = lambda x: {k: v for k, v in x.items() if '/.git/' in k or k.endswith('/.git') or k.endswith('/file') or k.startswith('.git/inner-')}
