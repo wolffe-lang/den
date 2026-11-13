@@ -406,6 +406,49 @@ The rows are `tools/submodule-test.py`'s families (read, status, diff, clone,
 hostile, transport, work, refusals) through `tools/check-submodule`, listed in
 the vc25 note. Limits by name are in the README's Submodules section.
 
+## Embedded repositories
+
+An untracked worktree with its own valid `.git` directory or gitfile is an
+opaque directory. Status renders one `path/` entry even with `-uall`, and
+normal grouping may fold it into an untracked parent directory. Directory
+ignore rules apply before recognition. An empty `.git` directory is not a
+repository: its metadata is skipped and ordinary sibling files are scanned.
+The outer scan never reads embedded worktree contents or resolves its HEAD.
+
+`repository.embedded(path)` recognizes the repository layout without opening
+its configuration; an unsupported inner format therefore remains opaque to
+status. `FileState {kind: 1, mode: 0}` is the untracked-directory sentinel,
+not a gitlink and never a blob. Status alone appends its trailing slash. Add
+resolves all selected embedded HEADs before writing anything, converts each
+to mode 160000 and reuses the existing gitlink writer. A child-only pathspec
+inside an untracked repository is a successful no-op; once a gitlink is
+tracked, the existing named child-pathspec error applies. Linked-worktree
+stores and unsupported inner formats retain their named add refusals.
+
+Two named divergences are bound in `tests/review/embedded.json` and exercised
+by `tools/embedded-test.py` through `check-worktree`:
+
+- `embedded-repository-advice`: one plain warning per new gitlink replaces
+  Git's warning and multi-line hint block. Exact command/stdout/stderr/status
+  bindings cover ten fixed rows; all resulting files are compared separately.
+- `unborn-add-preflight`: adding an unborn repository fails with Git's error
+  bytes and exit 128, but leaves the entire outer repository unchanged. Git's
+  bulk add may already have written the changed tracked file's loose blob;
+  the two fixed rows bind that exact extra object. Neither side publishes an
+  index or HEAD change, and neither changes the embedded repository.
+
+Complete captures retain process bytes and every file's bytes/mode. Resulting
+state comparison permits only the existing loose-compression rule and six
+index words independently proved against each tool's own lstat. Existing
+tracked-gitlink limits remain: porcelain v2 status, submodule move and
+worktree restore are named refusals, not parity rows. This does not implement
+`submodule add`, `.gitmodules` authoring or repository absorption.
+
+Sources: gitrepository-layout(5), DESCRIPTION, HEAD, objects, refs, commondir;
+git-status(1), Untracked files and porcelain output; git-add(1), embedded
+repositories; gitignore(5), directory patterns. Behavior was measured against
+the pinned Git executable without consulting implementation source.
+
 ## Pack writing and inspection (vc13)
 
 `pack.encode_delta(before, after)` is vc04's original matcher extracted unchanged
