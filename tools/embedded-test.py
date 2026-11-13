@@ -199,6 +199,9 @@ for name, nested, siblings, ignored in [
             compare('embedded-status-' + name + '-' + str(n) + '-' + mode, seed,
                     ['status', *fmt, '--untracked-files=' + mode], readonly=True)
     compare('embedded-bulk-' + name, seed, ['add', '-A'], warning=name not in ('ignored', 'nested-ignore'))
+    if name == 'ignored':
+        compare('embedded-ignored-explicit', seed, ['add', 'nested'], failed=True)
+        compare('embedded-ignored-child', seed, ['add', 'nested/file'], failed=True)
 
 # A newly authored gitlink is consumed by the existing vc25 command paths.
 seed = fixture('consumers')
