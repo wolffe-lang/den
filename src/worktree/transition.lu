@@ -135,7 +135,23 @@ fn transition_mode(
                 keep[text(path)?] = true
                 continue
             }
-            if at < 0 && next >= 0 && disk >= 0 {
+            var present = disk >= 0
+            if at < 0 && next >= 0 && !present {
+                // Opaque repositories deliberately omit their children from
+                // the scan. Probe a target by name before any transition
+                // write, so their untracked files still block a safe switch
+                // or merge. Hard reset retains Git's destructive semantics.
+                for file in snapshot.files {
+                    if file.kind == 1 &&
+                        file.mode == 0 &&
+                        under(path, file.path) &&
+                        path_present(ctx, path)? {
+                        present = true
+                        break
+                    }
+                }
+            }
+            if at < 0 && next >= 0 && present {
                 (mut untracked).push(copy path)
                 continue
             }
