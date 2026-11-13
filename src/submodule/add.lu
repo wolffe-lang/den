@@ -220,6 +220,7 @@ fn add(ctx: worktree.Context, args: List[str], quiet: bool) -> int ! worktree.Wo
     }
     let path = bytes_text(worktree.normalize(ctx, operand)?)?
     if path == "" { return Unsupported("submodule add at the worktree root") }
+    if path == ".gitmodules" { return Unsupported("submodule add at the metadata path") }
     add_parents(ctx.root, path)?
     let full = "{ctx.root}/{path}"
     let shown = display(ctx, "", path)
