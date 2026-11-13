@@ -147,6 +147,9 @@ fn add(ctx: worktree.Context, args: List[str], quiet: bool) -> int ! worktree.Wo
     } else {
         wiregit.clone_destination([copy url], false)
     }
+    for part in operand.split("/") {
+        if part == ".git" { return Unsupported("submodule add administrative path") }
+    }
     let path = bytes_text(worktree.normalize(ctx, operand)?)?
     if path == "" { return Unsupported("submodule add at the worktree root") }
     add_parents(ctx.root, path)?

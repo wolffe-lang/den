@@ -1,8 +1,8 @@
 // `den submodule` (status, init, update, sync, foreach) and clone's
 // --recurse-submodules, from git-submodule(1), gitsubmodules(7),
 // gitmodules(5) and git-clone(1) of Git v2.56.0, held to the pinned Git as a
-// black box (vc25's probes and rows). add, deinit, set-url, set-branch,
-// summary and absorbgitdirs are named refusals for a later lane. No
+// black box. Authoring add is in add.lu; deinit, set-url, set-branch,
+// summary and absorbgitdirs are named refusals for a later pass. No
 // implementation source consulted.
 use std.fs
 use commit
