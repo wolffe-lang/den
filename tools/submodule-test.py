@@ -898,6 +898,10 @@ def family_refusals():
          'refusal-author-add-administrative-name', None),
         (['submodule', 'add', '../leaf.git', '.git/evil'],
          'refusal-author-add-administrative-path', None),
+        (['submodule', 'add', '../leaf.git', '.gitmodules'],
+         'refusal-author-add-metadata-path',
+         lambda w: (g('rm', '--cached', '-f', '.gitmodules', cwd=w / 'c'),
+                    (w / 'c/.gitmodules').unlink())),
     ])
     # Checkout runs where branches have upstreams; making a tracking branch
     # (from a remote-tracking start, or by guessing a remote's branch) stays
