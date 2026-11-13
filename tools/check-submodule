@@ -10,6 +10,7 @@ DEN_ROOT=$(cd "$(dirname "$0")/.." && pwd)
 export DEN_ROOT
 cd "$DEN_ROOT"
 . tools/lib-toolchain.sh
+python3 -I tools/submodule-seed-test.py
 tools/build --all
 for tier in native release; do
     flag=$([ "$tier" = release ] && echo --release || echo)
