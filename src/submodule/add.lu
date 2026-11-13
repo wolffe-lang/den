@@ -68,8 +68,8 @@ fn add_url(ctx: worktree.Context, url: str) -> str ! worktree.WorkErrors {
 
 // Check every existing ancestor without following a symlink into a different
 // repository or administrative directory. Missing parents are made by clone.
-fn add_parents(ctx: worktree.Context, path: str) -> () ! worktree.WorkErrors {
-    var current = copy ctx.root
+fn add_parents(root: str, path: str) -> () ! worktree.WorkErrors {
+    var current = copy root
     for part in path.split("/") {
         current = "{current}/{part}"
         let info = fs.lstat(current) else |e| match e {
@@ -129,6 +129,15 @@ fn add_modules_text(file: str) -> str ! worktree.WorkErrors {
 
 fn add(ctx: worktree.Context, args: List[str], quiet: bool) -> int ! worktree.WorkErrors {
     let options = add_options(args, quiet)?
+    let autocrlf = ctx.repo.config["core.autocrlf"] else "false"
+    if autocrlf != "false" && autocrlf != "0" {
+        return Unsupported("submodule add with core.autocrlf")
+    }
+    if fs.exists("{ctx.root}/.gitattributes") ||
+        fs.exists("{ctx.repo.gitdir}/info/attributes") ||
+        (ctx.repo.config["core.attributesfile"] else "") != "" {
+        return Unsupported("submodule add with worktree attributes")
+    }
     let url = options.operands[0]
     if url == "" || url.starts_with("-") || url.contains("\n") || url.contains("\r") {
         return Unsupported("submodule add URL")
@@ -140,10 +149,10 @@ fn add(ctx: worktree.Context, args: List[str], quiet: bool) -> int ! worktree.Wo
     }
     let path = bytes_text(worktree.normalize(ctx, operand)?)?
     if path == "" { return Unsupported("submodule add at the worktree root") }
-    add_parents(ctx, path)?
+    add_parents(ctx.root, path)?
     let full = "{ctx.root}/{path}"
     let shown = display(ctx, "", path)
-    var name = if options.name == "" then copy path else copy options.name
+    let name = if options.name == "" then copy path else copy options.name
     if name == "" || name.starts_with("/") || name.ends_with("/") || gitmodules.suspicious(name) {
         return Fatal("'{name}' is not a valid submodule name")
     }
@@ -155,6 +164,7 @@ fn add(ctx: worktree.Context, args: List[str], quiet: bool) -> int ! worktree.Wo
     if name.contains("\n") || name.contains("\r") || name.contains("\0") {
         return Unsupported("submodule add control character in name")
     }
+    add_parents(ctx.repo.gitdir, "modules/{name}")?
     let value = worktree.read_index(ctx)?
     for entry in value.entries {
         let tracked = bytes_text(entry.path)?
@@ -171,10 +181,7 @@ fn add(ctx: worktree.Context, args: List[str], quiet: bool) -> int ! worktree.Wo
     let at = gitmodules.by_name(parsed, name)
     if at >= 0 && parsed.modules[at].path != path {
         if !options.force { return Fatal("submodule name '{name}' already used for path '{parsed.modules[at].path}'") }
-        let base = copy name
-        var suffix = 1
-        while gitmodules.by_name(parsed, name) >= 0 { name = "{base}{suffix}"; suffix += 1 }
-        if !options.quiet { eprint("warning: submodule name '{base}' is already used; using '{name}' instead") }
+        return Unsupported("submodule add --force with a conflicting module name")
     }
     let actual_url = add_url(ctx, url)?
     // Prepare all metadata edits before any clone, so unsupported config editing
@@ -202,7 +209,7 @@ fn add(ctx: worktree.Context, args: List[str], quiet: bool) -> int ! worktree.Wo
         let sub = worktree.discover(full) else |_| { return Fatal("'{shown}' already exists and is not a valid git repo") }
         if sub.root != fs.realpath(full)? { return Fatal("'{shown}' already exists and is not a valid git repo") }
         if worktree.head(sub)?.commits.len == 0 { return Fatal("'{shown}' does not have a commit checked out") }
-        if !options.quiet { print("Adding existing repo at '{shown}' to the index") }
+        print("Adding existing repo at '{shown}' to the index")
     } else {
         let gitdir = gitmodules.module_gitdir(ctx.repo.gitdir, name)
         if fs.exists(gitdir) { return Unsupported("submodule add reusing a module gitdir") }
