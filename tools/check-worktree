@@ -17,6 +17,7 @@ for tier in native release; do
     tools/env python3 -I tools/worktree-oracle.py --tier "$tier"
     # den#80: directories and paths the walk may not open, unprivileged.
     tools/env python3 -I tools/denied-test.py --tier "$tier"
+    tools/env python3 -I tools/embedded-test.py --tier "$tier"
 done
 "$WOLF" conform-run src/worktree_test.lu --checked --json > target/worktree-checked.json
 cat target/worktree-checked.json
