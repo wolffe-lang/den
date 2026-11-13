@@ -240,10 +240,11 @@ fn dispatch(args: List[str]) -> int ! worktree.WorkErrors {
     while at < args.len && (args[at] == "--quiet" || args[at] == "-q") { quiet = true; at += 1 }
     let sub = if at < args.len then copy args[at] else "status"
     let rest = if at < args.len then copy args[at + 1..] else List[str]()
-    for refused in ["add", "deinit", "set-url", "set-branch", "summary", "absorbgitdirs"] {
+    for refused in ["deinit", "set-url", "set-branch", "summary", "absorbgitdirs"] {
         if sub == refused { return Unsupported("submodule {sub}") }
     }
     let ctx = worktree.discover(".")?
+    if sub == "add" { return add(ctx, rest, quiet)? }
     var cached = false, recursive = false, paths = List[str](), literal = false
     var options = UpdateOptions {
         init: false,

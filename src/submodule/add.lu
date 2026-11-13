@@ -1,0 +1,244 @@
+// Submodule authoring from git-submodule(1) add, gitmodules(5) and
+// gitsubmodules(7) FORMS; measured against Git 2.56.0 as a black box.
+// Existing repositories stay in place; fresh clones use the shared transport,
+// attached HEAD and the shared index/worktree transaction. No Git source read.
+use std.fs
+use gitmodules
+use ignore
+use index
+use oid
+use refs
+use repository
+use transport
+use wiregit
+use worktree
+
+struct AddOptions { branch: str, name: str, force: bool, quiet: bool, operands: List[str] }
+
+fn add_options(args: List[str], quiet: bool) -> AddOptions ! worktree.WorkErrors {
+    var out = AddOptions { branch: "", name: "", force: false, quiet: quiet, operands: [] }
+    var pos = 0, literal = false
+    while pos < args.len {
+        let arg = args[pos]
+        pos += 1
+        if !literal && arg == "--" { literal = true; continue }
+        if !literal && arg.starts_with("-") {
+            if arg == "-q" || arg == "--quiet" { out.quiet = true; continue }
+            if arg == "-f" || arg == "--force" { out.force = true; continue }
+            if arg == "-b" || arg == "--branch" || arg == "--name" {
+                if pos == args.len { return Unsupported("submodule add missing option value") }
+                if arg == "--name" { out.name = copy args[pos] } else { out.branch = copy args[pos] }
+                pos += 1
+                continue
+            }
+            if arg.starts_with("--name=") { out.name = arg[7..]; continue }
+            if arg.starts_with("--branch=") { out.branch = arg[9..]; continue }
+            if arg.starts_with("-b") && arg.len > 2 { out.branch = arg[2..]; continue }
+            return Unsupported("submodule add option {arg}")
+        }
+        (mut out.operands).push(copy arg)
+    }
+    if out.operands.len < 1 || out.operands.len > 2 {
+        return Unsupported("submodule add requires a URL and optional path")
+    }
+    if out.branch == "." { return Unsupported("submodule add branch .") }
+    out
+}
+
+fn add_set(text: str, key: str, value: str) -> str ! worktree.WorkErrors {
+    let (after, status) = repository.config_update(text, key, value, "set")?
+    if status != 0 { return Unsupported("submodule add ambiguous configuration key {key}") }
+    after
+}
+
+fn add_url(ctx: worktree.Context, url: str) -> str ! worktree.WorkErrors {
+    if !gitmodules.is_relative(url) { return copy url }
+    let head = refs.symbolic(ctx.repo, "HEAD") else ""
+    var remote = "origin"
+    if head.starts_with("refs/heads/") {
+        let name = ctx.repo.config["branch.{head[11..]}.remote"] else ""
+        if name != "" { remote = name }
+    }
+    let base = ctx.repo.config["remote.{remote}.url"] else copy ctx.root
+    gitmodules.resolve(base, url) else |e| match e {
+        Fatal(message) => { return Fatal(message) },
+        _ => { return invalid },
+    }
+}
+
+// Check every existing ancestor without following a symlink into a different
+// repository or administrative directory. Missing parents are made by clone.
+fn add_parents(ctx: worktree.Context, path: str) -> () ! worktree.WorkErrors {
+    var current = copy ctx.root
+    for part in path.split("/") {
+        current = "{current}/{part}"
+        let info = fs.lstat(current) else |e| match e {
+            not_found => { return },
+            _ => { return io },
+        }
+        if info.kind == 3 { return Unsupported("submodule add through a symbolic link") }
+    }
+}
+
+fn add_checkout(sub: worktree.Context, branch: str, shown: str) -> int ! worktree.WorkErrors {
+    let prior = worktree.head(sub)?
+    var target = copy prior.commits
+    if branch != "" {
+        target = refs.optional(sub.repo, "refs/heads/{branch}")?
+        if target.len == 0 {
+            target = refs.optional(sub.repo, "refs/remotes/origin/{branch}")?
+            if target.len == 0 {
+                eprint("fatal: 'origin/{branch}' is not a commit and a branch '{branch}' cannot be created from it")
+                eprint("fatal: unable to checkout submodule '{shown}'")
+                return 128
+            }
+            refs.update(sub.repo, "refs/heads/{branch}", [], target, identity(sub)?, "branch: Created from origin/{branch}", false)?
+            let before = config_text(sub.repo)?
+            let remote = add_set(before, "branch.{branch}.remote", "origin")?
+            let after = add_set(remote, "branch.{branch}.merge", "refs/heads/{branch}")?
+            repository.publish_config(sub.repo, before, after)?
+        }
+    }
+    if target.len == 0 {
+        eprint("fatal: You are on a branch yet to be born")
+        eprint("fatal: unable to checkout submodule '{shown}'")
+        return 128
+    }
+    let tree = worktree.flatten_tree(sub.repo, target[0])?
+    var tx = index.begin(sub.repo, 16777216, worktree.index_version(sub)?)?
+    defer index.abort(mut tx)
+    worktree.transition(sub, mut tx.value, tree, "hard")?
+    index.commit(mut tx)?
+    if branch != "" {
+        let old = head_text(sub.repo)?
+        let from = if prior.detached then oid.hex(prior.commits[0])? else copy prior.branch
+        refs.set_head(sub.repo, old, "ref: refs/heads/{branch}\n", prior.commits, target,
+            identity(sub)?, "checkout: moving from {from} to {branch}")?
+    }
+    0
+}
+
+fn add_modules_text(file: str) -> str ! worktree.WorkErrors {
+    let info = fs.lstat(file) else |e| match e {
+        not_found => { return "" },
+        _ => { return io },
+    }
+    if info.kind != 0 { return Unsupported("submodule add with nonregular .gitmodules") }
+    str_from_utf8(repository.read_bytes(file, 1048576)?) else |_| { return invalid }
+}
+
+fn add(ctx: worktree.Context, args: List[str], quiet: bool) -> int ! worktree.WorkErrors {
+    let options = add_options(args, quiet)?
+    let url = options.operands[0]
+    if url == "" || url.starts_with("-") || url.contains("\n") || url.contains("\r") {
+        return Unsupported("submodule add URL")
+    }
+    let operand = if options.operands.len == 2 {
+        copy options.operands[1]
+    } else {
+        wiregit.clone_destination([copy url], false)
+    }
+    let path = bytes_text(worktree.normalize(ctx, operand)?)?
+    if path == "" { return Unsupported("submodule add at the worktree root") }
+    add_parents(ctx, path)?
+    let full = "{ctx.root}/{path}"
+    let shown = display(ctx, "", path)
+    var name = if options.name == "" then copy path else copy options.name
+    if name == "" || name.starts_with("/") || name.ends_with("/") || gitmodules.suspicious(name) {
+        return Fatal("'{name}' is not a valid submodule name")
+    }
+    for part in name.split("/") {
+        if part == "" || part == "." || part == ".git" {
+            return Unsupported("submodule add administrative or noncanonical name")
+        }
+    }
+    if name.contains("\n") || name.contains("\r") || name.contains("\0") {
+        return Unsupported("submodule add control character in name")
+    }
+    let value = worktree.read_index(ctx)?
+    for entry in value.entries {
+        let tracked = bytes_text(entry.path)?
+        if tracked == path || tracked.starts_with("{path}/") || path.starts_with("{tracked}/") {
+            return Fatal("'{path}' already exists in the index")
+        }
+        if tracked == ".gitmodules" && index.stage(entry) != 0 {
+            return Unsupported("submodule add with unmerged .gitmodules")
+        }
+    }
+    let file = "{ctx.root}/.gitmodules"
+    let before = add_modules_text(file)?;
+    let parsed = worktree.modules(ctx)?
+    let at = gitmodules.by_name(parsed, name)
+    if at >= 0 && parsed.modules[at].path != path {
+        if !options.force { return Fatal("submodule name '{name}' already used for path '{parsed.modules[at].path}'") }
+        let base = copy name
+        var suffix = 1
+        while gitmodules.by_name(parsed, name) >= 0 { name = "{base}{suffix}"; suffix += 1 }
+        if !options.quiet { eprint("warning: submodule name '{base}' is already used; using '{name}' instead") }
+    }
+    let actual_url = add_url(ctx, url)?
+    // Prepare all metadata edits before any clone, so unsupported config editing
+    // cannot leave a repository behind. Publication follows successful checkout.
+    let with_path = add_set(before, "submodule.{name}.path", path)?
+    var after = add_set(with_path, "submodule.{name}.url", url)?
+    if options.branch != "" { after = add_set(after, "submodule.{name}.branch", options.branch)? }
+    let config_before = config_text(ctx.repo)?
+    let config_url = add_set(config_before, "submodule.{name}.url", actual_url)?
+    let config_after = add_set(config_url, "submodule.{name}.active", "true")?
+    if !options.force {
+        let ignored = ignore.query(ctx.repo, ctx.root, path, true)?
+        if ignored.ignored {
+            eprint("The following paths are ignored by one of your .gitignore files:\n{shown}")
+            if worktree.config_bool(ctx, "advice.addignoredfile", true)? {
+                eprint("hint: Use -f if you really want to add them.\nhint: Disable this message with \"git config set advice.addIgnoredFile false\"")
+            }
+            return 1
+        }
+    }
+    if fs.exists(full) {
+        if !fs.is_dir(full) || !fs.exists("{full}/.git") {
+            return Fatal("'{shown}' already exists and is not a valid git repo")
+        }
+        let sub = worktree.discover(full) else |_| { return Fatal("'{shown}' already exists and is not a valid git repo") }
+        if sub.root != fs.realpath(full)? { return Fatal("'{shown}' already exists and is not a valid git repo") }
+        if worktree.head(sub)?.commits.len == 0 { return Fatal("'{shown}' does not have a commit checked out") }
+        if !options.quiet { print("Adding existing repo at '{shown}' to the index") }
+    } else {
+        let gitdir = gitmodules.module_gitdir(ctx.repo.gitdir, name)
+        if fs.exists(gitdir) { return Unsupported("submodule add reusing a module gitdir") }
+        fs.create_dir_all(fs.parent(gitdir) else ".")?
+        if transport.local_path(actual_url) && !fs.exists(actual_url) {
+            eprint("fatal: repository '{actual_url}' does not exist")
+            eprint("fatal: clone of '{actual_url}' into submodule path '{full}' failed")
+            return 128
+        }
+        if !options.quiet { eprint("Cloning into '{full}'...") }
+        if !clone_one(actual_url, gitdir, full) { return 128 }
+        fs.create_dir_all(full)?
+        write_gitfile(full, gitdir)?
+        let sub = worktree.discover(full)?
+        if worktree.head(sub)?.commits.len == 0 && !options.quiet {
+            eprint("warning: You appear to have cloned an empty repository.")
+        }
+        if transport.local_path(actual_url) && !options.quiet { eprint("done.") }
+        let rc = add_checkout(sub, options.branch, shown)?
+        if rc != 0 { return rc }
+    }
+    let sub = worktree.discover(full)?
+    let target = worktree.head(sub)?.commits[0]
+    repository.publish_config(ctx.repo, config_before, config_after)?
+    var tx = index.begin(ctx.repo, 16777216, worktree.index_version(ctx)?)?
+    defer index.abort(mut tx)
+    let entry = index.entry_from_directory(fs_lstat(full)?, path.bytes(), target, 0, 0)?
+    tx.value = worktree.stage_entry(tx.value, entry)?
+    index.commit(mut tx)?
+    repository.publish_config_path(file, before, after)?
+    let root_ctx = worktree.discover(ctx.root)?
+    var metadata = index.begin(ctx.repo, 16777216, worktree.index_version(ctx)?)?
+    defer index.abort(mut metadata)
+    var stage = worktree.add_options()
+    stage.force = true
+    let _ = worktree.stage_paths(root_ctx, mut metadata.value, [".gitmodules".bytes()], stage)?
+    index.commit(mut metadata)?
+    0
+}
