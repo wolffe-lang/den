@@ -70,6 +70,34 @@ fn gitfile(path: str) -> str ! RepoErrors {
     "{fs.parent(path) else "."}/{value}"
 }
 
+/// Recognize a worktree's own repository without opening its configuration or
+/// objects. Untracked repositories are opaque even when their format cannot
+/// be operated on here. An empty .git directory is not a repository. Linked
+/// worktrees borrow objects/refs from commondir but keep their own HEAD.
+/// gitrepository-layout(5), DESCRIPTION, HEAD, commondir and objects.
+pub fn embedded(path: str) -> bool ! RepoErrors {
+    let marker = "{path}/.git"
+    var dir = copy marker
+    if fs.is_file(marker) {
+        dir = gitfile(marker) else |e| match e {
+            invalid => { return false },
+            not_found => { return false },
+            _ => { return e },
+        }
+    } else if !fs.is_dir(marker) {
+        return false
+    }
+    if !fs.is_file("{dir}/HEAD") { return false }
+    var common = copy dir
+    if fs.is_file("{dir}/commondir") {
+        let bytes = read_bytes("{dir}/commondir", 4096)?
+        let value = str_from_utf8(bytes) else |_| { return invalid }
+        let target = value.trim()
+        common = if target.starts_with("/") then copy target else "{dir}/{target}"
+    }
+    fs.is_dir("{common}/objects") && fs.is_dir("{common}/refs")
+}
+
 /// Discover upward from start, or honor explicit GIT_DIR; no shell subprocess.
 pub fn discover(start: str) -> Repo ! RepoErrors {
     for name in ["GIT_COMMON_DIR", "GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES"] {

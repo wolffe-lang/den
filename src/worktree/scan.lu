@@ -5,6 +5,7 @@ use ignore
 use index
 use object
 use oid
+use repository
 
 fn stable(a: List[int], b: List[int]) -> bool {
     if a.len != 20 || b.len != 20 { return false }
@@ -348,10 +349,7 @@ fn walk_submodules(
             }
         }
         for item in items {
-            if compare(item.name, ".git".bytes()) == 0 {
-                if parent.len > 0 { return Unsupported("embedded repository {text(parent)?}") }
-                continue
-            }
+            if compare(item.name, ".git".bytes()) == 0 { continue }
             var path = copy parent
             if path.len > 0 { (mut path).push(47 as byte) }
             bytes_add(mut path, item.name)
@@ -507,6 +505,22 @@ fn walk_submodules(
                 }
                 if directories.len >= 1000000 { return limit }
                 (mut directories).push(copy path)
+                // An untracked repository is one opaque directory, including
+                // under -uall. Keep its plain path here for add/path selection;
+                // only status appends '/'. No inner HEAD or file is read.
+                if !tracked_under(value.entries, path) && repository.embedded(full)? {
+                    if files.len >= 1000000 { return limit }
+                    (mut files).push(FileState {
+                        path: copy path,
+                        mode: 0,
+                        id: copy empty,
+                        data: [],
+                        stat: copy info,
+                        kind: 1,
+                        dirt: 0,
+                    })
+                    continue
+                }
                 (mut deeper).push(path)
             } else if info[0] == 0 || info[0] == 3 {
                 if !selected(path, paths) { continue }
@@ -736,11 +750,13 @@ fn status_rows(
             ctx.root,
             mut ignores,
             text(file.path)?,
-            false,
+            file.kind == 1,
             mut warnings,
         )?
+        var path = copy file.path
+        if file.kind == 1 { (mut path).push(47 as byte) }
         var row = status_row(
-            file.path,
+            path,
             if decision.ignored then "!" else "?",
             if decision.ignored then "!" else "?",
         )
