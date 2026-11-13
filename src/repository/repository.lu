@@ -79,11 +79,7 @@ pub fn embedded(path: str) -> bool ! RepoErrors {
     let marker = "{path}/.git"
     var dir = copy marker
     if fs.is_file(marker) {
-        dir = gitfile(marker) else |e| match e {
-            invalid => { return false },
-            not_found => { return false },
-            _ => { return e },
-        }
+        dir = gitfile(marker)?
     } else if !fs.is_dir(marker) {
         return false
     }
