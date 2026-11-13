@@ -27,7 +27,11 @@ fn add_options(args: List[str], quiet: bool) -> AddOptions ! worktree.WorkErrors
             if arg == "-f" || arg == "--force" { out.force = true; continue }
             if arg == "-b" || arg == "--branch" || arg == "--name" {
                 if pos == args.len { return Unsupported("submodule add missing option value") }
-                if arg == "--name" { out.name = copy args[pos] } else { out.branch = copy args[pos] }
+                if arg == "--name" {
+                    out.name = copy args[pos]
+                } else {
+                    out.branch = copy args[pos]
+                }
                 pos += 1
                 continue
             }
@@ -115,19 +119,36 @@ fn add_checkout(sub: worktree.Context, branch: str, shown: str) -> int ! worktre
         if target.len == 0 {
             target = refs.optional(sub.repo, "refs/remotes/origin/{branch}")?
             if target.len == 0 {
-                eprint("fatal: 'origin/{branch}' is not a commit and a branch '{branch}' cannot be created from it")
+                eprint(
+                    "fatal: 'origin/{branch}' is not a commit and a branch '{branch}' cannot be created from it",
+                )
                 eprint("fatal: unable to checkout submodule '{shown}'")
                 return 128
             }
-            refs.update(sub.repo, "refs/heads/{branch}", [], target, identity(sub)?, "branch: Created from origin/{branch}", false)?
+            refs.update(
+                sub.repo,
+                "refs/heads/{branch}",
+                [],
+                target,
+                identity(sub)?,
+                "branch: Created from origin/{branch}",
+                false,
+            )?
             let before = config_text(sub.repo)?
             let remote = add_set(before, "branch.{branch}.remote", "origin")?
             let after = add_set(remote, "branch.{branch}.merge", "refs/heads/{branch}")?
             repository.publish_config(sub.repo, before, after)?
         } else {
             let old = head_text(sub.repo)?
-            refs.set_head(sub.repo, old, old, prior.commits, target,
-                identity(sub)?, "branch: Reset to origin/{branch}")?
+            refs.set_head(
+                sub.repo,
+                old,
+                old,
+                prior.commits,
+                target,
+                identity(sub)?,
+                "branch: Reset to origin/{branch}",
+            )?
         }
     }
     if target.len == 0 {
@@ -143,8 +164,15 @@ fn add_checkout(sub: worktree.Context, branch: str, shown: str) -> int ! worktre
     if branch != "" {
         let old = head_text(sub.repo)?
         let from = if prior.detached then oid.hex(prior.commits[0])? else copy prior.branch
-        refs.set_head(sub.repo, old, "ref: refs/heads/{branch}\n", prior.commits, target,
-            identity(sub)?, "checkout: moving from {from} to {branch}")?
+        refs.set_head(
+            sub.repo,
+            old,
+            "ref: refs/heads/{branch}\n",
+            prior.commits,
+            target,
+            identity(sub)?,
+            "checkout: moving from {from} to {branch}",
+        )?
     }
     0
 }
@@ -219,11 +247,15 @@ fn add(ctx: worktree.Context, args: List[str], quiet: bool) -> int ! worktree.Wo
         }
     }
     let file = "{ctx.root}/.gitmodules"
-    let before = add_modules_text(file)?;
+    let before = add_modules_text(file)?
     let parsed = worktree.modules(ctx)?
     let at = gitmodules.by_name(parsed, name)
     if at >= 0 && parsed.modules[at].path != path {
-        if !options.force { return Fatal("submodule name '{name}' already used for path '{parsed.modules[at].path}'") }
+        if !options.force {
+            return Fatal(
+                "submodule name '{name}' already used for path '{parsed.modules[at].path}'",
+            )
+        }
         return Unsupported("submodule add --force with a conflicting module name")
     }
     let actual_url = add_url(ctx, url)?
@@ -240,7 +272,9 @@ fn add(ctx: worktree.Context, args: List[str], quiet: bool) -> int ! worktree.Wo
         if ignored.ignored {
             eprint("The following paths are ignored by one of your .gitignore files:\n{shown}")
             if worktree.config_bool(ctx, "advice.addignoredfile", true)? {
-                eprint("hint: Use -f if you really want to add them.\nhint: Disable this message with \"git config set advice.addIgnoredFile false\"")
+                eprint(
+                    "hint: Use -f if you really want to add them.\nhint: Disable this message with \"git config set advice.addIgnoredFile false\"",
+                )
             }
             return 1
         }
@@ -249,9 +283,15 @@ fn add(ctx: worktree.Context, args: List[str], quiet: bool) -> int ! worktree.Wo
         if !fs.is_dir(full) || !fs.exists("{full}/.git") {
             return Fatal("'{shown}' already exists and is not a valid git repo")
         }
-        let sub = worktree.discover(full) else |_| { return Fatal("'{shown}' already exists and is not a valid git repo") }
-        if sub.root != fs.realpath(full)? { return Fatal("'{shown}' already exists and is not a valid git repo") }
-        if worktree.head(sub)?.commits.len == 0 { return Fatal("'{shown}' does not have a commit checked out") }
+        let sub = worktree.discover(full) else |_| {
+            return Fatal("'{shown}' already exists and is not a valid git repo")
+        }
+        if sub.root != fs.realpath(full)? {
+            return Fatal("'{shown}' already exists and is not a valid git repo")
+        }
+        if worktree.head(sub)?.commits.len == 0 {
+            return Fatal("'{shown}' does not have a commit checked out")
+        }
         print("Adding existing repo at '{shown}' to the index")
     } else {
         let gitdir = gitmodules.module_gitdir(ctx.repo.gitdir, name)
