@@ -327,6 +327,26 @@ records these lifecycle differences and the possible earlier object/message
 side effects. Unsupported-command refusals must not be confused with rollback
 of every ordinary commit failure.
 
+## Embedded repositories
+
+A directory with its own valid `.git` directory or gitfile does not stop
+outer commands. It appears as one untracked `path/`, including with `status
+-uall`, and is not descended into. Ignore the directory to hide it. An empty
+`.git` directory is not a repository; ordinary files beside it remain visible.
+
+`add path`, `add .` and `add -A` record the nested repository's checked-out
+commit as a mode-160000 gitlink, with one warning line naming it. This does
+not copy its files or create `.gitmodules`; a clone of the outer repository
+will not know where to obtain the nested repository. A nested repository
+without a commit makes add fail before changing the outer repository. Adding
+only a file inside an untracked nested repository is a successful no-op,
+as in Git; once tracked as a gitlink, child pathspecs are rejected.
+
+The [named reviews](tests/review/embedded.json) record the shorter advice and
+the stronger failed-add preflight. Existing gitlink command limits below
+still apply, including the named refusal of porcelain v2 status for tracked
+gitlinks. Untracked nested repositories work in every status format.
+
 ## Submodules
 
 A submodule takes Git's basic form (gitsubmodules(7)): its repository at
