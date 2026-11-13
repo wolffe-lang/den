@@ -251,11 +251,11 @@ def compare(name, args, seed_name, cwd='.', extra=None, data=None, prepare=None)
     ok = same_result and left['after'] == right['after'] and not index_errors
     differing = sorted(k for k in left['after'].keys() | right['after'].keys()
                        if left['after'].get(k) != right['after'].get(k))
-    known = (not ok and same_result and not index_errors and differing
+    known = (not name.startswith('author-add-') and not ok and same_result and not index_errors and differing
              and all(LOGS.search(k) for k in differing))
     details = {} if ok or known else {
         k: [shown(left['after'].get(k)), shown(right['after'].get(k))]
-        for k in [k for k in differing if not LOGS.search(k)][:4]}
+        for k in [k for k in differing if name.startswith('author-add-') or not LOGS.search(k)][:8]}
     rows.append(dict(name=name, argv=args, cwd=cwd, extra=extra or {}, equal=ok, known=known,
                      expected=dict(result=left['result']), actual=dict(result=right['result']),
                      differing_paths=differing, index_errors=index_errors, details=details))
