@@ -901,7 +901,91 @@ def family_refusals():
         print('PASS' if ok else 'FAIL', name, '' if ok else json.dumps(q), flush=True)
 
 
-FAMILIES = {'read': family_read, 'status': family_status, 'diff': family_diff, 'clone': family_clone, 'hostile': family_hostile, 'transport': family_transport, 'work': family_work, 'fetch': family_fetch, 'recurse': family_recurse, 'refusals': family_refusals}
+def author_seed(w, state='plain'):
+    g('init', '-q', 'leaf', cwd=w)
+    (w / 'leaf/file').write_text('one\n')
+    g('add', 'file', cwd=w / 'leaf')
+    commit(w / 'leaf', 'leaf')
+    g('branch', 'other', cwd=w / 'leaf')
+    g('clone', '-q', '--bare', 'leaf', 'leaf.git', cwd=w)
+    g('init', '-q', 'c', cwd=w)
+    (w / 'c/top').write_text('top\n')
+    g('add', 'top', cwd=w / 'c')
+    commit(w / 'c', 'top')
+    c = w / 'c'
+    if state in ('existing', 'dirty-existing'):
+        g('clone', '-q', str(w / 'leaf.git'), 'dep', cwd=c)
+        if state == 'dirty-existing':
+            (c / 'dep/file').write_text('modified\n')
+            (c / 'dep/untracked').write_text('untracked\n')
+    elif state in ('nonrepo', 'emptydir'):
+        (c / 'dep').mkdir()
+        if state == 'nonrepo':
+            (c / 'dep/file').write_text('not a repository\n')
+    elif state == 'unborn-existing':
+        g('init', '-q', 'dep', cwd=c)
+    elif state == 'indexed':
+        (c / 'dep').write_text('tracked\n')
+        g('add', 'dep', cwd=c)
+    elif state == 'ignored':
+        (c / '.gitignore').write_text('dep\n')
+        g('add', '.gitignore', cwd=c)
+    elif state == 'remote':
+        g('remote', 'add', 'origin', str(w / 'top.git'), cwd=c)
+    elif state == 'dot-remote':
+        g('remote', 'add', 'origin', str(w), cwd=c)
+    elif state == 'empty':
+        g('init', '-q', '--bare', 'empty.git', cwd=w)
+    elif state == 'name-conflict':
+        (c / '.gitmodules').write_text('[submodule "dep"]\n\tpath = elsewhere\n\turl = ignored\n')
+    elif state == 'subdir':
+        (c / 'inner').mkdir()
+
+
+def family_author_add():
+    """Authoring compares full worlds, not just .gitmodules and gitlinks."""
+    cases = [
+        ('fresh', 'plain', [], 'leaf.git', 'dep', 'c', ALLOW_FILE),
+        ('quiet', 'plain', ['-q'], 'leaf.git', 'dep', 'c', ALLOW_FILE),
+        ('default', 'plain', [], 'leaf.git', None, 'c', ALLOW_FILE),
+        ('existing', 'existing', [], 'leaf.git', 'dep', 'c', ALLOW_FILE),
+        ('existing-quiet', 'existing', ['-q'], 'leaf.git', 'dep', 'c', ALLOW_FILE),
+        ('existing-dirty', 'dirty-existing', [], 'leaf.git', 'dep', 'c', ALLOW_FILE),
+        ('existing-branch', 'existing', ['-b', 'other'], 'leaf.git', 'dep', 'c', ALLOW_FILE),
+        ('nonrepo', 'nonrepo', [], 'leaf.git', 'dep', 'c', ALLOW_FILE),
+        ('emptydir', 'emptydir', [], 'leaf.git', 'dep', 'c', ALLOW_FILE),
+        ('unborn-existing', 'unborn-existing', [], 'leaf.git', 'dep', 'c', ALLOW_FILE),
+        ('indexed', 'indexed', [], 'leaf.git', 'dep', 'c', ALLOW_FILE),
+        ('ignored', 'ignored', [], 'leaf.git', 'dep', 'c', ALLOW_FILE),
+        ('force-ignored', 'ignored', ['-f'], 'leaf.git', 'dep', 'c', ALLOW_FILE),
+        ('relative-remote', 'remote', [], '../leaf.git', 'dep', 'c', ALLOW_FILE),
+        ('relative-own', 'plain', [], '../leaf.git', 'dep', 'c', ALLOW_FILE),
+        ('dot-relative', 'dot-remote', [], './leaf.git', 'dep', 'c', ALLOW_FILE),
+        ('file-policy', 'plain', [], 'leaf.git', 'dep', 'c', None),
+        ('file-never', 'plain', [], 'leaf.git', 'dep', 'c', dict(ALLOW_FILE, GIT_CONFIG_VALUE_0='never')),
+        ('quoted', 'plain', ['--name', 'a"b\\c'], 'leaf.git', 'space dir', 'c', ALLOW_FILE),
+        ('branch', 'plain', ['-b', 'other'], 'leaf.git', 'dep', 'c', ALLOW_FILE),
+        ('missing-branch', 'plain', ['-b', 'missing'], 'leaf.git', 'dep', 'c', ALLOW_FILE),
+        ('failed', 'plain', [], 'missing.git', 'dep', 'c', ALLOW_FILE),
+        ('empty', 'empty', [], 'empty.git', 'dep', 'c', ALLOW_FILE),
+        ('name-conflict', 'name-conflict', [], 'leaf.git', 'dep', 'c', ALLOW_FILE),
+        ('invalid-name', 'plain', ['--name', '../bad'], 'leaf.git', 'dep', 'c', ALLOW_FILE),
+        ('nested-path', 'plain', [], 'leaf.git', 'a/b', 'c', ALLOW_FILE),
+        ('subdir', 'subdir', [], 'leaf.git', 'dep', 'c/inner', ALLOW_FILE),
+        ('file-url', 'plain', [], 'file-url', 'dep', 'c', ALLOW_FILE),
+    ]
+    for name, state_name, options, url, path, cwd, extra in cases:
+        seed_name = 'author-' + state_name
+        seed(seed_name, lambda w, s=state_name: author_seed(w, s))
+        if url == 'file-url':
+            url = 'file://' + str(world / 'leaf.git')
+        elif not url.startswith(('./', '../')):
+            url = str(world / url)
+        compare('author-add-' + name, ['submodule', 'add', *options, '--', url, *([path] if path else [])],
+                seed_name, cwd=cwd, extra=extra)
+
+
+FAMILIES = {'author-add': family_author_add, 'read': family_read, 'status': family_status, 'diff': family_diff, 'clone': family_clone, 'hostile': family_hostile, 'transport': family_transport, 'work': family_work, 'fetch': family_fetch, 'recurse': family_recurse, 'refusals': family_refusals}
 
 try:
     FAMILIES[a.family]()
