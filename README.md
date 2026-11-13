@@ -343,6 +343,11 @@ only a file inside an untracked nested repository is a successful no-op,
 as in Git; an ignored parent still produces the ignored-path error. Once
 tracked as a gitlink, child pathspecs are rejected.
 
+Checkout, switch, fast-forward merge/pull and stash apply retain Git's
+untracked-file protection for files inside an opaque repository. Explicitly
+destructive operations such as `reset --hard` and `restore --source` can
+replace those files, as they do in Git.
+
 The [named reviews](tests/review/embedded.json) record the shorter advice and
 the stronger failed-add preflight. Existing gitlink command limits below
 still apply, including the named refusal of porcelain v2 status for tracked

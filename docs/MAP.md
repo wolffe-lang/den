@@ -426,6 +426,14 @@ parent requires the ignored-path error; once a gitlink is tracked, the
 existing named child-pathspec error applies. Linked-worktree
 stores and unsupported inner formats retain their named add refusals.
 
+Opaque scanning does not waive transition safety. Before a safe switch or
+merge writes anything, the shared collision check probes a proposed target
+by name when it lies below an opaque directory. Existing files still cause
+Git's untracked-file refusal. Branch checkout/switch, fast-forward merge,
+configured fast-forward pull and stash apply share this protection. The
+explicitly destructive hard-reset and source-restore paths retain Git's
+matching overwrite behavior; they are not turned into den-only refusals.
+
 Two named divergences are bound in `tests/review/embedded.json` and exercised
 by `tools/embedded-test.py` through `check-worktree`:
 
