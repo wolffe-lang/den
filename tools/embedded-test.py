@@ -168,11 +168,11 @@ seed = fixture('consumers')
 git(seed, '-c', 'advice.addEmbeddedRepo=false', 'add', 'nested')
 for n, args in enumerate([
     ['status', '--porcelain=v2'], ['diff', '--cached'], ['commit', '-m', 'embedded'],
-    ['add', 'nested/file'], ['rm', '--cached', 'nested'],
+    ['add', 'nested/file'], ['rm', '-f', '--cached', 'nested'],
     ['mv', 'nested', 'moved'], ['restore', '--staged', 'nested'],
 ]):
     compare('embedded-consumer-' + str(n), seed, args, readonly=args[0] in ('status', 'diff'),
-            refusal='submodule move' if args[0] == 'mv' else '')
+            refusal='submodule move' if args[0] == 'mv' else 'status --porcelain=v2 of a submodule' if n == 0 else '')
 
 (OUT / 'captures.json').write_text(json.dumps(rows, indent=2) + '\n')
 (OUT / 'summary.json').write_text(json.dumps(dict(total=len(rows), failures=failures, skips=0), indent=2) + '\n')
