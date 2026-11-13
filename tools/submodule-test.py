@@ -888,6 +888,16 @@ def family_refusals():
                     (w / 'c/.gitmodules').symlink_to('../metadata'))),
         (['submodule', 'add', '../leaf.git', 'new'], 'refusal-author-add-reuse-gitdir',
          lambda w: (w / 'c/.git/modules/new').mkdir()),
+        (['submodule', 'add', '../leaf.git', 'new'], 'refusal-author-add-foreign-index-lock',
+         lambda w: write(w / 'c/.git/index.lock', 'foreign\n')),
+        (['submodule', 'add', '../leaf.git', 'link/new'], 'refusal-author-add-symlink-ancestor',
+         lambda w: (w / 'c/link').symlink_to(w / 'leaf.git', target_is_directory=True)),
+        (['submodule', 'add', '../leaf.git', 'new'], 'refusal-author-add-metadata-directory',
+         lambda w: ((w / 'c/.gitmodules').unlink(), (w / 'c/.gitmodules').mkdir())),
+        (['submodule', 'add', '--name', '.git/evil', '../leaf.git', 'new'],
+         'refusal-author-add-administrative-name', None),
+        (['submodule', 'add', '../leaf.git', '.git/evil'],
+         'refusal-author-add-administrative-path', None),
     ])
     # Checkout runs where branches have upstreams; making a tracking branch
     # (from a remote-tracking start, or by guessing a remote's branch) stays
@@ -952,6 +962,22 @@ def author_seed(w, state='plain'):
         (c / '.gitmodules').write_text('[submodule "dep"]\n\tpath = elsewhere\n\turl = ignored\n')
     elif state == 'subdir':
         (c / 'inner').mkdir()
+    elif state == 'other-tip':
+        g('checkout', '-q', 'other', cwd=w / 'leaf')
+        (w / 'leaf/file').write_text('other branch\n')
+        g('commit', '-qam', 'other tip', cwd=w / 'leaf')
+        g('push', '-q', str(w / 'leaf.git'), 'other', cwd=w / 'leaf')
+    elif state == 'existing-detached':
+        g('clone', '-q', str(w / 'leaf.git'), 'dep', cwd=c)
+        g('checkout', '-q', '--detach', cwd=c / 'dep')
+    elif state == 'existing-gitfile':
+        g('clone', '-q', '--separate-git-dir=' + str(w / 'external'), str(w / 'leaf.git'), 'dep', cwd=c)
+    elif state == 'failed-once':
+        q = run(G, ['submodule', 'add', str(w / 'missing.git'), 'dep'], c, ALLOW_FILE)
+        assert q['status'] == 128, q
+    elif state == 'denied-once':
+        q = run(G, ['submodule', 'add', str(w / 'leaf.git'), 'dep'], c)
+        assert q['status'] == 128, q
 
 
 def family_author_add():
@@ -985,6 +1011,14 @@ def family_author_add():
         ('nested-path', 'plain', [], 'leaf.git', 'a/b', 'c', ALLOW_FILE),
         ('subdir', 'subdir', [], 'leaf.git', 'dep', 'c/inner', ALLOW_FILE),
         ('file-url', 'plain', [], 'file-url', 'dep', 'c', ALLOW_FILE),
+        ('branch-distinct-tip', 'other-tip', ['--branch=other'], 'leaf.git', 'dep', 'c', ALLOW_FILE),
+        ('branch-main', 'plain', ['-bmain'], 'leaf.git', 'dep', 'c', ALLOW_FILE),
+        ('existing-detached', 'existing-detached', [], 'leaf.git', 'dep', 'c', ALLOW_FILE),
+        ('existing-gitfile', 'existing-gitfile', [], 'leaf.git', 'dep', 'c', ALLOW_FILE),
+        ('recover-failed-clone', 'failed-once', [], 'leaf.git', 'dep', 'c', ALLOW_FILE),
+        ('recover-denied-clone', 'denied-once', [], 'leaf.git', 'dep', 'c', ALLOW_FILE),
+        ('quiet-empty', 'empty', ['-q'], 'empty.git', 'dep', 'c', ALLOW_FILE),
+        ('name-equals', 'plain', ['--name=logical'], 'leaf.git', 'dep', 'c', ALLOW_FILE),
     ]
     for name, state_name, options, url, path, cwd, extra in cases:
         seed_name = 'author-' + state_name
