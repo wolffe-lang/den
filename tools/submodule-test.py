@@ -860,7 +860,7 @@ def family_recurse():
 
 
 REFUSALS = [
-    ['submodule', 'add', '../x.git', 'x'], ['submodule', 'deinit', 'abs'], ['submodule', 'set-url', 'abs', '../x'],
+    ['submodule', 'add', '--depth', '1', '../x.git', 'x'], ['submodule', 'deinit', 'abs'], ['submodule', 'set-url', 'abs', '../x'],
     ['submodule', 'set-branch', '-b', 'main', 'abs'], ['submodule', 'summary'], ['submodule', 'absorbgitdirs'],
     ['submodule', 'update', '--remote'], ['submodule', 'update', '--merge'], ['submodule', 'update', '--rebase'],
     ['clone', '--shallow-submodules', '--recurse-submodules', 'x', 'y'], ['clone', '--remote-submodules', 'x', 'y'],
@@ -877,6 +877,18 @@ def family_refusals():
     seed('clone', recursive_clone)
     cases = [(argv, ALLOW_FILE, 'refusal-' + '-'.join(x.strip('-') for x in argv[:3]), None) for argv in REFUSALS]
     cases.append((['push', 'origin', 'main'], RECURSE, 'refusal-push-submodule-recurse-true', None))
+    cases.extend((argv, ALLOW_FILE, name, prepare) for argv, name, prepare in [
+        (['submodule', 'add', '-b', '.', '../leaf.git', 'new'], 'refusal-author-add-dot-branch', None),
+        (['submodule', 'add', '-f', '--name', 'midname', '../leaf.git', 'new'],
+         'refusal-author-add-force-conflicting-name', None),
+        (['submodule', 'add', '../leaf.git', 'new'], 'refusal-author-add-attributes',
+         lambda w: write(w / 'c/.gitattributes', '* text\n')),
+        (['submodule', 'add', '../leaf.git', 'new'], 'refusal-author-add-symlink-metadata',
+         lambda w: ((w / 'c/.gitmodules').rename(w / 'metadata'),
+                    (w / 'c/.gitmodules').symlink_to('../metadata'))),
+        (['submodule', 'add', '../leaf.git', 'new'], 'refusal-author-add-reuse-gitdir',
+         lambda w: (w / 'c/.git/modules/new').mkdir()),
+    ])
     # Checkout runs where branches have upstreams; making a tracking branch
     # (from a remote-tracking start, or by guessing a remote's branch) stays
     # refused by name.
