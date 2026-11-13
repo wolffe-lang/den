@@ -80,6 +80,33 @@ fn add_parents(root: str, path: str) -> () ! worktree.WorkErrors {
     }
 }
 
+// The transport's historical reflogs use a synthetic identity and omit the
+// symbolic remote HEAD log. Authoring owns this newly created gitdir, so finish
+// its initial clone records with the shared reflog formatter, before checkout.
+// Never called for an existing repository or a retained module gitdir.
+fn add_clone_logs(sub: worktree.Context, url: str) -> () ! worktree.WorkErrors {
+    let current = worktree.head(sub)?
+    if current.commits.len == 0 { return }
+    let policy = (sub.repo.config["core.logallrefupdates"] else "true").lower()
+    if policy == "false" || policy == "0" || policy == "off" || policy == "no" { return }
+    let line = refs.log_line([], current.commits, identity(sub)?, "clone: from {url}")?
+    var names = ["HEAD"]
+    if current.reference != "" {
+        (mut names).push(copy current.reference)
+        if fs.exists("{sub.repo.gitdir}/refs/remotes/origin/HEAD") {
+            (mut names).push("refs/remotes/origin/HEAD")
+        }
+    }
+    for name in names {
+        let path = refs.administrative(sub.repo, "logs/{name}", true)?
+        if fs.exists(path) { fs.remove(path)? }
+        var file = fs.create_new_with_mode(path, 0o666)?
+        defer fs.close(take file) else |_| {}
+        fs.write_chunk(mut file, line)?
+        fs.sync(mut file)?
+    }
+}
+
 fn add_checkout(sub: worktree.Context, branch: str, shown: str) -> int ! worktree.WorkErrors {
     let prior = worktree.head(sub)?
     var target = copy prior.commits
@@ -97,6 +124,10 @@ fn add_checkout(sub: worktree.Context, branch: str, shown: str) -> int ! worktre
             let remote = add_set(before, "branch.{branch}.remote", "origin")?
             let after = add_set(remote, "branch.{branch}.merge", "refs/heads/{branch}")?
             repository.publish_config(sub.repo, before, after)?
+        } else {
+            let old = head_text(sub.repo)?
+            refs.set_head(sub.repo, old, old, prior.commits, target,
+                identity(sub)?, "branch: Reset to origin/{branch}")?
         }
     }
     if target.len == 0 {
@@ -127,8 +158,17 @@ fn add_modules_text(file: str) -> str ! worktree.WorkErrors {
     str_from_utf8(repository.read_bytes(file, 1048576)?) else |_| { return invalid }
 }
 
+fn add_unlocked(path: str) -> () ! worktree.WorkErrors {
+    let _ = fs.lstat(path) else |e| match e {
+        not_found => { return },
+        _ => { return io },
+    }
+    return Unsupported("submodule add with a foreign index lock")
+}
+
 fn add(ctx: worktree.Context, args: List[str], quiet: bool) -> int ! worktree.WorkErrors {
     let options = add_options(args, quiet)?
+    add_unlocked("{ctx.repo.gitdir}/index.lock")?
     let autocrlf = ctx.repo.config["core.autocrlf"] else "false"
     if autocrlf != "false" && autocrlf != "0" {
         return Unsupported("submodule add with core.autocrlf")
@@ -227,7 +267,8 @@ fn add(ctx: worktree.Context, args: List[str], quiet: bool) -> int ! worktree.Wo
         fs.create_dir_all(full)?
         write_gitfile(full, gitdir)?
         let sub = worktree.discover(full)?
-        if worktree.head(sub)?.commits.len == 0 && !options.quiet {
+        add_clone_logs(sub, actual_url)?
+        if worktree.head(sub)?.commits.len == 0 {
             eprint("warning: You appear to have cloned an empty repository.")
         }
         if transport.local_path(actual_url) && !options.quiet { eprint("done.") }
