@@ -194,6 +194,22 @@ pub fn stage_paths_with_warnings(
     }
     if !options.update {
         for file in walked.files {
+            // A child-only selection of an opaque repository is normally a
+            // no-op, but an excluded parent still names Git's ignored-path
+            // error. Query the directory, never the embedded ignore files.
+            if file.kind == 1 &&
+                !selected(file.path, paths) &&
+                selector_inside(paths, file.path) &&
+                !options.force &&
+                ignore.query_with_warnings(
+                    ctx.repo,
+                    ctx.root,
+                    text(file.path)?,
+                    true,
+                    mut warnings,
+                )?.ignored {
+                (mut ignored).push(copy file.path)
+            }
             if !selected(file.path, paths) || index_at(current.entries, file.path) >= 0 { continue }
             let result = ignore.query_with_warnings(
                 ctx.repo,
