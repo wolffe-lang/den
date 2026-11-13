@@ -6,9 +6,9 @@ physical path, once per tool, and compares the complete process result
 .git/modules/*, submodule worktrees and the bare remotes. Loose objects are
 compared by oid and inflated bytes (R4a); every index is compared byte for
 byte except the six timing/identity words both tools prove against their own
-lstat (tools/index-proof.py). The only named difference is den's reflog
-identity (R-vc18-2): a row whose sole differences are reflog files under a
-`logs/` of any gitdir is KNOWN, never counted as parity.
+lstat (tools/index-proof.py). Inherited read/update rows retain their existing
+KNOWN reflog classification, never counted as parity. Authoring rows require
+exact reflogs too and cannot use that classification.
 
 Sources: gitsubmodules(7), git-submodule(1), gitmodules(5),
 gitrepository-layout(5), git-clone(1), git-config(1), git-status(1),
@@ -939,8 +939,12 @@ def author_seed(w, state='plain'):
     g('add', 'top', cwd=w / 'c')
     commit(w / 'c', 'top')
     c = w / 'c'
-    if state in ('existing', 'dirty-existing'):
+    if state in ('existing', 'dirty-existing', 'copied-siblings'):
         g('clone', '-q', str(w / 'leaf.git'), 'dep', cwd=c)
+        if state == 'copied-siblings':
+            shutil.copytree(c / 'dep', c / 'sibling', symlinks=True)
+            (c / 'sibling/file').write_text('sibling local modification\n')
+            (c / 'sibling/untracked').write_text('keep this file\n')
         if state == 'dirty-existing':
             (c / 'dep/file').write_text('modified\n')
             (c / 'dep/untracked').write_text('untracked\n')
@@ -994,6 +998,7 @@ def family_author_add():
         ('existing-quiet', 'existing', ['-q'], 'leaf.git', 'dep', 'c', ALLOW_FILE),
         ('existing-dirty', 'dirty-existing', [], 'leaf.git', 'dep', 'c', ALLOW_FILE),
         ('existing-branch', 'existing', ['-b', 'other'], 'leaf.git', 'dep', 'c', ALLOW_FILE),
+        ('existing-copied-sibling', 'copied-siblings', [], 'leaf.git', 'dep', 'c', ALLOW_FILE),
         ('nonrepo', 'nonrepo', [], 'leaf.git', 'dep', 'c', ALLOW_FILE),
         ('emptydir', 'emptydir', [], 'leaf.git', 'dep', 'c', ALLOW_FILE),
         ('unborn-existing', 'unborn-existing', [], 'leaf.git', 'dep', 'c', ALLOW_FILE),
