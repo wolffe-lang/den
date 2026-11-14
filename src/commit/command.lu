@@ -505,7 +505,12 @@ fn command_run(args: List[str], fail: str, fast_revert: bool, replay_action: str
         _ => {},
     }
     dispatch(args, fail, fast_revert, replay_action) else |e| match e {
-        Unsupported(feature) => { eprint("den: not yet implemented: {feature}"); 2 },
+        Unsupported(feature) => {
+            // A named bound is a fatal error, as Git reports its own.
+            if feature.starts_with("limit: ") { eprint("fatal: {feature}"); return 128 }
+            eprint("den: not yet implemented: {feature}")
+            2
+        },
         Fatal(message) => { eprint("fatal: {message}"); 128 },
         Failure(message) => { eprint(message); 1 },
         exists => {
