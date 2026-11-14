@@ -79,7 +79,7 @@ pub fn request(command: str, args: List[str]) -> List[byte] ! Errors {
 
 /// Encode wants/haves/done and negotiated thin/OFS support; enforce identity and count bounds.
 pub fn fetch_request(wants: List[str], haves: List[str], thin: bool) -> List[byte] ! Errors {
-    if wants.len == 0 { return limit }
+    if wants.len == 0 { return invalid }
     var args = List[str]()
     if thin { (mut args).push("thin-pack") }
     (mut args).push("ofs-delta")
@@ -140,7 +140,9 @@ pub fn parse_pack(data: List[byte]) -> List[byte] ! Errors {
         if p.kind == 0 { if pos != data.len { return invalid }; return out }
         if p.kind != 4 || p.data.len == 0 { return invalid }
         if p.data[0] == 1 as byte {
-            if p.data.len - 1 > 134217728 - out.len { return limit }
+            if p.data.len - 1 > 134217728 - out.len {
+                return Unsupported("limit: a pack response larger than 134217728 bytes")
+            }
             append(mut out, p.data[1..])
         } else if p.data[0] == 3 as byte {
             return Unsupported("remote fatal sideband")
@@ -153,7 +155,9 @@ pub fn parse_pack(data: List[byte]) -> List[byte] ! Errors {
 
 /// Frame pack bytes as v2 sideband-1 chunks and a final flush; enforce the 128-MiB payload cap.
 pub fn pack_response(data: List[byte]) -> List[byte] ! Errors {
-    if data.len > 134217728 { return limit }
+    if data.len > 134217728 {
+        return Unsupported("limit: a pack response larger than 134217728 bytes")
+    }
     var out = List[byte](), pos = 0
     line(mut out, "packfile")?
     while pos < data.len {

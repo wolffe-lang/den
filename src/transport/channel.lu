@@ -36,7 +36,9 @@ pub fn read(c: Channel, count: int) -> List[byte] ! Errors {
 
 /// Read exactly count bytes with a 65520 bound; truncated on EOF, IO on transport failure.
 pub fn exact(c: Channel, count: int) -> List[byte] ! Errors {
-    if count < 0 || count > 65520 { return limit }
+    if count < 0 || count > 65520 {
+        return Unsupported("limit: a pkt-line longer than 65520 bytes")
+    }
     var out = List[byte]()
     while out.len < count {
         let bytes = read(c, count - out.len)?
@@ -65,16 +67,19 @@ pub fn packet(c: Channel) -> pktline.Packet ! Errors {
     pktline.Packet { kind: 4, data: exact(c, size - 4)?, next: size }
 }
 
+/// A protocol message's bound, named as fetch and push print it.
+fn message_limit(cap: int) -> str { "limit: a protocol message larger than {cap} bytes" }
+
 /// Preserves headers and special packets, never conflating delimiter with flush.
 pub fn message(c: Channel, cap: int) -> List[byte] ! Errors {
-    if cap < 4 || cap > 140000000 { return limit }
+    if cap < 4 || cap > 140000000 { return Unsupported(message_limit(cap)) }
     var out = List[byte]()
     loop {
         let p = packet(c)?
         if p.kind == -1 { if out.len == 0 { return out }; return truncated }
         let fatal = p.kind == 4 && wire.error_payload(p.data)
         let size = if p.kind < 4 then 4 else p.data.len + 4
-        if size > cap - out.len { return limit }
+        if size > cap - out.len { return Unsupported(message_limit(cap)) }
         if p.kind < 4 {
             wire.append(
                 mut out,
@@ -150,7 +155,7 @@ pub fn local_path(url: str) -> bool {
 /// Open a file service subprocess or git TCP session; no shell, no protocol fallback, 30-second TCP deadlines.
 pub fn connect(url: str, service: str) -> Channel ! Errors {
     if service != "upload-pack" && service != "receive-pack" { return invalid }
-    if url.len > 4096 { return limit }
+    if url.len > 4096 { return Unsupported("limit: a remote URL longer than 4096 bytes") }
     if local_path(url) {
         if url.contains("\0") { return invalid }
         let variable = if service == "upload-pack" then "DEN_UPLOAD_PACK" else "DEN_RECEIVE_PACK"

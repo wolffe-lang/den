@@ -16,7 +16,7 @@ pub fn ssh_form(url: str) -> bool {
 
 /// Validate bounded SSH URL components before any descriptor or process exists.
 pub fn ssh_endpoint(url: str) -> SshEndpoint ! Errors {
-    if url.len > 4096 { return limit }
+    if url.len > 4096 { return Unsupported("limit: a remote URL longer than 4096 bytes") }
     var host = "", path = "", port = 0
     if url.starts_with("ssh://") {
         let rest = url[6..]
