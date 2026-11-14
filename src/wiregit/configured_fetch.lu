@@ -65,9 +65,12 @@ fn named_fetch(
     )?
     if selection != "" && advertised.len == 0 { return not_found }
     var available = Map[str, bool](), roots = List[str]()
+    // One reader for every advertised ref: each pack's index parsed once.
+    let reader = object.reader_batch(repo)
     for reference in advertised {
         if reference.id == "unborn" { continue }
-        if object.read_object(repo, oid.parse("sha1", reference.id)?, 16777216)?.kind != "commit" {
+        if object.read_loaded(reader, oid.parse("sha1", reference.id)?, 16777216)?.kind !=
+            "commit" {
             return Unsupported("remote branch does not name a commit")
         }
         available[reference.name] = true
