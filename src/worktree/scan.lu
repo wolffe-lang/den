@@ -607,7 +607,7 @@ fn walk_submodules(
                     kind: info[0],
                     dirt: 0,
                 }
-                if transition && at < 0 {
+                if transition && at < -1 {
                     // Untracked: its lstat alone; never read, and its id is a
                     // placeholder no transition trusts. Ignored: left out.
                     let decision = ignore.query_cached(
