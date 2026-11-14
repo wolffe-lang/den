@@ -117,7 +117,9 @@ fn reader_repo(repo: repository.Repo) -> repository.Repo {
 /// A reader over repo; its pack indexes load on the first packed read, or
 /// are repo's own when repo's packs are opened (opened), not parsed again.
 pub fn reader(repo: repository.Repo) -> Reader {
-    if repo.packs.loaded { return Reader { repo: reader_repo(repo), packs: pack.with_cache(repo.packs) } }
+    if repo.packs.loaded {
+        return Reader { repo: reader_repo(repo), packs: pack.with_cache(repo.packs) }
+    }
     Reader { repo: copy repo, packs: pack.session(repo.gitdir) }
 }
 
@@ -149,7 +151,9 @@ pub fn read_with(mut r: Reader, id: oid.Oid, max_output: int) -> Object ! StoreE
 
 /// A reader whose pack indexes are loaded now (vc23), for read_loaded.
 pub fn reader_open(repo: repository.Repo) -> Reader ! StoreErrors {
-    if repo.packs.loaded { return Reader { repo: reader_repo(repo), packs: pack.with_cache(repo.packs) } }
+    if repo.packs.loaded {
+        return Reader { repo: reader_repo(repo), packs: pack.with_cache(repo.packs) }
+    }
     Reader { repo: copy repo, packs: pack.session_open(repo.gitdir)? }
 }
 

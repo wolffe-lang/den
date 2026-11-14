@@ -223,16 +223,27 @@ struct Hashed { entry: index.Entry, state: worktree.FileState }
 /// collect's answer with the hashes the worktree side made.
 struct Collected { changes: List[Change], hashed: List[Hashed] }
 
-fn pending_entry(ctx: worktree.Context, entry: worktree.FlatEntry) -> Pending ! worktree.WorkErrors {
+fn pending_entry(
+    ctx: worktree.Context,
+    entry: worktree.FlatEntry,
+) -> Pending ! worktree.WorkErrors {
     if entry.mode == 0o160000 { return Pending { file: blob(ctx, entry)?, source: 0, at: -1 } }
     Pending {
-        file: File { path: owned(entry.path), mode: entry.mode, id: copy entry.id, data: List[byte]() },
+        file: File {
+            path: owned(entry.path),
+            mode: entry.mode,
+            id: copy entry.id,
+            data: List[byte](),
+        },
         source: 1,
         at: -1,
     }
 }
 
-fn pending_flat(ctx: worktree.Context, entries: List[worktree.FlatEntry]) -> List[Pending] ! worktree.WorkErrors {
+fn pending_flat(
+    ctx: worktree.Context,
+    entries: List[worktree.FlatEntry],
+) -> List[Pending] ! worktree.WorkErrors {
     var out = List[Pending]()
     for entry in entries { (mut out).push(pending_entry(ctx, entry)?) }
     out
@@ -248,8 +259,7 @@ fn pending_index(ctx: worktree.Context, value: index.Index) -> List[Pending] ! w
     for entry in value.entries {
         if index.stage(entry) != 0 { return Unsupported("diff unmerged index") }
         if entry.extended & 0x2000 != 0 { continue }
-        (mut out).push(pending_entry(ctx, worktree.
-            FlatEntry { path: owned(entry.path), mode: entry.stat[6], id: copy entry.id })?)
+        (mut out).push(pending_entry(ctx, worktree.FlatEntry { path: owned(entry.path), mode: entry.stat[6], id: copy entry.id })?)
     }
     out
 }
@@ -280,7 +290,11 @@ fn pending_worktree(
             let setting = worktree.ignore_for(ctx, parsed[0], text(entry.path)?, ignore_option)
             if setting == "all" {
                 (mut out).push(Pending {
-                    file: blob(ctx, worktree.FlatEntry { path: owned(entry.path), mode: entry.stat[6], id: copy entry.id })?,
+                    file: blob(ctx, worktree.FlatEntry {
+                        path: owned(entry.path),
+                        mode: entry.stat[6],
+                        id: copy entry.id,
+                    })?,
                     source: 0,
                     at: at,
                 })
@@ -306,15 +320,19 @@ fn pending_worktree(
             continue
         }
         if entry.flags & 0x8000 != 0 || entry.extended & 0x4000 != 0 {
-            (mut out).push(pending_entry(ctx, worktree.
-                FlatEntry { path: owned(entry.path), mode: entry.stat[6], id: copy entry.id })?)
+            (mut out).push(pending_entry(ctx, worktree.FlatEntry { path: owned(entry.path), mode: entry.stat[6], id: copy entry.id })?)
             continue
         }
         let seen = worktree.tracked(ctx, entry, written, filemode, symlinks, mut verified)?
         if !seen.present { continue }
         if !seen.clean { (mut hashed).push(Hashed { entry: copy entry, state: copy seen.state }) }
         (mut out).push(Pending {
-            file: File { path: owned(entry.path), mode: seen.state.mode, id: copy seen.state.id, data: List[byte]() },
+            file: File {
+                path: owned(entry.path),
+                mode: seen.state.mode,
+                id: copy seen.state.id,
+                data: List[byte](),
+            },
             source: 2,
             at: at,
         })
@@ -333,7 +351,11 @@ fn same_endpoint(a: File, b: File) -> bool {
 /// HEAD's tree for a cached diff. While no entry is unmerged or intent-to-add,
 /// status's reading serves: the index's own entries when its cache tree's
 /// root names HEAD's tree (no tree object is read), else the full walk.
-fn pending_head(ctx: worktree.Context, value: index.Index, commit: oid.Oid) -> List[Pending] ! worktree.WorkErrors {
+fn pending_head(
+    ctx: worktree.Context,
+    value: index.Index,
+    commit: oid.Oid,
+) -> List[Pending] ! worktree.WorkErrors {
     for entry in value.entries {
         if index.stage(entry) != 0 || entry.extended & 0x2000 != 0 {
             return pending_tree(ctx, oid.hex(commit)?)?
@@ -390,10 +412,19 @@ fn bodies(
         let file = if item.source == 0 {
             copy item.file
         } else if item.source == 1 {
-            blob(ctx, worktree.FlatEntry { path: owned(item.file.path), mode: item.file.mode, id: copy item.file.id })?
+            blob(ctx, worktree.FlatEntry {
+                path: owned(item.file.path),
+                mode: item.file.mode,
+                id: copy item.file.id,
+            })?
         } else {
             let read = worktree.read_file(ctx, item.file.path, [copy value.entries[item.at]])?
-            File { path: owned(read.path), mode: read.mode, id: copy read.id, data: owned(read.data) }
+            File {
+                path: owned(read.path),
+                mode: read.mode,
+                id: copy read.id,
+                data: owned(read.data),
+            }
         }
         total += file.data.len
         if total > 134217728 { return limit }
@@ -448,11 +479,19 @@ fn collect_known(ctx: worktree.Context, options: Options) -> Collected ! worktre
                     data: owned(right.data),
                 },
             ]
-            if oid.equal(old[0].id, new[0].id) { return Collected { changes: List[Change](), hashed: hashed } }
-            if options.reverse {
-                return Collected { changes: [Change { before: new, after: old, status: "M", percent: 0 }], hashed: hashed }
+            if oid.equal(old[0].id, new[0].id) {
+                return Collected { changes: List[Change](), hashed: hashed }
             }
-            return Collected { changes: [Change { before: old, after: new, status: "M", percent: 0 }], hashed: hashed }
+            if options.reverse {
+                return Collected {
+                    changes: [Change { before: new, after: old, status: "M", percent: 0 }],
+                    hashed: hashed,
+                }
+            }
+            return Collected {
+                changes: [Change { before: old, after: new, status: "M", percent: 0 }],
+                hashed: hashed,
+            }
         }
         before = pending_tree(ctx, options.revisions[0])?
         after = pending_tree(ctx, options.revisions[1])?
