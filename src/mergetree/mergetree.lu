@@ -133,15 +133,19 @@ pub fn compared(
                         data = copy blob.data
                     }
                 }
-                (mut files).push(copy diff.File {
-                    path: copy entry.path,
-                    mode: entry.mode,
-                    id: copy entry.id,
-                    data: data,
-                })
+                (mut files).push(
+                    copy diff.File {
+                        path: copy entry.path,
+                        mode: entry.mode,
+                        id: copy entry.id,
+                        data: data,
+                    },
+                )
             }
             if exceeded {
-                return Unsupported("limit: more than 134217728 bytes of compared merge input per tree")
+                return Unsupported(
+                    "limit: more than 134217728 bytes of compared merge input per tree",
+                )
             }
         }
         (mut result).push(files)
