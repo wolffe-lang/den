@@ -432,6 +432,24 @@ pub fn read_object(gitdir: str, name: str, cap: int) -> Body ! PackErrors {
     not_found
 }
 
+/// The objects every pack index lists, summed, read from each index's header
+/// alone: the count Git sizes its default short names by (it counts no loose
+/// object).
+pub fn packed_count(gitdir: str) -> int ! PackErrors {
+    var total = 0
+    for path in indexes(gitdir)? {
+        let fd = fs_open(path)?
+        defer fs_close(fd) else |_| {}
+        let head = range_bytes(fd, 0, 1032)?
+        if !same(head[0..4], [255 as byte, 116 as byte, 79 as byte, 99 as byte]) ||
+            be32(head, 4) != 2 {
+            return Unsupported("pack index version (requires v2)")
+        }
+        total += be32(head, 1028)
+    }
+    total
+}
+
 /// Return at most two distinct matching names, sufficient for ambiguity checks.
 /// Validate the idx checksum and the trailer binding even for prefix-only reads.
 pub fn prefix(gitdir: str, prefix: str) -> List[str] ! PackErrors {
