@@ -13,7 +13,13 @@ pub fn packed(repo: repository.Repo) -> List[Packed] ! RefErrors {
         exists => { return exists },
         unsupported => { return unsupported },
         limit => { return limit },
-        Unsupported(reason) => { return Unsupported(reason) },
+        Unsupported(reason) => {
+            // A literal: the error can leave the region its read ran in.
+            if reason.starts_with("limit: ") {
+                return Unsupported("limit: packed-refs larger than 16777216 bytes")
+            }
+            return Unsupported(reason)
+        },
     }
     parse_packed(data)?
 }
@@ -75,7 +81,7 @@ pub fn list(repo: repository.Repo, prefix: str) -> List[Packed] ! RefErrors {
     for record in packed(repo)? {
         if record.name.starts_with(prefix) { names[record.name] = copy record.id }
     }
-    if names.len > 4096 { return Unsupported("limit: more than 4096 refs under {prefix}") }
+    if names.len > 4096 { return Unsupported("limit: more than 4096 refs in one namespace") }
     var pending = [prefix[0..prefix.len - 1]]
     var visited = 0
     while pending.len > 0 {
@@ -91,7 +97,9 @@ pub fn list(repo: repository.Repo, prefix: str) -> List[Packed] ! RefErrors {
             }
             let name = "{dir}/{leaf}"
             visited += 1
-            if visited > 4096 { return Unsupported("limit: more than 4096 entries under {prefix}") }
+            if visited > 4096 {
+                return Unsupported("limit: more than 4096 entries in one ref namespace")
+            }
             if leaf.ends_with(".lock") { continue }
             if entry.kind == 1 {
                 (mut pending).push(name)
@@ -99,7 +107,7 @@ pub fn list(repo: repository.Repo, prefix: str) -> List[Packed] ! RefErrors {
                 if !valid(name) { return invalid_oid }
                 names[name] = read(repo, name)?
                 if names.len > 4096 {
-                    return Unsupported("limit: more than 4096 refs under {prefix}")
+                    return Unsupported("limit: more than 4096 refs in one namespace")
                 }
             } else {
                 return Unsupported("ref filesystem kind {name}")

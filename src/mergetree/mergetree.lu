@@ -248,9 +248,7 @@ pub fn plan(
             binary => { return Unsupported("merge binary conflict") },
             invalid => { return invalid },
             limit => {
-                return Fatal(
-                    "limit: '{name}' is larger than 16777216 bytes, the file merge's bound",
-                )
+                return Fatal("limit: a file larger than 16777216 bytes in a three-way file merge")
             },
         }
         (mut result.messages).push("Auto-merging {name}")
