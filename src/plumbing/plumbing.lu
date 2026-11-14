@@ -164,14 +164,11 @@ fn hash_object(args: List[str]) -> int ! Errors {
     }
     if !object.valid_kind(kind) { eprint("fatal: invalid object type \"{kind}\""); return 128 }
     if stdin { (mut paths).push("-") }
-    var repo = repository.Repo { gitdir: "", config: Map[str, str]() }
+    var repo = repository.detached("", Map[str, str]())
     if write { repo = repository.discover(".")? }
     if !no_filters && !stdin {
         if fs.exists(".gitattributes") { return Unsupported("hash-object attributes") }
-        let candidate = repository.discover(".") else repository.Repo {
-            gitdir: "",
-            config: Map[str, str](),
-        }
+        let candidate = repository.discover(".") else repository.detached("", Map[str, str]())
         if (candidate.config["core.autocrlf"] else "false") != "false" ||
             fs.exists("{candidate.gitdir}/info/attributes") {
             return Unsupported("hash-object filters")
@@ -523,7 +520,7 @@ fn config(args: List[str]) -> int ! Errors {
         return 1
     }
     let repo = repository.discover(".") else |e| match e {
-        not_found => repository.Repo { gitdir: "", config: Map[str, str]() },
+        not_found => repository.detached("", Map[str, str]()),
         denied => { return denied },
         io => { return io },
         invalid => { return invalid },

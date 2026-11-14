@@ -162,7 +162,7 @@ fn listing(args: List[str]) -> int ! object.StoreErrors {
         }
     }
     let found = repository.discover(".") else |_| {
-        repository.Repo { gitdir: "", config: Map[str, str]() }
+        repository.detached("", Map[str, str]())
     }
     let config = if found.gitdir == "" then repository.global_config()? else copy found.config
     var url = "", name = "", announce = false
