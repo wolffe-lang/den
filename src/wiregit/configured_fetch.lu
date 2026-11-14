@@ -169,10 +169,16 @@ fn fetch_tags(
     mut rows: List[TransportRow],
 ) -> str ! object.StoreErrors {
     var extra = ""
-    var reachable = pack.nameset()
-    for id in closure(repo, roots, [])? { let _ = pack.names_add(mut reachable, id, "") }
+    var reachable = pack.nameset(), walked = false
     for tag in fetch_view(repo, url, "refs/tags/", false)? {
         if tag.id == "unborn" || refs.optional(repo, tag.name)?.len > 0 { continue }
+        // The fetched objects' closure is walked once, and only when a tag
+        // the repository lacks might follow: it reads every object reachable
+        // from the fetched tips.
+        if !walked {
+            for id in closure(repo, roots, [])? { let _ = pack.names_add(mut reachable, id, "") }
+            walked = true
+        }
         let target = if tag.peeled == "" then copy tag.id else copy tag.peeled
         if !pack.names_has(reachable, target) { continue }
         let _ = fetch_view(repo, url, tag.name, true)?
