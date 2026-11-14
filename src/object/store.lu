@@ -65,6 +65,20 @@ fn decoded(input: List[byte], id: oid.Oid, max_output: int) -> Object ! StoreErr
     }
 }
 
+/// repo with its packs' indexes loaded once, for a command that reads objects
+/// (den#101): read_object and every reader made from the result look names up
+/// in these indexes instead of parsing every index again for each object.
+/// Answers and errors are unchanged (pack.session_find). A load that fails
+/// for any reason leaves the packs unloaded, so each read takes the per-read
+/// path and fails, if it fails, exactly as it did.
+pub fn opened(repo: repository.Repo) -> repository.Repo {
+    if repo.packs.loaded { return copy repo }
+    let packs = pack.session_open(repo.gitdir) else |_| { return copy repo }
+    var out = copy repo
+    out.packs = packs
+    out
+}
+
 /// Read a bounded loose object first; only absence falls back to validated packs.
 pub fn read_object(repo: repository.Repo, id: oid.Oid, max_output: int) -> Object ! StoreErrors {
     if max_output < 0 { return invalid }
@@ -74,7 +88,7 @@ pub fn read_object(repo: repository.Repo, id: oid.Oid, max_output: int) -> Objec
         max_output + max_output / 100 + 65536,
     ) else |e| match e {
         not_found => {
-            let value = pack.read_object(repo.gitdir, oid.hex(id)?, max_output)?
+            let value = pack.session_find(repo.packs, oid.hex(id)?, max_output)?
             return Object { kind: value.kind, data: copy value.data }
         },
         denied => { return denied },
@@ -95,8 +109,15 @@ pub fn read_object(repo: repository.Repo, id: oid.Oid, max_output: int) -> Objec
 /// through one session, so a tree walk parses each pack index once.
 pub struct Reader { repo: repository.Repo, packs: pack.Session }
 
-/// A reader over repo; its pack indexes load on the first packed read.
+/// repo's own value for a reader: its packs travel in the reader's session.
+fn reader_repo(repo: repository.Repo) -> repository.Repo {
+    repository.detached(repo.gitdir, repo.config)
+}
+
+/// A reader over repo; its pack indexes load on the first packed read, or
+/// are repo's own when repo's packs are opened (opened), not parsed again.
 pub fn reader(repo: repository.Repo) -> Reader {
+    if repo.packs.loaded { return Reader { repo: reader_repo(repo), packs: pack.with_cache(repo.packs) } }
     Reader { repo: copy repo, packs: pack.session(repo.gitdir) }
 }
 
@@ -128,6 +149,7 @@ pub fn read_with(mut r: Reader, id: oid.Oid, max_output: int) -> Object ! StoreE
 
 /// A reader whose pack indexes are loaded now (vc23), for read_loaded.
 pub fn reader_open(repo: repository.Repo) -> Reader ! StoreErrors {
+    if repo.packs.loaded { return Reader { repo: reader_repo(repo), packs: pack.with_cache(repo.packs) } }
     Reader { repo: copy repo, packs: pack.session_open(repo.gitdir)? }
 }
 
@@ -232,7 +254,7 @@ pub fn lookup(repo: repository.Repo, name: str) -> oid.Oid ! StoreErrors {
             }
         }
     }
-    for candidate in pack.prefix(repo.gitdir, prefix)? {
+    for candidate in pack.session_prefix(repo.packs, prefix)? {
         if found != "" && candidate != found { return ambiguous }
         found = candidate
     }
@@ -308,7 +330,8 @@ pub fn write_injected(
     let id = identify(kind, data)?
     let destination = path(checked, id)?
     var present = true
-    let existing = read_object(checked, id, data.len) else |e| match e {
+    // The caller's repository answers: its packs may be opened (den#101).
+    let existing = read_object(repo, id, data.len) else |e| match e {
         not_found => { present = false; Object { kind: "", data: List[byte]() } },
         invalid => { return invalid },
         invalid_oid => { return invalid_oid },

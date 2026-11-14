@@ -40,8 +40,46 @@ fn session(args: List[str]) -> () ! object.StoreErrors {
     }
 }
 
+// One read through a repository whose packs were opened once (den#101).
+fn opened_line(repo: repository.Repo, label: str, name: str, cap: int) -> () ! object.StoreErrors {
+    let id = object.lookup(repo, name) else |e| {
+        print("{label} error {e}")
+        return
+    }
+    let value = object.read_object(repo, id, cap) else |e| {
+        print("{label} error {e}")
+        return
+    }
+    print("{label} {value.kind} {value.data.len} {oid.hex(id)?}")
+}
+
+// --opened REPO NAME CAP [DEST SOURCE]...: open REPO's packs once, look NAME
+// up (a full or abbreviated name) and read it; with DEST SOURCE pairs, copy
+// each SOURCE over its DEST (SOURCE "-" removes DEST) and do it again through
+// the same opened repository, as a command that opened its packs would see
+// packs changed, added or removed under it.
+fn opened(args: List[str]) -> () ! object.StoreErrors {
+    if args.len < 4 || args.len % 2 != 0 { return invalid }
+    let repo = object.opened(repository.open(args[1])?)
+    let cap = args[3].to_int() else |_| { return invalid }
+    opened_line(repo, "first", args[2], cap)?
+    if args.len > 4 {
+        var i = 4
+        while i < args.len {
+            if args[i + 1] == "-" {
+                fs.remove(args[i]) else |_| { return io }
+            } else {
+                fs.copy_file(args[i + 1], args[i]) else |_| { return io }
+            }
+            i += 2
+        }
+        opened_line(repo, "second", args[2], cap)?
+    }
+}
+
 fn run(args: List[str]) -> () ! object.StoreErrors {
     if args.len > 0 && args[0] == "--session" { return session(args)? }
+    if args.len > 0 && args[0] == "--opened" { return opened(args)? }
     if args.len != 3 && args.len != 4 { return invalid }
     let repo = repository.open(args[0])?
     if args.len == 4 {
