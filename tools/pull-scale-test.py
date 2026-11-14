@@ -12,11 +12,14 @@ repository). Three pulls, each in fresh copies for both tools:
 
 Each pull must equal the pinned Git's exit status, stdout, stderr and HEAD.
 Wall time, CPU time (user + system, from rusage) and peak resident set are the
-minimum over --takes runs; the resident-set floor this parent gives any child
-(ru_maxrss survives fork and exec) is measured and printed beside them. den
-must stay under the stated bounds, which are well under what the issue's
-pulls took before this change (6 min 55 s for an up-to-date pull; 3.2 GiB
-for a moved one).
+minimum over --takes runs. Each tool is started by tools/minimal-parent.c,
+which holds almost no memory: a child's ru_maxrss starts at its parent's
+peak, so a tool started from this Python runner read at least the runner's
+own (about 48 MB), and Git's figure was that floor, not Git's (den#114). The
+floor the minimal parent gives (/bin/true started the same way) is printed
+beside them. den must stay under the stated bounds, which are well under what
+the issue's pulls took before this change (6 min 55 s for an up-to-date pull;
+3.2 GiB for a moved one).
 """
 import argparse
 import hashlib
@@ -26,7 +29,6 @@ from pathlib import Path
 import shutil
 import subprocess
 import threading
-import time
 
 BOUNDS = {
     'uptodate': dict(cpu=10.0, rss_kib=512 * 1024),
@@ -124,22 +126,15 @@ def main():
     commits = run([git, 'rev-list', '--count', tip], origin).strip().decode()
     print(f'SHAPE files={files} commits={commits} moved={a.moved} {shape}', flush=True)
 
-    floor = []
-    for _ in range(3):
-        proc = subprocess.Popen(['/bin/true'])
-        _, status, usage = os.wait4(proc.pid, 0)
-        proc.returncode = os.waitstatus_to_exitcode(status)
-        floor.append(usage.ru_maxrss)
-    floor_kib = min(floor)
-    print(f'FLOOR resident set of a child of this parent: {floor_kib} KiB', flush=True)
+    parent = out / 'minimal-parent'
+    run(['cc', '-O2', '-o', parent, root / 'tools/minimal-parent.c'], out)
+    report = out / 'usage'
 
-    def take(tool, argv, seed):
-        work = out / 'work'
-        if work.exists():
-            shutil.rmtree(work)
-        shutil.copytree(seed, work, symlinks=True)
-        start = time.monotonic()
-        proc = subprocess.Popen([tool, *argv], cwd=work, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    def measured(argv, cwd):
+        """Run argv under the minimal parent: its exit, output and own usage."""
+        report.unlink(missing_ok=True)
+        proc = subprocess.Popen([str(parent), str(report), *map(str, argv)], cwd=cwd,
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         chunks = {}
 
         def drain(label, stream):
@@ -147,15 +142,24 @@ def main():
         readers = [threading.Thread(target=drain, args=(n, s)) for n, s in (('out', proc.stdout), ('err', proc.stderr))]
         for r in readers:
             r.start()
-        # wait4 reaps the child and gives its own rusage; Popen is told so.
-        _, status, usage = os.wait4(proc.pid, 0)
         for r in readers:
             r.join()
-        proc.returncode = os.waitstatus_to_exitcode(status)
-        wall = time.monotonic() - start
-        head = run([git, 'rev-parse', 'HEAD'], work).strip().decode()
-        return dict(status=proc.returncode, stdout=chunks['out'].hex(), stderr=chunks['err'].hex(), head=head,
-                    wall=wall, cpu=usage.ru_utime + usage.ru_stime, maxrss_kib=usage.ru_maxrss)
+        assert proc.wait() == 0, ('minimal parent', proc.returncode)
+        status, maxrss, user, system, wall = report.read_text().split()
+        return dict(status=int(status), stdout=chunks['out'].hex(), stderr=chunks['err'].hex(),
+                    wall=float(wall), cpu=float(user) + float(system), maxrss_kib=int(maxrss))
+
+    floor_kib = min(measured(['/bin/true'], out)['maxrss_kib'] for _ in range(3))
+    print(f'FLOOR resident set of a child of the minimal parent: {floor_kib} KiB', flush=True)
+
+    def take(tool, argv, seed):
+        work = out / 'work'
+        if work.exists():
+            shutil.rmtree(work)
+        shutil.copytree(seed, work, symlinks=True)
+        r = measured([tool, *argv], work)
+        r['head'] = run([git, 'rev-parse', 'HEAD'], work).strip().decode()
+        return r
 
     rows = []
     for name in ('uptodate', 'ff', 'merge'):
