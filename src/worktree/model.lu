@@ -165,6 +165,15 @@ pub fn config_bool(ctx: Context, key: str, fallback: bool) -> bool ! WorkErrors 
     return Unsupported("boolean configuration {key}={value}")
 }
 
+/// ctx with its repository's packs opened once for the command (den#101,
+/// object.opened): every object read through it shares one parse of each
+/// pack index. For commands that read objects and write no pack.
+pub fn opened(ctx: Context) -> Context {
+    var out = copy ctx
+    out.repo = object.opened(ctx.repo)
+    out
+}
+
 /// Resolve root without assuming gitdir's parent is the worktree (gitfiles and
 /// explicit GIT_DIR/GIT_WORK_TREE are distinct). Bare repositories are refused.
 pub fn discover(start: str) -> Context ! WorkErrors {
