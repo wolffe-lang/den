@@ -39,6 +39,7 @@ import shutil
 import statistics
 import subprocess
 import sys
+import tempfile
 import time
 
 GIT_SHA256 = 'c4848492938c4ebfffbefe1fbbaa68b9af90c86d1f6a20e76816c5ff37fcfa60'
@@ -95,17 +96,31 @@ env.update(GIT_TERMINAL_PROMPT='0', GIT_CONFIG_COUNT='1', GIT_CONFIG_KEY_0='prot
 failed = []
 
 
-def run(argv, cwd, timeout=CLONE_SECONDS, extra=None):
-    started = time.monotonic()
-    child = subprocess.Popen([str(x) for x in argv], cwd=str(cwd), env={**env, **(extra or {})},
-                             stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    try:
-        stdout, stderr = child.communicate(timeout=timeout)
-    except subprocess.TimeoutExpired:
-        child.kill()  # this row's own child only
-        stdout, stderr = child.communicate()
-    return dict(exit=child.returncode, stdout=stdout.decode('utf-8', 'backslashreplace'),
-                stderr=stderr.decode('utf-8', 'backslashreplace'), wall=round(time.monotonic() - started, 2))
+def run(argv, cwd, timeout=CLONE_SECONDS, extra=None, target=None, row=None, tool=None):
+    """One child, its output in files and reaped by tools/http-live-test.py's
+    reap (no pipe can stall it). With a target, a network clone: watched
+    for progress and run once more after a stall, as the HTTP live rows do."""
+    def attempt(suffix):
+        started = time.monotonic()
+        with tempfile.TemporaryFile() as stdout, tempfile.TemporaryFile() as stderr:
+            child = subprocess.Popen([str(x) for x in argv], cwd=str(cwd), env={**env, **(extra or {})},
+                                     stdin=subprocess.DEVNULL, stdout=stdout, stderr=stderr)
+            status, _, timed_out, stalled, quiet = live['reap'](child, timeout, target)
+            stdout.seek(0)
+            stderr.seek(0)
+            return dict(exit=os.waitstatus_to_exitcode(status), stdout=stdout.read().decode('utf-8', 'backslashreplace'),
+                        stderr=stderr.read().decode('utf-8', 'backslashreplace'),
+                        wall=round(time.monotonic() - started, 2), timed_out=timed_out, stalled=stalled, quiet=quiet)
+
+    if target is None:
+        return attempt('')
+    return live['watched'](attempt, target, timeout, row, tool)
+
+
+def stalled_twice(*clones):
+    """The problems of clones (tool, capture) that stalled twice."""
+    return [live['stall_problem'](tool, live['stall_bound'](CLONE_SECONDS)) for tool, capture in clones
+            if capture['stalls'] == 2]
 
 
 def git_out(cwd, *argv):
@@ -191,13 +206,26 @@ def web_row():
         work = clones / ('web-%d' % attempt)
         work.mkdir()
         before = cloned_refs(WEB)
-        oracle = run([git, 'clone', '-q', '--recurse-submodules', WEB, 'git'], work)
+        oracle = run([git, 'clone', '-q', '--recurse-submodules', WEB, 'git'], work, target=work / 'git', row=name,
+                     tool='git')
+        stalled = stalled_twice(('git', oracle))
+        if stalled:
+            problems.extend(stalled)
+            break
         if oracle['exit']:
             problems.append('pinned Git could not clone wolf-web: ' + oracle['stderr'][-300:])
             break
         urls = remotes_of(work / 'git')
         middle = [cloned_refs(url) for url in urls[1:]]
-        candidate = run([den, 'clone', '-q', '--recurse-submodules', WEB, 'den'], work)
+        candidate = run([den, 'clone', '-q', '--recurse-submodules', WEB, 'den'], work, target=work / 'den',
+                        row=name, tool='den')
+        print('LIVE %s attempt=%d retries=den:%d,git:%d quiet=den:%.1fs,git:%.1fs wall=den:%.2fs,git:%.2fs' % (
+            name, attempt, candidate['retries'], oracle['retries'], candidate['quiet'], oracle['quiet'],
+            candidate['wall'], oracle['wall']), flush=True)
+        stalled = stalled_twice(('den', candidate))
+        if stalled:
+            problems.extend(stalled)
+            break
         after = cloned_refs(WEB)
         # What both clones took, held from before Git's to after den's (the
         # submodules' remotes from Git's clone on).
@@ -218,14 +246,18 @@ def web_row():
                         t, o = theirs.get(k) or {}, ours.get(k) or {}
                         fields.append(k + ':' + ','.join(f for f in t if t.get(f) != o.get(f)))
                 problems.append('state differs: ' + '; '.join(fields))
-        detail = dict(urls=urls, git_wall=oracle['wall'], den_wall=candidate['wall'])
+        detail = dict(urls=urls, git_wall=oracle['wall'], den_wall=candidate['wall'],
+                      git_retries=oracle['retries'], den_retries=candidate['retries'])
         if moved and problems:
             print('LIVE %s refs moved during attempt %d; retried' % (name, attempt), flush=True)
             shutil.rmtree(work)
             continue
         verdict(name, problems, detail)
         return
-    verdict(name, problems + ['refs moved during the row'])
+    else:
+        verdict(name, problems + ['refs moved during the row'])
+        return
+    verdict(name, problems)
 
 
 def pinned_rows():
@@ -234,7 +266,13 @@ def pinned_rows():
         url = 'https://github.com/wolffe-lang/%s.git' % repo
         work = clones / repo
         work.mkdir()
-        q = run([git, 'clone', '-q', url, 'c'], work)
+        q = run([git, 'clone', '-q', url, 'c'], work, target=work / 'c', row=name, tool='git')
+        print('LIVE %s retries=git:%d quiet=git:%.1fs wall=git:%.2fs' % (name, q['retries'], q['quiet'], q['wall']),
+              flush=True)
+        stalled = stalled_twice(('git', q))
+        if stalled:
+            verdict(name, stalled)
+            continue
         if q['exit']:
             verdict(name, ['pinned Git could not clone %s' % repo])
             continue
@@ -272,8 +310,14 @@ def ssh_row():
                    GIT_CONFIG_VALUE_1='https://github.com/')
     work = clones / 'ssh'
     work.mkdir()
-    oracle = run([git, 'clone', '-q', 'https://github.com/wolffe-lang/wolf-std.git', 'git'], work, extra=rewrite)
-    candidate = run([den, 'clone', '-q', 'https://github.com/wolffe-lang/wolf-std.git', 'den'], work, extra=rewrite)
+    oracle = run([git, 'clone', '-q', 'https://github.com/wolffe-lang/wolf-std.git', 'git'], work, extra=rewrite,
+                 target=work / 'git', row=name, tool='git')
+    candidate = run([den, 'clone', '-q', 'https://github.com/wolffe-lang/wolf-std.git', 'den'], work, extra=rewrite,
+                    target=work / 'den', row=name, tool='den')
+    stalled = stalled_twice(('den', candidate), ('git', oracle))
+    if stalled:
+        verdict(name, stalled)
+        return
     problems = [f + ' differs' for f in ('exit', 'stdout', 'stderr') if oracle[f] != candidate[f]]
     if not problems and tree_state(work / 'git') != tree_state(work / 'den'):
         problems.append('state differs')
