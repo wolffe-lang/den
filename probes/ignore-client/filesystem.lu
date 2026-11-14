@@ -14,7 +14,7 @@ fn filesystem_test(root: str) -> int ! ProbeErrors {
     }
     var config = Map[str, str]()
     config["core.excludesfile"] = "{absolute}/global-ignore"
-    let repo = repository.Repo { gitdir: "{absolute}/.git", config: config }
+    let repo = repository.detached("{absolute}/.git", config)
     fs.write_text("{absolute}/global-ignore", "*.tmp\n*.o\n*.log\n/global-only\n")?
     fs.write_text("{absolute}/.git/info/exclude", "!keep.tmp\n/info-only\n")?
     fs.write_text("{absolute}/.gitignore", "!keep.o\ndeny/\n/only-root\nlink/\n")?
