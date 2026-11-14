@@ -29,11 +29,16 @@ stopped, so it is run only where it finishes: the control):
   http-stall-tls-keepalive-default     DEN_STALL_SECONDS unset: den ends
                                        between 30 and 60 s with the 30-second
                                        line.
-  http-stall-submodule-tls-keepalive   submodule update --init against the
+  http-stall-submodule-plain-keepalive submodule update --init against the
                                        stalling remote, DEN_STALL_SECONDS=5:
                                        both clone attempts end with the named
                                        line, the update aborts (exit 1), and
-                                       no module git directory is left.
+                                       no module git directory is left. Over
+                                       plain HTTP: the TLS gateway serves one
+                                       connection at a time through s_server's
+                                       pipes and cannot see a client leave, so
+                                       a held response would reach the retry's
+                                       connection.
 A den run still going at 90 s is stopped by the row (its own child only), and
 the row fails. Loopback only. Run through tools/env with the pinned Git.
 """
@@ -299,7 +304,7 @@ def main():
                                         last=lines[-1] if lines else ''))
 
     # A submodule update against the stalling remote.
-    server = StallGateway(srv, git, env, 'tls', pki, 'keepalive')
+    server = StallGateway(srv, git, env, 'plain', pki, 'keepalive')
     sup = out / 'super'
     try:
         run([git, 'init', '-q', '-b', 'main', sup])
@@ -320,7 +325,7 @@ def main():
         problems.append('the named line %d times, not twice (one a clone attempt)' % named)
     if (sup / '.git/modules/mod').exists():
         problems.append('the module git directory was left behind')
-    verdict('http-stall-submodule-tls-keepalive', problems,
+    verdict('http-stall-submodule-plain-keepalive', problems,
             dict(exit=r['exit'], elapsed=r['elapsed'], named=named, stalled=server.stalled))
 
     shutil.rmtree(pki, ignore_errors=True)
