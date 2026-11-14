@@ -84,12 +84,18 @@ def g(cwd, *args):
 
 
 def walk(path, each, dirs_only=False):
-    """Call each(full) on every entry os.walk lists below path; returns the
-    number of entries skipped."""
+    """Call each(full) on every entry os.walk lists below path. An entry
+    gone by its turn (den#119: the pinned Git's background maintenance takes
+    and drops objects/maintenance.lock) is skipped and counted; any other
+    error fails the walk. Returns the count."""
+    vanished = 0
     for dirpath, dirs, files in os.walk(path):
         for name in dirs if dirs_only else dirs + files:
-            each(os.path.join(dirpath, name))
-    return 0
+            try:
+                each(os.path.join(dirpath, name))
+            except FileNotFoundError:
+                vanished += 1
+    return vanished
 
 
 def lchown_tree(path, uid, gid, lchown=os.lchown):
@@ -103,7 +109,9 @@ def own(path):
     """Hand a tree to the unprivileged user (container root only)."""
     if not DROP:
         return
-    lchown_tree(path, 65534, 65534)
+    vanished = lchown_tree(path, 65534, 65534)
+    if vanished:
+        print('own: vanished %d under %s' % (vanished, os.path.relpath(path, ROOT)), flush=True)
 
 
 def reclaim(path):
@@ -111,9 +119,11 @@ def reclaim(path):
     def unlock(full):
         if not os.path.islink(full):
             os.chmod(full, 0o755)
-    walk(path, unlock, dirs_only=True)
+    vanished = walk(path, unlock, dirs_only=True)
     if DROP:
-        lchown_tree(path, 0, 0)
+        vanished += lchown_tree(path, 0, 0)
+    if vanished:
+        print('reclaim: vanished %d under %s' % (vanished, os.path.relpath(path, ROOT)), flush=True)
 
 
 def own_vanish_row():
