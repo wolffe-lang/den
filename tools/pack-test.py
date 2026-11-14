@@ -63,7 +63,7 @@ r = repo('ofs-ref', pack, idx)
 for body in (base,middle,last):
     check('read-'+oid('blob',body).hex(),r,body)
     check('prefix-'+oid('blob',body).hex(),r,body,name_id=oid('blob',body).hex()[:7])
-check('inclusive-cap',r,last,cap=len(last)); check('output-cap',r,last,expected='pack object size limit',cap=len(last)-1)
+check('inclusive-cap',r,last,cap=len(last)); check('output-cap',r,last,expected=f"limit: object {oid('blob',last).hex()} is larger than {len(last)-1} bytes",cap=len(last)-1)
 pack2, idx2, _ = make(entries, large=True)
 r2 = repo('large-offset-table',pack2,idx2)
 for body in (base,middle,last): check('large-offset-'+oid('blob',body).hex(),r2,body)
@@ -84,7 +84,7 @@ chain = [(3,b'0',b'0',b'')]
 for n in range(1,66):
     b = str(n).encode(); prev = str(n-1).encode(); chain.append((6,b,insert(prev,b),n-1))
 p,i,_ = make(chain)
-check('depth-limit',repo('depth',p,i),b'65',expected='pack delta depth limit')
+check('depth-limit',repo('depth',p,i),b'65',expected='limit: a delta chain deeper than 64')
 check('depth-boundary',OUT/'depth',b'64')
 flipped=bytearray(pack); flipped[-25]^=1
 # R-vc18-3: a read checks the entry it reads (CRC32 and identity) and the
