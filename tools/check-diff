@@ -28,6 +28,10 @@ for tier in native release; do
         tools/env python3 -I tools/diff-hunks-test.py --tier "$tier" --output "target/diff-hunks-$tier.json"
     fi
 done
+if [ "${1-}" != --units-only ]; then
+    # den#101: the scale rows, bounds stated for the native tier.
+    tools/env python3 -I tools/diff-scale-test.py --tier native
+fi
 if [ "${1-}" != --corpus-only ]; then
     "$WOLF" conform-run src/difftext_test.lu --checked --json > target/difftext-checked.json
     cat target/difftext-checked.json
