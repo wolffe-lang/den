@@ -109,9 +109,12 @@ fn fetch_selected(
         return advertised
     }
     var wants = List[str](), haves = List[str](), wanted = Map[str, bool](), had = Map[str, bool]()
+    // One reader for every ref: its pack indexes are parsed once, where a
+    // read per ref parsed every pack's index for every ref.
+    let reader = object.reader_batch(repo)
     for reference in refs.list(repo, "refs/")? {
         let name = oid.hex(reference.id)?
-        let body = object.read_object(repo, reference.id, 16777216)?
+        let body = object.read_loaded(reader, reference.id, 16777216)?
         if body.kind == "commit" && !(had[name] else false) {
             (mut haves).push(copy name)
             had[name] = true
@@ -120,8 +123,8 @@ fn fetch_selected(
     for reference in advertised {
         if reference.id == "unborn" || (wanted[reference.id] else false) { continue }
         wanted[reference.id] = true
-        let _ = object.read_object(
-            repo,
+        let _ = object.read_loaded(
+            reader,
             oid.parse("sha1", reference.id)?,
             16777216,
         ) else |e| match e {
@@ -291,11 +294,12 @@ fn clone_into(
     var selected = wire.Ref { name: "HEAD", id: "unborn", target: "", peeled: "" }
     for reference in advertised { if reference.name == "HEAD" { selected = copy reference } }
     var packed = List[refs.Packed]()
+    let reader = object.reader_batch(repo)
     for reference in advertised {
         if reference.name == "HEAD" || reference.id == "unborn" { continue }
         var name = copy reference.name
         if name.starts_with("refs/heads/") {
-            let body = object.read_object(repo, oid.parse("sha1", reference.id)?, 16777216)?
+            let body = object.read_loaded(reader, oid.parse("sha1", reference.id)?, 16777216)?
             if body.kind != "commit" { return invalid }
         }
         if !bare && name.starts_with("refs/heads/") { name = "refs/remotes/origin/{name[11..]}" }
