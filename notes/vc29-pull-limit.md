@@ -78,11 +78,11 @@ Git pulls a commit changing 4,531 paths (2,500 modified, 2,001 added, 30 renamed
 | `c93eb16` | 53 s CPU; Git's nine-digit names printed as seven | | |
 | `9e502ca` (short names; tree writes through one reader) | 53 s CPU, 154 MB (a closure walk when nothing is wanted) | 14.3 s CPU, 916 MB | 26.6 s CPU, 1.41 GB |
 | `7e5401c` | 1.19 s CPU, 64 MB | 14.3 s CPU, 504 MB | 27.0 s CPU, 727 MB |
-| the pinned Git | 0.012 s, 48 MB | 0.12 s, 48 MB | 0.18 s, 48 MB |
+| the pinned Git | 0.012 s, 48 MB (the runner's floor) | 0.12 s, 48 MB (floor) | 0.18 s, 48 MB (floor) |
 
 The same rows on a copy of the issue's own repository (`--source`, its trunk: 10,501 files, 4,904 commits, 31,799 objects over 44 packs, so eight-digit names) also equal Git's output at `7e5401c`: up to date 0.36 s CPU and 42 MB, fast-forward 8.5 s and 435 MB, true merge 17.9 s and 625 MB (Git 0.01, 0.26 and 0.33 s).
 
-Times are CPU (user and system), minimum of three takes on a light slot; memory is the peak resident set, and 48 MB is the floor any child of the test's parent starts from (ru_maxrss survives fork and exec), so Git's own peak is under it. The row holds den to 10 s of CPU and 512 MiB for the up-to-date pull, and 90 s and 120 s with 768 MiB for the moved ones. The record's `pull-scale` lines give the final head's figures.
+Times are CPU (user and system), minimum of three takes on a light slot; memory is the peak resident set. These figures were taken with the Python runner as each tool's parent, and a child's peak starts at its parent's, so the Git column (48 MB, 37 MB on the copy) is the runner's own peak, not Git's, and den's ratio to Git reads low (den#114). The rows now start each tool from `tools/minimal-parent.c`, which holds about a megabyte, so the record's `pull-scale` lines give each tool's own peak beside that floor. The row holds den to 10 s of CPU and 512 MiB for the up-to-date pull, and 90 s and 120 s with 768 MiB for the moved ones. The record's `pull-scale` lines give the final head's figures.
 
 ### Decisions
 
