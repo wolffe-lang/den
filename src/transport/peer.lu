@@ -6,6 +6,10 @@ use pktline
 /// One owned peer: exactly one stream channel or one HTTP connection.
 pub struct Peer { stream: List[Channel], web: List[http.Connection], service: str }
 
+/// den#118: the stall bound every HTTP read and every fetch's pack stream
+/// keeps (http.stall_seconds).
+pub fn stall_seconds() -> int { http.stall_seconds() }
+
 /// Recognize HTTP URLs without treating another scheme as an HTTP fallback.
 pub fn http_form(url: str) -> bool {
     let lower = url.lower()

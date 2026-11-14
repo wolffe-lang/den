@@ -1,4 +1,5 @@
 use std.fs
+use std.time
 use object
 use oid
 use pack
@@ -383,32 +384,57 @@ pub fn receive_pack(
         return Unsupported("remote error: {line[4..].trim()}")
     }
     if first.kind != 4 || pktline.text(first.data)? != "packfile" { return invalid }
-    var finished = false
-    while !finished {
+    // den#118: a remote that keeps the connection busy (keepalive packets,
+    // progress) but sends no pack data is bounded by the clock below, not
+    // only by a read's own deadline: stall_seconds once pack data has
+    // flowed, four times that before its first byte, while the remote may
+    // still be preparing the pack.
+    let bound = transport.stall_seconds()
+    var last = time.monotonic_ns(), started = false, state = 0
+    while state != 2 {
         region packet {
-            finished = receive_packet(mut s, mut receiver)?
+            state = receive_packet(mut s, mut receiver)?
+        }
+        let now = time.monotonic_ns()
+        if state == 1 {
+            last = now
+            started = true
+        } else if state == 0 {
+            let allowed = if started then bound else 4 * bound
+            if now - last > allowed * 1000000000 { return Unsupported(stalled(bound, started)) }
         }
     }
     pack.received_index(mut receiver)?
 }
 
+// den#118's named failure: no pack data within the bound. A literal, as a
+// bound's message is (see walk.node_limit).
+fn stalled(bound: int, started: bool) -> str {
+    if bound == 30 && started { return "fatal: the remote sent no pack data for 30 seconds" }
+    if bound == 30 { return "fatal: the remote sent no pack data for 120 seconds" }
+    "fatal: the remote sent no pack data within DEN_STALL_SECONDS"
+}
+
 // One packet of the packfile section: band 1 to the temporary, band 2
-// dropped, band 3 fatal. True at the section's flush.
+// dropped, band 3 fatal. 2 at the section's flush, 1 when pack data
+// arrived, 0 for any other packet (progress, or an empty keepalive).
 fn receive_packet(
     mut s: transport.Stream,
     mut receiver: pack.Receiver,
-) -> bool ! object.StoreErrors {
+) -> int ! object.StoreErrors {
     let p = transport.stream_packet(mut s)?
-    if p.kind == 0 { return true }
+    if p.kind == 0 { return 2 }
     if p.kind != 4 || p.data.len == 0 { return invalid }
     if p.data[0] == 1 as byte {
+        if p.data.len == 1 { return 0 }
         pack.receive_write(mut receiver, p.data[1..])?
+        return 1
     } else if p.data[0] == 3 as byte {
         return Unsupported("remote fatal sideband")
     } else if p.data[0] != 2 as byte {
         return invalid
     }
-    false
+    0
 }
 
 /// Install a received pack as Git does: a clone keeps it, and so does a
