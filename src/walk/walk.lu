@@ -17,7 +17,9 @@ pub struct Commit {
 
 /// Decode a commit without reserializing its headers or normalizing its message.
 pub fn parse(id: oid.Oid, data: List[byte]) -> Commit ! worktree.WorkErrors {
-    if data.len > 16777216 { return limit }
+    if data.len > 16777216 {
+        return Fatal("limit: commit {oid.hex(id)?} is larger than 16777216 bytes")
+    }
     let _ = oid.hex(id)?
     if id.algorithm != "sha1" { return unsupported_format }
     let headers = object.parse_commit(data, "sha1")?
@@ -57,6 +59,9 @@ fn read_from(mut reader: object.Reader, id: oid.Oid) -> Commit ! worktree.WorkEr
     parse(id, value.data)?
 }
 
+/// The ancestry walk's bounds, named as pull, merge and rebase print them.
+fn ancestry_limit(what: str) -> str { "limit: more than {what} in the ancestry walk" }
+
 /// Visit reachable commits, once each, by timestamp among the pending frontier.
 /// Equal timestamps retain enqueue order; parents retain raw header order.
 /// max_count/skip are output controls; max_nodes is the hard resource bound.
@@ -78,11 +83,11 @@ pub fn collect(
     for id in starts {
         let key = oid.hex(id)?
         if seen[key] else false { continue }
-        if seen.len >= max_nodes { return limit }
+        if seen.len >= max_nodes { return Fatal(ancestry_limit("{max_nodes} commits")) }
         seen[key] = true
         let node = read_from(mut reader, id)?
         total += node.encoded_size
-        if total > 134217728 { return limit }
+        if total > 134217728 { return Fatal(ancestry_limit("134217728 bytes of commits")) }
         (mut nodes).push(node)
         (mut active).push(true)
         queued += 1
@@ -104,11 +109,11 @@ pub fn collect(
             if first_parent && i > 0 { break }
             let key = oid.hex(item.parents[i])?
             if seen[key] else false { continue }
-            if seen.len >= max_nodes { return limit }
+            if seen.len >= max_nodes { return Fatal(ancestry_limit("{max_nodes} commits")) }
             seen[key] = true
             let node = read_from(mut reader, item.parents[i])?
             total += node.encoded_size
-            if total > 134217728 { return limit }
+            if total > 134217728 { return Fatal(ancestry_limit("134217728 bytes of commits")) }
             (mut nodes).push(node)
             (mut active).push(true)
             queued += 1
