@@ -78,19 +78,22 @@ fn tree_objects(
     files: List[diff.File],
 ) -> index.TreeAssembly ! commit.CommitErrors {
     var value = index.empty(2)?
+    // One reader answers which objects are stored already (most trees of a
+    // merged tree are): each pack index is parsed once.
+    let reader = object.reader_batch(ctx.repo)
     for file in files {
         // A gitlink names its submodule's commit; no blob is written (vc25).
         // compared() deliberately omits unchanged bodies. Their ids already
         // name stored blobs; only supplied canonical bodies need publishing.
         if file.mode != 0o160000 && oid.equal(file.id, object.identify("blob", file.data)?) {
-            let _ = object.write_object(ctx.repo, "blob", file.data)?
+            let _ = object.write_loaded(reader, "blob", file.data)?
         }
         var entry = index.conflict_entry(file.path, file.mode, file.id, 1)?
         entry.flags -= 4096
         (mut value.entries).push(entry)
     }
     let tree = index.build_trees(value)?
-    for obj in tree.objects { let _ = object.write_object(ctx.repo, "tree", obj.data)? }
+    for obj in tree.objects { let _ = object.write_loaded(reader, "tree", obj.data)? }
     tree
 }
 
