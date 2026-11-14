@@ -2,4 +2,7 @@ pkg {
     name: "repository",
     edition: "1",
     capabilities: [fs, env],
+    deps: {
+        pack: {path: "../pack"},
+    },
 }

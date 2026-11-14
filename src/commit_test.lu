@@ -105,7 +105,7 @@ fn main() -> int ! commit.CommitErrors {
         assert(count.added >= 0 && count.deleted >= 0)
     }
     let ctx = worktree.Context {
-        repo: repository.Repo { gitdir: "", config: Map[str, str]() },
+        repo: repository.detached("", Map[str, str]()),
         root: "",
         cwd: "",
         prefix: "",
@@ -133,7 +133,7 @@ fn main() -> int ! commit.CommitErrors {
     var disabled_config = Map[str, str]()
     disabled_config["diff.renames"] = "false"
     var disabled_ctx = worktree.Context {
-        repo: repository.Repo { gitdir: "", config: disabled_config },
+        repo: repository.detached("", disabled_config),
         root: "",
         cwd: "",
         prefix: "",

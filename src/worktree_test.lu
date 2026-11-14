@@ -20,7 +20,7 @@ fn equal(a: List[byte], b: List[byte]) -> bool {
 
 fn context() -> worktree.Context {
     worktree.Context {
-        repo: repository.Repo { gitdir: "/repo/.git", config: Map[str, str]() },
+        repo: repository.detached("/repo/.git", Map[str, str]()),
         root: "/repo",
         cwd: "/repo/sub",
         prefix: "sub",
