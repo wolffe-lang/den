@@ -91,7 +91,9 @@ for i,(encoded,id,tag) in enumerate(malformed):
  if path.exists():path.chmod(0o644)
  path.write_bytes(encoded)
  r=run(C,['read',gd,id,128],expect=1)
- assert b'trap' not in r.stderr and (tag is None or r.stderr==tag+b'\n'),(i,tag,r.stderr)
+ # den#100: a size bound names the object and the cap.
+ named=tag==b'limit' and r.stderr==b'Unsupported(limit: object '+id.encode()+b' is larger than 128 bytes)\n'
+ assert b'trap' not in r.stderr and (tag is None or named or r.stderr==tag+b'\n'),(i,tag,r.stderr)
  path.unlink()
 rows.append(f'malformed: {len(malformed)} header/length/truncation/trailing/checksum/oid rows')
 # Inclusive output boundary, zero, negative, and a compression bomb bounded to 64.
@@ -100,7 +102,7 @@ for body,cap,status in [(b'',0,0),(b'abc',3,0),(b'abc',2,1),(b'abc',-1,1),(b'x'*
  if path.exists():path.chmod(0o644)
  path.write_bytes(zlib.compress(b'blob '+str(len(body)).encode()+b'\0'+body))
  r=run(C,['read',gd,id,cap],expect=status)
- if status:assert r.stderr in (b'limit\n',b'invalid\n')
+ if status:assert r.stderr==b'invalid\n' if cap<0 else r.stderr==b'Unsupported(limit: object '+id.encode()+b' is larger than '+str(cap).encode()+b' bytes)\n',(body[:8],cap,r.stderr)
 # deterministic prefix collision, no fabricated names: two real SHA-1 objects
 seen={};collision=None
 for n in range(5000):
