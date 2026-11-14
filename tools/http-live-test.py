@@ -30,7 +30,8 @@ for the token.
 
 Every row SKIPs by name when github.com:443 is unreachable or when no
 distribution root bundle exists; the push row also without its variables. Run through tools/env in the oracle
-container. PEM is decoded per RFC 7468 here; no TLS library is imported.
+container. --self-url, --self-seconds and --output aim the self row at
+another repository (tools/http-live-stall-test.py's local server). PEM is decoded per RFC 7468 here; no TLS library is imported.
 """
 import argparse
 import base64
@@ -47,6 +48,7 @@ import subprocess
 import sys
 import threading
 import time
+from urllib.parse import urlsplit
 
 GIT_SHA256 = 'c4848492938c4ebfffbefe1fbbaa68b9af90c86d1f6a20e76816c5ff37fcfa60'
 READ_URL = 'https://github.com/wolffe-lang/burrow.git'
@@ -128,6 +130,12 @@ def pem_roots(path):
     return bytes(out), count
 
 
+def endpoint(url):
+    """The host and port a URL's requests connect to."""
+    parts = urlsplit(url)
+    return parts.hostname, parts.port or (443 if parts.scheme == 'https' else 80)
+
+
 def reachable(host, port, timeout=10):
     try:
         with socket.create_connection((host, port), timeout=timeout):
@@ -207,6 +215,10 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--tier', choices=('native', 'release'), default='native')
     parser.add_argument('--rows', default='read,identity,self,push')
+    # tools/http-live-stall-test.py aims the self row at its local server.
+    parser.add_argument('--self-url', default=SELF_URL)
+    parser.add_argument('--self-seconds', type=int, default=SELF_SECONDS)
+    parser.add_argument('--output', default='', help='a fresh directory (default target/runs/http-live-TIER)')
     args = parser.parse_args()
     rows = args.rows.split(',')
     assert set(rows) <= {'read', 'identity', 'self', 'push'} and rows, 'rows'
@@ -233,12 +245,14 @@ def main():
         for row in rows:
             print('SKIP ' + names[row] + ' reason=no distribution root bundle', flush=True)
         return
-    unreachable = reachable('github.com', 443)
-    if unreachable:
-        for row in rows:
-            print('SKIP ' + names[row] + ' reason=no network (github.com:443 ' + unreachable + ')', flush=True)
-        return
-    out = root / 'target/runs' / ('http-live-' + args.tier)
+    urls = {'read': READ_URL, 'identity': IDENTITY_URL, 'self': args.self_url, 'push': live_url}
+    for host, port in sorted({endpoint(urls[row]) for row in rows}):
+        unreachable = reachable(host, port)
+        if unreachable:
+            for row in rows:
+                print('SKIP ' + names[row] + ' reason=no network (%s:%d %s)' % (host, port, unreachable), flush=True)
+            return
+    out = Path(args.output) if args.output else root / 'target/runs' / ('http-live-' + args.tier)
     if out.exists():
         raise SystemExit('FAIL http-live-fresh-output: select a fresh build directory')
     out.mkdir(parents=True)
@@ -434,10 +448,10 @@ def main():
         name = names['self']
         problems = []
         den_dir, git_dir = out / 'self-den', out / 'self-git'
-        before = run([git, 'ls-remote', SELF_URL], out, name + '-ls-remote-before', 120)
-        candidate = run([den, 'clone', '-q', SELF_URL, den_dir], out, name + '-den', SELF_SECONDS, 'den')
-        oracle = run([git, 'clone', '-q', SELF_URL, git_dir], out, name + '-git', SELF_SECONDS)
-        after = run([git, 'ls-remote', SELF_URL], out, name + '-ls-remote-after', 120)
+        before = run([git, 'ls-remote', args.self_url], out, name + '-ls-remote-before', 120)
+        candidate = run([den, 'clone', '-q', args.self_url, den_dir], out, name + '-den', args.self_seconds, 'den')
+        oracle = run([git, 'clone', '-q', args.self_url, git_dir], out, name + '-git', args.self_seconds)
+        after = run([git, 'ls-remote', args.self_url], out, name + '-ls-remote-after', 120)
         measured = dict(den_exit=candidate['exit'], den_elapsed=candidate['elapsed'],
                         den_maxrss_kib=candidate['maxrss_kib'], den_user=candidate['user'],
                         git_exit=oracle['exit'], git_elapsed=oracle['elapsed'], git_maxrss_kib=oracle['maxrss_kib'],
@@ -451,7 +465,7 @@ def main():
                 problems.append('process %s differs: den exit %d stderr %r' % (
                     field, candidate['exit'], bytes.fromhex(candidate['stderr'])[:400]))
         if candidate['timed_out']:
-            problems.append('den did not finish within %d s' % SELF_SECONDS)
+            problems.append('den did not finish within %d s' % args.self_seconds)
         if candidate['maxrss_kib'] > SELF_RSS_KIB:
             problems.append('den peak RSS %d KiB over the predicted %d' % (candidate['maxrss_kib'], SELF_RSS_KIB))
         if not problems:
