@@ -11,11 +11,13 @@ refusals in REFUSED, where den must refuse by that name.
   --measure  run every row and write the table (target/denied-TIER/), failing
              nothing.
   --walk-rows-only
-             run only the fixture row below (no den build needed).
+             run only the fixture rows below (no den build needed).
 
-Before the matrix, a row checks the fixture code itself (den#119):
+Before the matrix, two rows check the fixture code itself (den#119):
 denied-own-vanish walks a tree whose maintenance.lock a hook removes after
-os.walk has listed it and before its lchown.
+os.walk has listed it and before its lchown; denied-fixture-maintenance
+counts the automatic maintenance children of a commit in a fixture made as
+build() makes them.
 """
 import argparse
 import errno
@@ -256,11 +258,46 @@ COMMANDS = [
 ]
 
 
-def build(work, shape):
+def init_fixture(work):
+    """A fixture repository with its first commit, as every row starts."""
     work.mkdir(parents=True)
     g(work, 'init', '-q', '-b', 'main')
     (work / 'a.txt').write_text('hi\n')
     commit(work, 'a.txt', message='one')
+
+
+def fixture_maintenance_row():
+    """den#119's cause: a Git command in a fixture may start automatic
+    maintenance (git-maintenance(1), maintenance.auto; git-config(1),
+    gc.auto), which takes objects/maintenance.lock while own() walks. A commit
+    in a fixture made as build() makes them must start none. The commit runs
+    any maintenance joined (maintenance.autoDetach=false), so its trace2
+    events are complete when it returns."""
+    name = 'denied-fixture-maintenance'
+    work = ROOT / 'fixture-maintenance'
+    trace = ROOT / 'fixture-maintenance.trace'
+    init_fixture(work)
+    q = subprocess.run([str(GIT), '-c', 'maintenance.autoDetach=false', 'commit', '-q', '--allow-empty', '-m', 'probe'],
+                       cwd=work, env={**os.environ, 'GIT_TRACE2_EVENT': str(trace)}, capture_output=True, timeout=120)
+    events = [json.loads(line) for line in trace.read_text().splitlines() if line.strip()] if trace.exists() else []
+    children = [e.get('argv', []) for e in events
+                if e.get('event') == 'child_start' and {'maintenance', 'gc'} & set(e.get('argv', []))]
+    problems = []
+    if q.returncode:
+        problems.append('commit exit %d: %r' % (q.returncode, text(q.stderr)[:200]))
+    if not events:
+        problems.append('the commit wrote no trace2 events')
+    if children:
+        problems.append('%d automatic maintenance child(ren): %s' % (len(children), ' '.join(children[0])))
+    shutil.rmtree(work)
+    trace.unlink(missing_ok=True)
+    print(('PASS ' if not problems else 'FAIL ') + name +
+          (' children=0' if not problems else ' ' + '; '.join(problems)), flush=True)
+    return not problems
+
+
+def build(work, shape):
+    init_fixture(work)
     locks = shape(work)
     own(work)
     for path, mode in locks:
@@ -296,7 +333,8 @@ def record(name, git_res, den_res, extra):
           'extra=' + json.dumps(extra), flush=True)
 
 
-walk_failures = [row for row, ok in (('denied-own-vanish', own_vanish_row()),) if not ok]
+walk_failures = [row for row, ok in (('denied-own-vanish', own_vanish_row()),
+                                     ('denied-fixture-maintenance', fixture_maintenance_row())) if not ok]
 if A.walk_rows_only:
     sys.exit(1 if walk_failures else 0)
 assert DEN.is_file(), DEN
