@@ -103,9 +103,29 @@ def main():
         (work / '.git/packed-refs').write_text(''.join(lines))
         return work
 
+    def long_rewrite(name):
+        """A clone behind its remote, which rewrote every line of a 2,500-line file."""
+        base = out / name
+        base.mkdir()
+        origin, work = base / 'origin', base / 'work'
+        run([git, 'init', '-q', origin], base)
+        (origin / 'long.txt').write_text(''.join(f'old line {i}\n' for i in range(2500)))
+        (origin / 'a').write_text('a\n')
+        run([git, 'add', '.'], origin)
+        run([git, 'commit', '-qm', 'base'], origin)
+        run([git, 'clone', '-q', origin, work], base)
+        if name.startswith('merge'):
+            (work / 'local').write_text('local\n')
+            run([git, 'add', 'local'], work)
+            run([git, 'commit', '-qm', 'local'], work)
+        (origin / 'long.txt').write_text(''.join(f'new line {i}\n' for i in range(2500)))
+        run([git, 'commit', '-qam', 'rewrite'], origin)
+        run([git, 'fetch', '-q', 'origin'], work)
+        return work
+
     rows = []
 
-    def row(name, setup, argv, expected):
+    def row(name, setup, argv, expected, published=False):
         if a.filter not in name:
             return
         made = setup(name)
@@ -119,9 +139,12 @@ def main():
         lines = p.stderr.decode(errors='replace').splitlines()
         last_ok = (lines and lines[-1].startswith(f'fatal: {wanted[0]}') and lines[-1].endswith(wanted[1])
                    if isinstance(wanted, tuple) else lines and lines[-1] == f'fatal: {wanted}')
+        # A bound the merge's stat reaches comes after the update is
+        # published: HEAD has moved, and no merge state is left behind.
+        moved = head(work) != before and not (work / '.git' / 'MERGE_HEAD').exists()
         ok = (p.returncode == 128 and last_ok and
               'fatal: limit' not in lines and not any('not yet implemented' in x for x in lines) and
-              head(work) == before)
+              (moved if published else head(work) == before))
         print(('PASS ' if ok else 'FAIL ') + f'limit-{name}' +
               ('' if ok else f' den exit {p.returncode} stderr tail {lines[-2:]!r}; wanted {wanted!r}') +
               f' (Git exit {oracle.returncode})', flush=True)
@@ -150,6 +173,9 @@ def main():
         return base / 'work'
     row('clone-url', plain, ['clone', 'git://127.0.0.1:1/' + 'x' * 5000, 'unused'],
         lambda w, _: 'limit: a remote URL longer than 4096 bytes')
+    stat_bound = lambda w, _: 'limit: a file whose line diff passes 2000 differing lines, 200000 lines or 16777216 bytes'
+    row('pull-diffstat-lines', long_rewrite, ['pull', 'origin', 'main'], stat_bound, published=True)
+    row('merge-diffstat-lines', long_rewrite, ['merge', '--no-edit', 'origin/main'], stat_bound, published=True)
     assert rows, 'empty selection'
     (out / 'summary.json').write_text(json.dumps(rows, indent=2) + '\n')
     failures = sum(not r['passed'] for r in rows)
