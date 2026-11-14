@@ -262,6 +262,38 @@ pub fn write_object(repo: repository.Repo, kind: str, data: List[byte]) -> oid.O
     write_injected(repo, kind, data, "")?
 }
 
+/// write_object for a writer of many objects: the batch reader answers
+/// whether each is already stored, so each pack index is parsed once, where
+/// write_object's own check parsed every pack's index for every object.
+pub fn write_loaded(r: Reader, kind: str, data: List[byte]) -> oid.Oid ! StoreErrors {
+    let id = identify(kind, data)?
+    let existing = read_loaded(r, id, data.len) else |e| match e {
+        not_found => { return write_injected(r.repo, kind, data, "")? },
+        invalid => { return invalid },
+        invalid_oid => { return invalid_oid },
+        unsupported_format => { return unsupported_format },
+        bad_header => { return bad_header },
+        bad_size => { return bad_size },
+        bad_oid => { return bad_oid },
+        truncated => { return truncated },
+        dictionary => { return dictionary },
+        checksum => { return checksum },
+        limit => { return limit },
+        trailing => { return trailing },
+        unsupported_level => { return unsupported_level },
+        denied => { return denied },
+        io => { return io },
+        exists => { return exists },
+        unsupported => { return unsupported },
+        Unsupported(name) => { return Unsupported(name) },
+        ambiguous => { return ambiguous },
+        cross_device => { return cross_device },
+    }
+    if existing.kind != kind || existing.data.len != data.len { return bad_oid }
+    for i in 0..data.len { if existing.data[i] != data[i] { return bad_oid } }
+    id
+}
+
 /// Explicit dependency-injection seam for owned-fixture failure tests only.
 /// write/sync/install fail before publication; directory-sync fails after a
 /// complete object is published. All temp names are removed on ordinary errors.
