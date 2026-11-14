@@ -80,7 +80,11 @@ fn tree_objects(
     var value = index.empty(2)?
     for file in files {
         // A gitlink names its submodule's commit; no blob is written (vc25).
-        if file.mode != 0o160000 { let _ = object.write_object(ctx.repo, "blob", file.data)? }
+        // compared() deliberately omits unchanged bodies. Their ids already
+        // name stored blobs; only supplied canonical bodies need publishing.
+        if file.mode != 0o160000 && oid.equal(file.id, object.identify("blob", file.data)?) {
+            let _ = object.write_object(ctx.repo, "blob", file.data)?
+        }
         var entry = index.conflict_entry(file.path, file.mode, file.id, 1)?
         entry.flags -= 4096
         (mut value.entries).push(entry)
@@ -272,8 +276,10 @@ fn merge_command_with(args: List[str], reflog: str, label: str) -> int ! commit.
         merge_cleanup(ctx)
         return 0
     }
-    let ours = mergetree.files(ctx.repo, head.commits[0])?,
-        theirs = mergetree.files(ctx.repo, target)?
+    var input_ids = [copy head.commits[0], copy target]
+    if !fast { (mut input_ids).push(copy bases[0]) }
+    let inputs = mergetree.compared(ctx.repo, input_ids, !fast || stat && !quiet)?
+    let ours = copy inputs[0], theirs = copy inputs[1]
     if !fast && !upto && !stop && !squash && !noedit {
         return Unsupported("merge editor execution")
     }
@@ -287,7 +293,7 @@ fn merge_command_with(args: List[str], reflog: str, label: str) -> int ! commit.
         }
         let style = ctx.repo.config["merge.conflictstyle"] else "merge"
         plan = mergetree.plan(
-            mergetree.files(ctx.repo, bases[0])?,
+            copy inputs[2],
             ours,
             theirs,
             "HEAD",
