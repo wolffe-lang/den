@@ -437,7 +437,7 @@ fn receive_pack_bytes(c: transport.Channel) -> List[byte] ! object.StoreErrors {
         let chunk = transport.read(c, 65536)?
         if chunk.len == 0 { return truncated }
         if chunk.len > receive_limit() - bytes.len {
-            return Unsupported("limit: a received pack larger than {receive_limit()} bytes")
+            return Unsupported("limit: a received pack larger than 2147483648 bytes")
         }
         wire.append(mut bytes, chunk)
         let end = pack.scan_more(mut scan, bytes) else |e| match e {

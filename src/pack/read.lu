@@ -126,10 +126,20 @@ fn verify(fd: int, index: Index) -> int ! PackErrors {
 // R-vc23-2: a read reconstructs at most three objects' worth along a chain.
 fn reconstruction_limit() -> int { 3 * object_limit() }
 
+/// A capped read's bound, named as the object store names it.
+// A bound's message is a literal: an error can leave the region the read
+// that raised it ran in, and a message built at run time would leave with it.
+fn capped(cap: int) -> str {
+    if cap == 16777216 { return "limit: an object larger than 16777216 bytes" }
+    if cap == 67108864 { return "limit: an object larger than 67108864 bytes" }
+    if cap == 1000000000 { return "limit: an object larger than 1000000000 bytes" }
+    "limit: an object larger than its read allows"
+}
+
 fn charge(mut total: int, count: int) -> () ! PackErrors {
     if count < 0 || count > reconstruction_limit() - total {
         return Unsupported(
-            "limit: more than {reconstruction_limit()} bytes rebuilding one object from its delta chain",
+            "limit: more than 1610612736 bytes rebuilding one object from its delta chain",
         )
     }
     total += count
@@ -153,9 +163,7 @@ fn unpack(
     let next = next_offset(index, offset, end)
     let length = next - offset
     if length > object_limit() + object_limit() / 16 + 65536 {
-        return Unsupported(
-            "limit: a compressed pack entry larger than {object_limit() + object_limit() / 16 + 65536} bytes",
-        )
+        return Unsupported("limit: a compressed pack entry larger than 570490880 bytes")
     }
     charge(mut total, length)?
     let bytes = range_bytes(fd, offset, length)?
@@ -168,18 +176,18 @@ fn unpack(
         byte0 = bytes[pos] as int
         pos += 1
         if byte0 & 127 > (object_limit() - size) / scale {
-            return Unsupported("limit: a pack object larger than {object_limit()} bytes")
+            return Unsupported("limit: a pack object larger than 536870912 bytes")
         }
         size += (byte0 & 127) * scale
         if byte0 >= 128 {
             if scale > object_limit() / 128 {
-                return Unsupported("limit: a pack object larger than {object_limit()} bytes")
+                return Unsupported("limit: a pack object larger than 536870912 bytes")
             }
             scale *= 128
         }
     }
     if size > object_limit() {
-        return Unsupported("limit: a pack object larger than {object_limit()} bytes")
+        return Unsupported("limit: a pack object larger than 536870912 bytes")
     }
     var base_slot: int = -1
     if kind == 6 {
@@ -232,7 +240,7 @@ fn unpack(
             return Unsupported("pack delta invalid")
         }
         if target_size > object_limit() {
-            return Unsupported("limit: a pack object larger than {object_limit()} bytes")
+            return Unsupported("limit: a pack object larger than 536870912 bytes")
         }
         charge(mut total, cache.data[hit].len)?
         charge(mut total, target_size)?
@@ -260,7 +268,7 @@ fn unpack(
             return Unsupported("pack delta invalid")
         }
         if target_size > object_limit() {
-            return Unsupported("limit: a pack object larger than {object_limit()} bytes")
+            return Unsupported("limit: a pack object larger than 536870912 bytes")
         }
         charge(mut total, target_size)?
         let data = apply_delta(base.data, inflated.data, object_limit()) else |e| {
@@ -416,7 +424,7 @@ pub fn read_object(gitdir: str, name: str, cap: int) -> Body ! PackErrors {
         }
         if found {
             if result.data.len > cap {
-                return Unsupported("limit: object {name} is larger than {cap} bytes")
+                return Unsupported(capped(cap))
             }
             return result
         }
@@ -510,7 +518,7 @@ pub fn session_peek(s: Session, name: str, cap: int) -> Body ! PackErrors {
             result = copy value
         }
         if result.data.len > cap {
-            return Unsupported("limit: object {name} is larger than {cap} bytes")
+            return Unsupported(capped(cap))
         }
         return result
     }
@@ -537,7 +545,7 @@ pub fn session_cached(mut s: Session, name: str, cap: int) -> Body ! PackErrors 
             result = copy value
         }
         if result.data.len > cap {
-            return Unsupported("limit: object {name} is larger than {cap} bytes")
+            return Unsupported(capped(cap))
         }
         return result
     }
@@ -560,7 +568,7 @@ pub fn session_read(mut s: Session, name: str, cap: int) -> Body ! PackErrors {
             result = copy value
         }
         if result.data.len > cap {
-            return Unsupported("limit: object {name} is larger than {cap} bytes")
+            return Unsupported(capped(cap))
         }
         return result
     }

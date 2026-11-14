@@ -129,7 +129,7 @@ def main():
                          stderr=p.stderr.decode(errors='replace'), git_exit=oracle.returncode))
         shutil.rmtree(mirror)
 
-    blob_bound = lambda w, blob: f'limit: object {blob} is larger than 16777216 bytes'
+    blob_bound = lambda w, blob: 'limit: an object larger than 16777216 bytes'
     packs_bound = lambda w, _: 'limit: more than 256 packs in objects/pack'
     row('merge-changed-file', large_change, ['merge', '--no-edit', 'origin/main'], blob_bound)
     row('pull-changed-file', large_change, ['pull', '--no-rebase', 'origin', 'main'], blob_bound)
@@ -137,9 +137,8 @@ def main():
     row('pull-pack-count', many_packs, ['pull', 'origin', 'main'], packs_bound)
     row('checkout-pack-count', many_packs, ['checkout', '-q', 'origin/other'], packs_bound)
     row('merge-pack-count', many_packs, ['merge', 'origin/other'], packs_bound)
-    # The path is the repository's own, as den resolved it.
     row('fetch-packed-refs', many_refs, ['fetch', 'origin'],
-        lambda w, _: ("limit: '", "/packed-refs' is larger than 16777216 bytes"))
+        lambda w, _: 'limit: packed-refs larger than 16777216 bytes')
 
     def plain(name):
         base = out / name

@@ -68,7 +68,14 @@ pub fn packet(c: Channel) -> pktline.Packet ! Errors {
 }
 
 /// A protocol message's bound, named as fetch and push print it.
-fn message_limit(cap: int) -> str { "limit: a protocol message larger than {cap} bytes" }
+// A bound's message is a literal: an error can leave the region the read
+// that raised it ran in, and a message built at run time would leave with it.
+fn message_limit(cap: int) -> str {
+    if cap == 134217728 { return "limit: a protocol message larger than 134217728 bytes" }
+    if cap == 140000000 { return "limit: a protocol message larger than 140000000 bytes" }
+    if cap == 16777216 { return "limit: a protocol message larger than 16777216 bytes" }
+    "limit: a protocol message larger than its read allows"
+}
 
 /// Preserves headers and special packets, never conflating delimiter with flush.
 pub fn message(c: Channel, cap: int) -> List[byte] ! Errors {

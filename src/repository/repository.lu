@@ -18,6 +18,19 @@ pub error RepoErrors = {
     Unsupported(str),
 }
 
+/// read_bytes's bound, named as fetch, pull, merge and checkout print it.
+// A bound's message is a literal: an error can leave the region the read
+// that raised it ran in, and a message built at run time would leave with it.
+fn file_limit(cap: int) -> str {
+    if cap == 4096 { return "limit: a file larger than 4096 bytes" }
+    if cap == 32768 { return "limit: a file larger than 32768 bytes" }
+    if cap == 65536 { return "limit: a file larger than 65536 bytes" }
+    if cap == 1048576 { return "limit: a file larger than 1048576 bytes" }
+    if cap == 16777216 { return "limit: a file larger than 16777216 bytes" }
+    if cap == 1000000000 { return "limit: a file larger than 1000000000 bytes" }
+    "limit: a file larger than its read allows"
+}
+
 /// Bounded binary read, including a growth check after stat; never reads a pack.
 pub fn read_bytes(path: str, cap: int) -> List[byte] ! RepoErrors {
     if cap < 0 { return invalid }
@@ -25,7 +38,7 @@ pub fn read_bytes(path: str, cap: int) -> List[byte] ! RepoErrors {
     defer fs.close(take f) else |_| {}
     let info = fs_fstat_record(f.fd) else |_| { return io }
     // The bound is named as fetch, pull, merge and checkout print it.
-    if info[1] > cap { return Unsupported("limit: '{path}' is larger than {cap} bytes") }
+    if info[1] > cap { return Unsupported(file_limit(cap)) }
     var out = List[byte](), exceeded = false
     loop {
         region chunk {
@@ -40,7 +53,7 @@ pub fn read_bytes(path: str, cap: int) -> List[byte] ! RepoErrors {
             for b in bytes { (mut out).push(b) }
         }
     }
-    if exceeded { return Unsupported("limit: '{path}' is larger than {cap} bytes") }
+    if exceeded { return Unsupported(file_limit(cap)) }
     out
 }
 

@@ -174,7 +174,7 @@ fn scan(path: str, mut t: Table) -> List[byte] ! PackErrors {
     }
     let count = be32(head, 8)
     if count > count_limit() {
-        return Unsupported("limit: more than {count_limit()} objects in one received pack")
+        return Unsupported("limit: more than 400000 objects in one received pack")
     }
     let table = crc32_table()
     var digest = hash.new1()
@@ -214,12 +214,12 @@ fn scan_entry(
         b = peek[at] as int
         at += 1
         if b & 127 > (object_limit() - length) / scale {
-            return Unsupported("limit: a pack object larger than {object_limit()} bytes")
+            return Unsupported("limit: a pack object larger than 536870912 bytes")
         }
         length += (b & 127) * scale
         if b >= 128 {
             if scale > object_limit() / 128 {
-                return Unsupported("limit: a pack object larger than {object_limit()} bytes")
+                return Unsupported("limit: a pack object larger than 536870912 bytes")
             }
             scale *= 128
         }
@@ -293,7 +293,7 @@ fn scan_entry(
     } else {
         let target = delta_target_size(data) else |_| { return Unsupported("pack delta invalid") }
         if target > object_limit() {
-            return Unsupported("limit: a pack object larger than {object_limit()} bytes")
+            return Unsupported("limit: a pack object larger than 536870912 bytes")
         }
         (mut t.targets).push(target)
         (mut t.types).push(0)
