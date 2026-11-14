@@ -247,6 +247,12 @@ objects/pack`, `fatal: limit: an object larger than 16777216 bytes` (den#100).
 History readers never write the index, objects, refs or reflogs. Root patches
 compare with an in-memory empty endpoint; ordinary patches reuse the shared
 diff collector and renderer. Unique abbreviations grow past collisions.
+Fetch, push, merge, checkout, reset and the replay commands start short names
+at Git's default length when `core.abbrev` is unset or `auto`: seven digits
+below 16,384 packed objects, then one more for each further factor of four
+(eight from 16,384, nine from 65,536), loose objects not counted; the fetch and
+push summary column is padded to two such names (den#100). Diff, blame, stash
+and rev-parse still start at seven.
 History caps each object at 16 MiB, discovered commit data and rendered output
 at 128 MiB, and the CLI walk at 10,000 commits. With a count (`-n`) and no
 exclusion the walk stops after the count plus the skip, so `log -1` reads one
