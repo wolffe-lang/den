@@ -178,6 +178,43 @@ rr = repo('session-bitmap', pack, idx); (rr/'objects'/'pack'/'pack-fixture.bitma
 loose = rr/'objects'/oid('blob',last).hex()[:2]; loose.mkdir(); (loose/oid('blob',last).hex()[2:]).write_bytes(zlib.compress(b'blob 9\0'+last))
 session_row('session-unopened-loose', rr, last, must='first blob 9 ')
 session_row('session-unopened-packed', rr, base, must='pack bitmap')
+# den#101: a repository whose packs were opened once answers every read and
+# lookup as a fresh process does, through a pack changed under it, a pack
+# added after it opened, or its pack removed for another holding the object,
+# by full and by abbreviated names.
+def opened_row(name, r, body, pairs=(), cap=16777216, must=None, abbrev=False):
+    full = oid('blob', body).hex(); arg = full[:7] if abbrev else full
+    argv = [str(CLIENT), '--opened', str(r), arg, str(cap)]
+    first = fresh_answer(r, arg, cap)
+    for dest, source in pairs: argv += [str(dest), str(source)]
+    p = subprocess.run(argv, capture_output=True, timeout=60)
+    expected = 'first ' + first + '\n'
+    if pairs: expected += 'second ' + fresh_answer(r, arg, cap) + '\n'
+    good = p.returncode == 0 and p.stdout.decode(errors='replace') == expected and not p.stderr and (must is None or must in expected)
+    rows.append(dict(name=name, ok=good, code=p.returncode, stdout=p.stdout.decode(errors='replace'), expected=expected, stderr=p.stderr.decode(errors='replace')))
+    if not good: print(name, p.returncode, p.stdout[:300], 'expected', expected, p.stderr, flush=True)
+for name, mutate, must in [('same', lambda b: b, 'second blob 9 '), ('shorter', lambda b: b[:-1], 'second error'),
+                           ('longer', lambda b: b + b'\0', 'second error'),
+                           ('header', flip(7), 'pack version'), ('count', flip(11), 'pack object count'),
+                           ('trailer', flip(-1), 'pack index binding'), ('entry', flip(-25), 'pack entry CRC')]:
+    rr = repo('opened-' + name, pack, idx); pack_path = rr/'objects'/'pack'/'pack-fixture.pack'
+    source = OUT/('opened-' + name + '.source'); source.write_bytes(mutate(pack_path.read_bytes()))
+    opened_row('opened-reread-' + name, rr, last, [(pack_path, source)], must=must)
+extra = b'an object only a later pack holds'
+pack3, idx3, _ = make([(3, extra, extra, b'')])
+pack4, idx4, _ = make([(3, last, last, b'')])
+for suffix, data in (('pack3.pack', pack3), ('pack3.idx', idx3), ('pack4.pack', pack4), ('pack4.idx', idx4)):
+    (OUT/suffix).write_bytes(data)
+for abbrev in (False, True):
+    tag = '-abbrev' if abbrev else ''
+    rr = repo('opened-added' + tag, pack, idx); d = rr/'objects'/'pack'
+    opened_row('opened-added' + tag, rr, extra, [(d/'pack-other.pack', OUT/'pack3.pack'), (d/'pack-other.idx', OUT/'pack3.idx')],
+               must='second blob', abbrev=abbrev)
+    rr = repo('opened-removed' + tag, pack, idx); d = rr/'objects'/'pack'
+    opened_row('opened-removed' + tag, rr, last, [(d/'pack-other.pack', OUT/'pack4.pack'), (d/'pack-other.idx', OUT/'pack4.idx'),
+                                                    (d/'pack-fixture.pack', '-'), (d/'pack-fixture.idx', '-')],
+               must='second blob 9 ', abbrev=abbrev)
+    opened_row('opened-read' + tag, repo('opened-read' + tag, pack, idx), middle, must='first blob', abbrev=abbrev)
 (OUT/'results.json').write_text(json.dumps(rows,indent=2)+'\n')
 print(f'pack structural: {sum(x["ok"] for x in rows)}/{len(rows)}; zero skips',flush=True)
 raise SystemExit(not all(x['ok'] for x in rows))
