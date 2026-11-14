@@ -25,16 +25,28 @@ same files (the same inodes and stat data), so the two answer one state:
   rewritten          a changed to bytes of its size with its mtime put back,
                      then the index written again (Git's
                      --force-write-index) and dated inside a's second;
+  same-second        a's bytes replaced in place by others of its size and
+                     its mtime put back to the nanosecond, all inside the
+                     second of the entry's own ctime (same inode): only the
+                     ctime's nanoseconds moved, and Git compares whole
+                     seconds, so it trusts the stat data (the case is
+                     retaken until that precondition holds);
   mode-only          a made executable, nothing else;
-  link-retarget      l pointed at a target of the same length, its mtime put
-                     back;
+  link-trusted       l's index entry names another stored blob of its
+                     length while every stat word still matches the link,
+                     and the index file is newer: Git trusts a symbolic
+                     link's stat data as it does a file's;
+  link-retarget      l pointed at a target of the same length in a later
+                     second than the refresh, as a new link renamed over it
+                     (a new inode), its mtime put back;
   file-to-dir        a replaced by a directory holding one file;
   dir-back           that directory replaced by a file with a's bytes again;
   touch-all          every file's mtime moved ten seconds on, content kept;
   touch-twice        the same, after the tool's own `diff` has already run
                      once (its refresh), so the second run reads stat only.
 
-The crafted index (trusted, racy-*) is inconsistent with HEAD's tree, so
+The crafted index (trusted, racy-*, link-trusted) is inconsistent with
+HEAD's tree, so
 `diff --cached` is not asked of it: the pinned Git's answer there depends on
 the worktree's stat data (measured), which no cached comparison of den's
 reads. file-to-dir does not ask `status`: Git lists no untracked path inside a
@@ -54,7 +66,9 @@ O = runpy.run_path(str(ROOT / 'tools/oracle.py'))
 COMMANDS = [['diff', '--quiet'], ['diff', '--exit-code'], ['diff'], ['diff', '--cached', '--quiet'],
             ['status', '--porcelain']]
 CASES = ['clean', 'same-size', 'trusted', 'racy-equal', 'racy-same-second', 'racy-older', 'rewritten',
-         'mode-only', 'link-retarget', 'file-to-dir', 'dir-back', 'touch-all', 'touch-twice']
+         'same-second', 'mode-only', 'link-trusted', 'link-retarget', 'file-to-dir', 'dir-back', 'touch-all',
+         'touch-twice']
+CRAFTED = ('trusted', 'racy-equal', 'racy-same-second', 'racy-older', 'link-trusted')
 
 
 def swap_entry(index, path, oid):
@@ -98,8 +112,10 @@ def main():
     g('init', '-q')
     g('add', '-A')
     g('commit', '-qm', 'base')
-    # Another stored blob of a's size, for the crafted entry to name.
+    # Another stored blob of a's size, and one of l's (a link's blob is its
+    # target), for the crafted entries to name.
     other = bytes.fromhex(g('hash-object', '-w', '--stdin', data=b'AAAA\n').decode().strip())
+    other_link = bytes.fromhex(g('hash-object', '-w', '--stdin', data=b'b').decode().strip())
 
     def date_index(repo, ns):
         os.utime(repo / '.git/index', ns=(ns, ns))
@@ -108,7 +124,34 @@ def main():
         now = time.time_ns()
         time.sleep((1_000_000_000 - now % 1_000_000_000) / 1e9 + 0.01)
 
+    def entry_words(repo, path):
+        data = (repo / '.git/index').read_bytes()
+        pos = 12
+        for _ in range(int.from_bytes(data[8:12], 'big')):
+            flags = int.from_bytes(data[pos + 60:pos + 62], 'big')
+            if data[pos + 62:pos + 62 + (flags & 0xfff)] == path:
+                return [int.from_bytes(data[pos + 4 * i:pos + 4 * i + 4], 'big') for i in range(10)]
+            pos += (62 + (flags & 0xfff) + 8) // 8 * 8
+        raise AssertionError(path)
+
     def prepare(case):
+        # same-second needs the copy, the refresh and the change inside one
+        # second: start just after a boundary, and take the case again (at
+        # most five times) until the entry's ctime second and inode still
+        # match the changed file.
+        for _ in range(5):
+            if case == 'same-second':
+                next_second()
+            prepared = prepare_once(case)
+            if case != 'same-second':
+                return prepared
+            repo = prepared[0]
+            entry, st = entry_words(repo, b'a'), os.lstat(repo / 'a')
+            if entry[0] == (st.st_ctime_ns // 10**9) & 0xffffffff and entry[5] == st.st_ino & 0xffffffff:
+                return prepared
+        raise AssertionError('same-second: no take kept the change inside the entry\'s ctime second')
+
+    def prepare_once(case):
         repo = base / 'repo'
         if repo.exists():
             shutil.rmtree(repo)
@@ -129,6 +172,12 @@ def main():
             (repo / '.git/index').write_bytes(swap_entry((repo / '.git/index').read_bytes(), b'a', other))
             date_index(repo, {'trusted': later, 'racy-equal': st.st_mtime_ns, 'racy-same-second': inside,
                               'racy-older': st.st_mtime_ns - 1_000_000_000}[case])
+        elif case == 'link-trusted':
+            (repo / '.git/index').write_bytes(swap_entry((repo / '.git/index').read_bytes(), b'l', other_link))
+            date_index(repo, later)
+        elif case == 'same-second':
+            (repo / 'a').write_bytes(b'AAAA\n')
+            os.utime(repo / 'a', ns=(st.st_atime_ns, st.st_mtime_ns))
         elif case == 'rewritten':
             (repo / 'a').write_bytes(b'AAAA\n')
             os.utime(repo / 'a', ns=(st.st_atime_ns, st.st_mtime_ns))
@@ -137,9 +186,11 @@ def main():
         elif case == 'mode-only':
             os.chmod(repo / 'a', 0o755)
         elif case == 'link-retarget':
+            # A later second and a new inode: neither may match the entry.
             lst = os.lstat(repo / 'l')
-            os.unlink(repo / 'l')
-            os.symlink('b', repo / 'l')
+            next_second()
+            os.symlink('b', repo / 'l.new')
+            os.rename(repo / 'l.new', repo / 'l')
             os.utime(repo / 'l', ns=(lst.st_atime_ns, lst.st_mtime_ns), follow_symlinks=False)
         elif case in ('file-to-dir', 'dir-back'):
             os.unlink(repo / 'a')
@@ -163,7 +214,7 @@ def main():
     rows = []
     for case in CASES:
         commands = [c for c in COMMANDS
-                    if not (case in ('trusted', 'racy-equal', 'racy-same-second', 'racy-older') and '--cached' in c)
+                    if not (case in CRAFTED and '--cached' in c)
                     and not (case == 'file-to-dir' and c[0] == 'status')]
         for command in commands:
             repo, saved, mtime = prepare(case)
