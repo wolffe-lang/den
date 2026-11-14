@@ -51,6 +51,12 @@ pub fn read(repo: repository.Repo, id: oid.Oid) -> Commit ! worktree.WorkErrors 
     parse(id, value.data)?
 }
 
+fn read_from(mut reader: object.Reader, id: oid.Oid) -> Commit ! worktree.WorkErrors {
+    let value = object.read_cached(mut reader, id, 16777216)?
+    if value.kind != "commit" { return Unsupported("history non-commit {value.kind}") }
+    parse(id, value.data)?
+}
+
 /// Visit reachable commits, once each, by timestamp among the pending frontier.
 /// Equal timestamps retain enqueue order; parents retain raw header order.
 /// max_count/skip are output controls; max_nodes is the hard resource bound.
@@ -67,12 +73,14 @@ pub fn collect(
     var nodes = List[Commit](), active = List[bool](), queued = 0
     var seen = Map[str, bool](), out = List[Commit]()
     if max_count == 0 { return out }
+    // One pack-index parse and delta-base cache for the whole ancestry walk.
+    var reader = object.reader_batch(repo)
     for id in starts {
         let key = oid.hex(id)?
         if seen[key] else false { continue }
         if seen.len >= max_nodes { return limit }
         seen[key] = true
-        let node = read(repo, id)?
+        let node = read_from(mut reader, id)?
         total += node.encoded_size
         if total > 134217728 { return limit }
         (mut nodes).push(node)
@@ -98,7 +106,7 @@ pub fn collect(
             if seen[key] else false { continue }
             if seen.len >= max_nodes { return limit }
             seen[key] = true
-            let node = read(repo, item.parents[i])?
+            let node = read_from(mut reader, item.parents[i])?
             total += node.encoded_size
             if total > 134217728 { return limit }
             (mut nodes).push(node)
