@@ -461,8 +461,10 @@ fn merge_command_with(args: List[str], reflog: str, label: str) -> int ! commit.
             merge_publish(ctx, head, id, action, "Merge made by the 'ort' strategy.")?
         }
     }
-    if stat && !quiet { merge_stat(ctx, ours, plan.files)? }
+    // The merge is complete: its state files go before the stat is printed,
+    // so a stat that reaches a bound never leaves a merge looking unfinished.
     merge_cleanup(ctx)
+    if stat && !quiet { merge_stat(ctx, ours, plan.files)? }
     0
 }
 
