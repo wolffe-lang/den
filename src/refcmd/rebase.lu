@@ -446,7 +446,14 @@ fn rebase_command_with(args: List[str], reflog: str, quiet: bool) -> int ! commi
     }
     defer index.abort(mut tx)
     let onto_files = worktree.flatten_tree(ctx.repo, onto)?
-    worktree.transition(ctx, mut tx.value, onto_files, "switch")?
+    // A checkout the work tree refuses ends the rebase before it starts, with
+    // Git's two lines.
+    worktree.transition(ctx, mut tx.value, onto_files, "switch") else |e| match e {
+        Failure(text) => { eprint("error: {text}\nerror: could not detach HEAD"); return 1 },
+        Fatal(text) => { return Fatal(text) },
+        Unsupported(feature) => { return Unsupported(feature) },
+        _ => { return Failure("could not detach HEAD: {e}") },
+    }
     index.commit(mut tx)?
     merge_orig(ctx, head.commits) else |e| match e {
         Fatal(text) => { eprint("error: {text}") },
