@@ -85,5 +85,5 @@ fn local_fetch_command(operands: List[str], quiet: bool, force: bool) -> () ! ob
         fetch_head = "{fetch_head}{followed}"
     }
     write_fetch_head(repo, fetch_head)?
-    if !quiet { fetch_report(url, rows) }
+    if !quiet { fetch_report(repo, url, rows)? }
 }

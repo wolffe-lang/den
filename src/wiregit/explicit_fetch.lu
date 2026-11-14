@@ -255,7 +255,9 @@ fn explicit_fetch(
     if !quiet {
         // A report with a rejection is printed without padding the summary
         // column, as Git prints it.
-        fetch_report_width(url, rows, if rejected then 0 else 17)
+        var least = 0
+        if !rejected { least = summary_least(repo)? }
+        fetch_report_width(url, rows, least)
     }
     if rejected then 1 else 0
 }
