@@ -23,9 +23,9 @@ import hashlib
 import json
 import os
 from pathlib import Path
-import resource
 import shutil
 import subprocess
+import threading
 import time
 
 BOUNDS = {
@@ -126,8 +126,9 @@ def main():
 
     floor = []
     for _ in range(3):
-        pid = subprocess.Popen(['/bin/true']).pid
-        _, _, usage = os.wait4(pid, 0)
+        proc = subprocess.Popen(['/bin/true'])
+        _, status, usage = os.wait4(proc.pid, 0)
+        proc.returncode = os.waitstatus_to_exitcode(status)
         floor.append(usage.ru_maxrss)
     floor_kib = min(floor)
     print(f'FLOOR resident set of a child of this parent: {floor_kib} KiB', flush=True)
@@ -138,14 +139,23 @@ def main():
             shutil.rmtree(work)
         shutil.copytree(seed, work, symlinks=True)
         start = time.monotonic()
-        with open(out / 'take.stdout', 'wb') as so, open(out / 'take.stderr', 'wb') as se:
-            pid = subprocess.Popen([tool, *argv], cwd=work, stdout=so, stderr=se).pid
-            _, status, usage = os.wait4(pid, 0)
+        proc = subprocess.Popen([tool, *argv], cwd=work, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        chunks = {}
+
+        def drain(label, stream):
+            chunks[label] = stream.read()
+        readers = [threading.Thread(target=drain, args=(n, s)) for n, s in (('out', proc.stdout), ('err', proc.stderr))]
+        for r in readers:
+            r.start()
+        # wait4 reaps the child and gives its own rusage; Popen is told so.
+        _, status, usage = os.wait4(proc.pid, 0)
+        for r in readers:
+            r.join()
+        proc.returncode = os.waitstatus_to_exitcode(status)
         wall = time.monotonic() - start
         head = run([git, 'rev-parse', 'HEAD'], work).strip().decode()
-        return dict(status=os.waitstatus_to_exitcode(status), stdout=(out / 'take.stdout').read_bytes().hex(),
-                    stderr=(out / 'take.stderr').read_bytes().hex(), head=head, wall=wall,
-                    cpu=usage.ru_utime + usage.ru_stime, maxrss_kib=usage.ru_maxrss)
+        return dict(status=proc.returncode, stdout=chunks['out'].hex(), stderr=chunks['err'].hex(), head=head,
+                    wall=wall, cpu=usage.ru_utime + usage.ru_stime, maxrss_kib=usage.ru_maxrss)
 
     rows = []
     for name in ('uptodate', 'ff', 'merge'):
