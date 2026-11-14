@@ -372,7 +372,7 @@ fn explicit_fetch_args(args: List[str]) -> int ! object.StoreErrors {
 pub fn explicit_fetch_command(args: List[str]) -> int {
     explicit_fetch_args(args) else |e| match e {
         Unsupported(message) => {
-            if startup_diagnostic(message) { return 128 }
+            if startup_diagnostic(message) || limit_diagnostic(message) { return 128 }
             eprint("den: wire: Unsupported({transport.redact(message)})")
             2
         },

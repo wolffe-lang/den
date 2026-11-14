@@ -97,8 +97,17 @@ fn perform_pull(args: List[str]) -> int ! object.StoreErrors {
     }
     let destination = "refs/remotes/{name}/{source[11..]}"
     if rebase == "true" {
-        refcmd.refresh_pull_index() else |e| {
-            return Unsupported("pull rebase index refresh: {e}")
+        // A named bound reaches the user as itself.
+        refcmd.refresh_pull_index() else |e| match e {
+            Fatal(message) => {
+                if message.starts_with("limit: ") { return Unsupported(message) }
+                return Unsupported("pull rebase index refresh: Fatal({message})")
+            },
+            Unsupported(message) => {
+                if message.starts_with("limit: ") { return Unsupported(message) }
+                return Unsupported("pull rebase index refresh: Unsupported({message})")
+            },
+            _ => { return Unsupported("pull rebase index refresh: {e}") },
         }
     }
     if recursion == "" &&
@@ -181,6 +190,7 @@ pub fn pull_command(args: List[str]) -> int {
     perform_pull(args) else |e| match e {
         Unsupported(message) => {
             if startup_diagnostic(message) { return 1 }
+            if limit_diagnostic(message) { return 128 }
             eprint("den: wire: Unsupported({message})")
             2
         },

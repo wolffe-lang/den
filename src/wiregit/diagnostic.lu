@@ -12,6 +12,14 @@ fn read_failure() {
     )
 }
 
+/// A named bound in a wire failure is a fatal error, exit 128, as Git
+/// reports its own; true when one was printed.
+fn limit_diagnostic(message: str) -> bool {
+    if !message.starts_with("limit: ") { return false }
+    eprint("fatal: {transport.redact(message)}")
+    true
+}
+
 fn startup_diagnostic(message: str) -> bool {
     if message == "remote service unavailable" { read_failure(); return true }
     if message.starts_with("transport '") && message.ends_with("' not allowed") {

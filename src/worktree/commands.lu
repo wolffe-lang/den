@@ -370,7 +370,12 @@ pub fn run(args: List[str]) -> int {
         _ => {},
     }
     dispatch(args) else |e| match e {
-        Unsupported(feature) => { eprint("den: not yet implemented: {feature}"); 2 },
+        Unsupported(feature) => {
+            // A named bound is a fatal error, as Git reports its own.
+            if feature.starts_with("limit: ") { eprint("fatal: {feature}"); return 128 }
+            eprint("den: not yet implemented: {feature}")
+            2
+        },
         Fatal(message) => { eprint("fatal: {message}"); 128 },
         Failure(message) => { eprint(message); 1 },
         Pathspec(path) => { eprint("fatal: pathspec '{path}' did not match any files"); 128 },

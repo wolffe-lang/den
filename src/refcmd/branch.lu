@@ -250,7 +250,12 @@ pub fn run(args: List[str]) -> int {
     let result = dispatch(args) else |e| match e {
         Fatal(message) => { eprint("fatal: {message}"); return 128 },
         Failure(message) => { eprint("error: {message}"); return 1 },
-        Unsupported(message) => { eprint("den: not yet implemented: {message}"); return 2 },
+        Unsupported(message) => {
+            // A named bound is a fatal error, as Git reports its own.
+            if message.starts_with("limit: ") { eprint("fatal: {message}"); return 128 }
+            eprint("den: not yet implemented: {message}")
+            return 2
+        },
         _ => { eprint("fatal: {e}"); return 128 },
     }
     result
