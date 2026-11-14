@@ -45,6 +45,7 @@ for tier in native release; do
     step "$tier-porcelain-pull-scan" tools/env python3 -I tools/pull-scan-test.py --tier "$tier"
     step "$tier-porcelain-attributes" tools/env python3 -I tools/attributes-test.py --tier "$tier"
     step "$tier-porcelain-named-limits" tools/env python3 -I tools/limit-test.py --tier "$tier"
+    step "$tier-porcelain-abbrev" tools/env python3 -I tools/abbrev-test.py --tier "$tier"
 done
 step porcelain-limit-census python3 -I tools/limit-census.py
 step porcelain-pull-scale tools/env python3 -I tools/pull-scale-test.py --tier native
