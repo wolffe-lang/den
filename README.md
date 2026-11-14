@@ -782,7 +782,11 @@ clone, fetch and push against the pinned `git-http-backend` over plain HTTP
 and authenticated TLS. Two live rows read from github.com:
 a small public repository and den's own repository (a pack over 300 MB), each
 cloned by den and compared with Git's clone, den's own within its predicted
-time and peak memory. Both are named SKIPs without network. A third fetches,
+time and peak memory. Both are named SKIPs without network. A live clone that
+makes no progress for 300 s (or half its own time bound, if shorter) is
+stopped by the row and run once more; a second stall fails the row by name.
+A local row holds that bound against a server that stops sending mid-pack.
+den itself has no such bound yet (den#118). A third fetches,
 pushes and deletes a disposable branch on the repository that
 `DEN_LIVE_HTTPS_URL` names, with `DEN_LIVE_HTTPS_TOKEN`, and is a named SKIP
 without them. It names that repository only in the environment, as a remote
