@@ -47,6 +47,7 @@ for tier in native release; do
     step "$tier-porcelain-named-limits" tools/env python3 -I tools/limit-test.py --tier "$tier"
 done
 step porcelain-limit-census python3 -I tools/limit-census.py
+step porcelain-pull-scale tools/env python3 -I tools/pull-scale-test.py --tier native
 step actual-checked-config-edit checked_program config_edit_test
 step actual-checked-ssh-parser checked_program ssh_test
 step porcelain-format tools/check-fmt
