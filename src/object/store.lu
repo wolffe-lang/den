@@ -195,6 +195,20 @@ pub fn read_cached(mut r: Reader, id: oid.Oid, max_output: int) -> Object ! Stor
     decoded(input, id, max_output)?
 }
 
+/// The short-name length Git prints when core.abbrev is unset or "auto": seven
+/// below 2^14 packed objects, then one more each time the packed count
+/// reaches another factor of four (8 from 16384, 9 from 65536, 10 from
+/// 262144), loose objects not counted; measured against the pinned Git.
+pub fn default_abbrev(repo: repository.Repo) -> int ! StoreErrors {
+    let count = pack.packed_count(repo.gitdir)?
+    var length = 7, threshold = 16384
+    while count >= threshold && length < 40 {
+        length += 1
+        threshold *= 4
+    }
+    length
+}
+
 /// Resolve a loose/packed oid prefix; duplicates share one identity.
 /// Full-width ids are returned even when missing (read_object tests presence).
 pub fn lookup(repo: repository.Repo, name: str) -> oid.Oid ! StoreErrors {
