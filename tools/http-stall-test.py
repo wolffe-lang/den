@@ -39,6 +39,18 @@ stopped, so it is run only where it finishes: the control):
                                        pipes and cannot see a client leave, so
                                        a held response would reach the retry's
                                        connection.
+  http-stall-rerun-clone               a clone cut off mid-fetch (its state
+                                       copied while den waits), then each
+                                       tool clones again: the same refusal of
+                                       the non-empty destination as Git's.
+  http-stall-rerun-submodule           a submodule update cut off the same
+                                       way, then each tool updates again: den
+                                       recovers as Git does (exit, stdout,
+                                       HEAD, files; Git's fetch reports are
+                                       kept as evidence, not compared).
+  http-stall-rerun-submodule-empty-dir the same with the empty gitlink
+                                       directory a superproject's checkout
+                                       leaves.
 A den run still going at 90 s is stopped by the row (its own child only), and
 the row fails. Loopback only. Run through tools/env with the pinned Git.
 """
@@ -224,8 +236,10 @@ def main():
             '-CAcreateserial', '-days', '1', '-sha256', '-extfile', pki / 'leaf.cnf', '-out', pki / 'leaf.pem')
     tls = dict(GIT_SSL_CAINFO=str(pki / 'ca.pem'), DEN_TLS_ROOTS=str(pki / 'ca.der'))
 
-    def tool(name, argv, cwd, extra):
-        """One run, bounded at STOP seconds (its own child stopped, a failure)."""
+    def tool(name, argv, cwd, extra, snap=None):
+        """One run, bounded at STOP seconds (its own child stopped, a failure).
+        snap=(source, copy, seconds): source is copied as it stands that many
+        seconds in, the state a kill at that moment would leave."""
         index = len(list(out.glob('*.stderr')))
         paths = out / ('%02d.stdout' % index), out / ('%02d.stderr' % index)
         started = time.monotonic()
@@ -237,6 +251,8 @@ def main():
             pid, status, _ = os.wait4(child.pid, os.WNOHANG)
             if pid:
                 break
+            if snap and not snap[1].exists() and time.monotonic() - started >= snap[2]:
+                shutil.copytree(snap[0], snap[1], symlinks=True)
             if not stopped and time.monotonic() - started > STOP:
                 os.kill(child.pid, signal.SIGKILL)  # This row's own child only.
                 stopped = True
@@ -327,6 +343,76 @@ def main():
         problems.append('the module git directory was left behind')
     verdict('http-stall-submodule-plain-keepalive', problems,
             dict(exit=r['exit'], elapsed=r['elapsed'], named=named, stalled=server.stalled))
+
+    # Cut off mid-fetch, then run again: the state den leaves when it is
+    # killed while it waits on the stalled remote (copied 2.5 s in; no signal
+    # is sent), then each tool reruns the same command against a remote that
+    # answers. A clone's non-empty destination is refused by both; a
+    # submodule's module directory with no refs is reused and fetched into by
+    # both (Git prints its fetch reports, which den does not; stderr is kept
+    # in the evidence, not compared). The second submodule case adds the
+    # empty directory a superproject's checkout leaves at a gitlink.
+    cases = (('clone', ['clone', None, 'dest'], 'dest'),
+             ('submodule', ['submodule', 'update', '--init'], None),
+             ('submodule-empty-dir', ['submodule', 'update', '--init'], None))
+    for label, argv, dest in cases:
+        stalled = StallGateway(srv, git, env, 'plain', pki, 'keepalive')
+        base = out / ('cut-' + label)
+        try:
+            if dest:
+                base.mkdir()
+                tool('den', [den, *[stalled.url if a is None else a for a in argv]], base,
+                     {'DEN_STALL_SECONDS': str(BOUND)}, snap=(base / dest, out / ('state-' + label) / dest, 2.5))
+            else:
+                run([git, 'init', '-q', '-b', 'main', base])
+                (base / '.gitmodules').write_text('[submodule "mod"]\n\tpath = mod\n\turl = %s\n' % stalled.url)
+                run([git, 'add', '.gitmodules'], base)
+                run([git, 'update-index', '--add', '--cacheinfo', '160000,%s,mod' % tip], base)
+                run([git, 'commit', '-q', '-m', 'one submodule'], base)
+                tool('den', [den, *argv], base, {'DEN_STALL_SECONDS': str(BOUND)},
+                     snap=(base, out / ('state-' + label), 2.5))
+        finally:
+            stalled.close()
+        state = out / ('state-' + label)
+        problems = []
+        if not state.exists():
+            problems.append('no state was copied while den waited')
+            verdict('http-stall-rerun-' + label, problems, {})
+            continue
+        if label == 'submodule-empty-dir':
+            (state / 'mod').mkdir(exist_ok=True)
+        server = StallGateway(srv, git, env, 'plain', pki, 'none')
+        runs = {}
+        try:
+            for name, exe in (('git', git), ('den', den)):
+                where = out / ('rerun-%s-%s' % (label, name))
+                shutil.copytree(state, where, symlinks=True)
+                if dest:
+                    runs[name] = tool(name, [exe, *[server.url if a is None else a for a in argv]], where, {})
+                    runs[name]['stdout'] = ''
+                else:
+                    run([git, 'config', 'submodule.mod.url', server.url], where)
+                    module = where / '.git/modules/mod/config'
+                    if module.exists():
+                        run([git, 'config', '--file', module, 'remote.origin.url', server.url])
+                    runs[name] = tool(name, [exe, *argv], where, {})
+                    runs[name]['head'] = subprocess.run([git, '-C', str(where / 'mod'), 'rev-parse', 'HEAD'],
+                                                        env=env, capture_output=True, text=True).stdout.strip()
+                    runs[name]['files'] = sorted(p.name for p in (where / 'mod').iterdir() if p.name != '.git') \
+                        if (where / 'mod').is_dir() else None
+                stdout = out / ('%02d.stdout' % (len(list(out.glob('*.stderr'))) - 1))
+                runs[name]['stdout'] = stdout.read_text(errors='replace')
+        finally:
+            server.close()
+        g, d = runs['git'], runs['den']
+        keys = ('exit', 'stderr') if dest else ('exit', 'stdout', 'head', 'files')
+        for key in keys:
+            if g[key] != d[key]:
+                problems.append('%s: git %r, den %r' % (key, g[key], d[key]))
+        if not dest and d['head'] != tip:
+            problems.append('den did not recover the submodule at %s' % tip[:12])
+        verdict('http-stall-rerun-' + label, problems,
+                dict(git_exit=g['exit'], den_exit=d['exit'], git_stderr=g['stderr'][-200:], den_stderr=d['stderr'][-200:]))
 
     shutil.rmtree(pki, ignore_errors=True)
     if failures:
