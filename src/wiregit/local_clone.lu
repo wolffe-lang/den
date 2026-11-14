@@ -30,7 +30,9 @@ fn local_objects(source: str, destination: str) -> () ! object.StoreErrors {
                 if name == "alternates" || name == "http-alternates" {
                     return Unsupported("local clone alternate object store")
                 }
-                if count >= 100000 { return limit }
+                if count >= 100000 {
+                    return Unsupported("limit: more than 100000 files in the source's object store")
+                }
                 count += 1
                 var input = fs.File { fd: fs_open_mode(from, 21)? }
                 defer fs.close(take input) else |_| {}
