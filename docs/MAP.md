@@ -263,6 +263,38 @@ across a writer's objects with deflate's bytes; `lengths` joins from two
 queues; inflate reads several bits a byte and decodes fixed blocks without
 tables; `encode_delta` rolls its fingerprint between matches.
 
+vc30 (den#101, one parse of each pack index a command): `repository.Repo`
+carries `packs`, a `pack.Session` that is unloaded (`pack.unloaded`, no I/O)
+until a command that reads objects opens it with `object.opened` (or
+`worktree.opened` for a context): diff, log and show, blame, the status
+family and commit do. `object.read_object` then answers through
+`pack.session_find`, and `object.lookup` through `pack.session_prefix` (a
+binary search of each loaded index); both answer exactly as `read_object` and
+`prefix` do, because every other outcome takes that path itself: a read
+through the session that fails for any reason (a pack replaced, truncated or
+removed since it loaded), and any lookup while objects/pack lists other packs
+than the session loaded. A load that fails leaves the session unloaded, so a
+damaged pack's error is the per-read one. Readers made from an opened
+repository (`reader`, `reader_open`, `reader_batch`) take its indexes with a
+base cache of their own (`pack.with_cache`) instead of parsing them again;
+`write_injected` checks for an existing object through the caller's
+repository. The idx checksum and the pack's structure and trailer binding are
+checked when the session loads, once per pack per command.
+`diff.collect` compares ids before it reads a body: endpoints are `Pending`
+(a body to read from the object store by id, from the worktree, or a
+gitlink's text), pairs with equal mode and id are dropped, and bodies are read
+only for what remains (`bodies`, the 128 MiB aggregate bound over those).
+The worktree side is `worktree.tracked`: a regular file whose lstat is
+stat-clean against its entry (status's `stat_clean`, the racy rule through the
+index file's mtime) takes the entry's id unread; any other is hashed as it
+streams. Ancestors are checked once per directory across the sorted walk
+(`parents_verified`). A cached diff against HEAD reads HEAD's tree as status
+does (`worktree.head_tree`: the index's own entries when its cache tree's root
+names HEAD's tree) unless an entry is unmerged or intent-to-add. The
+autoRefreshIndex step (`refresh_known`) answers each entry from collect's hash
+when the locked index still holds the entry collect compared, and otherwise
+as `refresh` did, skipping a stat-clean entry, so no file is read twice.
+
 vc24 (den#72): `clone_name` derives a clone's directory from its URL when none
 is given; `clone_mode` fills an existing empty destination and empties it again
 on failure, and reports an empty repository for Git's warning. A local clone's
