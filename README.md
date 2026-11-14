@@ -233,7 +233,14 @@ unchanged index entries, unless disabled or a foreign index lock prevents it.
 Cached/two-object comparisons do not refresh. The gate proves the six permitted
 inode/time fields against each tool's own files; modes and sizes remain exact.
 
-Diff bodies are limited to 16 MiB per file, aggregate endpoints to 128 MiB,
+A diff compares object ids before it reads anything: it reads the bodies of
+paths that differ only. A tracked file whose stat data matches its index entry
+is taken as unchanged without being read, by Git's rule: not when the entry is
+racily clean (its mtime at or after the index file's own). The
+autoRefreshIndex step reuses the hashes the comparison made. A command that
+reads objects parses each pack index once, when it starts, not once an object.
+
+Diff bodies are limited to 16 MiB per file, the bodies a diff reads to 128 MiB,
 text sequences to 200,000 lines and general edit searches to 2,000 changed
 lines. Rename pools are limited to 2,000 candidates per side. Exceeding a bound
 returns a named failure, never an approximate result presented as exact.
