@@ -18,7 +18,9 @@ fn lines(data: List[byte]) -> List[Line] ! CommitErrors {
         while pos < data.len && data[pos] != 10 as byte { pos += 1 }
         if pos < data.len { pos += 1 }
         (mut result).push(Line { start: begin, end: pos })
-        if result.len > 200000 { return limit }
+        if result.len > 200000 {
+            return Fatal("limit: more than 200000 lines in one file of a change summary")
+        }
     }
     result
 }
@@ -41,12 +43,14 @@ fn binary(data: List[byte]) -> bool {
 /// capped at four million line pairs, each body at 16 MiB. NUL in the first
 /// 8000 bytes selects binary counting. Malformed/large data is a row, not a trap.
 pub fn line_counts(before: List[byte], after: List[byte]) -> LineCounts ! CommitErrors {
-    if before.len > 16777216 || after.len > 16777216 { return limit }
+    if before.len > 16777216 || after.len > 16777216 {
+        return Fatal("limit: a file larger than 16777216 bytes in a change summary")
+    }
     if binary(before) || binary(after) { return LineCounts { added: 0, deleted: 0, binary: true } }
     let left = lines(before)?
     let right = lines(after)?
     if left.len > 0 && right.len > 4000000 / left.len {
-        return Unsupported("commit summary line-diff budget")
+        return Fatal("limit: more than 4000000 line pairs in one file of a change summary")
     }
     var row = List[int]()
     for _ in 0..=right.len { (mut row).push(0) }
@@ -99,7 +103,9 @@ fn changes(
     after: List[worktree.FlatEntry],
     renames: bool,
 ) -> List[Change] ! CommitErrors {
-    if before.len > 100000 || after.len > 100000 { return limit }
+    if before.len > 100000 || after.len > 100000 {
+        return Fatal("limit: more than 100000 paths in a change summary")
+    }
     var out = List[Change]()
     var old_at = 0, new_at = 0
     while old_at < before.len || new_at < after.len {
@@ -144,7 +150,9 @@ fn changes(
         }
     }
     if renames {
-        if out.len > 2000 { return Unsupported("commit rename summary budget") }
+        if out.len > 2000 {
+            return Fatal("limit: more than 2000 changed paths in a change summary")
+        }
         var sources = List[int](), destinations = List[int]()
         var left = List[rename.Candidate](), right = List[rename.Candidate]()
         for i in 0..out.len {
@@ -262,7 +270,7 @@ pub fn check_summary_policy(
     after: List[worktree.FlatEntry],
 ) -> () ! CommitErrors {
     let edits = changes(_ctx, before, after, false)?
-    if edits.len > 2000 { return Unsupported("commit rename summary budget") }
+    if edits.len > 2000 { return Fatal("limit: more than 2000 changed paths in a change summary") }
 }
 
 /// Render shortstat and create/delete/mode/rename rows. Counts compare actual

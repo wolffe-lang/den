@@ -19,7 +19,7 @@ SCOPE = [
     'src/walk', 'src/mergetree', 'src/refcmd', 'src/worktree', 'src/transport', 'src/pktline',
     'src/wire', 'src/wiregit', 'src/pack/read.lu', 'src/pack/stream.lu', 'src/pack/ingest.lu',
     'src/pack/index.lu', 'src/pack/inspect.lu', 'src/object/store.lu', 'src/refs/read.lu',
-    'src/repository/repository.lu',
+    'src/repository/repository.lu', 'src/diff/stat.lu', 'src/diff/render.lu', 'src/commit/summary.lu',
 ]
 ORIGIN = re.compile(r'(?<!=> \{ )\breturn limit\b|\{ limit \}')
 PASS_THROUGH = re.compile(r'\blimit => \{ return limit \}')
