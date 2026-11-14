@@ -289,7 +289,10 @@ file, repeated base-line hashes and multiple edit hunks on either side are named
 refusals. Recursive virtual bases for criss-cross histories, rename topology,
 modify/delete and binary conflicts, nonregular tree entries, unborn merges,
 annotated-tag messages and dirty/staged true-merge recovery are also refused.
-Fast-forward dirty/untracked safety remains measured. `revert -m`, sequences,
+Fast-forward dirty/untracked safety remains measured. An already-up-to-date
+merge does not load unchanged tree bodies; when both tips are identical it
+also skips the ancestry walk. Index safety checks and ORIG_HEAD publication
+are retained. `revert -m`, sequences,
 `--continue`/`--skip` and revert abort are not implemented. Merge editor execution
 and the previously named history limits remain open.
 
@@ -778,9 +781,9 @@ forms, multiple-URL editing and existing unconfigured local paths remain named
 limits. CLI service selectors and remote uploadpack/receivepack values select
 literal executables; they are not shell commands.
 
-The portable porcelain gate defines **892 fixture groups per native/release
+The portable porcelain gate defines **894 fixture groups per native/release
 tier**: 48 remote/tracking, 770 typed update-policy, 48 configured/lease/failure
-and 26 pull groups. The typed matrix compares acceptance and resulting refs,
+and 28 pull groups. The typed matrix compares acceptance and resulting refs,
 not exact failure text/status; complete raw outputs are retained. Other groups
 compare full process results and repository state, with one exact-input-bound
 receive-service stderr REVIEW rather than a parity pass. Pure units, review
