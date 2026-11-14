@@ -297,10 +297,13 @@ fn entry_disk_mode(record: List[int], prior: int, filemode: bool, symlinks: bool
     mode
 }
 
-/// A regular file whose lstat equals its stage-zero entry in all ten words
-/// (ctime, mtime, dev, ino, mode, uid, gid, size) and is not racily clean
-/// cannot differ from the entry's blob, so status need not read it. Any
-/// missing or differing word, or an unknown index time, reads the content.
+/// A regular file whose lstat matches its stage-zero entry, as the pinned Git
+/// compares them, and is not racily clean is taken as the entry's blob
+/// unread. Git compares the ctime and mtime by whole seconds (measured: a
+/// change that moved only their nanoseconds, same inode, is not seen), the
+/// inode (a change written as a new file is seen), mode and size; den compares
+/// those and uid, gid and dev too. Any missing or differing word, or an
+/// unknown index time, reads the content.
 fn stat_clean(entry: index.Entry, record: List[int], mode: int, written: List[int]) -> bool {
     if record.len != 20 || entry.stat.len != 10 || written[0] < 0 { return false }
     let required: int = 247507
@@ -308,9 +311,7 @@ fn stat_clean(entry: index.Entry, record: List[int], mode: int, written: List[in
     let m: int = 4294967295
     if entry.stat[6] != mode ||
         entry.stat[0] != record[16] & m ||
-        entry.stat[1] != record[17] & m ||
         entry.stat[2] != record[14] & m ||
-        entry.stat[3] != record[15] & m ||
         entry.stat[4] != record[9] & m ||
         entry.stat[5] != record[10] & m ||
         entry.stat[7] != record[6] & m ||
