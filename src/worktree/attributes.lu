@@ -5,8 +5,8 @@
 // No implementation consulted.
 use repository
 
-// The attribute in one `name`, `-name`, `!name` or `name=value` token that den
-// would have to act on, or "" when den behaves as Git does without acting:
+// The refusal for one `name`, `-name`, `!name` or `name=value` token that
+// den would have to act on, or "" when den behaves as Git does without acting:
 // - text and crlf unset or unspecified: no line-ending conversion, which is
 //   den's only behaviour (core.autocrlf other than false is refused apart);
 // - diff, merge, eol, filter, ident, working-tree-encoding,
@@ -33,26 +33,26 @@ fn attribute_refused(token: List[byte]) -> str ! WorkErrors {
         }
     }
     let name = str_from_utf8(token[start..end]) else |_| { return "" }
+    // Literals only: a refusal can leave the region its scan ran in (a
+    // rebase step's), and a message built at run time would leave with it.
     if name == "text" || name == "crlf" {
-        return if state == "unset" || state == "unspecified" then "" else "{name}"
+        if state == "unset" || state == "unspecified" { return "" }
+        return if name == "text" then "worktree attributes: text" else "worktree attributes: crlf"
     }
-    for acting in [
-        "diff",
-        "merge",
-        "eol",
-        "filter",
-        "ident",
-        "working-tree-encoding",
-        "conflict-marker-size",
-        "binary",
-    ] {
-        if name == acting { return if state == "unspecified" then "" else "{name}" }
-    }
+    if state == "unspecified" { return "" }
+    if name == "diff" { return "worktree attributes: diff" }
+    if name == "merge" { return "worktree attributes: merge" }
+    if name == "eol" { return "worktree attributes: eol" }
+    if name == "filter" { return "worktree attributes: filter" }
+    if name == "ident" { return "worktree attributes: ident" }
+    if name == "working-tree-encoding" { return "worktree attributes: working-tree-encoding" }
+    if name == "conflict-marker-size" { return "worktree attributes: conflict-marker-size" }
+    if name == "binary" { return "worktree attributes: binary" }
     ""
 }
 
-/// The first attribute in an attributes file's bytes that den would have to
-/// act on, "macro definition" for an `[attr]` line, or "" when there is none.
+/// The refusal for the first attribute in an attributes file's bytes that
+/// den would have to act on (a macro definition counts), or "" for none.
 pub fn attributes_refusal(data: List[byte]) -> str ! WorkErrors {
     var lines = List[List[byte]](), line = List[byte]()
     for b in data {
@@ -82,7 +82,7 @@ pub fn attributes_refusal(data: List[byte]) -> str ! WorkErrors {
         if tokens.len == 0 || tokens[0][0] == 35 as byte { continue }
         let first = copy tokens[0]
         let head = if first.len >= 6 then (str_from_utf8(first[0..6]) else "") else ""
-        if head == "[attr]" { return "macro definition" }
+        if head == "[attr]" { return "worktree attributes: macro definition" }
         for i in 1..tokens.len {
             let refused = attribute_refused(copy tokens[i])?
             if refused != "" { return refused }
@@ -91,25 +91,30 @@ pub fn attributes_refusal(data: List[byte]) -> str ! WorkErrors {
     ""
 }
 
-/// Refuse, by attribute and file, an attributes file that sets what den does
-/// not do; one that sets only what den need not act on is accepted. shown is
-/// the name the refusal prints.
-fn attributes_file(full: str, shown: str) -> () ! WorkErrors {
+/// Refuse, by attribute, an attributes file that sets what den does not do;
+/// one that sets only what den need not act on is accepted.
+fn attributes_file(full: str) -> () ! WorkErrors {
     let named = fs_lstat(full) else |e| match e {
         not_found => { return },
         denied => { return denied },
         io => { return io },
     }
-    if named[0] != 0 { return Unsupported("worktree attributes: {shown} is not a regular file") }
+    if named[0] != 0 { return Unsupported("worktree attributes: not a regular file") }
     let data = repository.read_bytes(full, 1048576) else |e| match e {
         not_found => { return },
-        limit => { return Fatal("limit: '{shown}' is larger than 1048576 bytes") },
+        limit => { return Fatal("limit: an attributes file larger than 1048576 bytes") },
         denied => { return denied },
         io => { return io },
-        _ => { return Unsupported("worktree attributes: {shown} unreadable") },
+        Unsupported(reason) => {
+            if reason.starts_with("limit: ") {
+                return Fatal("limit: an attributes file larger than 1048576 bytes")
+            }
+            return Unsupported("worktree attributes: unreadable")
+        },
+        _ => { return Unsupported("worktree attributes: unreadable") },
     }
     let refused = attributes_refusal(data)?
-    if refused != "" { return Unsupported("worktree attributes: {refused} in {shown}") }
+    if refused != "" { return Unsupported(refused) }
 }
 
 /// Every .gitattributes a walk listed, checked as attributes_file checks it.
@@ -118,6 +123,6 @@ fn supported_attributes(ctx: Context, files: List[FileState]) -> () ! WorkErrors
         if file.kind == 1 { continue }
         let path = text(file.path)?
         if path != ".gitattributes" && !path.ends_with("/.gitattributes") { continue }
-        attributes_file(absolute(ctx, file.path)?, path)?
+        attributes_file(absolute(ctx, file.path)?)?
     }
 }

@@ -37,8 +37,8 @@ fn ensure_filters(ctx: Context) -> () ! WorkErrors {
         return Unsupported("worktree attributes: core.attributesFile")
     }
     // Attribute files that set only what den need not act on are accepted.
-    attributes_file("{ctx.repo.gitdir}/info/attributes", "info/attributes")?
-    if ctx.root != "" { attributes_file("{ctx.root}/.gitattributes", ".gitattributes")? }
+    attributes_file("{ctx.repo.gitdir}/info/attributes")?
+    if ctx.root != "" { attributes_file("{ctx.root}/.gitattributes")? }
 }
 
 fn entry_for(
