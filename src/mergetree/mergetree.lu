@@ -44,6 +44,7 @@ pub fn bases(
 /// Collect bounded regular-file tree input, preserving byte paths and objects.
 pub fn files(repo: repository.Repo, id: oid.Oid) -> List[diff.File] ! worktree.WorkErrors {
     var out = List[diff.File](), total = 0
+    var reader = object.reader_batch(repo)
     for entry in worktree.flatten_tree(repo, id)? {
         // A gitlink merges by its recorded commit alone (vc25): no blob; its
         // data is the pseudo-blob a diffstat counts, as Git's does.
@@ -59,7 +60,7 @@ pub fn files(repo: repository.Repo, id: oid.Oid) -> List[diff.File] ! worktree.W
         if entry.mode != 0o100644 && entry.mode != 0o100755 {
             return Unsupported("merge nonregular tree entry")
         }
-        let blob = object.read_object(repo, entry.id, 16777216)?
+        let blob = object.read_cached(mut reader, entry.id, 16777216)?
         if blob.kind != "blob" { return bad_oid }
         total += blob.data.len
         if total > 134217728 { return limit }
@@ -77,6 +78,70 @@ fn compare(a: List[byte], b: List[byte]) -> int {
     var i = 0
     while i < a.len && i < b.len { if a[i] != b[i] { return a[i] as int - b[i] as int }; i += 1 }
     a.len - b.len
+}
+
+fn flat_find(entries: List[worktree.FlatEntry], path: List[byte]) -> int {
+    var low = 0, high = entries.len
+    while low < high {
+        let mid = low + (high - low) / 2
+        let order = compare(entries[mid].path, path)
+        if order < 0 { low = mid + 1 } else { high = mid }
+    }
+    if low < entries.len && compare(entries[low].path, path) == 0 then low else -1
+}
+
+/// Merge endpoints retain every path/mode/id, but unchanged paths need no
+/// body. The planner compares ids before bytes; rename candidates and changed
+/// paths have their full bodies. A single reader serves every endpoint.
+/// With bodies=false, only metadata is requested (a quiet fast-forward).
+pub fn compared(
+    repo: repository.Repo,
+    ids: List[oid.Oid],
+    bodies: bool,
+) -> List[List[diff.File]] ! worktree.WorkErrors {
+    var trees = List[List[worktree.FlatEntry]]()
+    for id in ids { (mut trees).push(worktree.flatten_tree(repo, id)?) }
+    var reader = object.reader_batch(repo)
+    var result = List[List[diff.File]]()
+    for tree in trees {
+        var files = List[diff.File](), total = 0
+        for entry in tree {
+            var changed = false
+            for other in trees {
+                let at = flat_find(other, entry.path)
+                if at < 0 || other[at].mode != entry.mode || !oid.equal(other[at].id, entry.id) {
+                    changed = true
+                    break
+                }
+            }
+            if entry.mode != 0o100644 && entry.mode != 0o100755 && entry.mode != 0o160000 {
+                return Unsupported("merge nonregular tree entry")
+            }
+            // Reclaim compressed input and reconstruction scratch per body.
+            region file {
+                var data = List[byte]()
+                if entry.mode == 0o160000 {
+                    data = worktree.subproject_text(entry.id, false)?
+                } else if bodies && changed {
+                    let blob = object.read_cached(mut reader, entry.id, 16777216)?
+                    if blob.kind != "blob" { return bad_oid }
+                    if blob.data.len > 134217728 - total {
+                        return Unsupported("limit: more than 134217728 bytes of compared merge input per tree")
+                    }
+                    total += blob.data.len
+                    data = copy blob.data
+                }
+                (mut files).push(diff.File {
+                    path: copy entry.path,
+                    mode: entry.mode,
+                    id: copy entry.id,
+                    data: data,
+                })
+            }
+        }
+        (mut result).push(files)
+    }
+    result
 }
 
 fn at(files: List[diff.File], path: List[byte]) -> int {
