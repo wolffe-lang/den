@@ -269,9 +269,13 @@ COMMANDS = [
 
 
 def init_fixture(work):
-    """A fixture repository with its first commit, as every row starts."""
+    """A fixture repository with its first commit, as every row starts. No
+    automatic maintenance: no row here tests it, and its background lock
+    races own() (den#119). Both tools read the same repository config."""
     work.mkdir(parents=True)
     g(work, 'init', '-q', '-b', 'main')
+    for key, value in (('gc.auto', '0'), ('maintenance.auto', 'false')):
+        g(work, 'config', key, value)
     (work / 'a.txt').write_text('hi\n')
     commit(work, 'a.txt', message='one')
 
