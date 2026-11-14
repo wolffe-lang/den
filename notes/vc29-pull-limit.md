@@ -54,7 +54,9 @@ Git pulls a commit changing 4,531 paths (2,500 modified, 2,001 added, 30 renamed
 - **Named bounds:** every bound fetch, pull, clone, merge and checkout reach is `fatal: limit: <the bound and its value>`, exit 128, from every printer those commands use, through the wrappers that used to rename it (`merge safety:`, `clone checkout:`, `pull rebase index refresh:`, the fetch's submodule tips). An empty want list was misnamed a limit; it is invalid input.
 - **Bound messages are literals.** A callee allocates in its caller's current region, so a message built at run time inside a read that the caller ran within a region block was freed when the error left the block, and printing it crashed (the merge rows found this, exit -11). Each message is a literal, chosen by the constant bound where the cap varies; the object's id or the file's path is no longer in the message.
 - **A merge's stat after the update:** the merge's state files are removed before the stat is printed, so a stat that reaches a bound leaves no unfinished merge, and the bound is named. The summary rows below the stat no longer count lines, which the stat already did.
-- **Speed:** equal tips skip the ancestry walk and every tree and body read; a merge loads only the bodies whose ids differ, through one pack reader per walk; the change summary, and the fetch's per-ref object reads, use one pack reader each, where every read parsed every pack index. A fetch walks the closure of what it fetched only when a tag it lacks might follow, and checks a received pack's closure up to the objects the repository already held, as Git does, where both walks read every object in the repository.
+- **Speed:** equal tips skip the ancestry walk and every tree and body read; a merge loads only the bodies whose ids differ, through one pack reader per walk; the change summary, the fetch's per-ref object reads and a merge's tree and blob writes (each checking whether its object is stored) use one pack reader each, where every read parsed every pack index. A fetch walks the closure of what it fetched only when a tag it lacks might follow, checks a received pack's closure up to the objects the repository already held, as Git does, and walks nothing when it wants no object; each of those walks read every object in the repository.
+- **Memory:** a merge's ancestry walk, tree comparison, local-change scans, safety check and tree writes each run in a region and keep only their answer, a failing phase being run again outside its region so its error can carry its message. Before, every phase's scratch stayed until the command ended: sampled once a second, a fast-forward pull of the generated repository below grew steadily to 0.9 GB and a true merge to 1.4 GB, each work tree scan adding about 150 MB.
+- **Short names at Git's default length.** With `core.abbrev` unset or `auto`, Git starts short object names at seven digits below 16,384 packed objects and adds one for each further factor of four (eight from 16,384, nine from 65,536, ten from 262,144); loose objects are not counted, and an object in two packs counts twice (all measured on the pinned Git). The issue's repository has 42,651 objects, so Git prints eight digits there and den printed seven: its fetch lines, `Updating` line and the column the fetch summary is padded to all differed. Fetch, push, merge, checkout, reset and the replay commands now start at that length, read from the pack index headers alone, and pad the fetch and push summary column to two such names and `...`, as Git does at any configured length.
 
 ### Rows
 
@@ -62,12 +64,25 @@ Git pulls a commit changing 4,531 paths (2,500 modified, 2,001 added, 30 renamed
 - `tools/attributes-test.py` (both tiers): 85 rows, five accepted attribute files under status, short status, `commit -a`, three pulls and a switch, equal to Git's output, HEAD, index and every file's bytes (CRLF bodies included); ten refused files under status, three pulls and a switch, each refused by name with nothing changed.
 - `tools/limit-test.py` (both tiers): ten rows that trip a bound through the command line (a 17 MB changed file under merge and pull; 257 packs under fetch, pull, checkout and merge; a 20 MB packed-refs under fetch; a 5,000-byte URL under clone; a 2,500-line rewrite under pull and merge, after the update is published), each `fatal: limit: …`, exit 128, no bare line.
 - `tools/limit-census.py`: no statement in the code those commands run originates an unnamed bound.
+- `tools/abbrev-test.py` (both tiers): 15 rows, fetch below and at 16,384 and at 65,536 packed objects, loose objects uncounted, duplicated packs counted, `core.abbrev` at `auto`, 7, 4 and 10, an up-to-date, fast-forward and true-merge pull, a detached checkout, `reset --hard` and a push, each equal to Git's exit status, stdout, stderr and HEAD.
 - `tools/pull-scale-test.py` (native): the up-to-date, fast-forward and true-merge pulls of a generated repository the issue's size, equal to Git, under CPU and resident-set bounds; numbers below.
 - The history, object and pack rows now expect the named bounds.
 
 ### Pulls of a repository the issue's size
 
-`tools/pull-scale-test.py` builds 10,500 files in 1,000 directories and 5,000 commits, the clone's objects spread over 44 packs, and pulls with the remote 20 commits ahead (a fast-forward, and a true merge with one local commit) and with nothing to fetch. Before this change an up-to-date pull of the issue's repository took 6 min 55 s and a moved one peaked at 3.2 GiB and refused after four minutes; at the head before the last two fetch changes, the generated up-to-date pull still took 102 s of CPU (Git 0.012 s), all of it in tag following's walk of every object, and a moved pull spent minutes re-reading the whole repository after receiving its pack. The record's `pull-scale` lines give den's and Git's wall time, CPU time and peak resident set for each pull at the final head, with the bounds the row holds (10 s of CPU and 512 MiB for the up-to-date pull, 90 s and 120 s with 768 MiB for the moved ones) and the resident-set floor any child of the test's parent starts from.
+`tools/pull-scale-test.py` builds 10,500 files in 1,000 directories and 5,000 commits, the clone's objects spread over 44 packs (70,271 objects, so Git prints nine-digit names), and pulls with the remote 20 commits ahead (a fast-forward, and a true merge with one local commit) and with nothing to fetch. Each pull must equal Git's exit status, stdout, stderr and HEAD. Before this change an up-to-date pull of the issue's repository took 6 min 55 s and a moved one peaked at 3.2 GiB and refused after four minutes.
+
+| head | up-to-date | fast-forward | true merge |
+|---|---|---|---|
+| `e600359` | 102 s CPU (tag following's walk of every object) | stopped at the step's ten minutes | |
+| `c93eb16` | 53 s CPU; Git's nine-digit names printed as seven | | |
+| `9e502ca` (short names; tree writes through one reader) | 53 s CPU, 154 MB (a closure walk when nothing is wanted) | 14.3 s CPU, 916 MB | 26.6 s CPU, 1.41 GB |
+| `7e5401c` | 1.19 s CPU, 64 MB | 14.3 s CPU, 504 MB | 27.0 s CPU, 727 MB |
+| the pinned Git | 0.012 s, 48 MB | 0.12 s, 48 MB | 0.18 s, 48 MB |
+
+The same rows on a copy of the issue's own repository (`--source`, its trunk: 10,501 files, 4,904 commits, 31,799 objects over 44 packs, so eight-digit names) also equal Git's output at `7e5401c`: up to date 0.36 s CPU and 42 MB, fast-forward 8.5 s and 435 MB, true merge 17.9 s and 625 MB (Git 0.01, 0.26 and 0.33 s).
+
+Times are CPU (user and system), minimum of three takes on a light slot; memory is the peak resident set, and 48 MB is the floor any child of the test's parent starts from (ru_maxrss survives fork and exec), so Git's own peak is under it. The row holds den to 10 s of CPU and 512 MiB for the up-to-date pull, and 90 s and 120 s with 768 MiB for the moved ones. The record's `pull-scale` lines give the final head's figures.
 
 ### Decisions
 
@@ -76,16 +91,18 @@ Git pulls a commit changing 4,531 paths (2,500 modified, 2,001 added, 30 renamed
 3. **Literal bound messages.** A message built at run time can be freed with the region its read ran in; every bound message is a literal, without the object's id or the file's path. The alternative, building each message at its call site outside any region, touches every caller of the object store. A compiler that refused an error carrying a region's bytes out of the region would remove the hazard at its source; that is outside den.
 4. **Attributes.** Accept attribute files that set only what den need not act on and refuse the rest by name, rather than implementing line-ending conversion, filters and drivers here (each a lane of its own). The refusal names the attribute, not the file (decision 3).
 5. **A bound the merge's stat reaches** after the update is named, and leaves no merge state behind; matching Git's unbounded diffstat and its rename limit is a follow-up.
-6. **A received pack's closure** is checked up to the objects the repository already held, which are read and typed but not walked: the repository was complete before the fetch, as Git assumes. The alternative, walking every object in the repository on every fetch, was most of a moved pull's time.
+6. **A received pack's closure** is checked up to the objects the repository already held, which are read and typed but not walked: the repository was complete before the fetch, as Git assumes; a fetch that wants nothing walks nothing. The alternative, walking every object in the repository on every fetch, was most of a moved pull's time and all of an up-to-date one's.
+7. **Short names.** The default length is applied where pull, fetch, push, merge, checkout and the replay commands print names, and the fetch and push column follows it. Diff, blame, stash and rev-parse keep seven: they are outside these commands, and each has its own rows to extend; recommended as a follow-up.
 
 ### Remaining limits
 
 - After a merge or pull has updated HEAD, its stat can still reach a bound: a file whose line diff passes 2,000 differing lines, or more than 2,000 changed paths in the summary. The command then ends with the named bound, exit 128, the update done and no merge state left; Git prints the stat (measured at 4,531 paths).
 - A repository holds at most 256 packs, and each den fetch adds one.
 - Three directory-and-file shapes in a transition's way still differ from Git: an untracked directory where the target has a file (Git: `Updating the following directories would lose untracked files in them`; den: `fatal: cannot overwrite directory`), an untracked file where the target has a directory (Git names the file as untracked and in the way; den: `fatal: not_found`), and an ignored directory where the target has a file (Git replaces it; den: `fatal: cannot overwrite directory`).
-- A moved pull still walks the whole history of both tips to find the merge base, and the pull's own ancestry checks walk a tip's whole history when the answer is no.
+- A moved pull still walks the whole history of both tips to find the merge base, and the pull's own ancestry checks walk a tip's whole history when the answer is no. With the work tree scanned up to three times and the index parsed and serialized at each step, a moved pull of the generated repository takes 14 to 27 s of CPU and 0.5 to 0.7 GB, where Git takes 0.2 s.
 - Progress output for pull, the issue's second request, is not in this change.
 - `den diff` keeps its own refusal of any root attribute file.
+- Diff, blame, stash and rev-parse still start short names at seven digits in a repository of 16,384 or more packed objects.
 - Messages built at run time inside region blocks elsewhere (`tree transition unreadable path …`) keep the hazard decision 3 describes.
 
 ## Done-when
@@ -95,6 +112,7 @@ Git pulls a commit changing 4,531 paths (2,500 modified, 2,001 added, 30 renamed
 - [x] Scan rows, 56 per tier, equal to Git within the read and memory budgets; red first, 41 of 56
 - [x] Attribute rows, 85 per tier
 - [x] Named-bound rows, 10 per tier, and the census
+- [x] Short-name rows, 15 per tier
 - [x] Scale rows equal to Git and under their bounds
 - [x] Worktree, index, ignore, commit, diff units, refs, merge, replay, stash, history, objects, pack, wire, HTTP, housekeeping, porcelain, everyday and submodule gates on both tiers, in one record
 - [x] A one-file, one-hunk plant, red by name
