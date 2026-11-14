@@ -21,7 +21,7 @@ fn entry_meta(fd: int, end: int, index: Index, slot: int, depth: int) -> (
     str,
     int,
 ) ! PackErrors {
-    if depth > 64 { return Unsupported("pack delta depth limit") }
+    if depth > 64 { return Unsupported("limit: a delta chain deeper than 64") }
     let offset = index.entries[slot].offset
     var next = end
     for item in index.entries {
@@ -34,10 +34,14 @@ fn entry_meta(fd: int, end: int, index: Index, slot: int, depth: int) -> (
         if pos >= bytes.len { return Unsupported("pack entry header") }
         b = bytes[pos] as int
         pos += 1
-        if b & 127 > (16777216 - size) / scale { return Unsupported("pack object size limit") }
+        if b & 127 > (16777216 - size) / scale {
+            return Unsupported("limit: a pack object larger than 16777216 bytes")
+        }
         size += (b & 127) * scale
         if b >= 128 {
-            if scale > 16777216 / 128 { return Unsupported("pack object size limit") }
+            if scale > 16777216 / 128 {
+                return Unsupported("limit: a pack object larger than 16777216 bytes")
+            }
             scale *= 128
         }
     }

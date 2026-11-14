@@ -129,7 +129,7 @@ fn parse_index(data: List[byte]) -> Index ! PackErrors {
         return Unsupported("pack index checksum")
     }
     let count = be32(data, 1028)
-    if count > 400000 { return Unsupported("pack index object count limit") }
+    if count > 400000 { return Unsupported("limit: more than 400000 objects in one pack index") }
     let fixed = 1032 + count * 28 + 40
     if fixed > data.len || (data.len - fixed) % 8 != 0 { return Unsupported("pack index length") }
     let large_count = (data.len - fixed) / 8

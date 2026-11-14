@@ -15,13 +15,16 @@ struct StreamEntry {
     data: List[byte],
 }
 
+/// The whole-stream decoder's bounds, named as fetch and push print them.
+fn whole_limit(what: str) -> str { "limit: {what} in a pack stream decoded whole" }
+
 fn stream_entries(data: List[byte]) -> (List[StreamEntry], int) ! StreamErrors {
     if data.len < 12 { return truncated }
     if !same(data[0..4], "PACK".bytes()) || be32(data, 4) != 2 { return invalid }
     let count = be32(data, 8)
     // den#73: no count bound; this whole-stream decoder (thin pushes) holds
     // the stream and its bodies, so both stay capped at 128 MiB.
-    if data.len > 134217728 { return limit }
+    if data.len > 134217728 { return Unsupported(whole_limit("more than 134217728 bytes")) }
     var pos = 12, out = List[StreamEntry](), total = 0
     for _ in 0..count {
         let offset = pos
@@ -33,10 +36,14 @@ fn stream_entries(data: List[byte]) -> (List[StreamEntry], int) ! StreamErrors {
             if pos == data.len { return truncated }
             b = data[pos] as int
             pos += 1
-            if b & 127 > (16777216 - size) / scale { return limit }
+            if b & 127 > (16777216 - size) / scale {
+                return Unsupported(whole_limit("a pack entry larger than 16777216 bytes"))
+            }
             size += (b & 127) * scale
             if b >= 128 {
-                if scale > 16777216 / 128 { return limit }
+                if scale > 16777216 / 128 {
+                    return Unsupported(whole_limit("a pack entry larger than 16777216 bytes"))
+                }
                 scale *= 128
             }
         }
@@ -63,10 +70,12 @@ fn stream_entries(data: List[byte]) -> (List[StreamEntry], int) ! StreamErrors {
         } else if kind < 1 || kind > 4 {
             return invalid
         }
-        if size > 134217728 - total { return limit }
+        if size > 134217728 - total {
+            return Unsupported(whole_limit("more than 134217728 bytes of objects"))
+        }
         let inflated = zlib.inflate(data[pos..], size) else |e| match e {
             truncated => { return truncated },
-            limit => { return limit },
+            limit => { return Unsupported("limit: a pack entry inflates past its declared size") },
             _ => { return invalid },
         }
         if inflated.data.len != size { return invalid }
@@ -117,7 +126,12 @@ pub fn decode(data: List[byte], bases: List[Body]) -> List[Body] ! StreamErrors 
     var total = 0
     for i in 0..bases.len {
         let body = copy bases[i]
-        if body.data.len > 16777216 || body.data.len > 134217728 - total { return limit }
+        if body.data.len > 16777216 {
+            return Unsupported("limit: a thin pack base larger than 16777216 bytes")
+        }
+        if body.data.len > 134217728 - total {
+            return Unsupported(whole_limit("more than 134217728 bytes of objects"))
+        }
         total += body.data.len
         let id = body_name(body) else |_| { return invalid }
         external[id] = i
@@ -163,12 +177,14 @@ pub fn decode(data: List[byte], bases: List[Body]) -> List[Body] ! StreamErrors 
                         continue
                     }
                 }
-                if level > 64 { return limit }
+                if level > 64 { return Unsupported("limit: a delta chain deeper than 64") }
                 let bytes = apply_delta(base.data, entry.data, 16777216) else |_| { return invalid }
                 body = Body { kind: copy base.kind, data: bytes }
                 depth[i] = level
             }
-            if body.data.len > 134217728 - total { return limit }
+            if body.data.len > 134217728 - total {
+                return Unsupported(whole_limit("more than 134217728 bytes of objects"))
+            }
             total += body.data.len
             let name = body_name(body) else |_| { return invalid }
             out[i] = body
@@ -213,10 +229,14 @@ pub fn scan_more(mut sc: Scan, data: List[byte]) -> int ! StreamErrors {
             if pos >= data.len { return -1 }
             b = data[pos] as int
             pos += 1
-            if b & 127 > (536870912 - size) / scale { return limit }
+            if b & 127 > (536870912 - size) / scale {
+                return Unsupported("limit: a pack object larger than 536870912 bytes")
+            }
             size += (b & 127) * scale
             if b >= 128 {
-                if scale > 536870912 / 128 { return limit }
+                if scale > 536870912 / 128 {
+                    return Unsupported("limit: a pack object larger than 536870912 bytes")
+                }
                 scale *= 128
             }
         }
@@ -242,7 +262,9 @@ pub fn scan_more(mut sc: Scan, data: List[byte]) -> int ! StreamErrors {
                     complete = false
                     zlib.Inflated { data: List[byte](), consumed: 0 }
                 },
-                limit => { return limit },
+                limit => {
+                    return Unsupported("limit: a pack entry inflates past its declared size")
+                },
                 _ => { return invalid },
             }
             if complete {
