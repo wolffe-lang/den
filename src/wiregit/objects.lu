@@ -438,7 +438,8 @@ pub fn publish_received(
 /// The typed closure check after a received pack, without the aggregate
 /// body cap: commits, trees and tags are read one at a time and their links
 /// followed; a link into the received pack is typed from its table, so a
-/// blob there is never read. Objects outside it are read and typed. The
+/// blob there is never read. Objects outside it are read and typed, and not
+/// walked: the repository held them, complete, before. The
 /// walk queues received objects by rank (an int each) and does each step in
 /// its own region, so it keeps no per-link name (den#63).
 pub fn closure_received(
@@ -554,7 +555,13 @@ fn follow(
     let body = object.read_cached(mut reader, oid.parse("sha1", link.name)?, pack.object_limit())?
     if link.kind != "" && link.kind != body.kind { return invalid }
     if rank >= 0 && body.kind != kind { return invalid }
-    if rank < 0 { let _ = pack.names_add(mut other, link.name, body.kind) }
+    if rank < 0 {
+        // An object the repository held before this fetch is present with its
+        // type, and complete: its own closure was checked when it arrived, so
+        // it is not walked again (git-fetch(1) checks only what it received).
+        let _ = pack.names_add(mut other, link.name, body.kind)
+        return
+    }
     for child in packcmd.links(body)? {
         let at = pack.received_rank(ix, child.name)?
         if at >= 0 {
