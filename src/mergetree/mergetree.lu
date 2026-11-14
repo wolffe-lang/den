@@ -117,6 +117,7 @@ pub fn compared(
             if entry.mode != 0o100644 && entry.mode != 0o100755 && entry.mode != 0o160000 {
                 return Unsupported("merge nonregular tree entry")
             }
+            var exceeded = false
             // Reclaim compressed input and reconstruction scratch per body.
             region file {
                 var data = List[byte]()
@@ -126,17 +127,21 @@ pub fn compared(
                     let blob = object.read_cached(mut reader, entry.id, 16777216)?
                     if blob.kind != "blob" { return bad_oid }
                     if blob.data.len > 134217728 - total {
-                        return Unsupported("limit: more than 134217728 bytes of compared merge input per tree")
+                        exceeded = true
+                    } else {
+                        total += blob.data.len
+                        data = copy blob.data
                     }
-                    total += blob.data.len
-                    data = copy blob.data
                 }
-                (mut files).push(diff.File {
+                (mut files).push(copy diff.File {
                     path: copy entry.path,
                     mode: entry.mode,
                     id: copy entry.id,
                     data: data,
                 })
+            }
+            if exceeded {
+                return Unsupported("limit: more than 134217728 bytes of compared merge input per tree")
             }
         }
         (mut result).push(files)
