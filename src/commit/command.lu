@@ -201,7 +201,7 @@ fn dispatch(
 ) -> int ! CommitErrors {
     if fail != "" && fail != "index-write" && fail != "index-sync" { return invalid }
     let value = options(args)?
-    let ctx = worktree.discover(".")?
+    let ctx = worktree.opened(worktree.discover(".")?)
     let expected = worktree.head(ctx)?
     if !expected.detached && !valid_reference(expected.reference) {
         return Unsupported("commit non-branch HEAD")

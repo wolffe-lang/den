@@ -89,11 +89,12 @@ pub fn patch(
 
 fn dispatch(args: List[str]) -> int ! worktree.WorkErrors {
     let repo = repository.discover(".")?
-    let ctx = if (repo.config["core.bare"] else "false") == "true" {
+    let found = if (repo.config["core.bare"] else "false") == "true" {
         worktree.Context { repo: repo, root: "", cwd: ".", prefix: "" }
     } else {
         worktree.discover(".")?
     }
+    let ctx = worktree.opened(found)
     let show = args[0] == "show"
     var display = diff.configured(ctx)?
     display.patch = show
