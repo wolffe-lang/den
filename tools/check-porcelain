@@ -42,6 +42,7 @@ for tier in native release; do
     step "$tier-porcelain-typed-policy" tools/env python3 -I tools/wire-policy-test.py --tier "$tier" --receive-peer
     step "$tier-porcelain-configured" tools/env python3 -I tools/configured-wire-test.py --tier "$tier" --family all
     step "$tier-porcelain-pull" tools/env python3 -I tools/pull-test.py --tier "$tier"
+    step "$tier-porcelain-pull-scan" tools/env python3 -I tools/pull-scan-test.py --tier "$tier"
 done
 step actual-checked-config-edit checked_program config_edit_test
 step actual-checked-ssh-parser checked_program ssh_test
