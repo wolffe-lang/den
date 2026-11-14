@@ -1,9 +1,13 @@
 use std.fs
+use pack
 
 /// Validated administrative directory; worktrees/alternates are not yet supported.
+/// packs is unloaded until a command opens it (object.opened, den#101): then
+/// every object read of the command shares one parse of each pack index.
 pub struct Repo {
     gitdir: str,
     config: Map[str, str],
+    packs: pack.Session,
 }
 
 /// IO errors remain actionable; unsupported repository features carry their name.
@@ -57,6 +61,12 @@ pub fn read_bytes(path: str, cap: int) -> List[byte] ! RepoErrors {
     out
 }
 
+/// A repository value with no directory behind it, its packs unloaded: what
+/// a command uses when there is no repository to discover.
+pub fn detached(gitdir: str, config: Map[str, str]) -> Repo {
+    Repo { gitdir: copy gitdir, config: copy config, packs: pack.unloaded(gitdir) }
+}
+
 /// Refuse unsupported formats before any object write, including at version 0.
 pub fn open(gitdir: str) -> Repo ! RepoErrors {
     let absolute = fs.realpath(gitdir)?
@@ -75,7 +85,7 @@ pub fn open(gitdir: str) -> Repo ! RepoErrors {
             }
         }
     }
-    Repo { gitdir: absolute, config: values }
+    Repo { gitdir: absolute, config: values, packs: pack.unloaded(absolute) }
 }
 
 /// Follow a .git gitfile without treating it as an absent repository.

@@ -38,7 +38,7 @@ fn config_list(args: List[str]) -> int ! Errors {
         i += 1
     }
     let repo = repository.discover(".") else |e| match e {
-        not_found => repository.Repo { gitdir: "", config: Map[str, str]() },
+        not_found => repository.detached("", Map[str, str]()),
         _ => { return Unsupported("config repository: {e}") },
     }
     let gitdir = if fs.is_dir(".git") {
