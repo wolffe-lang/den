@@ -76,7 +76,11 @@ fn state_of(
 /// stat-clean, or outside the pathspec) answers as refresh does, by reading
 /// it, unless its lstat is stat-clean, when refresh would find its stat
 /// unchanged and leave it.
-fn refresh_known(ctx: worktree.Context, options: Options, hashed: List[Hashed]) -> () ! worktree.WorkErrors {
+fn refresh_known(
+    ctx: worktree.Context,
+    options: Options,
+    hashed: List[Hashed],
+) -> () ! worktree.WorkErrors {
     if options.cached ||
         options.revisions.len == 2 ||
         !worktree.config_bool(ctx, "diff.autorefreshindex", true)? {
@@ -98,7 +102,16 @@ fn refresh_known(ctx: worktree.Context, options: Options, hashed: List[Hashed]) 
             continue
         }
         while k < hashed.len && compare(hashed[k].entry.path, prior.path) < 0 { k += 1 }
-        let file = state_of(ctx, prior, hashed, k, written, filemode, symlinks, mut verified) else |_| {
+        let file = state_of(
+            ctx,
+            prior,
+            hashed,
+            k,
+            written,
+            filemode,
+            symlinks,
+            mut verified,
+        ) else |_| {
             continue
         }
         if file.mode != prior.stat[6] || !oid.equal(file.id, prior.id) { continue }

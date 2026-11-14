@@ -160,7 +160,11 @@ pub fn index_written(ctx: Context) -> List[int] { index_time(ctx) }
 /// Each ancestor of path checked as safe_parents checks it, once per distinct
 /// ancestor across a sorted walk: verified holds the ancestors checked for
 /// the previous path, outermost first.
-fn parents_verified(ctx: Context, path: List[byte], mut verified: List[List[byte]]) -> () ! WorkErrors {
+fn parents_verified(
+    ctx: Context,
+    path: List[byte],
+    mut verified: List[List[byte]],
+) -> () ! WorkErrors {
     if !valid_relative(path) { return invalid }
     var depth = 0
     for i in 0..path.len {
@@ -215,7 +219,11 @@ pub fn tracked(
     parents_verified(ctx, entry.path, mut verified)?
     if info[0] == 0 || link_judged(info, entry.stat[6], symlinks) {
         let kind = info[0]
-        let mode = if kind == 3 then 0o120000 else entry_disk_mode(info, entry.stat[6], filemode, symlinks)
+        let mode = if kind == 3 {
+            0o120000
+        } else {
+            entry_disk_mode(info, entry.stat[6], filemode, symlinks)
+        }
         if stat_clean(entry, info, mode, written) {
             return Tracked {
                 state: FileState {
@@ -238,7 +246,11 @@ pub fn tracked(
 
 /// head_flat for a caller outside status: value must be the index read_index
 /// parsed, as status passes it (den#101: diff --cached).
-pub fn head_tree(ctx: Context, value: index.Index, commit: oid.Oid) -> List[FlatEntry] ! WorkErrors {
+pub fn head_tree(
+    ctx: Context,
+    value: index.Index,
+    commit: oid.Oid,
+) -> List[FlatEntry] ! WorkErrors {
     head_flat(ctx, value, commit)?
 }
 
