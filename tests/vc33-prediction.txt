@@ -1,0 +1,34 @@
+vc33 prediction for den#118 (written before any change; den trunk f908c9b)
+
+Measured already (vc33 census, Linux x86-64, den 0469f02, before this branch):
+- a TLS remote that sends half a fetch response and then nothing: den ends at
+  30 s, "den: wire: Unsupported(TLS timeout)", exit 2 (both tiers); Git waits
+  until it is stopped;
+- the same over plain HTTP: den ends at 30 s, "HTTP read timeout", exit 2;
+- a TLS remote that sends half a response and then an empty band-1 packet
+  every 5 s (the keepalive git-config(1) documents for uploadpack.keepAlive):
+  den and Git both wait until they are stopped (120 s in the census).
+
+P1  Base, keepalive or progress cue, TLS or plain: den neither ends nor
+    reports anything before the row stops the remote; its temporary pack
+    stops growing at the cue. Red.
+P2  Base, silent cue: den ends near 30 s with "den: wire: Unsupported(TLS
+    timeout)" (TLS) or "Unsupported(HTTP read timeout)" (plain), exit 2.
+P3  Head, every stall cue, both transports: den ends within the stall bound
+    plus 2 s with a named fatal line, exit 128 for clone; the clone's
+    destination is removed, as an ordinary failed clone's is.
+P4  Head, submodule update --init against a stalling remote: each clone
+    attempt ends at the bound with the named line; the update reports the
+    clone failure as it reports any other (retry, then abort, exit 1), and
+    the module git directory is removed after each failure.
+P5  A state cut off mid-fetch (a copy taken while the fetch waits, as a kill
+    would leave it), then a rerun against a healthy remote:
+    - clone: both tools refuse the non-empty destination, exit 128, the same
+      line;
+    - submodule update: Git does not trust a module directory with no refs;
+      I expect it to clone again or to report the directory by name; den at
+      base takes any existing module directory as cloned, then fails or
+      fetches into it. The fix matches whatever Git does, measured first.
+P6  The control (no stall) clones exactly as Git does at base and at head.
+P7  No other row changes: the HTTP, wire, submodule and clone rows stay
+    byte-identical.
