@@ -38,6 +38,8 @@ def main():
         ('ff-default', 'ff', [], []),
         ('ff-explicit', 'ff', ['origin', 'main'], []),
         ('uptodate', 'uptodate', [], []),
+        ('uptodate-large-loose', 'uptodate-large-loose', [], []),
+        ('uptodate-large-packed', 'uptodate-large-packed', [], []),
         ('uptodate-rebase', 'uptodate', ['--rebase'], []),
         ('divergent-unconfigured', 'clean', [], []),
         ('merge-linear', 'clean', ['--no-rebase'], []),
@@ -74,16 +76,21 @@ def main():
         run([git, 'init', '-q', origin])
         (origin / 'a').write_text('first\nmiddle\nlast\n')
         (origin / 'keep').write_text('keep\n')
+        if kind.startswith('uptodate-large'):
+            # Clone/fetch support this blob; an unchanged pull must not apply
+            # the true merge's 16 MiB per-file limit to it.
+            (origin / 'big').write_bytes(b'\0' * (16777216 + 1))
         run([git, 'add', '.'], origin)
         run([git, 'commit', '-qm', 'base'], origin)
         run([git, 'clone', '-q', '--bare', origin, server])
-        run([git, 'clone', '-q', server.as_uri(), seed])
+        source = server if kind == 'uptodate-large-loose' else server.as_uri()
+        run([git, 'clone', '-q', source, seed])
         for key, value in [('gc.auto', '0'), ('maintenance.auto', 'false'), *config]:
             run([git, 'config', key, value], seed)
         if kind in ('clean', 'conflict'):
             (seed / 'a').write_text('ours\nmiddle\nlast\n')
             run([git, 'commit', '-qam', 'ours'], seed)
-        if kind != 'uptodate':
+        if not kind.startswith('uptodate'):
             (origin / 'a').write_text('theirs\nmiddle\nlast\n' if kind == 'conflict' else 'first\nmiddle\ntheirs\n')
             run([git, 'commit', '-qam', 'theirs'], origin)
             run([git, 'push', '-q', server.as_uri(), 'HEAD:refs/heads/main'], origin)
