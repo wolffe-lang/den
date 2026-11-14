@@ -18,6 +18,32 @@ pub struct Connection {
     body_close: bool,
 }
 
+/// den#118: the longest a fetch waits on a remote that sends nothing, in
+/// seconds: 30, or DEN_STALL_SECONDS when it holds a whole number from 1 to
+/// 86400. Every read of a connection gets this deadline (the plain and TLS
+/// paths alike), and a fetch's pack stream applies it to pack data too
+/// (wiregit.receive_pack), so a remote that keeps the connection busy
+/// without sending the pack is bounded as well. Git has no such default
+/// bound; a stalled remote makes it wait until it is stopped.
+pub fn stall_seconds() -> int {
+    let text = env_get("DEN_STALL_SECONDS") else { return 30 }
+    if text.len == 0 || text.len > 5 { return 30 }
+    var n = 0
+    for b in text.bytes() {
+        if b as int < 48 || b as int > 57 { return 30 }
+        n = n * 10 + (b as int - 48)
+    }
+    if n < 1 || n > 86400 { return 30 }
+    n
+}
+
+/// The named failure of a read that waited out stall_seconds. A literal:
+/// an error can leave the region its read ran in (body_take's).
+fn silent_remote() -> str {
+    if stall_seconds() == 30 { return "fatal: the remote sent nothing for 30 seconds" }
+    "fatal: the remote sent nothing for DEN_STALL_SECONDS seconds"
+}
+
 /// One complete response, with metadata separate from its binary body.
 pub struct Response { status: int, content_type: str, location: str, basic: bool, body: List[byte] }
 
@@ -28,7 +54,7 @@ fn dial(mut c: Connection) -> () ! Errors {
         "{c.endpoint.host}:{c.endpoint.port}"
     }
     var socket = net.connect(address) else |_| { return io }
-    net.set_deadline(mut socket, 30000) else |_| {
+    net.set_deadline(mut socket, stall_seconds() * 1000) else |_| {
         net.close(take socket) else |_| {}
         return io
     }
@@ -115,9 +141,8 @@ fn refill(mut c: Connection) -> bool ! Errors {
     c.cursor = 0
     let secure = c.tls.len == 1
     let code = if secure then fill_secure(mut c) else fill_plain(mut c)
-    if code == 1 && !secure { return Unsupported("HTTP read timeout") }
+    if code == 1 { return Unsupported(silent_remote()) }
     if code == 5 && !secure { return io }
-    if code == 1 { return Unsupported("TLS timeout") }
     if code == 2 { return Unsupported("TLS bad_record_mac") }
     if code == 3 { return Unsupported("TLS decode_error") }
     if code == 4 { return Unsupported("TLS unexpected_message") }
