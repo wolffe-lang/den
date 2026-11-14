@@ -853,12 +853,7 @@ pub fn scan_index(ctx: Context, value: index.Index) -> Snapshot ! WorkErrors {
     if current_head.commits.len == 1 { entries = head_flat(ctx, value, current_head.commits[0])? }
     ensure_filters(ctx)?
     let walked = walk_transition(ctx, value, mut warnings)?
-    for file in walked.files {
-        let path = text(file.path)?
-        if path == ".gitattributes" || path.ends_with("/.gitattributes") {
-            return Unsupported("worktree attributes")
-        }
-    }
+    supported_attributes(ctx, walked.files)?
     let rows = compare_status_with_warnings(ctx, value, entries, walked.files, true, mut warnings)?
     Snapshot {
         context: copy ctx,
@@ -887,12 +882,7 @@ pub fn scan_index_with_warnings(
     if current_head.commits.len == 1 { entries = flatten_tree(ctx.repo, current_head.commits[0])? }
     ensure_filters(ctx)?
     let walked = walk(ctx, value, include_untracked, [], false, mut warnings)?
-    for file in walked.files {
-        let path = text(file.path)?
-        if path == ".gitattributes" || path.ends_with("/.gitattributes") {
-            return Unsupported("worktree attributes")
-        }
-    }
+    supported_attributes(ctx, walked.files)?
     let rows = compare_status_with_warnings(
         ctx,
         value,
@@ -952,12 +942,7 @@ pub fn scan_status_ignoring(
         mut ignores,
         mut warnings,
     )?
-    for file in walked.files {
-        let path = text(file.path)?
-        if path == ".gitattributes" || path.ends_with("/.gitattributes") {
-            return Unsupported("worktree attributes")
-        }
-    }
+    supported_attributes(ctx, walked.files)?
     let rows = status_rows(
         ctx,
         value,
