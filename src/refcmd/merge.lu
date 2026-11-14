@@ -287,7 +287,8 @@ fn merge_command_with(args: List[str], reflog: str, label: str) -> int ! commit.
     if !fast && !upto {
         let snapshot = worktree.scan_index(ctx, value)?
         for row in snapshot.rows {
-            if !row.untracked && (row.x != " " || row.y != " ") {
+            // Untracked and ignored paths are not local changes.
+            if !row.untracked && !row.ignored && (row.x != " " || row.y != " ") {
                 return Unsupported("merge dirty recursive recovery")
             }
         }
@@ -318,7 +319,9 @@ fn merge_command_with(args: List[str], reflog: str, label: str) -> int ! commit.
         let snap = worktree.scan_index(ctx, value)?
         var staged = ""
         for row in snap.rows {
-            if !row.untracked && row.x != " " { staged += "  {str_from_utf8(row.path)?}\n" }
+            if !row.untracked && !row.ignored && row.x != " " {
+                staged += "  {str_from_utf8(row.path)?}\n"
+            }
         }
         if staged != "" {
             eprint(
@@ -349,6 +352,8 @@ fn merge_command_with(args: List[str], reflog: str, label: str) -> int ! commit.
             eprint("Merge with strategy ort failed.")
             return 2
         },
+        // A named bound reaches the user as itself.
+        Fatal(text) => { return Fatal(text) },
         _ => { return Unsupported("merge safety: {e}") },
     }
     let tree = if fast then tree_objects(ctx, plan.files)? else copy assembled[0]
