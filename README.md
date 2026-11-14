@@ -803,11 +803,28 @@ reused 64 KiB buffer, with no whole-body cap. A close-delimited HTTPS body is re
 standard library can tell a clean close from truncation (wolf-std#133).
 A failed clone removes the directory it created, as Git does.
 
+A remote that stops sending is bounded (den#118). Every read of a connection,
+plain or TLS, waits at most 30 seconds. A fetch's pack stream also needs pack
+data: once the pack has begun, 30 seconds with none ends the fetch even while
+the remote keeps the connection busy with keepalive or progress packets (the
+empty packets `uploadpack.keepAlive` in git-config(1) sends every 5 seconds),
+and before its first byte, while the remote may still be preparing the pack,
+the bound is four times that. Each ends with a named line, `fatal: the remote
+sent nothing for 30 seconds` or `fatal: the remote sent no pack data for 30
+seconds` (`for 120 seconds` before the pack's first byte): exit 128 for clone
+and fetch, 1 for pull, and a submodule update reports it as a failed clone.
+The failed clone's directory is removed as for any other failure.
+`DEN_STALL_SECONDS` (whole seconds, 1 to 86400) sets the bound; the lines then
+name the variable instead of a number. Git has no such bound by default: a
+stalled remote makes it wait until it is stopped.
+
 `tools/check-http` runs the HTTP units natively, in release and on the
 checked machine. It also runs raw-peer and hostile-input rows, TLS rows against
 the pinned OpenSSL, memory, redirect, authentication and refusal rows, and
 clone, fetch and push against the pinned `git-http-backend` over plain HTTP
-and authenticated TLS. Two live rows read from github.com:
+and authenticated TLS, and the stall rows: a local remote, plain and TLS, that
+stops sending mid-pack (silent, keepalive or progress packets only) for clone
+and for submodule update. Two live rows read from github.com:
 a small public repository and den's own repository (a pack over 300 MB), each
 cloned by den and compared with Git's clone, den's own within its predicted
 time and peak memory. Both are named SKIPs without network. A live clone that
