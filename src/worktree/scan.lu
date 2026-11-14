@@ -224,8 +224,10 @@ fn stat_clean(entry: index.Entry, record: List[int], mode: int, written: List[in
         entry.stat[9] != record[1] & m {
         return false
     }
-    let seconds = entry.stat[2], nanoseconds = entry.stat[3]
-    if seconds > written[0] || seconds == written[0] && nanoseconds >= written[1] { return false }
+    // Racily clean by whole seconds, as the pinned Git judges it: an entry
+    // whose mtime falls in the index file's own second is read even when its
+    // nanoseconds are earlier (measured: tools/diff-racy-test.py).
+    if entry.stat[2] >= written[0] { return false }
     true
 }
 
