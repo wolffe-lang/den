@@ -966,3 +966,21 @@ through Git. The lenient readings, the wall-clock correction and the epoch
 threshold are inferred from those runs and written in den's own words
 (`notes/vc23-local-time-zones.md`). No Git, C library, tzcode or other
 implementation source was read.
+
+## A remote that stops sending (vc33, den#118)
+
+Git 2.56.0 documentation, read from the release tarball (Documentation/
+only, its digest checked against `den-oracle.toml`): `config/uploadpack.adoc`
+(`uploadpack.keepAlive`: an empty keepalive packet every 5 seconds by
+default while the pack is prepared), `gitprotocol-v2.adoc` (the packfile
+section's side-band, and `0005\2` as a keepalive under `sideband-all`),
+`config/http.adoc` (`http.lowSpeedLimit` and `http.lowSpeedTime`, off by
+default).
+
+Black box: the pinned Git 2.56.0 and den against a local remote, the
+pinned `git-http-backend` behind the smart-HTTP gateway of
+`tools/http-git-test.py` (plain, and TLS through the pinned OpenSSL), that
+stops sending mid-pack: silent, keepalive packets only, or progress packets
+only. Git waited in every case until it was stopped. The stall server follows
+the http-live-stall rows of the gate-hardening work, given the gateway's TLS
+mode. No Git, libgit2, JGit or other implementation source was read.
