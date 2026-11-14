@@ -142,10 +142,8 @@ fn merge_stat(
     options.stat = true
     var stdout = fs.stdout()
     fs.write_chunk(mut stdout, diff.render(ctx, diff.changes(before, after, options)?, options)?)?
-    let summary = commit.change_summary(ctx, flat_files(before), flat_files(after))?
-    var start = 0
-    while start < summary.len && summary[start] != 10 as byte { start += 1 }
-    if start < summary.len { fs.write_chunk(mut stdout, summary[start + 1..])? }
+    // The rows below the stat; the stat above already counted every line.
+    fs.write_chunk(mut stdout, commit.change_rows(ctx, flat_files(before), flat_files(after))?)?
 }
 
 fn merge_command(args: List[str]) -> int ! commit.CommitErrors {
