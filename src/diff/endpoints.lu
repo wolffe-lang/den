@@ -34,26 +34,6 @@ fn from_tree(ctx: worktree.Context, name: str) -> List[File] ! worktree.WorkErro
     out
 }
 
-fn from_index(
-    ctx: worktree.Context,
-    value: index.Index,
-    cached: bool,
-) -> List[File] ! worktree.WorkErrors {
-    var out = List[File]()
-    var total: int = 0
-    for entry in value.entries {
-        if index.stage(entry) != 0 { return Unsupported("diff unmerged index") }
-        if entry.extended & 0x2000 != 0 { continue }
-        let file = blob(ctx, worktree.
-            FlatEntry { path: owned(entry.path), mode: entry.stat[6], id: copy entry.id })?
-        total += file.data.len
-        if total > 134217728 { return limit }
-        (mut out).push(file)
-    }
-    let _ = cached
-    out
-}
-
 fn from_worktree(ctx: worktree.Context, value: index.Index) -> List[File] ! worktree.WorkErrors {
     from_worktree_ignoring(ctx, value, "")?
 }
@@ -230,21 +210,229 @@ pub fn changes(
     out
 }
 
-/// Resolve supported loose endpoints without refreshing or publishing the index.
-pub fn collect(ctx: worktree.Context, options: Options) -> List[Change] ! worktree.WorkErrors {
+/// An endpoint whose body is read only when it is needed (den#101): source 0
+/// carries its body (a gitlink's text), 1 reads it by id from the object
+/// store, 2 from the worktree (read_file, prior the index entry at `at`).
+struct Pending { file: File, source: int, at: int }
+
+/// A worktree path collect hashed because its stat differed from its entry:
+/// the entry it was compared with and what the hash saw, for the
+/// autoRefreshIndex step (refresh_known), which then reads nothing again.
+struct Hashed { entry: index.Entry, state: worktree.FileState }
+
+/// collect's answer with the hashes the worktree side made.
+struct Collected { changes: List[Change], hashed: List[Hashed] }
+
+fn pending_entry(ctx: worktree.Context, entry: worktree.FlatEntry) -> Pending ! worktree.WorkErrors {
+    if entry.mode == 0o160000 { return Pending { file: blob(ctx, entry)?, source: 0, at: -1 } }
+    Pending {
+        file: File { path: owned(entry.path), mode: entry.mode, id: copy entry.id, data: List[byte]() },
+        source: 1,
+        at: -1,
+    }
+}
+
+fn pending_flat(ctx: worktree.Context, entries: List[worktree.FlatEntry]) -> List[Pending] ! worktree.WorkErrors {
+    var out = List[Pending]()
+    for entry in entries { (mut out).push(pending_entry(ctx, entry)?) }
+    out
+}
+
+fn pending_tree(ctx: worktree.Context, name: str) -> List[Pending] ! worktree.WorkErrors {
+    let id = resolve(ctx, name)?
+    pending_flat(ctx, worktree.flatten_tree(ctx.repo, id)?)?
+}
+
+fn pending_index(ctx: worktree.Context, value: index.Index) -> List[Pending] ! worktree.WorkErrors {
+    var out = List[Pending]()
+    for entry in value.entries {
+        if index.stage(entry) != 0 { return Unsupported("diff unmerged index") }
+        if entry.extended & 0x2000 != 0 { continue }
+        (mut out).push(pending_entry(ctx, worktree.
+            FlatEntry { path: owned(entry.path), mode: entry.stat[6], id: copy entry.id })?)
+    }
+    out
+}
+
+/// from_worktree_ignoring's answer with ids only: a stat-clean file takes its
+/// entry's id unread, any other is hashed as it streams (worktree.tracked),
+/// and each hash is kept in hashed for the refresh step.
+fn pending_worktree(
+    ctx: worktree.Context,
+    value: index.Index,
+    ignore_option: str,
+    mut hashed: List[Hashed],
+) -> List[Pending] ! worktree.WorkErrors {
+    let autocrlf = (ctx.repo.config["core.autocrlf"] else "false").lower()
+    if autocrlf != "false" && autocrlf != "0" { return Unsupported("core.autocrlf={autocrlf}") }
+    let written = worktree.index_written(ctx)
+    let filemode = worktree.config_bool(ctx, "core.filemode", true)?
+    let symlinks = worktree.config_bool(ctx, "core.symlinks", true)?
+    var verified = List[List[byte]]()
+    var out = List[Pending]()
+    var parsed = List[gitmodules.Parsed]()
+    for at in 0..value.entries.len {
+        let entry = copy value.entries[at]
+        if index.stage(entry) != 0 { return Unsupported("diff unmerged index") }
+        if entry.stat[6] == 0o160000 {
+            if !fs.is_dir("{ctx.root}/{text(entry.path)?}") { continue }
+            if parsed.len == 0 { (mut parsed).push(worktree.modules(ctx)?) }
+            let setting = worktree.ignore_for(ctx, parsed[0], text(entry.path)?, ignore_option)
+            if setting == "all" {
+                (mut out).push(Pending {
+                    file: blob(ctx, worktree.FlatEntry { path: owned(entry.path), mode: entry.stat[6], id: copy entry.id })?,
+                    source: 0,
+                    at: at,
+                })
+                continue
+            }
+            let state = worktree.submodule_state(
+                ctx,
+                text(entry.path)?,
+                entry.id,
+                if setting == "" then "untracked" else setting,
+            )?
+            let dirty = state.modified || setting == "none" && state.untracked
+            (mut out).push(Pending {
+                file: File {
+                    path: owned(entry.path),
+                    mode: 0o160000,
+                    id: copy state.head,
+                    data: worktree.subproject_text(state.head, dirty)?,
+                },
+                source: 0,
+                at: at,
+            })
+            continue
+        }
+        if entry.flags & 0x8000 != 0 || entry.extended & 0x4000 != 0 {
+            (mut out).push(pending_entry(ctx, worktree.
+                FlatEntry { path: owned(entry.path), mode: entry.stat[6], id: copy entry.id })?)
+            continue
+        }
+        let seen = worktree.tracked(ctx, entry, written, filemode, symlinks, mut verified)?
+        if !seen.present { continue }
+        if !seen.clean { (mut hashed).push(Hashed { entry: copy entry, state: copy seen.state }) }
+        (mut out).push(Pending {
+            file: File { path: owned(entry.path), mode: seen.state.mode, id: copy seen.state.id, data: List[byte]() },
+            source: 2,
+            at: at,
+        })
+    }
+    out
+}
+
+/// Whether two endpoints at one path are the same: mode and id, and for a
+/// gitlink its text (`-dirty`), as changes compares them.
+fn same_endpoint(a: File, b: File) -> bool {
+    if a.mode != b.mode || !oid.equal(a.id, b.id) { return false }
+    if a.mode == 0o160000 && compare(a.data, b.data) != 0 { return false }
+    true
+}
+
+/// HEAD's tree for a cached diff. While no entry is unmerged or intent-to-add,
+/// status's reading serves: the index's own entries when its cache tree's
+/// root names HEAD's tree (no tree object is read), else the full walk.
+fn pending_head(ctx: worktree.Context, value: index.Index, commit: oid.Oid) -> List[Pending] ! worktree.WorkErrors {
+    for entry in value.entries {
+        if index.stage(entry) != 0 || entry.extended & 0x2000 != 0 {
+            return pending_tree(ctx, oid.hex(commit)?)?
+        }
+    }
+    pending_flat(ctx, worktree.head_tree(ctx, value, commit)?)?
+}
+
+/// The endpoints changes can report: every path with no equal counterpart.
+/// A pair changes would pass over silently is dropped before any body is
+/// read; the answer changes gives for what remains is the one it gave for
+/// the whole lists, since unchanged pairs are neither reported nor rename or
+/// copy candidates.
+fn differing(before: List[Pending], after: List[Pending]) -> (List[Pending], List[Pending]) {
+    var old = List[Pending](), new = List[Pending]()
+    var a = 0, b = 0
+    while a < before.len || b < after.len {
+        let cmp = if a == before.len {
+            1
+        } else if b == after.len {
+            -1
+        } else {
+            compare(before[a].file.path, after[b].file.path)
+        }
+        if cmp == 0 {
+            if !same_endpoint(before[a].file, after[b].file) {
+                (mut old).push(copy before[a])
+                (mut new).push(copy after[b])
+            }
+            a += 1
+            b += 1
+        } else if cmp < 0 {
+            (mut old).push(copy before[a])
+            a += 1
+        } else {
+            (mut new).push(copy after[b])
+            b += 1
+        }
+    }
+    (old, new)
+}
+
+/// Bodies for the endpoints that differ, within the 128 MiB bound on what a
+/// diff holds. A worktree body is read as before (read_file), and its id and
+/// mode are the read's own.
+fn bodies(
+    ctx: worktree.Context,
+    value: index.Index,
+    list: List[Pending],
+    mut total: int,
+) -> List[File] ! worktree.WorkErrors {
+    var out = List[File]()
+    for item in list {
+        let file = if item.source == 0 {
+            copy item.file
+        } else if item.source == 1 {
+            blob(ctx, worktree.FlatEntry { path: owned(item.file.path), mode: item.file.mode, id: copy item.file.id })?
+        } else {
+            let read = worktree.read_file(ctx, item.file.path, [copy value.entries[item.at]])?
+            File { path: owned(read.path), mode: read.mode, id: copy read.id, data: owned(read.data) }
+        }
+        total += file.data.len
+        if total > 134217728 { return limit }
+        (mut out).push(file)
+    }
+    out
+}
+
+fn without_gitlinks(list: List[Pending]) -> List[Pending] {
+    var out = List[Pending]()
+    for item in list { if item.file.mode != 0o160000 { (mut out).push(copy item) } }
+    out
+}
+
+fn chosen(list: List[Pending], specs: List[Spec]) -> List[Pending] ! worktree.WorkErrors {
+    var out = List[Pending]()
+    for item in list { if selected(item.file.path, specs)? { (mut out).push(copy item) } }
+    out
+}
+
+/// collect's answer and the worktree hashes it made (den#101). Endpoints carry
+/// ids first; bodies are read only for paths that differ; the worktree side
+/// reads a file only when its stat is not clean against its entry.
+fn collect_known(ctx: worktree.Context, options: Options) -> Collected ! worktree.WorkErrors {
     if ctx.root != "" && fs.exists("{ctx.root}/.gitattributes") ||
         fs.exists("{ctx.repo.gitdir}/info/attributes") ||
         (ctx.repo.config["core.attributesfile"] else "") != "" {
         return Unsupported("diff attributes")
     }
-    var before = List[File](), after = List[File]()
+    var hashed = List[Hashed]()
+    var before = List[Pending](), after = List[Pending]()
+    var value = index.empty(2)?
     if options.revisions.len == 2 {
         let a = resolve(ctx, options.revisions[0])?
         let b = resolve(ctx, options.revisions[1])?
         let left = object.read_object(ctx.repo, a, 16777216)?
         let right = object.read_object(ctx.repo, b, 16777216)?
         if left.kind == "blob" && right.kind == "blob" {
-            before = [
+            let old = [
                 File {
                     path: owned(options.revisions[0].bytes()),
                     mode: 0o100644,
@@ -252,7 +440,7 @@ pub fn collect(ctx: worktree.Context, options: Options) -> List[Change] ! worktr
                     data: owned(left.data),
                 },
             ]
-            after = [
+            let new = [
                 File {
                     path: owned(options.revisions[1].bytes()),
                     mode: 0o100644,
@@ -260,49 +448,53 @@ pub fn collect(ctx: worktree.Context, options: Options) -> List[Change] ! worktr
                     data: owned(right.data),
                 },
             ]
-            if oid.equal(before[0].id, after[0].id) { return List[Change]() }
+            if oid.equal(old[0].id, new[0].id) { return Collected { changes: List[Change](), hashed: hashed } }
             if options.reverse {
-                return [Change { before: after, after: before, status: "M", percent: 0 }]
+                return Collected { changes: [Change { before: new, after: old, status: "M", percent: 0 }], hashed: hashed }
             }
-            return [Change { before: before, after: after, status: "M", percent: 0 }]
+            return Collected { changes: [Change { before: old, after: new, status: "M", percent: 0 }], hashed: hashed }
         }
-        before = from_tree(ctx, options.revisions[0])?
-        after = from_tree(ctx, options.revisions[1])?
+        before = pending_tree(ctx, options.revisions[0])?
+        after = pending_tree(ctx, options.revisions[1])?
     } else {
-        let value = worktree.read_index(ctx)?
+        value = worktree.read_index(ctx)?
         if options.cached {
             if options.revisions.len == 1 {
-                before = from_tree(ctx, options.revisions[0])?
+                before = pending_tree(ctx, options.revisions[0])?
             } else {
                 let head = worktree.head(ctx)?
-                if head.commits.len > 0 { before = from_tree(ctx, oid.hex(head.commits[0])?)? }
+                if head.commits.len > 0 { before = pending_head(ctx, value, head.commits[0])? }
             }
-            after = from_index(ctx, value, true)?
+            after = pending_index(ctx, value)?
         } else {
             before = if options.revisions.len == 1 {
-                from_tree(ctx, options.revisions[0])?
+                pending_tree(ctx, options.revisions[0])?
             } else {
-                from_index(ctx, value, false)?
+                pending_index(ctx, value)?
             }
-            after = from_worktree_ignoring(ctx, value, options.ignore_submodules)?
+            after = pending_worktree(ctx, value, options.ignore_submodules, mut hashed)?
         }
     }
     if options.ignore_submodules == "all" {
-        var kept_old = List[File](), kept_new = List[File]()
-        for file in before { if file.mode != 0o160000 { (mut kept_old).push(copy file) } }
-        for file in after { if file.mode != 0o160000 { (mut kept_new).push(copy file) } }
-        before = kept_old
-        after = kept_new
+        before = without_gitlinks(before)
+        after = without_gitlinks(after)
     }
-    var selected_old = List[File](), selected_new = List[File]()
     let specs = pathspecs(ctx, options.paths)?
-    for file in before { if selected(file.path, specs)? { (mut selected_old).push(copy file) } }
-    for file in after { if selected(file.path, specs)? { (mut selected_new).push(copy file) } }
+    let (old, new) = differing(chosen(before, specs)?, chosen(after, specs)?)
+    var total: int = 0
+    let selected_old = bodies(ctx, value, old, mut total)?
+    let selected_new = bodies(ctx, value, new, mut total)?
     var result = if options.reverse {
         changes(selected_new, selected_old, options)?
     } else {
         changes(selected_old, selected_new, options)?
     }
     stat_only_names(ctx, options, mut result)?
-    result
+    Collected { changes: result, hashed: hashed }
+}
+
+/// Resolve supported loose endpoints without refreshing or publishing the index.
+pub fn collect(ctx: worktree.Context, options: Options) -> List[Change] ! worktree.WorkErrors {
+    let collected = collect_known(ctx, options)?
+    collected.changes
 }
