@@ -193,14 +193,15 @@ fn changes(
         }
         var pairs = copy exact
         if pending_left && pending_right {
+            let reader = object.reader_batch(ctx.repo)
             for i in 0..left.len {
                 if !used_left[i] && left[i].mode & 0o170000 == 0o100000 {
-                    left[i].data = blob(ctx, before[out[sources[i]].old_at])?
+                    left[i].data = blob(reader, before[out[sources[i]].old_at])?
                 }
             }
             for i in 0..right.len {
                 if !used_right[i] && right[i].mode & 0o170000 == 0o100000 {
-                    right[i].data = blob(ctx, after[out[destinations[i]].new_at])?
+                    right[i].data = blob(reader, after[out[destinations[i]].new_at])?
                 }
             }
             pairs = rename.pair(left, right, options)?
@@ -254,10 +255,12 @@ fn renamed_path(before: List[byte], after: List[byte]) -> List[byte] {
     out
 }
 
-fn blob(ctx: worktree.Context, entry: worktree.FlatEntry) -> List[byte] ! CommitErrors {
+// One reader per summary: its pack indexes are parsed once, where a read per
+// blob parsed every pack's index for every blob.
+fn blob(reader: object.Reader, entry: worktree.FlatEntry) -> List[byte] ! CommitErrors {
     // A gitlink counts as Git's `Subproject commit` text (vc25).
     if entry.mode == 0o160000 { return worktree.subproject_text(entry.id, false)? }
-    let stored = object.read_object(ctx.repo, entry.id, 16777216)?
+    let stored = object.read_loaded(reader, entry.id, 16777216)?
     if stored.kind != "blob" { return invalid_tree }
     owned(stored.data)
 }
@@ -280,7 +283,27 @@ pub fn change_summary(
     before: List[worktree.FlatEntry],
     after: List[worktree.FlatEntry],
 ) -> List[byte] ! CommitErrors {
+    summary_with(ctx, before, after, true)?
+}
+
+/// The create/delete/mode/rename rows alone, as a merge prints them below its
+/// stat: no line is counted, so no body is read but a rename candidate's.
+pub fn change_rows(
+    ctx: worktree.Context,
+    before: List[worktree.FlatEntry],
+    after: List[worktree.FlatEntry],
+) -> List[byte] ! CommitErrors {
+    summary_with(ctx, before, after, false)?
+}
+
+fn summary_with(
+    ctx: worktree.Context,
+    before: List[worktree.FlatEntry],
+    after: List[worktree.FlatEntry],
+    counts: bool,
+) -> List[byte] ! CommitErrors {
     let edits = changes(ctx, before, after, true)?
+    let reader = object.reader_batch(ctx.repo)
     var files = 0, added = 0, deleted = 0
     var detail = List[byte]()
     let quote = worktree.config_bool(ctx, "core.quotepath", true)?
@@ -292,9 +315,9 @@ pub fn change_summary(
             let same = change.old_at >= 0 &&
                 change.new_at >= 0 &&
                 oid.equal(before[change.old_at].id, after[change.new_at].id)
-            if !same {
-                if change.old_at >= 0 { old_data = blob(ctx, before[change.old_at])? }
-                if change.new_at >= 0 { new_data = blob(ctx, after[change.new_at])? }
+            if counts && !same {
+                if change.old_at >= 0 { old_data = blob(reader, before[change.old_at])? }
+                if change.new_at >= 0 { new_data = blob(reader, after[change.new_at])? }
                 let count = line_counts(old_data, new_data)?
                 added += count.added
                 deleted += count.deleted
@@ -339,6 +362,7 @@ pub fn change_summary(
         }
     }
     if files == 0 { return List[byte]() }
+    if !counts { return detail }
     var out = List[byte]()
     add_bytes(mut out, " {files} {if files == 1 then "file" else "files"} changed".bytes())
     if added > 0 || deleted == 0 {
