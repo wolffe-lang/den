@@ -210,9 +210,17 @@ fn fetch_with_submodules(args: List[str]) -> int {
     }
     let found = repository.discover(".") else |_| { return execute_status(rest) }
     if cli == "" && setting(found.config["submodule.recurse"] else "false") == "yes" { cli = "yes" }
-    let before = tips(found) else |e| {
-        eprint("den: wire: Unsupported(submodule fetch: {e})")
-        return 2
+    let before = tips(found) else |e| match e {
+        // A named bound reaches the user as itself.
+        Unsupported(message) => {
+            if limit_diagnostic(message) { return 128 }
+            eprint("den: wire: Unsupported(submodule fetch: Unsupported({message}))")
+            return 2
+        },
+        _ => {
+            eprint("den: wire: Unsupported(submodule fetch: {e})")
+            return 2
+        },
     }
     let status = execute_status(rest)
     if status != 0 { return status }
