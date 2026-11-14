@@ -26,7 +26,57 @@ fn stat_differs(a: index.Entry, b: index.Entry) -> bool {
     false
 }
 
-fn refresh(ctx: worktree.Context, options: Options) -> () ! worktree.WorkErrors {
+/// Whether the locked index's entry is the one collect compared (path, id,
+/// flags and all ten stat words), so collect's hash of it still answers.
+fn same_entry(a: index.Entry, b: index.Entry) -> bool {
+    compare(a.path, b.path) == 0 &&
+        oid.equal(a.id, b.id) &&
+        a.flags == b.flags &&
+        a.extended == b.extended &&
+        a.stat.len == 10 &&
+        b.stat.len == 10 &&
+        !stat_differs(a, b) &&
+        a.stat[6] == b.stat[6]
+}
+
+/// An entry's worktree state as refresh reads it, for an entry collect did not
+/// hash; an error for one refresh leaves alone: absent, a directory, or
+/// stat-clean (its stat words are the entry's, so nothing would change).
+fn current(
+    ctx: worktree.Context,
+    prior: index.Entry,
+    written: List[int],
+    filemode: bool,
+    symlinks: bool,
+    mut verified: List[List[byte]],
+) -> worktree.FileState ! worktree.WorkErrors {
+    let seen = worktree.tracked(ctx, prior, written, filemode, symlinks, mut verified)?
+    if seen.clean || !seen.present { return not_found }
+    seen.state
+}
+
+/// prior's worktree state: collect's hash when hashed[k] is the entry collect
+/// compared, else current's answer.
+fn state_of(
+    ctx: worktree.Context,
+    prior: index.Entry,
+    hashed: List[Hashed],
+    k: int,
+    written: List[int],
+    filemode: bool,
+    symlinks: bool,
+    mut verified: List[List[byte]],
+) -> worktree.FileState ! worktree.WorkErrors {
+    if k < hashed.len && same_entry(hashed[k].entry, prior) { return copy hashed[k].state }
+    current(ctx, prior, written, filemode, symlinks, mut verified)?
+}
+
+/// refresh's answer without reading a file twice (den#101). An entry collect
+/// hashed answers from that hash; an entry collect did not hash (it was
+/// stat-clean, or outside the pathspec) answers as refresh does, by reading
+/// it, unless its lstat is stat-clean, when refresh would find its stat
+/// unchanged and leave it.
+fn refresh_known(ctx: worktree.Context, options: Options, hashed: List[Hashed]) -> () ! worktree.WorkErrors {
     if options.cached ||
         options.revisions.len == 2 ||
         !worktree.config_bool(ctx, "diff.autorefreshindex", true)? {
@@ -36,13 +86,21 @@ fn refresh(ctx: worktree.Context, options: Options) -> () ! worktree.WorkErrors 
     // A foreign lock silently suppresses refresh and is never removed.
     var tx = index.begin(ctx.repo, 1000000000, 0)?
     defer index.abort(mut tx)
+    let written = worktree.index_written(ctx)
+    let filemode = worktree.config_bool(ctx, "core.filemode", true)?
+    let symlinks = worktree.config_bool(ctx, "core.symlinks", true)?
+    var verified = List[List[byte]]()
     var triggered = false
+    var k = 0
     for at in 0..tx.value.entries.len {
         let prior = copy tx.value.entries[at]
         if index.stage(prior) != 0 || prior.flags & 0x8000 != 0 || prior.extended & 0x6000 != 0 {
             continue
         }
-        let file = worktree.read_file(ctx, prior.path, [copy prior]) else |_| { continue }
+        while k < hashed.len && compare(hashed[k].entry.path, prior.path) < 0 { k += 1 }
+        let file = state_of(ctx, prior, hashed, k, written, filemode, symlinks, mut verified) else |_| {
+            continue
+        }
         if file.mode != prior.stat[6] || !oid.equal(file.id, prior.id) { continue }
         let fresh = fresh_stat(file, prior)?
         if stat_differs(fresh, prior) {
