@@ -352,8 +352,9 @@ fn merge_command_with(args: List[str], reflog: str, label: str) -> int ! commit.
             eprint("Merge with strategy ort failed.")
             return 2
         },
-        // A named bound reaches the user as itself.
+        // A named bound or refusal reaches the user as itself.
         Fatal(text) => { return Fatal(text) },
+        Unsupported(text) => { return Unsupported(text) },
         _ => { return Unsupported("merge safety: {e}") },
     }
     let tree = if fast then tree_objects(ctx, plan.files)? else copy assembled[0]

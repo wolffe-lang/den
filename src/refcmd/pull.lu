@@ -21,7 +21,12 @@ pub fn run_pull(args: List[str], action: str, label: str, quiet: bool) -> int {
     pull_dispatch(args, action, label, quiet) else |e| match e {
         Fatal(message) => { eprint("fatal: {message}"); 128 },
         Failure(message) => { eprint("error: {message}"); 1 },
-        Unsupported(message) => { eprint("den: not yet implemented: {message}"); 2 },
+        Unsupported(message) => {
+            // A named bound is a fatal error, as Git reports its own.
+            if message.starts_with("limit: ") { eprint("fatal: {message}"); return 128 }
+            eprint("den: not yet implemented: {message}")
+            2
+        },
         _ => { eprint("fatal: {e}"); 128 },
     }
 }

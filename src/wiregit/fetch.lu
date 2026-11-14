@@ -377,8 +377,17 @@ fn clone_into(
     }
     fs.sync(mut config)?
     if checkout && !bare && after.len == 1 {
-        checkout_clone(repo, destination, after[0]) else |e| {
-            return Unsupported("clone checkout: {e}")
+        // A named bound reaches the user as itself.
+        checkout_clone(repo, destination, after[0]) else |e| match e {
+            Fatal(message) => {
+                if message.starts_with("limit: ") { return Unsupported(message) }
+                return Unsupported("clone checkout: Fatal({message})")
+            },
+            Unsupported(message) => {
+                if message.starts_with("limit: ") { return Unsupported(message) }
+                return Unsupported("clone checkout: Unsupported({message})")
+            },
+            _ => { return Unsupported("clone checkout: {e}") },
         }
     }
     for reference in advertised { if reference.id != "unborn" { return false } }

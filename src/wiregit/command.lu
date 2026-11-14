@@ -225,7 +225,7 @@ fn fetch_with_submodules(args: List[str]) -> int {
 fn execute_status(args: List[str]) -> int {
     execute(args) else |e| match e {
         Unsupported(message) => {
-            if startup_diagnostic(message) { return 128 }
+            if startup_diagnostic(message) || limit_diagnostic(message) { return 128 }
             // Git's own fatal diagnostics, printed as Git prints them.
             if message.starts_with("fatal: ") { eprint(transport.redact(message)); return 128 }
             eprint("den: wire: Unsupported({transport.redact(message)})")
