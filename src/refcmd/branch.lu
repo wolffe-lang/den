@@ -2,6 +2,7 @@ use std.fs
 use commit
 use commit_format
 use history
+use object
 use oid
 use refs
 use repository
@@ -80,7 +81,9 @@ fn resolve_commit(repo: repository.Repo, name: str) -> oid.Oid ! commit.CommitEr
 }
 
 fn abbrev(repo: repository.Repo, id: oid.Oid) -> str ! commit.CommitErrors {
-    let value = repo.config["core.abbrev"] else "7"
+    let value = repo.config["core.abbrev"] else "auto"
+    // Unset or "auto": Git's length for the repository's packed object count.
+    if value == "auto" { return history.abbreviate(repo, id, object.default_abbrev(repo)?)? }
     let n = value.to_int() else |_| { return Unsupported("core.abbrev={value}") }
     history.abbreviate(repo, id, n)?
 }
