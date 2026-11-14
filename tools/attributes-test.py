@@ -158,11 +158,17 @@ def main():
             before_index = run([git, 'ls-files', '-s'], w).stdout.decode()
             before_files = files(w)
             got = observe(den, argv, w)
-            expected_tail = f'den: not yet implemented: worktree attributes: {refusal}\n'.encode()
+            if command == 'pull-rebase':
+                # A rebase pull refreshes the index before it fetches; that
+                # phase names its refusals in the wire's own form.
+                expected_tail = ('den: wire: Unsupported(pull rebase index refresh: '
+                                 f'Unsupported(worktree attributes: {refusal}))\n').encode()
+            else:
+                expected_tail = f'den: not yet implemented: worktree attributes: {refusal}\n'.encode()
             stderr = bytes.fromhex(got['stderr'])
             # A pull prints its fetch lines first; the refusal is the last line.
             ok = got['status'] == 2 and stderr.endswith(expected_tail) and \
-                stderr.count(b'not yet implemented') == 1 and got['index'] == before_index and \
+                stderr.count(b'worktree attributes') == 1 and got['index'] == before_index and \
                 got['files'] == before_files and (got['head'] == before_head)
             print(('PASS ' if ok else 'FAIL ') + row + ('' if ok else f' den exit {got["status"]} stderr {stderr[-200:]!r}'), flush=True)
             rows.append(dict(row=row, passed=ok, den=got, expected=expected_tail.decode()))
