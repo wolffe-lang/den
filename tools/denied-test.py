@@ -10,8 +10,15 @@ refusals in REFUSED, where den must refuse by that name.
 
   --measure  run every row and write the table (target/denied-TIER/), failing
              nothing.
+  --walk-rows-only
+             run only the fixture row below (no den build needed).
+
+Before the matrix, a row checks the fixture code itself (den#119):
+denied-own-vanish walks a tree whose maintenance.lock a hook removes after
+os.walk has listed it and before its lchown.
 """
 import argparse
+import errno
 import hashlib
 import json
 import os
@@ -27,12 +34,12 @@ p = argparse.ArgumentParser()
 p.add_argument('--tier', default='native')
 p.add_argument('--measure', action='store_true')
 p.add_argument('--field', action='store_true')
+p.add_argument('--walk-rows-only', action='store_true')
 A = p.parse_args()
 GIT = pathlib.Path(os.environ.get('DEN_GIT') or next((R / 'target/oracle').glob('*/root/opt/git/bin/git')))
 if not A.field:
     assert hashlib.sha256(GIT.read_bytes()).hexdigest() == ORACLE_SHA, 'pinned oracle digest'
 DEN = R / 'target' / A.tier / 'den'
-assert DEN.is_file(), DEN
 ROOT = R / 'target' / ('denied-' + A.tier + ('-field' if A.field else ''))
 if ROOT.exists():
     shutil.rmtree(ROOT)
@@ -74,28 +81,88 @@ def g(cwd, *args):
     return text(q.stdout)
 
 
+def walk(path, each, dirs_only=False):
+    """Call each(full) on every entry os.walk lists below path; returns the
+    number of entries skipped."""
+    for dirpath, dirs, files in os.walk(path):
+        for name in dirs if dirs_only else dirs + files:
+            each(os.path.join(dirpath, name))
+    return 0
+
+
+def lchown_tree(path, uid, gid, lchown=os.lchown):
+    """lchown path and everything below it; lchown is the row's hook."""
+    vanished = walk(path, lambda full: lchown(full, uid, gid))
+    lchown(path, uid, gid)
+    return vanished
+
+
 def own(path):
     """Hand a tree to the unprivileged user (container root only)."""
     if not DROP:
         return
-    for dirpath, dirs, files in os.walk(path):
-        for name in dirs + files:
-            os.lchown(os.path.join(dirpath, name), 65534, 65534)
-    os.lchown(path, 65534, 65534)
+    lchown_tree(path, 65534, 65534)
 
 
 def reclaim(path):
     """Give every permission back and, as root, take the tree back."""
-    for dirpath, dirs, files in os.walk(path):
-        for name in dirs:
-            full = os.path.join(dirpath, name)
-            if not os.path.islink(full):
-                os.chmod(full, 0o755)
+    def unlock(full):
+        if not os.path.islink(full):
+            os.chmod(full, 0o755)
+    walk(path, unlock, dirs_only=True)
     if DROP:
-        for dirpath, dirs, files in os.walk(path):
-            for name in dirs + files:
-                os.lchown(os.path.join(dirpath, name), 0, 0)
-        os.lchown(path, 0, 0)
+        lchown_tree(path, 0, 0)
+
+
+def own_vanish_row():
+    """den#119: an entry os.walk listed is gone when the walk reaches it (the
+    pinned Git's background maintenance took and dropped
+    objects/maintenance.lock). The hook removes the lock after the listing
+    and before its lchown, every time; the walk must skip and count it. Any
+    other error must still fail the walk."""
+    name = 'denied-own-vanish'
+    tree = ROOT / 'own-vanish'
+    lock = tree / '.git' / 'objects' / 'maintenance.lock'
+    lock.parent.mkdir(parents=True)
+    (tree / 'a.txt').write_text('a\n')
+    lock.write_text('')
+    uid, gid = (65534, 65534) if DROP else (os.geteuid(), os.getegid())
+    problems, removed = [], []
+
+    def vanish(full, uid, gid):
+        if full == str(lock):
+            lock.unlink()
+            removed.append(full)
+        os.lchown(full, uid, gid)
+
+    try:
+        vanished = lchown_tree(tree, uid, gid, vanish)
+        if not removed:
+            problems.append('the walk never reached the lock')
+        elif vanished != 1:
+            problems.append('vanished=%d, not 1' % vanished)
+        owners = {(st.st_uid, st.st_gid) for st in (os.lstat(os.path.join(d, n)) for d, ds, fs in os.walk(tree)
+                                                     for n in ds + fs)}
+        if owners != {(uid, gid)}:
+            problems.append('owners after the walk: %r' % sorted(owners))
+    except OSError as exc:
+        vanished = None
+        problems.append('a vanished entry failed the walk: %s: %s' % (type(exc).__name__, exc))
+
+    def refuse(full, uid, gid):
+        if full.endswith('a.txt'):
+            raise PermissionError(errno.EPERM, 'planted refusal', full)
+        os.lchown(full, uid, gid)
+
+    try:
+        lchown_tree(tree, uid, gid, refuse)
+        problems.append('a PermissionError was swallowed')
+    except PermissionError:
+        pass
+    shutil.rmtree(tree)
+    print(('PASS ' if not problems else 'FAIL ') + name +
+          (' vanished=%s' % vanished if not problems else ' ' + '; '.join(problems)), flush=True)
+    return not problems
 
 
 def commit(work, *paths, message='two'):
@@ -229,6 +296,10 @@ def record(name, git_res, den_res, extra):
           'extra=' + json.dumps(extra), flush=True)
 
 
+walk_failures = [row for row, ok in (('denied-own-vanish', own_vanish_row()),) if not ok]
+if A.walk_rows_only:
+    sys.exit(1 if walk_failures else 0)
+assert DEN.is_file(), DEN
 try:
     for shape_name, shape in SHAPES:
         for command_name, argv in COMMANDS:
@@ -250,5 +321,5 @@ finally:
     (ROOT / 'rows.json').write_text(json.dumps(rows, indent=1))
 print('DENIED rows=%d passed=%d failed=%d unprivileged=%s' % (len(rows), len(rows) - len(failures), len(failures),
                                                               'uid 65534' if DROP else 'uid %d' % os.geteuid()))
-if failures and not A.measure:
+if (failures or walk_failures) and not A.measure:
     sys.exit(1)
