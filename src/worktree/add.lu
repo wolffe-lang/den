@@ -33,11 +33,12 @@ pub fn add_options() -> AddOptions {
 fn ensure_filters(ctx: Context) -> () ! WorkErrors {
     let autocrlf = ctx.repo.config["core.autocrlf"] else "false"
     if autocrlf != "false" && autocrlf != "0" { return Unsupported("core.autocrlf={autocrlf}") }
-    if fs.exists("{ctx.root}/.gitattributes") ||
-        fs.exists("{ctx.repo.gitdir}/info/attributes") ||
-        (ctx.repo.config["core.attributesfile"] else "") != "" {
-        return Unsupported("worktree attributes")
+    if (ctx.repo.config["core.attributesfile"] else "") != "" {
+        return Unsupported("worktree attributes: core.attributesFile")
     }
+    // Attribute files that set only what den need not act on are accepted.
+    attributes_file("{ctx.repo.gitdir}/info/attributes", "info/attributes")?
+    if ctx.root != "" { attributes_file("{ctx.root}/.gitattributes", ".gitattributes")? }
 }
 
 fn entry_for(
@@ -154,12 +155,7 @@ pub fn stage_paths_with_warnings(
         return Failure(message)
     }
     var walked = walk(ctx, current, !options.update, paths, !options.force, mut warnings)?
-    for file in walked.files {
-        let name = text(file.path)?
-        if name == ".gitattributes" || name.ends_with("/.gitattributes") {
-            return Unsupported("worktree attributes")
-        }
-    }
+    supported_attributes(ctx, walked.files)?
     var candidates = List[List[byte]]()
     for entry in current.entries {
         if !selected(entry.path, paths) { continue }
