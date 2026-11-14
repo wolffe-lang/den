@@ -210,11 +210,12 @@ pub fn configured(ctx: worktree.Context) -> Options ! worktree.WorkErrors {
 fn dispatch(args: List[str]) -> int ! worktree.WorkErrors {
     let repo = repository.discover(".")?
     let bare = (repo.config["core.bare"] else "false") == "true"
-    let ctx = if bare {
+    let found = if bare {
         worktree.Context { repo: repo, root: "", cwd: ".", prefix: "" }
     } else {
         worktree.discover(".")?
     }
+    let ctx = worktree.opened(found)
     let options = parse(ctx, args[1..])?
     if bare && !options.cached && options.revisions.len < 2 {
         return Fatal("this operation must be run in a work tree")

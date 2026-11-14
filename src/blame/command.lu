@@ -58,12 +58,14 @@ fn dispatch(args: List[str]) -> int ! worktree.WorkErrors {
         i += 1
     }
     if operands.len < 1 || operands.len > 2 { return Unsupported("blame operand shape") }
-    let repo = repository.discover(".")?
-    let ctx = if (repo.config["core.bare"] else "false") == "true" {
-        worktree.Context { repo: copy repo, root: "", cwd: ".", prefix: "" }
+    let discovered = repository.discover(".")?
+    let found = if (discovered.config["core.bare"] else "false") == "true" {
+        worktree.Context { repo: copy discovered, root: "", cwd: ".", prefix: "" }
     } else {
         worktree.discover(".")?
     }
+    let ctx = worktree.opened(found)
+    let repo = copy ctx.repo
     for key in [
         "blame.blankboundary",
         "blame.showroot",

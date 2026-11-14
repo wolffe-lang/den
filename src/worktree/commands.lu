@@ -347,7 +347,9 @@ fn move_command(ctx: Context, args: List[str]) -> int ! WorkErrors {
 
 fn dispatch(args: List[str]) -> int ! WorkErrors {
     if args.len == 0 { return Unsupported("worktree command") }
-    let ctx = discover(".")?
+    let found = discover(".")?
+    // Every command here but check-ignore reads or writes objects (den#101).
+    let ctx = if args[0] == "check-ignore" then found else opened(found)
     let rest = args[1..args.len]
     match args[0] {
         "add" => add_command(ctx, rest)?,
