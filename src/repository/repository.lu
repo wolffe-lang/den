@@ -24,18 +24,23 @@ pub fn read_bytes(path: str, cap: int) -> List[byte] ! RepoErrors {
     var f = fs.open(path)?
     defer fs.close(take f) else |_| {}
     let info = fs_fstat_record(f.fd) else |_| { return io }
-    if info[1] > cap { return limit }
-    var out = List[byte]()
+    // The bound is named as fetch, pull, merge and checkout print it.
+    if info[1] > cap { return Unsupported("limit: '{path}' is larger than {cap} bytes") }
+    var out = List[byte](), exceeded = false
     loop {
         region chunk {
             let bytes = fs.read_chunk(mut f, 65536) else |e| match e {
                 eof => { break },
                 io => { return io },
             }
-            if bytes.len > cap - out.len { return limit }
+            if bytes.len > cap - out.len {
+                exceeded = true
+                break
+            }
             for b in bytes { (mut out).push(b) }
         }
     }
+    if exceeded { return Unsupported("limit: '{path}' is larger than {cap} bytes") }
     out
 }
 

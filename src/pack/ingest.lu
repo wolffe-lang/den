@@ -173,7 +173,9 @@ fn scan(path: str, mut t: Table) -> List[byte] ! PackErrors {
         return Unsupported("pack version (requires v2)")
     }
     let count = be32(head, 8)
-    if count > count_limit() { return Unsupported("pack object count limit") }
+    if count > count_limit() {
+        return Unsupported("limit: more than {count_limit()} objects in one received pack")
+    }
     let table = crc32_table()
     var digest = hash.new1()
     hash.update1(mut digest, head)
@@ -212,11 +214,13 @@ fn scan_entry(
         b = peek[at] as int
         at += 1
         if b & 127 > (object_limit() - length) / scale {
-            return Unsupported("pack object size limit")
+            return Unsupported("limit: a pack object larger than {object_limit()} bytes")
         }
         length += (b & 127) * scale
         if b >= 128 {
-            if scale > object_limit() / 128 { return Unsupported("pack object size limit") }
+            if scale > object_limit() / 128 {
+                return Unsupported("limit: a pack object larger than {object_limit()} bytes")
+            }
             scale *= 128
         }
     }
@@ -288,7 +292,9 @@ fn scan_entry(
         name_body(mut t, slot, kind, data)
     } else {
         let target = delta_target_size(data) else |_| { return Unsupported("pack delta invalid") }
-        if target > object_limit() { return Unsupported("pack object size limit") }
+        if target > object_limit() {
+            return Unsupported("limit: a pack object larger than {object_limit()} bytes")
+        }
         (mut t.targets).push(target)
         (mut t.types).push(0)
         (mut t.done).push(false)
@@ -414,7 +420,7 @@ fn settle(mut t: Table, slot: int, base: int, data: List[byte]) -> () ! PackErro
     if data.len != t.targets[slot] { return Unsupported("pack delta invalid") }
     t.bases[slot] = base
     t.depths[slot] = t.depths[base] + 1
-    if t.depths[slot] > 64 { return Unsupported("pack delta depth limit") }
+    if t.depths[slot] > 64 { return Unsupported("limit: a delta chain deeper than 64") }
     t.types[slot] = t.types[base]
     name_body(mut t, slot, t.types[slot], data)
     t.done[slot] = true
@@ -465,7 +471,7 @@ fn visit_child(
 
 // A body rebuilt from disk: at most its base, its delta and itself at once.
 fn rebuild(fd: int, t: Table, slot: int, depth: int) -> List[byte] ! PackErrors {
-    if depth > 64 { return Unsupported("pack delta depth limit") }
+    if depth > 64 { return Unsupported("limit: a delta chain deeper than 64") }
     if t.kinds[slot] < 5 { return entry_data(fd, t, slot)? }
     var out = List[byte]()
     region step {

@@ -35,9 +35,37 @@ pub fn path(repo: repository.Repo, id: oid.Oid) -> str ! StoreErrors {
     "{repo.gitdir}/objects/{text[0..2]}/{text[2..]}"
 }
 
+/// A capped read's bound, named as fetch, pull, merge and checkout print it.
+fn object_limit(id: oid.Oid, cap: int) -> str ! StoreErrors {
+    "limit: object {oid.hex(id)?} is larger than {cap} bytes"
+}
+
+fn read_limit(cap: int) -> str {
+    "limit: an object read of {cap} bytes is above the 1000000000-byte bound"
+}
+
+/// decode's answer with its size bound named.
+fn decoded(input: List[byte], id: oid.Oid, max_output: int) -> Object ! StoreErrors {
+    decode(input, id, max_output) else |e| match e {
+        limit => { return Unsupported(object_limit(id, max_output)?) },
+        invalid => { return invalid },
+        invalid_oid => { return invalid_oid },
+        unsupported_format => { return unsupported_format },
+        bad_header => { return bad_header },
+        bad_size => { return bad_size },
+        bad_oid => { return bad_oid },
+        truncated => { return truncated },
+        dictionary => { return dictionary },
+        checksum => { return checksum },
+        trailing => { return trailing },
+        unsupported_level => { return unsupported_level },
+    }
+}
+
 /// Read a bounded loose object first; only absence falls back to validated packs.
 pub fn read_object(repo: repository.Repo, id: oid.Oid, max_output: int) -> Object ! StoreErrors {
-    if max_output < 0 || max_output > 1000000000 { return limit }
+    if max_output < 0 { return invalid }
+    if max_output > 1000000000 { return Unsupported(read_limit(max_output)) }
     let input = repository.read_bytes(
         path(repo, id)?,
         max_output + max_output / 100 + 65536,
@@ -51,10 +79,13 @@ pub fn read_object(repo: repository.Repo, id: oid.Oid, max_output: int) -> Objec
         invalid => { return invalid },
         exists => { return exists },
         unsupported => { return unsupported },
-        limit => { return limit },
-        Unsupported(name) => { return Unsupported(name) },
+        limit => { return Unsupported(object_limit(id, max_output)?) },
+        Unsupported(name) => {
+            if name.starts_with("limit: ") { return Unsupported(object_limit(id, max_output)?) }
+            return Unsupported(name)
+        },
     }
-    decode(input, id, max_output)?
+    decoded(input, id, max_output)?
 }
 
 /// A batch reader with read_object's precedence: loose first, then packs
@@ -68,7 +99,8 @@ pub fn reader(repo: repository.Repo) -> Reader {
 
 /// read_object's answer and errors, packed reads served by the session.
 pub fn read_with(mut r: Reader, id: oid.Oid, max_output: int) -> Object ! StoreErrors {
-    if max_output < 0 || max_output > 1000000000 { return limit }
+    if max_output < 0 { return invalid }
+    if max_output > 1000000000 { return Unsupported(read_limit(max_output)) }
     let input = repository.read_bytes(
         path(r.repo, id)?,
         max_output + max_output / 100 + 65536,
@@ -82,10 +114,13 @@ pub fn read_with(mut r: Reader, id: oid.Oid, max_output: int) -> Object ! StoreE
         invalid => { return invalid },
         exists => { return exists },
         unsupported => { return unsupported },
-        limit => { return limit },
-        Unsupported(name) => { return Unsupported(name) },
+        limit => { return Unsupported(object_limit(id, max_output)?) },
+        Unsupported(name) => {
+            if name.starts_with("limit: ") { return Unsupported(object_limit(id, max_output)?) }
+            return Unsupported(name)
+        },
     }
-    decode(input, id, max_output)?
+    decoded(input, id, max_output)?
 }
 
 /// A reader whose pack indexes are loaded now (vc23), for read_loaded.
@@ -104,7 +139,8 @@ pub fn reader_batch(repo: repository.Repo) -> Reader {
 /// read_with's answer through an opened reader, which it never changes, so
 /// a caller may read inside its own region (one object's memory at a time).
 pub fn read_loaded(r: Reader, id: oid.Oid, max_output: int) -> Object ! StoreErrors {
-    if max_output < 0 || max_output > 1000000000 { return limit }
+    if max_output < 0 { return invalid }
+    if max_output > 1000000000 { return Unsupported(read_limit(max_output)) }
     let input = repository.read_bytes(
         path(r.repo, id)?,
         max_output + max_output / 100 + 65536,
@@ -118,10 +154,13 @@ pub fn read_loaded(r: Reader, id: oid.Oid, max_output: int) -> Object ! StoreErr
         invalid => { return invalid },
         exists => { return exists },
         unsupported => { return unsupported },
-        limit => { return limit },
-        Unsupported(name) => { return Unsupported(name) },
+        limit => { return Unsupported(object_limit(id, max_output)?) },
+        Unsupported(name) => {
+            if name.starts_with("limit: ") { return Unsupported(object_limit(id, max_output)?) }
+            return Unsupported(name)
+        },
     }
-    decode(input, id, max_output)?
+    decoded(input, id, max_output)?
 }
 
 /// read_loaded's answer, packed bases served by the reader's cache
@@ -129,7 +168,8 @@ pub fn read_loaded(r: Reader, id: oid.Oid, max_output: int) -> Object ! StoreErr
 /// a pack writer or a closure walk. Only bytes and ints change in the
 /// reader, so a caller may read inside its own region.
 pub fn read_cached(mut r: Reader, id: oid.Oid, max_output: int) -> Object ! StoreErrors {
-    if max_output < 0 || max_output > 1000000000 { return limit }
+    if max_output < 0 { return invalid }
+    if max_output > 1000000000 { return Unsupported(read_limit(max_output)) }
     let input = repository.read_bytes(
         path(r.repo, id)?,
         max_output + max_output / 100 + 65536,
@@ -143,10 +183,13 @@ pub fn read_cached(mut r: Reader, id: oid.Oid, max_output: int) -> Object ! Stor
         invalid => { return invalid },
         exists => { return exists },
         unsupported => { return unsupported },
-        limit => { return limit },
-        Unsupported(name) => { return Unsupported(name) },
+        limit => { return Unsupported(object_limit(id, max_output)?) },
+        Unsupported(name) => {
+            if name.starts_with("limit: ") { return Unsupported(object_limit(id, max_output)?) }
+            return Unsupported(name)
+        },
     }
-    decode(input, id, max_output)?
+    decoded(input, id, max_output)?
 }
 
 /// Resolve a loose/packed oid prefix; duplicates share one identity.

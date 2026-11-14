@@ -290,7 +290,9 @@ pub fn import_pack(repo: repository.Repo, bytes: List[byte]) -> () ! object.Stor
             cross_device => { return cross_device },
             Unsupported(text) => { return Unsupported(text) },
         }
-        if body.data.len > 134217728 - total { return limit }
+        if body.data.len > 134217728 - total {
+            return Unsupported("limit: more than 134217728 bytes of thin pack bases")
+        }
         total += body.data.len
         (mut bases).push(pack.Body { kind: copy body.kind, data: copy body.data })
     }
