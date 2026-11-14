@@ -50,7 +50,8 @@ BIG = 48 * MIB
 OLD_PAYLOAD_CAP = 134217728
 # R-vc23-2: den's per-object cap, and its refusal by name.
 OBJECT_LIMIT = 512 * MIB
-LIMIT_STDERR = b'den: wire: Unsupported(pack object size limit)\n'
+# den#100: the bound is a fatal error naming itself and its value.
+LIMIT_STDERR = b'fatal: limit: a pack object larger than 536870912 bytes\n'
 # tests/vc23-prediction.txt P2: 64 MiB + W (96 MiB) + 5 x L, L = 48 MiB here.
 MEMORY_BOUND = 64 * MIB + 96 * MIB + 5 * BIG
 CLONE_SECONDS = 1800
@@ -483,8 +484,8 @@ def main():
         target = out / 'den-huge'
         candidate = run([den, 'clone', '-q', huge.as_uri(), target], out, name + '-den')
         stderr = bytes.fromhex(candidate['stderr'])
-        if candidate['exit'] != 2:
-            problems.append('exit %d, want 2' % candidate['exit'])
+        if candidate['exit'] != 128:
+            problems.append('exit %d, want 128' % candidate['exit'])
         if stderr != LIMIT_STDERR:
             problems.append('stderr %r, want %r' % (stderr[-300:], LIMIT_STDERR))
         if candidate['stdout']:
