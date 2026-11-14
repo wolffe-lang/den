@@ -31,16 +31,16 @@ ACCEPTED = {
     'unknown-names': ('notes/.gitattributes', '*.tty linguist-generated=true owner=docs\n'),
 }
 REFUSED = {
-    'text-set': ('.gitattributes', '*.tty text\n', 'text in .gitattributes'),
-    'text-auto': ('notes/.gitattributes', '* text=auto\n', 'text in notes/.gitattributes'),
-    'eol': ('.gitattributes', '*.tty -text eol=crlf\n', 'eol in .gitattributes'),
-    'filter': ('.gitattributes', '*.tty filter=lfs\n', 'filter in .gitattributes'),
-    'ident': ('.gitattributes', '*.c ident\n', 'ident in .gitattributes'),
-    'encoding': ('.gitattributes', '*.utf16 working-tree-encoding=UTF-16\n', 'working-tree-encoding in .gitattributes'),
-    'diff-unset': ('.gitattributes', '*.tty -diff\n', 'diff in .gitattributes'),
-    'merge-driver': ('.gitattributes', '*.tty merge=ours\n', 'merge in .gitattributes'),
-    'binary': ('.gitattributes', '*.tty binary\n', 'binary in .gitattributes'),
-    'macro': ('.gitattributes', '[attr]evidence -text -diff\n*.tty evidence\n', 'macro definition in .gitattributes'),
+    'text-set': ('.gitattributes', '*.tty text\n', 'text'),
+    'text-auto': ('notes/.gitattributes', '* text=auto\n', 'text'),
+    'eol': ('.gitattributes', '*.tty -text eol=crlf\n', 'eol'),
+    'filter': ('.gitattributes', '*.tty filter=lfs\n', 'filter'),
+    'ident': ('.gitattributes', '*.c ident\n', 'ident'),
+    'encoding': ('.gitattributes', '*.utf16 working-tree-encoding=UTF-16\n', 'working-tree-encoding'),
+    'diff-unset': ('.gitattributes', '*.tty -diff\n', 'diff'),
+    'merge-driver': ('.gitattributes', '*.tty merge=ours\n', 'merge'),
+    'binary': ('.gitattributes', '*.tty binary\n', 'binary'),
+    'macro': ('.gitattributes', '[attr]evidence -text -diff\n*.tty evidence\n', 'macro definition'),
 }
 COMMANDS = {
     'status': (['status'], False),
@@ -48,6 +48,7 @@ COMMANDS = {
     'commit-all': (['commit', '-qam', 'local edit'], True),
     'pull-ff': (['pull', 'origin', 'main'], False),
     'pull-merge': (['pull', '--no-rebase', 'origin', 'main'], False),
+    'pull-rebase': (['pull', '--rebase', 'origin', 'main'], False),
     'switch': (['checkout', '-q', 'origin/main'], False),
 }
 
@@ -91,11 +92,11 @@ def main():
         run([git, 'clone', '-q', '--bare', origin, remote], root)
         run([git, 'clone', '-q', remote.as_uri(), work], root)
         run([git, 'config', 'gc.auto', '0'], work)
-        if mode == 'pull-merge':
+        if mode in ('pull-merge', 'pull-rebase'):
             (work / 'b').write_text('local independent change\n')
             run([git, 'add', 'b'], work)
             run([git, 'commit', '-qm', 'local'], work)
-        if mode in ('pull-ff', 'pull-merge', 'switch'):
+        if mode in ('pull-ff', 'pull-merge', 'pull-rebase', 'switch'):
             (origin / 'notes' / 'px' / 'session.tty').write_bytes(b'$ den pull\r\nUpdating\r\n')
             (origin / 'notes' / 'px' / 'census' / 'two.out').write_bytes(b'count 2\r\n')
             (origin / 'a').write_text('after\n')
@@ -143,7 +144,7 @@ def main():
             print(('PASS ' if same else 'FAIL ') + row + detail, flush=True)
             rows.append(dict(row=row, passed=same, **res))
     for name, (attr_path, attr_text, refusal) in REFUSED.items():
-        for command in ('status', 'pull-ff', 'pull-merge', 'switch'):
+        for command in ('status', 'pull-ff', 'pull-merge', 'pull-rebase', 'switch'):
             row = f'attributes-refused-{name}-{command}'
             if a.filter not in row:
                 continue
