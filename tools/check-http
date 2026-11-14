@@ -7,9 +7,10 @@
 # plain and authenticated TLS, the live github.com rows (a named SKIP
 # without network), vc23's packs over 128 MiB on every transport, and
 # vc24's wire gaps (push, clone, ls-remote, fetch, clone memory) and the
-# release tier's clone CPU against the pinned Git's (pelt), and the live
-# self row against a local remote that stops sending mid-pack (den#118's
-# gate side).
+# release tier's clone CPU against the pinned Git's (pelt), the live self
+# row against a local remote that stops sending mid-pack (den#118's gate
+# side), and the stall rows (den#118): a local remote that stops sending
+# mid-pack, plain and TLS.
 # Every output directory must be fresh.
 set -eu
 DEN_ROOT=$(cd "$(dirname "$0")/.." && pwd)
@@ -57,6 +58,7 @@ for tier in native release; do
     step "$tier-http-sideband" tools/env python3 -I tools/http-sideband-test.py "$tier"
     step "$tier-http-plain-git" tools/env python3 -I tools/http-git-test.py --tier "$tier" --transport plain
     step "$tier-http-tls-git" tools/env python3 -I tools/http-git-test.py --tier "$tier" --transport tls --auth
+    step "$tier-http-stall" tools/env python3 -I tools/http-stall-test.py --tier "$tier"
     step "$tier-http-live" tools/env python3 -I tools/http-live-test.py --tier "$tier"
     step "$tier-http-live-stall" tools/env python3 -I tools/http-live-stall-test.py --tier "$tier"
     step "$tier-large-pack" tools/env python3 -I tools/large-pack-test.py --tier "$tier"
@@ -65,4 +67,4 @@ done
 step release-clone-cost tools/env python3 -I tools/wire-gaps-test.py --tier release --family cost
 step actual-checked-http checked http_test
 step actual-checked-http-advertisement checked http_redirect_test
-echo 'http: native/release units, peers, TLS, memory, refusals, smart-git interop, live, live-stall, large-pack and wire-gap rows; the release clone cost row; checked units'
+echo 'http: native/release units, peers, TLS, memory, refusals, smart-git interop, stall, live, live-stall, large-pack and wire-gap rows; the release clone cost row; checked units'
