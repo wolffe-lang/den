@@ -79,7 +79,7 @@ fn push_report(
         if !quiet && outcomes.len > 0 { eprint("Everything up-to-date") }
         return failed
     }
-    var summary_width = 17, source_width = 0
+    var summary_width = summary_least(repo)?, source_width = 0
     for row in rows {
         if row.summary.len > summary_width { summary_width = row.summary.len }
         if row.source.len > source_width { source_width = row.source.len }

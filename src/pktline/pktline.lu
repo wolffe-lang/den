@@ -1,6 +1,6 @@
 // Original binary-clean framing from Git 2.56.0 gitprotocol-common/v2.
 /// Framing failures: invalid syntax, incomplete bytes, or the documented size limit; never traps.
-pub error Errors = {invalid, truncated, limit}
+pub error Errors = {invalid, truncated, limit, Unsupported(str)}
 
 /// kind 0/1/2 are flush/delimiter/response-end; 4 is data (including empty).
 pub struct Packet { kind: int, data: List[byte], next: int }
@@ -20,13 +20,13 @@ pub fn header(bytes: List[byte]) -> int ! Errors {
         }
     }
     if n == 3 { return invalid }
-    if n > 65520 { return limit }
+    if n > 65520 { return Unsupported("limit: a pkt-line longer than 65520 bytes") }
     n
 }
 
 /// Encode arbitrary binary payload with its inclusive length; limit above 65516 data bytes, never traps.
 pub fn encode(data: List[byte]) -> List[byte] ! Errors {
-    if data.len > 65516 { return limit }
+    if data.len > 65516 { return Unsupported("limit: a pkt-line payload longer than 65516 bytes") }
     let n = data.len + 4
     let digits = "0123456789abcdef".bytes()
     var out = List[byte]()

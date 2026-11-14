@@ -17,7 +17,9 @@ pub struct Commit {
 
 /// Decode a commit without reserializing its headers or normalizing its message.
 pub fn parse(id: oid.Oid, data: List[byte]) -> Commit ! worktree.WorkErrors {
-    if data.len > 16777216 { return limit }
+    if data.len > 16777216 {
+        return Fatal("limit: a commit larger than 16777216 bytes")
+    }
     let _ = oid.hex(id)?
     if id.algorithm != "sha1" { return unsupported_format }
     let headers = object.parse_commit(data, "sha1")?
@@ -51,6 +53,22 @@ pub fn read(repo: repository.Repo, id: oid.Oid) -> Commit ! worktree.WorkErrors 
     parse(id, value.data)?
 }
 
+fn read_from(mut reader: object.Reader, id: oid.Oid) -> Commit ! worktree.WorkErrors {
+    let value = object.read_cached(mut reader, id, 16777216)?
+    if value.kind != "commit" { return Unsupported("history non-commit {value.kind}") }
+    parse(id, value.data)?
+}
+
+/// The ancestry walk's node bound, named as pull, merge and rebase print it.
+// A bound's message is a literal: an error can leave the region the read
+// that raised it ran in, and a message built at run time would leave with it.
+fn node_limit(max_nodes: int) -> str {
+    if max_nodes == 100000 { return "limit: more than 100000 commits in the ancestry walk" }
+    if max_nodes == 10000 { return "limit: more than 10000 commits in the ancestry walk" }
+    if max_nodes == 1 { return "limit: more than 1 commit in the ancestry walk" }
+    "limit: more commits than this ancestry walk allows"
+}
+
 /// Visit reachable commits, once each, by timestamp among the pending frontier.
 /// Equal timestamps retain enqueue order; parents retain raw header order.
 /// max_count/skip are output controls; max_nodes is the hard resource bound.
@@ -67,14 +85,18 @@ pub fn collect(
     var nodes = List[Commit](), active = List[bool](), queued = 0
     var seen = Map[str, bool](), out = List[Commit]()
     if max_count == 0 { return out }
+    // One pack-index parse and delta-base cache for the whole ancestry walk.
+    var reader = object.reader_batch(repo)
     for id in starts {
         let key = oid.hex(id)?
         if seen[key] else false { continue }
-        if seen.len >= max_nodes { return limit }
+        if seen.len >= max_nodes { return Fatal(node_limit(max_nodes)) }
         seen[key] = true
-        let node = read(repo, id)?
+        let node = read_from(mut reader, id)?
         total += node.encoded_size
-        if total > 134217728 { return limit }
+        if total > 134217728 {
+            return Fatal("limit: more than 134217728 bytes of commits in the ancestry walk")
+        }
         (mut nodes).push(node)
         (mut active).push(true)
         queued += 1
@@ -96,11 +118,13 @@ pub fn collect(
             if first_parent && i > 0 { break }
             let key = oid.hex(item.parents[i])?
             if seen[key] else false { continue }
-            if seen.len >= max_nodes { return limit }
+            if seen.len >= max_nodes { return Fatal(node_limit(max_nodes)) }
             seen[key] = true
-            let node = read(repo, item.parents[i])?
+            let node = read_from(mut reader, item.parents[i])?
             total += node.encoded_size
-            if total > 134217728 { return limit }
+            if total > 134217728 {
+                return Fatal("limit: more than 134217728 bytes of commits in the ancestry walk")
+            }
             (mut nodes).push(node)
             (mut active).push(true)
             queued += 1

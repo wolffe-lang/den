@@ -27,7 +27,7 @@ assert (p.returncode,p.stdout,p.stderr)==(0,expected,b''),(p.returncode,p.stderr
 rows.append({'listing':1002})
 packed.write_bytes(original+b''.join(f'{one} refs/heads/bulk-{i:04}\n'.encode() for i in range(4095)))
 p=subprocess.run([C,'list',str(seed/'.git'),'refs/heads/'],capture_output=True,timeout=30)
-assert (p.returncode,p.stdout,p.stderr)==(1,b'',b'limit\n'),(p.returncode,p.stderr)
+assert (p.returncode,p.stdout,p.stderr)==(1,b'',b'Unsupported(limit: more than 4096 refs in one namespace)\n'),(p.returncode,p.stderr)
 rows.append({'listing-limit':4097,'explicit':True})
 packed.write_bytes(original)
 for i,(name,old,new,message) in enumerate([

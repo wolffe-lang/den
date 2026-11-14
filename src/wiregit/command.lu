@@ -210,9 +210,17 @@ fn fetch_with_submodules(args: List[str]) -> int {
     }
     let found = repository.discover(".") else |_| { return execute_status(rest) }
     if cli == "" && setting(found.config["submodule.recurse"] else "false") == "yes" { cli = "yes" }
-    let before = tips(found) else |e| {
-        eprint("den: wire: Unsupported(submodule fetch: {e})")
-        return 2
+    let before = tips(found) else |e| match e {
+        // A named bound reaches the user as itself.
+        Unsupported(message) => {
+            if limit_diagnostic(message) { return 128 }
+            eprint("den: wire: Unsupported(submodule fetch: Unsupported({message}))")
+            return 2
+        },
+        _ => {
+            eprint("den: wire: Unsupported(submodule fetch: {e})")
+            return 2
+        },
     }
     let status = execute_status(rest)
     if status != 0 { return status }
@@ -225,7 +233,7 @@ fn fetch_with_submodules(args: List[str]) -> int {
 fn execute_status(args: List[str]) -> int {
     execute(args) else |e| match e {
         Unsupported(message) => {
-            if startup_diagnostic(message) { return 128 }
+            if startup_diagnostic(message) || limit_diagnostic(message) { return 128 }
             // Git's own fatal diagnostics, printed as Git prints them.
             if message.starts_with("fatal: ") { eprint(transport.redact(message)); return 128 }
             eprint("den: wire: Unsupported({transport.redact(message)})")

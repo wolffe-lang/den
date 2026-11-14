@@ -58,7 +58,8 @@ for fixture in range(24):
 client=R/f'target/{a.tier}/history-client'
 before=state(); expected=run(G,['log','--oneline']); actual=run(client,[])
 assert actual==expected and before==state(),('external client',expected,actual)
-for mode,status,stderr in [('zero',0,b''),('limit',1,b'limit\n')]:
+# den#100: the walk's bound names itself and its value.
+for mode,status,stderr in [('zero',0,b''),('limit',1,b'Fatal(limit: more than 1 commit in the ancestry walk)\n')]:
  before=state(); actual=run(client,[mode])
  assert actual=={'status':status,'stdout':'','stderr':stderr.hex()} and before==state(),(mode,actual)
 for kind,obj in [('blob',blob),('tree',tree)]:

@@ -103,7 +103,14 @@ pub fn advertisement(mut p: Peer, cap: int) -> List[byte] ! Errors {
     if response.content_type.lower() != "application/x-git-{p.service}-advertisement" {
         return Unsupported("dumb HTTP protocol")
     }
-    if response.body.len > cap { return limit }
+    if response.body.len > cap {
+        // Literals: an error can leave the region its read ran in.
+        if cap == 65536 { return Unsupported("limit: a ref advertisement larger than 65536 bytes") }
+        if cap == 2097152 {
+            return Unsupported("limit: a ref advertisement larger than 2097152 bytes")
+        }
+        return Unsupported("limit: a ref advertisement larger than its read allows")
+    }
     http_advertisement(response.body, p.service)?
 }
 

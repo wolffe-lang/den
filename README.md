@@ -211,8 +211,14 @@ regexp edits remain named unsupported options. Remote/tracking editing retains
 its separate continued/CRLF/BOM, inline-assignment and multiple-URL limits.
 Diff implements literal, top, icase, glob and exclude
 pathspecs; other commands retain their earlier literal-path limits. Attribute
-pathspecs, filters/attributes, non-false `core.autocrlf`, nonempty templates/hooks,
-signing and user editor execution remain unsupported. A requested editor is never launched; the measured
+pathspecs, filters, non-false `core.autocrlf`, nonempty templates/hooks,
+signing and user editor execution remain unsupported. Attribute files are read:
+one that sets only attributes den need not act on (`text` and `crlf` unset or
+unspecified, `whitespace`, `export-ignore`, `export-subst` and `delta` in any
+form, `diff`, `merge`, `eol` and the other acting attributes unspecified, and
+names Git gives no meaning) behaves as no attribute file at all, as it does in
+Git; any other refuses by the attribute's name, for example
+`worktree attributes: eol`, and so does a macro definition. A requested editor is never launched; the measured
 `GIT_EDITOR=false` failure is handled explicitly. Relative dates such as `now`
 are refused; deterministic raw, RFC 2822 and ISO/calendar inputs are supported
 within the formatting API's stated bounds. A date not given, or given without a
@@ -232,9 +238,21 @@ text sequences to 200,000 lines and general edit searches to 2,000 changed
 lines. Rename pools are limited to 2,000 candidates per side. Exceeding a bound
 returns a named failure, never an approximate result presented as exact.
 
+A bound that fetch, pull, clone, merge or checkout reaches is a fatal error that
+names the bound and its value, exit 128: `fatal: limit: more than 100000
+commits in the ancestry walk`, `fatal: limit: more than 256 packs in
+objects/pack`, `fatal: limit: an object larger than 16777216 bytes` (den#100).
+`tools/limit-census.py` keeps the code those commands run free of unnamed bounds.
+
 History readers never write the index, objects, refs or reflogs. Root patches
 compare with an in-memory empty endpoint; ordinary patches reuse the shared
 diff collector and renderer. Unique abbreviations grow past collisions.
+Fetch, push, merge, checkout, reset and the replay commands start short names
+at Git's default length when `core.abbrev` is unset or `auto`: seven digits
+below 16,384 packed objects, then one more for each further factor of four
+(eight from 16,384, nine from 65,536), loose objects not counted; the fetch and
+push summary column is padded to two such names (den#100). Diff, blame, stash
+and rev-parse still start at seven.
 History caps each object at 16 MiB, discovered commit data and rendered output
 at 128 MiB, and the CLI walk at 10,000 commits. With a count (`-n`) and no
 exclusion the walk stops after the count plus the skip, so `log -1` reads one
@@ -289,7 +307,16 @@ file, repeated base-line hashes and multiple edit hunks on either side are named
 refusals. Recursive virtual bases for criss-cross histories, rename topology,
 modify/delete and binary conflicts, nonregular tree entries, unborn merges,
 annotated-tag messages and dirty/staged true-merge recovery are also refused.
-Fast-forward dirty/untracked safety remains measured. `revert -m`, sequences,
+Fast-forward dirty/untracked safety remains measured. Merge, checkout, switch,
+reset and the replay commands compare tracked files by their index stat or a
+hash taken as the file streams, and never read an untracked or ignored body:
+an untracked directory with no tracked path below it is one opaque entry, whose
+target paths are looked up by name, so an untracked file in the way still
+blocks as in Git; ignored files and directories are left out and overwritten
+as Git overwrites them, and are never local changes (den#100). An already-up-to-date
+merge does not load unchanged tree bodies; when both tips are identical it
+also skips the ancestry walk. Index safety checks and ORIG_HEAD publication
+are retained. `revert -m`, sequences,
 `--continue`/`--skip` and revert abort are not implemented. Merge editor execution
 and the previously named history limits remain open.
 
@@ -680,7 +707,8 @@ size, and its CRC-32 and the pack's SHA-1 are checked over the same bytes.
 Deltas resolve depth-first from the whole objects, with the bodies on the
 walk's path bounded at 96 MiB (Git's `core.deltaBaseCacheLimit` default); a
 deeper subtree is revisited from its own reconstruction. Objects cap at
-512 MiB (`pack object size limit`), counts at 400,000 and delta depth at 64.
+512 MiB (`limit: a pack object larger than 536870912 bytes`), counts at
+400,000 and delta depth at 64; a repository holds at most 256 packs.
 The fetch asks for no thin pack, so the received pack is self-contained. Its
 idx v2 and its reverse index (`.rev`, which Git writes by default) are written
 and installed with it: a clone keeps the pack, as Git does,
@@ -799,9 +827,9 @@ forms, multiple-URL editing and existing unconfigured local paths remain named
 limits. CLI service selectors and remote uploadpack/receivepack values select
 literal executables; they are not shell commands.
 
-The portable porcelain gate defines **892 fixture groups per native/release
+The portable porcelain gate defines **894 fixture groups per native/release
 tier**: 48 remote/tracking, 770 typed update-policy, 48 configured/lease/failure
-and 26 pull groups. The typed matrix compares acceptance and resulting refs,
+and 28 pull groups. The typed matrix compares acceptance and resulting refs,
 not exact failure text/status; complete raw outputs are retained. Other groups
 compare full process results and repository state, with one exact-input-bound
 receive-service stderr REVIEW rather than a parity pass. Pure units, review

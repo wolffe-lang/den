@@ -65,9 +65,12 @@ fn named_fetch(
     )?
     if selection != "" && advertised.len == 0 { return not_found }
     var available = Map[str, bool](), roots = List[str]()
+    // One reader for every advertised ref: each pack's index parsed once.
+    let reader = object.reader_batch(repo)
     for reference in advertised {
         if reference.id == "unborn" { continue }
-        if object.read_object(repo, oid.parse("sha1", reference.id)?, 16777216)?.kind != "commit" {
+        if object.read_loaded(reader, oid.parse("sha1", reference.id)?, 16777216)?.kind !=
+            "commit" {
             return Unsupported("remote branch does not name a commit")
         }
         available[reference.name] = true
@@ -154,7 +157,7 @@ fn named_fetch(
     let followed = fetch_tags(repo, url, roots, identity, action, mut rows)?
     fetch_head = "{fetch_head}{followed}"
     write_fetch_head(repo, fetch_head)?
-    if !quiet { fetch_report(url, rows) }
+    if !quiet { fetch_report(repo, url, rows)? }
 }
 
 fn fetch_tags(
@@ -166,10 +169,16 @@ fn fetch_tags(
     mut rows: List[TransportRow],
 ) -> str ! object.StoreErrors {
     var extra = ""
-    var reachable = pack.nameset()
-    for id in closure(repo, roots, [])? { let _ = pack.names_add(mut reachable, id, "") }
+    var reachable = pack.nameset(), walked = false
     for tag in fetch_view(repo, url, "refs/tags/", false)? {
         if tag.id == "unborn" || refs.optional(repo, tag.name)?.len > 0 { continue }
+        // The fetched objects' closure is walked once, and only when a tag
+        // the repository lacks might follow: it reads every object reachable
+        // from the fetched tips.
+        if !walked {
+            for id in closure(repo, roots, [])? { let _ = pack.names_add(mut reachable, id, "") }
+            walked = true
+        }
         let target = if tag.peeled == "" then copy tag.id else copy tag.peeled
         if !pack.names_has(reachable, target) { continue }
         let _ = fetch_view(repo, url, tag.name, true)?

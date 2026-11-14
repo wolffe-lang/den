@@ -35,9 +35,40 @@ pub fn path(repo: repository.Repo, id: oid.Oid) -> str ! StoreErrors {
     "{repo.gitdir}/objects/{text[0..2]}/{text[2..]}"
 }
 
+/// A capped read's bound, named as fetch, pull, merge and checkout print it.
+// A bound's message is a literal: an error can leave the region the read
+// that raised it ran in, and a message built at run time would leave with it.
+fn object_limit(cap: int) -> str {
+    if cap == 16777216 { return "limit: an object larger than 16777216 bytes" }
+    if cap == 67108864 { return "limit: an object larger than 67108864 bytes" }
+    if cap == 1000000000 { return "limit: an object larger than 1000000000 bytes" }
+    "limit: an object larger than its read allows"
+}
+
+fn read_limit() -> str { "limit: an object read above 1000000000 bytes" }
+
+/// decode's answer with its size bound named.
+fn decoded(input: List[byte], id: oid.Oid, max_output: int) -> Object ! StoreErrors {
+    decode(input, id, max_output) else |e| match e {
+        limit => { return Unsupported(object_limit(max_output)) },
+        invalid => { return invalid },
+        invalid_oid => { return invalid_oid },
+        unsupported_format => { return unsupported_format },
+        bad_header => { return bad_header },
+        bad_size => { return bad_size },
+        bad_oid => { return bad_oid },
+        truncated => { return truncated },
+        dictionary => { return dictionary },
+        checksum => { return checksum },
+        trailing => { return trailing },
+        unsupported_level => { return unsupported_level },
+    }
+}
+
 /// Read a bounded loose object first; only absence falls back to validated packs.
 pub fn read_object(repo: repository.Repo, id: oid.Oid, max_output: int) -> Object ! StoreErrors {
-    if max_output < 0 || max_output > 1000000000 { return limit }
+    if max_output < 0 { return invalid }
+    if max_output > 1000000000 { return Unsupported(read_limit()) }
     let input = repository.read_bytes(
         path(repo, id)?,
         max_output + max_output / 100 + 65536,
@@ -51,10 +82,13 @@ pub fn read_object(repo: repository.Repo, id: oid.Oid, max_output: int) -> Objec
         invalid => { return invalid },
         exists => { return exists },
         unsupported => { return unsupported },
-        limit => { return limit },
-        Unsupported(name) => { return Unsupported(name) },
+        limit => { return Unsupported(object_limit(max_output)) },
+        Unsupported(name) => {
+            if name.starts_with("limit: ") { return Unsupported(object_limit(max_output)) }
+            return Unsupported(name)
+        },
     }
-    decode(input, id, max_output)?
+    decoded(input, id, max_output)?
 }
 
 /// A batch reader with read_object's precedence: loose first, then packs
@@ -68,7 +102,8 @@ pub fn reader(repo: repository.Repo) -> Reader {
 
 /// read_object's answer and errors, packed reads served by the session.
 pub fn read_with(mut r: Reader, id: oid.Oid, max_output: int) -> Object ! StoreErrors {
-    if max_output < 0 || max_output > 1000000000 { return limit }
+    if max_output < 0 { return invalid }
+    if max_output > 1000000000 { return Unsupported(read_limit()) }
     let input = repository.read_bytes(
         path(r.repo, id)?,
         max_output + max_output / 100 + 65536,
@@ -82,10 +117,13 @@ pub fn read_with(mut r: Reader, id: oid.Oid, max_output: int) -> Object ! StoreE
         invalid => { return invalid },
         exists => { return exists },
         unsupported => { return unsupported },
-        limit => { return limit },
-        Unsupported(name) => { return Unsupported(name) },
+        limit => { return Unsupported(object_limit(max_output)) },
+        Unsupported(name) => {
+            if name.starts_with("limit: ") { return Unsupported(object_limit(max_output)) }
+            return Unsupported(name)
+        },
     }
-    decode(input, id, max_output)?
+    decoded(input, id, max_output)?
 }
 
 /// A reader whose pack indexes are loaded now (vc23), for read_loaded.
@@ -104,7 +142,8 @@ pub fn reader_batch(repo: repository.Repo) -> Reader {
 /// read_with's answer through an opened reader, which it never changes, so
 /// a caller may read inside its own region (one object's memory at a time).
 pub fn read_loaded(r: Reader, id: oid.Oid, max_output: int) -> Object ! StoreErrors {
-    if max_output < 0 || max_output > 1000000000 { return limit }
+    if max_output < 0 { return invalid }
+    if max_output > 1000000000 { return Unsupported(read_limit()) }
     let input = repository.read_bytes(
         path(r.repo, id)?,
         max_output + max_output / 100 + 65536,
@@ -118,10 +157,13 @@ pub fn read_loaded(r: Reader, id: oid.Oid, max_output: int) -> Object ! StoreErr
         invalid => { return invalid },
         exists => { return exists },
         unsupported => { return unsupported },
-        limit => { return limit },
-        Unsupported(name) => { return Unsupported(name) },
+        limit => { return Unsupported(object_limit(max_output)) },
+        Unsupported(name) => {
+            if name.starts_with("limit: ") { return Unsupported(object_limit(max_output)) }
+            return Unsupported(name)
+        },
     }
-    decode(input, id, max_output)?
+    decoded(input, id, max_output)?
 }
 
 /// read_loaded's answer, packed bases served by the reader's cache
@@ -129,7 +171,8 @@ pub fn read_loaded(r: Reader, id: oid.Oid, max_output: int) -> Object ! StoreErr
 /// a pack writer or a closure walk. Only bytes and ints change in the
 /// reader, so a caller may read inside its own region.
 pub fn read_cached(mut r: Reader, id: oid.Oid, max_output: int) -> Object ! StoreErrors {
-    if max_output < 0 || max_output > 1000000000 { return limit }
+    if max_output < 0 { return invalid }
+    if max_output > 1000000000 { return Unsupported(read_limit()) }
     let input = repository.read_bytes(
         path(r.repo, id)?,
         max_output + max_output / 100 + 65536,
@@ -143,10 +186,27 @@ pub fn read_cached(mut r: Reader, id: oid.Oid, max_output: int) -> Object ! Stor
         invalid => { return invalid },
         exists => { return exists },
         unsupported => { return unsupported },
-        limit => { return limit },
-        Unsupported(name) => { return Unsupported(name) },
+        limit => { return Unsupported(object_limit(max_output)) },
+        Unsupported(name) => {
+            if name.starts_with("limit: ") { return Unsupported(object_limit(max_output)) }
+            return Unsupported(name)
+        },
     }
-    decode(input, id, max_output)?
+    decoded(input, id, max_output)?
+}
+
+/// The short-name length Git prints when core.abbrev is unset or "auto": seven
+/// below 2^14 packed objects, then one more each time the packed count
+/// reaches another factor of four (8 from 16384, 9 from 65536, 10 from
+/// 262144), loose objects not counted; measured against the pinned Git.
+pub fn default_abbrev(repo: repository.Repo) -> int ! StoreErrors {
+    let count = pack.packed_count(repo.gitdir)?
+    var length = 7, threshold = 16384
+    while count >= threshold && length < 40 {
+        length += 1
+        threshold *= 4
+    }
+    length
 }
 
 /// Resolve a loose/packed oid prefix; duplicates share one identity.
@@ -200,6 +260,38 @@ pub fn resolve(repo: repository.Repo, name: str) -> oid.Oid ! StoreErrors {
 /// A preexisting object must validate to the same oid. No environment failpoints.
 pub fn write_object(repo: repository.Repo, kind: str, data: List[byte]) -> oid.Oid ! StoreErrors {
     write_injected(repo, kind, data, "")?
+}
+
+/// write_object for a writer of many objects: the batch reader answers
+/// whether each is already stored, so each pack index is parsed once, where
+/// write_object's own check parsed every pack's index for every object.
+pub fn write_loaded(r: Reader, kind: str, data: List[byte]) -> oid.Oid ! StoreErrors {
+    let id = identify(kind, data)?
+    let existing = read_loaded(r, id, data.len) else |e| match e {
+        not_found => { return write_injected(r.repo, kind, data, "")? },
+        invalid => { return invalid },
+        invalid_oid => { return invalid_oid },
+        unsupported_format => { return unsupported_format },
+        bad_header => { return bad_header },
+        bad_size => { return bad_size },
+        bad_oid => { return bad_oid },
+        truncated => { return truncated },
+        dictionary => { return dictionary },
+        checksum => { return checksum },
+        limit => { return limit },
+        trailing => { return trailing },
+        unsupported_level => { return unsupported_level },
+        denied => { return denied },
+        io => { return io },
+        exists => { return exists },
+        unsupported => { return unsupported },
+        Unsupported(name) => { return Unsupported(name) },
+        ambiguous => { return ambiguous },
+        cross_device => { return cross_device },
+    }
+    if existing.kind != kind || existing.data.len != data.len { return bad_oid }
+    for i in 0..data.len { if existing.data[i] != data[i] { return bad_oid } }
+    id
 }
 
 /// Explicit dependency-injection seam for owned-fixture failure tests only.

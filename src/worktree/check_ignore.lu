@@ -69,17 +69,21 @@ pub fn query_ignore_with_warnings(
 
 fn ignore_stdin(nul: bool) -> List[str] ! WorkErrors {
     let fd = fs.stdin().fd
-    var data = List[byte]()
+    var data = List[byte](), exceeded = false
     loop {
         region chunk {
             let bytes = fs_read_chunk(fd, 65536) else |e| match e {
                 eof => { break },
                 io => { return io },
             }
-            if bytes.len > 16777216 - data.len { return limit }
+            if bytes.len > 16777216 - data.len {
+                exceeded = true
+                break
+            }
             for b in bytes { (mut data).push(b) }
         }
     }
+    if exceeded { return Fatal("limit: more than 16777216 bytes of paths on standard input") }
     var words = List[str]()
     let delimiter = if nul then 0 as byte else 10 as byte
     var start = 0

@@ -13,18 +13,22 @@ fn stable(a: List[int], b: List[int]) -> bool {
     true
 }
 
-fn read_held(fd: int) -> List[byte] ! WorkErrors {
-    var out = List[byte]()
+fn read_held(fd: int, path: List[byte]) -> List[byte] ! WorkErrors {
+    var out = List[byte](), exceeded = false
     loop {
         region chunk {
             let part = fs_read_chunk(fd, 65536) else |e| match e {
                 eof => { break },
                 io => { return io },
             }
-            if part.len > 1000000000 - out.len { return limit }
+            if part.len > 1000000000 - out.len {
+                exceeded = true
+                break
+            }
             for b in part { (mut out).push(b) }
         }
     }
+    if exceeded { return Fatal("limit: a work tree file larger than 1000000000 bytes") }
     out
 }
 
@@ -60,7 +64,7 @@ pub fn read_file(
         defer fs.close(take file) else |_| {}
         let before = fs_fstat_record(file.fd)?
         if !stable(named, before) { return Failure("'{text(path)?}' changed while opening") }
-        data = read_held(file.fd)?
+        data = read_held(file.fd, path)?
         record = fs_fstat_record(file.fd)?
         if !stable(before, record) || !stable(record, fs_lstat(full)?) {
             return Failure("'{text(path)?}' changed while reading")
@@ -111,7 +115,7 @@ fn hash_file(
     defer fs.close(take file) else |_| {}
     let before = fs_fstat_record(file.fd)?
     if !stable(named, before) { return Failure("'{text(path)?}' changed while opening") }
-    if before[1] < 0 || before[1] > 1000000000 { return limit }
+    if before[1] < 0 { return invalid }
     var digest = hash.new1()
     hash.update1(mut digest, "blob {before[1]}\0".bytes())
     var total = 0, grew = false
@@ -243,9 +247,22 @@ fn walk(
         false,
         "",
         skip_ignored,
+        false,
         mut ignores,
         mut warnings,
     )?
+}
+
+/// The walk a tree transition's safety check needs (merge, checkout, switch,
+/// reset, pull, and the replay commands): tracked files are compared by
+/// their index stat or hashed as they stream, never held. An untracked
+/// directory with no tracked path below it is one opaque entry, never
+/// entered; the transition looks up its own target paths below it by name.
+/// Ignored files and directories are left out: Git overwrites them, so
+/// they never block, and their bodies are never read.
+fn walk_transition(ctx: Context, value: index.Index, mut warnings: List[str]) -> Walk ! WorkErrors {
+    var ignores = ignore.cache()
+    walk_submodules(ctx, value, true, [], false, false, "", false, true, mut ignores, mut warnings)?
 }
 
 /// status=false keeps the full snapshot every mutation consumer needs: every
@@ -272,6 +289,7 @@ fn walk_mode(
         status,
         show_ignored,
         "",
+        false,
         false,
         mut ignores,
         mut warnings,
@@ -302,6 +320,7 @@ fn walk_submodules(
     show_ignored: bool,
     ignore_option: str,
     skip_ignored: bool,
+    transition: bool,
     mut ignores: ignore.Cache,
     mut warnings: List[str],
 ) -> Walk ! WorkErrors {
@@ -311,10 +330,12 @@ fn walk_submodules(
         if entry.stat.len != 10 { return invalid_index }
     }
     var parsed = List[gitmodules.Parsed]()
-    let written = if status then index_time(ctx) else [-1, -1]
-    // Read once per walk in status mode; the full walk keeps read_file's own reads.
-    let filemode = if status then config_bool(ctx, "core.filemode", true)? else true
-    let symlinks = if status then config_bool(ctx, "core.symlinks", true)? else true
+    // status and transition walks hash or stat-compare; neither holds a body.
+    let hashing = status || transition
+    let written = if hashing then index_time(ctx) else [-1, -1]
+    // Read once per hashing walk; the full walk keeps read_file's own reads.
+    let filemode = if hashing then config_bool(ctx, "core.filemode", true)? else true
+    let symlinks = if hashing then config_bool(ctx, "core.symlinks", true)? else true
     let empty = object.identify("blob", List[byte]())?
     var total_bytes: int = 0
     var pending = [List[byte]()]
@@ -399,7 +420,9 @@ fn walk_submodules(
                     }
                     if !selected(path, paths) { continue }
                     (mut notices).push("{text(path)?}: Permission denied")
-                    if files.len >= 1000000 { return limit }
+                    if files.len >= 1000000 {
+                        return Fatal("limit: more than 1000000 paths in the work tree scan")
+                    }
                     (mut files).push(FileState {
                         path: owned_bytes(path),
                         mode: value.entries[tracked_at].stat[6],
@@ -438,13 +461,17 @@ fn walk_submodules(
                         )?
                         if decision.ignored { continue }
                     }
-                    if directories.len >= 1000000 { return limit }
+                    if directories.len >= 1000000 {
+                        return Fatal("limit: more than 1000000 directories in the work tree scan")
+                    }
                     (mut directories).push(copy path)
                     (mut deeper).push(path)
                     continue
                 }
                 if visit.kind != 0 && visit.kind != 3 || !selected(path, paths) { continue }
-                if files.len >= 1000000 { return limit }
+                if files.len >= 1000000 {
+                    return Fatal("limit: more than 1000000 paths in the work tree scan")
+                }
                 (mut files).push(FileState {
                     path: owned_bytes(path),
                     mode: if visit.kind == 3 then 0o120000 else 0o100644,
@@ -476,7 +503,9 @@ fn walk_submodules(
                 var dirt = 0
                 if state.modified { dirt = 1 }
                 if state.untracked { dirt = dirt | 2 }
-                if files.len >= 1000000 { return limit }
+                if files.len >= 1000000 {
+                    return Fatal("limit: more than 1000000 paths in the work tree scan")
+                }
                 (mut files).push(FileState {
                     path: owned_bytes(path),
                     mode: 0o160000,
@@ -485,6 +514,32 @@ fn walk_submodules(
                     stat: copy info,
                     kind: 1,
                     dirt: dirt,
+                })
+                continue
+            }
+            if info[0] == 1 && transition && !tracked_under(value.entries, path) {
+                let decision = ignore.query_cached(
+                    ctx.repo,
+                    ctx.root,
+                    mut ignores,
+                    text(path)?,
+                    true,
+                    mut warnings,
+                )?
+                if decision.ignored { continue }
+                // Opaque, as an embedded repository already is: no inner
+                // path is listed, read or counted.
+                if files.len >= 1000000 {
+                    return Fatal("limit: more than 1000000 paths in the work tree scan")
+                }
+                (mut files).push(FileState {
+                    path: copy path,
+                    mode: 0,
+                    id: copy empty,
+                    data: [],
+                    stat: copy info,
+                    kind: 1,
+                    dirt: 0,
                 })
                 continue
             }
@@ -503,13 +558,17 @@ fn walk_submodules(
                     )?
                     if decision.ignored { continue }
                 }
-                if directories.len >= 1000000 { return limit }
+                if directories.len >= 1000000 {
+                    return Fatal("limit: more than 1000000 directories in the work tree scan")
+                }
                 (mut directories).push(copy path)
                 // An untracked repository is one opaque directory, including
                 // under -uall. Keep its plain path here for add/path selection;
                 // only status appends '/'. No inner HEAD or file is read.
                 if !tracked_under(value.entries, path) && repository.embedded(full)? {
-                    if files.len >= 1000000 { return limit }
+                    if files.len >= 1000000 {
+                        return Fatal("limit: more than 1000000 paths in the work tree scan")
+                    }
                     (mut files).push(FileState {
                         path: copy path,
                         mode: 0,
@@ -548,9 +607,21 @@ fn walk_submodules(
                     kind: info[0],
                     dirt: 0,
                 }
-                if status && info[0] == 0 && at < 0 {
+                if transition && at < 0 {
+                    // Untracked: its lstat alone; never read, and its id is a
+                    // placeholder no transition trusts. Ignored: left out.
+                    let decision = ignore.query_cached(
+                        ctx.repo,
+                        ctx.root,
+                        mut ignores,
+                        text(path)?,
+                        false,
+                        mut warnings,
+                    )?
+                    if decision.ignored { continue }
+                } else if status && info[0] == 0 && at < 0 {
                     // Untracked or ignored: status renders the path alone.
-                } else if status &&
+                } else if hashing &&
                     info[0] == 0 &&
                     staged >= 0 &&
                     stat_clean(value.entries[staged], info, mode, written) {
@@ -558,13 +629,20 @@ fn walk_submodules(
                 } else {
                     var prior = List[index.Entry]()
                     if staged >= 0 { (mut prior).push(copy value.entries[staged]) }
-                    file = if status {
+                    file = if hashing {
                         hash_file(ctx, path, prior, filemode, symlinks)?
                     } else {
                         read_file(ctx, path, prior)?
                     }
                 }
-                if file.data.len > 1000000000 - total_bytes || files.len >= 1000000 { return limit }
+                if file.data.len > 1000000000 - total_bytes {
+                    return Fatal(
+                        "limit: more than 1000000000 bytes of file content in the work tree scan",
+                    )
+                }
+                if files.len >= 1000000 {
+                    return Fatal("limit: more than 1000000 paths in the work tree scan")
+                }
                 total_bytes += file.data.len
                 (mut files).push(file)
             } else if index_at(value.entries, path) >= 0 {
@@ -773,10 +851,30 @@ fn status_rows(
 }
 
 /// Scan against a caller's already-locked index snapshot. This function itself
-/// remains read-only, allowing commit/add/status consumers to choose ownership.
+/// remains read-only. Its files are walk_transition's: tracked ids without
+/// bodies, untracked paths by lstat (an untracked directory as one opaque
+/// entry), ignored paths absent. Every caller compares ids, modes and stat
+/// words only; commit and stash, which store bodies, use
+/// scan_index_with_warnings.
 pub fn scan_index(ctx: Context, value: index.Index) -> Snapshot ! WorkErrors {
     var warnings = List[str]()
-    scan_index_with_warnings(ctx, value, true, mut warnings)?
+    let _ = index.serialize(value)?
+    let current_head = head(ctx)?
+    var entries = List[FlatEntry]()
+    if current_head.commits.len == 1 { entries = head_flat(ctx, value, current_head.commits[0])? }
+    ensure_filters(ctx)?
+    let walked = walk_transition(ctx, value, mut warnings)?
+    supported_attributes(ctx, walked.files)?
+    let rows = compare_status_with_warnings(ctx, value, entries, walked.files, true, mut warnings)?
+    Snapshot {
+        context: copy ctx,
+        head: current_head,
+        index: copy value,
+        head_entries: entries,
+        files: walked.files,
+        directories: walked.directories,
+        rows: rows,
+    }
 }
 
 /// Read-only scan with explicit warning collection. include_untracked=false
@@ -795,12 +893,7 @@ pub fn scan_index_with_warnings(
     if current_head.commits.len == 1 { entries = flatten_tree(ctx.repo, current_head.commits[0])? }
     ensure_filters(ctx)?
     let walked = walk(ctx, value, include_untracked, [], false, mut warnings)?
-    for file in walked.files {
-        let path = text(file.path)?
-        if path == ".gitattributes" || path.ends_with("/.gitattributes") {
-            return Unsupported("worktree attributes")
-        }
-    }
+    supported_attributes(ctx, walked.files)?
     let rows = compare_status_with_warnings(
         ctx,
         value,
@@ -856,15 +949,11 @@ pub fn scan_status_ignoring(
         show_ignored,
         ignore_option,
         false,
+        false,
         mut ignores,
         mut warnings,
     )?
-    for file in walked.files {
-        let path = text(file.path)?
-        if path == ".gitattributes" || path.ends_with("/.gitattributes") {
-            return Unsupported("worktree attributes")
-        }
-    }
+    supported_attributes(ctx, walked.files)?
     let rows = status_rows(
         ctx,
         value,
