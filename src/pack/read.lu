@@ -1,4 +1,6 @@
-// Bounded offset reads; no mmap, whole-pack buffer, process or persistent cache.
+// Bounded offset reads; no mmap, whole-pack buffer or persistent cache. A
+// command may load its packs' indexes once and carry them (session_find,
+// den#101); no object body outlives a read unless a batch reader keeps it.
 use std.fs
 use hash
 use oid
@@ -568,6 +570,98 @@ pub fn session_cached(mut s: Session, name: str, cap: int) -> Body ! PackErrors 
         return result
     }
     not_found
+}
+
+/// An unloaded session with no base cache: what a repository carries until
+/// its packs are opened (den#101). Listing nothing and reading nothing, it
+/// costs a command that never reads a packed object nothing.
+pub fn unloaded(gitdir: str) -> Session {
+    Session {
+        gitdir: copy gitdir,
+        paths: List[str](),
+        indexes: List[Index](),
+        ends: List[int](),
+        loaded: false,
+        cache: no_cache(),
+    }
+}
+
+/// s's indexes with a base cache of their own, for a batch reader's
+/// session_cached: the indexes are not parsed again.
+pub fn with_cache(s: Session) -> Session {
+    var out = copy s
+    out.cache = base_cache()
+    out
+}
+
+/// One loaded pack's object at slot, its pack reopened and its header and
+/// trailer binding checked again (rebound), as session_peek reads it.
+fn read_slot(s: Session, i: int, slot: int) -> Body ! PackErrors {
+    var result = Body { kind: "", data: List[byte]() }
+    region candidate {
+        let fd = open_pack("{s.paths[i][0..s.paths[i].len - 4]}.pack")?
+        defer fs_close(fd) else |_| {}
+        let end = rebound(fd, s.indexes[i], s.ends[i])?
+        var seen = Map[int, bool](), total: int = 0, none = no_cache()
+        let value = unpack(fd, end, s.indexes[i], slot, mut seen, mut total, 0, mut none, 0)?
+        result = copy value
+    }
+    result
+}
+
+/// read_object's answer through a session loaded once (den#101), never a
+/// different one. A name a loaded index holds is read from its pack, the
+/// pack's header and trailer binding checked again. Any other outcome is
+/// read_object's own: a read through the session that fails for any reason
+/// (a pack removed, replaced or damaged since the load), or a name none of
+/// the loaded indexes holds while objects/pack lists a pack the session has
+/// not loaded (one written since), is answered by read_object itself, every
+/// error included. A name absent from every listed pack, while objects/pack
+/// lists exactly the loaded packs, is not_found, as read_object answers it,
+/// without parsing an index again.
+pub fn session_find(s: Session, name: str, cap: int) -> Body ! PackErrors {
+    if !s.loaded { return read_object(s.gitdir, name, cap)? }
+    for i in 0..s.paths.len {
+        let slot = slot_named(s.indexes[i], name)
+        if slot < 0 { continue }
+        let body = read_slot(s, i, slot) else |_| { return read_object(s.gitdir, name, cap)? }
+        if body.data.len > cap { return Unsupported(capped(cap)) }
+        return body
+    }
+    if !same_listing(s)? { return read_object(s.gitdir, name, cap)? }
+    not_found
+}
+
+/// Whether objects/pack lists exactly the packs s loaded, in the same order.
+fn same_listing(s: Session) -> bool ! PackErrors {
+    let listed = indexes(s.gitdir)?
+    if listed.len != s.paths.len { return false }
+    for i in 0..listed.len { if listed[i] != s.paths[i] { return false } }
+    true
+}
+
+/// prefix's answer through a session loaded once (den#101): each loaded
+/// index's names that start with prefix are found by binary search, at most
+/// two distinct, as prefix collects them. While objects/pack lists anything
+/// but the packs the session loaded, prefix itself answers.
+pub fn session_prefix(s: Session, prefix_text: str) -> List[str] ! PackErrors {
+    if !s.loaded || !same_listing(s)? { return prefix(s.gitdir, prefix_text)? }
+    var out = List[str]()
+    for index in s.indexes {
+        var lo = 0, hi = index.entries.len
+        while lo < hi {
+            let mid = (lo + hi) / 2
+            if index.entries[mid].name < prefix_text { lo = mid + 1 } else { hi = mid }
+        }
+        while lo < index.entries.len && index.entries[lo].name.starts_with(prefix_text) {
+            var duplicate = false
+            for name in out { if name == index.entries[lo].name { duplicate = true } }
+            if !duplicate && out.len < 2 { (mut out).push(copy index.entries[lo].name) }
+            if out.len == 2 { break }
+            lo += 1
+        }
+    }
+    out
 }
 
 /// read_object's answer through the session's parsed indexes.
