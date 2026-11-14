@@ -26,6 +26,11 @@ TZDIR) set as the row says, and compares den's result with Git's.
           must refuse the value by name. A value den reads differently from
           Git fails the row.
 
+  Clocks: stamp and shell read the clock by design (a date not given) and
+  never compare one tool's seconds with the other's; every other family
+  gives its dates, verbs at one pinned instant (den#95). stamp, verbs and
+  shell each print a CLOCK line saying which.
+
   --measure  run every row and write the table (target/zone-TIER/), failing
              nothing.
   (default)  any row whose result differs is FAIL <row>, except the named
@@ -289,6 +294,7 @@ def stamp_cases():
 
 
 def stamp_family():
+    print('CLOCK stamp: each tool reads the clock; zones compared, seconds only against its own run', flush=True)
     for label, zone, tzdir in stamp_cases():
         name = 'stamp/' + label
         env = dict(NO_DATES)
@@ -523,6 +529,7 @@ def verbs_family():
 # ---- shell: TZ from a startup file, a plain commit end to end ----------------
 
 def shell_family():
+    print('CLOCK shell: each tool reads the clock; seconds masked in the compared output', flush=True)
     zone = 'EST5EDT,M3.2.0,M11.1.0'
     res, seen, logs = {}, {}, {}
     for tool in ('git', 'den'):
