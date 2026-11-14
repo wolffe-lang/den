@@ -246,17 +246,34 @@ fn merge_command_with(args: List[str], reflog: str, label: str) -> int ! commit.
     let target = revision.peel(ctx.repo, raw_target, "commit") else |_| {
         return Failure("{name} - not something we can merge")
     }
-    let bases = mergetree.bases(ctx.repo, head.commits[0], target)?
+    // Equal tips need neither ancestry nor blob input. Clone/fetch admit
+    // larger objects than the true merge engine; a no-op must not apply
+    // that engine's limits to an unchanged tree.
+    let bases = if oid.equal(head.commits[0], target) {
+        [copy target]
+    } else {
+        mergetree.bases(ctx.repo, head.commits[0], target)?
+    }
     if bases.len > 1 { return Unsupported("merge recursive criss-cross bases") }
     if bases.len == 0 { return Fatal("refusing to merge unrelated histories") }
-    let ours = mergetree.files(ctx.repo, head.commits[0])?,
-        theirs = mergetree.files(ctx.repo, target)?
     let value = worktree.read_index(ctx)?
     for entry in value.entries {
         if index.stage(entry) != 0 { return Unsupported("merge unmerged index") }
     }
     let fast = oid.equal(bases[0], head.commits[0]) && !no_ff
     let upto = oid.equal(bases[0], target)
+    if upto {
+        merge_orig(ctx, head.commits)?
+        if !quiet {
+            print(
+                if squash then "Already up to date. (nothing to squash)" else "Already up to date.",
+            )
+        }
+        merge_cleanup(ctx)
+        return 0
+    }
+    let ours = mergetree.files(ctx.repo, head.commits[0])?,
+        theirs = mergetree.files(ctx.repo, target)?
     if !fast && !upto && !stop && !squash && !noedit {
         return Unsupported("merge editor execution")
     }
@@ -280,15 +297,6 @@ fn merge_command_with(args: List[str], reflog: str, label: str) -> int ! commit.
         )?
     }
     merge_orig(ctx, head.commits)?
-    if upto {
-        if !quiet {
-            print(
-                if squash then "Already up to date. (nothing to squash)" else "Already up to date.",
-            )
-        }
-        merge_cleanup(ctx)
-        return 0
-    }
     if !fast && ff_only {
         if worktree.config_bool(ctx, "advice.diverging", true)? {
             eprint(
