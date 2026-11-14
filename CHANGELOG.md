@@ -1,5 +1,23 @@
 # Changes
 
+## Unreleased — a remote that stops sending (den#118)
+
+- A fetch from a remote that stops sending now ends with a named line
+  instead of waiting until something outside kills it. Every read of an
+  HTTP connection, plain or TLS, already waited at most 30 seconds; a remote
+  that kept the connection busy with keepalive or progress packets but sent
+  no pack data was never bounded, and den waited as Git does.
+- A fetch's pack stream now needs pack data: 30 seconds with none once the
+  pack has begun, 120 seconds before its first byte. The lines are `fatal:
+  the remote sent no pack data for 30 seconds` (or `for 120 seconds`) and,
+  for a read that receives nothing at all, `fatal: the remote sent nothing for
+  30 seconds` (it was `den: wire: Unsupported(TLS timeout)` or `HTTP read
+  timeout`). Clone and fetch exit 128, pull 1; a submodule update reports a
+  failed clone. `DEN_STALL_SECONDS` sets the bound.
+- `tools/http-stall-test.py` holds clone and submodule update to the bound
+  against a local remote, plain and TLS, that stops mid-pack: silent, sending
+  keepalives, sending progress, or before any pack data.
+
 ## Unreleased — local time zones
 
 - `commit` no longer refuses a `TZ` other than UTC (den#84). A date den is
