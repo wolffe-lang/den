@@ -365,7 +365,7 @@ fn tree_id(repo: repository.Repo, id: oid.Oid) -> oid.Oid ! WorkErrors {
             if !linked { return invalid_header }
         }
     }
-    if found.len == 0 { return limit }
+    if found.len == 0 { return Fatal("limit: more than 64 tags and commits before a tree") }
     copy found[0]
 }
 
@@ -376,7 +376,7 @@ struct PendingTree { path: List[byte], id: oid.Oid, ancestors: List[oid.Oid] }
 /// One pack session serves every tree of the walk; one stable sort orders it.
 pub fn flatten_tree(repo: repository.Repo, id: oid.Oid) -> List[FlatEntry] ! WorkErrors {
     let root = tree_id(repo, id)?
-    var result = List[FlatEntry]()
+    var result = List[FlatEntry](), too_deep = false
     // The walk's reader, trees and scratch live in a region, so its idx parse
     // is reclaimed when the walk ends (den#63); only the result is kept.
     region walk {
@@ -392,7 +392,10 @@ pub fn flatten_tree(repo: repository.Repo, id: oid.Oid) -> List[FlatEntry] ! Wor
             }
             var ancestors = copy next.ancestors
             (mut ancestors).push(copy next.id)
-            if ancestors.len > 1024 { return limit }
+            if ancestors.len > 1024 {
+                too_deep = true
+                break
+            }
             let stored = object.read_with(mut reader, next.id, 1000000000)?
             if stored.kind != "tree" { return invalid_tree }
             let children = object.parse_tree(stored.data, "sha1")?
@@ -421,6 +424,7 @@ pub fn flatten_tree(repo: repository.Repo, id: oid.Oid) -> List[FlatEntry] ! Wor
         (mut result).reserve(entries.len)
         for i in path_order(paths) { (mut result).push(copy entries[i]) }
     }
+    if too_deep { return Fatal("limit: a tree nested more than 1024 deep") }
     result
 }
 

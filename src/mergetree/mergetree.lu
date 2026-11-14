@@ -34,7 +34,7 @@ pub fn bases(
     let names = mergebase.bases(nodes, oid.hex(left)?, oid.hex(right)?, 100000) else |e| match e {
         missing => { return not_found },
         invalid => { return invalid },
-        limit => { return limit },
+        limit => { return Fatal("limit: more than 100000 commits in the merge-base graph") },
     }
     var out = List[oid.Oid]()
     for name in names { (mut out).push(oid.parse("sha1", name)?) }
@@ -63,7 +63,9 @@ pub fn files(repo: repository.Repo, id: oid.Oid) -> List[diff.File] ! worktree.W
         let blob = object.read_cached(mut reader, entry.id, 16777216)?
         if blob.kind != "blob" { return bad_oid }
         total += blob.data.len
-        if total > 134217728 { return limit }
+        if total > 134217728 {
+            return Fatal("limit: more than 134217728 bytes of merge input in one tree")
+        }
         (mut out).push(diff.File {
             path: copy entry.path,
             mode: entry.mode,
@@ -143,9 +145,7 @@ pub fn compared(
                 )
             }
             if exceeded {
-                return Unsupported(
-                    "limit: more than 134217728 bytes of compared merge input per tree",
-                )
+                return Fatal("limit: more than 134217728 bytes of compared merge input in one tree")
             }
         }
         (mut result).push(files)
@@ -247,7 +247,11 @@ pub fn plan(
         ) else |e| match e {
             binary => { return Unsupported("merge binary conflict") },
             invalid => { return invalid },
-            limit => { return limit },
+            limit => {
+                return Fatal(
+                    "limit: '{name}' is larger than 16777216 bytes, the file merge's bound",
+                )
+            },
         }
         (mut result.messages).push("Auto-merging {name}")
         if merged.conflicts > 0 {
