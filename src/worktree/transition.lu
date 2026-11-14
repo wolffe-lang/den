@@ -1,4 +1,5 @@
 use std.fs
+use ignore
 use index
 use object
 use oid
@@ -38,6 +39,8 @@ fn transition_path(
     target: FlatEntry,
     path: List[byte],
     mode: str,
+    filemode: bool,
+    symlinks: bool,
 ) -> index.Entry ! WorkErrors {
     let desired = copy target
     var prior = List[index.Entry]()
@@ -64,15 +67,20 @@ fn transition_path(
         return index.entry_from_directory(record, path, desired.id, 0, 0)?
     }
     if mode != "mixed" {
+        // Only a tracked path's scanned id is real: an untracked one is a
+        // placeholder the scan never read, so its path is always written.
         let disk = file_at(snapshot.files, path)
         if disk < 0 ||
+            at < 0 ||
             snapshot.files[disk].mode != desired.mode ||
             !oid.equal(snapshot.files[disk].id, desired.id) {
             install(ctx, reader, desired)?
         }
     }
-    let file = read_file(ctx, path, [copy entry]) else |e| match e {
+    // The written file is hashed as it streams, never held.
+    let file = hash_file(ctx, path, [copy entry], filemode, symlinks) else |e| match e {
         not_found => { return entry },
+        Fatal(message) => { return Fatal(message) },
         _ => { return Unsupported("tree transition unreadable path {text(path)?}: {e}") },
     }
     if file.mode == desired.mode && oid.equal(file.id, desired.id) {
@@ -106,17 +114,8 @@ fn transition_mode(
     // One reader for the whole transition (den#63): its pack indexes are
     // parsed once, where a read per blob parsed them once a file.
     let reader = object.reader_batch(ctx.repo)
-    for entry in target {
-        if entry.mode == 0o160000 { continue }
-        if !dry {
-            // One blob at a time (vc23): a clone's checkout holds one file's
-            // body, never the whole worktree's.
-            region verify {
-                let data = object.read_loaded(reader, entry.id, 1000000000)?
-                if data.kind != "blob" { return bad_oid }
-            }
-        }
-    }
+    var ignores = ignore.cache()
+    var warnings = List[str]()
     var paths = List[List[byte]]()
     for entry in indexed { (mut paths).push(copy entry.path) }
     for entry in target {
@@ -137,16 +136,26 @@ fn transition_mode(
             }
             var present = disk >= 0
             if at < 0 && next >= 0 && !present {
-                // Opaque repositories deliberately omit their children from
-                // the scan. Probe a target by name before any transition
+                // Opaque directories (an embedded repository, or an untracked
+                // directory with no tracked path below it) omit their children
+                // from the scan. Probe a target by name before any transition
                 // write, so their untracked files still block a safe switch
-                // or merge. Hard reset retains Git's destructive semantics.
+                // or merge; an ignored one is expendable, as Git's is. Hard
+                // reset retains Git's destructive semantics.
                 for file in snapshot.files {
                     if file.kind == 1 &&
                         file.mode == 0 &&
                         under(path, file.path) &&
                         path_present(ctx, path)? {
-                        present = true
+                        let decision = ignore.query_cached(
+                            ctx.repo,
+                            ctx.root,
+                            mut ignores,
+                            text(path)?,
+                            false,
+                            mut warnings,
+                        )?
+                        present = !decision.ignored
                         break
                     }
                 }
@@ -186,6 +195,19 @@ fn transition_mode(
         return Failure("{message}Aborting")
     }
     if dry { return }
+    // Every blob this transition writes is verified before the first write;
+    // a kept path's blob is never read (it is HEAD's or the index's already).
+    for entry in target {
+        if entry.mode == 0o160000 || (keep[text(entry.path)?] else false) { continue }
+        // One blob at a time (vc23): a clone's checkout holds one file's
+        // body, never the whole worktree's.
+        region verify {
+            let data = object.read_loaded(reader, entry.id, 1000000000)?
+            if data.kind != "blob" { return bad_oid }
+        }
+    }
+    let filemode = config_bool(ctx, "core.filemode", true)?
+    let symlinks = config_bool(ctx, "core.symlinks", true)?
     let previous = copy value
     // Remove first so a tracked directory-to-file change can be installed.
     if mode != "mixed" {
@@ -232,6 +254,8 @@ fn transition_mode(
                 target[next],
                 path,
                 mode,
+                filemode,
+                symlinks,
             )?
             (mut entries).push(copy entry)
         }
