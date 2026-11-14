@@ -183,7 +183,9 @@ fn validate_side(files: List[File]) -> () ! worktree.WorkErrors {
     for file in files {
         if file.path.len == 0 { return invalid }
         for b in file.path { if b == 0 as byte { return invalid } }
-        if file.data.len > 16777216 { return limit }
+        if file.data.len > 16777216 {
+            return Fatal("limit: a file larger than 16777216 bytes in a diff")
+        }
         if file.mode != 0o100644 &&
             file.mode != 0o100755 &&
             file.mode != 0o120000 &&
