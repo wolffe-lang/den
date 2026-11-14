@@ -400,7 +400,10 @@ fn rebase_command_with(args: List[str], reflog: str, quiet: bool) -> int ! commi
     while !(excluded[oid.hex(current)?] else false) {
         let item = walk.read(ctx.repo, current)?
         if item.parents.len != 1 { return Unsupported("rebase nonlinear or unrelated history") }
-        if reverse.len == 100000 || item.encoded_size > 134217728 - selected_bytes { return limit }
+        if reverse.len == 100000 { return Fatal("limit: more than 100000 commits to rebase") }
+        if item.encoded_size > 134217728 - selected_bytes {
+            return Fatal("limit: more than 134217728 bytes of commits to rebase")
+        }
         selected_bytes += item.encoded_size
         current = copy item.parents[0]
         (mut reverse).push(item)

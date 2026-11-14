@@ -471,7 +471,7 @@ fn pick_command(args: List[str]) -> int ! commit.CommitErrors {
         }
     }
     if names.len == 0 { return Unsupported("cherry-pick missing commit") }
-    if names.len > 100000 { return limit }
+    if names.len > 100000 { return Fatal("limit: more than 100000 commits to cherry-pick") }
     replay_lock_scope(ctx)?
     for name in [
         "MERGE_HEAD",
@@ -491,7 +491,9 @@ fn pick_command(args: List[str]) -> int ! commit.CommitErrors {
     var selected_bytes: int = 0
     for name in names {
         let item = walk.read(ctx.repo, replay_target(ctx, name)?)?
-        if item.encoded_size > 134217728 - selected_bytes { return limit }
+        if item.encoded_size > 134217728 - selected_bytes {
+            return Fatal("limit: more than 134217728 bytes of commits to cherry-pick")
+        }
         selected_bytes += item.encoded_size
         if item.parents.len > 1 { return Unsupported("cherry-pick merge mainline") }
         (mut steps).push(sequencer.Step {
