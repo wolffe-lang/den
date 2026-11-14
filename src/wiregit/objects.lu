@@ -396,7 +396,7 @@ pub fn receive_pack(
             state = receive_packet(mut s, mut receiver)?
         }
         let now = time.monotonic_ns()
-        if state == 1 {
+        if state != 2 {
             last = now
             started = true
         } else if state == 0 {
