@@ -22,6 +22,8 @@ fn limit_diagnostic(message: str) -> bool {
 
 fn startup_diagnostic(message: str) -> bool {
     if message == "remote service unavailable" { read_failure(); return true }
+    // den#118's stall bound, named as itself (it carries no URL).
+    if message.starts_with("fatal: the remote sent ") { eprint(message); return true }
     if message.starts_with("transport '") && message.ends_with("' not allowed") {
         eprint("fatal: {message}")
         return true

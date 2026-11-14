@@ -277,6 +277,9 @@ fn clone_one(url: str, gitdir: str, full: str) -> bool {
         eprint(
             if message.starts_with("Unsupported(transport '") {
                 "fatal: {message[12..message.len - 1]}"
+            } else if message.starts_with("Unsupported(fatal: ") {
+                // den#118's stall bound, named as itself.
+                copy message[12..message.len - 1]
             } else {
                 "fatal: {message}"
             },
@@ -369,7 +372,9 @@ fn update(ctx: worktree.Context, options: UpdateOptions, parent: str) -> int ! w
             env_set("GIT_PROTOCOL_FROM_USER", "0") else |_| {}
             wiregit.fetch_commit(sub_ctx.repo, url, oid.hex(target)?) else |e| {
                 let message = "{e}"
-                if message.starts_with("Unsupported(") {
+                if message.starts_with("Unsupported(fatal: ") {
+                    eprint(message[12..message.len - 1])
+                } else if message.starts_with("Unsupported(") {
                     eprint("fatal: {message[12..message.len - 1]}")
                 }
             }
