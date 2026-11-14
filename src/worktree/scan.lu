@@ -745,14 +745,21 @@ fn walk_submodules(
                     (info[0] == 0 || link_judged(info, prior_mode, symlinks)) &&
                     stat_clean(value.entries[staged], info, mode, written) {
                     file.id = copy value.entries[staged].id
+                } else if hashing {
+                    // Each read's scratch lives in its own region and only
+                    // its FileState is kept, so a walk that reads every
+                    // tracked file (racily clean by whole seconds) holds no
+                    // more than one that trusts their stat data (den#101).
+                    region one {
+                        var prior = List[index.Entry]()
+                        if staged >= 0 { (mut prior).push(copy value.entries[staged]) }
+                        let hashed = hash_file(ctx, path, prior, filemode, symlinks)?
+                        file = copy hashed
+                    }
                 } else {
                     var prior = List[index.Entry]()
                     if staged >= 0 { (mut prior).push(copy value.entries[staged]) }
-                    file = if hashing {
-                        hash_file(ctx, path, prior, filemode, symlinks)?
-                    } else {
-                        read_file(ctx, path, prior)?
-                    }
+                    file = read_file(ctx, path, prior)?
                 }
                 if file.data.len > 1000000000 - total_bytes {
                     return Fatal(
