@@ -15,8 +15,9 @@ TZDIR) set as the row says, and compares den's result with Git's.
   amend   an amended author whose stored zone is not four digits, re-read in
           the local zone.
   verbs   tag -a, merge, stash, revert, cherry-pick, rebase, notes, branch,
-          switch and reset under a zone that is not UTC: the zone of every
-          identity and reflog line each writes.
+          switch and reset under a zone that is not UTC, at one pinned
+          instant given without a zone: the seconds and zone of every
+          identity and reflog line each writes, and each command's output.
   shell   TZ exported from a shell startup file, then a plain add, commit and
           log in a new repository, end to end.
   corpus  240 TZ values made by a seeded mutation of well-formed ones (a byte
@@ -475,11 +476,20 @@ VERBS = [
 ]
 
 
+# den#95: a verb that reads the clock, run by Git and then by den, can
+# straddle a second boundary, and revert prints its author date to the
+# second. Every verb runs at this one instant instead, given without a zone,
+# so each tool still takes the zone from TZ, and both write the same seconds.
+VERB_SECONDS = 1720000000
+
+
 def verbs_family():
+    print('CLOCK verbs: pinned at @%d with no zone; seconds and zones compared' % VERB_SECONDS, flush=True)
+    pinned = '@%d' % VERB_SECONDS
     for zlabel, zone in [('posix-rule', 'EST5EDT,M3.2.0,M11.1.0'), ('fixed-east', 'JST-9')]:
         for vlabel, commands, ref, kind in VERBS:
             name = 'verbs/%s/%s' % (zlabel, vlabel)
-            env = dict(NO_DATES, TZ=zone)
+            env = dict(TZ=zone, GIT_AUTHOR_DATE=pinned, GIT_COMMITTER_DATE=pinned)
             if vlabel == 'tag-reflog':
                 env.update(GIT_CONFIG_COUNT='1', GIT_CONFIG_KEY_0='core.logAllRefUpdates', GIT_CONFIG_VALUE_0='always')
             res, seen = {}, {}
@@ -489,26 +499,25 @@ def verbs_family():
                 if vlabel == 'stash':
                     (work / 'f').write_bytes(b'changed\n')
                 counts = reflog_counts(work)
-                before = int(time.time())
                 outs = []
                 for command in commands:
                     q = run([TOOLS[tool], *command], work, env=env)
                     outs.append(masked(result(q)))
-                after = int(time.time())
                 res[tool] = outs
+                # Every new reflog line and every identity line of the verb's
+                # object, by field, seconds and zone.
                 dates = reflog_dates(work, counts)
                 if ref is not None and all(o['status'] == 0 for o in outs):
                     dates += object_dates(work, kind, g(work, 'rev-parse', ref).strip())
                     if vlabel == 'stash':
                         dates += object_dates(work, 'commit', g(work, 'rev-parse', 'refs/stash^2').strip())
-                fresh_dates = [(f, z) for f, s, z in dates if s >= before - 1]
-                inside = all(s <= after + 1 for _, s, _ in dates if s >= before - 1)
-                seen[tool] = (fresh_dates + reflog_messages(work, counts), inside)
+                seen[tool] = (dates, reflog_messages(work, counts))
             git_res = {'status': max(o['status'] for o in res['git']), 'stdout': json.dumps(res['git']), 'stderr': ''}
             den_res = {'status': max(o['status'] for o in res['den']), 'stdout': json.dumps(res['den']), 'stderr': ''}
-            inside = seen['git'][1] and seen['den'][1]
-            record(name, git_res, den_res, extra={t: seen[t][0] for t in seen},
-                   same=git_res == den_res and inside and bool(seen['git'][0]))
+            # The row must reach a writer: Git wrote a line at the pinned instant.
+            at_pin = any(secs == VERB_SECONDS for _, secs, _ in seen['git'][0])
+            record(name, git_res, den_res, extra={t: seen[t][0] + seen[t][1] for t in seen},
+                   same=git_res == den_res and at_pin)
 
 
 # ---- shell: TZ from a startup file, a plain commit end to end ----------------
