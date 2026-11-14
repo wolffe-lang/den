@@ -73,6 +73,51 @@ fn flat_files(files: List[diff.File]) -> List[worktree.FlatEntry] {
     out
 }
 
+/// tree_objects in its own region, the assembly copied out (see
+/// merge_command_with); a failure is raised by a second run outside it.
+fn assembled_trees(
+    ctx: worktree.Context,
+    files: List[diff.File],
+) -> index.TreeAssembly ! commit.CommitErrors {
+    var failed = false
+    var out = List[index.TreeAssembly]()
+    region assembling {
+        let found = tree_list(ctx, files) else |_| {
+            failed = true
+            List[index.TreeAssembly]()
+        }
+        out = copy found
+    }
+    if failed || out.len != 1 { return tree_objects(ctx, files)? }
+    copy out[0]
+}
+
+fn tree_list(
+    ctx: worktree.Context,
+    files: List[diff.File],
+) -> List[index.TreeAssembly] ! commit.CommitErrors {
+    [tree_objects(ctx, files)?]
+}
+
+/// Whether the scan finds a local change (untracked and ignored paths are not).
+fn locally_changed(ctx: worktree.Context, value: index.Index) -> bool ! worktree.WorkErrors {
+    for row in worktree.scan_index(ctx, value)?.rows {
+        if !row.untracked && !row.ignored && (row.x != " " || row.y != " ") { return true }
+    }
+    false
+}
+
+/// The staged paths a merge would overwrite, one indented line each.
+fn staged_paths(ctx: worktree.Context, value: index.Index) -> str ! worktree.WorkErrors {
+    var staged = ""
+    for row in worktree.scan_index(ctx, value)?.rows {
+        if !row.untracked && !row.ignored && row.x != " " {
+            staged += "  {str_from_utf8(row.path)?}\n"
+        }
+    }
+    staged
+}
+
 fn tree_objects(
     ctx: worktree.Context,
     files: List[diff.File],
@@ -254,10 +299,22 @@ fn merge_command_with(args: List[str], reflog: str, label: str) -> int ! commit.
     // Equal tips need neither ancestry nor blob input. Clone/fetch admit
     // larger objects than the true merge engine; a no-op must not apply
     // that engine's limits to an unchanged tree.
-    let bases = if oid.equal(head.commits[0], target) {
-        [copy target]
-    } else {
-        mergetree.bases(ctx.repo, head.commits[0], target)?
+    // The phases below that walk history, read trees or scan the work tree
+    // each run in a region and copy out only their answer, so each phase's
+    // scratch is released when it ends rather than kept to the end of the
+    // command. A phase that fails is run again outside its region, where its
+    // error's message can leave it (a message built inside would be freed).
+    var bases = [copy target]
+    if !oid.equal(head.commits[0], target) {
+        var failed = false
+        region ancestry {
+            let found = mergetree.bases(ctx.repo, head.commits[0], target) else |_| {
+                failed = true
+                List[oid.Oid]()
+            }
+            bases = copy found
+        }
+        if failed { bases = mergetree.bases(ctx.repo, head.commits[0], target)? }
     }
     if bases.len > 1 { return Unsupported("merge recursive criss-cross bases") }
     if bases.len == 0 { return Fatal("refusing to merge unrelated histories") }
@@ -279,20 +336,31 @@ fn merge_command_with(args: List[str], reflog: str, label: str) -> int ! commit.
     }
     var input_ids = [copy head.commits[0], copy target]
     if !fast { (mut input_ids).push(copy bases[0]) }
-    let inputs = mergetree.compared(ctx.repo, input_ids, !fast || stat && !quiet)?
+    let bodies = !fast || stat && !quiet
+    var inputs = List[List[diff.File]](), compare_failed = false
+    region comparing {
+        let found = mergetree.compared(ctx.repo, input_ids, bodies) else |_| {
+            compare_failed = true
+            List[List[diff.File]]()
+        }
+        inputs = copy found
+    }
+    if compare_failed { inputs = mergetree.compared(ctx.repo, input_ids, bodies)? }
     let ours = copy inputs[0], theirs = copy inputs[1]
     if !fast && !upto && !stop && !squash && !noedit {
         return Unsupported("merge editor execution")
     }
     var plan = mergetree.Plan { files: copy theirs, stages: [], messages: [], conflicts: [] }
     if !fast && !upto {
-        let snapshot = worktree.scan_index(ctx, value)?
-        for row in snapshot.rows {
-            // Untracked and ignored paths are not local changes.
-            if !row.untracked && !row.ignored && (row.x != " " || row.y != " ") {
-                return Unsupported("merge dirty recursive recovery")
+        var dirty = false, scan_failed = false
+        region dirt {
+            dirty = locally_changed(ctx, value) else |_| {
+                scan_failed = true
+                false
             }
         }
+        if scan_failed { dirty = locally_changed(ctx, value)? }
+        if dirty { return Unsupported("merge dirty recursive recovery") }
         let style = ctx.repo.config["merge.conflictstyle"] else "merge"
         plan = mergetree.plan(
             copy inputs[2],
@@ -317,13 +385,15 @@ fn merge_command_with(args: List[str], reflog: str, label: str) -> int ! commit.
         print("Updating {abbrev(ctx.repo,head.commits[0])?}..{abbrev(ctx.repo,target)?}")
     }
     if !fast {
-        let snap = worktree.scan_index(ctx, value)?
-        var staged = ""
-        for row in snap.rows {
-            if !row.untracked && !row.ignored && row.x != " " {
-                staged += "  {str_from_utf8(row.path)?}\n"
+        var staged = "", scan_failed = false
+        region staging {
+            let found = staged_paths(ctx, value) else |_| {
+                scan_failed = true
+                ""
             }
+            staged = copy found
         }
+        if scan_failed { staged = staged_paths(ctx, value)? }
         if staged != "" {
             eprint(
                 "error: Your local changes to the following files would be overwritten by merge:\n{staged}Merge with strategy ort failed.",
@@ -344,21 +414,27 @@ fn merge_command_with(args: List[str], reflog: str, label: str) -> int ! commit.
     let flat = flat_files(plan.files)
     if !fast { worktree.transition(ctx, mut tx.value, flat_files(ours), "merge")? }
     var assembled = List[index.TreeAssembly]()
-    if !fast { (mut assembled).push(tree_objects(ctx, plan.files)?) }
-    worktree.merge_check(ctx, tx.value, flat) else |e| match e {
-        Failure(text) => {
-            eprint("error: {text}")
-            if fast { return 1 }
-            index.commit(mut tx)?
-            eprint("Merge with strategy ort failed.")
-            return 2
-        },
-        // A named bound or refusal reaches the user as itself.
-        Fatal(text) => { return Fatal(text) },
-        Unsupported(text) => { return Unsupported(text) },
-        _ => { return Unsupported("merge safety: {e}") },
+    if !fast { (mut assembled).push(assembled_trees(ctx, plan.files)?) }
+    var refused = false
+    region safety {
+        worktree.merge_check(ctx, tx.value, flat) else |_| { refused = true }
     }
-    let tree = if fast then tree_objects(ctx, plan.files)? else copy assembled[0]
+    if refused {
+        worktree.merge_check(ctx, tx.value, flat) else |e| match e {
+            Failure(text) => {
+                eprint("error: {text}")
+                if fast { return 1 }
+                index.commit(mut tx)?
+                eprint("Merge with strategy ort failed.")
+                return 2
+            },
+            // A named bound or refusal reaches the user as itself.
+            Fatal(text) => { return Fatal(text) },
+            Unsupported(text) => { return Unsupported(text) },
+            _ => { return Unsupported("merge safety: {e}") },
+        }
+    }
+    let tree = if fast then assembled_trees(ctx, plan.files)? else copy assembled[0]
     if !fast {
         let path = "{ctx.repo.gitdir}/AUTO_MERGE.lock"
         let file = fs.create_new_with_mode(path, 0o666) else |e| match e {
