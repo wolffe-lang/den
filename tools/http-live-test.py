@@ -30,8 +30,18 @@ for the token.
 
 Every row SKIPs by name when github.com:443 is unreachable or when no
 distribution root bundle exists; the push row also without its variables. Run through tools/env in the oracle
-container. --self-url, --self-seconds and --output aim the self row at
-another repository (tools/http-live-stall-test.py's local server). PEM is decoded per RFC 7468 here; no TLS library is imported.
+container. PEM is decoded per RFC 7468 here; no TLS library is imported.
+
+Stalls (den#118's gate side): when a clone in the read, identity or self
+row makes no progress for STALL_SECONDS (300 s, or DEN_LIVE_STALL_SECONDS),
+or for half its own time bound when that is shorter, the row stops it (its
+own child's pid) and runs that tool's clone once more, printing `RETRY
+<row> <tool> no-progress-for=<s>s`; the LIVE line counts the retries.
+Progress is growth in the clone directory's bytes or in the read bytes of
+the clone's process tree (/proc/PID/io rchar). A second stall is `FAIL
+<row> <tool>: the remote sent nothing for <s> s twice`. --self-url,
+--self-seconds and --output aim the self row at another repository
+(tools/http-live-stall-test.py's local server).
 """
 import argparse
 import base64
@@ -60,6 +70,10 @@ SELF_URL = 'https://github.com/wolffe-lang/den.git'
 SELF_RSS_KIB = (160 * 1024 * 1024 + 5 * 103002444) // 1024
 SELF_SECONDS = 1800
 READ_SECONDS = 300
+# A clone with no progress for this long is stopped and retried once
+# (stall_bound); measured clean self clones took den 152-274 s and the
+# pinned Git 66-176 s in total.
+STALL_SECONDS = int(os.environ.get('DEN_LIVE_STALL_SECONDS') or 300)
 SECRETS = ('DEN_HTTP_TOKEN', 'DEN_HTTP_USER', 'DEN_LIVE_HTTPS_URL', 'DEN_LIVE_HTTPS_TOKEN',
            'GIT_ASKPASS', 'SSH_ASKPASS', 'DEN_TLS_ROOTS', 'GIT_SSL_CAINFO', 'GIT_SSL_CAPATH')
 
@@ -128,6 +142,113 @@ def pem_roots(path):
     if not count:
         raise ValueError('no certificates in bundle')
     return bytes(out), count
+
+
+def stall_bound(timeout):
+    """den#118's gate side: a clone that receives nothing for this long has
+    stalled. STALL_SECONDS, or half the clone's own time bound when that is
+    shorter, so the stall is seen before the bound ends the clone."""
+    return min(STALL_SECONDS, max(1, timeout // 2))
+
+
+def stall_problem(tool, bound):
+    return '%s: the remote sent nothing for %d s twice' % (tool, bound)
+
+
+def descendants(root):
+    """root and every live process below it (proc(5) stat, field 4)."""
+    parents = {}
+    for entry in os.listdir('/proc') if os.path.isdir('/proc') else ():
+        if entry.isdigit():
+            try:
+                with open('/proc/' + entry + '/stat', 'rb') as handle:
+                    stat = handle.read()
+            except OSError:
+                continue
+            parents[int(entry)] = int(stat[stat.rfind(b')') + 2:].split()[1])
+    found, frontier = [root], [root]
+    while frontier:
+        frontier = [pid for pid, parent in parents.items() if parent in frontier and pid not in found]
+        found.extend(frontier)
+    return found
+
+
+def read_bytes(root):
+    """Bytes the read calls of root and its live descendants returned
+    (proc(5) /proc/PID/io rchar; a reaped child's count is its parent's).
+    0 where there is no /proc."""
+    total = 0
+    for pid in descendants(root):
+        try:
+            with open('/proc/%d/io' % pid, 'rb') as handle:
+                for line in handle:
+                    if line.startswith(b'rchar:'):
+                        total += int(line.split()[1])
+        except (OSError, ValueError):
+            continue
+    return total
+
+
+def tree_bytes(path):
+    """The sizes of every file below path (0 before the clone makes it)."""
+    total = 0
+    for dirpath, dirs, files in os.walk(path):
+        for name in files:
+            try:
+                total += os.lstat(os.path.join(dirpath, name)).st_size
+            except OSError:
+                pass
+    return total
+
+
+def reap(child, timeout, target=None):
+    """Wait for child by wait4 and stop it (SIGTERM, then SIGKILL 10 s later;
+    this child's pid only, never a group) when its time bound ends or, with a
+    target (a clone's destination), when neither the target's bytes nor the
+    child's read bytes have grown for stall_bound(timeout) seconds. Returns
+    the wait4 status and rusage, whether it timed out or stalled, and the
+    longest time it went without growth."""
+    started = time.monotonic()
+    stall, deadline, kill_at = stall_bound(timeout), started + timeout, None
+    timed_out = stalled = False
+    last, grew, sampled, quiet = None, started, 0.0, 0.0
+    while True:
+        pid, status, usage = os.wait4(child.pid, os.WNOHANG)
+        if pid:
+            return status, usage, timed_out, stalled, round(quiet, 1)
+        now = time.monotonic()
+        if target is not None and kill_at is None and now - sampled >= min(1.0, stall / 4):
+            sampled = now
+            mark = (tree_bytes(target), read_bytes(child.pid))
+            if last is None or mark[0] > last[0] or mark[1] > last[1]:
+                grew = now
+            last = mark
+            quiet = max(quiet, now - grew)
+            stalled = now - grew >= stall
+        if kill_at is None and (stalled or now >= deadline):
+            timed_out = not stalled
+            kill_at = now + 10
+            os.kill(child.pid, signal.SIGTERM)  # This child's pid only, never a group.
+        elif kill_at is not None and now >= kill_at:
+            os.kill(child.pid, signal.SIGKILL)
+            kill_at = float('inf')
+        time.sleep(0.05)
+
+
+def watched(attempt, target, timeout, row, tool):
+    """attempt(suffix) runs one clone into target and returns its capture.
+    After a stall the row stops it, removes what it left, prints RETRY and
+    runs that tool's clone once more. The capture carries retries (0 or 1)
+    and stalls (0, 1 or 2)."""
+    capture = attempt('')
+    capture.update(retries=0, stalls=int(capture['stalled']))
+    if not capture['stalled']:
+        return capture
+    print('RETRY %s %s no-progress-for=%ds' % (row, tool, stall_bound(timeout)), flush=True)
+    shutil.rmtree(target, ignore_errors=True)
+    second = attempt('-retry')
+    second.update(retries=1, stalls=1 + int(second['stalled']))
+    return second
 
 
 def endpoint(url):
@@ -283,40 +404,44 @@ def main():
     def record():
         (out / 'captures.json').write_text(json.dumps(captures, indent=2) + '\n')
 
-    def run(argv, cwd, label, timeout, tool='git', extra=None):
+    def run(argv, cwd, label, timeout, tool='git', extra=None, target=None, row=None):
         # Output goes to files and the child is reaped by wait4, so its own
-        # rusage (max RSS, CPU) is measured and no pipe can stall it.
-        index = len(captures)
-        paths = out / ('%03d.stdout' % index), out / ('%03d.stderr' % index)
-        started = time.monotonic()
-        with open(paths[0], 'wb') as stdout, open(paths[1], 'wb') as stderr:
-            child = subprocess.Popen(list(map(str, argv)), cwd=cwd, env={**env, **tools[tool], **(extra or {})},
-                                     stdin=subprocess.DEVNULL, stdout=stdout, stderr=stderr)
-        terminate_at, kill_at, timed_out = started + timeout, None, False
-        while True:
-            pid, status, usage = os.wait4(child.pid, os.WNOHANG)
-            if pid:
-                break
-            now = time.monotonic()
-            if not timed_out and now >= terminate_at:
-                timed_out, kill_at = True, now + 10
-                os.kill(child.pid, signal.SIGTERM)  # This child's pid only, never a group.
-            elif kill_at is not None and now >= kill_at:
-                os.kill(child.pid, signal.SIGKILL)
-                kill_at = None
-            time.sleep(0.05)
-        child.returncode = os.waitstatus_to_exitcode(status)
-        elapsed = time.monotonic() - started
-        outputs = [hidden(path.read_bytes()) for path in paths]
-        for path, data in zip(paths, outputs):
-            path.write_bytes(data)
-        capture = dict(label=label, argv=[hidden(str(a).encode()).decode() for a in argv], exit=child.returncode,
-                       timed_out=timed_out, elapsed=round(elapsed, 2), maxrss_kib=usage.ru_maxrss,
-                       user=round(usage.ru_utime, 2), system=round(usage.ru_stime, 2),
-                       stdout=outputs[0].hex(), stderr=outputs[1].hex())
-        captures.append(capture)
+        # rusage (max RSS, CPU) is measured and no pipe can stall it. With a
+        # target, a clone: watched for progress and retried once after a
+        # stall (den#118's gate side).
+        def attempt(suffix):
+            index = len(captures)
+            paths = out / ('%03d.stdout' % index), out / ('%03d.stderr' % index)
+            started = time.monotonic()
+            with open(paths[0], 'wb') as stdout, open(paths[1], 'wb') as stderr:
+                child = subprocess.Popen(list(map(str, argv)), cwd=cwd, env={**env, **tools[tool], **(extra or {})},
+                                         stdin=subprocess.DEVNULL, stdout=stdout, stderr=stderr)
+            status, usage, timed_out, stalled, quiet = reap(child, timeout, target)
+            child.returncode = os.waitstatus_to_exitcode(status)
+            elapsed = time.monotonic() - started
+            outputs = [hidden(path.read_bytes()) for path in paths]
+            for path, data in zip(paths, outputs):
+                path.write_bytes(data)
+            capture = dict(label=label + suffix, argv=[hidden(str(a).encode()).decode() for a in argv],
+                           exit=child.returncode, timed_out=timed_out, stalled=stalled, quiet=quiet,
+                           elapsed=round(elapsed, 2), maxrss_kib=usage.ru_maxrss,
+                           user=round(usage.ru_utime, 2), system=round(usage.ru_stime, 2),
+                           stdout=outputs[0].hex(), stderr=outputs[1].hex())
+            captures.append(capture)
+            record()
+            return capture
+
+        if target is None:
+            return attempt('')
+        capture = watched(attempt, target, timeout, row, tool)
         record()
         return capture
+
+    def stalls(candidate, oracle, bound):
+        """The row's problems when a tool's clone stalled twice: nothing else
+        about such a clone can be compared."""
+        return [stall_problem(tool, bound) for tool, capture in (('den', candidate), ('git', oracle))
+                if capture['stalls'] == 2]
 
     def git_out(repo, *argv, data=None):
         result = subprocess.run([git, '-C', str(repo), *argv], env=env, input=data, capture_output=True, timeout=120)
@@ -365,9 +490,15 @@ def main():
         for attempt in range(2):
             before = run([git, 'ls-remote', READ_URL], out, name + '-ls-remote-before', 120)
             den_dir, git_dir = out / ('read-den-%d' % attempt), out / ('read-git-%d' % attempt)
-            candidate = run([den, 'clone', '-q', READ_URL, den_dir], out, name + '-den', READ_SECONDS, 'den')
-            oracle = run([git, 'clone', '-q', READ_URL, git_dir], out, name + '-git', READ_SECONDS)
+            candidate = run([den, 'clone', '-q', READ_URL, den_dir], out, name + '-den', READ_SECONDS, 'den',
+                            target=den_dir, row=name)
+            oracle = run([git, 'clone', '-q', READ_URL, git_dir], out, name + '-git', READ_SECONDS,
+                         target=git_dir, row=name)
             after = run([git, 'ls-remote', READ_URL], out, name + '-ls-remote-after', 120)
+            stalled = stalls(candidate, oracle, stall_bound(READ_SECONDS))
+            if stalled:
+                why = '; '.join(stalled)
+                break
             if before['exit'] or after['exit'] or oracle['exit']:
                 why = 'pinned Git could not read the public repository'
                 break
@@ -385,14 +516,17 @@ def main():
             dirty = git_out(den_dir, 'status', '--porcelain')
             results[name] = dict(den=ours, git=theirs, differ=differ, status=dirty.decode(),
                                  den_elapsed=candidate['elapsed'], den_maxrss_kib=candidate['maxrss_kib'],
-                                 git_elapsed=oracle['elapsed'], git_maxrss_kib=oracle['maxrss_kib'])
+                                 git_elapsed=oracle['elapsed'], git_maxrss_kib=oracle['maxrss_kib'],
+                                 den_retries=candidate['retries'], git_retries=oracle['retries'])
             if differ or dirty:
                 why = 'state differs: ' + ', '.join(differ) + (' (den worktree dirty)' if dirty else '')
                 break
             ok = True
-            print('LIVE %s head=%s objects=%d den=%.2fs/%sKiB git=%.2fs/%sKiB' % (
-                name, ours['refs'].split('\n')[0], ours['objects'], candidate['elapsed'],
-                candidate['maxrss_kib'], oracle['elapsed'], oracle['maxrss_kib']), flush=True)
+            print('LIVE %s head=%s objects=%d den=%.2fs/%sKiB git=%.2fs/%sKiB retries=den:%d,git:%d '
+                  'quiet=den:%.1fs,git:%.1fs' % (
+                      name, ours['refs'].split('\n')[0], ours['objects'], candidate['elapsed'],
+                      candidate['maxrss_kib'], oracle['elapsed'], oracle['maxrss_kib'], candidate['retries'],
+                      oracle['retries'], candidate['quiet'], oracle['quiet']), flush=True)
             break
         print(('PASS ' if ok else 'FAIL ') + name + ('' if ok else ' ' + why), flush=True)
         if not ok:
@@ -404,9 +538,15 @@ def main():
         for attempt in range(2):
             before = run([git, 'ls-remote', IDENTITY_URL], out, name + '-ls-remote-before', 120)
             den_dir, git_dir = out / ('identity-den-%d' % attempt), out / ('identity-git-%d' % attempt)
-            candidate = run([den, 'clone', '-q', IDENTITY_URL, den_dir], out, name + '-den', IDENTITY_SECONDS, 'den')
-            oracle = run([git, 'clone', '-q', IDENTITY_URL, git_dir], out, name + '-git', IDENTITY_SECONDS)
+            candidate = run([den, 'clone', '-q', IDENTITY_URL, den_dir], out, name + '-den', IDENTITY_SECONDS, 'den',
+                            target=den_dir, row=name)
+            oracle = run([git, 'clone', '-q', IDENTITY_URL, git_dir], out, name + '-git', IDENTITY_SECONDS,
+                         target=git_dir, row=name)
             after = run([git, 'ls-remote', IDENTITY_URL], out, name + '-ls-remote-after', 120)
+            stalled = stalls(candidate, oracle, stall_bound(IDENTITY_SECONDS))
+            if stalled:
+                why = '; '.join(stalled)
+                break
             if before['exit'] or after['exit'] or oracle['exit']:
                 why = 'pinned Git could not read the public repository'
                 break
@@ -431,14 +571,17 @@ def main():
                     reads.append(' '.join(argv[:-1]))
             results[name] = dict(den=ours, git=theirs, differ=differ, status=dirty.decode(), reads=reads,
                                  den_elapsed=candidate['elapsed'], den_maxrss_kib=candidate['maxrss_kib'],
-                                 git_elapsed=oracle['elapsed'], git_maxrss_kib=oracle['maxrss_kib'])
+                                 git_elapsed=oracle['elapsed'], git_maxrss_kib=oracle['maxrss_kib'],
+                                 den_retries=candidate['retries'], git_retries=oracle['retries'])
             if differ or dirty or reads:
                 why = 'state differs: ' + ', '.join(differ + reads) + (' (den worktree dirty)' if dirty else '')
                 break
             ok = True
-            print('LIVE %s objects=%d den=%.2fs/%sKiB git=%.2fs/%sKiB' % (
-                name, ours['objects'], candidate['elapsed'], candidate['maxrss_kib'], oracle['elapsed'],
-                oracle['maxrss_kib']), flush=True)
+            print('LIVE %s objects=%d den=%.2fs/%sKiB git=%.2fs/%sKiB retries=den:%d,git:%d '
+                  'quiet=den:%.1fs,git:%.1fs' % (
+                      name, ours['objects'], candidate['elapsed'], candidate['maxrss_kib'], oracle['elapsed'],
+                      oracle['maxrss_kib'], candidate['retries'], oracle['retries'], candidate['quiet'],
+                      oracle['quiet']), flush=True)
             break
         print(('PASS ' if ok else 'FAIL ') + name + ('' if ok else ' ' + why), flush=True)
         if not ok:
@@ -446,38 +589,45 @@ def main():
 
     if 'self' in rows:
         name = names['self']
-        problems = []
         den_dir, git_dir = out / 'self-den', out / 'self-git'
         before = run([git, 'ls-remote', args.self_url], out, name + '-ls-remote-before', 120)
-        candidate = run([den, 'clone', '-q', args.self_url, den_dir], out, name + '-den', args.self_seconds, 'den')
-        oracle = run([git, 'clone', '-q', args.self_url, git_dir], out, name + '-git', args.self_seconds)
+        candidate = run([den, 'clone', '-q', args.self_url, den_dir], out, name + '-den', args.self_seconds, 'den',
+                        target=den_dir, row=name)
+        oracle = run([git, 'clone', '-q', args.self_url, git_dir], out, name + '-git', args.self_seconds,
+                     target=git_dir, row=name)
         after = run([git, 'ls-remote', args.self_url], out, name + '-ls-remote-after', 120)
+        bound = stall_bound(args.self_seconds)
         measured = dict(den_exit=candidate['exit'], den_elapsed=candidate['elapsed'],
                         den_maxrss_kib=candidate['maxrss_kib'], den_user=candidate['user'],
                         git_exit=oracle['exit'], git_elapsed=oracle['elapsed'], git_maxrss_kib=oracle['maxrss_kib'],
-                        git_user=oracle['user'], bound_kib=SELF_RSS_KIB)
-        if oracle['exit'] or before['exit'] or after['exit']:
-            problems.append('pinned Git could not read den\'s repository')
-        elif moved(before['stdout'], after['stdout']):
-            problems.append('den\'s refs moved during the row')
-        for field in ('exit', 'stdout', 'stderr'):
-            if candidate[field] != oracle[field]:
-                problems.append('process %s differs: den exit %d stderr %r' % (
-                    field, candidate['exit'], bytes.fromhex(candidate['stderr'])[:400]))
-        if candidate['timed_out']:
-            problems.append('den did not finish within %d s' % args.self_seconds)
-        if candidate['maxrss_kib'] > SELF_RSS_KIB:
-            problems.append('den peak RSS %d KiB over the predicted %d' % (candidate['maxrss_kib'], SELF_RSS_KIB))
+                        git_user=oracle['user'], bound_kib=SELF_RSS_KIB, stall_s=bound,
+                        den_retries=candidate['retries'], git_retries=oracle['retries'],
+                        den_quiet_s=candidate['quiet'], git_quiet_s=oracle['quiet'])
+        problems = stalls(candidate, oracle, bound)
+        # A clone that stalled twice has nothing else to compare.
         if not problems:
-            packs = sorted((git_dir / '.git/objects/pack').glob('*.pack'))
-            measured['git_pack_bytes'] = [path.stat().st_size for path in packs]
-            ours, theirs = state(den_dir), state(git_dir)
-            differ = [key for key in ours if ours[key] != theirs[key]]
-            git_out(den_dir, 'fsck', '--full', '--no-reflogs')
-            dirty = git_out(den_dir, 'status', '--porcelain')
-            measured.update(objects=theirs['objects'], differ=differ, status=dirty.decode()[:400])
-            if differ or dirty:
-                problems.append('state differs: ' + ', '.join(differ) + (' (den worktree dirty)' if dirty else ''))
+            if oracle['exit'] or before['exit'] or after['exit']:
+                problems.append('pinned Git could not read den\'s repository')
+            elif moved(before['stdout'], after['stdout']):
+                problems.append('den\'s refs moved during the row')
+            for field in ('exit', 'stdout', 'stderr'):
+                if candidate[field] != oracle[field]:
+                    problems.append('process %s differs: den exit %d stderr %r' % (
+                        field, candidate['exit'], bytes.fromhex(candidate['stderr'])[:400]))
+            if candidate['timed_out']:
+                problems.append('den did not finish within %d s' % args.self_seconds)
+            if candidate['maxrss_kib'] > SELF_RSS_KIB:
+                problems.append('den peak RSS %d KiB over the predicted %d' % (candidate['maxrss_kib'], SELF_RSS_KIB))
+            if not problems:
+                packs = sorted((git_dir / '.git/objects/pack').glob('*.pack'))
+                measured['git_pack_bytes'] = [path.stat().st_size for path in packs]
+                ours, theirs = state(den_dir), state(git_dir)
+                differ = [key for key in ours if ours[key] != theirs[key]]
+                git_out(den_dir, 'fsck', '--full', '--no-reflogs')
+                dirty = git_out(den_dir, 'status', '--porcelain')
+                measured.update(objects=theirs['objects'], differ=differ, status=dirty.decode()[:400])
+                if differ or dirty:
+                    problems.append('state differs: ' + ', '.join(differ) + (' (den worktree dirty)' if dirty else ''))
         results[name] = measured
         print('LIVE ' + name + ' ' + json.dumps(measured, sort_keys=True), flush=True)
         print(('PASS ' if not problems else 'FAIL ') + name + ('' if not problems else ' ' + '; '.join(problems)),
