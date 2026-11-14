@@ -234,9 +234,10 @@ Cached/two-object comparisons do not refresh. The gate proves the six permitted
 inode/time fields against each tool's own files; modes and sizes remain exact.
 
 A diff compares object ids before it reads anything: it reads the bodies of
-paths that differ only. A tracked file whose stat data matches its index entry
-is taken as unchanged without being read, by Git's rule: not when the entry is
-racily clean (its mtime at or after the index file's own). The
+paths that differ only. A tracked file or symbolic link whose stat data matches
+its index entry, compared as Git compares it (times by whole seconds, the
+inode, mode and size), is taken as unchanged without being read; not when the
+entry is racily clean (its mtime in the index file's own second or later). The
 autoRefreshIndex step reuses the hashes the comparison made. A command that
 reads objects parses each pack index once, when it starts, not once an object.
 

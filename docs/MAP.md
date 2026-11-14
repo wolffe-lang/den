@@ -284,9 +284,10 @@ checked when the session loads, once per pack per command.
 (a body to read from the object store by id, from the worktree, or a
 gitlink's text), pairs with equal mode and id are dropped, and bodies are read
 only for what remains (`bodies`, the 128 MiB aggregate bound over those).
-The worktree side is `worktree.tracked`: a regular file whose lstat is
-stat-clean against its entry (status's `stat_clean`, the racy rule through the
-index file's mtime) takes the entry's id unread; any other is hashed as it
+The worktree side is `worktree.tracked`: a regular file or symbolic link whose
+lstat is stat-clean against its entry (status's `stat_clean`: the times by
+whole seconds, as Git compares them, and the racy rule through the index
+file's mtime second) takes the entry's id unread; any other is hashed as it
 streams. Ancestors are checked once per directory across the sorted walk
 (`parents_verified`). A cached diff against HEAD reads HEAD's tree as status
 does (`worktree.head_tree`: the index's own entries when its cache tree's root
