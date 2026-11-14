@@ -171,9 +171,11 @@ fn fetch_selected(
         transport.end_stream(mut p, take stream)?
         publish_received(repo, received, keep)?
         closure_received(repo, roots, received)?
-    } else {
-        let _ = closure(repo, roots, [])?
     }
+    // With nothing wanted, every root was read above: the repository held it,
+    // complete, before this fetch, so it is not walked, as closure_received
+    // treats every object it did not receive (an up-to-date fetch walked
+    // every object in the repository).
     transport.end_peer(p)?
     let code = transport.close_peer(mut p)?
     active = false
