@@ -181,7 +181,10 @@ def main():
               f" den wall {best['den']['wall']:.2f} s cpu {best['den']['cpu']:.2f} s peak {best['den']['maxrss_kib']} KiB;"
               f" git wall {best['git']['wall']:.3f} s cpu {best['git']['cpu']:.3f} s peak {best['git']['maxrss_kib']} KiB;"
               f" bounds cpu {bound['cpu']} s peak {bound['rss_kib']} KiB; floor {floor_kib} KiB" +
-              ('' if same else f" DIFFERS den exit {d['status']} stderr {bytes.fromhex(d['stderr'])[-200:]!r}"), flush=True)
+              ('' if same else ' DIFFERS in ' + ', '.join(
+                  f"{k}: git {g[k] if k in ('status', 'head') else bytes.fromhex(g[k])[-160:]!r}"
+                  f" den {d[k] if k in ('status', 'head') else bytes.fromhex(d[k])[-160:]!r}"
+                  for k in ('status', 'stdout', 'stderr', 'head') if g[k] != d[k])), flush=True)
         rows.append(dict(row=row, passed=ok, same=same, bounded=bounded, best=best, bound=bound,
                          floor_kib=floor_kib, git=g, den=d))
     assert rows, 'empty selection'
