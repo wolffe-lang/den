@@ -13,9 +13,6 @@ fn stable(a: List[int], b: List[int]) -> bool {
     true
 }
 
-/// The walk's own bounds, named as fetch, pull, merge and checkout print them.
-fn scan_limit(what: str) -> str { "limit: more than 1000000 {what} in the work tree scan" }
-
 fn read_held(fd: int, path: List[byte]) -> List[byte] ! WorkErrors {
     var out = List[byte](), exceeded = false
     loop {
@@ -31,7 +28,7 @@ fn read_held(fd: int, path: List[byte]) -> List[byte] ! WorkErrors {
             for b in part { (mut out).push(b) }
         }
     }
-    if exceeded { return Fatal("limit: '{text(path)?}' is larger than 1000000000 bytes") }
+    if exceeded { return Fatal("limit: a work tree file larger than 1000000000 bytes") }
     out
 }
 
@@ -423,7 +420,9 @@ fn walk_submodules(
                     }
                     if !selected(path, paths) { continue }
                     (mut notices).push("{text(path)?}: Permission denied")
-                    if files.len >= 1000000 { return Fatal(scan_limit("paths")) }
+                    if files.len >= 1000000 {
+                        return Fatal("limit: more than 1000000 paths in the work tree scan")
+                    }
                     (mut files).push(FileState {
                         path: owned_bytes(path),
                         mode: value.entries[tracked_at].stat[6],
@@ -462,13 +461,17 @@ fn walk_submodules(
                         )?
                         if decision.ignored { continue }
                     }
-                    if directories.len >= 1000000 { return Fatal(scan_limit("directories")) }
+                    if directories.len >= 1000000 {
+                        return Fatal("limit: more than 1000000 directories in the work tree scan")
+                    }
                     (mut directories).push(copy path)
                     (mut deeper).push(path)
                     continue
                 }
                 if visit.kind != 0 && visit.kind != 3 || !selected(path, paths) { continue }
-                if files.len >= 1000000 { return Fatal(scan_limit("paths")) }
+                if files.len >= 1000000 {
+                    return Fatal("limit: more than 1000000 paths in the work tree scan")
+                }
                 (mut files).push(FileState {
                     path: owned_bytes(path),
                     mode: if visit.kind == 3 then 0o120000 else 0o100644,
@@ -500,7 +503,9 @@ fn walk_submodules(
                 var dirt = 0
                 if state.modified { dirt = 1 }
                 if state.untracked { dirt = dirt | 2 }
-                if files.len >= 1000000 { return Fatal(scan_limit("paths")) }
+                if files.len >= 1000000 {
+                    return Fatal("limit: more than 1000000 paths in the work tree scan")
+                }
                 (mut files).push(FileState {
                     path: owned_bytes(path),
                     mode: 0o160000,
@@ -553,13 +558,17 @@ fn walk_submodules(
                     )?
                     if decision.ignored { continue }
                 }
-                if directories.len >= 1000000 { return Fatal(scan_limit("directories")) }
+                if directories.len >= 1000000 {
+                    return Fatal("limit: more than 1000000 directories in the work tree scan")
+                }
                 (mut directories).push(copy path)
                 // An untracked repository is one opaque directory, including
                 // under -uall. Keep its plain path here for add/path selection;
                 // only status appends '/'. No inner HEAD or file is read.
                 if !tracked_under(value.entries, path) && repository.embedded(full)? {
-                    if files.len >= 1000000 { return Fatal(scan_limit("paths")) }
+                    if files.len >= 1000000 {
+                        return Fatal("limit: more than 1000000 paths in the work tree scan")
+                    }
                     (mut files).push(FileState {
                         path: copy path,
                         mode: 0,
@@ -631,7 +640,9 @@ fn walk_submodules(
                         "limit: more than 1000000000 bytes of file content in the work tree scan",
                     )
                 }
-                if files.len >= 1000000 { return Fatal(scan_limit("paths")) }
+                if files.len >= 1000000 {
+                    return Fatal("limit: more than 1000000 paths in the work tree scan")
+                }
                 total_bytes += file.data.len
                 (mut files).push(file)
             } else if index_at(value.entries, path) >= 0 {

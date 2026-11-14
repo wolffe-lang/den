@@ -104,7 +104,12 @@ pub fn advertisement(mut p: Peer, cap: int) -> List[byte] ! Errors {
         return Unsupported("dumb HTTP protocol")
     }
     if response.body.len > cap {
-        return Unsupported("limit: a ref advertisement larger than {cap} bytes")
+        // Literals: an error can leave the region its read ran in.
+        if cap == 65536 { return Unsupported("limit: a ref advertisement larger than 65536 bytes") }
+        if cap == 2097152 {
+            return Unsupported("limit: a ref advertisement larger than 2097152 bytes")
+        }
+        return Unsupported("limit: a ref advertisement larger than its read allows")
     }
     http_advertisement(response.body, p.service)?
 }

@@ -15,16 +15,15 @@ struct StreamEntry {
     data: List[byte],
 }
 
-/// The whole-stream decoder's bounds, named as fetch and push print them.
-fn whole_limit(what: str) -> str { "limit: {what} in a pack stream decoded whole" }
-
 fn stream_entries(data: List[byte]) -> (List[StreamEntry], int) ! StreamErrors {
     if data.len < 12 { return truncated }
     if !same(data[0..4], "PACK".bytes()) || be32(data, 4) != 2 { return invalid }
     let count = be32(data, 8)
     // den#73: no count bound; this whole-stream decoder (thin pushes) holds
     // the stream and its bodies, so both stay capped at 128 MiB.
-    if data.len > 134217728 { return Unsupported(whole_limit("more than 134217728 bytes")) }
+    if data.len > 134217728 {
+        return Unsupported("limit: a pack stream decoded whole larger than 134217728 bytes")
+    }
     var pos = 12, out = List[StreamEntry](), total = 0
     for _ in 0..count {
         let offset = pos
@@ -37,12 +36,16 @@ fn stream_entries(data: List[byte]) -> (List[StreamEntry], int) ! StreamErrors {
             b = data[pos] as int
             pos += 1
             if b & 127 > (16777216 - size) / scale {
-                return Unsupported(whole_limit("a pack entry larger than 16777216 bytes"))
+                return Unsupported(
+                    "limit: a pack entry larger than 16777216 bytes in a pack stream decoded whole",
+                )
             }
             size += (b & 127) * scale
             if b >= 128 {
                 if scale > 16777216 / 128 {
-                    return Unsupported(whole_limit("a pack entry larger than 16777216 bytes"))
+                    return Unsupported(
+                        "limit: a pack entry larger than 16777216 bytes in a pack stream decoded whole",
+                    )
                 }
                 scale *= 128
             }
@@ -71,7 +74,9 @@ fn stream_entries(data: List[byte]) -> (List[StreamEntry], int) ! StreamErrors {
             return invalid
         }
         if size > 134217728 - total {
-            return Unsupported(whole_limit("more than 134217728 bytes of objects"))
+            return Unsupported(
+                "limit: more than 134217728 bytes of objects in a pack stream decoded whole",
+            )
         }
         let inflated = zlib.inflate(data[pos..], size) else |e| match e {
             truncated => { return truncated },
@@ -130,7 +135,9 @@ pub fn decode(data: List[byte], bases: List[Body]) -> List[Body] ! StreamErrors 
             return Unsupported("limit: a thin pack base larger than 16777216 bytes")
         }
         if body.data.len > 134217728 - total {
-            return Unsupported(whole_limit("more than 134217728 bytes of objects"))
+            return Unsupported(
+                "limit: more than 134217728 bytes of objects in a pack stream decoded whole",
+            )
         }
         total += body.data.len
         let id = body_name(body) else |_| { return invalid }
@@ -183,7 +190,9 @@ pub fn decode(data: List[byte], bases: List[Body]) -> List[Body] ! StreamErrors 
                 depth[i] = level
             }
             if body.data.len > 134217728 - total {
-                return Unsupported(whole_limit("more than 134217728 bytes of objects"))
+                return Unsupported(
+                    "limit: more than 134217728 bytes of objects in a pack stream decoded whole",
+                )
             }
             total += body.data.len
             let name = body_name(body) else |_| { return invalid }
