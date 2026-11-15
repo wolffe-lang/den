@@ -289,38 +289,40 @@ pub fn stage_paths_with_warnings(
             continue
         }
         if options.intent && at >= 0 { continue }
-        // Git leaves a stat-clean entry alone: not staged again, so its
-        // cache-tree ancestors stay valid. A stat-dirty one is staged again
-        // even with the same contents, and invalidates them (den#91 rows).
-        if at >= 0 && options.chmod < 0 && unchanged(current.entries[at], walked.files[disk], written) {
-            continue
-        }
         var staging = true
         region one {
-            var prior = List[index.Entry]()
-            if at >= 0 && index.stage(current.entries[at]) == 0 {
-                (mut prior).push(copy current.entries[at])
-            }
-            if walked.files[disk].mode == 0o160000 {
-                // A gitlink stages its submodule's HEAD and writes no object; an
-                // unchanged one keeps its entry, stat and all (vc25 work rows).
-                if prior.len == 1 &&
-                    prior[0].stat[6] == 0o160000 &&
-                    oid.equal(prior[0].id, walked.files[disk].id) {
-                    staging = false
-                } else {
-                    let entry = entry_for(walked.files[disk], prior, options)?
-                    if !options.dry_run { (mut staged).push(copy entry) }
-                }
+            let file = copy walked.files[disk]
+            // Git leaves a stat-clean entry alone: not staged again, so its
+            // cache-tree ancestors stay valid. A stat-dirty one is staged again
+            // even with the same contents, and invalidates them (den#91 rows).
+            if at >= 0 && options.chmod < 0 && unchanged(current.entries[at], file, written) {
+                staging = false
             } else {
-                let entry = entry_for(walked.files[disk], prior, options)?
-                if !options.dry_run {
-                    let _ = object.write_object(
-                        ctx.repo,
-                        "blob",
-                        if options.intent then List[byte]() else walked.files[disk].data,
-                    )?
-                    (mut staged).push(copy entry)
+                var prior = List[index.Entry]()
+                if at >= 0 && index.stage(current.entries[at]) == 0 {
+                    (mut prior).push(copy current.entries[at])
+                }
+                if file.mode == 0o160000 {
+                    // A gitlink stages its submodule's HEAD and writes no object; an
+                    // unchanged one keeps its entry, stat and all (vc25 work rows).
+                    if prior.len == 1 &&
+                        prior[0].stat[6] == 0o160000 &&
+                        oid.equal(prior[0].id, file.id) {
+                        staging = false
+                    } else {
+                        let entry = entry_for(file, prior, options)?
+                        if !options.dry_run { (mut staged).push(copy entry) }
+                    }
+                } else {
+                    let entry = entry_for(file, prior, options)?
+                    if !options.dry_run {
+                        let _ = object.write_object(
+                            ctx.repo,
+                            "blob",
+                            if options.intent then List[byte]() else file.data,
+                        )?
+                        (mut staged).push(copy entry)
+                    }
                 }
             }
         }
