@@ -79,7 +79,11 @@ fn holds_any(paths: List[List[byte]], directory: List[byte]) -> bool {
 /// path are saved in REUC, replacing an older record for it; every TREE
 /// ancestor of a staged path, and of a removed path that was present, is
 /// invalidated; other records keep their bytes. A path may appear once.
-pub fn stage_all(value: Index, entries: List[Entry], removed: List[List[byte]]) -> Index ! IndexErrors {
+pub fn stage_all(
+    value: Index,
+    entries: List[Entry],
+    removed: List[List[byte]],
+) -> Index ! IndexErrors {
     check_version(value.version)?
     validate_entries(value.entries)?
     validate_extensions(value.extensions)?
@@ -97,7 +101,9 @@ pub fn stage_all(value: Index, entries: List[Entry], removed: List[List[byte]]) 
     var edits = List[Edit]()
     (mut edits).reserve(paths.len)
     for k in byte_order(paths) {
-        if edits.len > 0 && byte_compare(edits[edits.len - 1].path, paths[k]) == 0 { return invalid_index }
+        if edits.len > 0 && byte_compare(edits[edits.len - 1].path, paths[k]) == 0 {
+            return invalid_index
+        }
         (mut edits).push(Edit { path: copy paths[k], staged: if k < entries.len then k else -1 })
     }
     var out = List[Entry]()
@@ -106,7 +112,8 @@ pub fn stage_all(value: Index, entries: List[Entry], removed: List[List[byte]]) 
     var touched = List[List[byte]]()
     var i = 0, e = 0
     while i < value.entries.len || e < edits.len {
-        if e == edits.len || i < value.entries.len && byte_compare(value.entries[i].path, edits[e].path) < 0 {
+        if e == edits.len ||
+            i < value.entries.len && byte_compare(value.entries[i].path, edits[e].path) < 0 {
             (mut out).push(copy value.entries[i])
             i += 1
             continue
@@ -164,7 +171,13 @@ pub fn stage_all(value: Index, entries: List[Entry], removed: List[List[byte]]) 
         var data = List[byte]()
         var p = 0, r = 0
         while p < previous.len || r < records.len {
-            let cmp = if p == previous.len then 1 else if r == records.len then -1 else byte_compare(previous[p].path, records[r].path)
+            let cmp = if p == previous.len {
+                1
+            } else if r == records.len {
+                -1
+            } else {
+                byte_compare(previous[p].path, records[r].path)
+            }
             if cmp < 0 {
                 append(mut data, previous[p].raw)
                 p += 1

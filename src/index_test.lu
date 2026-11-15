@@ -365,10 +365,20 @@ fn main() -> int ! index.IndexErrors {
     let removals = ["d".bytes(), "missing".bytes(), "z/q".bytes()]
     for start in [copy base, copy conflicted] {
         let batch = index.stage_all(start, edits, removals)?
-        assert(same(index.serialize(batch)?, index.serialize(staged_one_by_one(start, edits, removals)?)?))
+        assert(
+            same(
+                index.serialize(batch)?,
+                index.serialize(staged_one_by_one(start, edits, removals)?)?,
+            ),
+        )
         assert(same(index.serialize(index.stage_all(start, [], [])?)?, index.serialize(start)?))
         let only = index.stage_all(start, [fixture("k/n".bytes(), 0)?], [])?
-        assert(same(index.serialize(only)?, index.serialize(staged_one_by_one(start, [fixture("k/n".bytes(), 0)?], [])?)?))
+        assert(
+            same(
+                index.serialize(only)?,
+                index.serialize(staged_one_by_one(start, [fixture("k/n".bytes(), 0)?], [])?)?,
+            ),
+        )
     }
     let undone = index.stage_all(conflicted, edits, removals)?
     assert(undone.extensions.len == 2 && undone.extensions[1].signature == "REUC")
