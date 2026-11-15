@@ -119,6 +119,17 @@ tools/oracle --filter status       # empty selections are errors
 tools/oracle --strict              # fails while named not-yet cases remain
 ```
 
+`DEN_COUNTERS=1` makes den print one line on stderr when it exits, after
+everything else it prints: `den-counters index-parses=N pack-index-loads=N
+objects-read=N files-read=N scans=N commits-parsed=N`. They count the index
+files and pack indexes it parsed, the object bodies it read (loose or packed),
+the work-tree files it read or hashed, its walks of the work tree and the
+commits it parsed, for rows that measure how much work a command does. Any
+other value, or none, changes nothing: `tools/counters-test.py` (run by
+`tools/check-everyday`) holds every step's output and the repository it leaves
+to the same bytes with the variable unset, empty and `0`, and with `1` adds
+only the line.
+
 The gates include external-package clients, real filesystem operations,
 index lock contention, ref CAS/lock collisions and injected failures, command-state snapshots,
 ignore precedence and diagnostics, fixed dates/messages, object interop and
