@@ -10,8 +10,8 @@ permissions:
   contents: read
 jobs:
   verify:
-    uses: wolffe-lang/homebrew-wolf/.github/workflows/tool-public-smoke.yml@577f7a89114c38d555da813fbe34ca1b5e8afd84
+    uses: wolffe-lang/homebrew-wolf/.github/workflows/tool-public-smoke.yml@86a927a61bada609eb64f7da982530962af129c8
     with:
       tag: ${{ inputs.tag }}
       config: .github/release.json
-      infrastructure-revision: 577f7a89114c38d555da813fbe34ca1b5e8afd84
+      infrastructure-revision: 86a927a61bada609eb64f7da982530962af129c8

@@ -13,8 +13,8 @@ jobs:
     needs: gate
     permissions:
       contents: write
-    uses: wolffe-lang/homebrew-wolf/.github/workflows/tool-release.yml@577f7a89114c38d555da813fbe34ca1b5e8afd84
+    uses: wolffe-lang/homebrew-wolf/.github/workflows/tool-release.yml@86a927a61bada609eb64f7da982530962af129c8
     with:
       config: .github/release.json
-      infrastructure-revision: 577f7a89114c38d555da813fbe34ca1b5e8afd84
+      infrastructure-revision: 86a927a61bada609eb64f7da982530962af129c8
       tested-sha: ${{ needs.gate.outputs.tested-sha }}
