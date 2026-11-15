@@ -19,8 +19,9 @@ racily clean). Rows, each in fresh copies for both tools:
 Each row must equal the pinned Git's exit status, stdout and stderr, step by
 step. CPU time (user + system) and peak resident set are den's minimum over
 --takes runs; a run past --timeout seconds is ended and fails its row (one
-take is enough when the first is over its bound). The
-resident-set floor this parent gives any child is printed beside them. den
+take is enough when the first is over its bound). Each tool starts through
+minimal-parent.c, so its peak does not inherit this Python runner's high-water
+mark. That minimal parent's floor is printed beside the measurements. den
 must stay under BOUNDS, stated for the native tier on a Linux x86-64 host
 (the release tier is faster); before den#101 the two diff rows took minutes
 and up to 2 GiB on this shape.
@@ -32,7 +33,6 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
-import threading
 import time
 
 BOUNDS = {
@@ -57,30 +57,25 @@ class Measurement:
     """The scale runner's process and resource-use boundary."""
 
     def __init__(self, root, out, timeout):
-        self.root = Path(root)
-        self.out = Path(out)
+        self.root = Path(root).resolve()
+        self.out = Path(out).resolve()
         self.timeout = timeout
+        if not 0 < timeout <= 86400:
+            raise ValueError('timeout must be positive and at most 86400 seconds')
+        self.parent = self.out / 'minimal-parent'
+        self.report = self.out / 'measurement-usage'
+        subprocess.run(['cc', '-O2', '-o', str(self.parent), str(self.root / 'tools/minimal-parent.c')], check=True)
 
     def run(self, tool, argv, work):
-        start = time.monotonic()
-        proc = subprocess.Popen([tool, *argv], cwd=work, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        chunks = {}
-
-        def drain(label, stream):
-            chunks[label] = stream.read()
-        readers = [threading.Thread(target=drain, args=(n, s)) for n, s in (('out', proc.stdout), ('err', proc.stderr))]
-        for reader in readers:
-            reader.start()
-        timer = threading.Timer(self.timeout, proc.kill)
-        timer.start()
-        _, status, usage = os.wait4(proc.pid, 0)
-        timer.cancel()
-        for reader in readers:
-            reader.join()
-        wall = time.monotonic() - start
-        return dict(status=os.waitstatus_to_exitcode(status), stdout=chunks['out'].hex(),
-                    stderr=chunks['err'].hex(), wall=wall, cpu=usage.ru_utime + usage.ru_stime,
-                    maxrss_kib=usage.ru_maxrss, ended=wall >= self.timeout)
+        self.report.unlink(missing_ok=True)
+        proc = subprocess.run([str(self.parent), '--timeout', str(self.timeout), str(self.report), tool, *argv],
+                              cwd=work, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        if proc.returncode != 0:
+            raise RuntimeError(('minimal parent', proc.returncode, proc.stderr))
+        status, maxrss, user, system, wall, timed_out = self.report.read_text().split()
+        return dict(status=int(status), stdout=proc.stdout.hex(), stderr=proc.stderr.hex(),
+                    wall=float(wall), cpu=float(user) + float(system), maxrss_kib=int(maxrss),
+                    ended=bool(int(timed_out)) or float(wall) >= self.timeout)
 
 
 def main():
@@ -150,7 +145,7 @@ def main():
 
     measurement = Measurement(root, out, a.timeout)
     floor_kib = min(measurement.run('/bin/true', [], out)['maxrss_kib'] for _ in range(3))
-    print(f'FLOOR resident set of a child of this parent: {floor_kib} KiB', flush=True)
+    print(f'FLOOR resident set of a child of the minimal parent: {floor_kib} KiB', flush=True)
 
     def take(tool, steps):
         work = out / 'work'

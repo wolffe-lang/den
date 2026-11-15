@@ -3,6 +3,7 @@
 import importlib.util
 import os
 from pathlib import Path
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -48,6 +49,26 @@ class MeasurementTest(unittest.TestCase):
         self.assertFalse(result['ended'])
         self.assertGreaterEqual(result['cpu'], 0)
         self.assertGreaterEqual(result['wall'], 0)
+
+    def test_legacy_five_field_report_is_unchanged(self):
+        measurement = scale.Measurement(ROOT, self.work, 10)
+        report = self.work / 'legacy-usage'
+        subprocess.run([str(measurement.parent), str(report), sys.executable, '-I', '-c',
+                        'print("legacy output"); raise SystemExit(7)'],
+                       check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        fields = report.read_text().split()
+        self.assertEqual(len(fields), 5)
+        self.assertEqual(fields[0], '7')
+
+    def test_invalid_deadlines_never_start_the_command(self):
+        measurement = scale.Measurement(ROOT, self.work, 10)
+        for timeout in ['nan', 'inf', '0', '-1', '86401', 'not-a-number']:
+            with self.subTest(timeout=timeout):
+                report = self.work / 'invalid-usage'
+                result = subprocess.run([str(measurement.parent), '--timeout', timeout,
+                                         str(report), '/bin/true'])
+                self.assertEqual(result.returncode, 64)
+                self.assertFalse(report.exists())
 
     def test_deadline_reaps_the_timed_command(self):
         measurement = scale.Measurement(ROOT, self.work, 0.15)
