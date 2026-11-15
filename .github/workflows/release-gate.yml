@@ -1,3 +1,4 @@
+# Generated from ci.yml by the pinned release-adapter; checked for drift.
 name: release gate
 on:
   workflow_call:
@@ -7,7 +8,6 @@ on:
         value: ${{ jobs.complete.outputs.tested-sha }}
 permissions:
   contents: read
-  issues: write
 jobs:
   verify:
     runs-on: ubuntu-24.04
@@ -30,15 +30,129 @@ jobs:
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           test "$(git rev-parse "refs/tags/$GITHUB_REF_NAME^{commit}")" = "$GITHUB_SHA"
           echo "sha=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
-  ci:
+  plan:
     needs: verify
-    uses: ./.github/workflows/ci.yml
+    name: plan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      tier: ${{ steps.plan.outputs.tier }}
+      jobs: ${{ steps.plan.outputs.jobs }}
+    steps:
+      - uses: actions/checkout@v4
+        if: ${{ github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-matrix') || contains(github.event.pull_request.labels.*.name, 'ci') || contains(github.event.pull_request.labels.*.name, 'release-matrix') }}
+        with:
+          fetch-depth: 2
+      - id: plan
+        if: ${{ github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-matrix') || contains(github.event.pull_request.labels.*.name, 'ci') || contains(github.event.pull_request.labels.*.name, 'release-matrix') }}
+        env:
+          EVENT: workflow_dispatch
+          ACTION: ${{ github.event.action }}
+          LABEL: ${{ github.event.label.name }}
+          LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          IN_JOBS: ""
+        run: python3 ci/tiers.py plan --merge --github-output "$GITHUB_OUTPUT"
+
+      - name: local gate wiring proof
+        if: ${{ github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-matrix') || contains(github.event.pull_request.labels.*.name, 'ci') || contains(github.event.pull_request.labels.*.name, 'release-matrix') }}
+        run: python3 -I ci/local-gate-test.py
+      - name: local evidence gate
+        if: ${{ !(github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-matrix') || contains(github.event.pull_request.labels.*.name, 'ci') || contains(github.event.pull_request.labels.*.name, 'release-matrix')) }}
+        run: echo 'Local gauntlet evidence is the gate; request ci or full-matrix for CI.'
+  plan-test:
+    name: the planner's own test
+    needs: plan
+    if: ${{ (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-matrix') || contains(github.event.pull_request.labels.*.name, 'ci') || contains(github.event.pull_request.labels.*.name, 'release-matrix')) && (contains(fromJSON(needs.plan.outputs.jobs || '[]'), 'plan-test')) }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 ci/tiers-test.py
+
+  linux:
+    name: linux x86-64 (every gate)
+    needs: plan
+    if: ${{ (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-matrix') || contains(github.event.pull_request.labels.*.name, 'ci') || contains(github.event.pull_request.labels.*.name, 'release-matrix')) && (contains(fromJSON(needs.plan.outputs.jobs || '[]'), 'linux')) }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            .wolf-bin
+            target/oracle
+          key: den-linux-${{ hashFiles('wolf-toolchain.toml', 'den-oracle.toml', 'ci/oracle.Containerfile', 'tools/fetch-oracle.py') }}
+      - name: every gate inside the pinned Ubuntu container
+        env:
+          DEN_ENGINE: docker
+          DEN_CPUS: 0-3
+        run: tools/in-container tools/gate-record
+      - name: evidence, including failures
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-evidence
+          path: |
+            target/*checked.json
+            target/codec*.log
+            target/codec/*.json
+            target/codec-corpus/summary.json
+            target/codec-fuzz/summary.json
+            target/corpus/oids.json
+            target/runs
+            target/dist/sums.txt
+
+  macos:
+    name: macOS Homebrew git field leg (nonblocking)
+    needs: plan
+    if: ${{ (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-matrix') || contains(github.event.pull_request.labels.*.name, 'ci') || contains(github.event.pull_request.labels.*.name, 'release-matrix')) && (contains(fromJSON(needs.plan.outputs.jobs || '[]'), 'macos')) }}
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - run: brew install git
+      - name: field observation, not oracle parity
+        id: field
+        continue-on-error: true
+        run: tools/field
+      - name: record field result
+        if: ${{ !cancelled() }}
+        run: echo 'Homebrew field result ${{ steps.field.outcome }}' >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: macos-field-evidence
+          path: target/runs
+
+  tier:
+    name: tier ${{ needs.plan.outputs.tier || 'unplanned' }}
+    if: ${{ (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-matrix') || contains(github.event.pull_request.labels.*.name, 'ci') || contains(github.event.pull_request.labels.*.name, 'release-matrix')) && (!cancelled()) }}
+    needs:
+      - plan
+      - plan-test
+      - linux
+      - macos
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: every chosen job succeeded, every other was skipped
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: python3 ci/tiers.py verdict
+
+  # A red nightly opens an issue (ruling #92): a scheduled run has no lane
+  # watching it, so the red has to come and find one. One open issue per
+  # workflow, its title the dedupe key (ci/nightly-red.sh).
   complete:
-    needs: [verify, ci]
+    needs: [verify, tier]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
       tested-sha: ${{ needs.verify.outputs.sha }}
     steps:
       - name: complete release profile
-        run: echo 'PROFILE complete: every-gate-leaf'
+        run: echo 'PROFILE-complete every-gate-leaf'

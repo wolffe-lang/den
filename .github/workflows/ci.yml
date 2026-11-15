@@ -27,7 +27,6 @@
 name: ci
 
 on:
-  workflow_call:
   pull_request:
     types: [opened, synchronize, reopened, labeled]
   push:
@@ -84,12 +83,12 @@ jobs:
       - id: plan
         if: ${{ github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-matrix') || contains(github.event.pull_request.labels.*.name, 'ci') || contains(github.event.pull_request.labels.*.name, 'release-matrix') }}
         env:
-          EVENT: ${{ startsWith(github.ref, 'refs/tags/') && 'workflow_dispatch' || (github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'release-matrix') && 'push' || github.event_name) }}
+          EVENT: ${{ github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'release-matrix') && 'push' || github.event_name }}
           ACTION: ${{ github.event.action }}
           LABEL: ${{ github.event.label.name }}
           LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          IN_JOBS: ${{ !startsWith(github.ref, 'refs/tags/') && inputs.jobs || '' }}
+          IN_JOBS: ${{ inputs.jobs }}
         run: python3 ci/tiers.py plan --merge --github-output "$GITHUB_OUTPUT"
 
       - name: local gate wiring proof
@@ -127,7 +126,7 @@ jobs:
         env:
           DEN_ENGINE: docker
           DEN_CPUS: 0-3
-        run: tools/in-container ${{ startsWith(github.ref, 'refs/tags/') && 'tools/gate-record' || 'tools/gate' }}
+        run: tools/in-container tools/gate
       - name: evidence, including failures
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
