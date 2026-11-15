@@ -86,6 +86,14 @@ fn path_present(ctx: Context, path: List[byte]) -> bool ! WorkErrors {
     true
 }
 
+// A tracked regular file or symlink whose lstat equals its stage-zero entry
+// and is not racily clean (scan's stat_clean): Git's add leaves it alone.
+fn unchanged(entry: index.Entry, file: FileState, written: List[int]) -> bool {
+    if index.stage(entry) != 0 || entry.stat.len != 10 || entry.stat[6] == 0o160000 { return false }
+    if file.kind != 0 && file.kind != 3 { return false }
+    stat_clean(entry, file.stat, file.mode, written)
+}
+
 /// Apply Git add's measured cache policy without IO. Every actually staged
 /// entry invalidates its TREE ancestors, even with identical stat/mode/oid.
 /// stage_paths bypasses assume-valid/skip entries before reaching this helper;
@@ -270,6 +278,7 @@ pub fn stage_paths_with_warnings(
     // after the loop (index.stage_all), never copied whole per path.
     var staged = List[index.Entry]()
     var removed = List[List[byte]]()
+    let written = index_time(ctx)
     for path in candidates {
         let at = index_at(current.entries, path)
         let disk = file_at(walked.files, path)
@@ -280,6 +289,12 @@ pub fn stage_paths_with_warnings(
             continue
         }
         if options.intent && at >= 0 { continue }
+        // Git leaves a stat-clean entry alone: not staged again, so its
+        // cache-tree ancestors stay valid. A stat-dirty one is staged again
+        // even with the same contents, and invalidates them (den#91 rows).
+        if at >= 0 && options.chmod < 0 && unchanged(current.entries[at], walked.files[disk], written) {
+            continue
+        }
         var staging = true
         region one {
             var prior = List[index.Entry]()
