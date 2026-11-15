@@ -1,0 +1,185 @@
+// den#91: a whole staging applied to the index in one pass. Staging path by
+// path (replace_entry, record_undo, invalidate_tree, remove_path) copies the
+// whole index several times for every path, so staging N paths held N times
+// the index until the command ended.
+use object
+
+struct Edit {
+    path: List[byte],
+    staged: int,
+}
+
+// Indices of paths in byte order (a stable bottom-up merge sort).
+fn byte_order(paths: List[List[byte]]) -> List[int] {
+    var order = List[int]()
+    (mut order).reserve(paths.len)
+    for i in 0..paths.len { (mut order).push(i) }
+    var scratch = copy order
+    var width = 1
+    while width < order.len {
+        var lo = 0
+        while lo < order.len {
+            let mid = if lo + width < order.len then lo + width else order.len
+            let hi = if lo + 2 * width < order.len then lo + 2 * width else order.len
+            var i = lo, j = mid, k = lo
+            while i < mid && j < hi {
+                if byte_compare(paths[order[j]], paths[order[i]]) < 0 {
+                    scratch[k] = order[j]
+                    j += 1
+                } else {
+                    scratch[k] = order[i]
+                    i += 1
+                }
+                k += 1
+            }
+            while i < mid {
+                scratch[k] = order[i]
+                i += 1
+                k += 1
+            }
+            while j < hi {
+                scratch[k] = order[j]
+                j += 1
+                k += 1
+            }
+            lo = hi
+        }
+        let swap = copy order
+        order = copy scratch
+        scratch = swap
+        width *= 2
+    }
+    order
+}
+
+// The first index in sorted `paths` whose path is at or after `key`.
+fn first_at(paths: List[List[byte]], key: List[byte]) -> int {
+    var lo = 0, hi = paths.len
+    while lo < hi {
+        let mid = (lo + hi) / 2
+        if byte_compare(paths[mid], key) < 0 { lo = mid + 1 } else { hi = mid }
+    }
+    lo
+}
+
+// Whether any of the sorted `paths` lies below `directory` (the root holds all).
+fn holds_any(paths: List[List[byte]], directory: List[byte]) -> bool {
+    if directory.len == 0 { return paths.len > 0 }
+    var key = owned_path(directory)
+    (mut key).push(47 as byte)
+    let at = first_at(paths, key)
+    at < paths.len && parent_of(directory, paths[at])
+}
+
+/// Stage `entries` (stage zero, one per path) and remove every stage of each
+/// path in `removed`, in one pass. The result is the index that applying,
+/// path by path, replace_entry then invalidate_tree to each entry (add's
+/// stage_entry) and remove_path to each removal would leave: an entry
+/// replaces every stage of its path; the higher stages of a staged or removed
+/// path are saved in REUC, replacing an older record for it; every TREE
+/// ancestor of a staged path, and of a removed path that was present, is
+/// invalidated; other records keep their bytes. A path may appear once.
+pub fn stage_all(value: Index, entries: List[Entry], removed: List[List[byte]]) -> Index ! IndexErrors {
+    check_version(value.version)?
+    validate_entries(value.entries)?
+    validate_extensions(value.extensions)?
+    var paths = List[List[byte]]()
+    (mut paths).reserve(entries.len + removed.len)
+    for entry in entries {
+        validate_entry(entry)?
+        if stage(entry) != 0 { return invalid_index }
+        (mut paths).push(copy entry.path)
+    }
+    for path in removed {
+        if !valid_path(path) { return invalid_index }
+        (mut paths).push(copy path)
+    }
+    var edits = List[Edit]()
+    (mut edits).reserve(paths.len)
+    for k in byte_order(paths) {
+        if edits.len > 0 && byte_compare(edits[edits.len - 1].path, paths[k]) == 0 { return invalid_index }
+        (mut edits).push(Edit { path: copy paths[k], staged: if k < entries.len then k else -1 })
+    }
+    var out = List[Entry]()
+    (mut out).reserve(value.entries.len + entries.len)
+    var records = List[Undo]()
+    var touched = List[List[byte]]()
+    var i = 0, e = 0
+    while i < value.entries.len || e < edits.len {
+        if e == edits.len || i < value.entries.len && byte_compare(value.entries[i].path, edits[e].path) < 0 {
+            (mut out).push(copy value.entries[i])
+            i += 1
+            continue
+        }
+        let path = copy edits[e].path
+        var slots = [-1, -1, -1]
+        var found = false
+        while i < value.entries.len && byte_compare(value.entries[i].path, path) == 0 {
+            found = true
+            let n = stage(value.entries[i])
+            if n != 0 { slots[n - 1] = i }
+            i += 1
+        }
+        if slots[0] >= 0 || slots[1] >= 0 || slots[2] >= 0 {
+            var record = owned_path(path)
+            (mut record).push(0 as byte)
+            for slot in slots {
+                let mode = if slot < 0 then "0" else object.mode_text(value.entries[slot].stat[6])?
+                append(mut record, mode.bytes())
+                (mut record).push(0 as byte)
+            }
+            for slot in slots { if slot >= 0 { append(mut record, value.entries[slot].id.bytes) } }
+            (mut records).push(Undo { path: owned_path(path), raw: record })
+        }
+        if edits[e].staged >= 0 {
+            (mut out).push(copy entries[edits[e].staged])
+            (mut touched).push(copy path)
+        } else if found {
+            (mut touched).push(copy path)
+        }
+        e += 1
+    }
+    var result = Index { version: value.version, entries: out, extensions: copy value.extensions }
+    for x in 0..result.extensions.len {
+        if result.extensions[x].signature != "TREE" || touched.len == 0 { continue }
+        var data = List[byte]()
+        for node in parse_cache(result.extensions[x].data)? {
+            if holds_any(touched, node.path) {
+                append(mut data, cache_record(node.component, -1, node.children, List[byte]()))
+            } else {
+                append(mut data, node.raw)
+            }
+        }
+        result.extensions[x].data = data
+    }
+    if records.len > 0 {
+        var at = -1
+        var previous = List[Undo]()
+        for x in 0..result.extensions.len {
+            if result.extensions[x].signature == "REUC" {
+                previous = undo_records(result.extensions[x].data)?
+                at = x
+            }
+        }
+        var data = List[byte]()
+        var p = 0, r = 0
+        while p < previous.len || r < records.len {
+            let cmp = if p == previous.len then 1 else if r == records.len then -1 else byte_compare(previous[p].path, records[r].path)
+            if cmp < 0 {
+                append(mut data, previous[p].raw)
+                p += 1
+            } else {
+                append(mut data, records[r].raw)
+                if cmp == 0 { p += 1 }
+                r += 1
+            }
+        }
+        if at < 0 {
+            (mut result.extensions).push(Extension { signature: "REUC", data: data })
+        } else {
+            result.extensions[at].data = data
+        }
+    }
+    validate_entries(result.entries)?
+    result
+}
