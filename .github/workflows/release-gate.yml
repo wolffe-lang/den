@@ -144,9 +144,6 @@ jobs:
           NEEDS: ${{ toJSON(needs) }}
         run: python3 ci/tiers.py verdict
 
-  # A red nightly opens an issue (ruling #92): a scheduled run has no lane
-  # watching it, so the red has to come and find one. One open issue per
-  # workflow, its title the dedupe key (ci/nightly-red.sh).
   complete:
     needs: [verify, tier]
     runs-on: ubuntu-24.04
