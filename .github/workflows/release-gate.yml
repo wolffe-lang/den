@@ -1,0 +1,44 @@
+name: release gate
+on:
+  workflow_call:
+    outputs:
+      tested-sha:
+        description: Exact tag commit whose complete release gate succeeded
+        value: ${{ jobs.complete.outputs.tested-sha }}
+permissions:
+  contents: read
+  issues: write
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      sha: ${{ steps.identity.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - id: identity
+        name: exact stable tag commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_TYPE" = tag
+          [[ "$GITHUB_REF_NAME" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-parse "refs/tags/$GITHUB_REF_NAME^{commit}")" = "$GITHUB_SHA"
+          echo "sha=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+  ci:
+    needs: verify
+    uses: ./.github/workflows/ci.yml
+  complete:
+    needs: [verify, ci]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      tested-sha: ${{ needs.verify.outputs.sha }}
+    steps:
+      - name: complete release profile
+        run: echo 'PROFILE complete: every-gate-leaf'

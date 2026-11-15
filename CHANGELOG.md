@@ -1,5 +1,11 @@
 # Changes
 
+## 0.1.0 — 2026-11-15
+
+- First 0.1.0 preview of Git-compatible objects, local history, worktree operations and experimental transports. This is not a complete replacement for Git.
+- Align the package and CLI release version. Release builds record the compiler observed at build time; local source builds report unrecorded provenance.
+- Require every gate leaf at the exact tag before staging macOS arm64 and Linux x86-64 archives with SHA-256 sidecars. Releases remain drafts until explicitly published.
+
 ## Unreleased — a remote that stops sending (den#118)
 
 - A fetch from a remote that stops sending now ends with a named line

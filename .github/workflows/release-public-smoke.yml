@@ -1,0 +1,17 @@
+name: public release smoke
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Already published stable tag to verify anonymously
+        type: string
+        required: true
+permissions:
+  contents: read
+jobs:
+  verify:
+    uses: wolffe-lang/homebrew-wolf/.github/workflows/tool-public-smoke.yml@dc1758c155c7d83d6303f74013bca1a6d8175a9f
+    with:
+      tag: ${{ inputs.tag }}
+      config: .github/release.json
+      infrastructure-revision: dc1758c155c7d83d6303f74013bca1a6d8175a9f

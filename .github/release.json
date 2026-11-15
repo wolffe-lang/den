@@ -1,0 +1,30 @@
+{
+  "schema": 1,
+  "name": "den",
+  "manifest": "src/wolf.pkg",
+  "gate_workflow": ".github/workflows/release-gate.yml",
+  "gate_profile": "every-gate-leaf",
+  "build": [
+    "tools/build",
+    "--release"
+  ],
+  "binaries": {
+    "den": "target/release/den"
+  },
+  "version_args": [
+    "--version"
+  ],
+  "version_pattern": "^den (?P<version>[0-9]+\\.[0-9]+\\.[0-9]+) \\(built with .+\\)$",
+  "smoke": [
+    [
+      "{bin}/den",
+      "--version"
+    ],
+    [
+      "{bin}/den",
+      "init",
+      "repository"
+    ]
+  ],
+  "provenance_source": "src/build_version/build_version.lu"
+}
