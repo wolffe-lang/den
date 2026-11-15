@@ -786,9 +786,11 @@ sent nothing for 30 seconds` or `fatal: the remote sent no pack data for 30
 seconds` (`for 120 seconds` before the pack's first byte): exit 128 for clone
 and fetch, 1 for pull, and a submodule update reports it as a failed clone.
 The failed clone's directory is removed as for any other failure.
-`DEN_STALL_SECONDS` (whole seconds, 1 to 86400) sets the bound; the lines then
-name the variable instead of a number. Git has no such bound by default: a
-stalled remote makes it wait until it is stopped.
+`DEN_STALL_SECONDS` (whole seconds, 1 to 86400) is the one setting: it sets the
+wait for pack data once the pack has begun and each read's wait, and the wait
+before the pack's first byte stays four times it. With it set, the lines name
+the variable instead of a number. Git has no such bound by default: a stalled
+remote makes it wait until it is stopped.
 
 `tools/check-http` runs the HTTP units natively, in release and on the
 checked machine. It also runs raw-peer and hostile-input rows, TLS rows against
