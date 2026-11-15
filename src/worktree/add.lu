@@ -88,9 +88,13 @@ fn path_present(ctx: Context, path: List[byte]) -> bool ! WorkErrors {
 
 // A tracked regular file or symlink whose lstat equals its stage-zero entry
 // and is not racily clean (scan's stat_clean): Git's add leaves it alone.
+// add's racy test is coarser than status's: the pinned Git stages an entry
+// again when its mtime falls in the index file's own second or later, even
+// a fraction of a second before the index was written.
 fn unchanged(entry: index.Entry, file: FileState, written: List[int]) -> bool {
     if index.stage(entry) != 0 || entry.stat.len != 10 || entry.stat[6] == 0o160000 { return false }
     if file.kind != 0 && file.kind != 3 { return false }
+    if written[0] < 0 || entry.stat[2] >= written[0] { return false }
     stat_clean(entry, file.stat, file.mode, written)
 }
 
