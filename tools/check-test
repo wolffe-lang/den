@@ -14,3 +14,14 @@ import json,sys
 rows=[json.loads(line) for line in open(sys.argv[1]) if line.startswith('{')]
 assert len(rows)==1 and rows[0]['verdict']=='exit(0)',rows
 PY
+for flag in "" --release; do
+    "$WOLF" build $flag --deny-warnings src/counters_test.lu -o target/counters-test
+    target/counters-test
+done
+"$WOLF" conform-run src/counters_test.lu --checked --json >target/counters-checked.json
+cat target/counters-checked.json
+python3 -I - target/counters-checked.json <<'PY2'
+import json,sys
+rows=[json.loads(line) for line in open(sys.argv[1]) if line.startswith('{')]
+assert len(rows)==1 and rows[0]['verdict']=='exit(0)',rows
+PY2
