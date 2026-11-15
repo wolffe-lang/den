@@ -1,5 +1,24 @@
 # Changes
 
+## Unreleased — adding thousands of files
+
+- `add` of several thousand new files no longer runs out of memory (den#91).
+  Everything an add allocated was held until it exited: 512 KiB of
+  compression tables for each object it wrote, and about five copies of the
+  whole index for each path it staged, so 5000 new files needed about 25 GiB
+  where Git takes 5 MiB. Each file's object is now written in its own region,
+  and the index is staged once, in one pass, with the same bytes as before.
+- `add .`, `add -A`, `add -u` and `commit -a` leave alone an entry whose
+  file's stat data still matches it and is not racily clean, as Git does: its
+  cache-tree records stay valid, so the index `add .` writes over an unchanged
+  tree is Git's. A stat-dirty entry is staged again, as before and as in Git.
+  `add .` over 2000 unchanged files, and `commit -a` of one change among them,
+  ran out of memory before.
+- `tools/add-scale-test.py` holds `add .` of 500, 2000 and 5000 new files, and
+  `add .` and `commit -a` over 2000 tracked ones, to the pinned Git: the same
+  index, cache tree included, under a 64 MiB peak measured from
+  `tools/minimal-parent.c`.
+
 ## Unreleased — a remote that stops sending (den#118)
 
 - A fetch from a remote that stops sending now ends with a named line
