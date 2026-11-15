@@ -299,6 +299,19 @@ fn main() -> int ! index.IndexErrors {
     let sibling_id = object.identify("tree", sibling_body)?
     for name in ["a", "a.", "a0"] { add_bytes(mut sibling_cache, record(name, 1, 0, sibling_id)) }
     assert(same(siblings_tree.cache, sibling_cache))
+    // den#123: the pinned Git writes a directory's subtrees shorter name
+    // first, and names of the same length by unsigned bytes.
+    var many = index.empty(2)?
+    var many_names = ["a/f", "a-b/f", "a.b/f", "ab/f", "b/f", "B/f", "a0/f"]
+    for i in 0..12 { (mut many_names).push("d{i}/f") }
+    for name in many_names { many = index.replace_entry(many, fixture(name.bytes(), 0)?)? }
+    let many_tree = index.build_trees(many)?
+    var many_order = ["B", "a", "b", "a0", "ab"]
+    for i in 0..10 { (mut many_order).push("d{i}") }
+    for name in ["a-b", "a.b", "d10", "d11"] { (mut many_order).push(name) }
+    var many_cache = record("", 19, 19, many_tree.root)
+    for name in many_order { add_bytes(mut many_cache, record(name, 1, 0, sibling_id)) }
+    assert(same(many_tree.cache, many_cache))
 
     let stat = [
         0,
@@ -395,7 +408,7 @@ fn main() -> int ! index.IndexErrors {
     }
     assert(higher)
     print(
-        "PASS index versions, raw paths, flags, malformed data, extensions, nested trees, stat mapping, one-pass staging",
+        "PASS index versions, raw paths, flags, malformed data, extensions, nested trees, subtree order, stat mapping, one-pass staging",
     )
     0
 }
