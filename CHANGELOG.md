@@ -7,17 +7,25 @@
   compression tables for each object it wrote, and about five copies of the
   whole index for each path it staged, so 5000 new files needed about 25 GiB
   where Git takes 5 MiB. Each file's object is now written in its own region,
-  and the index is staged once, in one pass, with the same bytes as before.
+  the walk's scratch dies in a region of its own, and the index is staged
+  once, in one pass, with the same bytes as before.
 - `add .`, `add -A`, `add -u` and `commit -a` leave alone an entry whose
   file's stat data still matches it and is not racily clean, as Git does: its
   cache-tree records stay valid, so the index `add .` writes over an unchanged
-  tree is Git's. A stat-dirty entry is staged again, as before and as in Git.
+  tree is Git's. A stat-dirty entry is staged again, as before and as in Git,
+  and so is one whose mtime falls in the index file's own second or later.
   `add .` over 2000 unchanged files, and `commit -a` of one change among them,
   ran out of memory before.
+- `commit` writes the cache tree's subtrees in Git's order, shorter names
+  first and names of one length by their bytes (den#123). Past ten sibling
+  directories (`d9`, `d10`) den's index differed from Git's.
+- Each SHA-1 state reserves its lists, so hashing a file leaves no list growth
+  behind; `commit -a` of 2000 files peaks about 19 MiB lower.
 - `tools/add-scale-test.py` holds `add .` of 500, 2000 and 5000 new files, and
-  `add .` and `commit -a` over 2000 tracked ones, to the pinned Git: the same
-  index, cache tree included, under a 64 MiB peak measured from
-  `tools/minimal-parent.c`.
+  `add .` over 2000 tracked ones, to the pinned Git: the same index, cache
+  tree included, under a 64 MiB peak measured from `tools/minimal-parent.c`.
+  Its `commit -a` rows, over 1000 and 2000 tracked files, must equal Git's
+  index and grow linearly; commit's own per-file memory is a later change.
 
 ## Unreleased — local time zones
 
