@@ -12,8 +12,10 @@ both tools:
                            `init -q` first, outside the measurement)
   add-scale-tracked-2000   `add .` over 2000 files Git committed, the index
                            stat-clean, plus one new file `d0/new.txt`
-  add-scale-commit-a-2000  `commit -a -q -m change` over the same tree with
-                           one file changed
+  add-scale-commit-a-N     `commit -a -q -m change` over N such files (no new
+                           one) with one file changed (N = 1000, 2000)
+  add-scale-commit-a-linear  den's commit -a peak at 2000 files at most
+                           LINEAR times its peak at 1000
 
 The trees have the shape of den#91's report: directories `dI` of 100 files
 `fJ.txt`, each holding `px142 den row file I J`. Each run's exit status,
@@ -22,9 +24,12 @@ leaves: `ls-files -s` and the TREE extension's bytes (Git leaves a stat-clean
 entry's cache-tree records valid); after `commit -a`, HEAD's tree and the
 status as well. Each tool is started by tools/minimal-parent.c, so its peak
 is its own (den#114), under a 2 GiB address-space cap on Linux so a regressed
-den stops there and is named, not killed by the host. den's peak must stay
-within BOUND_KIB. Wall and CPU (user + system, from rusage) are printed for
-both tools: den's wall is mostly its fsyncs, three per object it writes.
+den stops there and is named, not killed by the host. den's `add` peak must
+stay within BOUND_KIB. `commit` keeps its own per-file term (status walks,
+every blob read back, every tree written), so a commit -a row is held to Git's
+bytes and to linear growth, not to BOUND_KIB. Wall and CPU (user + system,
+from rusage) are printed for both tools: den's wall is mostly its fsyncs,
+three per object it writes.
 """
 import argparse
 import hashlib
@@ -38,6 +43,7 @@ import threading
 import time
 
 BOUND_KIB = 64 * 1024
+LINEAR = 2.2
 CAP = 2 * 1024 ** 3
 ENV = dict(os.environ, GIT_AUTHOR_NAME='Den Tester', GIT_AUTHOR_EMAIL='den@example.invalid',
            GIT_COMMITTER_NAME='Den Tester', GIT_COMMITTER_EMAIL='den@example.invalid',
@@ -141,7 +147,8 @@ def main():
     for n in (500, 2000, 5000):
         plan.append((f'add-scale-{n}', ('fresh', n), ['add', '.'], True, None))
     plan.append(('add-scale-tracked-2000', ('tracked', 2000), ['add', '.'], False, 'new'))
-    plan.append(('add-scale-commit-a-2000', ('tracked', 2000), ['commit', '-a', '-q', '-m', 'change'], False, 'change'))
+    for n in (1000, 2000):
+        plan.append((f'add-scale-commit-a-{n}', ('tracked', n), ['commit', '-a', '-q', '-m', 'change'], False, 'change'))
 
     def prepared(key, init, tool, change):
         if key not in seeds:
@@ -175,6 +182,7 @@ def main():
 
     rows = 0
     failures = 0
+    commit_peaks = {}
     for name, key, argv, init, change in plan:
         if a.filter not in name:
             continue
@@ -193,16 +201,28 @@ def main():
         g, d = sample['git'], sample['den']
         keys = ('status', 'stdout', 'stderr', 'lsfiles', 'tree', 'head_tree', 'porcelain')
         differs = [k for k in keys if (k in g or k in d) and g.get(k) != d.get(k)]
-        bounded = best['den']['maxrss_kib'] <= BOUND_KIB
+        commit_row = argv[0] == 'commit'
+        if commit_row:
+            commit_peaks[key[1]] = best['den']['maxrss_kib']
+        bounded = commit_row or best['den']['maxrss_kib'] <= BOUND_KIB
         ok = not differs and bounded and d['status'] == 0
         failures += not ok
         print(('PASS ' if ok else 'FAIL ') + name +
               f" den peak {best['den']['maxrss_kib']} KiB wall {best['den']['wall']:.2f} s cpu {best['den']['cpu']:.3f} s;"
-              f" git peak {best['git']['maxrss_kib']} KiB wall {best['git']['wall']:.3f} s cpu {best['git']['cpu']:.3f} s;"
-              f" bound {BOUND_KIB} KiB; floor {floor_kib} KiB" +
+              f" git peak {best['git']['maxrss_kib']} KiB wall {best['git']['wall']:.3f} s cpu {best['git']['cpu']:.3f} s;" +
+              (' bound none (linear row);' if commit_row else f' bound {BOUND_KIB} KiB;') +
+              f" floor {floor_kib} KiB" +
               ('' if bounded else ' OVER BOUND') +
               ('' if not differs else ' DIFFERS in ' + ', '.join(
                   f'{k}: git {str(g.get(k))[-120:]!r} den {str(d.get(k))[-120:]!r}' for k in differs)), flush=True)
+    if 1000 in commit_peaks and 2000 in commit_peaks:
+        rows += 1
+        small, large = commit_peaks[1000], commit_peaks[2000]
+        linear = large <= LINEAR * small
+        failures += not linear
+        print(('PASS ' if linear else 'FAIL ') + 'add-scale-commit-a-linear' +
+              f' den peak {large} KiB at 2000 files, {large / small:.2f} times {small} KiB at 1000;'
+              f' limit {LINEAR} times' + ('' if linear else ' NOT LINEAR'), flush=True)
     assert rows, 'empty selection'
     print(f'add-scale: {rows} rows, {failures} failures; zero skips', flush=True)
     shutil.rmtree(out / 'work', ignore_errors=True)
