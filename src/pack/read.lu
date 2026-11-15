@@ -1,5 +1,6 @@
 // Bounded offset reads; no mmap, whole-pack buffer, process or persistent cache.
 use std.fs
+use counters
 use hash
 use oid
 use zlib
@@ -399,6 +400,7 @@ pub fn read_object(gitdir: str, name: str, cap: int) -> Body ! PackErrors {
                 var seen = Map[int, bool](), total: int = 0, none = no_cache()
                 let value = unpack(fd, end, index, slot, mut seen, mut total, 0, mut none, 0)?
                 result = copy value
+                counters.object_read()
                 found = true
             }
         }
@@ -494,6 +496,7 @@ pub fn session_peek(s: Session, name: str, cap: int) -> Body ! PackErrors {
             var seen = Map[int, bool](), total: int = 0, none = no_cache()
             let value = unpack(fd, end, s.indexes[i], slot, mut seen, mut total, 0, mut none, 0)?
             result = copy value
+            counters.object_read()
         }
         if result.data.len > cap { return Unsupported("pack object size limit") }
         return result
@@ -519,6 +522,7 @@ pub fn session_cached(mut s: Session, name: str, cap: int) -> Body ! PackErrors 
             var seen = Map[int, bool](), total: int = 0
             let value = unpack(fd, end, s.indexes[i], slot, mut seen, mut total, 0, mut s.cache, i)?
             result = copy value
+            counters.object_read()
         }
         if result.data.len > cap { return Unsupported("pack object size limit") }
         return result
@@ -540,6 +544,7 @@ pub fn session_read(mut s: Session, name: str, cap: int) -> Body ! PackErrors {
             var seen = Map[int, bool](), total: int = 0, none = no_cache()
             let value = unpack(fd, end, s.indexes[i], slot, mut seen, mut total, 0, mut none, 0)?
             result = copy value
+            counters.object_read()
         }
         if result.data.len > cap { return Unsupported("pack object size limit") }
         return result
