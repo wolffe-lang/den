@@ -833,7 +833,7 @@ time and peak memory. Both are named SKIPs without network. A live clone that
 makes no progress for 300 s (or half its own time bound, if shorter) is
 stopped by the row and run once more; a second stall fails the row by name.
 A local row holds that bound against a server that stops sending mid-pack.
-den itself has no such bound yet (den#118). A third fetches,
+den's own bound is the one above (den#118). A third fetches,
 pushes and deletes a disposable branch on the repository that
 `DEN_LIVE_HTTPS_URL` names, with `DEN_LIVE_HTTPS_TOKEN`, and is a named SKIP
 without them. It names that repository only in the environment, as a remote
