@@ -111,6 +111,9 @@ pub fn new1() -> Digest {
         used: 0,
         count: 0,
     }
+    // den#91: reserved, so a state leaves no list growth behind in its region.
+    (mut d.w).reserve(80)
+    (mut d.buf).reserve(64)
     for _ in 0..80 { (mut d.w).push(0) }
     for _ in 0..64 { (mut d.buf).push(0 as byte) }
     d
