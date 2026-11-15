@@ -1,0 +1,20 @@
+//! member: false
+
+use counters
+
+fn main() -> int {
+    let zero = "den-counters index-parses=0 pack-index-loads=0 objects-read=0 files-read=0 scans=0 commits-parsed=0"
+    assert(counters.line() == zero)
+    counters.index_parsed()
+    counters.pack_index_loaded()
+    counters.pack_index_loaded()
+    for _ in 0..3 { counters.object_read() }
+    for _ in 0..4 { counters.file_read() }
+    for _ in 0..5 { counters.scan() }
+    for _ in 0..6 { counters.commit_parsed() }
+    let counted = "den-counters index-parses=1 pack-index-loads=2 objects-read=3 files-read=4 scans=5 commits-parsed=6"
+    assert(counters.line() == counted)
+    assert(counters.line() == counted)
+    print("counters: ok")
+    0
+}
