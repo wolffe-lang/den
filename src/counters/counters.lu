@@ -1,0 +1,73 @@
+// Work counters for measuring rows. Each counts one kind of work a command
+// does: index files parsed, pack indexes parsed, objects read, work-tree
+// files read, work-tree walks and commits parsed. den prints them as one
+// line on stderr when it exits, only when DEN_COUNTERS is 1, so normal
+// output never changes. Counters only ever grow; line() reads them.
+
+var INDEX_PARSES: int = 0
+
+var PACK_INDEX_LOADS: int = 0
+
+var OBJECTS_READ: int = 0
+
+var FILES_READ: int = 0
+
+var SCANS: int = 0
+
+var COMMITS_PARSED: int = 0
+
+/// An index file was parsed (index.parse).
+pub fn index_parsed() {
+    // # Safety: den does its work on one thread; nothing else writes INDEX_PARSES.
+    unsafe {
+        INDEX_PARSES += 1
+    }
+}
+
+/// A pack index (.idx) was parsed.
+pub fn pack_index_loaded() {
+    // # Safety: one thread, as index_parsed.
+    unsafe {
+        PACK_INDEX_LOADS += 1
+    }
+}
+
+/// An object body was read, loose or packed.
+pub fn object_read() {
+    // # Safety: one thread, as index_parsed.
+    unsafe {
+        OBJECTS_READ += 1
+    }
+}
+
+/// A work-tree file's body was read or hashed.
+pub fn file_read() {
+    // # Safety: one thread, as index_parsed.
+    unsafe {
+        FILES_READ += 1
+    }
+}
+
+/// A walk of the work tree began.
+pub fn scan() {
+    // # Safety: one thread, as index_parsed.
+    unsafe {
+        SCANS += 1
+    }
+}
+
+/// A commit's headers were parsed.
+pub fn commit_parsed() {
+    // # Safety: one thread, as index_parsed.
+    unsafe {
+        COMMITS_PARSED += 1
+    }
+}
+
+/// The counters as one line, without its newline.
+pub fn line() -> str {
+    // # Safety: one thread, as index_parsed; this only reads.
+    unsafe {
+        "den-counters index-parses={INDEX_PARSES} pack-index-loads={PACK_INDEX_LOADS} objects-read={OBJECTS_READ} files-read={FILES_READ} scans={SCANS} commits-parsed={COMMITS_PARSED}"
+    }
+}
