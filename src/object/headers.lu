@@ -1,3 +1,4 @@
+use counters
 use oid
 
 /// Header values own raw bytes, including LF+SP continuation sequences.
@@ -76,6 +77,7 @@ fn field_oid(field: Header, algorithm: str) -> oid.Oid ! HeaderErrors {
 
 /// Validate ordered required commit headers while preserving all extra fields.
 pub fn parse_commit(data: List[byte], algorithm: str) -> Headers ! HeaderErrors {
+    counters.commit_parsed()
     let parsed = parse_headers(data)?
     if parsed.fields.len < 3 || parsed.fields[0].key != "tree" { return invalid_header }
     let _ = field_oid(parsed.fields[0], algorithm)?

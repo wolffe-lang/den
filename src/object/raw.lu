@@ -1,4 +1,5 @@
 // Git gitformat-loose(5), Loose objects. See docs/SOURCES.md.
+use counters
 use hash
 use oid
 use zlib
@@ -80,6 +81,7 @@ pub fn parse(raw: List[byte], max_output: int) -> Object ! ParseErrors {
 /// Decode exactly one complete loose file and validate its independent oid.
 /// max_output bounds body bytes; at most 32 framing bytes are additionally allowed.
 pub fn decode(src: List[byte], expected: oid.Oid, max_output: int) -> Object ! ObjectErrors {
+    counters.object_read()
     oid.validate(expected)?
     if expected.algorithm != "sha1" { return unsupported_format }
     if max_output < 0 || max_output > 9223372036854775775 { return invalid }
