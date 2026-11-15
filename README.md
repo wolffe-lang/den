@@ -12,9 +12,39 @@ rebase cover the measured subsets below. Full replay
 semantics, gc policy and wider transport policies remain unfinished. Text diff has
 two recorded equal-cost alignment differences; binary patches reconstruct the
 exact blobs but do not always use Git's byte representation. `den --version`
-prints `den 0.0.0 (built with wolf 0.2.36)`.
+prints version `0.1.0` and compiler provenance. Release builds record the actual
+pinned compiler; an ordinary local source build reports an unrecorded compiler.
 See [MAP](docs/MAP.md) for API contracts and [FORMATS](docs/FORMATS.md) for
 measured bytes and documentation discrepancies.
+
+## Install 0.1.0
+
+Release preparation targets macOS arm64 (`aarch64-apple-darwin`) and Linux
+x86-64 (`x86_64-unknown-linux-gnu`). A release workflow creates a **draft**;
+these instructions apply only once `v0.1.0` has been published on the
+[release page](https://github.com/wolffe-lang/den/releases).
+Other platforms have no prebuilt archive in this release.
+
+Download `den-0.1.0-TARGET.tar.gz` and its `.sha256` sidecar into an empty
+directory, replacing `TARGET` with your platform above. Before unpacking, run:
+
+```sh
+# Linux:
+sha256sum -c den-0.1.0-TARGET.tar.gz.sha256
+# macOS:
+shasum -a 256 -c den-0.1.0-TARGET.tar.gz.sha256
+tar -xzf den-0.1.0-TARGET.tar.gz
+cd den-0.1.0-TARGET
+./den --version
+```
+
+The archive contains the executables, license, documentation, toolchain pins
+and `BUILD.json` provenance. Keep it outside system directories and add its
+absolute directory to your PATH if desired. Checksums detect altered bytes;
+they do not replace a trusted download channel or constitute signed releases.
+Homebrew and AUR recipes are prepared separately after published hashes are
+known; preparation does not imply that either package is already available.
+
 
 ## Machines and pins
 

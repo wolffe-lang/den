@@ -1,5 +1,16 @@
 # Changes
 
+## 0.1.0 — 2026-11-20
+
+- First 0.1.0 preview of Git-compatible objects, local history, worktree operations and experimental transports. This is not a complete replacement for Git.
+- Align the package and CLI release version. Release builds record the compiler observed at build time; local source builds report unrecorded provenance.
+- Require every gate leaf at the exact tag before staging macOS arm64 and Linux x86-64 archives with SHA-256 sidecars. Releases remain drafts until explicitly published.
+- Read and write blobs past 16 MiB; a fast-forward pull of one commit takes about 2 to 3 times Git's CPU, and the diff and pull speed rows carry ceilings checked on every gate take.
+- Check large trees and large adds without growing memory with the file count, and summarize changes of any size.
+- Follow symbolic links in pulls, read clones Git made, pull a week's work, and end a fetch from a remote that stops sending with a named line (30 seconds without pack data, 120 before the first byte).
+- Read local time zones and identities as Git does, name directories the walk cannot open, and handle submodules and the everyday wire gaps over smart HTTP.
+- The entries below, headed Unreleased, give the detail of each part of this release.
+
 ## Unreleased — fast-forward pull
 
 - A fast-forward `pull` of one commit over `file://` on the 454-file speed

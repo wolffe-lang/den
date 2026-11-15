@@ -1,0 +1,5 @@
+// Release builds replace this module after observing the pinned compiler.
+// An ordinary source build makes no unverifiable compiler-version claim.
+pub fn compiler() -> str {
+    "unrecorded compiler; local source build"
+}
