@@ -1,5 +1,13 @@
 # Changes
 
+## Unreleased — work counters for measuring rows
+
+- `DEN_COUNTERS=1` prints one line on stderr when den exits:
+  `den-counters index-parses=N pack-index-loads=N objects-read=N
+  files-read=N scans=N commits-parsed=N`. Rows that measure how much work a
+  command does read it. Unset, empty or any other value, it changes nothing,
+  and `tools/counters-test.py` holds that byte for byte.
+
 ## Unreleased — a remote that stops sending (den#118)
 
 - A fetch from a remote that stops sending now ends with a named line
