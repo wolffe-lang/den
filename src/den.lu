@@ -2,6 +2,7 @@
 
 use blame
 use commit
+use counters
 use diff
 use history
 use notes
@@ -36,8 +37,16 @@ fn destination(command: str) -> str {
     }
 }
 
+// DEN_COUNTERS=1 adds one line of work counters on stderr at exit, for
+// measuring rows; any other value, or none, leaves every output unchanged.
 fn main() -> int {
-    let args = env_args()
+    let code = dispatch(env_args())
+    let wanted = env_get("DEN_COUNTERS") else { return code }
+    if wanted == "1" { eprint(counters.line()) }
+    code
+}
+
+fn dispatch(args: List[str]) -> int {
     if args.len == 1 && args[0] == "--version" {
         print("den 0.0.0 (built with wolf 0.2.36)")
         return 0
