@@ -10,5 +10,6 @@ pkg {
         object: {path: "../object"}, oid: {path: "../oid"},
         repository: {path: "../repository"}, hash: {path: "../hash"}, zlib: {path: "../zlib"},
         gitmodules: {path: "../gitmodules"},
+        counters: {path: "../counters"},
     },
 }

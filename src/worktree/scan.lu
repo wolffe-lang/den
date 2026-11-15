@@ -1,4 +1,5 @@
 use std.fs
+use counters
 use gitmodules
 use hash
 use ignore
@@ -43,6 +44,7 @@ pub fn read_file(
         let _ = index.serialize(checked)?
         if index.stage(prior[0]) != 0 || compare(prior[0].path, path) != 0 { return invalid_index }
     }
+    counters.file_read()
     safe_parents(ctx, path, false)?
     let full = absolute(ctx, path)?
     let named = fs_lstat(full)?
@@ -107,6 +109,7 @@ fn hash_file(
     let full = absolute(ctx, path)?
     let named = fs_lstat(full)?
     if named[0] != 0 { return read_file(ctx, path, prior)? }
+    counters.file_read()
     var file = fs.File { fd: fs_open_mode(full, 21)? }
     defer fs.close(take file) else |_| {}
     let before = fs_fstat_record(file.fd)?
@@ -305,6 +308,7 @@ fn walk_submodules(
     mut ignores: ignore.Cache,
     mut warnings: List[str],
 ) -> Walk ! WorkErrors {
+    counters.scan()
     let mark = warnings.len
     var notices = List[str]()
     for entry in value.entries {
