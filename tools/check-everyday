@@ -1,6 +1,7 @@
 #!/bin/sh
 # vc18 exact everyday rows against the pinned git: upstream tracking, config
-# listing, merge guidance and show, inherited descriptors and local paths.
+# listing, merge guidance and show, inherited descriptors and local paths;
+# DEN_COUNTERS off unless 1, with output unchanged byte for byte.
 set -eu
 DEN_ROOT=$(cd "$(dirname "$0")/.." && pwd)
 export DEN_ROOT
@@ -12,5 +13,6 @@ for tier in native release; do
         tools/env python3 -I tools/everyday-test.py --tier "$tier" --family "$family"
     done
     tools/env python3 -I tools/local-path-test.py --tier "$tier"
+    tools/env python3 -I tools/counters-test.py --tier "$tier"
 done
-echo 'everyday: native/release exact upstream/config/merge/combined/descriptor rows (combined fuzz rows inheriting a two-tree alignment are reviewed); local paths exact or named; zero skips'
+echo 'everyday: native/release exact upstream/config/merge/combined/descriptor rows (combined fuzz rows inheriting a two-tree alignment are reviewed); local paths exact or named; DEN_COUNTERS off by default; zero skips'
