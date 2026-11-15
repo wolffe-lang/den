@@ -3,6 +3,7 @@ pkg {
     edition: "1",
     capabilities: [fs, env],
     deps: {
+        counters: {path: "../counters"},
         hash: {path: "../hash"},
         object: {path: "../object"},
         oid: {path: "../oid"},

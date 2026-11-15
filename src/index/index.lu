@@ -1,4 +1,5 @@
 // Owned SHA-1 index format boundary. Paths are unsigned bytes, never text.
+use counters
 use hash
 use object
 use oid
@@ -159,6 +160,7 @@ fn validate_entries(entries: List[Entry]) -> () ! IndexErrors {
 /// Strict v2/v3/v4 parser. No malformed input is allowed to reach a slice/trap.
 /// Stages 1..3 are retained; tree construction, not this reader, rejects them.
 pub fn parse(data: List[byte]) -> Index ! IndexErrors {
+    counters.index_parsed()
     if data.len < 32 { return invalid_index }
     if be(data, 0, 4) != 0x44495243 { return invalid_index }
     let version = be(data, 4, 4)
