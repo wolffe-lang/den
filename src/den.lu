@@ -1,7 +1,6 @@
 //! member: false
 
 use blame
-use build_version
 use commit
 use diff
 use history
@@ -37,10 +36,16 @@ fn destination(command: str) -> str {
     }
 }
 
+/// Release builds replace this literal after observing the pinned compiler.
+/// An ordinary source build does not claim an unverified compiler identity.
+fn compiler_provenance() -> str {
+    "unrecorded compiler; local source build"
+}
+
 fn main() -> int {
     let args = env_args()
     if args.len == 1 && args[0] == "--version" {
-        print("den 0.1.0 (built with {build_version.compiler()})")
+        print("den 0.1.0 (built with {compiler_provenance()})")
         return 0
     }
     if args.len > 0 {

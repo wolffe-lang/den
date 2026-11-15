@@ -26,5 +26,6 @@
       "repository"
     ]
   ],
-  "provenance_source": "src/build_version/build_version.lu"
+  "provenance_source": "src/den.lu",
+  "provenance_function": "compiler_provenance"
 }
