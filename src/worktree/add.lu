@@ -86,6 +86,16 @@ fn path_present(ctx: Context, path: List[byte]) -> bool ! WorkErrors {
     true
 }
 
+// The walk's warnings, copied into the caller's list (which outlives the
+// walk's region) as ignore's queries add one: once per message.
+fn keep_warnings(mut into: List[str], found: List[str]) {
+    for warning in found {
+        var seen = false
+        for previous in into { if previous == warning { seen = true; break } }
+        if !seen { (mut into).push(copy warning) }
+    }
+}
+
 // A tracked regular file or symlink whose lstat equals its stage-zero entry
 // and is not racily clean (scan's stat_clean): Git's add leaves it alone.
 // add's racy test is coarser than status's: the pinned Git stages an entry
@@ -166,7 +176,17 @@ pub fn stage_paths_with_warnings(
         }
         return Failure(message)
     }
-    var walked = walk(ctx, current, !options.update, paths, !options.force, mut warnings)?
+    // den#91: the walk's scratch (lstat records, parent checks, hash states,
+    // its sorted copy) lives in its own region; only what it found is kept.
+    var walked = Walk { files: List[FileState](), directories: List[List[byte]]() }
+    region walking {
+        var found_warnings = List[str]()
+        errdefer keep_warnings(mut warnings, found_warnings)
+        let found = walk(ctx, current, !options.update, paths, !options.force, mut found_warnings)?
+        keep_warnings(mut warnings, found_warnings)
+        for file in found.files { (mut walked.files).push(copy file) }
+        for directory in found.directories { (mut walked.directories).push(copy directory) }
+    }
     supported_attributes(ctx, walked.files)?
     var candidates = List[List[byte]]()
     for entry in current.entries {
