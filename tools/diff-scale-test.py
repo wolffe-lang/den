@@ -53,6 +53,36 @@ ROWS = {
 }
 
 
+class Measurement:
+    """The scale runner's process and resource-use boundary."""
+
+    def __init__(self, root, out, timeout):
+        self.root = Path(root)
+        self.out = Path(out)
+        self.timeout = timeout
+
+    def run(self, tool, argv, work):
+        start = time.monotonic()
+        proc = subprocess.Popen([tool, *argv], cwd=work, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        chunks = {}
+
+        def drain(label, stream):
+            chunks[label] = stream.read()
+        readers = [threading.Thread(target=drain, args=(n, s)) for n, s in (('out', proc.stdout), ('err', proc.stderr))]
+        for reader in readers:
+            reader.start()
+        timer = threading.Timer(self.timeout, proc.kill)
+        timer.start()
+        _, status, usage = os.wait4(proc.pid, 0)
+        timer.cancel()
+        for reader in readers:
+            reader.join()
+        wall = time.monotonic() - start
+        return dict(status=os.waitstatus_to_exitcode(status), stdout=chunks['out'].hex(),
+                    stderr=chunks['err'].hex(), wall=wall, cpu=usage.ru_utime + usage.ru_stime,
+                    maxrss_kib=usage.ru_maxrss, ended=wall >= self.timeout)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--tier', default='native')
@@ -118,36 +148,9 @@ def main():
     commits = run([git, 'rev-list', '--count', 'HEAD'], seed).strip().decode()
     print(f'SHAPE files={files} commits={commits} {shape}', flush=True)
 
-    floor = []
-    for _ in range(3):
-        proc = subprocess.Popen(['/bin/true'])
-        _, status, usage = os.wait4(proc.pid, 0)
-        floor.append(usage.ru_maxrss)
-    floor_kib = min(floor)
+    measurement = Measurement(root, out, a.timeout)
+    floor_kib = min(measurement.run('/bin/true', [], out)['maxrss_kib'] for _ in range(3))
     print(f'FLOOR resident set of a child of this parent: {floor_kib} KiB', flush=True)
-
-    def step_run(tool, argv, work):
-        start = time.monotonic()
-        proc = subprocess.Popen([tool, *argv], cwd=work, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        chunks = {}
-
-        def drain(label, stream_):
-            chunks[label] = stream_.read()
-        readers = [threading.Thread(target=drain, args=(n, s)) for n, s in (('out', proc.stdout), ('err', proc.stderr))]
-        for r in readers:
-            r.start()
-        # A bounded row: a run past --timeout is ended and fails.
-        timer = threading.Timer(a.timeout, proc.kill)
-        timer.start()
-        # wait4 reaps the child and gives its own rusage.
-        _, status, usage = os.wait4(proc.pid, 0)
-        timer.cancel()
-        for r in readers:
-            r.join()
-        wall = time.monotonic() - start
-        return dict(status=os.waitstatus_to_exitcode(status), stdout=chunks['out'].hex(),
-                    stderr=chunks['err'].hex(), wall=wall, cpu=usage.ru_utime + usage.ru_stime,
-                    maxrss_kib=usage.ru_maxrss, ended=wall >= a.timeout)
 
     def take(tool, steps):
         work = out / 'work'
@@ -158,7 +161,7 @@ def main():
         # mtime than any file's, so no entry is racily clean for either tool.
         time.sleep(1.1)
         run([git, 'update-index', '-q', '--refresh'], work)
-        results = [step_run(tool, argv, work) for argv in steps]
+        results = [measurement.run(tool, argv, work) for argv in steps]
         return dict(steps=results, wall=sum(r['wall'] for r in results), cpu=sum(r['cpu'] for r in results),
                     maxrss_kib=max(r['maxrss_kib'] for r in results), ended=any(r['ended'] for r in results))
 
