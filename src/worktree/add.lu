@@ -265,42 +265,52 @@ pub fn stage_paths_with_warnings(
         (mut warnings).push("warning: adding embedded git repository: {text(file.path)?}")
     }
     var changed = List[List[byte]]()
+    // den#91: each path's object is written in its own region, so its deflate
+    // tables, framing and copies die with it, and the index is changed once,
+    // after the loop (index.stage_all), never copied whole per path.
+    var staged = List[index.Entry]()
+    var removed = List[List[byte]]()
     for path in candidates {
         let at = index_at(current.entries, path)
         let disk = file_at(walked.files, path)
         if disk < 0 {
             if options.ignore_removal || options.intent { continue }
-            if !options.dry_run { value = index.remove_path(value, path)? }
+            if !options.dry_run { (mut removed).push(copy path) }
             (mut changed).push(copy path)
             continue
         }
         if options.intent && at >= 0 { continue }
-        var prior = List[index.Entry]()
-        if at >= 0 && index.stage(current.entries[at]) == 0 {
-            (mut prior).push(copy current.entries[at])
-        }
-        let file = copy walked.files[disk]
-        if file.mode == 0o160000 {
-            // A gitlink stages its submodule's HEAD and writes no object; an
-            // unchanged one keeps its entry, stat and all (vc25 work rows).
-            if prior.len == 1 && prior[0].stat[6] == 0o160000 && oid.equal(prior[0].id, file.id) {
-                continue
+        var staging = true
+        region one {
+            var prior = List[index.Entry]()
+            if at >= 0 && index.stage(current.entries[at]) == 0 {
+                (mut prior).push(copy current.entries[at])
             }
-            let entry = entry_for(file, prior, options)?
-            if !options.dry_run { value = stage_entry(value, entry)? }
-            (mut changed).push(copy path)
-            continue
+            if walked.files[disk].mode == 0o160000 {
+                // A gitlink stages its submodule's HEAD and writes no object; an
+                // unchanged one keeps its entry, stat and all (vc25 work rows).
+                if prior.len == 1 &&
+                    prior[0].stat[6] == 0o160000 &&
+                    oid.equal(prior[0].id, walked.files[disk].id) {
+                    staging = false
+                } else {
+                    let entry = entry_for(walked.files[disk], prior, options)?
+                    if !options.dry_run { (mut staged).push(copy entry) }
+                }
+            } else {
+                let entry = entry_for(walked.files[disk], prior, options)?
+                if !options.dry_run {
+                    let _ = object.write_object(
+                        ctx.repo,
+                        "blob",
+                        if options.intent then List[byte]() else walked.files[disk].data,
+                    )?
+                    (mut staged).push(copy entry)
+                }
+            }
         }
-        let entry = entry_for(file, prior, options)?
-        if !options.dry_run {
-            let _ = object.write_object(
-                ctx.repo,
-                "blob",
-                if options.intent then List[byte]() else file.data,
-            )?
-            value = stage_entry(value, entry)?
-        }
-        (mut changed).push(copy path)
+        if staging { (mut changed).push(copy path) }
     }
+    if staged.len > 0 || removed.len > 0 { value = index.stage_all(value, staged, removed)? }
     changed
 }
