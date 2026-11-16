@@ -129,6 +129,15 @@ fn planned_restore_attributes(
             if planned_base(path, false).len == 0 { continue }
             let at = flat_at(source, path)
             if at >= 0 {
+                // Staged-only restores still introduce index fallback sources.
+                // Validate and charge them even when every selected body is LF.
+                if !options.worktree {
+                    let data = planned_data(reader, source[at])?
+                    if data.len > 16777216 - policy.bytes {
+                        return Fatal("limit: more than 16777216 bytes of checkout attributes")
+                    }
+                    policy.bytes += data.len
+                }
                 policy.fallback = index.replace_entry(
                     policy.fallback,
                     cached_entry(source[at], []),
