@@ -83,12 +83,18 @@ def main():
         'nul': ('.gitattributes', '* text=auto eol=lf\n'),
         'bare-cr': ('.gitattributes', '* text=auto eol=lf\n'),
         'binary': ('.gitattributes', '*.png binary\n'),
+        'quote-literal': ('.gitattributes', 'sub/a"quoted.txt text=auto eol=lf\n'),
+        'quoted-space': ('.gitattributes', '"sub/a quoted.txt" text=auto eol=lf\n'),
+        'quoted-escaped': ('.gitattributes', '"sub/a\\"quoted.txt" text=auto eol=lf\n'),
     }
     converting = {'auto-lf', 'text', 'auto', 'eol-lf', 'nested', 'info', 'deleted',
-                  'chunk-boundary', 'nul', 'bare-cr'}
+                  'chunk-boundary', 'nul', 'bare-cr', 'quote-literal', 'quoted-space', 'quoted-escaped'}
     rows = []
     for kind, (attr_path, attr) in attrs.items():
-        for command, argv in commands.items():
+        file_path = {'quote-literal': 'sub/a"quoted.txt', 'quoted-space': 'sub/a quoted.txt',
+                     'quoted-escaped': 'sub/a"quoted.txt'}.get(kind, 'sub/a.txt')
+        for command, base_argv in commands.items():
+            argv = [file_path if part == 'sub/a.txt' else part for part in base_argv]
             for crlf in (False, True):
                 if crlf and command not in ('status', 'add', 'commit', 'checkout', 'checkout-path', 'restore', 'pull', 'pull-rebase', 'pull-rebase-staged', 'pull-rebase-both', 'diff'):
                     continue
@@ -104,12 +110,12 @@ def main():
                 (seed / attr_path).write_text(attr)
                 if kind == 'nested-unset':
                     (seed / '.gitattributes').write_text('* text=auto eol=lf\n')
-                (seed / 'sub/a.txt').write_bytes(b'base\n')
+                (seed / file_path).write_bytes(b'base\n')
                 if kind == 'binary':
                     (seed / 'asset.png').write_bytes(b'\0PNG\r\n')
                 run(git, ['add', '.'], seed)
                 run(git, ['commit', '-qm', 'base'], seed)
-                (seed / 'sub/a.txt').write_bytes(b'next\n')
+                (seed / file_path).write_bytes(b'next\n')
                 run(git, ['commit', '-qam', 'next'], seed)
                 run(git, ['branch', 'other', 'HEAD~'], seed)
                 remote = case / 'remote.git'
@@ -125,16 +131,16 @@ def main():
                         body = b'\0' + body
                     if kind == 'bare-cr' and not crlf:
                         body = b'changed\rbare\n'
-                    (seed / 'sub/a.txt').write_bytes(body)
+                    (seed / file_path).write_bytes(body)
                 if command in ('pull-rebase-staged', 'pull-rebase-both'):
-                    run(git, ['add', 'sub/a.txt'], seed)
+                    run(git, ['add', file_path], seed)
                     if command == 'pull-rebase-both':
-                        with (seed / 'sub/a.txt').open('ab') as f:
+                        with (seed / file_path).open('ab') as f:
                             f.write(b'additional unstaged\n')
                 if kind == 'deleted':
                     (seed / attr_path).unlink()
                 if command == 'diff-cached':
-                    (seed / 'sub/a.txt').write_bytes(b'staged\n')
+                    (seed / file_path).write_bytes(b'staged\n')
                     run(git, ['add', '.'], seed)
                 results = {}
                 before = state(seed)
@@ -153,7 +159,7 @@ def main():
                 elif crlf and kind in converting:
                     got = results['den']
                     err = bytes.fromhex(got['stderr'])
-                    ok = got['status'] == 2 and b'worktree attributes: text' in err and b'sub/a.txt' in err and got['state'] == before
+                    ok = got['status'] == 2 and b'worktree attributes: text' in err and file_path.encode() in err and got['state'] == before
                 else:
                     ok = results['git'] == results['den']
                 print(('PASS ' if ok else 'FAIL ') + name, flush=True)

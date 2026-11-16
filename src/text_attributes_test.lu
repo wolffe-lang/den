@@ -11,6 +11,8 @@ fn main() -> int ! worktree.WorkErrors {
         "* -text\n",
         "* !text !eol\n",
         "*.txt linguist-generated\n",
+        "a\"b.txt text=auto eol=lf\n",
+        "\"a\\\"b.txt\" text=auto eol=lf\n",
     ] {
         assert(worktree.attributes_refusal(rule.bytes())? == "")
     }
@@ -18,6 +20,8 @@ fn main() -> int ! worktree.WorkErrors {
         ("* text=unknown\n", "worktree attributes: text"),
         ("* eol=crlf\n", "worktree attributes: eol"),
         ("* filter=lfs\n", "worktree attributes: filter"),
+        ("a\"b.txt filter=lfs\n", "worktree attributes: filter"),
+        ("\"a\\\"b.txt\" filter=lfs\n", "worktree attributes: filter"),
         ("* ident\n", "worktree attributes: ident"),
         ("* working-tree-encoding=UTF-16\n", "worktree attributes: working-tree-encoding"),
         ("*.png binary\n", "worktree attributes: binary"),
