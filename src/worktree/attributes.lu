@@ -60,6 +60,37 @@ fn attribute_refused(token: List[byte]) -> str ! WorkErrors {
     ""
 }
 
+// Only an initial double quote quotes the pattern. A literal quote within an
+// unquoted name must not swallow the attributes; escaped quotes inside a
+// quoted pattern must not end it. Preserve pattern bytes for the CR-LF guard.
+fn attribute_tokens(raw: List[byte]) -> List[List[byte]] {
+    var tokens = List[List[byte]](), current = List[byte](), quoted = false, escaped = false
+    for b in raw {
+        if quoted {
+            (mut current).push(b)
+            if escaped {
+                escaped = false
+            } else if b == 92 as byte {
+                escaped = true
+            } else if b == 34 as byte {
+                quoted = false
+            }
+            continue
+        }
+        if tokens.len == 0 && current.len == 0 && b == 34 as byte { quoted = true }
+        if !quoted && (b == 32 as byte || b == 9 as byte || b == 13 as byte) {
+            if current.len > 0 {
+                (mut tokens).push(copy current)
+                current = List[byte]()
+            }
+        } else {
+            (mut current).push(b)
+        }
+    }
+    if current.len > 0 { (mut tokens).push(current) }
+    tokens
+}
+
 /// The refusal for the first attribute in an attributes file's bytes that
 /// den would have to act on (a macro definition counts), or "" for none.
 pub fn attributes_refusal(data: List[byte]) -> str ! WorkErrors {
@@ -74,20 +105,7 @@ pub fn attributes_refusal(data: List[byte]) -> str ! WorkErrors {
     }
     (mut lines).push(copy line)
     for raw in lines {
-        // Tokens split at blanks; a quoted pattern keeps its blanks.
-        var tokens = List[List[byte]](), current = List[byte](), quoted = false
-        for b in raw {
-            if b == 34 as byte { quoted = !quoted }
-            if !quoted && (b == 32 as byte || b == 9 as byte || b == 13 as byte) {
-                if current.len > 0 {
-                    (mut tokens).push(copy current)
-                    current = List[byte]()
-                }
-            } else {
-                (mut current).push(b)
-            }
-        }
-        if current.len > 0 { (mut tokens).push(copy current) }
+        let tokens = attribute_tokens(raw)
         if tokens.len == 0 || tokens[0][0] == 35 as byte { continue }
         let first = copy tokens[0]
         let head = if first.len >= 6 then (str_from_utf8(first[0..6]) else "") else ""
@@ -154,19 +172,10 @@ fn text_rules(
         return Unsupported("worktree attributes: text at {text(path)?}")
     }
     for raw in source.split("\n") {
-        var tokens = List[str](), word = List[byte](), quoted = false
-        for b in raw.bytes() {
-            if b == 34 as byte { quoted = !quoted }
-            if !quoted && (b == 32 as byte || b == 9 as byte || b == 13 as byte) {
-                if word.len > 0 {
-                    (mut tokens).push(str_from_utf8(word) else "")
-                    word = List[byte]()
-                }
-            } else {
-                (mut word).push(b)
-            }
+        var tokens = List[str]()
+        for token in attribute_tokens(raw.bytes()) {
+            (mut tokens).push(str_from_utf8(token) else "")
         }
-        if word.len > 0 { (mut tokens).push(str_from_utf8(word) else "") }
         if tokens.len < 2 || tokens[0].starts_with("#") { continue }
         var changes = false
         for token in tokens {
