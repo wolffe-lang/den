@@ -3,7 +3,15 @@
 use worktree
 
 fn main() -> int ! worktree.WorkErrors {
-    for rule in ["* text\n", "* text=auto\n", "* text=auto eol=lf\n", "* eol=lf\n", "* -text\n", "* !text !eol\n", "*.txt linguist-generated\n"] {
+    for rule in [
+        "* text\n",
+        "* text=auto\n",
+        "* text=auto eol=lf\n",
+        "* eol=lf\n",
+        "* -text\n",
+        "* !text !eol\n",
+        "*.txt linguist-generated\n",
+    ] {
         assert(worktree.attributes_refusal(rule.bytes())? == "")
     }
     for (rule, expected) in [
