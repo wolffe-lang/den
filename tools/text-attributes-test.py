@@ -90,6 +90,7 @@ def main():
         'history-core-eol': (None, ''),
         'review-ignorecase': ('.gitattributes', '*.TXT text=auto eol=lf\n'),
         'review-case-sensitive': ('.gitattributes', '*.TXT text=auto eol=lf\n'),
+        'review-ignorecase-range': ('.gitattributes', '[A-z].TXT text=auto eol=lf\n'),
         'review-cr-separator': ('.gitattributes', '* text\rfoo\n'),
         'review-quote-close': ('.gitattributes', '"sub/a.txt"text\n'),
         'review-nul-line': ('.gitattributes', '* text\0junk\n'),
@@ -97,11 +98,11 @@ def main():
     }
     converting = {'auto-lf', 'text', 'auto', 'eol-lf', 'nested', 'info', 'deleted',
                   'chunk-boundary', 'nul', 'bare-cr', 'quote-literal', 'quoted-space', 'quoted-escaped',
-                  'review-ignorecase', 'review-cr-separator', 'review-quote-close', 'review-nul-line'}
+                  'review-ignorecase', 'review-ignorecase-range', 'review-cr-separator', 'review-quote-close', 'review-nul-line'}
     rows = []
     for kind, (attr_path, attr) in attrs.items():
         file_path = {'quote-literal': 'sub/a"quoted.txt', 'quoted-space': 'sub/a quoted.txt',
-                     'quoted-escaped': 'sub/a"quoted.txt'}.get(kind, 'sub/a.txt')
+                     'quoted-escaped': 'sub/a"quoted.txt', 'review-ignorecase-range': 'sub/_.txt'}.get(kind, 'sub/a.txt')
         for command, base_argv in commands.items():
             # Pure index/tree readers must not acquire unrelated checkout
             # configuration refusals while sharing the attributes guard.
@@ -118,8 +119,8 @@ def main():
                 case.mkdir()
                 seed = case / 'seed'
                 run(git, ['init', '-q', seed], root)
-                if kind in ('review-ignorecase', 'review-case-sensitive'):
-                    run(git, ['config', 'core.ignorecase', 'true' if kind == 'review-ignorecase' else 'false'], seed)
+                if kind in ('review-ignorecase', 'review-ignorecase-range', 'review-case-sensitive'):
+                    run(git, ['config', 'core.ignorecase', 'false' if kind == 'review-case-sensitive' else 'true'], seed)
                 (seed / 'sub').mkdir()
                 if attr_path is not None:
                     (seed / attr_path).parent.mkdir(parents=True, exist_ok=True)
