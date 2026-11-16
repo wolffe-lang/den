@@ -17,6 +17,7 @@ def main():
     ap.add_argument('--tier', default='native')
     ap.add_argument('--den')
     ap.add_argument('--filter', default='')
+    ap.add_argument('--dev-oracle', action='store_true', help='Darwin development evidence only; not the pinned Linux oracle')
     a = ap.parse_args()
     root = Path(__file__).resolve().parents[1]
     out = root / 'target/runs' / ('text-attributes-' + a.tier)
@@ -24,7 +25,12 @@ def main():
         shutil.rmtree(out)
     out.mkdir(parents=True)
     git = os.environ['DEN_GIT']
-    assert hashlib.sha256(Path(git).read_bytes()).hexdigest() == 'c4848492938c4ebfffbefe1fbbaa68b9af90c86d1f6a20e76816c5ff37fcfa60'
+    digest = hashlib.sha256(Path(git).read_bytes()).hexdigest()
+    if a.dev_oracle:
+        assert os.uname().sysname == 'Darwin', 'development oracle is Darwin-only'
+        print('DEV ORACLE (not pinned Linux evidence):', subprocess.check_output([git, '--version']).decode().strip(), digest, flush=True)
+    else:
+        assert digest == 'c4848492938c4ebfffbefe1fbbaa68b9af90c86d1f6a20e76816c5ff37fcfa60'
     den = a.den or str(root / 'target' / a.tier / 'den')
 
     def run(tool, args, cwd, check=True):
