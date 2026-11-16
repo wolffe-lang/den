@@ -238,6 +238,84 @@ def main():
             if not ok:
                 print(json.dumps(results), flush=True)
             rows.append(dict(name=name, passed=ok, **results))
+    # Selected restore sources are overlays, not a replacement for all current
+    # worktree metadata. A removed worktree file can expose the retained index.
+    controls = [
+        ('target-nested-unset', 'checkout', None, None, '* text\n', '*.txt -text\n', None, ''),
+        ('target-nested-text', 'checkout', None, None, '* -text\n', '*.txt text\n', None, 'text'),
+        ('target-info-unset', 'checkout', None, None, '* text\n', None, '* -text\n', ''),
+        ('restore-unselected-attributes', 'worktree-file', '* -text\n', '* -text\n', '* text\n', None, None, ''),
+        ('restore-selected-attributes', 'both', '* -text\n', '* -text\n', '* text\n', None, None, 'text'),
+        ('restore-delete-index-fallback', 'worktree', '* text\n', '* -text\n', None, None, None, 'text'),
+        ('restore-delete-both', 'both', '* text\n', '* -text\n', None, None, None, ''),
+        ('restore-overlay-retain', 'overlay', '* -text\n', '* -text\n', None, None, None, ''),
+        ('restore-staged-worktree-precedence', 'staged', '* -text\n', '* -text\n', '* text\n', None, None, ''),
+        ('restore-staged-index-fallback', 'staged', '* -text\n', None, '* text\n', None, None, 'text'),
+        ('restore-staged-acting-source', 'staged', None, None, '* filter=lfs\n', None, None, 'filter'),
+    ]
+    for kind, command, indexed, working, incoming, nested, info, refusal in controls:
+        name = f'text-attributes-review-policy-{kind}'
+        if a.filter not in name:
+            continue
+        case = out / name
+        case.mkdir()
+        seed = case / 'seed'
+        run(git, ['init', '-q', seed], root)
+        (seed / 'sub').mkdir()
+        (seed / 'sub/a.txt').write_bytes(b'base\n')
+        run(git, ['add', '.'], seed)
+        run(git, ['commit', '-qm', 'base'], seed)
+        old = run(git, ['rev-parse', 'HEAD'], seed).stdout.decode().strip()
+        (seed / 'sub/a.txt').write_bytes(b'next\r\n')
+        run(git, ['add', 'sub/a.txt'], seed)
+        if incoming is not None:
+            (seed / '.gitattributes').write_text(incoming)
+            run(git, ['add', '.gitattributes'], seed)
+        if nested is not None:
+            (seed / 'sub/.gitattributes').write_text(nested)
+            run(git, ['add', 'sub/.gitattributes'], seed)
+        run(git, ['commit', '-qm', 'incoming'], seed)
+        run(git, ['branch', 'incoming'], seed)
+        run(git, ['checkout', '-q', '--detach', old], seed)
+        if indexed is not None:
+            (seed / '.gitattributes').write_text(indexed)
+            run(git, ['add', '.gitattributes'], seed)
+            run(git, ['commit', '-qm', 'current metadata'], seed)
+        if working is None:
+            (seed / '.gitattributes').unlink(missing_ok=True)
+        else:
+            (seed / '.gitattributes').write_text(working)
+        if info is not None:
+            (seed / '.git/info/attributes').write_text(info)
+        argv = {
+            'checkout': ['checkout', '-q', 'incoming'],
+            'worktree-file': ['restore', '--source=incoming', '--worktree', 'sub/a.txt'],
+            'worktree': ['restore', '--source=incoming', '--worktree', '.'],
+            'both': ['restore', '--source=incoming', '--staged', '--worktree', '.'],
+            'overlay': ['checkout', 'incoming', '--', '.'],
+            'staged': ['restore', '--source=incoming', '--staged', '.'],
+        }[command]
+        before = state(seed)
+        results = {}
+        for label, tool in (('git', git), ('den', den)):
+            work = case / 'work'
+            if work.exists():
+                shutil.rmtree(work)
+            shutil.copytree(seed, work, symlinks=True)
+            p = run(tool, argv, work, check=False)
+            results[label] = dict(status=p.returncode, stdout=p.stdout.hex(), stderr=p.stderr.hex(), state=state(work))
+        if refusal:
+            got = results['den']
+            err = bytes.fromhex(got['stderr'])
+            ok = got['status'] == 2 and f'worktree attributes: {refusal}'.encode() in err and got['state'] == before
+            if refusal == 'text':
+                ok = ok and b'sub/a.txt' in err
+        else:
+            ok = results['git'] == results['den']
+        print(('PASS ' if ok else 'FAIL ') + name, flush=True)
+        if not ok:
+            print(json.dumps(results), flush=True)
+        rows.append(dict(name=name, passed=ok, **results))
     assert rows, 'empty selection'
     (out / 'summary.json').write_text(json.dumps(rows, indent=2) + '\n')
     failed = sum(not r['passed'] for r in rows)
