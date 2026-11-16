@@ -19,13 +19,24 @@ pub fn transition(
     target: List[FlatEntry],
     mode: str,
 ) -> () ! WorkErrors {
-    transition_mode(ctx, mut value, target, mode, false)?
+    transition_mode(ctx, mut value, target, mode, false, Map[str, List[byte]]())?
 }
 
 /// Validate merge worktree/index safety without publishing blobs or entries.
 pub fn merge_check(ctx: Context, value: index.Index, target: List[FlatEntry]) -> () ! WorkErrors {
+    merge_check_supplied(ctx, value, target, Map[str, List[byte]]())?
+}
+
+/// Validate merge safety before publishing newly synthesized blob bodies. Map
+/// keys are full blob OIDs; supplied bytes are identity-checked and never stored.
+pub fn merge_check_supplied(
+    ctx: Context,
+    value: index.Index,
+    target: List[FlatEntry],
+    supplied: Map[str, List[byte]],
+) -> () ! WorkErrors {
     var scratch = copy value
-    transition_mode(ctx, mut scratch, target, "merge", true)?
+    transition_mode(ctx, mut scratch, target, "merge", true, supplied)?
 }
 
 // Install one target path (unless mixed) and return its index entry, stat
@@ -96,6 +107,7 @@ fn transition_mode(
     target: List[FlatEntry],
     mode: str,
     dry: bool,
+    supplied: Map[str, List[byte]],
 ) -> () ! WorkErrors {
     if mode != "switch" && mode != "merge" && mode != "hard" && mode != "mixed" { return invalid }
     let snapshot = scan_index(ctx, value)?
@@ -194,7 +206,7 @@ fn transition_mode(
         }
         return Failure("{message}Aborting")
     }
-    let attributes = planned_tree_attributes(ctx, reader, target)?
+    let attributes = planned_tree_attributes(ctx, reader, target, supplied)?
     // Incoming rules can require a refusal even for a kept path. A policy-free
     // safety-only check still avoids reading unchanged bodies, as before.
     for entry in target {
@@ -204,7 +216,7 @@ fn transition_mode(
         // One blob at a time (vc23): a clone's checkout holds one file's
         // body, never the whole worktree's.
         region verify {
-            let data = object.read_loaded(reader, entry.id, 1000000000)?
+            let data = planned_object(reader, entry.id, supplied, 1000000000)?
             if data.kind != "blob" { return bad_oid }
             if attributes.possible && (entry.mode == 0o100644 || entry.mode == 0o100755) {
                 crlf = has_crlf(data.data)

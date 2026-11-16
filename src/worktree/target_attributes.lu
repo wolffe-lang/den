@@ -2,6 +2,7 @@ use std.map
 // Future attribute sources for checkout/restore. No normalization is done.
 use index
 use object
+use oid
 
 struct PlannedAttributes {
     files: Map[str, List[byte]],
@@ -51,11 +52,31 @@ fn planned_empty(
     }
 }
 
+fn planned_object(
+    reader: object.Reader,
+    id: oid.Oid,
+    supplied: Map[str, List[byte]],
+    cap: int,
+) -> object.Object ! WorkErrors {
+    let data = supplied[oid.hex(id)?] else |_| { return object.read_loaded(reader, id, cap)? }
+    if data.len > cap { return limit }
+    if !oid.equal(id, object.identify("blob", data)?) { return bad_oid }
+    object.Object { kind: "blob", data: copy data }
+}
+
 fn planned_data(reader: object.Reader, entry: FlatEntry) -> List[byte] ! WorkErrors {
+    planned_supplied_data(reader, entry, Map[str, List[byte]]())?
+}
+
+fn planned_supplied_data(
+    reader: object.Reader,
+    entry: FlatEntry,
+    supplied: Map[str, List[byte]],
+) -> List[byte] ! WorkErrors {
     if entry.mode != 0o100644 && entry.mode != 0o100755 {
         return Unsupported("worktree attributes: not a regular file")
     }
-    let stored = object.read_loaded(reader, entry.id, 1048576) else |e| match e {
+    let stored = planned_object(reader, entry.id, supplied, 1048576) else |e| match e {
         limit => { return Fatal("limit: an attributes file larger than 1048576 bytes") },
         Unsupported(reason) => {
             if reason.starts_with("limit: ") {
@@ -99,6 +120,7 @@ fn planned_tree_attributes(
     ctx: Context,
     reader: object.Reader,
     target: List[FlatEntry],
+    supplied: Map[str, List[byte]],
 ) -> PlannedAttributes ! WorkErrors {
     let empty = index.empty(2)?
     var policy = planned_empty(ctx, empty, true)?
@@ -109,7 +131,7 @@ fn planned_tree_attributes(
         if map.has(policy.files, key) {
             return Unsupported("worktree attributes: case-colliding target sources")
         }
-        planned_put(mut policy, bases[0], planned_data(reader, entry)?)?
+        planned_put(mut policy, bases[0], planned_supplied_data(reader, entry, supplied)?)?
     }
     policy
 }
