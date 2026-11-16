@@ -306,8 +306,15 @@ pub fn attributes_directory(
     possible
 }
 
-/// The same unsupported configuration/attribute policy for diff and history.
-pub fn check_attributes(ctx: Context) -> () ! WorkErrors { ensure_filters(ctx)? }
+/// Read the shared attribute sources without acquiring unrelated worktree
+/// conversion-configuration limits for pure index/tree history readers.
+pub fn check_attributes(ctx: Context) -> () ! WorkErrors {
+    if (ctx.repo.config["core.attributesfile"] else "") != "" {
+        return Unsupported("worktree attributes: core.attributesFile")
+    }
+    attributes_file("{ctx.repo.gitdir}/info/attributes")?
+    if ctx.root != "" { attributes_file("{ctx.root}/.gitattributes")? }
+}
 
 /// Directory-scoped policy cache for readers of tree/index endpoints.
 pub fn text_path_policy(
