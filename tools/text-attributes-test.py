@@ -192,9 +192,11 @@ def main():
                 rows.append(dict(name=name, passed=ok, **results))
     # Incoming attributes govern bytes installed by a transition, not the
     # outgoing worktree/index. Stage raw content before introducing the rule.
-    for command in ('checkout', 'restore', 'pull'):
+    for command, metadata in [(cmd, filename) for cmd in ('checkout', 'restore', 'pull')
+                              for filename in ('.gitattributes', '.GITATTRIBUTES')]:
         for crlf in (False, True):
-            name = f'text-attributes-review-incoming-{command}-{"crlf" if crlf else "lf"}'
+            suffix = '-metadata-alias' if metadata == '.GITATTRIBUTES' else ''
+            name = f'text-attributes-review-incoming-{command}-{"crlf" if crlf else "lf"}{suffix}'
             if a.filter not in name:
                 continue
             case = out / name
@@ -210,8 +212,9 @@ def main():
             run(git, ['clone', '-q', remote.as_uri(), seed], root)
             (origin / 'a.txt').write_bytes(b'next\r\n' if crlf else b'next\n')
             run(git, ['add', 'a.txt'], origin)
-            (origin / '.gitattributes').write_text('a.txt text\n')
-            run(git, ['add', '.gitattributes'], origin)
+            (origin / metadata).write_text('a.txt text\n')
+            run(git, ['add', metadata], origin)
+            incoming_text = run(git, ['check-attr', 'text', '--', 'a.txt'], origin).stdout.endswith(b': text: set\n')
             run(git, ['commit', '-qm', 'incoming attributes'], origin)
             target = run(git, ['rev-parse', 'HEAD'], origin).stdout.decode().strip()
             run(git, ['push', '-q', remote.as_uri(), 'HEAD:refs/heads/main'], origin)
@@ -229,7 +232,7 @@ def main():
                 shutil.copytree(seed, work, symlinks=True)
                 p = run(tool, argv, work, check=False)
                 results[label] = dict(status=p.returncode, stdout=p.stdout.hex(), stderr=p.stderr.hex(), state=state(work))
-            if crlf:
+            if crlf and incoming_text:
                 got = results['den']
                 err = bytes.fromhex(got['stderr'])
                 ok = got['status'] == 2 and b'worktree attributes: text' in err and b'a.txt' in err and got['state'] == before
@@ -365,6 +368,39 @@ def main():
             ok = got['status'] == 128 and b'limit:' in err and limit.encode() in err and got['state'] == before
         else:
             ok = results['git'] == results['den']
+        print(('PASS ' if ok else 'FAIL ') + name, flush=True)
+        if not ok:
+            print(json.dumps(results), flush=True)
+        rows.append(dict(name=name, passed=ok, **results))
+    # A revert can synthesize a blob which has not been published yet. The
+    # safety preflight must inspect that supplied content, not require storage.
+    name = 'text-attributes-review-policy-revert-synthesized-lf'
+    if a.filter in name:
+        case = out / name
+        case.mkdir()
+        seed = case / 'seed'
+        run(git, ['init', '-q', seed], root)
+        (seed / '.gitattributes').write_text('* text\n')
+        lines = [f'line {i}\n' for i in range(12)]
+        (seed / 'a.txt').write_text(''.join(lines))
+        run(git, ['add', '.'], seed)
+        run(git, ['commit', '-qm', 'base'], seed)
+        lines[2] = 'target edit\n'
+        (seed / 'a.txt').write_text(''.join(lines))
+        run(git, ['commit', '-qam', 'target'], seed)
+        target = run(git, ['rev-parse', 'HEAD'], seed).stdout.decode().strip()
+        lines[9] = 'retained edit\n'
+        (seed / 'a.txt').write_text(''.join(lines))
+        run(git, ['commit', '-qam', 'later'], seed)
+        results = {}
+        for label, tool in (('git', git), ('den', den)):
+            work = case / 'work'
+            if work.exists():
+                shutil.rmtree(work)
+            shutil.copytree(seed, work, symlinks=True)
+            p = run(tool, ['revert', '--no-edit', target], work, check=False)
+            results[label] = dict(status=p.returncode, stdout=p.stdout.hex(), stderr=p.stderr.hex(), state=state(work))
+        ok = results['git'] == results['den']
         print(('PASS ' if ok else 'FAIL ') + name, flush=True)
         if not ok:
             print(json.dumps(results), flush=True)
