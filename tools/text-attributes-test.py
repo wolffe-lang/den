@@ -39,12 +39,13 @@ def main():
             assert p.returncode == 0, (tool, args, p.stdout, p.stderr)
         return p
 
-    def state(w):
+    def state(w, hashes=False):
         return dict(head=run(git, ['rev-parse', 'HEAD'], w).stdout.hex(),
                     index=run(git, ['ls-files', '-s'], w).stdout.hex(),
-                    files={str(p.relative_to(w)): p.read_bytes().hex()
-                           for p in sorted(w.rglob('*'))
-                           if '.git' not in p.relative_to(w).parts and p.is_file()})
+                    **{'file_sha256' if hashes else 'files': {
+                        str(p.relative_to(w)): hashlib.sha256(p.read_bytes()).hexdigest() if hashes else p.read_bytes().hex()
+                        for p in sorted(w.rglob('*'))
+                        if '.git' not in p.relative_to(w).parts and p.is_file()}})
 
     commands = {
         'status': ['status', '--porcelain'],
@@ -287,6 +288,7 @@ def main():
         else:
             (seed / '.gitattributes').write_text(working)
         if info is not None:
+            (seed / '.git/info').mkdir(exist_ok=True)
             (seed / '.git/info/attributes').write_text(info)
         argv = {
             'checkout': ['checkout', '-q', 'incoming'],
@@ -311,6 +313,54 @@ def main():
             ok = got['status'] == 2 and f'worktree attributes: {refusal}'.encode() in err and got['state'] == before
             if refusal == 'text':
                 ok = ok and b'sub/a.txt' in err
+        else:
+            ok = results['git'] == results['den']
+        print(('PASS ' if ok else 'FAIL ') + name, flush=True)
+        if not ok:
+            print(json.dumps(results), flush=True)
+        rows.append(dict(name=name, passed=ok, **results))
+    # Boundaries retain SHA-256 file manifests rather than duplicating tens of
+    # MiB of comment bytes in every capture. HEAD/index bytes remain explicit.
+    bounds = [('file-exact', 1, 1048576, False, ''),
+              ('file-over', 1, 1048577, False, '1048576'),
+              ('staged-file-over', 1, 1048577, True, '1048576'),
+              ('aggregate-exact', 16, 1048576, False, ''),
+              ('aggregate-over', 17, 1048576, False, '16777216')]
+    for kind, count, size, staged, limit in bounds:
+        name = f'text-attributes-review-policy-limit-{kind}'
+        if a.filter not in name:
+            continue
+        case = out / name
+        case.mkdir()
+        seed = case / 'seed'
+        run(git, ['init', '-q', seed], root)
+        (seed / 'a.txt').write_bytes(b'base\n')
+        run(git, ['add', '.'], seed)
+        run(git, ['commit', '-qm', 'base'], seed)
+        old = run(git, ['rev-parse', 'HEAD'], seed).stdout.decode().strip()
+        data = b'#' + b'x' * (size - 2) + b'\n'
+        for i in range(count):
+            directory = seed / f'rules-{i:02}'
+            directory.mkdir()
+            (directory / '.gitattributes').write_bytes(data)
+        run(git, ['add', '.'], seed)
+        run(git, ['commit', '-qm', 'incoming metadata boundary'], seed)
+        run(git, ['branch', 'incoming'], seed)
+        run(git, ['checkout', '-q', '-f', '--detach', old], seed)
+        argv = ['restore', '--source=incoming', '--staged', '.'] if staged else ['checkout', '-q', 'incoming']
+        before = state(seed, hashes=True)
+        results = {}
+        for label, tool in (('git', git), ('den', den)):
+            work = case / 'work'
+            if work.exists():
+                shutil.rmtree(work)
+            shutil.copytree(seed, work, symlinks=True)
+            p = run(tool, argv, work, check=False)
+            results[label] = dict(status=p.returncode, stdout=p.stdout.hex(), stderr=p.stderr.hex(), state=state(work, hashes=True))
+        if limit:
+            got = results['den']
+            err = bytes.fromhex(got['stderr'])
+            ok = got['status'] == 128 and b'limit:' in err and limit.encode() in err and got['state'] == before
         else:
             ok = results['git'] == results['den']
         print(('PASS ' if ok else 'FAIL ') + name, flush=True)
