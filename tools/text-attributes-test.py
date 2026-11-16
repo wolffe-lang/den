@@ -86,6 +86,8 @@ def main():
         'quote-literal': ('.gitattributes', 'sub/a"quoted.txt text=auto eol=lf\n'),
         'quoted-space': ('.gitattributes', '"sub/a quoted.txt" text=auto eol=lf\n'),
         'quoted-escaped': ('.gitattributes', '"sub/a\\"quoted.txt" text=auto eol=lf\n'),
+        'history-autocrlf': (None, ''),
+        'history-core-eol': (None, ''),
     }
     converting = {'auto-lf', 'text', 'auto', 'eol-lf', 'nested', 'info', 'deleted',
                   'chunk-boundary', 'nul', 'bare-cr', 'quote-literal', 'quoted-space', 'quoted-escaped'}
@@ -94,6 +96,10 @@ def main():
         file_path = {'quote-literal': 'sub/a"quoted.txt', 'quoted-space': 'sub/a quoted.txt',
                      'quoted-escaped': 'sub/a"quoted.txt'}.get(kind, 'sub/a.txt')
         for command, base_argv in commands.items():
+            # Pure index/tree readers must not acquire unrelated checkout
+            # configuration refusals while sharing the attributes guard.
+            if kind.startswith('history-') and command not in ('diff-cached', 'diff-tree', 'log-p', 'log-stat', 'show', 'show-root', 'log-root'):
+                continue
             argv = [file_path if part == 'sub/a.txt' else part for part in base_argv]
             for crlf in (False, True):
                 if crlf and command not in ('status', 'add', 'commit', 'checkout', 'checkout-path', 'restore', 'pull', 'pull-rebase', 'pull-rebase-staged', 'pull-rebase-both', 'diff'):
@@ -106,8 +112,9 @@ def main():
                 seed = case / 'seed'
                 run(git, ['init', '-q', seed], root)
                 (seed / 'sub').mkdir()
-                (seed / attr_path).parent.mkdir(parents=True, exist_ok=True)
-                (seed / attr_path).write_text(attr)
+                if attr_path is not None:
+                    (seed / attr_path).parent.mkdir(parents=True, exist_ok=True)
+                    (seed / attr_path).write_text(attr)
                 if kind == 'nested-unset':
                     (seed / '.gitattributes').write_text('* text=auto eol=lf\n')
                 (seed / file_path).write_bytes(b'base\n')
@@ -121,6 +128,10 @@ def main():
                 remote = case / 'remote.git'
                 run(git, ['clone', '-q', '--bare', seed, remote], root)
                 run(git, ['remote', 'add', 'origin', remote.as_uri()], seed)
+                if kind == 'history-autocrlf':
+                    run(git, ['config', 'core.autocrlf', 'true'], seed)
+                if kind == 'history-core-eol':
+                    run(git, ['config', 'core.eol', 'crlf'], seed)
                 if command == 'pull' or command.startswith('pull-rebase'):
                     run(git, ['reset', '--hard', '-q', 'HEAD~'], seed)
                 if command in ('status', 'add', 'commit', 'diff', 'checkout-path', 'restore', 'pull-rebase-staged', 'pull-rebase-both') or crlf:
