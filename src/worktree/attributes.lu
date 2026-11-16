@@ -169,6 +169,30 @@ fn supported_attributes(ctx: Context, files: List[FileState]) -> () ! WorkErrors
 // text: -1 unset, 0 unspecified, 1 set/auto. eol: 0 unspecified, 1 LF.
 // This is an identity-only guard, not a text detector or normalizer. In
 // particular text=auto bodies with NUL and CR-LF still refuse conservatively.
+fn attribute_basename(name: List[byte]) -> bool {
+    let wanted = ".gitattributes".bytes()
+    if name.len != wanted.len { return false }
+    for i in 0..name.len {
+        let b = name[i]
+        let folded = if b >= 65 as byte && b <= 90 as byte then (b as int + 32) as byte else b
+        if folded != wanted[i] { return false }
+    }
+    true
+}
+
+// A read-only alias check on the worktree's own administrative entry avoids
+// assuming that a manually overridden core.ignorecase describes its filesystem.
+fn attributes_fs_casefold(ctx: Context) -> bool ! WorkErrors {
+    if ctx.root == "" { return false }
+    let original = fs_lstat("{ctx.root}/.git") else |_| { return false }
+    let alias = fs_lstat("{ctx.root}/.GIT") else |_| { return false }
+    original.len == 20 &&
+        alias.len == 20 &&
+        (original[9] != 0 || original[10] != 0) &&
+        original[9] == alias[9] &&
+        original[10] == alias[10]
+}
+
 fn attribute_fold(data: List[byte]) -> List[byte] {
     var out = List[byte]()
     for b in data {

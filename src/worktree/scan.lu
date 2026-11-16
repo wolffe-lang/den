@@ -515,7 +515,7 @@ fn walk_submodules(
             }
         }
         for item in items {
-            if compare(item.name, ".gitattributes".bytes()) == 0 { attributes_seen = true }
+            if attribute_basename(item.name) { attributes_seen = true }
             if compare(item.name, ".git".bytes()) == 0 { continue }
             var path = copy parent
             if path.len > 0 { (mut path).push(47 as byte) }
