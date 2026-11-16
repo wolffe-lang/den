@@ -48,9 +48,10 @@ fn current(
     written: List[int],
     filemode: bool,
     symlinks: bool,
+    text_check: bool,
     mut verified: List[List[byte]],
 ) -> worktree.FileState ! worktree.WorkErrors {
-    let seen = worktree.tracked(ctx, prior, written, filemode, symlinks, mut verified)?
+    let seen = worktree.tracked(ctx, prior, written, filemode, symlinks, text_check, mut verified)?
     if seen.clean || !seen.present { return not_found }
     seen.state
 }
@@ -65,10 +66,11 @@ fn state_of(
     written: List[int],
     filemode: bool,
     symlinks: bool,
+    text_check: bool,
     mut verified: List[List[byte]],
 ) -> worktree.FileState ! worktree.WorkErrors {
     if k < hashed.len && same_entry(hashed[k].entry, prior) { return copy hashed[k].state }
-    current(ctx, prior, written, filemode, symlinks, mut verified)?
+    current(ctx, prior, written, filemode, symlinks, text_check, mut verified)?
 }
 
 /// refresh's answer without reading a file twice (den#101). An entry collect
@@ -94,6 +96,7 @@ fn refresh_known(
     let filemode = worktree.config_bool(ctx, "core.filemode", true)?
     let symlinks = worktree.config_bool(ctx, "core.symlinks", true)?
     var verified = List[List[byte]]()
+    var attribute_cache = Map[str, bool]()
     var triggered = false
     var k = 0
     for at in 0..tx.value.entries.len {
@@ -102,6 +105,11 @@ fn refresh_known(
             continue
         }
         while k < hashed.len && compare(hashed[k].entry.path, prior.path) < 0 { k += 1 }
+        // An entry collect did not hash is read with its CR-LF guard where a
+        // text rule may apply: a body Git would clean is left unrefreshed.
+        let text_check = (k >= hashed.len || !same_entry(hashed[k].entry, prior)) &&
+            (prior.stat[6] == 0o100644 || prior.stat[6] == 0o100755) &&
+            worktree.text_path_policy(ctx, prior.path, tx.value, mut attribute_cache)?
         let file = state_of(
             ctx,
             prior,
@@ -110,6 +118,7 @@ fn refresh_known(
             written,
             filemode,
             symlinks,
+            text_check,
             mut verified,
         ) else |_| {
             continue
