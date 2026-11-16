@@ -35,3 +35,31 @@ pub fn run_pull(args: List[str], action: str, label: str, quiet: bool) -> int {
 pub fn refresh_pull_index() -> () ! commit.CommitErrors {
     replay_refresh(worktree.discover(".")?)?
 }
+
+/// Refresh and reject staged/unstaged changes before a rebase pull fetches.
+/// False has printed Git's dirty-state diagnostics; attribute/IO errors retain
+/// their named rows. Untracked and ignored paths never make a pull dirty.
+pub fn pull_rebase_clean() -> bool ! commit.CommitErrors {
+    let ctx = worktree.discover(".")?
+    replay_refresh(ctx)?
+    let snapshot = worktree.scan(ctx)?
+    var staged = false, unstaged = false
+    for row in snapshot.rows {
+        if row.untracked || row.ignored { continue }
+        if row.x != " " { staged = true }
+        if row.y != " " { unstaged = true }
+    }
+    if !staged && !unstaged { return true }
+    if unstaged { eprint("error: cannot pull with rebase: You have unstaged changes.") }
+    if staged {
+        eprint(
+            if unstaged {
+                "error: additionally, your index contains uncommitted changes."
+            } else {
+                "error: cannot pull with rebase: Your index contains uncommitted changes."
+            },
+        )
+    }
+    eprint("error: Please commit or stash them.")
+    false
+}
