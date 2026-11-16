@@ -4,6 +4,7 @@ use commit_format
 use diff
 use index
 use mergetree
+use object
 use oid
 use walk
 use worktree
@@ -72,7 +73,13 @@ fn revert_command(args: List[str]) -> int ! commit.CommitErrors {
         ctx.repo.config["merge.conflictstyle"] else "merge",
     )?
     let flat = flat_files(plan.files)
-    worktree.merge_check(ctx, tx.value, flat) else |e| match e {
+    var supplied = Map[str, List[byte]]()
+    for file in plan.files {
+        if file.mode != 0o160000 && oid.equal(file.id, object.identify("blob", file.data)?) {
+            supplied[oid.hex(file.id)?] = copy file.data
+        }
+    }
+    worktree.merge_check_supplied(ctx, tx.value, flat, supplied) else |e| match e {
         Failure(text) => {
             index.commit(mut tx)?
             eprint("error: {text}")
