@@ -326,7 +326,3 @@ pub fn has_crlf(data: List[byte]) -> bool {
     }
     false
 }
-
-/// A caller that detected CR-LF in reclaimed scratch invokes the path guard
-/// outside that region, so its path-named error owns live storage.
-pub fn check_text_path(ctx: Context, path: List[byte]) -> () ! WorkErrors { check_crlf(ctx, path)? }
