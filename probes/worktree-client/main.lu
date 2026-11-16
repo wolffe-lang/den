@@ -60,13 +60,27 @@ fn exercise(root: str) -> int ! worktree.WorkErrors {
     let commit = object.write_object(repo, "commit", body)?
     fs.write_text("{repo.gitdir}/refs/heads/main", "{oid.hex(commit)?}\n")?
     assert(worktree.scan(ctx)?.rows.len == 0)
-    // The no-op add's clock is pinned: the index's own mtime is the second
-    // after `a`'s, whatever second the probe happens to run in.
+    // The no-op adds' clock is pinned, whatever second the probe runs in, and
+    // each is held to the pinned oracle's racy rule (den#91). With the index's
+    // own mtime in the second after `a`'s, `a` is stat-clean: the oracle leaves
+    // it alone, and its TREE records stay valid.
     let a_stat = fs_lstat("{root}/a") else |_| { return invalid }
-    fs_set_times("{repo.gitdir}/index", a_stat[14] + 1, 0, a_stat[14] + 1, 0, false) else |_| {
+    let a_second = a_stat[14]
+    fs_set_times("{repo.gitdir}/index", a_second + 1, 0, a_second + 1, 0, false) else |_| {
         return invalid
     }
-    // The pinned oracle invalidates TREE even for this same-inode no-op add.
+    tx = index.begin(repo, 1000000000, 0)?
+    let kept = copy tx.value.extensions[0].data
+    let kept_paths = worktree.stage_paths(ctx, mut tx.value, [raw("a")], worktree.add_options())?
+    assert(kept_paths.len == 0)
+    assert(hex(tx.value.extensions[0].data) == hex(kept))
+    index.commit(mut tx)?
+    // With the index's mtime in `a`'s own second, `a` is racily clean: the
+    // oracle stages it again and invalidates TREE even for this same-inode
+    // no-op add.
+    fs_set_times("{repo.gitdir}/index", a_second, 999999999, a_second, 999999999, false) else |_| {
+        return invalid
+    }
     tx = index.begin(repo, 1000000000, 0)?
     let expected_noop = index.invalidate_tree(tx.value, raw("a"))?
     let noop_paths = worktree.stage_paths(ctx, mut tx.value, [raw("a")], worktree.add_options())?
