@@ -226,7 +226,7 @@ under case-insensitive matching, retain conservative CR-LF refusals.
 Tree transitions preflight incoming attribute sources before publication. Restore
 uses selected metadata changes over the remaining worktree/index sources, including
 index fallback after a worktree-only deletion. Each attributes file is limited to
-1,048,576 bytes; incoming worktree metadata snapshots, including `info/attributes`,
+1,048,576 bytes; incoming metadata snapshots, including `info/attributes`,
 are limited to 16,777,216 bytes.
 
 `-text` preserves raw bytes, including CR-LF. Attributes den need not act on

@@ -1152,6 +1152,11 @@ reader before publication. A whole-tree transition uses its target sources; a
 restore overlays selected worktree metadata on the remaining sources and computes
 post-operation index fallback separately. A worktree-only metadata deletion can
 therefore expose the retained index rule. Current `info/attributes` still wins.
+`merge_check_supplied(ctx, value, target, supplied)` accepts an OID-keyed map of
+unpublished blob bodies for read-only safety checks. Each supplied identity is
+verified; revert uses it rather than publishing a synthesized blob just to inspect
+its content. Staged-only restore also validates incoming index-fallback metadata
+when every selected body is LF.
 Case-folding filesystem aliases are distinguished from pattern case folding by a
 read-only check of the worktree's administrative entry. Metadata files retain the
 1,048,576-byte bound; retained incoming payload plus info metadata is bounded at
