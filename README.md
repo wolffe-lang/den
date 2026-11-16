@@ -226,8 +226,10 @@ text patterns with CR-LF remain named refusals.
 (`text` and `crlf` unset or unspecified, `whitespace`, export and delta choices,
 other acting attributes unspecified, and names Git gives no meaning) are accepted.
 The `binary` macro, macro definitions, custom diff/merge drivers, filters, `ident`,
-working-tree encodings and `eol=crlf` remain refused by name. `core.eol` other than
-`lf` or `native` is also refused. Combined merge diffs retain their separate
+working-tree encodings and `eol=crlf` remain refused by name. Worktree commands
+also refuse `core.eol` other than `lf` or `native`; pure index/tree history
+comparisons do not acquire checkout-configuration limits. Combined merge diffs
+retain their separate
 attribute limitation below. `tools/text-attributes-test.py` keeps exact Git
 comparisons separate from the named conversion refusals on both tiers.
 

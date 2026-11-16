@@ -1127,7 +1127,8 @@ pub fn worktree.render_status(snapshot: Snapshot, options: StatusOptions) -> Lis
 
 Attribute guards are shared by worktree commands and ordinary diff/history.
 `attributes_refusal` checks unsupported tokens, not file content. `check_attributes`
-checks configuration and root/info sources; `attributes_directory` validates a
+checks root/info sources and unsupported global attribute files, not unrelated
+checkout configuration for pure history readers. `attributes_directory` validates a
 directory's sources and reports whether text rules could invalidate stat-only
 comparison. `text_path_policy` caches that result for tree/index readers.
 `has_crlf` tests adjacent bytes, and `check_text_content` refuses by attribute and
