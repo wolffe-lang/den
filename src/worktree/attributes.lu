@@ -169,11 +169,20 @@ fn supported_attributes(ctx: Context, files: List[FileState]) -> () ! WorkErrors
 // text: -1 unset, 0 unspecified, 1 set/auto. eol: 0 unspecified, 1 LF.
 // This is an identity-only guard, not a text detector or normalizer. In
 // particular text=auto bodies with NUL and CR-LF still refuse conservatively.
-fn text_rules(
+fn attribute_fold(data: List[byte]) -> List[byte] {
+    var out = List[byte]()
+    for b in data {
+        (mut out).push(if b >= 65 as byte && b <= 90 as byte then (b as int + 32) as byte else b)
+    }
+    out
+}
+
+fn text_rules_case(
     data: List[byte],
     base: List[byte],
     path: List[byte],
     mut state: List[int],
+    ignore_case: bool,
 ) -> () ! WorkErrors {
     let source = str_from_utf8(data) else |_| {
         return Unsupported("worktree attributes: text at {text(path)?}")
@@ -198,12 +207,21 @@ fn text_rules(
         if !changes { continue }
         // Quoted/escaped patterns need Git's C quoting, not ignore's escape
         // syntax. They are safely outside this first conversion guard.
-        if tokens[0].contains("\"") || tokens[0].contains("\\") {
+        if tokens[0].contains("\"") ||
+            tokens[0].contains("\\") ||
+            ignore_case && tokens[0].contains("[") {
             return Unsupported("worktree attributes: text at {text(path)?}")
         }
-        let rules = ignore.parse("attributes", base, "{tokens[0]}\n".bytes())?
+        let pattern = if ignore_case {
+            attribute_fold("{tokens[0]}\n".bytes())
+        } else {
+            "{tokens[0]}\n".bytes()
+        }
+        let directory = if ignore_case then attribute_fold(base) else copy base
+        let candidate = if ignore_case then attribute_fold(path) else copy path
+        let rules = ignore.parse("attributes", directory, pattern)?
         var matched = false
-        for rule in rules { if ignore.matches(rule, path, false)? { matched = true } }
+        for rule in rules { if ignore.matches(rule, candidate, false)? { matched = true } }
         if !matched { continue }
         for i in 1..tokens.len {
             let token = tokens[i]
@@ -251,15 +269,28 @@ fn attributes_source(
 fn check_crlf(ctx: Context, path: List[byte]) -> () ! WorkErrors {
     var state = [0, 0]
     let value = read_index(ctx)?
+    let ignore_case = config_bool(ctx, "core.ignorecase", false)?
     if ctx.root != "" {
-        text_rules(attributes_source(ctx, [], value)?, [], path, mut state)?
+        text_rules_case(attributes_source(ctx, [], value)?, [], path, mut state, ignore_case)?
         for i in 0..path.len {
             if path[i] != 47 as byte { continue }
             let base = path[0..i]
-            text_rules(attributes_source(ctx, base, value)?, base, path, mut state)?
+            text_rules_case(
+                attributes_source(ctx, base, value)?,
+                base,
+                path,
+                mut state,
+                ignore_case,
+            )?
         }
     }
-    text_rules(attributes_data("{ctx.repo.gitdir}/info/attributes")?, [], path, mut state)?
+    text_rules_case(
+        attributes_data("{ctx.repo.gitdir}/info/attributes")?,
+        [],
+        path,
+        mut state,
+        ignore_case,
+    )?
     if state[0] > 0 || state[0] == 0 && state[1] == 1 {
         return Unsupported("worktree attributes: text at {text(path)?} (CR-LF conversion)")
     }
