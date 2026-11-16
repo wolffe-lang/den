@@ -194,25 +194,25 @@ fn transition_mode(
         }
         return Failure("{message}Aborting")
     }
-    if dry { return }
-    // Every blob this transition writes is verified before the first write;
-    // a kept path's blob is never read (it is HEAD's or the index's already).
-    var text_cache = Map[str, bool]()
+    let attributes = planned_tree_attributes(ctx, reader, target)?
+    // Incoming rules can require a refusal even for a kept path. A policy-free
+    // safety-only check still avoids reading unchanged bodies, as before.
     for entry in target {
-        if entry.mode == 0o160000 || (keep[text(entry.path)?] else false) { continue }
-        let text_check = text_path_policy(ctx, entry.path, value, mut text_cache)?
+        if entry.mode == 0o160000 { continue }
+        if !attributes.possible && (dry || (keep[text(entry.path)?] else false)) { continue }
         var crlf = false
         // One blob at a time (vc23): a clone's checkout holds one file's
         // body, never the whole worktree's.
         region verify {
             let data = object.read_loaded(reader, entry.id, 1000000000)?
             if data.kind != "blob" { return bad_oid }
-            if text_check && (entry.mode == 0o100644 || entry.mode == 0o100755) {
+            if attributes.possible && (entry.mode == 0o100644 || entry.mode == 0o100755) {
                 crlf = has_crlf(data.data)
             }
         }
-        if crlf { check_crlf(ctx, entry.path)? }
+        if crlf { planned_check_crlf(ctx, attributes, entry.path)? }
     }
+    if dry { return }
     let filemode = config_bool(ctx, "core.filemode", true)?
     let symlinks = config_bool(ctx, "core.symlinks", true)?
     let previous = copy value

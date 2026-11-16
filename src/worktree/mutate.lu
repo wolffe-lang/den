@@ -343,6 +343,7 @@ pub fn restore_paths(
     // Verify every blob before deleting or replacing even one worktree file,
     // through one reader for the whole restore.
     let reader = object.reader_batch(ctx.repo)
+    let attributes = planned_restore_attributes(ctx, reader, previous, source, targets, options)?
     var text_cache = Map[str, bool]()
     for path in targets {
         let text_check = text_path_policy(ctx, path, previous, mut text_cache)?
@@ -366,11 +367,12 @@ pub fn restore_paths(
             region verify {
                 let stored = object.read_loaded(reader, source[src].id, 1000000000)?
                 if stored.kind != "blob" { return bad_oid }
-                if text_check && (source[src].mode == 0o100644 || source[src].mode == 0o100755) {
+                if (text_check || attributes.possible) &&
+                    (source[src].mode == 0o100644 || source[src].mode == 0o100755) {
                     crlf = has_crlf(stored.data)
                 }
             }
-            if crlf { check_crlf(ctx, path)? }
+            if crlf { planned_check_crlf(ctx, attributes, path)? }
         }
     }
     for path in targets {
