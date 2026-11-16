@@ -287,6 +287,10 @@ fn head_flat(ctx: Context, value: index.Index, commit: oid.Oid) -> List[FlatEntr
 
 struct Walk { files: List[FileState], directories: List[List[byte]] }
 
+// Attribute presence follows the traversal stack. An ordinary directory with
+// no inherited, indexed or listed attributes needs no extra filesystem probe.
+struct PendingWalk { path: List[byte], attributes: bool }
+
 // One path the walk visits: an entry a directory listed (`kind` its own kind
 // from the listing), or a tracked path below a directory that could not be
 // listed (`probe`), looked up by its own name.
@@ -468,11 +472,22 @@ fn walk_submodules(
     let symlinks = if hashing then config_bool(ctx, "core.symlinks", true)? else true
     let empty = object.identify("blob", List[byte]())?
     var total_bytes: int = 0
-    var pending = [List[byte]()]
+    var pending = [
+        PendingWalk {
+            path: List[byte](),
+            attributes: fs.exists("{ctx.repo.gitdir}/info/attributes"),
+        },
+    ]
     var files = List[FileState]()
     var directories = List[List[byte]]()
     while pending.len > 0 {
-        let parent = (mut pending).pop() else |_| { return invalid }
+        let todo = (mut pending).pop() else |_| { return invalid }
+        let parent = copy todo.path
+        var attributes_seen = todo.attributes
+        var attribute_path = copy parent
+        if attribute_path.len > 0 { (mut attribute_path).push(47 as byte) }
+        bytes_add(mut attribute_path, ".gitattributes".bytes())
+        if index_at(value.entries, attribute_path) >= 0 { attributes_seen = true }
         var listed = true
         let items = fs.entries(absolute(ctx, parent)?) else |e| match e {
             denied => {
@@ -483,7 +498,6 @@ fn walk_submodules(
             not_found => { return not_found },
             io => { return io },
         }
-        let text_check = if listed then attributes_directory(ctx, parent, value)? else false
         var visits = List[Visit]()
         if !listed {
             if include_untracked {
@@ -501,11 +515,17 @@ fn walk_submodules(
             }
         }
         for item in items {
+            if compare(item.name, ".gitattributes".bytes()) == 0 { attributes_seen = true }
             if compare(item.name, ".git".bytes()) == 0 { continue }
             var path = copy parent
             if path.len > 0 { (mut path).push(47 as byte) }
             bytes_add(mut path, item.name)
             (mut visits).push(Visit { path: path, kind: item.kind, probe: false })
+        }
+        let text_check = if listed && attributes_seen {
+            attributes_directory(ctx, parent, value)?
+        } else {
+            false
         }
         // Subdirectories are entered depth first in the order the host lists
         // them, as Git enters them, so the warnings come in Git's order.
@@ -793,7 +813,7 @@ fn walk_submodules(
         }
         while deeper.len > 0 {
             let next = (mut deeper).pop() else |_| { return invalid }
-            (mut pending).push(next)
+            (mut pending).push(PendingWalk { path: next, attributes: attributes_seen })
         }
     }
     // Git refreshes the tracked paths before it looks for untracked ones:
