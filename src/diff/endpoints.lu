@@ -281,7 +281,7 @@ fn pending_worktree(
     var verified = List[List[byte]]()
     var out = List[Pending]()
     var parsed = List[gitmodules.Parsed]()
-    var attribute_cache = Map[str, bool]()
+    var directory = List[byte](), known = false, possible = false
     for at in 0..value.entries.len {
         let entry = copy value.entries[at]
         if index.stage(entry) != 0 { return Unsupported("diff unmerged index") }
@@ -326,8 +326,21 @@ fn pending_worktree(
         }
         // A text rule can make a stat-clean body differ once cleaned, so
         // such a path is hashed and its CR-LF checked, as status does.
-        let text_check = (entry.stat[6] == 0o100644 || entry.stat[6] == 0o100755) &&
-            worktree.text_path_policy(ctx, entry.path, value, mut attribute_cache)?
+        var text_check = false
+        if entry.stat[6] == 0o100644 || entry.stat[6] == 0o100755 {
+            var end = 0
+            for i in 0..entry.path.len { if entry.path[i] == 47 as byte { end = i } }
+            var same = known && directory.len == end
+            if same {
+                for i in 0..end { if directory[i] != entry.path[i] { same = false; break } }
+            }
+            if !same {
+                directory = owned(entry.path[0..end])
+                possible = worktree.attributes_directory(ctx, directory, value)?
+                known = true
+            }
+            text_check = possible
+        }
         let seen = worktree.tracked(
             ctx,
             entry,
@@ -462,13 +475,24 @@ fn endpoint_attributes(
     ctx: worktree.Context,
     files: List[File],
     value: index.Index,
-    mut cache: Map[str, bool],
 ) -> () ! worktree.WorkErrors {
+    // Endpoints are path ordered. Cache the current directory without making
+    // a fresh UTF-8 map key for every file on both sides of a large diff.
+    var directory = List[byte](), known = false, possible = false
     for file in files {
         if file.mode != 0o100644 && file.mode != 0o100755 { continue }
-        if worktree.text_path_policy(ctx, file.path, value, mut cache)? {
-            worktree.check_text_content(ctx, file.path, file.data)?
+        var end = 0
+        for i in 0..file.path.len { if file.path[i] == 47 as byte { end = i } }
+        var same = known && directory.len == end
+        if same {
+            for i in 0..end { if directory[i] != file.path[i] { same = false; break } }
         }
+        if !same {
+            directory = owned(file.path[0..end])
+            possible = worktree.attributes_directory(ctx, directory, value)?
+            known = true
+        }
+        if possible { worktree.check_text_content(ctx, file.path, file.data)? }
     }
 }
 
@@ -550,9 +574,8 @@ fn collect_known(ctx: worktree.Context, options: Options) -> Collected ! worktre
     let selected_new = bodies(ctx, value, new, mut total)?
     // Every body a diff shows passes the worktree attribute policy. The
     // worktree side was also checked as it was hashed (pending_worktree).
-    var attribute_cache = Map[str, bool]()
-    endpoint_attributes(ctx, selected_old, value, mut attribute_cache)?
-    endpoint_attributes(ctx, selected_new, value, mut attribute_cache)?
+    endpoint_attributes(ctx, selected_old, value)?
+    endpoint_attributes(ctx, selected_new, value)?
     var result = if options.reverse {
         changes(selected_new, selected_old, options)?
     } else {
