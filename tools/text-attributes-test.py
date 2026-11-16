@@ -325,7 +325,9 @@ def main():
               ('file-over', 1, 1048577, False, '1048576'),
               ('staged-file-over', 1, 1048577, True, '1048576'),
               ('aggregate-exact', 16, 1048576, False, ''),
-              ('aggregate-over', 17, 1048576, False, '16777216')]
+              ('staged-aggregate-exact', 16, 1048576, True, ''),
+              ('aggregate-over', 17, 1048576, False, '16777216'),
+              ('staged-aggregate-over', 17, 1048576, True, '16777216')]
     for kind, count, size, staged, limit in bounds:
         name = f'text-attributes-review-policy-limit-{kind}'
         if a.filter not in name:
