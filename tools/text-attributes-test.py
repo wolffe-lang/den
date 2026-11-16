@@ -245,6 +245,7 @@ def main():
         ('target-nested-text', 'checkout', None, None, '* -text\n', '*.txt text\n', None, 'text'),
         ('target-info-unset', 'checkout', None, None, '* text\n', None, '* -text\n', ''),
         ('restore-unselected-attributes', 'worktree-file', '* -text\n', '* -text\n', '* text\n', None, None, ''),
+        ('restore-unselected-acting-metadata', 'worktree-file', '* -text\n', '* -text\n', '* filter=lfs\n', None, None, ''),
         ('restore-selected-attributes', 'both', '* -text\n', '* -text\n', '* text\n', None, None, 'text'),
         ('restore-delete-index-fallback', 'worktree', '* text\n', '* -text\n', None, None, None, 'text'),
         ('restore-delete-both', 'both', '* text\n', '* -text\n', None, None, None, ''),
@@ -266,7 +267,7 @@ def main():
         run(git, ['add', '.'], seed)
         run(git, ['commit', '-qm', 'base'], seed)
         old = run(git, ['rev-parse', 'HEAD'], seed).stdout.decode().strip()
-        (seed / 'sub/a.txt').write_bytes(b'next\r\n')
+        (seed / 'sub/a.txt').write_bytes(b'next\n' if refusal == 'filter' else b'next\r\n')
         run(git, ['add', 'sub/a.txt'], seed)
         if incoming is not None:
             (seed / '.gitattributes').write_text(incoming)
@@ -276,7 +277,7 @@ def main():
             run(git, ['add', 'sub/.gitattributes'], seed)
         run(git, ['commit', '-qm', 'incoming'], seed)
         run(git, ['branch', 'incoming'], seed)
-        run(git, ['checkout', '-q', '--detach', old], seed)
+        run(git, ['checkout', '-q', '-f', '--detach', old], seed)
         if indexed is not None:
             (seed / '.gitattributes').write_text(indexed)
             run(git, ['add', '.gitattributes'], seed)
