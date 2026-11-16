@@ -19,6 +19,12 @@ fn main() -> int ! worktree.WorkErrors {
     ] {
         assert(worktree.attributes_refusal(rule.bytes())? == expected)
     }
+    for body in ["", "\n", "\r", "a\rb\n", "\0a\n"] {
+        assert(!worktree.has_crlf(body.bytes()))
+    }
+    for body in ["\r\n", "a\r\nb", "\0\r\n", "a\n\r\n"] {
+        assert(worktree.has_crlf(body.bytes()))
+    }
     print("PASS text-attributes-policy-units")
     0
 }

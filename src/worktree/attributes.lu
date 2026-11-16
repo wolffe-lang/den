@@ -3,6 +3,9 @@
 // merge, whitespace, export-ignore, export-subst, delta; USING MACRO
 // ATTRIBUTES; DEFINING MACRO ATTRIBUTES), measured against the pinned Git.
 // No implementation consulted.
+use ignore
+use index
+use object
 use repository
 
 // The refusal for one `name`, `-name`, `!name` or `name=value` token that
@@ -37,12 +40,18 @@ fn attribute_refused(token: List[byte]) -> str ! WorkErrors {
     // rebase step's), and a message built at run time would leave with it.
     if name == "text" || name == "crlf" {
         if state == "unset" || state == "unspecified" { return "" }
+        if name == "text" && (state == "set" || compare(token, "text=auto".bytes()) == 0) {
+            return ""
+        }
         return if name == "text" then "worktree attributes: text" else "worktree attributes: crlf"
     }
     if state == "unspecified" { return "" }
     if name == "diff" { return "worktree attributes: diff" }
     if name == "merge" { return "worktree attributes: merge" }
-    if name == "eol" { return "worktree attributes: eol" }
+    if name == "eol" {
+        if compare(token, "eol=lf".bytes()) == 0 { return "" }
+        return "worktree attributes: eol"
+    }
     if name == "filter" { return "worktree attributes: filter" }
     if name == "ident" { return "worktree attributes: ident" }
     if name == "working-tree-encoding" { return "worktree attributes: working-tree-encoding" }
@@ -93,15 +102,15 @@ pub fn attributes_refusal(data: List[byte]) -> str ! WorkErrors {
 
 /// Refuse, by attribute, an attributes file that sets what den does not do;
 /// one that sets only what den need not act on is accepted.
-fn attributes_file(full: str) -> () ! WorkErrors {
+fn attributes_data(full: str) -> List[byte] ! WorkErrors {
     let named = fs_lstat(full) else |e| match e {
-        not_found => { return },
+        not_found => { return List[byte]() },
         denied => { return denied },
         io => { return io },
     }
     if named[0] != 0 { return Unsupported("worktree attributes: not a regular file") }
     let data = repository.read_bytes(full, 1048576) else |e| match e {
-        not_found => { return },
+        not_found => { return List[byte]() },
         limit => { return Fatal("limit: an attributes file larger than 1048576 bytes") },
         denied => { return denied },
         io => { return io },
@@ -115,6 +124,11 @@ fn attributes_file(full: str) -> () ! WorkErrors {
     }
     let refused = attributes_refusal(data)?
     if refused != "" { return Unsupported(refused) }
+    data
+}
+
+fn attributes_file(full: str) -> () ! WorkErrors {
+    let _ = attributes_data(full)?
 }
 
 /// Every .gitattributes a walk listed, checked as attributes_file checks it.
@@ -126,3 +140,193 @@ fn supported_attributes(ctx: Context, files: List[FileState]) -> () ! WorkErrors
         attributes_file(absolute(ctx, file.path)?)?
     }
 }
+
+// text: -1 unset, 0 unspecified, 1 set/auto. eol: 0 unspecified, 1 LF.
+// This is an identity-only guard, not a text detector or normalizer. In
+// particular text=auto bodies with NUL and CR-LF still refuse conservatively.
+fn text_rules(
+    data: List[byte],
+    base: List[byte],
+    path: List[byte],
+    mut state: List[int],
+) -> () ! WorkErrors {
+    let source = str_from_utf8(data) else |_| {
+        return Unsupported("worktree attributes: text at {text(path)?}")
+    }
+    for raw in source.split("\n") {
+        var tokens = List[str](), word = List[byte](), quoted = false
+        for b in raw.bytes() {
+            if b == 34 as byte { quoted = !quoted }
+            if !quoted && (b == 32 as byte || b == 9 as byte || b == 13 as byte) {
+                if word.len > 0 {
+                    (mut tokens).push(str_from_utf8(word) else "")
+                    word = List[byte]()
+                }
+            } else {
+                (mut word).push(b)
+            }
+        }
+        if word.len > 0 { (mut tokens).push(str_from_utf8(word) else "") }
+        if tokens.len < 2 || tokens[0].starts_with("#") { continue }
+        var changes = false
+        for token in tokens {
+            if token == "text" ||
+                token == "text=auto" ||
+                token == "-text" ||
+                token == "!text" ||
+                token == "eol=lf" ||
+                token == "!eol" {
+                changes = true
+            }
+        }
+        if !changes { continue }
+        // Quoted/escaped patterns need Git's C quoting, not ignore's escape
+        // syntax. They are safely outside this first conversion guard.
+        if tokens[0].contains("\"") || tokens[0].contains("\\") {
+            return Unsupported("worktree attributes: text at {text(path)?}")
+        }
+        let rules = ignore.parse("attributes", base, "{tokens[0]}\n".bytes())?
+        var matched = false
+        for rule in rules { if ignore.matches(rule, path, false)? { matched = true } }
+        if !matched { continue }
+        for i in 1..tokens.len {
+            let token = tokens[i]
+            if token == "text" || token == "text=auto" { state[0] = 1 }
+            if token == "-text" { state[0] = -1 }
+            if token == "!text" { state[0] = 0 }
+            if token == "eol=lf" { state[1] = 1 }
+            if token == "!eol" { state[1] = 0 }
+        }
+    }
+}
+
+// Git falls back to the index when a worktree attributes file is absent.
+// In particular deleting .gitattributes must not enable an unsafe raw add.
+fn attributes_source(
+    ctx: Context,
+    base: List[byte],
+    value: index.Index,
+) -> List[byte] ! WorkErrors {
+    var path = copy base
+    if path.len > 0 { (mut path).push(47 as byte) }
+    bytes_add(mut path, ".gitattributes".bytes())
+    let full = absolute(ctx, path)?
+    let named = fs_lstat(full) else |e| match e {
+        not_found => { List[int]() },
+        denied => { return denied },
+        io => { return io },
+    }
+    if named.len > 0 { return attributes_data(full)? }
+    let at = index_at(value.entries, path)
+    if at < 0 { return List[byte]() }
+    let entry = copy value.entries[at]
+    if entry.stat[6] != 0o100644 && entry.stat[6] != 0o100755 {
+        return Unsupported("worktree attributes: not a regular file")
+    }
+    let stored = object.read_object(ctx.repo, entry.id, 1048576)?
+    if stored.kind != "blob" { return invalid_tree }
+    let refused = attributes_refusal(stored.data)?
+    if refused != "" { return Unsupported(refused) }
+    stored.data
+}
+
+// Only a CR-LF body pays for path matching. LF bodies retain their existing
+// byte/hash path, and a CR at a chunk's end is carried into the next chunk.
+fn check_crlf(ctx: Context, path: List[byte]) -> () ! WorkErrors {
+    var state = [0, 0]
+    let value = read_index(ctx)?
+    if ctx.root != "" {
+        text_rules(attributes_source(ctx, [], value)?, [], path, mut state)?
+        for i in 0..path.len {
+            if path[i] != 47 as byte { continue }
+            let base = path[0..i]
+            text_rules(attributes_source(ctx, base, value)?, base, path, mut state)?
+        }
+    }
+    text_rules(attributes_data("{ctx.repo.gitdir}/info/attributes")?, [], path, mut state)?
+    if state[0] > 0 || state[0] == 0 && state[1] == 1 {
+        return Unsupported("worktree attributes: text at {text(path)?} (CR-LF conversion)")
+    }
+}
+
+/// Refuse a CR-LF body by path when its effective text/eol rules would clean
+/// it. LF-only bodies are identity; filesystem/index/parser errors propagate.
+pub fn check_text_content(ctx: Context, path: List[byte], data: List[byte]) -> () ! WorkErrors {
+    if has_crlf(data) { check_crlf(ctx, path)? }
+}
+
+// A newly introduced text rule can invalidate an otherwise stat-clean entry:
+// stat equality is not evidence that its bytes contain no CR-LF. Check once
+// per directory, not per path. Inert attributes keep the old stat fast path.
+fn text_tokens(data: List[byte]) -> bool {
+    let s = str_from_utf8(data) else |_| { return true }
+    for raw in s.split("\n") {
+        let line = raw.trim()
+        if line.starts_with("#") { continue }
+        for token in line.replace("\t", " ").split(" ") {
+            if token == "text" || token == "text=auto" || token == "eol=lf" { return true }
+        }
+    }
+    false
+}
+
+/// Validate all attribute sources applying below directory. True means a
+/// text rule may invalidate a stat-clean entry; it does not mean every path
+/// matches that rule. Directory-scoped callers cache this result.
+pub fn attributes_directory(
+    ctx: Context,
+    directory: List[byte],
+    value: index.Index,
+) -> bool ! WorkErrors {
+    var possible = false
+    region attributes {
+        possible = text_tokens(attributes_data("{ctx.repo.gitdir}/info/attributes")?)
+    }
+    if ctx.root == "" { return possible }
+    var bases = [List[byte]()]
+    for i in 0..=directory.len {
+        if i == directory.len || directory[i] == 47 as byte {
+            if i > 0 { (mut bases).push(copy directory[0..i]) }
+        }
+    }
+    for base in bases {
+        region attributes {
+            if text_tokens(attributes_source(ctx, base, value)?) { possible = true }
+        }
+    }
+    possible
+}
+
+/// The same unsupported configuration/attribute policy for diff and history.
+pub fn check_attributes(ctx: Context) -> () ! WorkErrors { ensure_filters(ctx)? }
+
+/// Directory-scoped policy cache for readers of tree/index endpoints.
+pub fn text_path_policy(
+    ctx: Context,
+    path: List[byte],
+    value: index.Index,
+    mut cache: Map[str, bool],
+) -> bool ! WorkErrors {
+    var end = 0
+    for i in 0..path.len { if path[i] == 47 as byte { end = i } }
+    let directory = path[0..end]
+    let key = text(directory)?
+    let cached = cache[key] else |_| {
+        let possible = attributes_directory(ctx, directory, value)?
+        cache[key] = possible
+        return possible
+    }
+    cached
+}
+
+/// Whether bytes contain adjacent CR and LF; NUL and bare CR are ordinary bytes.
+pub fn has_crlf(data: List[byte]) -> bool {
+    for i in 1..data.len {
+        if data[i - 1] == 13 as byte && data[i] == 10 as byte { return true }
+    }
+    false
+}
+
+/// A caller that detected CR-LF in reclaimed scratch invokes the path guard
+/// outside that region, so its path-named error owns live storage.
+pub fn check_text_path(ctx: Context, path: List[byte]) -> () ! WorkErrors { check_crlf(ctx, path)? }

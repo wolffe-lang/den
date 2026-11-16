@@ -106,6 +106,7 @@ fn hash_file(
     prior: List[index.Entry],
     filemode: bool,
     symlinks: bool,
+    text_check: bool,
 ) -> FileState ! WorkErrors {
     safe_parents(ctx, path, false)?
     let full = absolute(ctx, path)?
@@ -118,7 +119,7 @@ fn hash_file(
     if before[1] < 0 { return invalid }
     var digest = hash.new1()
     hash.update1(mut digest, "blob {before[1]}\0".bytes())
-    var total = 0, grew = false
+    var total = 0, grew = false, previous_cr = false, crlf = false
     loop {
         region chunk {
             let part = fs_read_chunk(file.fd, 65536) else |e| match e {
@@ -127,6 +128,12 @@ fn hash_file(
             }
             if part.len > before[1] - total { grew = true; break }
             total += part.len
+            if text_check && !crlf {
+                for b in part {
+                    if previous_cr && b == 10 as byte { crlf = true; break }
+                    previous_cr = b == 13 as byte
+                }
+            }
             hash.update1(mut digest, part)
         }
     }
@@ -134,6 +141,7 @@ fn hash_file(
     if grew || total != before[1] || !stable(before, record) || !stable(record, fs_lstat(full)?) {
         return Failure("'{text(path)?}' changed while reading")
     }
+    if crlf { check_crlf(ctx, path)? }
     let id = oid.from_bytes("sha1", hash.final1(take digest)) else |_| { return invalid }
     FileState {
         path: owned_bytes(path),
@@ -240,7 +248,7 @@ pub fn tracked(
             }
         }
     }
-    let state = hash_file(ctx, entry.path, [copy entry], filemode, symlinks)?
+    let state = hash_file(ctx, entry.path, [copy entry], filemode, symlinks, false)?
     Tracked { state: state, present: true, clean: false }
 }
 
@@ -472,6 +480,7 @@ fn walk_submodules(
             not_found => { return not_found },
             io => { return io },
         }
+        let text_check = if listed then attributes_directory(ctx, parent, value)? else false
         var visits = List[Visit]()
         if !listed {
             if include_untracked {
@@ -741,6 +750,7 @@ fn walk_submodules(
                 } else if status && info[0] == 0 && at < 0 {
                     // Untracked or ignored: status renders the path alone.
                 } else if hashing &&
+                    !text_check &&
                     staged >= 0 &&
                     (info[0] == 0 || link_judged(info, prior_mode, symlinks)) &&
                     stat_clean(value.entries[staged], info, mode, written) {
@@ -753,13 +763,16 @@ fn walk_submodules(
                     region one {
                         var prior = List[index.Entry]()
                         if staged >= 0 { (mut prior).push(copy value.entries[staged]) }
-                        let hashed = hash_file(ctx, path, prior, filemode, symlinks)?
+                        let hashed = hash_file(ctx, path, prior, filemode, symlinks, text_check)?
                         file = copy hashed
                     }
                 } else {
                     var prior = List[index.Entry]()
                     if staged >= 0 { (mut prior).push(copy value.entries[staged]) }
                     file = read_file(ctx, path, prior)?
+                }
+                if text_check && !hashing && (file.mode == 0o100644 || file.mode == 0o100755) {
+                    check_text_content(ctx, path, file.data)?
                 }
                 if file.data.len > 1000000000 - total_bytes {
                     return Fatal(
