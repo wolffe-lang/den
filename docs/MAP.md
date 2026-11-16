@@ -1125,6 +1125,22 @@ pub fn worktree.tracked_for_ignore(value: index.Index, path: List[byte]) -> bool
 pub fn worktree.render_status(snapshot: Snapshot, options: StatusOptions) -> List[byte] ! WorkErrors
 ```
 
+Attribute guards are shared by worktree commands and ordinary diff/history.
+`attributes_refusal` checks unsupported tokens, not file content. `check_attributes`
+checks configuration and root/info sources; `attributes_directory` validates a
+directory's sources and reports whether text rules could invalidate stat-only
+comparison. `text_path_policy` caches that result for tree/index readers.
+`has_crlf` tests adjacent bytes, and `check_text_content` refuses by attribute and
+path when a CR-LF body would require cleaning. LF bodies remain unchanged.
+
+Text matching uses root-to-leaf precedence per attribute, then `info/attributes`;
+a missing worktree attributes file falls back to its index blob. `-text` keeps
+raw bytes. `text`, `text=auto` and `eol=lf` are identity-only in this step: there
+is no normalization or Git-style binary detection, so a matched NUL-bearing
+CR-LF body still refuses. Quoted/escaped text patterns with CR-LF, the binary
+macro and other acting attributes remain named refusals. The streaming hash
+guard carries CR between chunks; all restore/transition guards precede writes.
+
 Scan/read operations do not refresh the index or acquire its write lock.
 `include_untracked=false` skips ignore queries and untracked file-body reads,
 not just their displayed rows. `compare_status_with_warnings` offers the same
