@@ -24,7 +24,7 @@ measured bytes and documentation discrepancies.
 | Development witnesses | hasu core blocks for local object/history work; kasumi CPUs 4–7 for wire protocols and 12–15 for the initial census; Linux x86-64, rootless containers under core locks |
 | CI PR gate | ubuntu-24.04, pinned container and oracle, including planner tests |
 | CI full field leg | macOS arm64 with Homebrew Git; nonblocking observation, not the oracle |
-| Toolchain | wolf 0.2.36 5adf3d91, lupin 0.1.58 tag 6240efe5 (binary embeds a5378e3), bundled std 78b9d3cb |
+| Toolchain | wolf 0.2.36 5adf3d91, lupin 0.1.58 tag 6240efe5 (binary embeds a5378e3), pinned std d4a4d4ca (release bundles 78b9d3cb) |
 
 Archive and oracle pins are in `wolf-toolchain.toml` and `den-oracle.toml`.
 Downloads fail on a digest mismatch. Both release-metadata reads are retained
@@ -212,13 +212,26 @@ its separate continued/CRLF/BOM, inline-assignment and multiple-URL limits.
 Diff implements literal, top, icase, glob and exclude
 pathspecs; other commands retain their earlier literal-path limits. Attribute
 pathspecs, filters, non-false `core.autocrlf`, nonempty templates/hooks,
-signing and user editor execution remain unsupported. Attribute files are read:
-one that sets only attributes den need not act on (`text` and `crlf` unset or
-unspecified, `whitespace`, `export-ignore`, `export-subst` and `delta` in any
-form, `diff`, `merge`, `eol` and the other acting attributes unspecified, and
-names Git gives no meaning) behaves as no attribute file at all, as it does in
-Git; any other refuses by the attribute's name, for example
-`worktree attributes: eol`, and so does a macro definition. A requested editor is never launched; the measured
+signing and user editor execution remain unsupported. Ordinary diff, `log -p`,
+`log --stat` and `show` share the worktree attribute policy. On LF-native systems,
+`text`, `text=auto` and `eol=lf` are accepted while they change no content bytes.
+A matched regular file containing CR-LF refuses by attribute and path before
+staging or replacing files; this first step does not normalize line endings.
+That conservative refusal also covers NUL-bearing `text=auto` bodies with CR-LF.
+Root, nested and `info/attributes` rules use per-attribute precedence, with the
+index fallback when a worktree attributes file is absent. Quoted or escaped
+text patterns with CR-LF remain named refusals.
+
+`-text` preserves raw bytes, including CR-LF. Attributes den need not act on
+(`text` and `crlf` unset or unspecified, `whitespace`, export and delta choices,
+other acting attributes unspecified, and names Git gives no meaning) are accepted.
+The `binary` macro, macro definitions, custom diff/merge drivers, filters, `ident`,
+working-tree encodings and `eol=crlf` remain refused by name. `core.eol` other than
+`lf` or `native` is also refused. Combined merge diffs retain their separate
+attribute limitation below. `tools/text-attributes-test.py` keeps exact Git
+comparisons separate from the named conversion refusals on both tiers.
+
+A requested editor is never launched; the measured
 `GIT_EDITOR=false` failure is handled explicitly. Relative dates such as `now`
 are refused; deterministic raw, RFC 2822 and ISO/calendar inputs are supported
 within the formatting API's stated bounds. A date not given, or given without a
