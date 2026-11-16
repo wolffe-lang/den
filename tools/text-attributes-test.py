@@ -55,6 +55,8 @@ def main():
         'restore': ['restore', 'sub/a.txt'],
         'pull': ['pull', '--ff-only', 'origin', 'main'],
         'pull-rebase': ['pull', '--rebase', 'origin', 'main'],
+        'pull-rebase-staged': ['pull', '--rebase', 'origin', 'main'],
+        'pull-rebase-both': ['pull', '--rebase', 'origin', 'main'],
         'diff': ['diff'],
         'diff-cached': ['diff', '--cached'],
         'diff-tree': ['diff', 'HEAD~', 'HEAD'],
@@ -88,7 +90,7 @@ def main():
     for kind, (attr_path, attr) in attrs.items():
         for command, argv in commands.items():
             for crlf in (False, True):
-                if crlf and command not in ('status', 'add', 'commit', 'checkout', 'checkout-path', 'restore', 'pull', 'pull-rebase', 'diff'):
+                if crlf and command not in ('status', 'add', 'commit', 'checkout', 'checkout-path', 'restore', 'pull', 'pull-rebase', 'pull-rebase-staged', 'pull-rebase-both', 'diff'):
                     continue
                 name = f'text-attributes-{kind}-{"crlf" if crlf else "lf"}-{command}'
                 if a.filter not in name:
@@ -113,9 +115,9 @@ def main():
                 remote = case / 'remote.git'
                 run(git, ['clone', '-q', '--bare', seed, remote], root)
                 run(git, ['remote', 'add', 'origin', remote.as_uri()], seed)
-                if command in ('pull', 'pull-rebase'):
+                if command == 'pull' or command.startswith('pull-rebase'):
                     run(git, ['reset', '--hard', '-q', 'HEAD~'], seed)
-                if command in ('status', 'add', 'commit', 'diff', 'checkout-path', 'restore') or crlf:
+                if command in ('status', 'add', 'commit', 'diff', 'checkout-path', 'restore', 'pull-rebase-staged', 'pull-rebase-both') or crlf:
                     body = b'changed\r\n' if crlf else b'changed\n'
                     if kind == 'chunk-boundary':
                         body = b'x' * 65535 + body.replace(b'changed', b'')
@@ -124,6 +126,11 @@ def main():
                     if kind == 'bare-cr' and not crlf:
                         body = b'changed\rbare\n'
                     (seed / 'sub/a.txt').write_bytes(body)
+                if command in ('pull-rebase-staged', 'pull-rebase-both'):
+                    run(git, ['add', 'sub/a.txt'], seed)
+                    if command == 'pull-rebase-both':
+                        with (seed / 'sub/a.txt').open('ab') as f:
+                            f.write(b'additional unstaged\n')
                 if kind == 'deleted':
                     (seed / attr_path).unlink()
                 if command == 'diff-cached':
