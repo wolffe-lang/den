@@ -219,8 +219,15 @@ A matched regular file containing CR-LF refuses by attribute and path before
 staging or replacing files; this first step does not normalize line endings.
 That conservative refusal also covers NUL-bearing `text=auto` bodies with CR-LF.
 Root, nested and `info/attributes` rules use per-attribute precedence, with the
-index fallback when a worktree attributes file is absent. Quoted or escaped
-text patterns with CR-LF remain named refusals.
+index fallback when a worktree attributes file is absent. Pattern matching honors
+ASCII `core.ignorecase`. Quoted or escaped text patterns, and bracket patterns
+under case-insensitive matching, retain conservative CR-LF refusals.
+
+Tree transitions preflight incoming attribute sources before publication. Restore
+uses selected metadata changes over the remaining worktree/index sources, including
+index fallback after a worktree-only deletion. Each attributes file is limited to
+1,048,576 bytes; incoming worktree metadata snapshots, including `info/attributes`,
+are limited to 16,777,216 bytes.
 
 `-text` preserves raw bytes, including CR-LF. Attributes den need not act on
 (`text` and `crlf` unset or unspecified, `whitespace`, export and delta choices,
