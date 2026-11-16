@@ -60,6 +60,12 @@ fn exercise(root: str) -> int ! worktree.WorkErrors {
     let commit = object.write_object(repo, "commit", body)?
     fs.write_text("{repo.gitdir}/refs/heads/main", "{oid.hex(commit)?}\n")?
     assert(worktree.scan(ctx)?.rows.len == 0)
+    // The no-op add's clock is pinned: the index's own mtime is the second
+    // after `a`'s, whatever second the probe happens to run in.
+    let a_stat = fs_lstat("{root}/a") else |_| { return invalid }
+    fs_set_times("{repo.gitdir}/index", a_stat[14] + 1, 0, a_stat[14] + 1, 0, false) else |_| {
+        return invalid
+    }
     // The pinned oracle invalidates TREE even for this same-inode no-op add.
     tx = index.begin(repo, 1000000000, 0)?
     let expected_noop = index.invalidate_tree(tx.value, raw("a"))?
