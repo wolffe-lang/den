@@ -88,9 +88,16 @@ def main():
         'quoted-escaped': ('.gitattributes', '"sub/a\\"quoted.txt" text=auto eol=lf\n'),
         'history-autocrlf': (None, ''),
         'history-core-eol': (None, ''),
+        'review-ignorecase': ('.gitattributes', '*.TXT text=auto eol=lf\n'),
+        'review-case-sensitive': ('.gitattributes', '*.TXT text=auto eol=lf\n'),
+        'review-cr-separator': ('.gitattributes', '* text\rfoo\n'),
+        'review-quote-close': ('.gitattributes', '"sub/a.txt"text\n'),
+        'review-nul-line': ('.gitattributes', '* text\0junk\n'),
+        'review-nul-reset': ('.gitattributes', '* text\0junk\n* -text\n'),
     }
     converting = {'auto-lf', 'text', 'auto', 'eol-lf', 'nested', 'info', 'deleted',
-                  'chunk-boundary', 'nul', 'bare-cr', 'quote-literal', 'quoted-space', 'quoted-escaped'}
+                  'chunk-boundary', 'nul', 'bare-cr', 'quote-literal', 'quoted-space', 'quoted-escaped',
+                  'review-ignorecase', 'review-cr-separator', 'review-quote-close', 'review-nul-line'}
     rows = []
     for kind, (attr_path, attr) in attrs.items():
         file_path = {'quote-literal': 'sub/a"quoted.txt', 'quoted-space': 'sub/a quoted.txt',
@@ -111,6 +118,8 @@ def main():
                 case.mkdir()
                 seed = case / 'seed'
                 run(git, ['init', '-q', seed], root)
+                if kind in ('review-ignorecase', 'review-case-sensitive'):
+                    run(git, ['config', 'core.ignorecase', 'true' if kind == 'review-ignorecase' else 'false'], seed)
                 (seed / 'sub').mkdir()
                 if attr_path is not None:
                     (seed / attr_path).parent.mkdir(parents=True, exist_ok=True)
@@ -177,6 +186,55 @@ def main():
                 if not ok:
                     print(json.dumps(results), flush=True)
                 rows.append(dict(name=name, passed=ok, **results))
+    # Incoming attributes govern bytes installed by a transition, not the
+    # outgoing worktree/index. Stage raw content before introducing the rule.
+    for command in ('checkout', 'restore', 'pull'):
+        for crlf in (False, True):
+            name = f'text-attributes-review-incoming-{command}-{"crlf" if crlf else "lf"}'
+            if a.filter not in name:
+                continue
+            case = out / name
+            case.mkdir()
+            origin = case / 'origin'
+            run(git, ['init', '-q', origin], root)
+            (origin / 'a.txt').write_bytes(b'base\n')
+            run(git, ['add', 'a.txt'], origin)
+            run(git, ['commit', '-qm', 'base'], origin)
+            remote = case / 'remote.git'
+            run(git, ['clone', '-q', '--bare', origin, remote], root)
+            seed = case / 'seed'
+            run(git, ['clone', '-q', remote.as_uri(), seed], root)
+            (origin / 'a.txt').write_bytes(b'next\r\n' if crlf else b'next\n')
+            run(git, ['add', 'a.txt'], origin)
+            (origin / '.gitattributes').write_text('a.txt text\n')
+            run(git, ['add', '.gitattributes'], origin)
+            run(git, ['commit', '-qm', 'incoming attributes'], origin)
+            target = run(git, ['rev-parse', 'HEAD'], origin).stdout.decode().strip()
+            run(git, ['push', '-q', remote.as_uri(), 'HEAD:refs/heads/main'], origin)
+            run(git, ['fetch', '-q', 'origin'], seed)
+            run(git, ['branch', 'incoming', target], seed)
+            argv = {'checkout': ['checkout', '-q', 'incoming'],
+                    'restore': ['restore', '--source=incoming', '--staged', '--worktree', '.'],
+                    'pull': ['pull', '--ff-only', 'origin', 'main']}[command]
+            before = state(seed)
+            results = {}
+            for label, tool in (('git', git), ('den', den)):
+                work = case / 'work'
+                if work.exists():
+                    shutil.rmtree(work)
+                shutil.copytree(seed, work, symlinks=True)
+                p = run(tool, argv, work, check=False)
+                results[label] = dict(status=p.returncode, stdout=p.stdout.hex(), stderr=p.stderr.hex(), state=state(work))
+            if crlf:
+                got = results['den']
+                err = bytes.fromhex(got['stderr'])
+                ok = got['status'] == 2 and b'worktree attributes: text' in err and b'a.txt' in err and got['state'] == before
+            else:
+                ok = results['git'] == results['den']
+            print(('PASS ' if ok else 'FAIL ') + name, flush=True)
+            if not ok:
+                print(json.dumps(results), flush=True)
+            rows.append(dict(name=name, passed=ok, **results))
     assert rows, 'empty selection'
     (out / 'summary.json').write_text(json.dumps(rows, indent=2) + '\n')
     failed = sum(not r['passed'] for r in rows)
