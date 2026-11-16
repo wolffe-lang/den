@@ -66,6 +66,7 @@ fn attribute_refused(token: List[byte]) -> str ! WorkErrors {
 fn attribute_tokens(raw: List[byte]) -> List[List[byte]] {
     var tokens = List[List[byte]](), current = List[byte](), quoted = false, escaped = false
     for b in raw {
+        if b == 0 as byte { break }
         if quoted {
             (mut current).push(b)
             if escaped {
@@ -74,6 +75,8 @@ fn attribute_tokens(raw: List[byte]) -> List[List[byte]] {
                 escaped = true
             } else if b == 34 as byte {
                 quoted = false
+                (mut tokens).push(copy current)
+                current = List[byte]()
             }
             continue
         }
@@ -91,9 +94,7 @@ fn attribute_tokens(raw: List[byte]) -> List[List[byte]] {
     tokens
 }
 
-/// The refusal for the first attribute in an attributes file's bytes that
-/// den would have to act on (a macro definition counts), or "" for none.
-pub fn attributes_refusal(data: List[byte]) -> str ! WorkErrors {
+fn attribute_lines(data: List[byte]) -> List[List[byte]] {
     var lines = List[List[byte]](), line = List[byte]()
     for b in data {
         if b == 10 as byte {
@@ -104,7 +105,13 @@ pub fn attributes_refusal(data: List[byte]) -> str ! WorkErrors {
         }
     }
     (mut lines).push(copy line)
-    for raw in lines {
+    lines
+}
+
+/// The refusal for the first attribute in an attributes file's bytes that
+/// den would have to act on (a macro definition counts), or "" for none.
+pub fn attributes_refusal(data: List[byte]) -> str ! WorkErrors {
+    for raw in attribute_lines(data) {
         let tokens = attribute_tokens(raw)
         if tokens.len == 0 || tokens[0][0] == 35 as byte { continue }
         let first = copy tokens[0]
@@ -268,12 +275,16 @@ pub fn check_text_content(ctx: Context, path: List[byte], data: List[byte]) -> (
 // stat equality is not evidence that its bytes contain no CR-LF. Check once
 // per directory, not per path. Inert attributes keep the old stat fast path.
 fn text_tokens(data: List[byte]) -> bool {
-    let s = str_from_utf8(data) else |_| { return true }
-    for raw in s.split("\n") {
-        let line = raw.trim()
-        if line.starts_with("#") { continue }
-        for token in line.replace("\t", " ").split(" ") {
-            if token == "text" || token == "text=auto" || token == "eol=lf" { return true }
+    for line in attribute_lines(data) {
+        let tokens = attribute_tokens(line)
+        if tokens.len == 0 || tokens[0][0] == 35 as byte { continue }
+        for i in 1..tokens.len {
+            let token = copy tokens[i]
+            if compare(token, "text".bytes()) == 0 ||
+                compare(token, "text=auto".bytes()) == 0 ||
+                compare(token, "eol=lf".bytes()) == 0 {
+                return true
+            }
         }
     }
     false
