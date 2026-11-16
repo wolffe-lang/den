@@ -52,6 +52,8 @@ def main():
         'log-p': ['log', '-p', '-1'],
         'log-stat': ['log', '--stat', '-1'],
         'show': ['show', 'HEAD'],
+        'show-root': ['show', 'HEAD~'],
+        'log-root': ['log', '-p', '-1', 'HEAD~'],
     }
     attrs = {
         'auto-lf': ('.gitattributes', '* text=auto eol=lf\n'),
@@ -61,13 +63,23 @@ def main():
         'nested': ('sub/.gitattributes', '*.txt text=auto eol=lf\n'),
         'unset': ('.gitattributes', '* -text\n'),
         'unknown': ('.gitattributes', '* linguist-generated\n'),
+        'nonmatching': ('.gitattributes', '*.other text=auto eol=lf\n'),
+        'nested-unset': ('sub/.gitattributes', '*.txt -text\n'),
+        'override': ('.gitattributes', '* text=auto eol=lf\nsub/a.txt -text\n'),
+        'info': ('.git/info/attributes', '* text=auto eol=lf\n'),
+        'deleted': ('.gitattributes', '* text=auto eol=lf\n'),
+        'chunk-boundary': ('.gitattributes', '* text=auto eol=lf\n'),
+        'nul': ('.gitattributes', '* text=auto eol=lf\n'),
+        'bare-cr': ('.gitattributes', '* text=auto eol=lf\n'),
+        'binary': ('.gitattributes', '*.png binary\n'),
     }
+    converting = {'auto-lf', 'text', 'auto', 'eol-lf', 'nested', 'info', 'deleted',
+                  'chunk-boundary', 'nul', 'bare-cr'}
     rows = []
     for kind, (attr_path, attr) in attrs.items():
         for command, argv in commands.items():
             for crlf in (False, True):
-                if crlf and (kind not in ('auto-lf', 'text', 'auto', 'eol-lf', 'nested') or
-                             command not in ('status', 'add', 'commit', 'checkout', 'pull', 'diff')):
+                if crlf and command not in ('status', 'add', 'commit', 'checkout', 'pull', 'diff'):
                     continue
                 name = f'text-attributes-{kind}-{"crlf" if crlf else "lf"}-{command}'
                 if a.filter not in name:
@@ -77,8 +89,13 @@ def main():
                 seed = case / 'seed'
                 run(git, ['init', '-q', seed], root)
                 (seed / 'sub').mkdir()
+                (seed / attr_path).parent.mkdir(parents=True, exist_ok=True)
                 (seed / attr_path).write_text(attr)
+                if kind == 'nested-unset':
+                    (seed / '.gitattributes').write_text('* text=auto eol=lf\n')
                 (seed / 'sub/a.txt').write_bytes(b'base\n')
+                if kind == 'binary':
+                    (seed / 'asset.png').write_bytes(b'\0PNG\r\n')
                 run(git, ['add', '.'], seed)
                 run(git, ['commit', '-qm', 'base'], seed)
                 (seed / 'sub/a.txt').write_bytes(b'next\n')
@@ -90,7 +107,16 @@ def main():
                 if command == 'pull':
                     run(git, ['reset', '--hard', '-q', 'HEAD~'], seed)
                 if command in ('status', 'add', 'commit', 'diff') or crlf:
-                    (seed / 'sub/a.txt').write_bytes(b'changed\r\n' if crlf else b'changed\n')
+                    body = b'changed\r\n' if crlf else b'changed\n'
+                    if kind == 'chunk-boundary':
+                        body = b'x' * 65535 + body.replace(b'changed', b'')
+                    if kind == 'nul':
+                        body = b'\0' + body
+                    if kind == 'bare-cr' and not crlf:
+                        body = b'changed\rbare\n'
+                    (seed / 'sub/a.txt').write_bytes(body)
+                if kind == 'deleted':
+                    (seed / attr_path).unlink()
                 if command == 'diff-cached':
                     (seed / 'sub/a.txt').write_bytes(b'staged\n')
                     run(git, ['add', '.'], seed)
@@ -105,7 +131,10 @@ def main():
                     p = run(tool, argv, work, check=False)
                     results[label] = dict(status=p.returncode, stdout=p.stdout.hex(),
                                           stderr=p.stderr.hex(), state=state(work))
-                if crlf:
+                if kind == 'binary':
+                    got = results['den']
+                    ok = got['status'] == 2 and b'worktree attributes: binary' in bytes.fromhex(got['stderr']) and got['state'] == before
+                elif crlf and kind in converting:
                     got = results['den']
                     err = bytes.fromhex(got['stderr'])
                     ok = got['status'] == 2 and b'worktree attributes: text' in err and b'sub/a.txt' in err and got['state'] == before

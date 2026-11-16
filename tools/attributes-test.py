@@ -31,8 +31,6 @@ ACCEPTED = {
     'unknown-names': ('notes/.gitattributes', '*.tty linguist-generated=true owner=docs\n'),
 }
 REFUSED = {
-    'text-set': ('.gitattributes', '*.tty text\n', 'text'),
-    'text-auto': ('notes/.gitattributes', '* text=auto\n', 'text'),
     'eol': ('.gitattributes', '*.tty -text eol=crlf\n', 'eol'),
     'filter': ('.gitattributes', '*.tty filter=lfs\n', 'filter'),
     'ident': ('.gitattributes', '*.c ident\n', 'ident'),

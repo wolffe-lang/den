@@ -1,0 +1,24 @@
+//! member: false
+
+use worktree
+
+fn main() -> int ! worktree.WorkErrors {
+    for rule in ["* text\n", "* text=auto\n", "* text=auto eol=lf\n", "* eol=lf\n", "* -text\n", "* !text !eol\n", "*.txt linguist-generated\n"] {
+        assert(worktree.attributes_refusal(rule.bytes())? == "")
+    }
+    for (rule, expected) in [
+        ("* text=unknown\n", "worktree attributes: text"),
+        ("* eol=crlf\n", "worktree attributes: eol"),
+        ("* filter=lfs\n", "worktree attributes: filter"),
+        ("* ident\n", "worktree attributes: ident"),
+        ("* working-tree-encoding=UTF-16\n", "worktree attributes: working-tree-encoding"),
+        ("*.png binary\n", "worktree attributes: binary"),
+        ("* -diff\n", "worktree attributes: diff"),
+        ("* merge=custom\n", "worktree attributes: merge"),
+        ("[attr]custom text\n", "worktree attributes: macro definition"),
+    ] {
+        assert(worktree.attributes_refusal(rule.bytes())? == expected)
+    }
+    print("PASS text-attributes-policy-units")
+    0
+}
