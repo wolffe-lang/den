@@ -1135,12 +1135,27 @@ comparison. `text_path_policy` caches that result for tree/index readers.
 path when a CR-LF body would require cleaning. LF bodies remain unchanged.
 
 Text matching uses root-to-leaf precedence per attribute, then `info/attributes`;
-a missing worktree attributes file falls back to its index blob. `-text` keeps
-raw bytes. `text`, `text=auto` and `eol=lf` are identity-only in this step: there
-is no normalization or Git-style binary detection, so a matched NUL-bearing
-CR-LF body still refuses. Quoted/escaped text patterns with CR-LF, the binary
-macro and other acting attributes remain named refusals. The streaming hash
-guard carries CR between chunks; all restore/transition guards precede writes.
+a missing worktree attributes file falls back to its index blob. Unsupported-token
+checks, text-presence detection and matching share a byte lexer: CR separates
+tokens, NUL ends its physical line, and a closing C quote ends the initial pattern
+token without requiring following whitespace. ASCII pattern/base/path folding
+honors `core.ignorecase`. Quoted/escaped patterns and case-folded bracket patterns
+retain conservative CR-LF refusals rather than approximating their matches.
+
+`-text` keeps raw bytes. `text`, `text=auto` and `eol=lf` are identity-only in this
+step: there is no normalization or Git-style binary detection, so a matched
+NUL-bearing CR-LF body still refuses. The binary macro and other acting attributes
+remain named refusals. The streaming hash guard carries CR between chunks.
+
+`PlannedAttributes` preflights incoming metadata with the operation's batch object
+reader before publication. A whole-tree transition uses its target sources; a
+restore overlays selected worktree metadata on the remaining sources and computes
+post-operation index fallback separately. A worktree-only metadata deletion can
+therefore expose the retained index rule. Current `info/attributes` still wins.
+Case-folding filesystem aliases are distinguished from pattern case folding by a
+read-only check of the worktree's administrative entry. Metadata files retain the
+1,048,576-byte bound; retained incoming payload plus info metadata is bounded at
+16,777,216 bytes, with named limit errors rather than an unbounded snapshot.
 
 Scan/read operations do not refresh the index or acquire its write lock.
 `include_untracked=false` skips ignore queries and untracked file-body reads,
@@ -1229,7 +1244,7 @@ subsections); entries marked refusal controls do not imply feature support:
 |---|---|
 | Repository / init | `core.repositoryFormatVersion`, `extensions.objectFormat`, `core.bare`, `core.worktree`, `init.defaultBranch`, `init.templateDir`; unknown `extensions.*` refuse |
 | Loose storage | `core.compression`, `core.looseCompression` |
-| Worktree / ignore / index | `core.fileMode`, `core.symlinks`, `core.excludesFile`, `core.quotePath`, `index.version` |
+| Worktree / ignore / index | `core.fileMode`, `core.symlinks`, `core.ignorecase` (attribute pattern matching), `core.excludesFile`, `core.quotePath`, `index.version` |
 | Status | `status.short`, `status.branch`, `status.showUntrackedFiles`, `status.relativePaths`, `status.renames`, `advice.statusHints`; `branch.<current>.merge` triggers the unsupported upstream-tracking path |
 | Diff | `diff.context`, `diff.indentHeuristic`, `diff.renames`, `diff.autoRefreshIndex`, `diff.statNameWidth`, `diff.statGraphWidth`, `core.abbrev`, `core.quotePath`, `core.fileMode`, `core.symlinks` |
 | Add diagnostics | `advice.addEmptyPathspec`, `advice.addIgnoredFile`, `advice.updateSparsePath` |
