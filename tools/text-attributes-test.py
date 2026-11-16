@@ -91,6 +91,7 @@ def main():
         'review-ignorecase': ('.gitattributes', '*.TXT text=auto eol=lf\n'),
         'review-case-sensitive': ('.gitattributes', '*.TXT text=auto eol=lf\n'),
         'review-ignorecase-range': ('.gitattributes', '[A-z].TXT text=auto eol=lf\n'),
+        'review-meta-case': ('.GITATTRIBUTES', '* text\n'),
         'review-cr-separator': ('.gitattributes', '* text\rfoo\n'),
         'review-quote-close': ('.gitattributes', '"sub/a.txt"text\n'),
         'review-nul-line': ('.gitattributes', '* text\0junk\n'),
@@ -165,6 +166,7 @@ def main():
                     run(git, ['add', '.'], seed)
                 results = {}
                 before = state(seed)
+                meta_case_active = kind == 'review-meta-case' and run(git, ['check-attr', 'text', '--', file_path], seed).stdout.endswith(b': text: set\n')
                 for label, tool in (('git', git), ('den', den)):
                     # Same pathname for equal remote diagnostics and reflog values.
                     work = case / 'work'
@@ -177,7 +179,7 @@ def main():
                 if kind == 'binary':
                     got = results['den']
                     ok = got['status'] == 2 and b'worktree attributes: binary' in bytes.fromhex(got['stderr']) and got['state'] == before
-                elif crlf and kind in converting:
+                elif crlf and (kind in converting or meta_case_active):
                     got = results['den']
                     err = bytes.fromhex(got['stderr'])
                     ok = got['status'] == 2 and b'worktree attributes: text' in err and file_path.encode() in err and got['state'] == before
