@@ -51,7 +51,10 @@ def main():
         'add': ['add', 'sub/a.txt'],
         'commit': ['commit', '-qam', 'edit'],
         'checkout': ['checkout', '-q', 'other'],
+        'checkout-path': ['checkout', '--', 'sub/a.txt'],
+        'restore': ['restore', 'sub/a.txt'],
         'pull': ['pull', '--ff-only', 'origin', 'main'],
+        'pull-rebase': ['pull', '--rebase', 'origin', 'main'],
         'diff': ['diff'],
         'diff-cached': ['diff', '--cached'],
         'diff-tree': ['diff', 'HEAD~', 'HEAD'],
@@ -85,7 +88,7 @@ def main():
     for kind, (attr_path, attr) in attrs.items():
         for command, argv in commands.items():
             for crlf in (False, True):
-                if crlf and command not in ('status', 'add', 'commit', 'checkout', 'pull', 'diff'):
+                if crlf and command not in ('status', 'add', 'commit', 'checkout', 'checkout-path', 'restore', 'pull', 'pull-rebase', 'diff'):
                     continue
                 name = f'text-attributes-{kind}-{"crlf" if crlf else "lf"}-{command}'
                 if a.filter not in name:
@@ -110,9 +113,9 @@ def main():
                 remote = case / 'remote.git'
                 run(git, ['clone', '-q', '--bare', seed, remote], root)
                 run(git, ['remote', 'add', 'origin', remote.as_uri()], seed)
-                if command == 'pull':
+                if command in ('pull', 'pull-rebase'):
                     run(git, ['reset', '--hard', '-q', 'HEAD~'], seed)
-                if command in ('status', 'add', 'commit', 'diff') or crlf:
+                if command in ('status', 'add', 'commit', 'diff', 'checkout-path', 'restore') or crlf:
                     body = b'changed\r\n' if crlf else b'changed\n'
                     if kind == 'chunk-boundary':
                         body = b'x' * 65535 + body.replace(b'changed', b'')
