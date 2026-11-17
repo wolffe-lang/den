@@ -59,7 +59,7 @@ fn planned_object(
     cap: int,
 ) -> object.Object ! WorkErrors {
     let data = supplied[oid.hex(id)?] else |_| { return object.read_loaded(reader, id, cap)? }
-    if data.len > cap { return limit }
+    if data.len > cap { return Fatal("limit: a supplied checkout blob larger than {cap} bytes") }
     if !oid.equal(id, object.identify("blob", data)?) { return bad_oid }
     object.Object { kind: "blob", data: copy data }
 }
@@ -78,6 +78,7 @@ fn planned_supplied_data(
     }
     let stored = planned_object(reader, entry.id, supplied, 1048576) else |e| match e {
         limit => { return Fatal("limit: an attributes file larger than 1048576 bytes") },
+        Fatal(reason) => { return Fatal(reason) },
         Unsupported(reason) => {
             if reason.starts_with("limit: ") {
                 return Fatal("limit: an attributes file larger than 1048576 bytes")

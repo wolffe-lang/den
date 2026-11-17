@@ -85,6 +85,8 @@ fn revert_command(args: List[str]) -> int ! commit.CommitErrors {
             eprint("error: {text}")
             return Fatal("revert failed")
         },
+        Fatal(reason) => { return Fatal(reason) },
+        Unsupported(reason) => { return Unsupported(reason) },
         _ => { return Unsupported("revert safety: {e}") },
     }
     let tree = tree_objects(ctx, plan.files)?
