@@ -30,7 +30,14 @@ fn abbreviation(
     files: List[File],
     options: Options,
 ) -> str ! worktree.WorkErrors {
-    let width = if options.full_index || options.binary_patch then 40 else options.abbreviate
+    abbreviated(
+        ctx,
+        files,
+        if options.full_index || options.binary_patch then 40 else options.abbreviate,
+    )?
+}
+
+fn abbreviated(ctx: worktree.Context, files: List[File], width: int) -> str ! worktree.WorkErrors {
     if files.len == 0 { return "0000000000000000000000000000000000000000"[0..width] }
     let full = oid.hex(files[0].id)?
     var n = width
@@ -119,10 +126,18 @@ fn patch_one(
     // its `-dirty` hunk with no index line (vc25 probe 1, diff-modified).
     let dirty_only = unchanged(change) && compare(data(change.before), data(change.after)) != 0
     if unchanged(change) && !dirty_only { return }
+    let binary = diff_binary(change, driver, options)
+    // --binary implies the full index only for a file it renders as a binary
+    // patch; a text hunk keeps the abbreviated ids, as the pinned Git prints.
+    let width = if options.full_index || options.binary_patch && binary {
+        40
+    } else {
+        options.abbreviate
+    }
     if !dirty_only {
         add(
             mut out,
-            "index {abbreviation(ctx,change.before,options)?}..{abbreviation(ctx,change.after,options)?}".
+            "index {abbreviated(ctx,change.before,width)?}..{abbreviated(ctx,change.after,width)?}".
                 bytes(),
         )
         if change.before.len > 0 &&
@@ -133,7 +148,7 @@ fn patch_one(
         (mut out).push(10 as byte)
     }
     let before = data(change.before), after = data(change.after)
-    if diff_binary(change, driver, options) {
+    if binary {
         if options.binary_patch { add(mut out, diffbinary.patch(before, after)?); return }
         add(mut out, "Binary files ".bytes())
         add(

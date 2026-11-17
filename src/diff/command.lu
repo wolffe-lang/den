@@ -133,8 +133,8 @@ fn parse(ctx: worktree.Context, args: List[str]) -> Options ! worktree.WorkError
         } else if arg == "--full-index" {
             options.full_index = true
         } else if arg == "--binary" {
+            // Full ids only for a file rendered as a binary patch (render.lu).
             options.binary_patch = true
-            options.full_index = true
             options.patch = true
             explicit_patch = true
         } else if arg.starts_with("--abbrev=") {
