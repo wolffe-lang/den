@@ -213,34 +213,54 @@ Diff implements literal, top, icase, glob and exclude
 pathspecs; other commands retain their earlier literal-path limits. Attribute
 pathspecs, filters, non-false `core.autocrlf`, nonempty templates/hooks,
 signing and user editor execution remain unsupported. Ordinary diff, `log -p`,
-`log --stat` and `show` share the worktree attribute policy. On LF-native systems,
-`text`, `text=auto` and `eol=lf` are accepted while they change no content bytes.
-Matched regular text bodies containing CR-LF refuse by attribute and path before
-staging or replacing files; this first step does not normalize line endings.
-Within the supported pattern subset, `text=auto` preserves binary bodies using
-Git 2.56.0 byte statistics over the whole content, including NUL, lone CR and
-control-byte density. Forced `text` and `eol=lf` without auto still refuse CR-LF.
-Root, nested and `info/attributes` rules use per-attribute precedence, with the
-index fallback when a worktree attributes file is absent. Pattern matching honors
-ASCII `core.ignorecase`. Quoted or escaped text patterns, and bracket patterns
-under case-insensitive matching, retain conservative CR-LF refusals.
+`log --stat`, `show` and combined merge diffs share the worktree attribute policy.
+Attributes resolve per path and per field in Git's precedence order (root to
+leaf, then `info/attributes`), with the `binary` macro expanded in place so a later
+field overrides it; a missing worktree attributes file falls back to its index
+blob. Pattern matching decodes quoted patterns and honors ASCII `core.ignorecase`.
+
+On LF-native systems, `text`, `text=auto` and `eol=lf` are accepted while they
+change no content bytes. Matched regular text bodies containing CR-LF refuse by
+attribute and path before staging or replacing files; this first step does not
+normalize line endings. Where a text rule may apply, status and diff read a
+tracked body even when its stat data matches its entry, so a CR-LF body is never
+taken as unchanged unread. `text=auto` preserves binary bodies using Git 2.56.0 byte
+statistics over the whole content, including NUL, lone CR and control-byte
+density. Forced `text` and `eol=lf` without auto still refuse CR-LF. A specified
+`text` wins over the legacy `crlf` attribute in either order; `-crlf` alone acts
+as `-text`. `-text`, `-eol` and `-filter` keep raw bytes, including CR-LF.
+
+`binary`, `-diff` and `diff` decide binary rendering in patches, `--stat`,
+`--numstat` and commit summaries as Git does, and so does a configured driver's
+`diff.<name>.binary`. An unconfigured diff driver is Git's content-based diff.
+The built-in `cpp`, `dts`, `perl`, `python` and `rust` drivers, and any configured
+diff driver, refuse by name in patch output only.
+
+Merges, cherry-picks, reverts, rebases and stash applies treat an unconfigured
+merge driver (including `ours`) and the built-in `text` driver as Git's default
+text merge. `-merge`, `binary` and the built-in `binary` driver keep ours and
+record the conflict stages; `conflict-marker-size` sets the marker width. A
+configured merge driver and the built-in `union` driver refuse by name, and only
+when a content merge needs them. No diff or merge attribute makes status, add,
+commit, checkout, restore, reset, clone, fetch, push or `log` without a patch
+refuse.
+
+An unconfigured filter driver is identity, as in Git. A configured one (any
+`filter.<name>.*` key, `required` included) refuses by name. Driver configuration
+comes from den's ordinary configuration: the system, global and repository files
+and `GIT_CONFIG_COUNT` entries. Macro definitions, `ident`, working-tree encodings,
+`crlf` set without `text`, `eol=crlf` and `text` values other than `auto` remain
+refused by name. Worktree commands also refuse `core.eol` other than `lf` or
+`native`; pure index/tree history comparisons do not acquire checkout-configuration
+limits. `tools/text-attributes-test.py`, `tools/attribute-effects-test.py` and
+`tools/attribute-config-test.py` keep exact Git comparisons separate from the
+named refusals on both tiers.
 
 Tree transitions preflight incoming attribute sources before publication. Restore
 uses selected metadata changes over the remaining worktree/index sources, including
 index fallback after a worktree-only deletion. Each attributes file is limited to
 1,048,576 bytes; incoming metadata snapshots, including `info/attributes`,
 are limited to 16,777,216 bytes.
-
-`-text` preserves raw bytes, including CR-LF. Attributes den need not act on
-(`text` and `crlf` unset or unspecified, `whitespace`, export and delta choices,
-other acting attributes unspecified, and names Git gives no meaning) are accepted.
-The `binary` macro, macro definitions, custom diff/merge drivers, filters, `ident`,
-working-tree encodings and `eol=crlf` remain refused by name. Worktree commands
-also refuse `core.eol` other than `lf` or `native`; pure index/tree history
-comparisons do not acquire checkout-configuration limits. Combined merge diffs
-retain their separate
-attribute limitation below. `tools/text-attributes-test.py` keeps exact Git
-comparisons separate from the named conversion refusals on both tiers.
 
 A requested editor is never launched; the measured
 `GIT_EDITOR=false` failure is handled explicitly. Relative dates such as `now`
@@ -294,7 +314,7 @@ a bounded whole-history reader, not a streaming walk.
 Default `log -p` omits merge patches as Git does. `show` of a merge prints the
 dense combined diff (`--cc`, the default) or `-c`, with `-U<n>`; `show -s`
 renders its ordered parents and message. Combined `--stat`, other pretty formats,
-`--binary`, attributes, `-m`, `--diff-merges`, `--combined-all-paths`,
+`--binary`, `-m`, `--diff-merges`, `--combined-all-paths`,
 `--remerge-diff` and `log -c`/`--cc` stay named refusals. Show-specific
 revision limiting, show ranges, history path simplification, graph/topological order,
 custom formats, relative/human dates, non-UTC local zones, message transcoding,
