@@ -193,19 +193,18 @@ fn parents_verified(
     }
 }
 
-/// entry's worktree side (Tracked), with read_file's errors for the reads it
-/// makes. A stat-clean regular file or symbolic link is not read unless
-/// text_check (a text rule may apply: the body is hashed with its CR-LF
-/// guard, as the status walk does); its
-/// ancestors are checked as read_file checks them, each once across a sorted
-/// walk (verified).
-pub fn tracked(
+/// entry's worktree side (Tracked) from its lstat alone. An absent path or a
+/// directory is not present. A regular file or symbolic link whose lstat
+/// matches the entry is clean and unread, whatever its attributes say, as Git
+/// takes it; anything else is present and not clean, its state unread, for
+/// tracked_read. Its ancestors are checked as read_file checks them, each
+/// once across a sorted walk (verified).
+pub fn tracked_stat(
     ctx: Context,
     entry: index.Entry,
     written: List[int],
     filemode: bool,
     symlinks: bool,
-    text_check: bool,
     mut verified: List[List[byte]],
 ) -> Tracked ! WorkErrors {
     let none = FileState {
@@ -224,7 +223,7 @@ pub fn tracked(
     }
     if info[0] == 1 { return Tracked { state: none, present: false, clean: false } }
     parents_verified(ctx, entry.path, mut verified)?
-    if !text_check && (info[0] == 0 || link_judged(info, entry.stat[6], symlinks)) {
+    if info[0] == 0 || link_judged(info, entry.stat[6], symlinks) {
         let kind = info[0]
         let mode = if kind == 3 {
             0o120000
@@ -247,6 +246,19 @@ pub fn tracked(
             }
         }
     }
+    Tracked { state: none, present: true, clean: false }
+}
+
+/// A present entry tracked_stat did not find clean, read and hashed with
+/// read_file's errors, and with its CR-LF guard when text_check (a text rule
+/// may apply), as the status walk hashes it.
+pub fn tracked_read(
+    ctx: Context,
+    entry: index.Entry,
+    filemode: bool,
+    symlinks: bool,
+    text_check: bool,
+) -> Tracked ! WorkErrors {
     let state = hash_file(ctx, entry.path, [copy entry], filemode, symlinks, text_check)?
     Tracked { state: state, present: true, clean: false }
 }
