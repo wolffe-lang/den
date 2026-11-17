@@ -129,9 +129,32 @@ def main():
                     default = run(git, argv, work)
                     oracle_changes_header = (q.stdout != default.stdout)
                     results[label]['without_driver_stdout'] = default.stdout.hex()
+            git_out = bytes.fromhex(results['git']['stdout'])
             if driver and command in ('diff', 'diff-binary', 'log-p'):
                 d = results['den'];err = bytes.fromhex(d['stderr'])
                 ok = d['status'] == 2 and b'diff' in err and driver.encode() in err and b'sample.dat' in err
+            elif command == 'diff-binary' and b'GIT binary patch\n' in git_out:
+                # den's delta and deflate bytes are not Git's (the diffbinary
+                # gate's standard): the envelope through `GIT binary patch` is
+                # exact, and den's patch applies forward and reverse to the index.
+                left = {k:v for k,v in results['git'].items() if k not in ('without_driver_stdout', 'stdout')}
+                right = {k:v for k,v in results['den'].items() if k != 'stdout'}
+                den_out = bytes.fromhex(results['den']['stdout'])
+                cut = git_out.index(b'GIT binary patch\n') + len(b'GIT binary patch\n')
+                ok = left == right and den_out[:cut] == git_out[:cut]
+                if ok:
+                    probe = case / 'apply'
+                    if probe.exists():
+                        shutil.rmtree(probe)
+                    shutil.copytree(seed, probe)
+                    blob = lambda: g(probe, 'ls-files', '-s', 'sample.dat').split()[1]
+                    before = blob()
+                    forward = subprocess.run([git, 'apply', '--cached', '--binary', '-'], cwd=probe, input=den_out, capture_output=True)
+                    after = blob()
+                    reverse = subprocess.run([git, 'apply', '-R', '--cached', '--binary', '-'], cwd=probe, input=den_out, capture_output=True)
+                    expected = git_out.split(b'\n')[1].split(b' ')[1].split(b'..')[1]
+                    ok = forward.returncode == 0 and reverse.returncode == 0 and after == expected and blob() == before
+                    results['den']['applied'] = dict(forward=forward.returncode, reverse=reverse.returncode, after=after.decode())
             else:
                 left = {k:v for k,v in results['git'].items() if k != 'without_driver_stdout'}
                 ok = left == results['den']
