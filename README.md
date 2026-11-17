@@ -248,9 +248,13 @@ refuse.
 An unconfigured filter driver is identity, as in Git. A configured one (any
 `filter.<name>.*` key, `required` included) refuses by name. Driver configuration
 comes from den's ordinary configuration: the system, global and repository files
-and `GIT_CONFIG_COUNT` entries. Macro definitions, `ident`, working-tree encodings,
-`crlf` set without `text`, `eol=crlf` and `text` values other than `auto` remain
-refused by name. Worktree commands also refuse `core.eol` other than `lf` or
+and `GIT_CONFIG_COUNT` entries. Macro definitions remain refused by name. `ident`,
+working-tree encodings, `crlf` set without `text`, `eol=crlf` and `text` values
+other than `auto` refuse by name when den reads or writes a file they apply to.
+Status and diff take a tracked file whose lstat still matches its index entry as
+that entry's blob, unread, whatever its attributes say, as Git does; only a changed
+or racily clean file is read and checked (`tools/attribute-statclean-test.py`).
+Worktree commands also refuse `core.eol` other than `lf` or
 `native`; pure index/tree history comparisons do not acquire checkout-configuration
 limits. `tools/text-attributes-test.py`, `tools/attribute-effects-test.py` and
 `tools/attribute-config-test.py` keep exact Git comparisons separate from the
