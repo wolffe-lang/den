@@ -47,6 +47,8 @@ for tier in native release; do
     step "$tier-porcelain-pull-scan" tools/env python3 -I tools/pull-scan-test.py --tier "$tier"
     step "$tier-porcelain-attributes" tools/env python3 -I tools/attributes-test.py --tier "$tier"
     step "$tier-porcelain-text-attributes" tools/env python3 -I tools/text-attributes-test.py --tier "$tier"
+    step "$tier-porcelain-attribute-effects" tools/env python3 -I tools/attribute-effects-test.py --tier "$tier"
+    step "$tier-porcelain-attribute-config" tools/env python3 -I tools/attribute-config-test.py --tier "$tier"
     step "$tier-porcelain-auto-binary" tools/env python3 -I tools/auto-binary-test.py --tier "$tier"
     step "$tier-porcelain-supplied-attributes-limit" tools/env python3 -I tools/supplied-attributes-limit-test.py --tier "$tier"
     step "$tier-porcelain-named-limits" tools/env python3 -I tools/limit-test.py --tier "$tier"
