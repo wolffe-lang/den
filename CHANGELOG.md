@@ -15,6 +15,12 @@
   `conflict-marker-size`. Configured drivers, the built-in `union` merge,
   the built-in diff hunk-header drivers in patches, `eol=crlf`, `ident` and
   working-tree encodings refuse by name.
+- Status, diff and diff's index refresh take a tracked file whose stat data
+  still matches its index entry as that entry's blob, unread, whatever its
+  attributes say, as Git does (den#102, second step). A clean checkout under
+  `eol=crlf` or `ident` is clean instead of refused, and `* text=auto eol=lf`
+  no longer makes status and `diff --quiet` read every tracked body. A changed
+  or racily clean file under those attributes still refuses by name.
 - `diff --binary` prints full object ids only for a file it renders as a
   binary patch; text hunks keep abbreviated ids, as Git prints them.
 - `add` of several thousand new files no longer runs out of memory (den#91).
