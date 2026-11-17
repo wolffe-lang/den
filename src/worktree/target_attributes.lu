@@ -217,6 +217,7 @@ fn planned_check_crlf(
     ctx: Context,
     policy: PlannedAttributes,
     path: List[byte],
+    binary: bool,
 ) -> () ! WorkErrors {
     var state = [0, 0]
     planned_rules_at(ctx, policy, [], path, mut state)?
@@ -224,7 +225,7 @@ fn planned_check_crlf(
         if path[i] == 47 as byte { planned_rules_at(ctx, policy, path[0..i], path, mut state)? }
     }
     text_rules_case(policy.info, [], path, mut state, policy.ignore_case)?
-    if state[0] > 0 || state[0] == 0 && state[1] == 1 {
+    if text_conversion_needed(state, binary) {
         return Unsupported("worktree attributes: text at {text(path)?} (CR-LF conversion)")
     }
 }

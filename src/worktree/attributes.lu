@@ -166,9 +166,8 @@ fn supported_attributes(ctx: Context, files: List[FileState]) -> () ! WorkErrors
     }
 }
 
-// text: -1 unset, 0 unspecified, 1 set/auto. eol: 0 unspecified, 1 LF.
-// This is an identity-only guard, not a text detector or normalizer. In
-// particular text=auto bodies with NUL and CR-LF still refuse conservatively.
+// text: -1 unset, 0 unspecified, 1 forced, 2 auto. eol: 0 unspecified, 1 LF.
+// Auto binary bodies retain their bytes; forced text/eol still needs conversion.
 fn attribute_basename(name: List[byte]) -> bool {
     let wanted = ".gitattributes".bytes()
     if name.len != wanted.len { return false }
@@ -249,7 +248,8 @@ fn text_rules_case(
         if !matched { continue }
         for i in 1..tokens.len {
             let token = tokens[i]
-            if token == "text" || token == "text=auto" { state[0] = 1 }
+            if token == "text" { state[0] = 1 }
+            if token == "text=auto" { state[0] = 2 }
             if token == "-text" { state[0] = -1 }
             if token == "!text" { state[0] = 0 }
             if token == "eol=lf" { state[1] = 1 }
@@ -290,7 +290,11 @@ fn attributes_source(
 
 // Only a CR-LF body pays for path matching. LF bodies retain their existing
 // byte/hash path, and a CR at a chunk's end is carried into the next chunk.
-fn check_crlf(ctx: Context, path: List[byte]) -> () ! WorkErrors {
+fn text_conversion_needed(state: List[int], binary: bool) -> bool {
+    state[0] == 1 || state[0] == 2 && !binary || state[0] == 0 && state[1] == 1
+}
+
+fn check_crlf(ctx: Context, path: List[byte], binary: bool) -> () ! WorkErrors {
     var state = [0, 0]
     let value = read_index(ctx)?
     let ignore_case = config_bool(ctx, "core.ignorecase", false)?
@@ -315,7 +319,7 @@ fn check_crlf(ctx: Context, path: List[byte]) -> () ! WorkErrors {
         mut state,
         ignore_case,
     )?
-    if state[0] > 0 || state[0] == 0 && state[1] == 1 {
+    if text_conversion_needed(state, binary) {
         return Unsupported("worktree attributes: text at {text(path)?} (CR-LF conversion)")
     }
 }
@@ -323,7 +327,8 @@ fn check_crlf(ctx: Context, path: List[byte]) -> () ! WorkErrors {
 /// Refuse a CR-LF body by path when its effective text/eol rules would clean
 /// it. LF-only bodies are identity; filesystem/index/parser errors propagate.
 pub fn check_text_content(ctx: Context, path: List[byte], data: List[byte]) -> () ! WorkErrors {
-    if has_crlf(data) { check_crlf(ctx, path)? }
+    let stats = text_content_bytes(data)
+    if stats.crlf { check_crlf(ctx, path, text_content_binary(stats))? }
 }
 
 // A newly introduced text rule can invalidate an otherwise stat-clean entry:

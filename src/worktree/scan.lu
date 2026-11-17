@@ -119,7 +119,8 @@ fn hash_file(
     if before[1] < 0 { return invalid }
     var digest = hash.new1()
     hash.update1(mut digest, "blob {before[1]}\0".bytes())
-    var total = 0, grew = false, previous_cr = false, crlf = false
+    var total = 0, grew = false
+    var content = text_content()
     loop {
         region chunk {
             let part = fs_read_chunk(file.fd, 65536) else |e| match e {
@@ -128,12 +129,7 @@ fn hash_file(
             }
             if part.len > before[1] - total { grew = true; break }
             total += part.len
-            if text_check && !crlf {
-                for b in part {
-                    if previous_cr && b == 10 as byte { crlf = true; break }
-                    previous_cr = b == 13 as byte
-                }
-            }
+            if text_check { text_content_add(mut content, part) }
             hash.update1(mut digest, part)
         }
     }
@@ -141,7 +137,7 @@ fn hash_file(
     if grew || total != before[1] || !stable(before, record) || !stable(record, fs_lstat(full)?) {
         return Failure("'{text(path)?}' changed while reading")
     }
-    if crlf { check_crlf(ctx, path)? }
+    if content.crlf { check_crlf(ctx, path, text_content_binary(content))? }
     let id = oid.from_bytes("sha1", hash.final1(take digest)) else |_| { return invalid }
     FileState {
         path: owned_bytes(path),

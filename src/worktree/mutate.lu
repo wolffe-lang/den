@@ -363,16 +363,18 @@ pub fn restore_paths(
         let src = flat_at(source, path)
         if src >= 0 {
             if source[src].mode == 0o160000 { return Unsupported("submodule restore") }
-            var crlf = false
+            var crlf = false, binary = false
             region verify {
                 let stored = object.read_loaded(reader, source[src].id, 1000000000)?
                 if stored.kind != "blob" { return bad_oid }
                 if (text_check || attributes.possible) &&
                     (source[src].mode == 0o100644 || source[src].mode == 0o100755) {
-                    crlf = has_crlf(stored.data)
+                    let content = text_content_bytes(stored.data)
+                    crlf = content.crlf
+                    binary = text_content_binary(content)
                 }
             }
-            if crlf { planned_check_crlf(ctx, attributes, path)? }
+            if crlf { planned_check_crlf(ctx, attributes, path, binary)? }
         }
     }
     for path in targets {
