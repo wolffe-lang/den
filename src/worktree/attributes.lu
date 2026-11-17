@@ -64,6 +64,9 @@ pub fn attributes_refusal(data: List[byte]) -> str ! WorkErrors {
         let first = copy tokens[0]
         let head = if first.len >= 6 then (str_from_utf8(first[0..6]) else "") else ""
         if head == "[attr]" { return "worktree attributes: macro definition" }
+        for i in 1..tokens.len {
+            if compare(tokens[i], "text=auto".bytes()) == 0 { return "worktree attributes: text" }
+        }
     }
     ""
 }
