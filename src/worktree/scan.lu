@@ -107,7 +107,11 @@ fn hash_file(
     filemode: bool,
     symlinks: bool,
     text_check: bool,
+    identity_check: bool,
 ) -> FileState ! WorkErrors {
+    if identity_check {
+        check_attribute_identity(ctx, path, attribute_policy(ctx, path, read_index(ctx)?)?)?
+    }
     safe_parents(ctx, path, false)?
     let full = absolute(ctx, path)?
     let named = fs_lstat(full)?
@@ -247,7 +251,7 @@ pub fn tracked(
             }
         }
     }
-    let state = hash_file(ctx, entry.path, [copy entry], filemode, symlinks, text_check)?
+    let state = hash_file(ctx, entry.path, [copy entry], filemode, symlinks, text_check, false)?
     Tracked { state: state, present: true, clean: false }
 }
 
@@ -518,11 +522,13 @@ fn walk_submodules(
             bytes_add(mut path, item.name)
             (mut visits).push(Visit { path: path, kind: item.kind, probe: false })
         }
-        let text_check = if listed && attributes_seen {
-            attributes_directory(ctx, parent, value)?
+        let attribute_modes = if listed && attributes_seen {
+            attributes_directory_modes(ctx, parent, value)?
         } else {
-            false
+            [false, false]
         }
+        let text_check = attribute_modes[0]
+        let identity_check = attribute_modes[1]
         // Subdirectories are entered depth first in the order the host lists
         // them, as Git enters them, so the warnings come in Git's order.
         var deeper = List[List[byte]]()
@@ -770,6 +776,7 @@ fn walk_submodules(
                     // Untracked or ignored: status renders the path alone.
                 } else if hashing &&
                     !text_check &&
+                    !identity_check &&
                     staged >= 0 &&
                     (info[0] == 0 || link_judged(info, prior_mode, symlinks)) &&
                     stat_clean(value.entries[staged], info, mode, written) {
@@ -782,7 +789,15 @@ fn walk_submodules(
                     region one {
                         var prior = List[index.Entry]()
                         if staged >= 0 { (mut prior).push(copy value.entries[staged]) }
-                        let hashed = hash_file(ctx, path, prior, filemode, symlinks, text_check)?
+                        let hashed = hash_file(
+                            ctx,
+                            path,
+                            prior,
+                            filemode,
+                            symlinks,
+                            text_check,
+                            identity_check,
+                        )?
                         file = copy hashed
                     }
                 } else {
@@ -790,7 +805,9 @@ fn walk_submodules(
                     if staged >= 0 { (mut prior).push(copy value.entries[staged]) }
                     file = read_file(ctx, path, prior)?
                 }
-                if text_check && !hashing && (file.mode == 0o100644 || file.mode == 0o100755) {
+                if (text_check || identity_check) &&
+                    !hashing &&
+                    (file.mode == 0o100644 || file.mode == 0o100755) {
                     check_text_content(ctx, path, file.data)?
                 }
                 if file.data.len > 1000000000 - total_bytes {

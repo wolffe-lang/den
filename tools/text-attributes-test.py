@@ -178,10 +178,7 @@ def main():
                     p = run(tool, argv, work, check=False)
                     results[label] = dict(status=p.returncode, stdout=p.stdout.hex(),
                                           stderr=p.stderr.hex(), state=state(work))
-                if kind == 'binary':
-                    got = results['den']
-                    ok = got['status'] == 2 and b'worktree attributes: binary' in bytes.fromhex(got['stderr']) and got['state'] == before
-                elif crlf and (kind in converting or meta_case_active):
+                if crlf and (kind in converting or meta_case_active):
                     got = results['den']
                     err = bytes.fromhex(got['stderr'])
                     ok = got['status'] == 2 and b'worktree attributes: text' in err and file_path.encode() in err and got['state'] == before
@@ -250,14 +247,14 @@ def main():
         ('target-nested-text', 'checkout', None, None, '* -text\n', '*.txt text\n', None, 'text'),
         ('target-info-unset', 'checkout', None, None, '* text\n', None, '* -text\n', ''),
         ('restore-unselected-attributes', 'worktree-file', '* -text\n', '* -text\n', '* text\n', None, None, ''),
-        ('restore-unselected-acting-metadata', 'worktree-file', '* -text\n', '* -text\n', '* filter=lfs\n', None, None, ''),
+        ('restore-unselected-acting-metadata', 'worktree-file', '* -text\n', '* -text\n', '* ident\n', None, None, ''),
         ('restore-selected-attributes', 'both', '* -text\n', '* -text\n', '* text\n', None, None, 'text'),
         ('restore-delete-index-fallback', 'worktree', '* text\n', '* -text\n', None, None, None, 'text'),
         ('restore-delete-both', 'both', '* text\n', '* -text\n', None, None, None, ''),
         ('restore-overlay-retain', 'overlay', '* -text\n', '* -text\n', None, None, None, ''),
         ('restore-staged-worktree-precedence', 'staged', '* -text\n', '* -text\n', '* text\n', None, None, ''),
         ('restore-staged-index-fallback', 'staged', '* -text\n', None, '* text\n', None, None, 'text'),
-        ('restore-staged-acting-source', 'staged', None, None, '* filter=lfs\n', None, None, 'filter'),
+        ('restore-staged-acting-source', 'staged', None, None, '* ident\n', None, None, 'ident'),
     ]
     for kind, command, indexed, working, incoming, nested, info, refusal in controls:
         name = f'text-attributes-review-policy-{kind}'
@@ -272,7 +269,7 @@ def main():
         run(git, ['add', '.'], seed)
         run(git, ['commit', '-qm', 'base'], seed)
         old = run(git, ['rev-parse', 'HEAD'], seed).stdout.decode().strip()
-        (seed / 'sub/a.txt').write_bytes(b'next\n' if refusal == 'filter' else b'next\r\n')
+        (seed / 'sub/a.txt').write_bytes(b'next\n' if refusal in ('filter', 'ident') else b'next\r\n')
         run(git, ['add', 'sub/a.txt'], seed)
         if incoming is not None:
             (seed / '.gitattributes').write_text(incoming)

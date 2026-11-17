@@ -10,6 +10,7 @@ struct PlannedAttributes {
     info: List[byte],
     complete: bool,
     possible: bool,
+    identity: bool,
     ignore_case: bool,
     fold_filesystem: bool,
     bytes: int,
@@ -45,7 +46,8 @@ fn planned_empty(
         fallback: fallback,
         info: copy info,
         complete: complete,
-        possible: !complete || text_tokens(info),
+        possible: !complete || text_tokens(info) || attribute_identity_tokens(ctx, info)?,
+        identity: !complete || attribute_identity_tokens(ctx, info)?,
         ignore_case: config_bool(ctx, "core.ignorecase", false)?,
         fold_filesystem: attributes_fs_casefold(ctx)?,
         bytes: info.len,
@@ -103,6 +105,7 @@ fn planned_length(policy: PlannedAttributes, key: str) -> int {
 }
 
 fn planned_put(
+    ctx: Context,
     mut policy: PlannedAttributes,
     base: List[byte],
     data: List[byte],
@@ -114,6 +117,7 @@ fn planned_put(
     }
     policy.bytes += data.len
     if text_tokens(data) { policy.possible = true }
+    if attribute_identity_tokens(ctx, data)? { policy.identity = true; policy.possible = true }
     policy.files[key] = copy data
 }
 
@@ -132,7 +136,7 @@ fn planned_tree_attributes(
         if map.has(policy.files, key) {
             return Unsupported("worktree attributes: case-colliding target sources")
         }
-        planned_put(mut policy, bases[0], planned_supplied_data(reader, entry, supplied)?)?
+        planned_put(ctx, mut policy, bases[0], planned_supplied_data(reader, entry, supplied)?)?
     }
     policy
 }
@@ -176,14 +180,14 @@ fn planned_restore_attributes(
             if bases.len == 0 { continue }
             let at = flat_at(source, path)
             if at >= 0 {
-                planned_put(mut policy, bases[0], planned_data(reader, source[at])?)?
+                planned_put(ctx, mut policy, bases[0], planned_data(reader, source[at])?)?
             } else if !options.overlay {
                 let fallback = index_at(policy.fallback.entries, path)
                 if fallback < 0 {
-                    planned_put(mut policy, bases[0], [])?
+                    planned_put(ctx, mut policy, bases[0], [])?
                 } else {
                     let entry = copy policy.fallback.entries[fallback]
-                    planned_put(mut policy, bases[0], planned_data(reader, FlatEntry {
+                    planned_put(ctx, mut policy, bases[0], planned_data(reader, FlatEntry {
                             path: copy entry.path,
                             mode: entry.stat[6],
                             id: copy entry.id,
@@ -200,7 +204,7 @@ fn planned_rules_at(
     policy: PlannedAttributes,
     base: List[byte],
     path: List[byte],
-    mut state: List[int],
+    mut state: Attributes,
 ) -> () ! WorkErrors {
     let key = planned_key(base, policy.fold_filesystem)?
     let data = policy.files[key] else |_| {
@@ -210,22 +214,24 @@ fn planned_rules_at(
             attributes_source(ctx, base, policy.fallback)?
         }
     }
-    text_rules_case(data, base, path, mut state, policy.ignore_case)?
+    apply_attribute_bytes(data, base, path, mut state, policy.ignore_case)?
 }
 
-fn planned_check_crlf(
+fn planned_check_content(
     ctx: Context,
     policy: PlannedAttributes,
     path: List[byte],
+    crlf: bool,
     binary: bool,
 ) -> () ! WorkErrors {
-    var state = [0, 0]
+    var state = attributes_empty()
     planned_rules_at(ctx, policy, [], path, mut state)?
     for i in 0..path.len {
         if path[i] == 47 as byte { planned_rules_at(ctx, policy, path[0..i], path, mut state)? }
     }
-    text_rules_case(policy.info, [], path, mut state, policy.ignore_case)?
-    if text_conversion_needed(state, binary) {
+    apply_attribute_bytes(policy.info, [], path, mut state, policy.ignore_case)?
+    check_attribute_identity(ctx, path, state)?
+    if crlf && text_conversion_needed(state, binary) {
         return Unsupported("worktree attributes: text at {text(path)?} (CR-LF conversion)")
     }
 }

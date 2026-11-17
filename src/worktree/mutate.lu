@@ -356,7 +356,7 @@ pub fn restore_paths(
                     io => { return io },
                 }
                 if named.len > 0 && named[0] == 0 {
-                    let _ = hash_file(ctx, path, [], true, true, true)?
+                    let _ = hash_file(ctx, path, [], true, true, true, true)?
                 }
             }
         }
@@ -374,7 +374,10 @@ pub fn restore_paths(
                     binary = text_content_binary(content)
                 }
             }
-            if crlf { planned_check_crlf(ctx, attributes, path, binary)? }
+            if (crlf || attributes.identity) &&
+                (source[src].mode == 0o100644 || source[src].mode == 0o100755) {
+                planned_check_content(ctx, attributes, path, crlf, binary)?
+            }
         }
     }
     for path in targets {

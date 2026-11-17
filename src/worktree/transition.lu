@@ -89,7 +89,15 @@ fn transition_path(
         }
     }
     // The written file is hashed as it streams, never held.
-    let file = hash_file(ctx, path, [copy entry], filemode, symlinks, false) else |e| match e {
+    let file = hash_file(
+        ctx,
+        path,
+        [copy entry],
+        filemode,
+        symlinks,
+        false,
+        false,
+    ) else |e| match e {
         not_found => { return entry },
         Fatal(message) => { return Fatal(message) },
         _ => { return Unsupported("tree transition unreadable path {text(path)?}: {e}") },
@@ -224,7 +232,9 @@ fn transition_mode(
                 binary = text_content_binary(content)
             }
         }
-        if crlf { planned_check_crlf(ctx, attributes, entry.path, binary)? }
+        if (crlf || attributes.identity) && (entry.mode == 0o100644 || entry.mode == 0o100755) {
+            planned_check_content(ctx, attributes, entry.path, crlf, binary)?
+        }
     }
     if dry { return }
     let filemode = config_bool(ctx, "core.filemode", true)?

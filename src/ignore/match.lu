@@ -122,7 +122,7 @@ fn known_class(name: List[byte]) -> bool {
 
 // Expand one bracket into a 256-byte membership table once, not per query.
 // The first ] and first/last - are literal. Backslash quotes a member.
-fn bracket(pattern: List[byte], start: int) -> (Atom, int, bool) {
+fn bracket(pattern: List[byte], start: int, fold: bool) -> (Atom, int, bool) {
     var members = List[byte]()
     for _ in 0..256 { (mut members).push(0 as byte) }
     var pos = start + 1
@@ -180,6 +180,13 @@ fn bracket(pattern: List[byte], start: int) -> (Atom, int, bool) {
             members[low as int] = 1 as byte
         }
     }
+    if fold {
+        for n in 65..91 {
+            let member = members[n] == 1 as byte || members[n + 32] == 1 as byte
+            members[n] = if member then 1 as byte else 0 as byte
+            members[n + 32] = if member then 1 as byte else 0 as byte
+        }
+    }
     if inverse {
         for n in 0..256 { members[n] = if members[n] == 0 as byte then 1 as byte else 0 as byte }
     }
@@ -188,7 +195,7 @@ fn bracket(pattern: List[byte], start: int) -> (Atom, int, bool) {
     (Atom { kind: 5, value: 0 as byte, members: members }, pos, closed)
 }
 
-fn compile(pattern: List[byte]) -> (List[Atom], bool) {
+fn compile(pattern: List[byte], fold: bool) -> (List[Atom], bool) {
     var atoms = List[Atom]()
     var pos = 0
     while pos < pattern.len {
@@ -196,7 +203,15 @@ fn compile(pattern: List[byte]) -> (List[Atom], bool) {
         if b == 92 as byte {
             pos += 1
             if pos == pattern.len { return (atoms, false) }
-            (mut atoms).push(Atom { kind: 0, value: pattern[pos], members: [] })
+            (mut atoms).push(Atom {
+                kind: 0,
+                value: if fold && pattern[pos] >= 65 as byte && pattern[pos] <= 90 as byte {
+                    (pattern[pos] as int + 32) as byte
+                } else {
+                    pattern[pos]
+                },
+                members: [],
+            })
             pos += 1
         } else if b == 42 as byte {
             let begin = pos
@@ -220,12 +235,20 @@ fn compile(pattern: List[byte]) -> (List[Atom], bool) {
             (mut atoms).push(Atom { kind: 1, value: 0 as byte, members: [] })
             pos += 1
         } else if b == 91 as byte {
-            let (atom, next, valid) = bracket(pattern, pos)
+            let (atom, next, valid) = bracket(pattern, pos, fold)
             if !valid { return (atoms, false) }
             (mut atoms).push(atom)
             pos = next
         } else {
-            (mut atoms).push(Atom { kind: 0, value: b, members: [] })
+            (mut atoms).push(Atom {
+                kind: 0,
+                value: if fold && b >= 65 as byte && b <= 90 as byte {
+                    (b as int + 32) as byte
+                } else {
+                    b
+                },
+                members: [],
+            })
             pos += 1
         }
     }
@@ -245,6 +268,7 @@ fn escaped(data: List[byte], pos: int) -> bool {
 /// the pattern on that physical line, not the file or its source line count.
 /// Measured by the Git 2.56.0 oracle (ignore-oracle-initial.json, file\0junk).
 pub fn parse(source: str, base: List[byte], data: List[byte]) -> List[Rule] ! {invalid} {
+
     if base.len > 0 && !valid_path(base) { return invalid }
     var rules = List[Rule]()
     var start = 0
@@ -275,7 +299,7 @@ pub fn parse(source: str, base: List[byte], data: List[byte]) -> List[Rule] ! {i
             var anchored = begin < end && data[begin] == 47 as byte
             if anchored { begin += 1 }
             for i in begin..end { if data[i] == 47 as byte { anchored = true } }
-            let (atoms, valid) = compile(data[begin..end])
+            let (atoms, valid) = compile(data[begin..end], false)
             (mut rules).push(Rule {
                 source: source,
                 line: line,
@@ -295,6 +319,35 @@ pub fn parse(source: str, base: List[byte], data: List[byte]) -> List[Rule] ! {i
         line += 1
     }
     rules
+}
+
+/// Compile one already lexed attribute pattern, without ignore-file comment,
+/// whitespace or physical-line processing. Case folding preserves the original
+/// bracket membership (including punctuation inside ASCII ranges).
+/// A folded rule requires an ASCII-folded base and candidate.
+pub fn attribute_rule(source: str, base: List[byte], pattern: List[byte], fold: bool) -> Rule ! {
+    invalid,
+} {
+    if base.len > 0 && !valid_path(base) { return invalid }
+    var begin = 0, end = pattern.len
+    let directory_only = end > 0 && pattern[end - 1] == 47 as byte
+    if directory_only { end -= 1 }
+    var anchored = begin < end && pattern[begin] == 47 as byte
+    if anchored { begin += 1 }
+    for i in begin..end { if pattern[i] == 47 as byte { anchored = true } }
+    let (atoms, valid) = compile(pattern[begin..end], fold)
+    Rule {
+        source: source,
+        line: 1,
+        base: own_bytes(base),
+        pattern: own_bytes(pattern),
+        original: own_bytes(pattern),
+        negated: false,
+        directory_only: directory_only,
+        anchored: anchored,
+        valid: valid && begin < end,
+        atoms: atoms,
+    }
 }
 
 // Two rows, reused in place. O(atoms * pathname bytes) time, O(pathname bytes)
