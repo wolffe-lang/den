@@ -774,11 +774,11 @@ fn walk_submodules(
                 } else if status && info[0] == 0 && at < 0 {
                     // Untracked or ignored: status renders the path alone.
                 } else if hashing &&
-                    !text_check &&
-                    !identity_check &&
                     staged >= 0 &&
                     (info[0] == 0 || link_judged(info, prior_mode, symlinks)) &&
                     stat_clean(value.entries[staged], info, mode, written) {
+                    // A stat-clean entry is its blob, unread whatever its
+                    // attributes say, as Git takes it.
                     file.id = copy value.entries[staged].id
                 } else if hashing {
                     if identity_check && info[0] == 0 {
