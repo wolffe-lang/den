@@ -281,7 +281,8 @@ fn pending_worktree(
     var verified = List[List[byte]]()
     var out = List[Pending]()
     var parsed = List[gitmodules.Parsed]()
-    var directory = List[byte](), known = false, possible = false
+    var directory = List[byte](), known = false, modes = [false, false]
+    var identity = List[worktree.AttributeCache]()
     for at in 0..value.entries.len {
         let entry = copy value.entries[at]
         if index.stage(entry) != 0 { return Unsupported("diff unmerged index") }
@@ -336,10 +337,15 @@ fn pending_worktree(
             }
             if !same {
                 directory = owned(entry.path[0..end])
-                possible = worktree.attributes_directory(ctx, directory, value)?
+                modes = worktree.attributes_directory_modes(ctx, directory, value)?
                 known = true
             }
-            text_check = possible
+            // Identity-breaking metadata refuses before a present body is
+            // read; a deleted path shows as Git shows it.
+            if modes[1] && fs.is_file("{ctx.root}/{text(entry.path)?}") {
+                worktree.check_path_identity(ctx, entry.path, value, mut identity)?
+            }
+            text_check = modes[0] || modes[1]
         }
         let seen = worktree.tracked(
             ctx,
@@ -478,7 +484,8 @@ fn endpoint_attributes(
 ) -> () ! worktree.WorkErrors {
     // Endpoints are path ordered. Cache the current directory without making
     // a fresh UTF-8 map key for every file on both sides of a large diff.
-    var directory = List[byte](), known = false, possible = false
+    var directory = List[byte](), known = false, modes = [false, false]
+    var identity = List[worktree.AttributeCache]()
     for file in files {
         if file.mode != 0o100644 && file.mode != 0o100755 { continue }
         var end = 0
@@ -489,10 +496,13 @@ fn endpoint_attributes(
         }
         if !same {
             directory = owned(file.path[0..end])
-            possible = worktree.attributes_directory(ctx, directory, value)?
+            modes = worktree.attributes_directory_modes(ctx, directory, value)?
             known = true
         }
-        if possible { worktree.check_text_content(ctx, file.path, file.data)? }
+        // Identity-breaking metadata resolves per path through one shared
+        // resolver; an LF body under text rules pays only the byte scan.
+        if modes[1] { worktree.check_path_identity(ctx, file.path, value, mut identity)? }
+        if modes[0] || modes[1] { worktree.check_text_content(ctx, file.path, file.data)? }
     }
 }
 

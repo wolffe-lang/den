@@ -107,11 +107,7 @@ fn hash_file(
     filemode: bool,
     symlinks: bool,
     text_check: bool,
-    identity_check: bool,
 ) -> FileState ! WorkErrors {
-    if identity_check {
-        check_attribute_identity(ctx, path, attribute_policy(ctx, path, read_index(ctx)?)?)?
-    }
     safe_parents(ctx, path, false)?
     let full = absolute(ctx, path)?
     let named = fs_lstat(full)?
@@ -251,7 +247,7 @@ pub fn tracked(
             }
         }
     }
-    let state = hash_file(ctx, entry.path, [copy entry], filemode, symlinks, text_check, false)?
+    let state = hash_file(ctx, entry.path, [copy entry], filemode, symlinks, text_check)?
     Tracked { state: state, present: true, clean: false }
 }
 
@@ -460,6 +456,9 @@ fn walk_submodules(
 ) -> Walk ! WorkErrors {
     let mark = warnings.len
     var notices = List[str]()
+    // One identity resolver for the walk, created only in a directory whose
+    // attribute sources hold identity-breaking metadata.
+    var identity_caches = List[AttributeCache]()
     for entry in value.entries {
         if entry.stat.len != 10 { return invalid_index }
     }
@@ -782,6 +781,9 @@ fn walk_submodules(
                     stat_clean(value.entries[staged], info, mode, written) {
                     file.id = copy value.entries[staged].id
                 } else if hashing {
+                    if identity_check && info[0] == 0 {
+                        check_path_identity(ctx, path, value, mut identity_caches)?
+                    }
                     // Each read's scratch lives in its own region and only
                     // its FileState is kept, so a walk that reads every
                     // tracked file (racily clean by whole seconds) holds no
@@ -789,20 +791,15 @@ fn walk_submodules(
                     region one {
                         var prior = List[index.Entry]()
                         if staged >= 0 { (mut prior).push(copy value.entries[staged]) }
-                        let hashed = hash_file(
-                            ctx,
-                            path,
-                            prior,
-                            filemode,
-                            symlinks,
-                            text_check,
-                            identity_check,
-                        )?
+                        let hashed = hash_file(ctx, path, prior, filemode, symlinks, text_check)?
                         file = copy hashed
                     }
                 } else {
                     var prior = List[index.Entry]()
                     if staged >= 0 { (mut prior).push(copy value.entries[staged]) }
+                    if identity_check && info[0] == 0 {
+                        check_path_identity(ctx, path, value, mut identity_caches)?
+                    }
                     file = read_file(ctx, path, prior)?
                 }
                 if (text_check || identity_check) &&

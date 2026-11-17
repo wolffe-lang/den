@@ -23,7 +23,7 @@ pub struct Attributes {
 /// One compiled file rule, shared by the directory cache and target preflight.
 pub struct AttributeRule { pattern: ignore.Rule, tokens: List[List[byte]] }
 
-/// Operation-local compiled metadata and one batch object reader. No cache is
+/// Operation-local compiled metadata and one lazily opened reader. No cache is
 /// persisted across commands or used as evidence that a worktree file is clean.
 pub struct AttributeCache {
     rules: Map[str, List[AttributeRule]],
@@ -245,7 +245,7 @@ pub fn attribute_cache(ctx: Context) -> AttributeCache ! WorkErrors {
         rules: Map[str, List[AttributeRule]](),
         info: compile_attributes(attributes_data("{ctx.repo.gitdir}/info/attributes")?, [], fold)?,
         ignore_case: fold,
-        reader: object.reader_batch(ctx.repo),
+        reader: object.reader(ctx.repo),
     }
 }
 

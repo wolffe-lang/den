@@ -162,8 +162,7 @@ fn attributes_source(
     base: List[byte],
     value: index.Index,
 ) -> List[byte] ! WorkErrors {
-    let reader = object.reader_batch(ctx.repo)
-    attributes_source_reader(ctx, base, value, reader)?
+    attributes_source_reader(ctx, base, value, object.reader(ctx.repo))?
 }
 
 fn attributes_source_reader(
@@ -210,14 +209,28 @@ fn check_crlf(ctx: Context, path: List[byte], binary: bool) -> () ! WorkErrors {
     }
 }
 
-/// Check effective conversion/filter policy before a body can be used raw.
+/// Refuse a CR-LF body by path when its effective text/eol rules would clean
+/// it. An LF body pays no per-path resolution: identity-breaking metadata is
+/// checked apart (check_path_identity) where a directory's sources hold it.
 pub fn check_text_content(ctx: Context, path: List[byte], data: List[byte]) -> () ! WorkErrors {
     let stats = text_content_bytes(data)
-    let value = attribute_policy(ctx, path, read_index(ctx)?)?
-    check_attribute_identity(ctx, path, value)?
-    if stats.crlf && text_conversion_needed(value, text_content_binary(stats)) {
-        return Unsupported("worktree attributes: text at {text(path)?} (CR-LF conversion)")
-    }
+    if stats.crlf { check_crlf(ctx, path, text_content_binary(stats))? }
+}
+
+/// Refuse a regular path whose effective fields den cannot apply as identity
+/// (eol=crlf, an unknown text value, legacy crlf, ident, working-tree-encoding,
+/// a configured filter). One resolver, created on first use, serves a batch.
+pub fn check_path_identity(
+    ctx: Context,
+    path: List[byte],
+    value: index.Index,
+    mut caches: List[AttributeCache],
+) -> () ! WorkErrors {
+    if caches.len == 0 { (mut caches).push(attribute_cache(ctx)?) }
+    var cache = (mut caches).pop() else |_| { return invalid }
+    let policy = attribute_policy_cached(ctx, path, value, mut cache)?
+    (mut caches).push(cache)
+    check_attribute_identity(ctx, path, policy)?
 }
 
 fn attribute_identity_tokens(ctx: Context, data: List[byte]) -> bool ! WorkErrors {
@@ -266,8 +279,8 @@ fn text_tokens(data: List[byte]) -> bool {
 }
 
 /// Validate all attribute sources applying below directory. True means a
-/// text rule may invalidate a stat-clean entry; it does not mean every path
-/// matches that rule. Directory-scoped callers cache this result.
+/// text rule may invalidate a stat-clean entry, or identity-breaking metadata
+/// may apply; it does not mean every path matches that rule.
 pub fn attributes_directory(
     ctx: Context,
     directory: List[byte],
@@ -277,7 +290,8 @@ pub fn attributes_directory(
     modes[0] || modes[1]
 }
 
-fn attributes_directory_modes(
+/// [a text rule may apply, identity-breaking metadata may apply] below directory.
+pub fn attributes_directory_modes(
     ctx: Context,
     directory: List[byte],
     value: index.Index,
@@ -295,7 +309,8 @@ fn attributes_directory_modes(
             if i > 0 { (mut bases).push(copy directory[0..i]) }
         }
     }
-    let reader = object.reader_batch(ctx.repo)
+    // Unopened: pack indexes load only for an index fallback, never per directory.
+    let reader = object.reader(ctx.repo)
     for base in bases {
         region attributes {
             let data = attributes_source_reader(ctx, base, value, reader)?

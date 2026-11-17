@@ -356,7 +356,7 @@ pub fn restore_paths(
                     io => { return io },
                 }
                 if named.len > 0 && named[0] == 0 {
-                    let _ = hash_file(ctx, path, [], true, true, true, true)?
+                    let _ = hash_file(ctx, path, [], true, true, true)?
                 }
             }
         }
