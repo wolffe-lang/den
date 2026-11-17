@@ -1,7 +1,6 @@
 use std.map
 use ignore
 use index
-use object
 
 /// Effective per-path attributes. Empty driver strings mean Git defaults;
 /// '-' and '+' are unset/set for diff/merge. Text: -1 unset, 0 default,
@@ -23,13 +22,12 @@ pub struct Attributes {
 /// One compiled file rule, shared by the directory cache and target preflight.
 pub struct AttributeRule { pattern: ignore.Rule, tokens: List[List[byte]] }
 
-/// Operation-local compiled metadata and one lazily opened reader. No cache is
-/// persisted across commands or used as evidence that a worktree file is clean.
+/// Operation-local compiled metadata. No cache is persisted across commands
+/// or used as evidence that a worktree file is clean.
 pub struct AttributeCache {
     rules: Map[str, List[AttributeRule]],
     info: List[AttributeRule],
     ignore_case: bool,
-    reader: object.Reader,
 }
 
 /// Default fields before any path rules match.
@@ -245,7 +243,6 @@ pub fn attribute_cache(ctx: Context) -> AttributeCache ! WorkErrors {
         rules: Map[str, List[AttributeRule]](),
         info: compile_attributes(attributes_data("{ctx.repo.gitdir}/info/attributes")?, [], fold)?,
         ignore_case: fold,
-        reader: object.reader(ctx.repo),
     }
 }
 
@@ -257,7 +254,7 @@ fn ensure_attribute_base(
 ) -> () ! WorkErrors {
     let key = text(base)?
     if map.has(cache.rules, key) { return }
-    let data = attributes_source_reader(ctx, base, value, cache.reader)?
+    let data = attributes_source(ctx, base, value)?
     let rules = compile_attributes(data, base, cache.ignore_case)?
     cache.rules[key] = copy rules
 }

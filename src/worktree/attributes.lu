@@ -157,19 +157,12 @@ pub fn apply_attribute_bytes(
 
 // Git falls back to the index when a worktree attributes file is absent.
 // In particular deleting .gitattributes must not enable an unsafe raw add.
+// An object reader (with its pack session's base cache) is made only for an
+// index fallback: a scan of many directories never holds one per directory.
 fn attributes_source(
     ctx: Context,
     base: List[byte],
     value: index.Index,
-) -> List[byte] ! WorkErrors {
-    attributes_source_reader(ctx, base, value, object.reader(ctx.repo))?
-}
-
-fn attributes_source_reader(
-    ctx: Context,
-    base: List[byte],
-    value: index.Index,
-    reader: object.Reader,
 ) -> List[byte] ! WorkErrors {
     var path = copy base
     if path.len > 0 { (mut path).push(47 as byte) }
@@ -187,7 +180,7 @@ fn attributes_source_reader(
     if entry.stat[6] != 0o100644 && entry.stat[6] != 0o100755 {
         return Unsupported("worktree attributes: not a regular file")
     }
-    planned_data(reader, FlatEntry {
+    planned_data(object.reader(ctx.repo), FlatEntry {
         path: copy entry.path,
         mode: entry.stat[6],
         id: copy entry.id,
@@ -309,11 +302,9 @@ pub fn attributes_directory_modes(
             if i > 0 { (mut bases).push(copy directory[0..i]) }
         }
     }
-    // Unopened: pack indexes load only for an index fallback, never per directory.
-    let reader = object.reader(ctx.repo)
     for base in bases {
         region attributes {
-            let data = attributes_source_reader(ctx, base, value, reader)?
+            let data = attributes_source(ctx, base, value)?
             if text_tokens(data) { content = true }
             if attribute_identity_tokens(ctx, data)? { identity = true }
         }

@@ -1141,8 +1141,9 @@ value, caches)` refuses such metadata for one regular path through one resolver
 created on first use and shared by the caller's batch.
 
 `attribute_policy.lu` holds the one resolver. `attribute_cache(ctx)` compiles
-`info/attributes` and each directory's rules once per operation (with an unopened
-object reader, so pack indexes load only for an index fallback);
+`info/attributes` and each directory's rules once per operation; an object
+reader (and its pack session) is made only to read an attributes file's index
+fallback, never once per directory scanned;
 `attribute_policy_cached(ctx, path, value, cache)` returns `Attributes`: text,
 eol, legacy crlf, diff, merge, filter, conflict-marker-size, ident and encoding
 fields, resolved root to leaf and then `info/attributes`, every token applied in
