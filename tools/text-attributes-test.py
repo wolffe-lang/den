@@ -82,6 +82,7 @@ def main():
         'deleted': ('.gitattributes', '* text=auto eol=lf\n'),
         'chunk-boundary': ('.gitattributes', '* text=auto eol=lf\n'),
         'nul': ('.gitattributes', '* text=auto eol=lf\n'),
+        'forced-nul': ('.gitattributes', '* text eol=lf\n'),
         'bare-cr': ('.gitattributes', '* text=auto eol=lf\n'),
         'binary': ('.gitattributes', '*.png binary\n'),
         'quote-literal': ('.gitattributes', 'sub/a"quoted.txt text=auto eol=lf\n'),
@@ -99,7 +100,7 @@ def main():
         'review-nul-reset': ('.gitattributes', '* text\0junk\n* -text\n'),
     }
     converting = {'auto-lf', 'text', 'auto', 'eol-lf', 'nested', 'info', 'deleted',
-                  'chunk-boundary', 'nul', 'bare-cr', 'quote-literal', 'quoted-space', 'quoted-escaped',
+                  'chunk-boundary', 'forced-nul', 'bare-cr', 'quote-literal', 'quoted-space', 'quoted-escaped',
                   'review-ignorecase', 'review-ignorecase-range', 'review-cr-separator', 'review-quote-close', 'review-nul-line'}
     rows = []
     for kind, (attr_path, attr) in attrs.items():
@@ -150,7 +151,7 @@ def main():
                     body = b'changed\r\n' if crlf else b'changed\n'
                     if kind == 'chunk-boundary':
                         body = b'x' * 65535 + body.replace(b'changed', b'')
-                    if kind == 'nul':
+                    if kind in ('nul', 'forced-nul'):
                         body = b'\0' + body
                     if kind == 'bare-cr' and not crlf:
                         body = b'changed\rbare\n'
