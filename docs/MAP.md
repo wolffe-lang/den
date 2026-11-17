@@ -1142,10 +1142,19 @@ token without requiring following whitespace. ASCII pattern/base/path folding
 honors `core.ignorecase`. Quoted/escaped patterns and case-folded bracket patterns
 retain conservative CR-LF refusals rather than approximating their matches.
 
-`-text` keeps raw bytes. `text`, `text=auto` and `eol=lf` are identity-only in this
-step: there is no normalization or Git-style binary detection, so a matched
-NUL-bearing CR-LF body still refuses. The binary macro and other acting attributes
-remain named refusals. The streaming hash guard carries CR between chunks.
+`-text` keeps raw bytes. Forced text, auto text and unspecified text remain
+distinct states. `auto_binary` exposes the measured whole-body Git 2.56.0 binary
+classification without normalizing bytes: NUL or lone CR is binary; otherwise
+non-printable bytes exceeding `printable / 128` are binary. Backspace, tab, form
+feed, ESC and high bytes count as printable; CR/LF do not enter that denominator.
+One final SUB byte is discounted from the non-printable count. Streaming guards
+carry CR, counts and the final byte across chunks, deciding density only at EOF.
+The pinned `tools/auto-binary-test.py` fixtures check the exact boundaries with
+hash-object, add, checkout and status, including non-UTF-8 bodies.
+
+Auto binary bodies retain raw bytes. Text-classed CR-LF bodies and forced
+text/eol-only CR-LF bodies still refuse; this is not text normalization. The
+binary macro and other acting attributes remain named refusals.
 
 `PlannedAttributes` preflights incoming metadata with the operation's batch object
 reader before publication. A whole-tree transition uses its target sources; a

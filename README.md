@@ -215,9 +215,11 @@ pathspecs, filters, non-false `core.autocrlf`, nonempty templates/hooks,
 signing and user editor execution remain unsupported. Ordinary diff, `log -p`,
 `log --stat` and `show` share the worktree attribute policy. On LF-native systems,
 `text`, `text=auto` and `eol=lf` are accepted while they change no content bytes.
-A matched regular file containing CR-LF refuses by attribute and path before
+Matched regular text bodies containing CR-LF refuse by attribute and path before
 staging or replacing files; this first step does not normalize line endings.
-That conservative refusal also covers NUL-bearing `text=auto` bodies with CR-LF.
+Within the supported pattern subset, `text=auto` preserves binary bodies using
+Git 2.56.0 byte statistics over the whole content, including NUL, lone CR and
+control-byte density. Forced `text` and `eol=lf` without auto still refuse CR-LF.
 Root, nested and `info/attributes` rules use per-attribute precedence, with the
 index fallback when a worktree attributes file is absent. Pattern matching honors
 ASCII `core.ignorecase`. Quoted or escaped text patterns, and bracket patterns
