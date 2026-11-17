@@ -69,8 +69,12 @@ if not a.field:
 
 
 def clone_problem(repo, capture):
-    """The problem a gitlinks row prints when the pinned Git's clone fails."""
-    return 'pinned Git could not clone %s' % repo
+    """The problem a gitlinks row prints when the pinned Git's clone fails:
+    Git's exit status, the clone's wall time and the end of what Git wrote to
+    stderr, its lines joined."""
+    said = ' | '.join(line.strip() for line in capture['stderr'].splitlines() if line.strip())
+    return 'pinned Git could not clone %s (exit %d after %.2f s): %s' % (
+        repo, capture['exit'], capture['wall'], said[-300:] or 'nothing on stderr')
 
 
 if a.self_test:
