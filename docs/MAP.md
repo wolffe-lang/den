@@ -668,7 +668,8 @@ resets through `worktree.transition` (keep-index: `mixed` to I plus
 `stash.apply(ctx, stash, name)` is recovery: it reads only stash-like (two
 parent) commits, merges W into the current index tree with `mergetree.plan`
 (the trivial base-equals-ours case takes W directly, so whole-tree renames
-need no rename topology), refuses conflicts before writing, checks safety with
+need no rename topology), refuses unattributed content conflicts before writing
+(an attributed conflict records its stages and exits 1), checks safety with
 `worktree.merge_check`, writes the index tree, merged tree and AUTO_MERGE, then
 `transition(..., "merge")` and resets changed paths to their previous index
 entries as zero-stat tree entries; new paths stay staged with fresh stat.
@@ -1132,15 +1133,28 @@ checkout configuration for pure history readers. `attributes_directory` validate
 directory's sources and reports whether text rules could invalidate stat-only
 comparison. `text_path_policy` caches that result for tree/index readers.
 `has_crlf` tests adjacent bytes, and `check_text_content` refuses by attribute and
-path when a CR-LF body would require cleaning. LF bodies remain unchanged.
+path when a CR-LF body would require cleaning; an LF body pays only the byte scan.
+`attributes_directory_modes` reports, per directory, whether a text rule and
+whether identity-breaking metadata may apply; `check_path_identity(ctx, path,
+value, caches)` refuses such metadata for one regular path through one resolver
+created on first use and shared by the caller's batch.
 
-Text matching uses root-to-leaf precedence per attribute, then `info/attributes`;
-a missing worktree attributes file falls back to its index blob. Unsupported-token
-checks, text-presence detection and matching share a byte lexer: CR separates
-tokens, NUL ends its physical line, and a closing C quote ends the initial pattern
-token without requiring following whitespace. ASCII pattern/base/path folding
-honors `core.ignorecase`. Quoted/escaped patterns and case-folded bracket patterns
-retain conservative CR-LF refusals rather than approximating their matches.
+`attribute_policy.lu` holds the one resolver. `attribute_cache(ctx)` compiles
+`info/attributes` and each directory's rules once per operation (with an unopened
+object reader, so pack indexes load only for an index fallback);
+`attribute_policy_cached(ctx, path, value, cache)` returns `Attributes`: text,
+eol, legacy crlf, diff, merge, filter, conflict-marker-size, ident and encoding
+fields, resolved root to leaf and then `info/attributes`, every token applied in
+order so the `binary` macro expands in place. `attribute_text(value)` is the text
+state a decision uses: a specified text field wins over crlf, and `-crlf` alone is
+`-text`. `configured_attribute_driver(ctx, family, name)` is true when the merged
+configuration holds any `family.name.*` key; `diff_driver_binary(ctx, driver)`
+maps a configured `diff.<name>.binary` to binary for counts. A missing worktree
+attributes file falls back to its index blob. The byte lexer is shared: CR
+separates tokens, NUL ends its physical line, and a closing C quote ends the
+initial pattern token without requiring following whitespace. Quoted patterns are
+C-unquoted; ASCII pattern/base/path folding honors `core.ignorecase`, including
+bracket membership.
 
 `-text` keeps raw bytes. Forced text, auto text and unspecified text remain
 distinct states. `auto_binary` exposes the measured whole-body Git 2.56.0 binary
@@ -1153,8 +1167,12 @@ The pinned `tools/auto-binary-test.py` fixtures check the exact boundaries with
 hash-object, add, checkout and status, including non-UTF-8 bodies.
 
 Auto binary bodies retain raw bytes. Text-classed CR-LF bodies and forced
-text/eol-only CR-LF bodies still refuse; this is not text normalization. The
-binary macro and other acting attributes remain named refusals.
+text/eol-only CR-LF bodies still refuse; this is not text normalization.
+`eol=crlf`, unknown text values, crlf set without text, `ident`,
+working-tree-encoding and configured filters remain named refusals. Diff
+rendering, stats and commit summaries take each change's diff field: `-` binary,
+`+` text, a name the content detection unless `diff.<name>.binary`; the built-in
+funcname drivers and configured drivers refuse by name in patch output only.
 
 `PlannedAttributes` preflights incoming metadata with the operation's batch object
 reader before publication. A whole-tree transition uses its target sources; a
@@ -1535,7 +1553,8 @@ never reads or writes the index. The command refuses multiple criss-cross bases
 rather than choosing one: recursive virtual-base merging is still open.
 
 `mergefile.merge(base, ours, theirs, ours_label, base_label, theirs_label,
-style)` returns owned `{data, conflicts}`. It reuses `difftext.edits`, preserves
+style)` returns owned `{data, conflicts}`; `merge_markers(..., style, size)` is
+the same engine with a marker width of 1 to 1,024 (`merge` uses 7). It reuses `difftext.edits`, preserves
 raw bytes and final-newline behavior, and renders merge/diff3/zdiff3 markers.
 Labels are single physical lines. Invalid options, binary conflicts and inherited
 file/edit bounds are distinct errors. The default-style nearby-conflict joining
@@ -1546,7 +1565,12 @@ immutability. Three actual-checked programs cover graph, text and REUC.
 
 `mergetree.files` collects owned regular-file endpoints, capped at 16 MiB per
 blob and 128 MiB per endpoint. `mergetree.plan` returns files, higher stages,
-ordered diagnostics and conflict paths without publication. It uses the existing
+ordered diagnostics and conflict paths without publication.
+`plan_with_policy(ctx, value, ...)` resolves merge attributes only for a path that
+needs a content merge: `-merge`, `binary` and the built-in `binary` driver keep
+ours with stages recorded, `conflict-marker-size` sets the width (over 1,024
+refuses only when markers are needed), and a configured driver or the built-in
+`union` refuses by name. Unconfigured names and `text` are the default merge. It uses the existing
 `diff.changes`/rename scorer to detect rename topology, which currently refuses.
 Repeated base-line hashes and multiple edits per changed side also refuse:
 `ort` defaults to histogram, not the file API's Myers algorithm. Other named
