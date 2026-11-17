@@ -288,6 +288,10 @@ fn plan_inner(
                 worktree.configured_attribute_driver(contexts[0], "merge", driver) {
                 return Unsupported("merge driver {driver} for {name}")
             }
+            // Unconfigured, Git's built-in binary driver keeps ours and text is
+            // the default merge. Union is not implemented: it refuses by name.
+            if driver == "binary" { driver = "-" }
+            if driver == "union" { return Unsupported("merge driver union for {name}") }
         }
         var merged = mergefile.Result { data: copy ours[o].data, conflicts: 1 }
         if driver == "-" {
