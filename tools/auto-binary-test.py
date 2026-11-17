@@ -81,6 +81,45 @@ def main():
         ('info-forced-over-auto', auto, '* text\n', bodies['nul-0-crlf-after']),
         ('info-auto-over-forced', '* text eol=lf\n', '* text=auto\n', bodies['nul-0-crlf-after']),
     ]
+    # A third content family: no NUL and no lone CR. Density and denominator
+    # probes are byte-defined; Git, not a guessed printable predicate, decides.
+    def controls(name, body):
+        assert b'\0' not in body and b'\r' not in body.replace(b'\r\n', b'')
+        cases.append((name, auto, None, body))
+
+    values = list(range(1, 9)) + [11] + list(range(14, 32)) + [127]
+    for value in values:
+        for denominator in (1000, 128, 100, 10, 1):
+            block = bytes([value]) * 100
+            printable = b'A' * (100 * (denominator - 1))
+            controls(f'control-density-{value:02x}-1-in-{denominator}-before', block + printable + b'\r\n')
+            controls(f'control-density-{value:02x}-1-in-{denominator}-after', b'\r\n' + printable + block)
+    for count, printables in [(1, (0, 1, 126, 127, 128, 129, 254, 255, 256)),
+                              (2, (254, 255, 256, 257)),
+                              (3, (382, 383, 384, 385)),
+                              (8, (1022, 1023, 1024, 1025))]:
+        for printable in printables:
+            block = b'\x01' * count + b'A' * printable
+            controls(f'control-threshold-{count}-{printable}-before', block + b'\r\n')
+            controls(f'control-threshold-{count}-{printable}-after', b'\r\n' + block)
+    for value in (8, 9, 12, 27, 32, 128):
+        for printable in (127, 128):
+            controls(f'control-denominator-{value:02x}-{printable}', b'\x01' + bytes([value]) * printable + b'\r\n')
+    controls('high-valid-utf8', b'\xc3\xa9' * 50000 + b'\r\n')
+    controls('high-invalid-utf8', b'\xff\xfe\x80' * 33000 + b'\r\n')
+    for count in (127, 128):
+        high = b'A' * (count % 2) + b'\xc3\xa9' * (count // 2)
+        controls(f'control-denominator-valid-utf8-{count}', b'\x01' + high + b'\r\n')
+    for name, body in {
+        'control-denominator-lf': b'\x01' + b'\n' * 128 + b'\r\n',
+        'control-denominator-crlf': b'\x01' + b'\r\n' * 128,
+        'control-sub-before': b'\x1a\r\n',
+        'control-sub-at-eof': b'\r\n\x1a',
+        'control-sub-two-at-eof': b'\r\n\x1a\x1a',
+        'control-sub-mixed-at-eof': b'\x01\r\n\x1a',
+        'control-sub-mixed-threshold': b'A' * 128 + b'\x01\r\n\x1a',
+    }.items():
+        controls(name, body)
     rows, oracle_rows = [], []
     for name, rule, info, body in cases:
         case = out / name
