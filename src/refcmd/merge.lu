@@ -206,7 +206,8 @@ fn merge_command_with(args: List[str], reflog: str, label: str) -> int ! commit.
         if key.starts_with("merge.") &&
             key != "merge.conflictstyle" &&
             key != "merge.stat" &&
-            key != "merge.ff" {
+            key != "merge.ff" &&
+            !key[6..].contains(".") {
             return Unsupported("merge configuration {key}")
         }
     }
@@ -362,7 +363,9 @@ fn merge_command_with(args: List[str], reflog: str, label: str) -> int ! commit.
         if scan_failed { dirty = locally_changed(ctx, value)? }
         if dirty { return Unsupported("merge dirty recursive recovery") }
         let style = ctx.repo.config["merge.conflictstyle"] else "merge"
-        plan = mergetree.plan(
+        plan = mergetree.plan_with_policy(
+            ctx,
+            value,
             copy inputs[2],
             ours,
             theirs,

@@ -174,6 +174,46 @@ pub fn plan(
     theirs_label: str,
     style: str,
 ) -> Plan ! worktree.WorkErrors {
+    plan_inner(
+        [],
+        index.empty(2)?,
+        base,
+        ours,
+        theirs,
+        ours_label,
+        base_label,
+        theirs_label,
+        style,
+    )?
+}
+
+/// Working-tree attribute lookup is specific to an actual content merge.
+/// Equal and one-sided object resolutions never consult merge drivers or CMS.
+pub fn plan_with_policy(
+    ctx: worktree.Context,
+    value: index.Index,
+    base: List[diff.File],
+    ours: List[diff.File],
+    theirs: List[diff.File],
+    ours_label: str,
+    base_label: str,
+    theirs_label: str,
+    style: str,
+) -> Plan ! worktree.WorkErrors {
+    plan_inner([ctx], value, base, ours, theirs, ours_label, base_label, theirs_label, style)?
+}
+
+fn plan_inner(
+    contexts: List[worktree.Context],
+    value: index.Index,
+    base: List[diff.File],
+    ours: List[diff.File],
+    theirs: List[diff.File],
+    ours_label: str,
+    base_label: str,
+    theirs_label: str,
+    style: str,
+) -> Plan ! worktree.WorkErrors {
     for endpoint in [copy ours, copy theirs] {
         for change in diff.changes(base, endpoint, diff.defaults())? {
             if change.status == "R" { return Unsupported("merge rename topology") }
@@ -220,36 +260,76 @@ pub fn plan(
             return Unsupported("merge mode conflict")
         }
         let mode = if b >= 0 && base[b].mode == ours[o].mode then theirs[t].mode else ours[o].mode
+        // Mode and blob resolution are independent. A chmod on one side and
+        // an edit on the other needs no content driver, even though the full
+        // entries above differ. Do not refuse it because of merge metadata.
+        if oid.equal(ours[o].id, theirs[t].id) || b >= 0 && oid.equal(base[b].id, theirs[t].id) {
+            var chosen = copy ours[o]
+            chosen.mode = mode
+            (mut result.files).push(chosen)
+            continue
+        }
+        if b >= 0 && oid.equal(base[b].id, ours[o].id) {
+            var chosen = copy theirs[t]
+            chosen.mode = mode
+            (mut result.files).push(chosen)
+            continue
+        }
         let name = str_from_utf8(path)?
         let data = if b < 0 then List[byte]() else copy base[b].data
-        // ort defaults to histogram, whereas the file API is measured against
-        // merge-file's Myers default. Do not silently substitute algorithms for
-        // repeated anchors or multi-hunk inputs; those need their own engine.
-        var line_hashes = Map[int, bool]()
-        for line in difftext.lines(data)? {
-            if line_hashes[line.hash] else false {
-                return Unsupported("merge repeated-line alignment")
+        var driver = "", marker_size = 7
+        if contexts.len > 0 {
+            let policy = worktree.attribute_policy(contexts[0], path, value)?
+            driver = policy.merge
+            marker_size = policy.conflict_marker_size
+            if driver != "" &&
+                driver != "+" &&
+                driver != "-" &&
+                worktree.configured_attribute_driver(contexts[0], "merge", driver) {
+                return Unsupported("merge driver {driver} for {name}")
             }
-            line_hashes[line.hash] = true
         }
-        if difftext.edits(data, ours[o].data)?.len > 1 ||
-            difftext.edits(data, theirs[t].data)?.len > 1 {
-            return Unsupported("merge multi-hunk alignment")
-        }
-        let merged = mergefile.merge(
-            data,
-            ours[o].data,
-            theirs[t].data,
-            ours_label,
-            base_label,
-            theirs_label,
-            style,
-        ) else |e| match e {
-            binary => { return Unsupported("merge binary conflict") },
-            invalid => { return invalid },
-            limit => {
-                return Fatal("limit: a file larger than 16777216 bytes in a three-way file merge")
-            },
+        var merged = mergefile.Result { data: copy ours[o].data, conflicts: 1 }
+        if driver == "-" {
+            (mut result.messages).push(
+                "warning: Cannot merge binary files: {name} ({ours_label} vs. {theirs_label})",
+            )
+        } else {
+            // ort defaults to histogram, whereas the file API is measured against
+            // merge-file's Myers default. Preserve the existing alignment limits.
+            var line_hashes = Map[int, bool]()
+            for line in difftext.lines(data)? {
+                if line_hashes[line.hash] else false {
+                    return Unsupported("merge repeated-line alignment")
+                }
+                line_hashes[line.hash] = true
+            }
+            if difftext.edits(data, ours[o].data)?.len > 1 ||
+                difftext.edits(data, theirs[t].data)?.len > 1 {
+                return Unsupported("merge multi-hunk alignment")
+            }
+            let safe_markers = marker_size >= 1 && marker_size <= 1024
+            merged = mergefile.merge_markers(
+                data,
+                ours[o].data,
+                theirs[t].data,
+                ours_label,
+                base_label,
+                theirs_label,
+                style,
+                if safe_markers then marker_size else 7,
+            ) else |e| match e {
+                binary => { return Unsupported("merge binary conflict") },
+                invalid => { return invalid },
+                limit => {
+                    return Fatal(
+                        "limit: a file larger than 16777216 bytes in a three-way file merge",
+                    )
+                },
+            }
+            if merged.conflicts > 0 && !safe_markers {
+                return Unsupported("merge conflict-marker-size={marker_size} for {name}")
+            }
         }
         (mut result.messages).push("Auto-merging {name}")
         if merged.conflicts > 0 {

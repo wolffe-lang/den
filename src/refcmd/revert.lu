@@ -63,7 +63,9 @@ fn revert_command(args: List[str]) -> int ! commit.CommitErrors {
     if item.parents.len == 1 { theirs = mergetree.files(ctx.repo, item.parents[0])? }
     let short = abbrev(ctx.repo, target)?,
         subject = str_from_utf8(commit.subject(item.headers.message)?)?
-    let plan = mergetree.plan(
+    let plan = mergetree.plan_with_policy(
+        ctx,
+        tx.value,
         mergetree.files(ctx.repo, target)?,
         ours,
         theirs,

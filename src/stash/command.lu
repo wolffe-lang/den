@@ -300,7 +300,9 @@ fn recover(args: List[str], pop: bool) -> int ! commit.CommitErrors {
             }
         }
         write_out(out)?
-        eprint("error: {outcome.error}")
+        // A published attribute conflict reports through merge messages and
+        // status, not an additional (empty) error diagnostic.
+        if outcome.status != 1 || outcome.error != "" { eprint("error: {outcome.error}") }
         return outcome.status
     }
     if pop {
