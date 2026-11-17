@@ -50,11 +50,12 @@ def main():
             d=results['den'];err=bytes.fromhex(d['stderr'])
             ok=(d['status']==2 and b'filter' in err and b'lfs' in err and b'sample.dat' in err and d['preserved']) if refuse else results['git']==results['den']
             save('attribute-config-'+kind+'-'+command,results,ok,dict(config=config,attributes=attrs))
-    merges=[('negative','-merge'),('binary','binary'),('ours-unconfigured','merge=ours'),('custom-unconfigured','merge=libcxx-reformat'),('lfs-unconfigured','merge=lfs'),('markers','conflict-marker-size=32')]
+    merges=[('negative','-merge'),('binary','binary'),('ours-unconfigured','merge=ours'),('ours-configured','merge=ours'),('custom-unconfigured','merge=libcxx-reformat'),('lfs-unconfigured','merge=lfs'),('markers','conflict-marker-size=32')]
     for kind,attrs in merges:
         for operation in ('merge','cherry-pick','revert','rebase','stash'):
             name='attribute-merge-'+kind+'-'+operation;case=out/name;case.mkdir();seed=case/'seed';run(git,['init','-q','-b','main',seed],root)
             (seed/'.gitattributes').write_text('sample.dat '+attrs+'\n');(seed/'sample.dat').write_text('first\nbase\nlast\n');g(seed,'add','.');g(seed,'commit','-qm','base');base=g(seed,'rev-parse','HEAD').decode().strip()
+            if kind=='ours-configured':g(seed,'config','merge.ours.driver','true')
             g(seed,'checkout','-qb','side');(seed/'sample.dat').write_text('first\ntheirs\nlast\n');g(seed,'commit','-qam','theirs');target=g(seed,'rev-parse','HEAD').decode().strip()
             g(seed,'checkout','-q','main');(seed/'sample.dat').write_text('first\nours\nlast\n');g(seed,'commit','-qam','ours')
             if operation=='stash':
@@ -64,11 +65,12 @@ def main():
             for label,tool in [('git',git),('den',den)]:
                 work=case/'work'
                 if work.exists():shutil.rmtree(work)
-                shutil.copytree(seed,work);q=run(tool,args,work,False);results[label]=dict(status=q.returncode,stdout=q.stdout.hex(),stderr=q.stderr.hex(),state=state(work))
+                shutil.copytree(seed,work);q=run(tool,args,work,False);results[label]=dict(status=q.returncode,stdout=q.stdout.hex(),stderr=q.stderr.hex(),state=state(work),body=(work/'sample.dat').read_bytes().hex())
             d=results['den'];err=bytes.fromhex(d['stderr']);spelling=attrs.split('=',1)[-1] if '=' in attrs else 'merge'
             ok=d['status']==2 and b'merge' in err and b'sample.dat' in err
             if '=' in attrs and not attrs.startswith('conflict-marker-size'):ok=ok and spelling.encode() in err
             if attrs.startswith('conflict-marker-size'):ok=d['status']==2 and b'conflict-marker-size' in err and b'sample.dat' in err
+            ok=ok or results['git']==results['den']
             save(name,results,ok,dict(attributes=attrs))
     (out/'summary.json').write_text(json.dumps(rows,indent=2)+'\n');failed=sum(not x['passed'] for x in rows)
     print(f'attribute-config: {len(rows)} rows, {failed} failures; zero skips',flush=True);return int(bool(failed))

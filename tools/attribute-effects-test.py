@@ -75,7 +75,7 @@ def main():
         if driver == 'python':
             prefix, suffix = ['class X:\n', '    def important(self):\n'], ['        return 0\n']
         elif driver == 'perl':
-            prefix, suffix = ['package X;\n', 'sub important {\n'], ['}\n']
+            prefix, suffix = ['package X;\n', 'sub important {\n', 'my $noise = 0;\n'], ['}\n']
         elif driver == 'rust':
             prefix, suffix = ['struct X;\n', 'impl X {\n', '    fn important(&self) {\n'], ['    }\n', '}\n']
         elif driver == 'dts':
