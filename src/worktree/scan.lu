@@ -786,6 +786,7 @@ fn walk_submodules(
                 } else if status && info[0] == 0 && at < 0 {
                     // Untracked or ignored: status renders the path alone.
                 } else if hashing &&
+                    !text_check &&
                     staged >= 0 &&
                     (info[0] == 0 || link_judged(info, prior_mode, symlinks)) &&
                     stat_clean(value.entries[staged], info, mode, written) {
