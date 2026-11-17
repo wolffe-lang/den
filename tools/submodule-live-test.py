@@ -20,6 +20,10 @@ live-wolf-std-ssh: through url.git@github.com:.insteadOf=https://github.com/,
 only with DEN_LIVE_SSH=1 and where an ssh key for github.com answers; a named
 SKIP otherwise.
 
+--self-test: live-gitlinks-clone-problem, no network: the pinned Git clones a
+repository that does not exist, and the problem text a gitlinks row would
+print must carry the last line Git wrote, so a red live row names its cause.
+
 --timed N: the measured row (not a gate): N interleaved recursive clones of
 wolf-web by each tool on this machine, wall time and the child's CPU from
 wait4, written to target/runs/submodule-live-timed.json.
@@ -52,6 +56,7 @@ p.add_argument('--tier', choices=('native', 'release'), default='native')
 p.add_argument('--timed', type=int, default=0)
 p.add_argument('--field', action='store_true', help='a Git other than the pinned one, for development only')
 p.add_argument('--only', default='', help='run the rows whose names match this pattern')
+p.add_argument('--self-test', action='store_true', help='the clone-problem row alone, with no network')
 p.add_argument('--url', default='', help='--timed only: another public superproject, measured locally')
 p.add_argument('--ssh-to-https', action='store_true',
                help='--timed only: url.https://github.com/.insteadOf=git@github.com: for scp-like submodule URLs')
@@ -61,6 +66,28 @@ live = runpy.run_path(str(R / 'tools/http-live-test.py'), run_name='http_live')
 git = str(Path(os.environ['DEN_GIT']).resolve())
 if not a.field:
     assert hashlib.sha256(Path(git).read_bytes()).hexdigest() == GIT_SHA256, 'pinned Git digest'
+
+
+def clone_problem(repo, capture):
+    """The problem a gitlinks row prints when the pinned Git's clone fails."""
+    return 'pinned Git could not clone %s' % repo
+
+
+if a.self_test:
+    with tempfile.TemporaryDirectory() as scratch:
+        missing = Path(scratch) / 'missing.git'
+        started = time.monotonic()
+        q = subprocess.run([git, 'clone', '-q', missing.as_uri(), 'c'], cwd=scratch, capture_output=True,
+                           env={**os.environ, 'GIT_TERMINAL_PROMPT': '0'}, stdin=subprocess.DEVNULL, timeout=120)
+        capture = dict(exit=q.returncode, stderr=q.stderr.decode('utf-8', 'backslashreplace'),
+                       wall=round(time.monotonic() - started, 2))
+    problem = clone_problem('missing', capture)
+    said = [line.strip() for line in capture['stderr'].splitlines() if line.strip()]
+    ok = capture['exit'] != 0 and bool(said) and said[-1] in problem
+    print(('PASS ' if ok else 'FAIL ') + 'live-gitlinks-clone-problem' +
+          ('' if ok else ' %r does not carry Git\'s last line %r (exit %d)' % (problem, said[-1:], capture['exit'])),
+          flush=True)
+    raise SystemExit(0 if ok else 1)
 den = R / 'target' / a.tier / 'den'
 if not den.is_file():
     raise SystemExit('FAIL submodule-live-input: build target/' + a.tier + '/den first')
@@ -274,7 +301,7 @@ def pinned_rows():
             verdict(name, stalled)
             continue
         if q['exit']:
-            verdict(name, ['pinned Git could not clone %s' % repo])
+            verdict(name, [clone_problem(repo, q)])
             continue
         c = work / 'c'
         moved = git_out(c, 'log', '-1', '--format=%H', '--', 'upstream').decode().strip()
