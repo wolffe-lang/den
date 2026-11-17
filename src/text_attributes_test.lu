@@ -2,6 +2,16 @@
 
 use worktree
 
+fn density(control: byte, count: int, printable: int, final_sub: bool) -> List[byte] {
+    var out = List[byte]()
+    for _ in 0..count { (mut out).push(control) }
+    for _ in 0..printable { (mut out).push(65 as byte) }
+    (mut out).push(13 as byte)
+    (mut out).push(10 as byte)
+    if final_sub { (mut out).push(26 as byte) }
+    out
+}
+
 fn main() -> int ! worktree.WorkErrors {
     for rule in [
         "* text\n",
@@ -42,6 +52,23 @@ fn main() -> int ! worktree.WorkErrors {
     for body in ["\r\n", "a\r\nb", "\0\r\n", "a\n\r\n"] {
         assert(worktree.has_crlf(body.bytes()))
     }
+    for body in ["\0\r\n", "one\rtwo\r\n", "\r\nlast\r", "\r\0end\r\n"] {
+        assert(worktree.auto_binary(body.bytes()))
+    }
+    for control in [1, 7, 11, 14, 26, 31, 127] {
+        assert(worktree.auto_binary(density(control as byte, 1, 127, false)))
+        assert(!worktree.auto_binary(density(control as byte, 1, 128, false)))
+    }
+    for control in [8, 9, 12, 27, 128, 255] {
+        assert(!worktree.auto_binary(density(control as byte, 100, 0, false)))
+    }
+    for count in [2, 3, 8] {
+        assert(worktree.auto_binary(density(1 as byte, count, count * 128 - 1, false)))
+        assert(!worktree.auto_binary(density(1 as byte, count, count * 128, false)))
+    }
+    assert(!worktree.auto_binary(density(26 as byte, 0, 0, true)))
+    assert(worktree.auto_binary(density(1 as byte, 1, 127, true)))
+    assert(!worktree.auto_binary(density(1 as byte, 1, 128, true)))
     print("PASS text-attributes-policy-units")
     0
 }
