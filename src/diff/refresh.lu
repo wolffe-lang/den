@@ -96,7 +96,7 @@ fn refresh_known(
     let filemode = worktree.config_bool(ctx, "core.filemode", true)?
     let symlinks = worktree.config_bool(ctx, "core.symlinks", true)?
     var verified = List[List[byte]]()
-    var attribute_cache = Map[str, bool]()
+    var directories = worktree.directory_modes()
     var triggered = false
     var k = 0
     for at in 0..tx.value.entries.len {
@@ -107,9 +107,12 @@ fn refresh_known(
         while k < hashed.len && compare(hashed[k].entry.path, prior.path) < 0 { k += 1 }
         // An entry collect did not hash is read with its CR-LF guard where a
         // text rule may apply: a body Git would clean is left unrefreshed.
-        let text_check = (k >= hashed.len || !same_entry(hashed[k].entry, prior)) &&
-            (prior.stat[6] == 0o100644 || prior.stat[6] == 0o100755) &&
-            worktree.text_path_policy(ctx, prior.path, tx.value, mut attribute_cache)?
+        var text_check = false
+        if (k >= hashed.len || !same_entry(hashed[k].entry, prior)) &&
+            (prior.stat[6] == 0o100644 || prior.stat[6] == 0o100755) {
+            let modes = worktree.path_modes(ctx, prior.path, tx.value, mut directories)?
+            text_check = modes[0] || modes[1]
+        }
         let file = state_of(
             ctx,
             prior,

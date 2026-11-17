@@ -78,15 +78,14 @@ pub fn patch(
     if !options.patch && !options.stat { return List[byte]() }
     if value.parents.len > 1 && !first_parent { return List[byte]() }
     var display = copy options
-    var changes = List[diff.Change]()
     if value.parents.len == 0 {
         worktree.check_attributes(ctx)?
-        changes = diff.changes(List[diff.File](), root_files(ctx, value.tree)?, display)?
-    } else {
-        display.revisions = [oid.hex(value.parents[0])?, oid.hex(value.id)?]
-        changes = diff.collect(ctx, display)?
+        let changes = diff.changes(List[diff.File](), root_files(ctx, value.tree)?, display)?
+        return diff.render(ctx, changes, display)?
     }
-    diff.render(ctx, changes, display)?
+    display.revisions = [oid.hex(value.parents[0])?, oid.hex(value.id)?]
+    // One index read per commit serves the endpoints and the diff attributes.
+    diff.collect_render(ctx, display)?
 }
 
 fn dispatch(args: List[str]) -> int ! worktree.WorkErrors {

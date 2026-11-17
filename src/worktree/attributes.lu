@@ -321,6 +321,38 @@ pub fn attributes_directory_modes(
     [content, identity]
 }
 
+/// A path-ordered batch's directory policy: the last directory's
+/// [text rule may apply, identity-breaking metadata may apply], reused while
+/// consecutive paths share that directory (no per-path key allocation).
+pub struct DirectoryModes { directory: List[byte], known: bool, modes: List[bool] }
+
+/// An empty DirectoryModes for one batch.
+pub fn directory_modes() -> DirectoryModes {
+    DirectoryModes { directory: List[byte](), known: false, modes: [false, false] }
+}
+
+/// path's directory modes through cache, recomputed only when the directory
+/// differs from the previous path's.
+pub fn path_modes(
+    ctx: Context,
+    path: List[byte],
+    value: index.Index,
+    mut cache: DirectoryModes,
+) -> List[bool] ! WorkErrors {
+    var end = 0
+    for i in 0..path.len { if path[i] == 47 as byte { end = i } }
+    var same = cache.known && cache.directory.len == end
+    if same {
+        for i in 0..end { if cache.directory[i] != path[i] { same = false; break } }
+    }
+    if !same {
+        cache.directory = owned_bytes(path[0..end])
+        cache.modes = attributes_directory_modes(ctx, cache.directory, value)?
+        cache.known = true
+    }
+    copy cache.modes
+}
+
 /// Read the shared attribute sources without acquiring unrelated worktree
 /// conversion-configuration limits for pure index/tree history readers.
 pub fn check_attributes(ctx: Context) -> () ! WorkErrors {

@@ -253,6 +253,18 @@ pub fn render(
     changes: List[Change],
     options: Options,
 ) -> List[byte] ! worktree.WorkErrors {
+    render_known(ctx, changes, options, List[List[str]]())?
+}
+
+/// render with the changes' diff drivers the caller's collect already
+/// resolved (known holds at most one list); with none, it resolves them
+/// itself, reading the index.
+pub fn render_known(
+    ctx: worktree.Context,
+    changes: List[Change],
+    options: Options,
+    known: List[List[str]],
+) -> List[byte] ! worktree.WorkErrors {
     if options.context < 0 ||
         options.context > 200000 ||
         options.abbreviate < 4 ||
@@ -267,7 +279,13 @@ pub fn render(
         return out
     }
     let policies = if options.patch || options.stat || options.numstat || options.shortstat {
-        diff_policies(ctx, changes, options.patch)?
+        if known.len > 0 {
+            copy known[0]
+        } else if changes.len == 0 {
+            List[str]()
+        } else {
+            diff_policies(ctx, changes, options.patch, worktree.read_index(ctx)?)?
+        }
     } else {
         List[str]()
     }

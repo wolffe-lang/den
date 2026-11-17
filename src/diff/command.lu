@@ -221,7 +221,7 @@ fn dispatch(args: List[str]) -> int ! worktree.WorkErrors {
         return Fatal("this operation must be run in a work tree")
     }
     let collected = collect_known(ctx, options)?
-    let bytes = render(ctx, collected.changes, options)?
+    let bytes = render_known(ctx, collected.changes, options, [collected.policies])?
     var stdout = fs.stdout()
     fs.write_chunk(mut stdout, bytes)?
     refresh_known(ctx, options, collected.hashed) else |_| {}

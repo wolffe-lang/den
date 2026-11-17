@@ -1135,7 +1135,8 @@ comparison. `text_path_policy` caches that result for tree/index readers.
 `has_crlf` tests adjacent bytes, and `check_text_content` refuses by attribute and
 path when a CR-LF body would require cleaning; an LF body pays only the byte scan.
 `attributes_directory_modes` reports, per directory, whether a text rule and
-whether identity-breaking metadata may apply; `check_path_identity(ctx, path,
+whether identity-breaking metadata may apply (`path_modes` caches it for a
+path-ordered batch through a `DirectoryModes`); `check_path_identity(ctx, path,
 value, caches)` refuses such metadata for one regular path through one resolver
 created on first use and shared by the caller's batch.
 
@@ -1393,6 +1394,10 @@ pub fn diff.collect(ctx: worktree.Context, options: Options)
     -> List[Change] ! worktree.WorkErrors
 pub fn diff.render(ctx: worktree.Context, changes: List[Change], options: Options)
     -> List[byte] ! worktree.WorkErrors
+pub fn diff.render_known(ctx: worktree.Context, changes: List[Change], options: Options,
+    known: List[List[str]]) -> List[byte] ! worktree.WorkErrors
+pub fn diff.collect_render(ctx: worktree.Context, options: Options)
+    -> List[byte] ! worktree.WorkErrors
 pub fn diff.run(args: List[str]) -> int
 ```
 
@@ -1454,7 +1459,11 @@ ambiguity remain bytes; message transcoding is an explicit refusal.
 
 `history.abbreviate` checks the loose/packed object namespace for collisions.
 `history.patch` compares a root against an in-memory empty endpoint with
-`diff.changes`; nonroots use `diff.collect`. Both paths call `diff.render` with
+`diff.changes` and `diff.render`; nonroots use `diff.collect_render`: collect
+resolves the changes' diff drivers while its own index is alive and
+`render_known` renders with them, so one index read per commit serves both the
+endpoints and the diff attributes, and rendering never holds the index. Both
+paths use
 `diff.configured` defaults. They never invoke `diff.run` or `index.write_tree`.
 `diff.resolve` remains a compatibility adapter to the shared revision evaluator.
 Show handles loose/packed commits, blobs, raw tree entries, annotated tags and
