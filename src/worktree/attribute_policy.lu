@@ -56,6 +56,15 @@ pub fn configured_attribute_driver(ctx: Context, family: str, name: str) -> bool
     false
 }
 
+/// A diff driver as counts and binary rendering see it: a named driver whose
+/// `diff.<name>.binary` is true is binary ('-'); any other name keeps Git's
+/// content detection. Patch consumers refuse configured drivers separately.
+pub fn diff_driver_binary(ctx: Context, driver: str) -> str ! WorkErrors {
+    if driver == "" || driver == "-" || driver == "+" { return driver }
+    if config_bool(ctx, "diff.{driver}.binary", false)? { return "-" }
+    driver
+}
+
 fn attribute_pattern(raw: List[byte]) -> List[byte] ! WorkErrors {
     if raw.len == 0 || raw[0] != 34 as byte { return copy raw }
     if raw.len < 2 || raw[raw.len - 1] != 34 as byte {

@@ -549,7 +549,7 @@ fn diff_policies(
     for change in changes {
         let driver = attribute_diff(ctx, change, value, mut cache)?
         if patch { check_diff_driver(ctx, path(change), driver)? }
-        (mut out).push(driver)
+        (mut out).push(worktree.diff_driver_binary(ctx, driver)?)
     }
     out
 }

@@ -331,7 +331,7 @@ fn summary_diff_policies(
             }
             if entry.mode == 0o100644 || entry.mode == 0o100755 {
                 let policy = worktree.attribute_policy_cached(ctx, entry.path, value, mut cache)?
-                driver = policy.diff
+                driver = worktree.diff_driver_binary(ctx, policy.diff)?
             }
         }
         (mut out).push(driver)
