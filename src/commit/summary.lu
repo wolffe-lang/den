@@ -43,10 +43,20 @@ fn binary(data: List[byte]) -> bool {
 /// capped at four million line pairs, each body at 16 MiB. NUL in the first
 /// 8000 bytes selects binary counting. Malformed/large data is a row, not a trap.
 pub fn line_counts(before: List[byte], after: List[byte]) -> LineCounts ! CommitErrors {
+    line_counts_with_diff(before, after, "")?
+}
+
+fn line_counts_with_diff(
+    before: List[byte],
+    after: List[byte],
+    driver: str,
+) -> LineCounts ! CommitErrors {
     if before.len > 16777216 || after.len > 16777216 {
         return Fatal("limit: a file larger than 16777216 bytes in a change summary")
     }
-    if binary(before) || binary(after) { return LineCounts { added: 0, deleted: 0, binary: true } }
+    if driver == "-" || driver != "+" && (binary(before) || binary(after)) {
+        return LineCounts { added: 0, deleted: 0, binary: true }
+    }
     let left = lines(before)?
     let right = lines(after)?
     if left.len > 0 && right.len > 4000000 / left.len {
@@ -296,6 +306,39 @@ pub fn change_rows(
     summary_with(ctx, before, after, false)?
 }
 
+// Resolve once per changed blob, sharing parsed directory rules and the
+// attribute reader across the summary. Detail-only rows never read policies.
+fn summary_diff_policies(
+    ctx: worktree.Context,
+    before: List[worktree.FlatEntry],
+    after: List[worktree.FlatEntry],
+    edits: List[Change],
+) -> List[str] ! CommitErrors {
+    var out = List[str]()
+    if edits.len == 0 { return out }
+    let value = worktree.read_index(ctx)?
+    var cache = worktree.attribute_cache(ctx)?
+    for change in edits {
+        let same = change.old_at >= 0 &&
+            change.new_at >= 0 &&
+            oid.equal(before[change.old_at].id, after[change.new_at].id)
+        var driver = ""
+        if !change.dropped && !same {
+            let entry = if change.new_at >= 0 {
+                copy after[change.new_at]
+            } else {
+                copy before[change.old_at]
+            }
+            if entry.mode == 0o100644 || entry.mode == 0o100755 {
+                let policy = worktree.attribute_policy_cached(ctx, entry.path, value, mut cache)?
+                driver = policy.diff
+            }
+        }
+        (mut out).push(driver)
+    }
+    out
+}
+
 fn summary_with(
     ctx: worktree.Context,
     before: List[worktree.FlatEntry],
@@ -307,7 +350,13 @@ fn summary_with(
     var files = 0, added = 0, deleted = 0
     var detail = List[byte]()
     let quote = worktree.config_bool(ctx, "core.quotepath", true)?
-    for change in edits {
+    let policies = if counts {
+        summary_diff_policies(ctx, before, after, edits)?
+    } else {
+        List[str]()
+    }
+    for i in 0..edits.len {
+        let change = copy edits[i]
         if change.dropped { continue }
         files += 1
         var old_data = List[byte](), new_data = List[byte]()
@@ -318,7 +367,9 @@ fn summary_with(
             if counts && !same {
                 if change.old_at >= 0 { old_data = blob(reader, before[change.old_at])? }
                 if change.new_at >= 0 { new_data = blob(reader, after[change.new_at])? }
-                let count = line_counts(old_data, new_data)?
+                // Driver execution and custom hunk headers are patch-only:
+                // named drivers never make commit's shortstat refuse.
+                let count = line_counts_with_diff(old_data, new_data, policies[i])?
                 added += count.added
                 deleted += count.deleted
             }

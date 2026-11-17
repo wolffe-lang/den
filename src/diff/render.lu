@@ -56,11 +56,30 @@ fn header_name(mut out: List[byte], marker: str, prefix: str, files: List[File],
     (mut out).push(10 as byte)
 }
 
+// The explicit text option wins over attributes. Named drivers not handled
+// by the patch consumer have already refused; unconfigured names use auto.
+fn binary_policy(driver: str, options: Options, detected: bool) -> bool {
+    if options.text { return false }
+    if driver == "-" { return true }
+    if driver == "+" { return false }
+    detected
+}
+
+fn diff_binary(change: Change, driver: str, options: Options) -> bool {
+    binary_policy(
+        if regular_change(change) then driver else "",
+        options,
+        change.before.len > 0 && delta.binary(change.before[0].data) ||
+            change.after.len > 0 && delta.binary(change.after[0].data),
+    )
+}
+
 fn patch_one(
     mut out: List[byte],
     ctx: worktree.Context,
     change: Change,
     options: Options,
+    driver: str,
 ) -> () ! worktree.WorkErrors {
     let old_path = if change.before.len > 0 {
         owned(change.before[0].path)
@@ -114,7 +133,7 @@ fn patch_one(
         (mut out).push(10 as byte)
     }
     let before = data(change.before), after = data(change.after)
-    if !options.text && (delta.binary(before) || delta.binary(after)) {
+    if diff_binary(change, driver, options) {
         if options.binary_patch { add(mut out, diffbinary.patch(before, after)?); return }
         add(mut out, "Binary files ".bytes())
         add(
@@ -232,32 +251,42 @@ pub fn render(
         for change in changes { name_record(mut out, change, options) }
         return out
     }
+    let policies = if options.patch || options.stat || options.numstat || options.shortstat {
+        diff_policies(ctx, changes, options.patch)?
+    } else {
+        List[str]()
+    }
     if options.stat || options.numstat || options.shortstat {
-        render_stats(mut out, changes, options)?
+        render_stats(mut out, changes, options, policies)?
     }
     if options.patch {
         if changes.len > 0 && (options.stat || options.numstat || options.shortstat) {
             (mut out).push(10 as byte)
         }
+        var at = 0
         for change in changes {
+            let driver = policies[at]
+            at += 1
             region patch_scratch {
                 if options.submodule != "short" && gitlink_change(change) {
-                    submodule_patch(mut out, ctx, change, options)?
+                    submodule_patch(mut out, ctx, change, options, driver)?
                 } else if change.status == "T" {
                     patch_one(
                         mut out,
                         ctx,
                         Change { before: copy change.before, after: [], status: "D", percent: 0 },
                         options,
+                        driver,
                     )?
                     patch_one(
                         mut out,
                         ctx,
                         Change { before: [], after: copy change.after, status: "A", percent: 0 },
                         options,
+                        driver,
                     )?
                 } else {
-                    patch_one(mut out, ctx, change, options)?
+                    patch_one(mut out, ctx, change, options, driver)?
                 }
             }
         }
@@ -282,6 +311,7 @@ fn submodule_patch(
     ctx: worktree.Context,
     change: Change,
     options: Options,
+    driver: str,
 ) -> () ! worktree.WorkErrors {
     let path = if change.after.len > 0 {
         owned(change.after[0].path)
@@ -296,6 +326,7 @@ fn submodule_patch(
                 ctx,
                 Change { before: [], after: copy change.after, status: "A", percent: 0 },
                 options,
+                driver,
             )?
         } else {
             patch_one(
@@ -303,6 +334,7 @@ fn submodule_patch(
                 ctx,
                 Change { before: copy change.before, after: [], status: "D", percent: 0 },
                 options,
+                driver,
             )?
             add(mut out, summary(ctx, path, [], side_ids(change.after), false)?)
         }

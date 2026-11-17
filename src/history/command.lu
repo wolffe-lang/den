@@ -173,6 +173,8 @@ fn dispatch(args: List[str]) -> int ! worktree.WorkErrors {
             display.context = number(arg[2..])?
             display.patch = true
             explicit_patch = true
+        } else if arg == "-a" || arg == "--text" {
+            display.text = true
         } else if arg == "--binary" {
             display.binary_patch = true
             display.patch = true
@@ -413,11 +415,6 @@ fn dispatch(args: List[str]) -> int ! worktree.WorkErrors {
         if merged && display.patch {
             if format != "medium" { return Unsupported("show combined merge format {format}") }
             if display.binary_patch { return Unsupported("show combined merge binary patch") }
-            if fs.exists("{ctx.root}/.gitattributes") ||
-                fs.exists("{ctx.repo.gitdir}/info/attributes") ||
-                (ctx.repo.config["core.attributesfile"] else "") != "" {
-                return Unsupported("diff attributes")
-            }
         }
         if user_given {
             if user == "" { continue }

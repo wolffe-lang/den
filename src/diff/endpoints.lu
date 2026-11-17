@@ -496,6 +496,64 @@ fn endpoint_attributes(
     }
 }
 
+fn regular_change(change: Change) -> bool {
+    for file in change.before {
+        if file.mode == 0o100644 || file.mode == 0o100755 { return true }
+    }
+    for file in change.after {
+        if file.mode == 0o100644 || file.mode == 0o100755 { return true }
+    }
+    false
+}
+
+// Resolve at the destination (or the source for a deletion), using the same
+// worktree/index attribute sources as staging. Symlinks and gitlinks do not
+// acquire a regular file's diff policy.
+fn attribute_diff(
+    ctx: worktree.Context,
+    change: Change,
+    value: index.Index,
+    mut cache: worktree.AttributeCache,
+) -> str ! worktree.WorkErrors {
+    if !regular_change(change) { return "" }
+    let policy = worktree.attribute_policy_cached(ctx, path(change), value, mut cache)?
+    policy.diff
+}
+
+fn check_diff_driver(
+    ctx: worktree.Context,
+    path: List[byte],
+    driver: str,
+) -> () ! worktree.WorkErrors {
+    if driver == "" || driver == "-" || driver == "+" { return }
+    if driver == "cpp" ||
+        driver == "dts" ||
+        driver == "perl" ||
+        driver == "python" ||
+        driver == "rust" ||
+        worktree.configured_attribute_driver(ctx, "diff", driver) {
+        return Unsupported("diff driver {driver} at {text(path)?}")
+    }
+    // An unconfigured custom driver is Git's default content-based diff.
+}
+
+fn diff_policies(
+    ctx: worktree.Context,
+    changes: List[Change],
+    patch: bool,
+) -> List[str] ! worktree.WorkErrors {
+    var out = List[str]()
+    if changes.len == 0 { return out }
+    let value = worktree.read_index(ctx)?
+    var cache = worktree.attribute_cache(ctx)?
+    for change in changes {
+        let driver = attribute_diff(ctx, change, value, mut cache)?
+        if patch { check_diff_driver(ctx, path(change), driver)? }
+        (mut out).push(driver)
+    }
+    out
+}
+
 /// collect's answer and the worktree hashes it made (den#101). Endpoints carry
 /// ids first; bodies are read only for paths that differ; the worktree side
 /// reads a file only when its stat is not clean against its entry.
