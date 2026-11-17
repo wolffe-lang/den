@@ -198,7 +198,8 @@ fn attributes_source_reader(
 // Only a CR-LF body pays for path matching. LF bodies retain their existing
 // byte/hash path, and a CR at a chunk's end is carried into the next chunk.
 fn text_conversion_needed(state: Attributes, binary: bool) -> bool {
-    state.text == 1 || state.text == 2 && !binary || state.text == 0 && state.eol == 1
+    let value = attribute_text(state)
+    value == 1 || value == 2 && !binary || value == 0 && state.eol == 1
 }
 
 fn check_crlf(ctx: Context, path: List[byte], binary: bool) -> () ! WorkErrors {

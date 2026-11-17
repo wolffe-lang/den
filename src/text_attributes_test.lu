@@ -65,6 +65,25 @@ fn main() -> int ! worktree.WorkErrors {
                 expected,
         )
     }
+    // A specified text field wins over legacy crlf in either order; -crlf
+    // acts as -text only while text is unspecified.
+    for (rules, expected) in [
+        ("f text -crlf\n", "1/-1"),
+        ("f -crlf text\n", "1/-1"),
+        ("f text !crlf\n", "1/0"),
+        ("f text=auto -crlf\n", "2/-1"),
+        ("f -text crlf\n", "-1/1"),
+        ("f -crlf\n", "-1/-1"),
+        ("f crlf\n", "0/1"),
+        ("f crlf=input\n", "0/1"),
+        ("f -crlf\nf !crlf\n", "0/0"),
+        ("f binary\nf !text -crlf\n", "-1/-1"),
+    ] {
+        var value = worktree.attributes_empty()
+        let data = rules.bytes(), name = "f".bytes()
+        worktree.apply_attribute_bytes(data, [], name, mut value, false)?
+        assert("{worktree.attribute_text(value)}/{value.crlf}" == expected)
+    }
     for (rules, path) in [
         ("\"a b\" binary\n", "a b"),
         ("\"#name\" binary\n", "#name"),

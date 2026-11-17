@@ -5,7 +5,9 @@ use object
 
 /// Effective per-path attributes. Empty driver strings mean Git defaults;
 /// '-' and '+' are unset/set for diff/merge. Text: -1 unset, 0 default,
-/// 1 forced, 2 auto. Eol: -1 unset, 0 default, 1 LF, 2 CRLF.
+/// 1 forced, 2 auto. Eol: -1 unset, 0 default, 1 LF, 2 CRLF. The legacy crlf
+/// field is kept apart (-1 unset, 0 default, 1 set or valued): a specified
+/// text field wins over it in either order, as the pinned Git stores it.
 pub struct Attributes {
     text: int,
     eol: int,
@@ -15,7 +17,7 @@ pub struct Attributes {
     conflict_marker_size: int,
     ident: bool,
     encoding: str,
-    legacy_crlf: bool,
+    crlf: int,
 }
 
 /// One compiled file rule, shared by the directory cache and target preflight.
@@ -41,7 +43,7 @@ pub fn attributes_empty() -> Attributes {
         conflict_marker_size: 7,
         ident: false,
         encoding: "",
-        legacy_crlf: false,
+        crlf: 0,
     }
 }
 
@@ -208,12 +210,7 @@ fn attribute_apply(mut value: Attributes, raw: List[byte]) -> () ! WorkErrors {
     } else if name == "working-tree-encoding" {
         value.encoding = if state <= 0 then "" else if assigned then copy argument else "+"
     } else if name == "crlf" {
-        if state <= 0 {
-            value.text = state
-            value.legacy_crlf = false
-        } else {
-            value.legacy_crlf = true
-        }
+        value.crlf = if state <= 0 then state else 1
     }
 }
 
@@ -299,12 +296,20 @@ pub fn attribute_policy(
     attribute_policy_cached(ctx, path, value, mut cache)?
 }
 
+/// The text state a decision uses: the text field when specified, otherwise
+/// `-crlf` as `-text`. A set or valued crlf alone refuses in identity checks.
+pub fn attribute_text(value: Attributes) -> int {
+    if value.text != 0 { return value.text }
+    if value.crlf < 0 { return -1 }
+    0
+}
+
 fn check_attribute_identity(ctx: Context, path: List[byte], value: Attributes) -> () ! WorkErrors {
-    if value.eol > 1 && value.text != -1 {
+    if value.eol > 1 && attribute_text(value) != -1 {
         return Unsupported("worktree attributes: eol at {text(path)?}")
     }
     if value.text > 2 { return Unsupported("worktree attributes: text at {text(path)?}") }
-    if value.legacy_crlf && value.text == 0 {
+    if value.crlf > 0 && value.text == 0 {
         return Unsupported("worktree attributes: crlf at {text(path)?}")
     }
     if value.ident { return Unsupported("worktree attributes: ident at {text(path)?}") }
