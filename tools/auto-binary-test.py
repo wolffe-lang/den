@@ -20,6 +20,7 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument('--tier', default='native')
     p.add_argument('--den')
+    p.add_argument('--filter', default='')
     p.add_argument('--dev-oracle', action='store_true')
     a = p.parse_args()
     root = Path(__file__).resolve().parents[1]
@@ -117,11 +118,14 @@ def main():
         'control-sub-at-eof': b'\r\n\x1a',
         'control-sub-two-at-eof': b'\r\n\x1a\x1a',
         'control-sub-mixed-at-eof': b'\x01\r\n\x1a',
+        'control-sub-mixed-threshold-127': b'A' * 127 + b'\x01\r\n\x1a',
         'control-sub-mixed-threshold': b'A' * 128 + b'\x01\r\n\x1a',
     }.items():
         controls(name, body)
     rows, oracle_rows = [], []
     for name, rule, info, body in cases:
+        if a.filter not in name:
+            continue
         case = out / name
         case.mkdir()
         seed = case / 'seed'
@@ -196,6 +200,7 @@ def main():
             if not ok:
                 print(json.dumps(row), flush=True)
             rows.append(row)
+    assert rows, 'empty selection'
     (out / 'oracle.json').write_text(json.dumps(oracle_rows, indent=2) + '\n')
     (out / 'summary.json').write_text(json.dumps(rows, indent=2) + '\n')
     failed = sum(not x['passed'] for x in rows)
