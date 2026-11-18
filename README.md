@@ -248,9 +248,13 @@ refuse.
 An unconfigured filter driver is identity, as in Git. A configured one (any
 `filter.<name>.*` key, `required` included) refuses by name. Driver configuration
 comes from den's ordinary configuration: the system, global and repository files
-and `GIT_CONFIG_COUNT` entries. Macro definitions, `ident`, working-tree encodings,
-`crlf` set without `text`, `eol=crlf` and `text` values other than `auto` remain
-refused by name. Worktree commands also refuse `core.eol` other than `lf` or
+and `GIT_CONFIG_COUNT` entries. Macro definitions remain refused by name. `ident`,
+working-tree encodings, `crlf` set without `text`, `eol=crlf` and `text` values
+other than `auto` refuse by name when den reads or writes a file they apply to.
+Status and diff take a tracked file whose lstat still matches its index entry as
+that entry's blob, unread, whatever its attributes say, as Git does; only a changed
+or racily clean file is read and checked (`tools/attribute-statclean-test.py`).
+Worktree commands also refuse `core.eol` other than `lf` or
 `native`; pure index/tree history comparisons do not acquire checkout-configuration
 limits. `tools/text-attributes-test.py`, `tools/attribute-effects-test.py` and
 `tools/attribute-config-test.py` keep exact Git comparisons separate from the
@@ -570,11 +574,13 @@ namespaces, and writes do not duplicate objects already packed. Multiple packs
 and `.keep` files need no special caller behavior. OFS_DELTA and in-pack REF_DELTA
 chains reconstruct owned bodies, including forward REF bases.
 
-Both file SHA-1 trailers and their binding are verified before lookup results
-are used. The index validates fan-out, sorted unique names, CRC entries and
-32/64-bit offsets. Each reconstructed entry checks CRC, zlib consumption, sizes,
-delta instructions and its independent object identity. Corruption is a named
-error, not a missing-object fallback.
+The index's copy of the pack's SHA-1 trailer must equal the pack's own before
+lookup results are used. An object read checks neither file's whole SHA-1, as
+Git's reads do not; verify-pack, fsck and installation check both. The index
+validates fan-out, sorted unique names, CRC entries and 32/64-bit offsets. Each
+reconstructed entry checks CRC, zlib consumption, sizes, delta instructions and
+its independent object identity. Corruption is a named error, not a
+missing-object fallback.
 
 Pack hashing and file reads use reclaimed 64-KiB offset windows without mmap.
 Compressed entries and reconstructed bodies are bounded whole-object buffers:

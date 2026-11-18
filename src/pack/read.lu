@@ -22,7 +22,10 @@ fn range_bytes(fd: int, start: int, count: int) -> List[byte] ! PackErrors {
     if start < 0 || count < 0 || start > 9223372036854775807 - count {
         return Unsupported("pack offset range")
     }
+    // One buffer of the range's size: growing it a byte at a time kept every
+    // smaller buffer it outgrew (an 11 MB index cost 32 MB).
     var out = List[byte](), pos: int = 0
+    (mut out).reserve(count)
     while pos < count {
         region window {
             let want = if count - pos > 65536 then 65536 else count - pos
@@ -48,14 +51,22 @@ fn open_pack(path: str) -> int ! PackErrors {
     }
 }
 
-fn load_index(path: str) -> Index ! PackErrors {
+/// A pack index for verify-pack, fsck, installation and housekeeping: its own
+/// checksum included.
+fn load_index(path: str) -> Index ! PackErrors { load_index_summed(path, true)? }
+
+/// A pack index for object reads and lookups: its own checksum is not read, as
+/// the pinned Git reads one (parse_index).
+fn load_read_index(path: str) -> Index ! PackErrors { load_index_summed(path, false)? }
+
+fn load_index_summed(path: str, summed: bool) -> Index ! PackErrors {
     let fd = fs_open(path)?
     defer fs_close(fd) else |_| {}
     let size = file_size(fd)?
     if size > 16777216 { return Unsupported("limit: a pack index larger than 16777216 bytes") }
     let bytes = range_bytes(fd, 0, size)?
     if file_size(fd)? != size { return Unsupported("pack index changed") }
-    parse_index(bytes)?
+    parse_index(bytes, summed)?
 }
 
 /// Header, object count and offset bounds against the parsed index; the size.
@@ -302,7 +313,7 @@ fn unpack(
     let id = oid.from_bytes("sha1", hash.final1(take digest)) else |_| {
         return Unsupported("pack object identity")
     }
-    if (oid.hex(id) else "") != index.entries[slot].name {
+    if id.bytes.len != 20 || name_cmp(index, slot, id.bytes) != 0 {
         return Unsupported("pack object identity")
     }
     cache_keep(mut cache, pack_no, offset, result)
@@ -412,7 +423,7 @@ pub fn read_object(gitdir: str, name: str, cap: int) -> Body ! PackErrors {
         // Per-pack scratch is reclaimed; the returned body is explicitly owned.
         var result = Body { kind: "", data: List[byte]() }, found = false
         region candidate {
-            let index = load_index(path)?
+            let index = load_read_index(path)?
             let fd = open_pack("{path[0..path.len - 4]}.pack")?
             defer fs_close(fd) else |_| {}
             let end = bounds(fd, index)?
@@ -453,20 +464,21 @@ pub fn packed_count(gitdir: str) -> int ! PackErrors {
 }
 
 /// Return at most two distinct matching names, sufficient for ambiguity checks.
-/// Validate the idx checksum and the trailer binding even for prefix-only reads.
+/// Validate the trailer binding even for prefix-only reads.
 pub fn prefix(gitdir: str, prefix: str) -> List[str] ! PackErrors {
     var out = List[str]()
     for path in indexes(gitdir)? {
         region candidate {
-            let index = load_index(path)?
+            let index = load_read_index(path)?
             let fd = open_pack("{path[0..path.len - 4]}.pack")?
             defer fs_close(fd) else |_| {}
             let _ = bounds(fd, index)?
-            for entry in index.entries {
-                if entry.name.starts_with(prefix) {
+            for slot in 0..index.entries.len {
+                let name = name_hex(index, slot)
+                if name.starts_with(prefix) {
                     var duplicate = false
-                    for name in out { if name == entry.name { duplicate = true } }
-                    if !duplicate && out.len < 2 { (mut out).push(copy entry.name) }
+                    for seen in out { if seen == name { duplicate = true } }
+                    if !duplicate && out.len < 2 { (mut out).push(copy name) }
                 }
             }
         }
@@ -502,7 +514,7 @@ pub fn session(gitdir: str) -> Session {
 
 fn load_session(mut s: Session) -> () ! PackErrors {
     for path in indexes(s.gitdir)? {
-        let index = load_index(path)?
+        let index = load_read_index(path)?
         let fd = open_pack("{path[0..path.len - 4]}.pack")?
         defer fs_close(fd) else |_| {}
         let end = bounds(fd, index)?
@@ -651,12 +663,13 @@ pub fn session_prefix(s: Session, prefix_text: str) -> List[str] ! PackErrors {
         var lo = 0, hi = index.entries.len
         while lo < hi {
             let mid = (lo + hi) / 2
-            if index.entries[mid].name < prefix_text { lo = mid + 1 } else { hi = mid }
+            if name_hex(index, mid) < prefix_text { lo = mid + 1 } else { hi = mid }
         }
-        while lo < index.entries.len && index.entries[lo].name.starts_with(prefix_text) {
+        while lo < index.entries.len && name_hex(index, lo).starts_with(prefix_text) {
+            let name = name_hex(index, lo)
             var duplicate = false
-            for name in out { if name == index.entries[lo].name { duplicate = true } }
-            if !duplicate && out.len < 2 { (mut out).push(copy index.entries[lo].name) }
+            for seen in out { if seen == name { duplicate = true } }
+            if !duplicate && out.len < 2 { (mut out).push(copy name) }
             if out.len == 2 { break }
             lo += 1
         }

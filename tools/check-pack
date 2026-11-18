@@ -15,6 +15,7 @@ for tier in native release; do
     "$WOLF" build $flag --deny-warnings probes/pack-client/main.lu -o "target/$tier/pack-client"
     tools/env python3 -I tools/pack-test.py --tier "$tier"
     tools/env python3 -I tools/pack-interop.py --tier "$tier"
+    tools/env python3 -I tools/pack-idx-sum-test.py --tier "$tier"
     for name in history refs merge replay; do
         DEN_PACKED_FIXTURES=1 tools/env python3 -I "tools/$name-test.py" --tier "$tier"
     done

@@ -100,14 +100,19 @@ verify('flipped-delta-verify-pack',OUT/'flipped-delta','pack checksum')
 big = random.Random(901).randbytes(300000)
 p,i,_ = make([(3,big,big,b'')]); check('window-crossing',repo('windows',p,i),big)
 # Trailer failures do not disappear when resolving a prefix.
-for name,p,i,reason in [('short-pack',pack[:11],idx,'pack truncated'),('bad-pack-trailer',pack[:-1]+bytes([pack[-1]^1]),idx,'pack index binding'),('bad-idx-trailer',pack,idx[:-1]+bytes([idx[-1]^1]),'pack index checksum'),('short-idx',pack,idx[:1020],'pack index truncated')]:
+# A read does not check the idx's own checksum, as the pinned Git does not
+# (its reads succeed); verify-pack does.
+for name,p,i,reason in [('short-pack',pack[:11],idx,'pack truncated'),('bad-pack-trailer',pack[:-1]+bytes([pack[-1]^1]),idx,'pack index binding'),('bad-idx-trailer',pack,idx[:-1]+bytes([idx[-1]^1]),None),('short-idx',pack,idx[:1020],'pack index truncated')]:
     rr=repo(name,p,i); check(name,rr,last,expected=reason); check(name+'-prefix',rr,last,expected=reason,name_id=oid('blob',last).hex()[:7])
 verify('bad-pack-trailer-verify-pack',OUT/'bad-pack-trailer','pack checksum')
-# Re-sign malformed indexes so structure/CRC guards, not just SHA, must fire.
+verify('bad-idx-trailer-verify-pack',OUT/'bad-idx-trailer','pack index checksum')
+# Malformed indexes, re-signed and with the checksum left stale: the
+# structure and CRC guards fire either way, not the SHA.
 for name,offset,value,reason in [('fanout',8,u32(999),'pack index fanout'),('crc',1032+20*3,b'\0'*4,'pack entry CRC'),('offset',1032+24*3+4*next(n for n,x in enumerate(records) if x[2]==12),u32(13),'pack index offsets'),('pack-binding',len(idx)-40,b'\0'*20,'pack index binding')]:
-    bad=idx[:offset]+value+idx[offset+len(value):]; rr=repo(name,pack,resign_idx(bad))
+    bad=idx[:offset]+value+idx[offset+len(value):]
     target = next(b for b in (base,middle,last) if oid('blob',b)==records[0][0]) if name=='crc' else last
-    check(name,rr,target,expected=reason)
+    check(name,repo(name,pack,resign_idx(bad)),target,expected=reason)
+    check(name+'-stale-sum',repo(name+'-stale-sum',pack,bad),target,expected=reason)
 # Corrupt the delta instruction and repair every outer integrity layer.
 for name,delta,reason in [('zero-op',size(len(base))+b'\x00\x00','pack delta invalid'),('truncated-copy',size(len(base))+b'\x01\x91','pack delta invalid'),('base-size',b'\x01\x01\x01x','pack delta invalid')]:
     p,i,_=make([(3,base,base,b''),(6,last,delta,0)]); check(name,repo(name,p,i),last,expected=reason)

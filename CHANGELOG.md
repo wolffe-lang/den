@@ -1,5 +1,43 @@
 # Changes
 
+## Unreleased — status of large trees
+
+- Reading an index checks its cache tree against the entries in near-linear
+  time. Each directory's record was tested against every entry, and the
+  records against one another, so an index of 100,000 entries in 10,000
+  directories took den about a minute to read where Git takes 17 ms, and
+  plain `status` of 10,000 files in 1,000 directories spent two fifths of its
+  time there. `tools/index-scale-test.py` holds `ls-files` of that index to
+  Git's CPU time and peak memory.
+- The status walk finds a directory's gitlink entry by binary search. It
+  scanned every index entry for each directory it met, so status of 20,000
+  files, one in each of 20,000 directories, took 6.7 s where Git takes
+  0.15 s. `tools/status-scale-test.py` holds that shape to Git's CPU time and
+  peak memory.
+- Opening a repository's packs no longer hashes each pack index whole or
+  spells every object name in it in hex. An index keeps its name table as
+  stored, and a name is spelled only when one is printed. Git's reads skip
+  that checksum too; verify-pack and fsck still check it. Status beside
+  390,000 packed objects took 0.71 s where Git takes a millisecond, and now
+  takes 0.20 s. `tools/status-scale-test.py`'s objects shape holds it to Git's
+  CPU time and peak memory.
+- `status` keeps about what it needs. Nothing is freed before a region ends,
+  so every outgrown list buffer, every lstat record, listing and absolute path
+  of its walk, and its copies of the index stayed until it exited. Status of
+  10,000 files in 1,000 directories peaked at 68 MB, nearly ten times Git's
+  7 MB; it now peaks at 36 MB. Status of 20,000 files, one in each of 20,000
+  directories, went from 230 MB to 137 MB. A pack file's byte range is read
+  into one buffer of its size, where it grew a byte at a time.
+  `tools/status-scale-test.py` holds both shapes to Git's peak memory.
+- SHA-1 runs about two and a half times as fast in a native build. Each block
+  is unrolled over 32-bit words; the rounds read and wrote a list for each
+  schedule word and masked a 64-bit value after each operation. A whole-file
+  read makes one buffer of the file's size, where it kept about twice the
+  file in outgrown buffers. `hash-object` of a 64 MiB file took 1.14 s and
+  134 MB where Git takes 0.24 s and 70 MB; it now takes 0.44 s and 69 MB.
+  A status that must hash its files gains the same. `tools/hash-scale-test.py`
+  holds `hash-object` to Git's CPU time and peak memory.
+
 ## Unreleased — adding thousands of files
 
 - Repositories whose `.gitattributes` say `* text=auto eol=lf`, mark files
@@ -15,6 +53,12 @@
   `conflict-marker-size`. Configured drivers, the built-in `union` merge,
   the built-in diff hunk-header drivers in patches, `eol=crlf`, `ident` and
   working-tree encodings refuse by name.
+- Status, diff and diff's index refresh take a tracked file whose stat data
+  still matches its index entry as that entry's blob, unread, whatever its
+  attributes say, as Git does (den#102, second step). A clean checkout under
+  `eol=crlf` or `ident` is clean instead of refused, and `* text=auto eol=lf`
+  no longer makes status and `diff --quiet` read every tracked body. A changed
+  or racily clean file under those attributes still refuses by name.
 - `diff --binary` prints full object ids only for a file it renders as a
   binary patch; text hunks keep abbreviated ids, as Git prints them.
 - `add` of several thousand new files no longer runs out of memory (den#91).

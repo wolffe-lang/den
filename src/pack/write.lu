@@ -86,6 +86,14 @@ fn deflated(data: List[byte]) -> List[byte] ! PackErrors {
     zlib.deflate(data, 1, 17000000) else |e| { return Unsupported("pack writer compression {e}") }
 }
 
+/// One object the writer has placed: its name, offset and CRC32, for the
+/// index the writer builds (the reader's Entry keeps no name).
+struct Written {
+    name: str,
+    offset: int,
+    crc: int,
+}
+
 /// Encode an owned pack/idx pair. mode is none, ofs or ref. Candidate window 10,
 /// depth 50; 16 MiB/body, 128 MiB aggregate input and output, 10,000 objects.
 /// Duplicate identities are emitted once. Ordering is type then descending size.
@@ -123,11 +131,11 @@ pub fn encode(bodies: List[Body], mode: str) -> Encoded ! PackErrors {
     append_write(mut data, "PACK".bytes())
     put32(mut data, 2)
     put32(mut data, order.len)
-    var entries = List[Entry](), depths = List[int]()
+    var entries = List[Written](), depths = List[int]()
     for slot in 0..order.len {
         let b = order[slot]
         let offset = data.len
-        var record = Entry { name: copy names[b], offset: offset, crc: 0 }
+        var record = Written { name: copy names[b], offset: offset, crc: 0 }
         region candidate {
             var encoded = entry_header(kind_number(bodies[b].kind)?, bodies[b].data.len)
             append_write(mut encoded, deflated(bodies[b].data)?)

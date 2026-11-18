@@ -345,28 +345,24 @@ fn pending_worktree(
             (mut out).push(pending_entry(ctx, worktree.FlatEntry { path: owned(entry.path), mode: entry.stat[6], id: copy entry.id })?)
             continue
         }
-        // A text rule can make a stat-clean body differ once cleaned, so
-        // such a path is hashed and its CR-LF checked, as status does.
-        var text_check = false
-        if entry.stat[6] == 0o100644 || entry.stat[6] == 0o100755 {
-            let modes = worktree.path_modes(ctx, entry.path, value, mut directories)?
-            // Identity-breaking metadata refuses before a present body is
-            // read; a deleted path shows as Git shows it.
-            if modes[1] && fs.is_file("{ctx.root}/{text(entry.path)?}") {
-                worktree.check_path_identity(ctx, entry.path, value, mut identity)?
-            }
-            text_check = modes[0] || modes[1]
-        }
-        let seen = worktree.tracked(
-            ctx,
-            entry,
-            written,
-            filemode,
-            symlinks,
-            text_check,
-            mut verified,
-        )?
+        // A stat-clean entry is its blob, unread whatever its attributes
+        // say, as Git takes it.
+        var seen = worktree.tracked_stat(ctx, entry, written, filemode, symlinks, mut verified)?
         if !seen.present { continue }
+        if !seen.clean {
+            // A text rule can make a changed body differ once cleaned, so
+            // such a path is hashed and its CR-LF checked, as status does.
+            var text_check = false
+            if entry.stat[6] == 0o100644 || entry.stat[6] == 0o100755 {
+                let modes = worktree.path_modes(ctx, entry.path, value, mut directories)?
+                // Identity-breaking metadata refuses before the body is read.
+                if modes[1] && fs.is_file("{ctx.root}/{text(entry.path)?}") {
+                    worktree.check_path_identity(ctx, entry.path, value, mut identity)?
+                }
+                text_check = modes[0] || modes[1]
+            }
+            seen = worktree.tracked_read(ctx, entry, filemode, symlinks, text_check)?
+        }
         if !seen.clean { (mut hashed).push(Hashed { entry: copy entry, state: copy seen.state }) }
         (mut out).push(Pending {
             file: File {

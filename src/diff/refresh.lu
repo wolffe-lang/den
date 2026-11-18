@@ -48,12 +48,21 @@ fn current(
     written: List[int],
     filemode: bool,
     symlinks: bool,
-    text_check: bool,
+    value: index.Index,
+    mut directories: worktree.DirectoryModes,
     mut verified: List[List[byte]],
 ) -> worktree.FileState ! worktree.WorkErrors {
-    let seen = worktree.tracked(ctx, prior, written, filemode, symlinks, text_check, mut verified)?
+    let seen = worktree.tracked_stat(ctx, prior, written, filemode, symlinks, mut verified)?
     if seen.clean || !seen.present { return not_found }
-    seen.state
+    // A changed entry is read with its CR-LF guard where a text rule may
+    // apply: a body Git would clean is left unrefreshed.
+    var text_check = false
+    if prior.stat[6] == 0o100644 || prior.stat[6] == 0o100755 {
+        let modes = worktree.path_modes(ctx, prior.path, value, mut directories)?
+        text_check = modes[0] || modes[1]
+    }
+    let read = worktree.tracked_read(ctx, prior, filemode, symlinks, text_check)?
+    read.state
 }
 
 /// prior's worktree state: collect's hash when hashed[k] is the entry collect
@@ -66,11 +75,12 @@ fn state_of(
     written: List[int],
     filemode: bool,
     symlinks: bool,
-    text_check: bool,
+    value: index.Index,
+    mut directories: worktree.DirectoryModes,
     mut verified: List[List[byte]],
 ) -> worktree.FileState ! worktree.WorkErrors {
     if k < hashed.len && same_entry(hashed[k].entry, prior) { return copy hashed[k].state }
-    current(ctx, prior, written, filemode, symlinks, text_check, mut verified)?
+    current(ctx, prior, written, filemode, symlinks, value, mut directories, mut verified)?
 }
 
 /// refresh's answer without reading a file twice (den#101). An entry collect
@@ -105,14 +115,6 @@ fn refresh_known(
             continue
         }
         while k < hashed.len && compare(hashed[k].entry.path, prior.path) < 0 { k += 1 }
-        // An entry collect did not hash is read with its CR-LF guard where a
-        // text rule may apply: a body Git would clean is left unrefreshed.
-        var text_check = false
-        if (k >= hashed.len || !same_entry(hashed[k].entry, prior)) &&
-            (prior.stat[6] == 0o100644 || prior.stat[6] == 0o100755) {
-            let modes = worktree.path_modes(ctx, prior.path, tx.value, mut directories)?
-            text_check = modes[0] || modes[1]
-        }
         let file = state_of(
             ctx,
             prior,
@@ -121,7 +123,8 @@ fn refresh_known(
             written,
             filemode,
             symlinks,
-            text_check,
+            tx.value,
+            mut directories,
             mut verified,
         ) else |_| {
             continue
