@@ -278,8 +278,12 @@ damaged pack's error is the per-read one. Readers made from an opened
 repository (`reader`, `reader_open`, `reader_batch`) take its indexes with a
 base cache of their own (`pack.with_cache`) instead of parsing them again;
 `write_injected` checks for an existing object through the caller's
-repository. The idx checksum and the pack's structure and trailer binding are
-checked when the session loads, once per pack per command.
+repository. The pack's structure and trailer binding are checked when the
+session loads, once per pack per command. Object reads and lookups load an
+index without its own trailing checksum (`load_read_index`), as Git reads one;
+verify-pack, fsck, installation and housekeeping keep it (`load_index`). An
+`Index` keeps the idx's name table as raw bytes (`names`); `name_hex` spells
+one name, and `slot_named` searches the raw names.
 `diff.collect` compares ids before it reads a body: endpoints are `Pending`
 (a body to read from the object store by id, from the worktree, or a
 gitlink's text), pairs with equal mode and id are dropped, and bodies are read
