@@ -234,7 +234,7 @@ fn validate_extensions(extensions: List[Extension]) -> () ! IndexErrors {
 // over that run replace a pass over every entry for every record, which was
 // quadratic. Entries out of path order (a caller's own value) keep that pass.
 fn validate_cache_spans(value: Index) -> () ! IndexErrors {
-    var ordered = true
+    var ordered = false
     for i in 1..value.entries.len {
         if byte_compare(value.entries[i - 1].path, value.entries[i].path) > 0 {
             ordered = false
