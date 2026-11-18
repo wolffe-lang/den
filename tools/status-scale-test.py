@@ -6,18 +6,23 @@ Each shape's fixture is made with the pinned Git alone: one commit of --files
 files spread over --directories directories (file i in directory i modulo
 the count), written by fast-import into a bare repository, cloned (so the
 branch has its upstream, as a clone's does), its index refreshed by Git after
-the copy (stat data fresh, not racily clean). Shapes:
+the copy (stat data fresh, not racily clean). A shape with extra objects then
+has that many more blobs, none reachable, written into the clone by
+fast-import as a pack of their own. Shapes:
 
   directories   20,000 files, one in each of 20,000 directories: the walk's
                 work per directory is what status spends.
+  objects       100 files in 10 directories beside 390,000 packed objects:
+                opening the packs is what status spends.
 
 Each tool starts through minimal-parent.c, so its peak resident set is its
 own. Both tools run `status` in the same checkout, which neither changes,
 interleaved over --takes takes; each measure is a tool's minimum. stdout,
 stderr and the exit status must equal Git's. den is bounded against Git in the
 same take: its CPU at most RELATIVE's cpu_factor times Git's plus cpu_slack,
-its peak at most rss_factor times Git's plus rss_slack_kib, stated for the
-native tier. A den run past --timeout seconds is ended and fails its row.
+its peak at most rss_factor times Git's plus rss_slack_kib (each shape's
+RELATIVE), stated for the native tier on Linux. A den run past --timeout
+seconds is ended and fails its row.
 """
 import argparse
 import hashlib
@@ -29,12 +34,20 @@ import subprocess
 import time
 
 SHAPES = {
-    'directories': dict(files=20000, directories=20000),
+    'directories': dict(files=20000, directories=20000, objects=0),
+    'objects': dict(files=100, directories=10, objects=390000),
 }
-# Stated for the native tier on Linux. The peak bound is today's (den keeps
-# its scan's scratch until it exits); the CPU bound fails a walk whose work per
-# directory grows with the number of entries.
-RELATIVE = dict(cpu_factor=10.0, cpu_slack=0.05, rss_factor=24.0, rss_slack_kib=16384)
+# Stated for the native tier on Linux. directories: the peak bound is today's
+# (den keeps its scan's scratch until it exits); the CPU bound fails a walk
+# whose work per directory grows with the number of entries. objects: den still
+# reads every pack index whole where Git reads what it looks up, and the peak
+# bound is today's. Git's own time there is a millisecond, so the CPU bound is
+# nearly all slack: it fails a read that hashes every index and spells every
+# name in it, on a machine up to half again as fast as the one it was set on.
+RELATIVE = {
+    'directories': dict(cpu_factor=10.0, cpu_slack=0.05, rss_factor=24.0, rss_slack_kib=16384),
+    'objects': dict(cpu_factor=10.0, cpu_slack=0.40, rss_factor=8.0, rss_slack_kib=98304),
+}
 
 
 def main():
@@ -104,11 +117,17 @@ def main():
         run([git, 'clone', '-q', '--no-local', '-b', 'main', origin, work], case)
         run([git, 'config', 'gc.auto', '0'], work)
         run([git, 'config', 'maintenance.auto', 'false'], work)
+        if shape['objects']:
+            bodies = (f'object {i}\n' for i in range(shape['objects']))
+            blobs = ''.join(f'blob\ndata {len(body)}\n{body}\n' for body in bodies)
+            run([git, 'fast-import', '--quiet'], work, blobs.encode())
         # Git's refresh after the clone, then a later index mtime than any file's.
         time.sleep(1.1)
         run([git, 'update-index', '-q', '--refresh'], work)
         files = len(run([git, 'ls-files'], work).decode().splitlines())
-        print(f'SHAPE {row} files={files} directories={shape["directories"]}', flush=True)
+        packed = run([git, 'count-objects', '-v'], work).decode().split()
+        in_pack = packed[packed.index('in-pack:') + 1]
+        print(f'SHAPE {row} files={files} directories={shape["directories"]} in-pack={in_pack}', flush=True)
         best = {}
         sample = {}
         for take in range(a.takes):
@@ -128,8 +147,9 @@ def main():
             if g[k] != d[k]:
                 shown = (g[k], d[k]) if k == 'status' else (g[k][-160:], d[k][-160:])
                 diffs.append(f'{k}: git {shown[0]!r} den {shown[1]!r}')
-        bound = dict(cpu=round(best['git']['cpu'] * RELATIVE['cpu_factor'] + RELATIVE['cpu_slack'], 3),
-                     rss_kib=int(best['git']['maxrss_kib'] * RELATIVE['rss_factor']) + RELATIVE['rss_slack_kib'])
+        rel = RELATIVE[name]
+        bound = dict(cpu=round(best['git']['cpu'] * rel['cpu_factor'] + rel['cpu_slack'], 3),
+                     rss_kib=int(best['git']['maxrss_kib'] * rel['rss_factor']) + rel['rss_slack_kib'])
         bounded = (not d['ended'] and best['den']['cpu'] <= bound['cpu'] and
                    best['den']['maxrss_kib'] <= bound['rss_kib'])
         ok = not diffs and bounded
