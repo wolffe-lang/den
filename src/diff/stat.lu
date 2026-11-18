@@ -47,28 +47,25 @@ fn statistics(change: Change, options: Options, driver: str) -> Stat ! worktree.
     let binary = diff_binary(change, driver, options)
     var added = 0, deleted = 0, exceeded = false
     if !binary && !unchanged(change) {
+        // A minimal script's counts, in space linear in the two bodies and
+        // with no bound on differing lines (den#105): the script itself, and
+        // its trace, are never made.
         region count_scratch {
             let before = data(change.before), after = data(change.after)
-            let edits = difftext.edits(before, after) else |e| match e {
+            let counted = difftext.counts(before, after) else |e| match e {
                 limit => {
                     exceeded = true
-                    List[difftext.Edit]()
+                    difftext.Counts { added: 0, deleted: 0 }
                 },
                 invalid => { return invalid },
             }
-            for edit in edits {
-                added += edit.new_count
-                deleted += edit.old_count
-            }
+            added = counted.added
+            deleted = counted.deleted
         }
     }
     // Named outside the region the count ran in, as fetch, pull, merge and
     // checkout print a bound.
-    if exceeded {
-        return Fatal(
-            "limit: a file whose line diff passes 2000 differing lines, 200000 lines or 16777216 bytes",
-        )
-    }
+    if exceeded { return Fatal("limit: a file larger than 16777216 bytes in a line count") }
     Stat {
         name: quoted(raw, options),
         added: added,
