@@ -198,16 +198,67 @@ pub fn changes(
         for taken in taken_new { if taken == i { used = true } }
         if !used { (mut out).push(Change { before: [], after: [copy added[i]], status: "A", percent: 0 }) }
     }
-    for i in 1..out.len {
-        let item = copy out[i]
-        var j = i
-        while j > 0 && compare(path(out[j - 1]), path(item)) > 0 {
-            out[j] = copy out[j - 1]
-            j -= 1
-        }
-        out[j] = item
+    // Path order: a stable sort of positions, its keys in a region of their
+    // own, then each change moved once into place. An insertion sort that
+    // copied every change it shifted, bodies and all, kept each copy to the
+    // end of the command: 1.2 GB of a pull's change summary when it added
+    // 440 paths beside 133 changed files (den#138).
+    var order = copy region {
+        var keys = List[List[byte]]()
+        (mut keys).reserve(out.len)
+        for change in out { (mut keys).push(path(change)) }
+        stable_order(keys)
     }
-    out
+    var sorted = List[Change]()
+    (mut sorted).reserve(out.len)
+    for i in order {
+        (mut sorted).push(take out[i])
+        out[i] = Change { before: [], after: [], status: "", percent: 0 }
+    }
+    sorted
+}
+
+/// Stable bottom-up merge sort of positions by unsigned path order: the
+/// order an insertion sort of the same keys gives, in O(n log n), with no
+/// element copied.
+fn stable_order(keys: List[List[byte]]) -> List[int] {
+    var order = List[int]()
+    (mut order).reserve(keys.len)
+    for i in 0..keys.len { (mut order).push(i) }
+    var scratch = copy order
+    var width = 1
+    while width < order.len {
+        var lo = 0
+        while lo < order.len {
+            let mid = if lo + width < order.len then lo + width else order.len
+            let hi = if lo + 2 * width < order.len then lo + 2 * width else order.len
+            var i = lo, j = mid, k = lo
+            while i < mid && j < hi {
+                if compare(keys[order[j]], keys[order[i]]) < 0 {
+                    scratch[k] = order[j]
+                    j += 1
+                } else {
+                    scratch[k] = order[i]
+                    i += 1
+                }
+                k += 1
+            }
+            while i < mid {
+                scratch[k] = order[i]
+                i += 1
+                k += 1
+            }
+            while j < hi {
+                scratch[k] = order[j]
+                j += 1
+                k += 1
+            }
+            lo = hi
+        }
+        order = copy scratch
+        width *= 2
+    }
+    order
 }
 
 /// An endpoint whose body is read only when it is needed (den#101): source 0
