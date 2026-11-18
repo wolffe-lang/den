@@ -872,28 +872,10 @@ fn walk_submodules(
             (mut warnings).push(next)
         }
     }
-    // The files move into path order; the sort's keys and order live in a
-    // region of their own.
-    var order = copy region {
-        var names = List[List[byte]]()
-        (mut names).reserve(files.len)
-        for file in files { (mut names).push(copy file.path) }
-        path_order(names)
-    }
-    var sorted = List[FileState]()
-    (mut sorted).reserve(files.len)
-    for i in order {
-        (mut sorted).push(take files[i])
-        files[i] = FileState {
-            path: List[byte](),
-            mode: 0,
-            id: oid.Oid { algorithm: "", bytes: List[byte]() },
-            data: List[byte](),
-            stat: List[int](),
-            kind: 0,
-            dirt: 0,
-        }
-    }
+    var names = List[List[byte]]()
+    for file in files { (mut names).push(copy file.path) }
+    var sorted: List[FileState] = []
+    for i in path_order(names) { (mut sorted).push(copy files[i]) }
     Walk { files: sorted, directories: directories }
 }
 
