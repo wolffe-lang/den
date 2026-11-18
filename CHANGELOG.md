@@ -1,5 +1,18 @@
 # Changes
 
+## Unreleased — pulls of a week's work
+
+- A pull, merge, checkout or reset puts the index entries it writes in path
+  order without copying them, and a diff puts its changes in path order the
+  same way. Each was ordered by an insertion sort that copied every element
+  it shifted, and every copy stayed until the command ended: a fast-forward
+  pull of a week of a 10,000-file public repository (889 commits, 440 paths
+  added beside 133 changed) peaked at 4.0 GB, 2.6 GB of it entry copies and
+  1.2 GB copies of the summary's changes with their bodies, where Git peaks
+  at 26 MB (den#138). It now peaks at 450 MB, and takes 7.5 s of CPU where it
+  took 9.6 s (release; Git 0.9 s). `tools/pull-memory-test.py` holds such a
+  pull, with and without its summary, to a multiple of Git's peak.
+
 ## Unreleased — status of large trees
 
 - Reading an index checks its cache tree against the entries in near-linear
