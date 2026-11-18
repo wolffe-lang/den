@@ -1,5 +1,15 @@
 # Changes
 
+## Unreleased — status of large trees
+
+- Reading an index checks its cache tree against the entries in near-linear
+  time. Each directory's record was tested against every entry, and the
+  records against one another, so an index of 100,000 entries in 10,000
+  directories took den about a minute to read where Git takes 17 ms, and
+  plain `status` of 10,000 files in 1,000 directories spent two fifths of its
+  time there. `tools/index-scale-test.py` holds `ls-files` of that index to
+  Git's CPU time and peak memory.
+
 ## Unreleased — adding thousands of files
 
 - Repositories whose `.gitattributes` say `* text=auto eol=lf`, mark files
