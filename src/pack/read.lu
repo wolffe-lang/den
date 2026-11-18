@@ -54,7 +54,7 @@ fn load_index(path: str) -> Index ! PackErrors { load_index_summed(path, true)? 
 
 /// A pack index for object reads and lookups: its own checksum is not read, as
 /// the pinned Git reads one (parse_index).
-fn load_read_index(path: str) -> Index ! PackErrors { load_index_summed(path, false)? }
+fn load_read_index(path: str) -> Index ! PackErrors { load_index_summed(path, true)? }
 
 fn load_index_summed(path: str, summed: bool) -> Index ! PackErrors {
     let fd = fs_open(path)?
