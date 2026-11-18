@@ -6,9 +6,15 @@ live-wolf-web: den and the pinned Git each clone wolf-web with
 --recurse-submodules (submodules two deep, names unlike their paths); the
 process bytes, and for the superproject and every repository under
 .git/modules: refs, HEAD, every reachable object, the config file's bytes and
-the worktree, are compared. The guard holds what the clones take: if any
-branch or tag of the superproject or a submodule's remote moves while the row
-runs, it is retried once, then fails by name.
+the worktree, are compared. Others push to these repositories at any time,
+so the row compares what held still (tools/http-live-test.py's judge): a ref
+held in a repository when the refs Git's clone took, an `ls-remote --symref`
+of its remote right after Git's clone and another after den's all agree
+(the superproject's also before Git's). A move of the superproject's HEAD or
+its branch reruns the row once; any other moved ref is left out of the
+comparison and named on a `NARROWED live-wolf-web excluded=<module>:<ref>`
+line and in the row's report. A submodule's checkout is its gitlink, so a
+move of a submodule's default branch is narrowed, never rerun.
 
 live-<repo>-gitlinks, for wolf-interp, wolf-std and wolf-lsp: one clone by the
 pinned Git, then submodule status, ls-tree, ls-files, cat-file and rev-parse
@@ -171,11 +177,25 @@ def git_out(cwd, *argv):
     return q.stdout
 
 
-def cloned_refs(url):
-    q = run([git, 'ls-remote', url], out, 120)
-    if q['exit']:
-        return None
-    return live['cloned'](q['stdout'].encode().hex())
+def listing(url):
+    """The remote's `ls-remote --symref` (hex stdout), or None."""
+    q = run([git, 'ls-remote', '--symref', url], out, 120)
+    return None if q['exit'] else q['stdout'].encode().hex()
+
+
+def took_refs(gitdir):
+    """The refs a clone took, by the names its remote gives them: a remote-
+    tracking branch as refs/heads/<name>, a tag as it is."""
+    took = {}
+    for line in git_out(gitdir, '--git-dir=' + str(gitdir), 'for-each-ref',
+                        '--format=%(refname) %(objectname)').decode().splitlines():
+        ref, oid = line.split(' ', 1)
+        if ref.startswith('refs/remotes/origin/'):
+            if ref != 'refs/remotes/origin/HEAD':
+                took['refs/heads/' + ref[len('refs/remotes/origin/'):]] = oid
+        elif ref.startswith('refs/tags/'):
+            took[ref] = oid
+    return took
 
 
 def gitdirs(top):
@@ -187,10 +207,29 @@ def gitdirs(top):
     return found
 
 
-def repo_state(gitdir):
+def repo_state(gitdir, keep=None):
+    """A repository's refs, objects, HEAD and config; with keep (the remote's
+    refs that held still), only its refs for those, and the objects they and
+    HEAD reach."""
     refs = git_out(gitdir, '--git-dir=' + str(gitdir), 'for-each-ref', '--format=%(refname) %(objectname) %(symref)')
-    ids = sorted({line.split()[0] for line in git_out(gitdir, '--git-dir=' + str(gitdir), 'rev-list', '--objects',
-                                                       '--all').splitlines()})
+    if keep is None:
+        listed = git_out(gitdir, '--git-dir=' + str(gitdir), 'rev-list', '--objects', '--all')
+    else:
+        def kept(ref):
+            if ref.startswith('refs/remotes/origin/'):
+                rest = ref[len('refs/remotes/origin/'):]
+                return rest == 'HEAD' or 'refs/heads/' + rest in keep
+            if ref.startswith(('refs/heads/', 'refs/tags/')):
+                return ref in keep
+            return True
+        lines = [line for line in refs.decode().splitlines() if kept(line.split(' ', 1)[0])]
+        refs = ''.join(line + '\n' for line in lines).encode()
+        tips = ''.join(line.split(' ', 1)[0] + '\n' for line in lines) + 'HEAD\n'
+        q = subprocess.run([git, '--git-dir=' + str(gitdir), 'rev-list', '--objects', '--stdin'], env=env,
+                           input=tips.encode(), capture_output=True, timeout=600)
+        assert q.returncode == 0, ('rev-list', q.stderr[-300:])
+        listed = q.stdout
+    ids = sorted({line.split()[0] for line in listed.splitlines()})
     digest = hashlib.sha256()
     if ids:
         q = subprocess.run([git, '--git-dir=' + str(gitdir), 'cat-file', '--batch'], env=env, capture_output=True,
@@ -205,7 +244,9 @@ def repo_state(gitdir):
                 objects=len(ids), objects_sha256=digest.hexdigest(), config=config)
 
 
-def tree_state(top):
+def tree_state(top, keeps=None):
+    """The worktree and every repository's repo_state; keeps maps a
+    repository's path under top to the refs held in it (absent: all)."""
     files = {}
     for path in sorted(top.rglob('*')):
         rel = path.relative_to(top).as_posix()
@@ -217,7 +258,8 @@ def tree_state(top):
             files[rel] = '%o:%s' % (path.stat().st_mode & 0o777, hashlib.sha256(path.read_bytes()).hexdigest())
     state = dict(worktree=files)
     for gitdir in gitdirs(top):
-        state[gitdir.relative_to(top).as_posix()] = repo_state(gitdir)
+        rel = gitdir.relative_to(top).as_posix()
+        state[rel] = repo_state(gitdir, (keeps or {}).get(rel))
     return state
 
 
@@ -248,7 +290,7 @@ def web_row():
         problems = []
         work = clones / ('web-%d' % attempt)
         work.mkdir()
-        before = cloned_refs(web)
+        before = listing(web)
         oracle = run([git, 'clone', '-q', '--recurse-submodules', web, 'git'], work, target=work / 'git', row=name,
                      tool='git')
         stalled = stalled_twice(('git', oracle))
@@ -259,10 +301,22 @@ def web_row():
             problems.append('pinned Git could not clone wolf-web: ' + oracle['stderr'][-300:])
             break
         urls = remotes_of(work / 'git', web)
+        top = work / 'git'
+        # Each repository Git's clone made: its path, its remote and what it took.
+        repos = []
+        for gitdir in gitdirs(top):
+            rel = gitdir.relative_to(top).as_posix()
+            if rel == '.git':
+                url = web
+            else:
+                q = subprocess.run([git, '--git-dir=' + str(gitdir), 'config', 'remote.origin.url'], env=env,
+                                   capture_output=True, timeout=60)
+                url = q.stdout.decode().strip()
+            repos.append((rel, url, took_refs(gitdir)))
         if a.between_clones:
             # Test only: the local witness moves a submodule remote's refs here.
             subprocess.run(a.between_clones, shell=True, check=True, env=env, timeout=120)
-        middle = [cloned_refs(url) for url in urls[1:]]
+        middle = {rel: listing(url) for rel, url, _ in repos if rel != '.git'}
         candidate = run([den, 'clone', '-q', '--recurse-submodules', web, 'den'], work, target=work / 'den',
                         row=name, tool='den')
         print('LIVE %s attempt=%d retries=den:%d,git:%d quiet=den:%.1fs,git:%.1fs wall=den:%.2fs,git:%.2fs' % (
@@ -272,16 +326,48 @@ def web_row():
         if stalled:
             problems.extend(stalled)
             break
-        after = cloned_refs(web)
-        # What both clones took, held from before Git's to after den's (the
-        # submodules' remotes from Git's clone on).
-        moved = before is None or after is None or before != after or middle != [cloned_refs(u) for u in urls[1:]]
+        after = listing(web)
+        ends = {rel: listing(url) for rel, url, _ in repos if rel != '.git'}
+        if before is None or after is None or None in middle.values() or None in ends.values():
+            problems.append('pinned Git could not list a remote of wolf-web')
+            break
+        # What held, repository by repository: the superproject's refs from
+        # before Git's clone to after den's, and each submodule's from what
+        # Git's clone took to after den's. Only the superproject's HEAD and
+        # its branch decide the checkouts; a submodule's is its gitlink.
+        keeps, moved, critical = {}, [], []
+        for rel, url, took in repos:
+            if rel == '.git':
+                (first, head_before), (last, head_after) = live['ref_table'](before), live['ref_table'](after)
+                head_moved = first.get('HEAD') != last.get('HEAD') or head_before != head_after
+                first = {k: v for k, v in first.items() if k != 'HEAD'}
+                last = {k: v for k, v in last.items() if k != 'HEAD'}
+                gone = live['drift'](first, took, last)
+                critical += (['HEAD'] if head_moved else []) + [r for r in gone if r in {head_before, head_after}]
+                gone = [r for r in gone if r not in {head_before, head_after}]
+                label = ''
+            else:
+                mid = {k: v for k, v in live['ref_table'](middle[rel])[0].items() if k != 'HEAD'}
+                end = {k: v for k, v in live['ref_table'](ends[rel])[0].items() if k != 'HEAD'}
+                gone = live['drift'](took, mid, end)
+                first, last = mid, end
+                label = rel[len('.git/modules/'):] + ':'
+            if gone:
+                keeps[rel] = set(first) - set(gone)
+                moved += [label + r for r in gone]
+        action = live['judge'](name, sorted(moved), sorted(critical), attempt)
+        if action == 'retry':
+            shutil.rmtree(work)
+            continue
+        if action == 'fail':
+            problems.append('refs moved during the row: ' + ','.join(sorted(critical) or sorted(moved)))
+            break
         for field in ('exit', 'stdout', 'stderr'):
             if oracle[field] != candidate[field]:
                 problems.append('process %s differs: den exit %d stderr %r' % (field, candidate['exit'],
                                                                                  candidate['stderr'][-400:]))
         if not problems:
-            theirs, ours = tree_state(work / 'git'), tree_state(work / 'den')
+            theirs, ours = tree_state(work / 'git', keeps), tree_state(work / 'den', keeps)
             differ = sorted(k for k in theirs.keys() | ours.keys() if theirs.get(k) != ours.get(k))
             if differ:
                 fields = []
@@ -293,15 +379,9 @@ def web_row():
                         fields.append(k + ':' + ','.join(f for f in t if t.get(f) != o.get(f)))
                 problems.append('state differs: ' + '; '.join(fields))
         detail = dict(urls=urls, git_wall=oracle['wall'], den_wall=candidate['wall'],
-                      git_retries=oracle['retries'], den_retries=candidate['retries'])
-        if moved and problems:
-            print('LIVE %s refs moved during attempt %d; retried' % (name, attempt), flush=True)
-            shutil.rmtree(work)
-            continue
+                      git_retries=oracle['retries'], den_retries=candidate['retries'],
+                      moved_retries=attempt, excluded=sorted(moved))
         verdict(name, problems, detail)
-        return
-    else:
-        verdict(name, problems + ['refs moved during the row'])
         return
     verdict(name, problems)
 
@@ -354,20 +434,36 @@ def ssh_row():
         return
     rewrite = dict(GIT_CONFIG_COUNT='2', GIT_CONFIG_KEY_1='url.git@github.com:.insteadOf',
                    GIT_CONFIG_VALUE_1='https://github.com/')
-    work = clones / 'ssh'
-    work.mkdir()
-    oracle = run([git, 'clone', '-q', 'https://github.com/wolffe-lang/wolf-std.git', 'git'], work, extra=rewrite,
-                 target=work / 'git', row=name, tool='git')
-    candidate = run([den, 'clone', '-q', 'https://github.com/wolffe-lang/wolf-std.git', 'den'], work, extra=rewrite,
-                    target=work / 'den', row=name, tool='den')
-    stalled = stalled_twice(('den', candidate), ('git', oracle))
-    if stalled:
-        verdict(name, stalled)
+    url = 'https://github.com/wolffe-lang/wolf-std.git'
+    for attempt in range(2):
+        work = clones / ('ssh-%d' % attempt)
+        work.mkdir()
+        # The same guard as the other clone rows: compare what held still.
+        before = listing(url)
+        oracle = run([git, 'clone', '-q', url, 'git'], work, extra=rewrite, target=work / 'git', row=name, tool='git')
+        candidate = run([den, 'clone', '-q', url, 'den'], work, extra=rewrite, target=work / 'den', row=name,
+                        tool='den')
+        after = listing(url)
+        stalled = stalled_twice(('den', candidate), ('git', oracle))
+        if stalled:
+            verdict(name, stalled)
+            return
+        if before is None or after is None:
+            verdict(name, ['pinned Git could not list wolf-std'])
+            return
+        kept, moved, critical = live['held'](before, after)
+        action = live['judge'](name, moved, critical, attempt)
+        if action == 'retry':
+            continue
+        if action == 'fail':
+            verdict(name, ['refs moved during the row: ' + ','.join(critical or moved)])
+            return
+        keeps = {'.git': set(kept)} if moved else None
+        problems = [f + ' differs' for f in ('exit', 'stdout', 'stderr') if oracle[f] != candidate[f]]
+        if not problems and tree_state(work / 'git', keeps) != tree_state(work / 'den', keeps):
+            problems.append('state differs')
+        verdict(name, problems, dict(moved_retries=attempt, excluded=moved))
         return
-    problems = [f + ' differs' for f in ('exit', 'stdout', 'stderr') if oracle[f] != candidate[f]]
-    if not problems and tree_state(work / 'git') != tree_state(work / 'den'):
-        problems.append('state differs')
-    verdict(name, problems)
 
 
 LAUNCH = r'''
