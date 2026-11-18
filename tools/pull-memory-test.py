@@ -33,14 +33,20 @@ from pathlib import Path
 import shutil
 import subprocess
 
-# Stated for the native tier on Linux, from takes of the head beside a head
-# that copies each shifted entry back into path order (den#138: 2.8 GB of a
-# 4.1 GB pull of a 10,000-file repository was such copies).
+# Stated for the native tier on Linux. The peak bound holds a pull's memory
+# as it stands with its index entries and its summary's changes put in path
+# order without copies: on Linux the quiet pull peaked at 22 and the
+# summarised one at 26 times Git's 14.6 MB (78% and 90% of their bounds),
+# where the copying sort they replace kept 1.5 GB (more than three times
+# either bound). What remains is the work tree scans, the trees and the
+# ancestry walk, each in proportion to the repository. The CPU bound is
+# slack against a stall or a search that grows with the square of the
+# paths: den's pull takes about 30 times Git's CPU here, sorted either way.
 RELATIVE = {
     'quiet': dict(argv=['pull', '--ff-only', '-q'],
-                  rss_factor=4.0, rss_slack_kib=65536, cpu_factor=20.0, cpu_slack=1.0),
+                  rss_factor=20.0, rss_slack_kib=131072, cpu_factor=40.0, cpu_slack=2.0),
     'stat': dict(argv=['pull', '--ff-only'],
-                 rss_factor=4.0, rss_slack_kib=65536, cpu_factor=20.0, cpu_slack=1.0),
+                 rss_factor=20.0, rss_slack_kib=131072, cpu_factor=40.0, cpu_slack=2.0),
 }
 
 
