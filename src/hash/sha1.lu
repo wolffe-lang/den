@@ -1,102 +1,393 @@
-// SHA-1 rounds vendored from wolffe-lang/boreutils f87dc76,
-// src/checksum/sha.lu:9-49 (org-own, GPL-3.0-or-later + Training Data Permission).
-// 575dc7b has no such file: proposed provenance correction R-vc00-1.
-// State/streaming adapter follows that revision digest.lu, SHA-1 only.
-// FIPS 180-4 sections 4.1.1, 5, 6.1; no other implementation read.
+// SHA-1 from FIPS 180-4 sections 4.1.1, 5 and 6.1; no other implementation read.
+// The block is unrolled over 32-bit words. The 80 rounds name the five working
+// variables in turn, so no round moves a value: round t adds into the variable
+// that held e and rotates the one that held b. The message schedule (6.1.2 step
+// 1) lives in sixteen locals, W[t] for t >= 16 replacing W[t - 16]. In the native
+// tier the former loops cost list reads and writes and a 64-bit mask after every
+// operation: about three times the time.
 fn sha1_block(mut d: Digest) {
-    load_words(mut d, 4, false)
-    sha1_rounds(mut d)
+    sha1_block_from(mut d.h, d.buf, 0)
 }
 
-/// One block straight from data[pos..pos + 64], big-endian words (FIPS 180-4
-/// 6.1.2 step 1), with no copy through the partial-block buffer.
+/// One block straight from data[pos..pos + 64], with no copy through the
+/// partial-block buffer.
 fn sha1_block_at(mut d: Digest, data: List[byte], pos: int) {
-    var i = 0
-    while i < 16 {
-        let p = pos + i * 4
-        d.w[i] = data[p] as int as wrapping[u64] << 24 |
-            data[p + 1] as int as wrapping[u64] << 16 |
-            data[p + 2] as int as wrapping[u64] << 8 |
-            data[p + 3] as int as wrapping[u64]
-        i += 1
-    }
-    sha1_rounds(mut d)
+    sha1_block_from(mut d.h, data, pos)
 }
 
-/// The schedule and the 80 rounds (FIPS 180-4 6.1.2 steps 1-4), one loop per
-/// round function so no round branches on its index; ROTL^n is spelled inline.
-fn sha1_rounds(mut d: Digest) {
-    var i = 16
-    while i < 80 {
-        let x = d.w[i - 3] ^ d.w[i - 8] ^ d.w[i - 14] ^ d.w[i - 16]
-        d.w[i] = (x << 1 | x >> 31) & 0xffffffff
-        i += 1
-    }
-    var a = d.h[0]
-    var b = d.h[1]
-    var c = d.h[2]
-    var e = d.h[3]
-    var f = d.h[4]
-    i = 0
-    while i < 20 {
-        let t = ((a << 5 | a >> 27) & 0xffffffff) +
-            (b & c | (b ^ 0xffffffff) & e) +
-            f +
-            0x5a827999 +
-            d.w[i] &
-            0xffffffff
-        f = e
-        e = c
-        c = (b << 30 | b >> 2) & 0xffffffff
-        b = a
-        a = t
-        i += 1
-    }
-    while i < 40 {
-        let t = ((a << 5 | a >> 27) & 0xffffffff) + (b ^ c ^ e) + f + 0x6ed9eba1 + d.w[i] &
-            0xffffffff
-        f = e
-        e = c
-        c = (b << 30 | b >> 2) & 0xffffffff
-        b = a
-        a = t
-        i += 1
-    }
-    while i < 60 {
-        let t = ((a << 5 | a >> 27) & 0xffffffff) +
-            (b & c | b & e | c & e) +
-            f +
-            0x8f1bbcdc +
-            d.w[i] &
-            0xffffffff
-        f = e
-        e = c
-        c = (b << 30 | b >> 2) & 0xffffffff
-        b = a
-        a = t
-        i += 1
-    }
-    while i < 80 {
-        let t = ((a << 5 | a >> 27) & 0xffffffff) + (b ^ c ^ e) + f + 0xca62c1d6 + d.w[i] &
-            0xffffffff
-        f = e
-        e = c
-        c = (b << 30 | b >> 2) & 0xffffffff
-        b = a
-        a = t
-        i += 1
-    }
-    d.h[0] = d.h[0] + a & 0xffffffff
-    d.h[1] = d.h[1] + b & 0xffffffff
-    d.h[2] = d.h[2] + c & 0xffffffff
-    d.h[3] = d.h[3] + e & 0xffffffff
-    d.h[4] = d.h[4] + f & 0xffffffff
+/// FIPS 180-4 6.1.2 steps 1-4 on data[pos..pos + 64] (big-endian words), into h.
+fn sha1_block_from(mut h: List[wrapping[u32]], data: List[byte], pos: int) {
+    var w0: wrapping[u32] = data[pos] as int as wrapping[u32] << 24 |
+        data[pos + 1] as int as wrapping[u32] << 16 |
+        data[pos + 2] as int as wrapping[u32] << 8 |
+        data[pos + 3] as int as wrapping[u32]
+    var w1: wrapping[u32] = data[pos + 4] as int as wrapping[u32] << 24 |
+        data[pos + 5] as int as wrapping[u32] << 16 |
+        data[pos + 6] as int as wrapping[u32] << 8 |
+        data[pos + 7] as int as wrapping[u32]
+    var w2: wrapping[u32] = data[pos + 8] as int as wrapping[u32] << 24 |
+        data[pos + 9] as int as wrapping[u32] << 16 |
+        data[pos + 10] as int as wrapping[u32] << 8 |
+        data[pos + 11] as int as wrapping[u32]
+    var w3: wrapping[u32] = data[pos + 12] as int as wrapping[u32] << 24 |
+        data[pos + 13] as int as wrapping[u32] << 16 |
+        data[pos + 14] as int as wrapping[u32] << 8 |
+        data[pos + 15] as int as wrapping[u32]
+    var w4: wrapping[u32] = data[pos + 16] as int as wrapping[u32] << 24 |
+        data[pos + 17] as int as wrapping[u32] << 16 |
+        data[pos + 18] as int as wrapping[u32] << 8 |
+        data[pos + 19] as int as wrapping[u32]
+    var w5: wrapping[u32] = data[pos + 20] as int as wrapping[u32] << 24 |
+        data[pos + 21] as int as wrapping[u32] << 16 |
+        data[pos + 22] as int as wrapping[u32] << 8 |
+        data[pos + 23] as int as wrapping[u32]
+    var w6: wrapping[u32] = data[pos + 24] as int as wrapping[u32] << 24 |
+        data[pos + 25] as int as wrapping[u32] << 16 |
+        data[pos + 26] as int as wrapping[u32] << 8 |
+        data[pos + 27] as int as wrapping[u32]
+    var w7: wrapping[u32] = data[pos + 28] as int as wrapping[u32] << 24 |
+        data[pos + 29] as int as wrapping[u32] << 16 |
+        data[pos + 30] as int as wrapping[u32] << 8 |
+        data[pos + 31] as int as wrapping[u32]
+    var w8: wrapping[u32] = data[pos + 32] as int as wrapping[u32] << 24 |
+        data[pos + 33] as int as wrapping[u32] << 16 |
+        data[pos + 34] as int as wrapping[u32] << 8 |
+        data[pos + 35] as int as wrapping[u32]
+    var w9: wrapping[u32] = data[pos + 36] as int as wrapping[u32] << 24 |
+        data[pos + 37] as int as wrapping[u32] << 16 |
+        data[pos + 38] as int as wrapping[u32] << 8 |
+        data[pos + 39] as int as wrapping[u32]
+    var w10: wrapping[u32] = data[pos + 40] as int as wrapping[u32] << 24 |
+        data[pos + 41] as int as wrapping[u32] << 16 |
+        data[pos + 42] as int as wrapping[u32] << 8 |
+        data[pos + 43] as int as wrapping[u32]
+    var w11: wrapping[u32] = data[pos + 44] as int as wrapping[u32] << 24 |
+        data[pos + 45] as int as wrapping[u32] << 16 |
+        data[pos + 46] as int as wrapping[u32] << 8 |
+        data[pos + 47] as int as wrapping[u32]
+    var w12: wrapping[u32] = data[pos + 48] as int as wrapping[u32] << 24 |
+        data[pos + 49] as int as wrapping[u32] << 16 |
+        data[pos + 50] as int as wrapping[u32] << 8 |
+        data[pos + 51] as int as wrapping[u32]
+    var w13: wrapping[u32] = data[pos + 52] as int as wrapping[u32] << 24 |
+        data[pos + 53] as int as wrapping[u32] << 16 |
+        data[pos + 54] as int as wrapping[u32] << 8 |
+        data[pos + 55] as int as wrapping[u32]
+    var w14: wrapping[u32] = data[pos + 56] as int as wrapping[u32] << 24 |
+        data[pos + 57] as int as wrapping[u32] << 16 |
+        data[pos + 58] as int as wrapping[u32] << 8 |
+        data[pos + 59] as int as wrapping[u32]
+    var w15: wrapping[u32] = data[pos + 60] as int as wrapping[u32] << 24 |
+        data[pos + 61] as int as wrapping[u32] << 16 |
+        data[pos + 62] as int as wrapping[u32] << 8 |
+        data[pos + 63] as int as wrapping[u32]
+    var a = h[0]
+    var b = h[1]
+    var c = h[2]
+    var d = h[3]
+    var e = h[4]
+    // Rounds 0 to 19, K = 0x5a827999.
+    e = e + (a << 5 | a >> 27) + (b & c | (b ^ 0xffffffff) & d) + 0x5a827999 + w0
+    b = b << 30 | b >> 2
+    d = d + (e << 5 | e >> 27) + (a & b | (a ^ 0xffffffff) & c) + 0x5a827999 + w1
+    a = a << 30 | a >> 2
+    c = c + (d << 5 | d >> 27) + (e & a | (e ^ 0xffffffff) & b) + 0x5a827999 + w2
+    e = e << 30 | e >> 2
+    b = b + (c << 5 | c >> 27) + (d & e | (d ^ 0xffffffff) & a) + 0x5a827999 + w3
+    d = d << 30 | d >> 2
+    a = a + (b << 5 | b >> 27) + (c & d | (c ^ 0xffffffff) & e) + 0x5a827999 + w4
+    c = c << 30 | c >> 2
+    e = e + (a << 5 | a >> 27) + (b & c | (b ^ 0xffffffff) & d) + 0x5a827999 + w5
+    b = b << 30 | b >> 2
+    d = d + (e << 5 | e >> 27) + (a & b | (a ^ 0xffffffff) & c) + 0x5a827999 + w6
+    a = a << 30 | a >> 2
+    c = c + (d << 5 | d >> 27) + (e & a | (e ^ 0xffffffff) & b) + 0x5a827999 + w7
+    e = e << 30 | e >> 2
+    b = b + (c << 5 | c >> 27) + (d & e | (d ^ 0xffffffff) & a) + 0x5a827999 + w8
+    d = d << 30 | d >> 2
+    a = a + (b << 5 | b >> 27) + (c & d | (c ^ 0xffffffff) & e) + 0x5a827999 + w9
+    c = c << 30 | c >> 2
+    e = e + (a << 5 | a >> 27) + (b & c | (b ^ 0xffffffff) & d) + 0x5a827999 + w10
+    b = b << 30 | b >> 2
+    d = d + (e << 5 | e >> 27) + (a & b | (a ^ 0xffffffff) & c) + 0x5a827999 + w11
+    a = a << 30 | a >> 2
+    c = c + (d << 5 | d >> 27) + (e & a | (e ^ 0xffffffff) & b) + 0x5a827999 + w12
+    e = e << 30 | e >> 2
+    b = b + (c << 5 | c >> 27) + (d & e | (d ^ 0xffffffff) & a) + 0x5a827999 + w13
+    d = d << 30 | d >> 2
+    a = a + (b << 5 | b >> 27) + (c & d | (c ^ 0xffffffff) & e) + 0x5a827999 + w14
+    c = c << 30 | c >> 2
+    e = e + (a << 5 | a >> 27) + (b & c | (b ^ 0xffffffff) & d) + 0x5a827999 + w15
+    b = b << 30 | b >> 2
+    w0 = w13 ^ w8 ^ w2 ^ w0
+    w0 = w0 << 1 | w0 >> 31
+    d = d + (e << 5 | e >> 27) + (a & b | (a ^ 0xffffffff) & c) + 0x5a827999 + w0
+    a = a << 30 | a >> 2
+    w1 = w14 ^ w9 ^ w3 ^ w1
+    w1 = w1 << 1 | w1 >> 31
+    c = c + (d << 5 | d >> 27) + (e & a | (e ^ 0xffffffff) & b) + 0x5a827999 + w1
+    e = e << 30 | e >> 2
+    w2 = w15 ^ w10 ^ w4 ^ w2
+    w2 = w2 << 1 | w2 >> 31
+    b = b + (c << 5 | c >> 27) + (d & e | (d ^ 0xffffffff) & a) + 0x5a827999 + w2
+    d = d << 30 | d >> 2
+    w3 = w0 ^ w11 ^ w5 ^ w3
+    w3 = w3 << 1 | w3 >> 31
+    a = a + (b << 5 | b >> 27) + (c & d | (c ^ 0xffffffff) & e) + 0x5a827999 + w3
+    c = c << 30 | c >> 2
+    // Rounds 20 to 39, K = 0x6ed9eba1.
+    w4 = w1 ^ w12 ^ w6 ^ w4
+    w4 = w4 << 1 | w4 >> 31
+    e = e + (a << 5 | a >> 27) + (b ^ c ^ d) + 0x6ed9eba1 + w4
+    b = b << 30 | b >> 2
+    w5 = w2 ^ w13 ^ w7 ^ w5
+    w5 = w5 << 1 | w5 >> 31
+    d = d + (e << 5 | e >> 27) + (a ^ b ^ c) + 0x6ed9eba1 + w5
+    a = a << 30 | a >> 2
+    w6 = w3 ^ w14 ^ w8 ^ w6
+    w6 = w6 << 1 | w6 >> 31
+    c = c + (d << 5 | d >> 27) + (e ^ a ^ b) + 0x6ed9eba1 + w6
+    e = e << 30 | e >> 2
+    w7 = w4 ^ w15 ^ w9 ^ w7
+    w7 = w7 << 1 | w7 >> 31
+    b = b + (c << 5 | c >> 27) + (d ^ e ^ a) + 0x6ed9eba1 + w7
+    d = d << 30 | d >> 2
+    w8 = w5 ^ w0 ^ w10 ^ w8
+    w8 = w8 << 1 | w8 >> 31
+    a = a + (b << 5 | b >> 27) + (c ^ d ^ e) + 0x6ed9eba1 + w8
+    c = c << 30 | c >> 2
+    w9 = w6 ^ w1 ^ w11 ^ w9
+    w9 = w9 << 1 | w9 >> 31
+    e = e + (a << 5 | a >> 27) + (b ^ c ^ d) + 0x6ed9eba1 + w9
+    b = b << 30 | b >> 2
+    w10 = w7 ^ w2 ^ w12 ^ w10
+    w10 = w10 << 1 | w10 >> 31
+    d = d + (e << 5 | e >> 27) + (a ^ b ^ c) + 0x6ed9eba1 + w10
+    a = a << 30 | a >> 2
+    w11 = w8 ^ w3 ^ w13 ^ w11
+    w11 = w11 << 1 | w11 >> 31
+    c = c + (d << 5 | d >> 27) + (e ^ a ^ b) + 0x6ed9eba1 + w11
+    e = e << 30 | e >> 2
+    w12 = w9 ^ w4 ^ w14 ^ w12
+    w12 = w12 << 1 | w12 >> 31
+    b = b + (c << 5 | c >> 27) + (d ^ e ^ a) + 0x6ed9eba1 + w12
+    d = d << 30 | d >> 2
+    w13 = w10 ^ w5 ^ w15 ^ w13
+    w13 = w13 << 1 | w13 >> 31
+    a = a + (b << 5 | b >> 27) + (c ^ d ^ e) + 0x6ed9eba1 + w13
+    c = c << 30 | c >> 2
+    w14 = w11 ^ w6 ^ w0 ^ w14
+    w14 = w14 << 1 | w14 >> 31
+    e = e + (a << 5 | a >> 27) + (b ^ c ^ d) + 0x6ed9eba1 + w14
+    b = b << 30 | b >> 2
+    w15 = w12 ^ w7 ^ w1 ^ w15
+    w15 = w15 << 1 | w15 >> 31
+    d = d + (e << 5 | e >> 27) + (a ^ b ^ c) + 0x6ed9eba1 + w15
+    a = a << 30 | a >> 2
+    w0 = w13 ^ w8 ^ w2 ^ w0
+    w0 = w0 << 1 | w0 >> 31
+    c = c + (d << 5 | d >> 27) + (e ^ a ^ b) + 0x6ed9eba1 + w0
+    e = e << 30 | e >> 2
+    w1 = w14 ^ w9 ^ w3 ^ w1
+    w1 = w1 << 1 | w1 >> 31
+    b = b + (c << 5 | c >> 27) + (d ^ e ^ a) + 0x6ed9eba1 + w1
+    d = d << 30 | d >> 2
+    w2 = w15 ^ w10 ^ w4 ^ w2
+    w2 = w2 << 1 | w2 >> 31
+    a = a + (b << 5 | b >> 27) + (c ^ d ^ e) + 0x6ed9eba1 + w2
+    c = c << 30 | c >> 2
+    w3 = w0 ^ w11 ^ w5 ^ w3
+    w3 = w3 << 1 | w3 >> 31
+    e = e + (a << 5 | a >> 27) + (b ^ c ^ d) + 0x6ed9eba1 + w3
+    b = b << 30 | b >> 2
+    w4 = w1 ^ w12 ^ w6 ^ w4
+    w4 = w4 << 1 | w4 >> 31
+    d = d + (e << 5 | e >> 27) + (a ^ b ^ c) + 0x6ed9eba1 + w4
+    a = a << 30 | a >> 2
+    w5 = w2 ^ w13 ^ w7 ^ w5
+    w5 = w5 << 1 | w5 >> 31
+    c = c + (d << 5 | d >> 27) + (e ^ a ^ b) + 0x6ed9eba1 + w5
+    e = e << 30 | e >> 2
+    w6 = w3 ^ w14 ^ w8 ^ w6
+    w6 = w6 << 1 | w6 >> 31
+    b = b + (c << 5 | c >> 27) + (d ^ e ^ a) + 0x6ed9eba1 + w6
+    d = d << 30 | d >> 2
+    w7 = w4 ^ w15 ^ w9 ^ w7
+    w7 = w7 << 1 | w7 >> 31
+    a = a + (b << 5 | b >> 27) + (c ^ d ^ e) + 0x6ed9eba1 + w7
+    c = c << 30 | c >> 2
+    // Rounds 40 to 59, K = 0x8f1bbcdc.
+    w8 = w5 ^ w0 ^ w10 ^ w8
+    w8 = w8 << 1 | w8 >> 31
+    e = e + (a << 5 | a >> 27) + (b & c | b & d | c & d) + 0x8f1bbcdc + w8
+    b = b << 30 | b >> 2
+    w9 = w6 ^ w1 ^ w11 ^ w9
+    w9 = w9 << 1 | w9 >> 31
+    d = d + (e << 5 | e >> 27) + (a & b | a & c | b & c) + 0x8f1bbcdc + w9
+    a = a << 30 | a >> 2
+    w10 = w7 ^ w2 ^ w12 ^ w10
+    w10 = w10 << 1 | w10 >> 31
+    c = c + (d << 5 | d >> 27) + (e & a | e & b | a & b) + 0x8f1bbcdc + w10
+    e = e << 30 | e >> 2
+    w11 = w8 ^ w3 ^ w13 ^ w11
+    w11 = w11 << 1 | w11 >> 31
+    b = b + (c << 5 | c >> 27) + (d & e | d & a | e & a) + 0x8f1bbcdc + w11
+    d = d << 30 | d >> 2
+    w12 = w9 ^ w4 ^ w14 ^ w12
+    w12 = w12 << 1 | w12 >> 31
+    a = a + (b << 5 | b >> 27) + (c & d | c & e | d & e) + 0x8f1bbcdc + w12
+    c = c << 30 | c >> 2
+    w13 = w10 ^ w5 ^ w15 ^ w13
+    w13 = w13 << 1 | w13 >> 31
+    e = e + (a << 5 | a >> 27) + (b & c | b & d | c & d) + 0x8f1bbcdc + w13
+    b = b << 30 | b >> 2
+    w14 = w11 ^ w6 ^ w0 ^ w14
+    w14 = w14 << 1 | w14 >> 31
+    d = d + (e << 5 | e >> 27) + (a & b | a & c | b & c) + 0x8f1bbcdc + w14
+    a = a << 30 | a >> 2
+    w15 = w12 ^ w7 ^ w1 ^ w15
+    w15 = w15 << 1 | w15 >> 31
+    c = c + (d << 5 | d >> 27) + (e & a | e & b | a & b) + 0x8f1bbcdc + w15
+    e = e << 30 | e >> 2
+    w0 = w13 ^ w8 ^ w2 ^ w0
+    w0 = w0 << 1 | w0 >> 31
+    b = b + (c << 5 | c >> 27) + (d & e | d & a | e & a) + 0x8f1bbcdc + w0
+    d = d << 30 | d >> 2
+    w1 = w14 ^ w9 ^ w3 ^ w1
+    w1 = w1 << 1 | w1 >> 31
+    a = a + (b << 5 | b >> 27) + (c & d | c & e | d & e) + 0x8f1bbcdc + w1
+    c = c << 30 | c >> 2
+    w2 = w15 ^ w10 ^ w4 ^ w2
+    w2 = w2 << 1 | w2 >> 31
+    e = e + (a << 5 | a >> 27) + (b & c | b & d | c & d) + 0x8f1bbcdc + w2
+    b = b << 30 | b >> 2
+    w3 = w0 ^ w11 ^ w5 ^ w3
+    w3 = w3 << 1 | w3 >> 31
+    d = d + (e << 5 | e >> 27) + (a & b | a & c | b & c) + 0x8f1bbcdc + w3
+    a = a << 30 | a >> 2
+    w4 = w1 ^ w12 ^ w6 ^ w4
+    w4 = w4 << 1 | w4 >> 31
+    c = c + (d << 5 | d >> 27) + (e & a | e & b | a & b) + 0x8f1bbcdc + w4
+    e = e << 30 | e >> 2
+    w5 = w2 ^ w13 ^ w7 ^ w5
+    w5 = w5 << 1 | w5 >> 31
+    b = b + (c << 5 | c >> 27) + (d & e | d & a | e & a) + 0x8f1bbcdc + w5
+    d = d << 30 | d >> 2
+    w6 = w3 ^ w14 ^ w8 ^ w6
+    w6 = w6 << 1 | w6 >> 31
+    a = a + (b << 5 | b >> 27) + (c & d | c & e | d & e) + 0x8f1bbcdc + w6
+    c = c << 30 | c >> 2
+    w7 = w4 ^ w15 ^ w9 ^ w7
+    w7 = w7 << 1 | w7 >> 31
+    e = e + (a << 5 | a >> 27) + (b & c | b & d | c & d) + 0x8f1bbcdc + w7
+    b = b << 30 | b >> 2
+    w8 = w5 ^ w0 ^ w10 ^ w8
+    w8 = w8 << 1 | w8 >> 31
+    d = d + (e << 5 | e >> 27) + (a & b | a & c | b & c) + 0x8f1bbcdc + w8
+    a = a << 30 | a >> 2
+    w9 = w6 ^ w1 ^ w11 ^ w9
+    w9 = w9 << 1 | w9 >> 31
+    c = c + (d << 5 | d >> 27) + (e & a | e & b | a & b) + 0x8f1bbcdc + w9
+    e = e << 30 | e >> 2
+    w10 = w7 ^ w2 ^ w12 ^ w10
+    w10 = w10 << 1 | w10 >> 31
+    b = b + (c << 5 | c >> 27) + (d & e | d & a | e & a) + 0x8f1bbcdc + w10
+    d = d << 30 | d >> 2
+    w11 = w8 ^ w3 ^ w13 ^ w11
+    w11 = w11 << 1 | w11 >> 31
+    a = a + (b << 5 | b >> 27) + (c & d | c & e | d & e) + 0x8f1bbcdc + w11
+    c = c << 30 | c >> 2
+    // Rounds 60 to 79, K = 0xca62c1d6.
+    w12 = w9 ^ w4 ^ w14 ^ w12
+    w12 = w12 << 1 | w12 >> 31
+    e = e + (a << 5 | a >> 27) + (b ^ c ^ d) + 0xca62c1d6 + w12
+    b = b << 30 | b >> 2
+    w13 = w10 ^ w5 ^ w15 ^ w13
+    w13 = w13 << 1 | w13 >> 31
+    d = d + (e << 5 | e >> 27) + (a ^ b ^ c) + 0xca62c1d6 + w13
+    a = a << 30 | a >> 2
+    w14 = w11 ^ w6 ^ w0 ^ w14
+    w14 = w14 << 1 | w14 >> 31
+    c = c + (d << 5 | d >> 27) + (e ^ a ^ b) + 0xca62c1d6 + w14
+    e = e << 30 | e >> 2
+    w15 = w12 ^ w7 ^ w1 ^ w15
+    w15 = w15 << 1 | w15 >> 31
+    b = b + (c << 5 | c >> 27) + (d ^ e ^ a) + 0xca62c1d6 + w15
+    d = d << 30 | d >> 2
+    w0 = w13 ^ w8 ^ w2 ^ w0
+    w0 = w0 << 1 | w0 >> 31
+    a = a + (b << 5 | b >> 27) + (c ^ d ^ e) + 0xca62c1d6 + w0
+    c = c << 30 | c >> 2
+    w1 = w14 ^ w9 ^ w3 ^ w1
+    w1 = w1 << 1 | w1 >> 31
+    e = e + (a << 5 | a >> 27) + (b ^ c ^ d) + 0xca62c1d6 + w1
+    b = b << 30 | b >> 2
+    w2 = w15 ^ w10 ^ w4 ^ w2
+    w2 = w2 << 1 | w2 >> 31
+    d = d + (e << 5 | e >> 27) + (a ^ b ^ c) + 0xca62c1d6 + w2
+    a = a << 30 | a >> 2
+    w3 = w0 ^ w11 ^ w5 ^ w3
+    w3 = w3 << 1 | w3 >> 31
+    c = c + (d << 5 | d >> 27) + (e ^ a ^ b) + 0xca62c1d6 + w3
+    e = e << 30 | e >> 2
+    w4 = w1 ^ w12 ^ w6 ^ w4
+    w4 = w4 << 1 | w4 >> 31
+    b = b + (c << 5 | c >> 27) + (d ^ e ^ a) + 0xca62c1d6 + w4
+    d = d << 30 | d >> 2
+    w5 = w2 ^ w13 ^ w7 ^ w5
+    w5 = w5 << 1 | w5 >> 31
+    a = a + (b << 5 | b >> 27) + (c ^ d ^ e) + 0xca62c1d6 + w5
+    c = c << 30 | c >> 2
+    w6 = w3 ^ w14 ^ w8 ^ w6
+    w6 = w6 << 1 | w6 >> 31
+    e = e + (a << 5 | a >> 27) + (b ^ c ^ d) + 0xca62c1d6 + w6
+    b = b << 30 | b >> 2
+    w7 = w4 ^ w15 ^ w9 ^ w7
+    w7 = w7 << 1 | w7 >> 31
+    d = d + (e << 5 | e >> 27) + (a ^ b ^ c) + 0xca62c1d6 + w7
+    a = a << 30 | a >> 2
+    w8 = w5 ^ w0 ^ w10 ^ w8
+    w8 = w8 << 1 | w8 >> 31
+    c = c + (d << 5 | d >> 27) + (e ^ a ^ b) + 0xca62c1d6 + w8
+    e = e << 30 | e >> 2
+    w9 = w6 ^ w1 ^ w11 ^ w9
+    w9 = w9 << 1 | w9 >> 31
+    b = b + (c << 5 | c >> 27) + (d ^ e ^ a) + 0xca62c1d6 + w9
+    d = d << 30 | d >> 2
+    w10 = w7 ^ w2 ^ w12 ^ w10
+    w10 = w10 << 1 | w10 >> 31
+    a = a + (b << 5 | b >> 27) + (c ^ d ^ e) + 0xca62c1d6 + w10
+    c = c << 30 | c >> 2
+    w11 = w8 ^ w3 ^ w13 ^ w11
+    w11 = w11 << 1 | w11 >> 31
+    e = e + (a << 5 | a >> 27) + (b ^ c ^ d) + 0xca62c1d6 + w11
+    b = b << 30 | b >> 2
+    w12 = w9 ^ w4 ^ w14 ^ w12
+    w12 = w12 << 1 | w12 >> 31
+    d = d + (e << 5 | e >> 27) + (a ^ b ^ c) + 0xca62c1d6 + w12
+    a = a << 30 | a >> 2
+    w13 = w10 ^ w5 ^ w15 ^ w13
+    w13 = w13 << 1 | w13 >> 31
+    c = c + (d << 5 | d >> 27) + (e ^ a ^ b) + 0xca62c1d6 + w13
+    e = e << 30 | e >> 2
+    w14 = w11 ^ w6 ^ w0 ^ w14
+    w14 = w14 << 1 | w14 >> 31
+    b = b + (c << 5 | c >> 27) + (d ^ e ^ a) + 0xca62c1d6 + w14
+    d = d << 30 | d >> 2
+    w15 = w12 ^ w7 ^ w1 ^ w15
+    w15 = w15 << 1 | w15 >> 31
+    a = a + (b << 5 | b >> 27) + (c ^ d ^ e) + 0xca62c1d6 + w15
+    c = c << 30 | c >> 2
+    h[0] = h[0] + a
+    h[1] = h[1] + b
+    h[2] = h[2] + c
+    h[3] = h[3] + d
+    h[4] = h[4] + e
 }
 
 /// Streaming SHA-1 state; construct with new1, feed bytes, finalize once.
 pub struct Digest {
-    h: List[wrapping[u64]],
-    w: List[wrapping[u64]],
+    h: List[wrapping[u32]],
     buf: List[byte],
     used: int,
     count: wrapping[u64],
@@ -106,32 +397,14 @@ pub struct Digest {
 pub fn new1() -> Digest {
     var d = Digest {
         h: [0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476, 0xc3d2e1f0],
-        w: List[wrapping[u64]](),
         buf: List[byte](),
         used: 0,
         count: 0,
     }
     // den#91: reserved, so a state leaves no list growth behind in its region.
-    (mut d.w).reserve(80)
     (mut d.buf).reserve(64)
-    for _ in 0..80 { (mut d.w).push(0) }
     for _ in 0..64 { (mut d.buf).push(0 as byte) }
     d
-}
-
-fn load_words(mut d: Digest, width: int, little: bool) {
-    var i = 0
-    while i < 16 {
-        var x: wrapping[u64] = 0
-        var j = 0
-        while j < width {
-            let shift = (if little then j else width - 1 - j) * 8
-            x = x | d.buf[i * width + j] as int as wrapping[u64] << shift as wrapping[u64]
-            j += 1
-        }
-        d.w[i] = x
-        i += 1
-    }
 }
 
 /// Feed a byte slice without retaining it; SHA-1 length wraps modulo 2^64 bits.
@@ -181,7 +454,7 @@ pub fn final1(take state: Digest) -> List[byte] {
     var result = List[byte]()
     for j in 0..20 {
         let shift = (3 - j % 4) * 8
-        (mut result).push((d.h[j / 4] >> shift as wrapping[u64] & 255) as int as byte)
+        (mut result).push((d.h[j / 4] >> shift as wrapping[u32] & 255) as int as byte)
     }
     result
 }
