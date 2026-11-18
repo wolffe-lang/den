@@ -10,6 +10,8 @@ the copy (stat data fresh, not racily clean). A shape with extra objects then
 has that many more blobs, none reachable, written into the clone by
 fast-import as a pack of their own. Shapes:
 
+  files         10,000 files in 1,000 directories: status's own memory, what
+                it keeps of the index, HEAD and the walk, is what it spends.
   directories   20,000 files, one in each of 20,000 directories: the walk's
                 work per directory is what status spends.
   objects       100 files in 10 directories beside 390,000 packed objects:
@@ -34,18 +36,23 @@ import subprocess
 import time
 
 SHAPES = {
+    'files': dict(files=10000, directories=1000, objects=0),
     'directories': dict(files=20000, directories=20000, objects=0),
     'objects': dict(files=100, directories=10, objects=390000),
 }
-# Stated for the native tier on Linux. directories: the peak bound is today's
-# (den keeps its scan's scratch until it exits); the CPU bound fails a walk
-# whose work per directory grows with the number of entries. objects: den still
-# reads every pack index whole where Git reads what it looks up, and the peak
-# bound is today's. Git's own time there is a millisecond, so the CPU bound is
-# nearly all slack: it fails a read that hashes every index and spells every
-# name in it, on a machine up to half again as fast as the one it was set on.
+# Stated for the native tier on Linux. files: the peak bound fails a status
+# that keeps every list's outgrown buffers, its walk's lstat records and
+# listings, and copies of the index and its entries. directories: the peak
+# bound fails a walk that keeps all it made of each directory; the CPU bound
+# fails a walk whose work per directory grows with the number of entries.
+# objects: den still reads every pack index whole where Git reads what it
+# looks up, and the peak bound is today's. Git's own time there is a
+# millisecond, so the CPU bound is nearly all slack: it fails a read that
+# hashes every index and spells every name in it, on a machine up to half
+# again as fast as the one it was set on.
 RELATIVE = {
-    'directories': dict(cpu_factor=10.0, cpu_slack=0.05, rss_factor=24.0, rss_slack_kib=16384),
+    'files': dict(cpu_factor=10.0, cpu_slack=0.05, rss_factor=6.0, rss_slack_kib=8192),
+    'directories': dict(cpu_factor=10.0, cpu_slack=0.05, rss_factor=14.0, rss_slack_kib=16384),
     'objects': dict(cpu_factor=10.0, cpu_slack=0.40, rss_factor=8.0, rss_slack_kib=98304),
 }
 
