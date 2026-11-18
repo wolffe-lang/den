@@ -9,6 +9,11 @@
   plain `status` of 10,000 files in 1,000 directories spent two fifths of its
   time there. `tools/index-scale-test.py` holds `ls-files` of that index to
   Git's CPU time and peak memory.
+- The status walk finds a directory's gitlink entry by binary search. It
+  scanned every index entry for each directory it met, so status of 20,000
+  files, one in each of 20,000 directories, took 6.7 s where Git takes
+  0.15 s. `tools/status-scale-test.py` holds that shape to Git's CPU time and
+  peak memory.
 
 ## Unreleased — adding thousands of files
 
