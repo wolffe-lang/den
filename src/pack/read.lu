@@ -22,7 +22,10 @@ fn range_bytes(fd: int, start: int, count: int) -> List[byte] ! PackErrors {
     if start < 0 || count < 0 || start > 9223372036854775807 - count {
         return Unsupported("pack offset range")
     }
+    // One buffer of the range's size: growing it a byte at a time kept every
+    // smaller buffer it outgrew (an 11 MB index cost 32 MB).
     var out = List[byte](), pos: int = 0
+    (mut out).reserve(count)
     while pos < count {
         region window {
             let want = if count - pos > 65536 then 65536 else count - pos
