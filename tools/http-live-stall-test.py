@@ -18,6 +18,20 @@ self row runs against it with its stall bound at STALL seconds
                          line per tool, then FAIL http-live-self with the
                          remote sent nothing for STALL s twice, for both.
 
+and two in which the served repository's refs move mid-row, right after the
+server has sent den's first fetch response (den clones first):
+
+  http-live-stall-moved-branch  a branch no clone checks out appears
+                         (refs/heads/unrelated, on a new commit): PASS
+                         http-live-self, no RETRY line, and the row says it
+                         left that ref out (a NARROWED line and the LIVE
+                         line's excluded list).
+  http-live-stall-moved-head  the default branch gains a commit: one RETRY
+                         line naming HEAD and refs/heads/main, then PASS
+                         http-live-self with nothing excluded.
+
+The served repository is put back after each of these.
+
 A client is told apart by its User-Agent header (den sends none). Each
 scenario must reach its verdict within BOUND seconds; the row stops its own
 child, the live row's process, at that bound. Loopback only, no github.com.
@@ -43,7 +57,8 @@ STALL = 3
 LIMIT = 60
 BOUND = 240
 HOLD = 200
-SCENARIOS = (('none', 0), ('once', 1), ('twice', 2))
+SCENARIOS = (('none', 0, None), ('once', 1, None), ('twice', 2, None), ('moved-branch', 0, 'branch'),
+             ('moved-head', 0, 'head'))
 
 http_git = runpy.run_path(str(R / 'tools/http-git-test.py'), run_name='http_git')
 Server, Reader, Stopped = http_git['Server'], http_git['Reader'], http_git['Stopped']
@@ -53,8 +68,12 @@ class StallServer(Server):
     """The plain gateway with a thread per connection, stalling each client's
     first `stalls` fetch responses halfway through their bodies."""
 
-    def __init__(self, root, git, env, stalls):
+    def __init__(self, root, git, env, stalls, mover=None):
         self.stalls = stalls
+        # mover() moves the served refs once, right after den's first fetch
+        # response has been sent (den sends no User-Agent).
+        self.mover = mover
+        self.moved = False
         self.fetches = {}
         self.stalled = []
         self.guard = threading.Lock()
@@ -82,12 +101,18 @@ class StallServer(Server):
                 reply = self.response(request)
                 agent = headers.get(b'user-agent', b'').decode('ascii', 'replace') or '(none)'
                 stall = False
-                if method == 'POST' and b'want ' in body:
+                fetch = method == 'POST' and b'want ' in body
+                if fetch:
                     with self.guard:
                         count = self.fetches[agent] = self.fetches.get(agent, 0) + 1
                     stall = count <= self.stalls
                 if not stall:
                     peer.sendall(reply)
+                    if fetch and agent == '(none)' and self.mover is not None:
+                        with self.guard:
+                            first, self.moved = not self.moved, True
+                        if first:
+                            self.mover()
                     return
                 head, _, content = reply.partition(b'\r\n\r\n')
                 peer.sendall(head + b'\r\n\r\n' + content[:len(content) // 2])
@@ -149,12 +174,44 @@ def fixture(srv, git, env):
     shutil.rmtree(work)
 
 
-def scenario(label, stalls, tier, srv, git, env):
+def mover(kind, srv, git, env):
+    """What moves the served refs mid-row: a new branch on a new commit
+    ('branch'), or a new commit on the default branch ('head')."""
+    remote = srv / 'remote.git'
+    who = dict(GIT_AUTHOR_NAME='Den Tester', GIT_AUTHOR_EMAIL='den@example.invalid',
+               GIT_COMMITTER_NAME='Den Tester', GIT_COMMITTER_EMAIL='den@example.invalid')
+
+    def g(*argv):
+        q = subprocess.run([git, '--git-dir', str(remote), *argv], env={**env, **who}, capture_output=True, timeout=60)
+        assert q.returncode == 0, (argv, q.stderr.decode(errors='replace')[-300:])
+        return q.stdout.decode().strip()
+
+    def move():
+        main = g('rev-parse', 'refs/heads/main')
+        commit = g('commit-tree', g('rev-parse', 'refs/heads/main^{tree}'), '-p', main, '-m', 'moved mid-row: ' + kind)
+        if kind == 'branch':
+            g('update-ref', 'refs/heads/unrelated', commit)
+        else:
+            g('update-ref', 'refs/heads/main', commit, main)
+
+    def restore(main):
+        g('update-ref', 'refs/heads/main', main)
+        present = subprocess.run([git, '--git-dir', str(remote), 'show-ref', '--verify', '--quiet',
+                                  'refs/heads/unrelated'], env=env, timeout=60).returncode == 0
+        if present:
+            g('update-ref', '-d', 'refs/heads/unrelated')
+
+    return move, restore, lambda: g('rev-parse', 'refs/heads/main')
+
+
+def scenario(label, stalls, move, tier, srv, git, env):
     name = 'http-live-stall-' + label
     out = R / 'target/runs' / ('http-live-stall-%s-%s' % (tier, label))
     if out.exists():
         shutil.rmtree(out)
-    server = StallServer(srv, git, env, stalls)
+    moving, restore, tip = mover(move, srv, git, env) if move else (None, None, None)
+    main = tip() if move else None
+    server = StallServer(srv, git, env, stalls, moving)
     argv = [sys.executable, '-I', str(R / 'tools/http-live-test.py'), '--tier', tier, '--rows', 'self',
             '--self-url', server.url, '--self-seconds', str(LIMIT), '--output', str(out)]
     started = time.monotonic()
@@ -170,6 +227,8 @@ def scenario(label, stalls, tier, srv, git, env):
             output, _ = child.communicate()
     finally:
         server.close()
+        if move:
+            restore(main)
     elapsed = round(time.monotonic() - started, 1)
     lines = output.decode('utf-8', 'replace').splitlines()
     for line in lines:
@@ -179,6 +238,14 @@ def scenario(label, stalls, tier, srv, git, env):
     live = [json.loads(line.split(' ', 2)[2]) for line in lines if line.startswith('LIVE http-live-self ')]
     want_retries = ['RETRY http-live-self %s no-progress-for=%ds' % (tool, STALL) for tool in ('den', 'git')] \
         if stalls else []
+    if move == 'head':
+        want_retries = ['RETRY http-live-self moved=HEAD,refs/heads/main']
+    narrowed = [line for line in lines if line.startswith('NARROWED ')]
+    want_narrowed = ['NARROWED http-live-self excluded=refs/heads/unrelated'] if move == 'branch' else []
+    # A row from before the narrowing prints neither field: nothing excluded, no move retried.
+    excluded = live[0].get('excluded', []) if len(live) == 1 else None
+    want_excluded = ['refs/heads/unrelated'] if move == 'branch' else []
+    moved_retries = live[0].get('moved_retries', 0) if len(live) == 1 else None
     if stalls < 2:
         want_verdicts = ['PASS http-live-self']
     else:
@@ -196,6 +263,14 @@ def scenario(label, stalls, tier, srv, git, env):
         problems.append('the live row exited %d' % child.returncode)
     if counts != (min(stalls, 1), min(stalls, 1)):
         problems.append('LIVE retries den,git %r, not %r' % (counts, (min(stalls, 1), min(stalls, 1))))
+    if narrowed != want_narrowed:
+        problems.append('NARROWED lines %r, not %r' % (narrowed, want_narrowed))
+    if excluded != want_excluded:
+        problems.append('LIVE excluded %r, not %r' % (excluded, want_excluded))
+    if moved_retries != (1 if move == 'head' else 0):
+        problems.append('LIVE moved_retries %r, not %r' % (moved_retries, 1 if move == 'head' else 0))
+    if bool(move) != server.moved:
+        problems.append('the served refs %s' % ('never moved' if move else 'moved unasked'))
     if len(server.stalled) != 2 * stalls:
         problems.append('the server stalled %d fetches, not %d' % (len(server.stalled), 2 * stalls))
     if server.errors:
@@ -216,7 +291,7 @@ def main():
     if not (R / 'target' / args.tier / 'den').is_file():
         raise SystemExit('FAIL http-live-stall-input: build target/' + args.tier + '/den first')
     if not Path(os.environ.get('DEN_LIVE_ROOTS_PEM', '/etc/ssl/certs/ca-certificates.crt')).is_file():
-        for label, _ in SCENARIOS:
+        for label, _, _ in SCENARIOS:
             print('SKIP http-live-stall-%s reason=no distribution root bundle (the live row needs one)' % label,
                   flush=True)
         return
@@ -226,11 +301,12 @@ def main():
     srv.mkdir(parents=True)
     env = dict(os.environ)
     fixture(srv, git, env)
-    failed = [label for label, stalls in SCENARIOS if not scenario(label, stalls, args.tier, srv, git, env)]
+    failed = [label for label, stalls, move in SCENARIOS
+              if not scenario(label, stalls, move, args.tier, srv, git, env)]
     shutil.rmtree(srv)
     if failed:
         raise SystemExit('FAIL http-live-stall: ' + ', '.join(failed))
-    print('http-live-stall: %s none,once,twice; zero skips' % args.tier, flush=True)
+    print('http-live-stall: %s none,once,twice,moved-branch,moved-head; zero skips' % args.tier, flush=True)
 
 
 if __name__ == '__main__':
