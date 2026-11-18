@@ -30,4 +30,5 @@ a=json.load(open('target/objects-native.json')); b=json.load(open('target/object
 assert a['initial_oids']==b['initial_oids'] and len(a['initial_oids'])>10
 print('objects: independently authored native/release repositories have identical OIDs')
 PY
-echo 'objects: native/release API and e2e pass; checked programs pass; unsupported=0'
+tools/env python3 -I tools/hash-scale-test.py --tier native
+echo 'objects: native/release API and e2e pass; checked programs pass; hash-scale row beside Git; unsupported=0'
