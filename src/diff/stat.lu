@@ -187,6 +187,8 @@ fn render_stats(
             pad(mut out, name_width - name.len)
             add(mut out, " | ".bytes())
             if row.binary {
+                // Bin stands right-aligned in the count column, as Git puts it.
+                pad(mut out, number_width - 3)
                 add(mut out, "Bin {row.old_size} -> {row.new_size} bytes\n".bytes())
                 continue
             }
