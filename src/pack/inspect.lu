@@ -70,7 +70,7 @@ fn entry_meta(fd: int, end: int, index: Index, slot: int, depth: int) -> (
     if kind == 6 || kind == 7 {
         if base < 0 { return Unsupported("thin pack REF_DELTA base") }
         let (_, _, _, links) = entry_meta(fd, end, index, base, depth + 1)?
-        return (size, next - offset, name_hex(index, base), links + 1)
+        return (size, next - offset, copy index.entries[base].name, links + 1)
     }
     (size, next - offset, "", 0)
 }
@@ -86,7 +86,7 @@ pub fn inspect(path: str) -> Inspection ! PackErrors {
     var objects = List[PackedEntry]()
     for slot in 0..index.entries.len {
         var row = PackedEntry {
-            name: name_hex(index, slot),
+            name: copy index.entries[slot].name,
             kind: "",
             size: 0,
             stored: 0,
@@ -128,7 +128,7 @@ pub fn retirement_names(path: str, expected: str) -> List[str] ! PackErrors {
     }
     if (oid.hex(id) else "") != expected { return Unsupported("retirement pack binding") }
     var names = List[str]()
-    for slot in 0..index.entries.len { (mut names).push(name_hex(index, slot)) }
+    for entry in index.entries { (mut names).push(copy entry.name) }
     names
 }
 
@@ -140,6 +140,6 @@ pub fn names(path: str) -> List[str] ! PackErrors {
     defer fs_close(fd) else |_| {}
     let _ = verify(fd, index)?
     var out = List[str]()
-    for slot in 0..index.entries.len { (mut out).push(name_hex(index, slot)) }
+    for entry in index.entries { (mut out).push(copy entry.name) }
     out
 }
