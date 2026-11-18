@@ -151,6 +151,7 @@ fn common_length(a: List[byte], left: List[Line], b: List[byte], right: List[Lin
             if x >= n && y >= m { return (n + m - distance) / 2 }
             k += 2
         }
+        let _ = copy v[offset - distance..offset + distance + 1]
         distance += 1
     }
     0
