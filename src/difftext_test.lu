@@ -43,5 +43,47 @@ fn main() -> int ! difftext.DeltaErrors {
     for edit in edits { changed += edit.old_count + edit.new_count }
     assert(changed == 2)
     print("difftext: hunk headers, context, final-LF markers, default indent and minimal move pass")
+    // den#105: the linear-space counts equal a minimal script's, and have no
+    // bound on differing lines.
+    let pairs = [
+        ["a\nb\nc\n", "c\na\nb\n"],
+        ["", "new\n"],
+        ["old\n", ""],
+        ["one\ntwo", "one\nTWO"],
+        ["x\ny\nx\ny\nx\n", "y\nx\ny\nx\ny\n"],
+        ["same\n", "same\n"],
+        ["a\nb\na\nb\n", "b\na\nb\na\nc\n"],
+    ]
+    for pair in pairs {
+        let counted = difftext.counts(pair[0].bytes(), pair[1].bytes())?
+        var added = 0, deleted = 0
+        for edit in difftext.edits(pair[0].bytes(), pair[1].bytes())? {
+            added += edit.new_count
+            deleted += edit.old_count
+        }
+        assert(counted.added == added && counted.deleted == deleted)
+    }
+    var before = List[byte](), after = List[byte]()
+    for i in 0..300 {
+        for b in "w{i * 7919 % 13}\n".bytes() { (mut before).push(b) }
+        let line = if i % 5 == 0 then "w{i * 31 % 13}\n" else "w{i * 7919 % 13}\n"
+        for b in line.bytes() { (mut after).push(b) }
+    }
+    let scattered = difftext.counts(before, after)?
+    var added = 0, deleted = 0
+    for edit in difftext.edits(before, after)? {
+        added += edit.new_count
+        deleted += edit.old_count
+    }
+    assert(scattered.added == added && scattered.deleted == deleted)
+    // 1,001 lines rewritten: 2,002 differing lines, past the script's bound.
+    var old_text = List[byte](), new_text = List[byte]()
+    for i in 0..1001 {
+        for b in "old {i}\n".bytes() { (mut old_text).push(b) }
+        for b in "new {i}\n".bytes() { (mut new_text).push(b) }
+    }
+    let rewrite = difftext.counts(old_text, new_text)?
+    assert(rewrite.added == 1001 && rewrite.deleted == 1001)
+    print("difftext: minimal counts in linear space, past the script's 2,000-line bound")
     0
 }
