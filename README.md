@@ -24,7 +24,7 @@ measured bytes and documentation discrepancies.
 | Development witnesses | hasu core blocks for local object/history work; kasumi CPUs 4–7 for wire protocols and 12–15 for the initial census; Linux x86-64, rootless containers under core locks |
 | CI PR gate | ubuntu-24.04, pinned container and oracle, including planner tests |
 | CI full field leg | macOS arm64 with Homebrew Git; nonblocking observation, not the oracle |
-| Toolchain | wolf 0.2.36 5adf3d91, lupin 0.1.58 tag 6240efe5 (binary embeds a5378e3), bundled std 78b9d3cb |
+| Toolchain | wolf 0.2.36 5adf3d91, lupin 0.1.58 tag 6240efe5 (binary embeds a5378e3), pinned std d4a4d4ca (release bundles 78b9d3cb) |
 
 Archive and oracle pins are in `wolf-toolchain.toml` and `den-oracle.toml`.
 Downloads fail on a digest mismatch. Both release-metadata reads are retained
@@ -212,13 +212,61 @@ its separate continued/CRLF/BOM, inline-assignment and multiple-URL limits.
 Diff implements literal, top, icase, glob and exclude
 pathspecs; other commands retain their earlier literal-path limits. Attribute
 pathspecs, filters, non-false `core.autocrlf`, nonempty templates/hooks,
-signing and user editor execution remain unsupported. Attribute files are read:
-one that sets only attributes den need not act on (`text` and `crlf` unset or
-unspecified, `whitespace`, `export-ignore`, `export-subst` and `delta` in any
-form, `diff`, `merge`, `eol` and the other acting attributes unspecified, and
-names Git gives no meaning) behaves as no attribute file at all, as it does in
-Git; any other refuses by the attribute's name, for example
-`worktree attributes: eol`, and so does a macro definition. A requested editor is never launched; the measured
+signing and user editor execution remain unsupported. Ordinary diff, `log -p`,
+`log --stat`, `show` and combined merge diffs share the worktree attribute policy.
+Attributes resolve per path and per field in Git's precedence order (root to
+leaf, then `info/attributes`), with the `binary` macro expanded in place so a later
+field overrides it; a missing worktree attributes file falls back to its index
+blob. Pattern matching decodes quoted patterns and honors ASCII `core.ignorecase`.
+
+On LF-native systems, `text`, `text=auto` and `eol=lf` are accepted while they
+change no content bytes. Matched regular text bodies containing CR-LF refuse by
+attribute and path before staging or replacing files; this first step does not
+normalize line endings. Where a text rule may apply, status and diff read a
+tracked body even when its stat data matches its entry, so a CR-LF body is never
+taken as unchanged unread. `text=auto` preserves binary bodies using Git 2.56.0 byte
+statistics over the whole content, including NUL, lone CR and control-byte
+density. Forced `text` and `eol=lf` without auto still refuse CR-LF. A specified
+`text` wins over the legacy `crlf` attribute in either order; `-crlf` alone acts
+as `-text`. `-text`, `-eol` and `-filter` keep raw bytes, including CR-LF.
+
+`binary`, `-diff` and `diff` decide binary rendering in patches, `--stat`,
+`--numstat` and commit summaries as Git does, and so does a configured driver's
+`diff.<name>.binary`. An unconfigured diff driver is Git's content-based diff.
+The built-in `cpp`, `dts`, `perl`, `python` and `rust` drivers, and any configured
+diff driver, refuse by name in patch output only.
+
+Merges, cherry-picks, reverts, rebases and stash applies treat an unconfigured
+merge driver (including `ours`) and the built-in `text` driver as Git's default
+text merge. `-merge`, `binary` and the built-in `binary` driver keep ours and
+record the conflict stages; `conflict-marker-size` sets the marker width. A
+configured merge driver and the built-in `union` driver refuse by name, and only
+when a content merge needs them. No diff or merge attribute makes status, add,
+commit, checkout, restore, reset, clone, fetch, push or `log` without a patch
+refuse.
+
+An unconfigured filter driver is identity, as in Git. A configured one (any
+`filter.<name>.*` key, `required` included) refuses by name. Driver configuration
+comes from den's ordinary configuration: the system, global and repository files
+and `GIT_CONFIG_COUNT` entries. Macro definitions remain refused by name. `ident`,
+working-tree encodings, `crlf` set without `text`, `eol=crlf` and `text` values
+other than `auto` refuse by name when den reads or writes a file they apply to.
+Status and diff take a tracked file whose lstat still matches its index entry as
+that entry's blob, unread, whatever its attributes say, as Git does; only a changed
+or racily clean file is read and checked (`tools/attribute-statclean-test.py`).
+Worktree commands also refuse `core.eol` other than `lf` or
+`native`; pure index/tree history comparisons do not acquire checkout-configuration
+limits. `tools/text-attributes-test.py`, `tools/attribute-effects-test.py` and
+`tools/attribute-config-test.py` keep exact Git comparisons separate from the
+named refusals on both tiers.
+
+Tree transitions preflight incoming attribute sources before publication. Restore
+uses selected metadata changes over the remaining worktree/index sources, including
+index fallback after a worktree-only deletion. Each attributes file is limited to
+1,048,576 bytes; incoming metadata snapshots, including `info/attributes`,
+are limited to 16,777,216 bytes.
+
+A requested editor is never launched; the measured
 `GIT_EDITOR=false` failure is handled explicitly. Relative dates such as `now`
 are refused; deterministic raw, RFC 2822 and ISO/calendar inputs are supported
 within the formatting API's stated bounds. A date not given, or given without a
@@ -270,7 +318,7 @@ a bounded whole-history reader, not a streaming walk.
 Default `log -p` omits merge patches as Git does. `show` of a merge prints the
 dense combined diff (`--cc`, the default) or `-c`, with `-U<n>`; `show -s`
 renders its ordered parents and message. Combined `--stat`, other pretty formats,
-`--binary`, attributes, `-m`, `--diff-merges`, `--combined-all-paths`,
+`--binary`, `-m`, `--diff-merges`, `--combined-all-paths`,
 `--remerge-diff` and `log -c`/`--cc` stay named refusals. Show-specific
 revision limiting, show ranges, history path simplification, graph/topological order,
 custom formats, relative/human dates, non-UTC local zones, message transcoding,

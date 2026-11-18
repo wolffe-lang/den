@@ -51,6 +51,10 @@ fn terminated(mut out: List[byte], data: List[byte]) {
     if data.len > 0 && data[data.len - 1] != 10 as byte { (mut out).push(10 as byte) }
 }
 
+fn marker(mut out: List[byte], symbol: byte, size: int) {
+    for _ in 0..size { (mut out).push(symbol) }
+}
+
 /// Byte-owned result; labels must be single physical lines. Explicit file/line
 /// limits are inherited from difftext. Binary content is refused, not decoded.
 pub fn merge(
@@ -62,6 +66,22 @@ pub fn merge(
     theirs_label: str,
     style: str,
 ) -> Result ! MergeErrors {
+    merge_markers(base, ours, theirs, ours_label, base_label, theirs_label, style, 7)?
+}
+
+/// Bounded attribute-selected marker width; callers may defer an unsupported
+/// width until a merge actually needs markers, rather than rejecting clean data.
+pub fn merge_markers(
+    base: List[byte],
+    ours: List[byte],
+    theirs: List[byte],
+    ours_label: str,
+    base_label: str,
+    theirs_label: str,
+    style: str,
+    marker_size: int,
+) -> Result ! MergeErrors {
+    if marker_size < 1 || marker_size > 1024 { return invalid }
     if style != "merge" && style != "diff3" && style != "zdiff3" { return invalid }
     for label in [ours_label, base_label, theirs_label] {
         if label.contains("\n") || label.contains("\r") || label.contains("\0") { return invalid }
@@ -179,15 +199,19 @@ pub fn merge(
                     ) { suffix += 1 }
             }
             append(mut out, span(left, ll, 0, prefix))
-            append(mut out, "<<<<<<< {ours_label}\n".bytes())
+            marker(mut out, 60 as byte, marker_size)
+            append(mut out, " {ours_label}\n".bytes())
             terminated(mut out, span(left, ll, prefix, ll.len - suffix))
             if style != "merge" {
-                append(mut out, "||||||| {base_label}\n".bytes())
+                marker(mut out, 124 as byte, marker_size)
+                append(mut out, " {base_label}\n".bytes())
                 terminated(mut out, span(base, bl, lo, hi))
             }
-            append(mut out, "=======\n".bytes())
+            marker(mut out, 61 as byte, marker_size)
+            (mut out).push(10 as byte)
             terminated(mut out, span(right, rl, prefix, rl.len - suffix))
-            append(mut out, ">>>>>>> {theirs_label}\n".bytes())
+            marker(mut out, 62 as byte, marker_size)
+            append(mut out, " {theirs_label}\n".bytes())
             append(mut out, span(left, ll, ll.len - suffix, ll.len))
         }
         pos = hi

@@ -1,17 +1,19 @@
 #!/usr/bin/env python3
-"""Attribute files den need not act on, and the ones it refuses by name.
+"""Attribute files resolved per path, and the ones den refuses by name.
 
-accepted rows: a repository whose .gitattributes files set only attributes
-that change nothing den does (text and crlf unset, whitespace, export and
-delta, unspecified diff and merge, names Git gives no meaning). Status, add,
-commit -a, a fast-forward pull, a true-merge pull and a switch must equal the
-pinned Git's exit status, stdout, stderr, HEAD, index and files byte for byte,
+accepted rows: a repository whose .gitattributes files set attributes that
+change nothing den does for the paths they match (text and crlf unset,
+whitespace, export and delta, unspecified fields, names Git gives no meaning,
+eol under -text, an unconfigured filter or merge driver, -diff, the binary
+macro, and ident or an encoding on paths that do not exist). Status, commit
+-a, fast-forward, merge and rebase pulls and a switch must equal the pinned
+Git's exit status, stdout, stderr, HEAD, index and files byte for byte,
 including CRLF bodies, which neither tool converts.
 
-refused rows: an attributes file that sets something den would have to act on
-(line-ending conversion, eol, filters, ident, an encoding, diff or merge
-drivers, the binary macro, a macro definition) makes den refuse by the
-attribute's and the file's name, exit 2, and change nothing.
+refused rows: an attribute den would have to act on for a path a command
+reads or writes (eol=crlf, ident or an encoding on the tracked .tty files), or
+a macro definition, makes den refuse by the attribute's name, exit 2, and
+change nothing.
 """
 import argparse
 import hashlib
@@ -29,17 +31,19 @@ ACCEPTED = {
     'export-delta': ('.gitattributes', '/notes export-ignore\n*.bin -delta\nVERSION export-subst\n'),
     'unspecified': ('.gitattributes', '*.tty !diff !merge !eol !text\n"quoted name.tty" -crlf\n'),
     'unknown-names': ('notes/.gitattributes', '*.tty linguist-generated=true owner=docs\n'),
+    # Per path, as Git resolves them: none of these acts on a path here.
+    'eol-unset-text': ('.gitattributes', '*.tty -text eol=crlf\n'),
+    'filter-unconfigured': ('.gitattributes', '*.tty filter=lfs\n'),
+    'ident-unmatched': ('.gitattributes', '*.c ident\n'),
+    'encoding-unmatched': ('.gitattributes', '*.utf16 working-tree-encoding=UTF-16\n'),
+    'diff-unset': ('.gitattributes', '*.tty -diff\n'),
+    'merge-driver-unconfigured': ('.gitattributes', '*.tty merge=ours\n'),
+    'binary': ('.gitattributes', '*.tty binary\n'),
 }
 REFUSED = {
-    'text-set': ('.gitattributes', '*.tty text\n', 'text'),
-    'text-auto': ('notes/.gitattributes', '* text=auto\n', 'text'),
-    'eol': ('.gitattributes', '*.tty -text eol=crlf\n', 'eol'),
-    'filter': ('.gitattributes', '*.tty filter=lfs\n', 'filter'),
-    'ident': ('.gitattributes', '*.c ident\n', 'ident'),
-    'encoding': ('.gitattributes', '*.utf16 working-tree-encoding=UTF-16\n', 'working-tree-encoding'),
-    'diff-unset': ('.gitattributes', '*.tty -diff\n', 'diff'),
-    'merge-driver': ('.gitattributes', '*.tty merge=ours\n', 'merge'),
-    'binary': ('.gitattributes', '*.tty binary\n', 'binary'),
+    'eol': ('.gitattributes', '*.tty eol=crlf\n', 'eol'),
+    'ident': ('.gitattributes', '*.tty ident\n', 'ident'),
+    'encoding': ('.gitattributes', '*.tty working-tree-encoding=ISO-8859-1\n', 'working-tree-encoding'),
     'macro': ('.gitattributes', '[attr]evidence -text -diff\n*.tty evidence\n', 'macro definition'),
 }
 COMMANDS = {
@@ -58,6 +62,7 @@ def main():
     parser.add_argument('--tier', default='native')
     parser.add_argument('--den')
     parser.add_argument('--filter', default='')
+    parser.add_argument('--dev-oracle', action='store_true', help='Darwin development evidence only; not the pinned Linux oracle')
     a = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
     out = root / 'target/runs' / ('attributes-' + a.tier)
@@ -65,7 +70,12 @@ def main():
         shutil.rmtree(out)
     out.mkdir(parents=True)
     git = os.environ['DEN_GIT']
-    assert hashlib.sha256(Path(git).read_bytes()).hexdigest() == 'c4848492938c4ebfffbefe1fbbaa68b9af90c86d1f6a20e76816c5ff37fcfa60'
+    digest = hashlib.sha256(Path(git).read_bytes()).hexdigest()
+    if a.dev_oracle:
+        assert os.uname().sysname == 'Darwin', 'development oracle is Darwin-only'
+        print('DEV ORACLE (not pinned Linux evidence):', digest, flush=True)
+    else:
+        assert digest == 'c4848492938c4ebfffbefe1fbbaa68b9af90c86d1f6a20e76816c5ff37fcfa60'
     den = a.den or str(root / 'target' / a.tier / 'den')
     os.environ['GIT_MERGE_AUTOEDIT'] = 'no'
 
@@ -162,12 +172,17 @@ def main():
                 # A rebase pull refreshes the index before it fetches; that
                 # phase names its refusals in the wire's own form.
                 expected_tail = ('den: wire: Unsupported(pull rebase index refresh: '
-                                 f'Unsupported(worktree attributes: {refusal}))\n').encode()
+                                 f'Unsupported(worktree attributes: {refusal}').encode()
             else:
-                expected_tail = f'den: not yet implemented: worktree attributes: {refusal}\n'.encode()
+                expected_tail = f'den: not yet implemented: worktree attributes: {refusal}'.encode()
             stderr = bytes.fromhex(got['stderr'])
-            # A pull prints its fetch lines first; the refusal is the last line.
-            ok = got['status'] == 2 and stderr.endswith(expected_tail) and \
+            # A pull prints its fetch lines first; the refusal is the last
+            # line, naming the attribute and, for a path-bound one, its path.
+            last = stderr.rstrip(b'\n').split(b'\n')[-1]
+            named = last == expected_tail or last.startswith(expected_tail + b' at ')
+            if command == 'pull-rebase':
+                named = last.startswith(expected_tail + b')') or last.startswith(expected_tail + b' at ')
+            ok = got['status'] == 2 and named and \
                 stderr.count(b'worktree attributes') == 1 and got['index'] == before_index and \
                 got['files'] == before_files and (got['head'] == before_head)
             print(('PASS ' if ok else 'FAIL ') + row + ('' if ok else f' den exit {got["status"]} stderr {stderr[-200:]!r}'), flush=True)

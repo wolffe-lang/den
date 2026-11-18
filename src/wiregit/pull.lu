@@ -98,7 +98,7 @@ fn perform_pull(args: List[str]) -> int ! object.StoreErrors {
     let destination = "refs/remotes/{name}/{source[11..]}"
     if rebase == "true" {
         // A named bound reaches the user as itself.
-        refcmd.refresh_pull_index() else |e| match e {
+        let clean = refcmd.pull_rebase_clean() else |e| match e {
             Fatal(message) => {
                 if message.starts_with("limit: ") { return Unsupported(message) }
                 return Unsupported("pull rebase index refresh: Fatal({message})")
@@ -109,6 +109,7 @@ fn perform_pull(args: List[str]) -> int ! object.StoreErrors {
             },
             _ => { return Unsupported("pull rebase index refresh: {e}") },
         }
+        if !clean { return 128 }
     }
     if recursion == "" &&
         setting(repo.config["submodule.recurse"] else "false") == "yes" &&

@@ -33,12 +33,9 @@ pub fn add_options() -> AddOptions {
 fn ensure_filters(ctx: Context) -> () ! WorkErrors {
     let autocrlf = ctx.repo.config["core.autocrlf"] else "false"
     if autocrlf != "false" && autocrlf != "0" { return Unsupported("core.autocrlf={autocrlf}") }
-    if (ctx.repo.config["core.attributesfile"] else "") != "" {
-        return Unsupported("worktree attributes: core.attributesFile")
-    }
-    // Attribute files that set only what den need not act on are accepted.
-    attributes_file("{ctx.repo.gitdir}/info/attributes")?
-    if ctx.root != "" { attributes_file("{ctx.root}/.gitattributes")? }
+    let eol = (ctx.repo.config["core.eol"] else "native").lower()
+    if eol != "lf" && eol != "native" { return Unsupported("core.eol={eol}") }
+    check_attributes(ctx)?
 }
 
 fn entry_for(

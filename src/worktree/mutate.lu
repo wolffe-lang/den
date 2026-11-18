@@ -303,6 +303,7 @@ pub fn restore_paths(
     let _ = index.serialize(value)?
     if paths.len == 0 { return Fatal("you must specify path(s) to restore") }
     if !options.staged && !options.worktree { return invalid }
+    ensure_filters(ctx)?
     let previous = copy value
     var source = List[FlatEntry]()
     if options.source != "" || options.staged {
@@ -342,13 +343,40 @@ pub fn restore_paths(
     // Verify every blob before deleting or replacing even one worktree file,
     // through one reader for the whole restore.
     let reader = object.reader_batch(ctx.repo)
+    let attributes = planned_restore_attributes(ctx, reader, previous, source, targets, options)?
+    var text_cache = Map[str, bool]()
     for path in targets {
+        let text_check = text_path_policy(ctx, path, previous, mut text_cache)?
+        if text_check && options.worktree {
+            let old = index_at(previous.entries, path)
+            if old < 0 || previous.entries[old].stat[6] != 0o120000 {
+                let named = fs_lstat(absolute(ctx, path)?) else |e| match e {
+                    not_found => { List[int]() },
+                    denied => { return denied },
+                    io => { return io },
+                }
+                if named.len > 0 && named[0] == 0 {
+                    let _ = hash_file(ctx, path, [], true, true, true)?
+                }
+            }
+        }
         let src = flat_at(source, path)
         if src >= 0 {
             if source[src].mode == 0o160000 { return Unsupported("submodule restore") }
+            var crlf = false, binary = false
             region verify {
                 let stored = object.read_loaded(reader, source[src].id, 1000000000)?
                 if stored.kind != "blob" { return bad_oid }
+                if (text_check || attributes.possible) &&
+                    (source[src].mode == 0o100644 || source[src].mode == 0o100755) {
+                    let content = text_content_bytes(stored.data)
+                    crlf = content.crlf
+                    binary = text_content_binary(content)
+                }
+            }
+            if (crlf || attributes.identity) &&
+                (source[src].mode == 0o100644 || source[src].mode == 0o100755) {
+                planned_check_content(ctx, attributes, path, crlf, binary)?
             }
         }
     }

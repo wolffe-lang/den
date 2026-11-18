@@ -106,6 +106,7 @@ fn hash_file(
     prior: List[index.Entry],
     filemode: bool,
     symlinks: bool,
+    text_check: bool,
 ) -> FileState ! WorkErrors {
     safe_parents(ctx, path, false)?
     let full = absolute(ctx, path)?
@@ -119,6 +120,7 @@ fn hash_file(
     var digest = hash.new1()
     hash.update1(mut digest, "blob {before[1]}\0".bytes())
     var total = 0, grew = false
+    var content = text_content()
     loop {
         region chunk {
             let part = fs_read_chunk(file.fd, 65536) else |e| match e {
@@ -127,6 +129,7 @@ fn hash_file(
             }
             if part.len > before[1] - total { grew = true; break }
             total += part.len
+            if text_check { text_content_add(mut content, part) }
             hash.update1(mut digest, part)
         }
     }
@@ -134,6 +137,7 @@ fn hash_file(
     if grew || total != before[1] || !stable(before, record) || !stable(record, fs_lstat(full)?) {
         return Failure("'{text(path)?}' changed while reading")
     }
+    if content.crlf { check_crlf(ctx, path, text_content_binary(content))? }
     let id = oid.from_bytes("sha1", hash.final1(take digest)) else |_| { return invalid }
     FileState {
         path: owned_bytes(path),
@@ -189,11 +193,13 @@ fn parents_verified(
     }
 }
 
-/// entry's worktree side (Tracked), with read_file's errors for the reads it
-/// makes. A stat-clean regular file or symbolic link is not read; its
-/// ancestors are checked as read_file checks them, each once across a sorted
-/// walk (verified).
-pub fn tracked(
+/// entry's worktree side (Tracked) from its lstat alone. An absent path or a
+/// directory is not present. A regular file or symbolic link whose lstat
+/// matches the entry is clean and unread, whatever its attributes say, as Git
+/// takes it; anything else is present and not clean, its state unread, for
+/// tracked_read. Its ancestors are checked as read_file checks them, each
+/// once across a sorted walk (verified).
+pub fn tracked_stat(
     ctx: Context,
     entry: index.Entry,
     written: List[int],
@@ -240,7 +246,20 @@ pub fn tracked(
             }
         }
     }
-    let state = hash_file(ctx, entry.path, [copy entry], filemode, symlinks)?
+    Tracked { state: none, present: true, clean: false }
+}
+
+/// A present entry tracked_stat did not find clean, read and hashed with
+/// read_file's errors, and with its CR-LF guard when text_check (a text rule
+/// may apply), as the status walk hashes it.
+pub fn tracked_read(
+    ctx: Context,
+    entry: index.Entry,
+    filemode: bool,
+    symlinks: bool,
+    text_check: bool,
+) -> Tracked ! WorkErrors {
+    let state = hash_file(ctx, entry.path, [copy entry], filemode, symlinks, text_check)?
     Tracked { state: state, present: true, clean: false }
 }
 
@@ -276,6 +295,10 @@ fn head_flat(ctx: Context, value: index.Index, commit: oid.Oid) -> List[FlatEntr
 }
 
 struct Walk { files: List[FileState], directories: List[List[byte]] }
+
+// Attribute presence follows the traversal stack. An ordinary directory with
+// no inherited, indexed or listed attributes needs no extra filesystem probe.
+struct PendingWalk { path: List[byte], attributes: bool }
 
 // One path the walk visits: an entry a directory listed (`kind` its own kind
 // from the listing), or a tracked path below a directory that could not be
@@ -446,6 +469,9 @@ fn walk_submodules(
 ) -> Walk ! WorkErrors {
     let mark = warnings.len
     var notices = List[str]()
+    // One identity resolver for the walk, created only in a directory whose
+    // attribute sources hold identity-breaking metadata.
+    var identity_caches = List[AttributeCache]()
     for entry in value.entries {
         if entry.stat.len != 10 { return invalid_index }
     }
@@ -458,13 +484,24 @@ fn walk_submodules(
     let symlinks = if hashing then config_bool(ctx, "core.symlinks", true)? else true
     let empty = object.identify("blob", List[byte]())?
     var total_bytes: int = 0
-    var pending = [List[byte]()]
+    var pending = [
+        PendingWalk {
+            path: List[byte](),
+            attributes: fs.exists("{ctx.repo.gitdir}/info/attributes"),
+        },
+    ]
     var files = List[FileState]()
     // A worktree mostly holds what its index lists: one buffer for the files.
     (mut files).reserve(value.entries.len)
     var directories = List[List[byte]]()
     while pending.len > 0 {
-        let parent = (mut pending).pop() else |_| { return invalid }
+        let todo = (mut pending).pop() else |_| { return invalid }
+        let parent = copy todo.path
+        var attributes_seen = todo.attributes
+        var attribute_path = copy parent
+        if attribute_path.len > 0 { (mut attribute_path).push(47 as byte) }
+        bytes_add(mut attribute_path, ".gitattributes".bytes())
+        if index_at(value.entries, attribute_path) >= 0 { attributes_seen = true }
         var listed = true
         // The listing's own rows live in a region; only the visits are kept.
         var visits = copy region {
@@ -480,6 +517,7 @@ fn walk_submodules(
             var listing = List[Visit]()
             (mut listing).reserve(items.len)
             for item in items {
+                if attribute_basename(item.name) { attributes_seen = true }
                 if compare(item.name, ".git".bytes()) == 0 { continue }
                 var path = List[byte]()
                 (mut path).reserve(parent.len + 1 + item.name.len)
@@ -505,6 +543,13 @@ fn walk_submodules(
                 (mut visits).push(Visit { path: copy entry.path, kind: -1, probe: true })
             }
         }
+        let attribute_modes = if listed && attributes_seen {
+            attributes_directory_modes(ctx, parent, value)?
+        } else {
+            [false, false]
+        }
+        let text_check = attribute_modes[0]
+        let identity_check = attribute_modes[1]
         // Subdirectories are entered depth first in the order the host lists
         // them, as Git enters them, so the warnings come in Git's order.
         var deeper = List[List[byte]]()
@@ -765,8 +810,12 @@ fn walk_submodules(
                 } else if status && info[0] == 0 && at < 0 {
                     // Untracked or ignored: status renders the path alone.
                 } else if clean {
-                    // Its id is the entry's, given above.
+                    // A stat-clean entry is its blob, unread whatever its
+                    // attributes say, as Git takes it: its id is given above.
                 } else if hashing {
+                    if identity_check && info[0] == 0 {
+                        check_path_identity(ctx, path, value, mut identity_caches)?
+                    }
                     // Each read's scratch lives in its own region and only
                     // its FileState is kept, so a walk that reads every
                     // tracked file (racily clean by whole seconds) holds no
@@ -774,13 +823,21 @@ fn walk_submodules(
                     region one {
                         var prior = List[index.Entry]()
                         if staged >= 0 { (mut prior).push(copy value.entries[staged]) }
-                        let hashed = hash_file(ctx, path, prior, filemode, symlinks)?
+                        let hashed = hash_file(ctx, path, prior, filemode, symlinks, text_check)?
                         file = copy hashed
                     }
                 } else {
                     var prior = List[index.Entry]()
                     if staged >= 0 { (mut prior).push(copy value.entries[staged]) }
+                    if identity_check && info[0] == 0 {
+                        check_path_identity(ctx, path, value, mut identity_caches)?
+                    }
                     file = read_file(ctx, path, prior)?
+                }
+                if (text_check || identity_check) &&
+                    !hashing &&
+                    (file.mode == 0o100644 || file.mode == 0o100755) {
+                    check_text_content(ctx, path, file.data)?
                 }
                 if file.data.len > 1000000000 - total_bytes {
                     return Fatal(
@@ -798,7 +855,7 @@ fn walk_submodules(
         }
         while deeper.len > 0 {
             let next = (mut deeper).pop() else |_| { return invalid }
-            (mut pending).push(next)
+            (mut pending).push(PendingWalk { path: next, attributes: attributes_seen })
         }
     }
     // Git refreshes the tracked paths before it looks for untracked ones:

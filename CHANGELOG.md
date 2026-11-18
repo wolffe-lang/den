@@ -40,6 +40,27 @@
 
 ## Unreleased — adding thousands of files
 
+- Repositories whose `.gitattributes` say `* text=auto eol=lf`, mark files
+  `binary` or `-diff`, or name diff and merge drivers no longer make status,
+  add, commit, checkout, restore, reset, pull, diff or log refuse (den#102,
+  first step). Attributes resolve per path and per field in Git's order, the
+  `binary` macro in place. LF bodies under `text`, `text=auto` and `eol=lf`
+  are stored and compared as they are; a CR-LF body that Git would clean
+  still refuses by name, since this step does not normalize. Binary
+  attributes and a configured `diff.<name>.binary` shape patches, stats and
+  commit summaries as in Git. Unconfigured diff, merge and filter drivers
+  behave as Git's defaults; merges honor `-merge`, `binary` and
+  `conflict-marker-size`. Configured drivers, the built-in `union` merge,
+  the built-in diff hunk-header drivers in patches, `eol=crlf`, `ident` and
+  working-tree encodings refuse by name.
+- Status, diff and diff's index refresh take a tracked file whose stat data
+  still matches its index entry as that entry's blob, unread, whatever its
+  attributes say, as Git does (den#102, second step). A clean checkout under
+  `eol=crlf` or `ident` is clean instead of refused, and `* text=auto eol=lf`
+  no longer makes status and `diff --quiet` read every tracked body. A changed
+  or racily clean file under those attributes still refuses by name.
+- `diff --binary` prints full object ids only for a file it renders as a
+  binary patch; text hunks keep abbreviated ids, as Git prints them.
 - `add` of several thousand new files no longer runs out of memory (den#91).
   Everything an add allocated was held until it exited: 512 KiB of
   compression tables for each object it wrote, and about five copies of the

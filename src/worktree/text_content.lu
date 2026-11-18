@@ -1,0 +1,63 @@
+// Clean-room content statistics from the pinned Git black-box fixtures in
+// tools/auto-binary-test.py. No text decoding and no fixed prefix window.
+struct TextContent {
+    crlf: bool,
+    previous_cr: bool,
+    nul: bool,
+    lone_cr: bool,
+    printable: int,
+    nonprintable: int,
+    last: int,
+}
+
+fn text_content() -> TextContent {
+    TextContent {
+        crlf: false,
+        previous_cr: false,
+        nul: false,
+        lone_cr: false,
+        printable: 0,
+        nonprintable: 0,
+        last: -1,
+    }
+}
+
+// Counts are retained across chunks. A density decision and final-SUB discount
+// are made only at EOF: a later printable suffix can change the classification.
+fn text_content_add(mut stats: TextContent, data: List[byte]) {
+    for b in data {
+        if stats.previous_cr {
+            if b == 10 as byte { stats.crlf = true } else { stats.lone_cr = true }
+        }
+        stats.previous_cr = b == 13 as byte
+        stats.last = b as int
+        if b == 0 as byte { stats.nul = true }
+        if b == 10 as byte || b == 13 as byte { continue }
+        if b == 8 as byte ||
+            b == 9 as byte ||
+            b == 12 as byte ||
+            b == 27 as byte ||
+            b >= 32 as byte && b != 127 as byte {
+            stats.printable += 1
+        } else {
+            stats.nonprintable += 1
+        }
+    }
+}
+
+fn text_content_binary(stats: TextContent) -> bool {
+    let nonprintable = stats.nonprintable - (if stats.last == 26 then 1 else 0)
+    stats.nul || stats.lone_cr || stats.previous_cr || nonprintable > stats.printable / 128
+}
+
+fn text_content_bytes(data: List[byte]) -> TextContent {
+    var stats = text_content()
+    text_content_add(mut stats, data)
+    stats
+}
+
+/// Pinned Git's measured auto-text binary classification over the whole body.
+/// Forced text/eol conversion is separate; this does not normalize any bytes.
+pub fn auto_binary(data: List[byte]) -> bool {
+    text_content_binary(text_content_bytes(data))
+}

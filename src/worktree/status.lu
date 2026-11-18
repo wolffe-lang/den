@@ -399,7 +399,15 @@ pub fn render_status(snapshot: Snapshot, options: StatusOptions) -> List[byte] !
     }
     if conflicts {
         line(mut out, "Unmerged paths:")
-        if options.hints { line(mut out, "  (use \"git add <file>...\" to mark resolution)") }
+        if options.hints {
+            if !merging &&
+                !fs.is_file("{ctx.repo.gitdir}/CHERRY_PICK_HEAD") &&
+                !fs.is_file("{ctx.repo.gitdir}/REVERT_HEAD") &&
+                !fs.is_file("{ctx.repo.gitdir}/REBASE_HEAD") {
+                line(mut out, "  (use \"git restore --staged <file>...\" to unstage)")
+            }
+            line(mut out, "  (use \"git add <file>...\" to mark resolution)")
+        }
         for row in rows {
             if row.untracked || row.ignored { continue }
             if !conflict_row(row) { continue }

@@ -25,6 +25,14 @@ mark. That minimal parent's floor is printed beside the measurements. den
 must stay under BOUNDS, stated for the native tier on a Linux x86-64 host
 (the release tier is faster); before den#101 the two diff rows took minutes
 and up to 2 GiB on this shape.
+
+The -lf-attributes rows run status and diff --quiet with `* text=auto
+eol=lf` in the copies' info/attributes, as a checkout that normalizes line
+endings has them; Git reads none of the stat-clean bodies. Each take runs
+Git and den with the attributes and den without them, and den's own cost of
+the attributes is bounded by RELATIVE: its best CPU at most 1.25 times its
+attribute-free best plus 20 ms, its best peak at most 1.10 times plus 4 MiB.
+Git's numbers are printed beside.
 """
 import argparse
 import hashlib
@@ -44,12 +52,22 @@ BOUNDS = {
 }
 SCRIPT = [['rev-parse', 'HEAD'], ['diff', '--quiet'], ['diff', '--cached', '--quiet'],
           ['pull', '--ff-only'], ['rev-parse', 'HEAD']]
+LF_ATTRIBUTES = b'* text=auto eol=lf\n'
+# An attribute row: its den baseline, measured in the same takes without the
+# attributes, and the factors and slack of its bound.
+ATTRIBUTE_ROWS = {
+    'status-lf-attributes': 'status',
+    'diff-quiet-lf-attributes': 'diff-quiet',
+}
+RELATIVE = dict(cpu_factor=1.25, cpu_slack=0.02, rss_factor=1.10, rss_slack_kib=4096)
 ROWS = {
     'diff-quiet': [['diff', '--quiet']],
     'diff-cached-quiet': [['diff', '--cached', '--quiet']],
     'log-oneline': [['log', '--oneline']],
     'status': [['status']],
     'script': SCRIPT,
+    'status-lf-attributes': [['status']],
+    'diff-quiet-lf-attributes': [['diff', '--quiet']],
 }
 
 
@@ -89,6 +107,7 @@ def main():
     parser.add_argument('--timeout', type=float, default=300.0)
     parser.add_argument('--out')
     parser.add_argument('--filter', default='')
+    parser.add_argument('--dev-oracle', action='store_true', help='Darwin development evidence only; not the pinned Linux oracle')
     a = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
     out = Path(a.out) if a.out else root / 'target/runs' / ('diff-scale-' + a.tier)
@@ -96,7 +115,12 @@ def main():
         shutil.rmtree(out)
     out.mkdir(parents=True)
     git = os.environ['DEN_GIT']
-    assert hashlib.sha256(Path(git).read_bytes()).hexdigest() == 'c4848492938c4ebfffbefe1fbbaa68b9af90c86d1f6a20e76816c5ff37fcfa60'
+    digest = hashlib.sha256(Path(git).read_bytes()).hexdigest()
+    if a.dev_oracle:
+        assert os.uname().sysname == 'Darwin', 'development oracle is Darwin-only'
+        print('DEV ORACLE (not pinned Linux evidence; BOUNDS are stated for Linux):', digest, flush=True)
+    else:
+        assert digest == 'c4848492938c4ebfffbefe1fbbaa68b9af90c86d1f6a20e76816c5ff37fcfa60'
     den = a.den or str(root / 'target' / a.tier / 'den')
     branch = 'main'
 
@@ -147,7 +171,7 @@ def main():
     floor_kib = min(measurement.run('/bin/true', [], out)['maxrss_kib'] for _ in range(3))
     print(f'FLOOR resident set of a child of the minimal parent: {floor_kib} KiB', flush=True)
 
-    def take(tool, steps):
+    def take(tool, steps, attributes=False):
         work = out / 'work'
         if work.exists():
             shutil.rmtree(work)
@@ -156,6 +180,9 @@ def main():
         # mtime than any file's, so no entry is racily clean for either tool.
         time.sleep(1.1)
         run([git, 'update-index', '-q', '--refresh'], work)
+        if attributes:
+            (work / '.git/info').mkdir(exist_ok=True)
+            (work / '.git/info/attributes').write_bytes(LF_ATTRIBUTES)
         results = [measurement.run(tool, argv, work) for argv in steps]
         return dict(steps=results, wall=sum(r['wall'] for r in results), cpu=sum(r['cpu'] for r in results),
                     maxrss_kib=max(r['maxrss_kib'] for r in results), ended=any(r['ended'] for r in results))
@@ -167,15 +194,17 @@ def main():
             continue
         best = {}
         sample = {}
+        attributes = name in ATTRIBUTE_ROWS
+        tools = (('git', git), ('den', den)) + ((('den-plain', den),) if attributes else ())
         for _ in range(a.takes):
-            for label, tool in (('git', git), ('den', den)):
-                r = take(tool, steps)
+            for label, tool in tools:
+                r = take(tool, steps, attributes and label != 'den-plain')
                 sample.setdefault(label, r)
                 b = best.setdefault(label, dict(wall=r['wall'], cpu=r['cpu'], maxrss_kib=r['maxrss_kib']))
                 for k in ('wall', 'cpu', 'maxrss_kib'):
                     b[k] = min(b[k], r[k])
             # A den run over its bound already fails the row: one take is enough.
-            if sample['den']['cpu'] > BOUNDS[name]['cpu']:
+            if not attributes and sample['den']['cpu'] > BOUNDS[name]['cpu']:
                 break
         g, d = sample['git'], sample['den']
         diffs = []
@@ -184,13 +213,20 @@ def main():
                 if gs[k] != ds[k]:
                     shown = (gs[k], ds[k]) if k == 'status' else (bytes.fromhex(gs[k])[-160:], bytes.fromhex(ds[k])[-160:])
                     diffs.append(f'step {i} {" ".join(steps[i])} {k}: git {shown[0]!r} den {shown[1]!r}')
-        bound = BOUNDS[name]
+        if attributes:
+            plain = best['den-plain']
+            bound = dict(cpu=round(plain['cpu'] * RELATIVE['cpu_factor'] + RELATIVE['cpu_slack'], 3),
+                         rss_kib=int(plain['maxrss_kib'] * RELATIVE['rss_factor']) + RELATIVE['rss_slack_kib'])
+        else:
+            bound = BOUNDS[name]
         bounded = (not d['ended'] and best['den']['cpu'] <= bound['cpu'] and
                    best['den']['maxrss_kib'] <= bound['rss_kib'])
         ok = not diffs and bounded
         print(('PASS ' if ok else 'FAIL ') + row +
               f" den wall {best['den']['wall']:.3f} s cpu {best['den']['cpu']:.3f} s peak {best['den']['maxrss_kib']} KiB;"
-              f" git wall {best['git']['wall']:.3f} s cpu {best['git']['cpu']:.3f} s peak {best['git']['maxrss_kib']} KiB;"
+              f" git wall {best['git']['wall']:.3f} s cpu {best['git']['cpu']:.3f} s peak {best['git']['maxrss_kib']} KiB;" +
+              (f" den without attributes cpu {best['den-plain']['cpu']:.3f} s peak {best['den-plain']['maxrss_kib']} KiB;"
+               if attributes else '') +
               f" bounds cpu {bound['cpu']} s peak {bound['rss_kib']} KiB; floor {floor_kib} KiB" +
               (f'; ended after {a.timeout} s' if d['ended'] else '') +
               ('' if not diffs else '; DIFFERS: ' + '; '.join(diffs)), flush=True)

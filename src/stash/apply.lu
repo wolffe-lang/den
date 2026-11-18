@@ -1,7 +1,8 @@
 // Recovery of a constructed entry: git-stash(1) apply/pop, measured on the
 // pinned oracle. The merge is the existing vc07 plan (base W^1, ours HEAD,
-// theirs W), never a forked matcher; conflicts and unsupported topologies
-// refuse by name before any object, AUTO_MERGE, index or worktree write.
+// theirs W), never a forked matcher. Attributed content conflicts retain
+// higher stages; unmeasured plain conflicts and topologies still refuse before
+// any object, AUTO_MERGE, index or worktree write.
 use commit
 use diff
 use index
@@ -70,15 +71,15 @@ pub fn status(ctx: worktree.Context) -> List[byte] ! commit.CommitErrors {
     worktree.render_status(snapshot, options)?
 }
 
-/// Outcome of recovery: status 0 applied; 128 refused by the merge-safety
-/// check with message (already reported state untouched).
+/// Outcome of recovery: status 0 applied, 1 attributed content conflict,
+/// or 128 refused by the merge-safety check with a diagnostic message.
 pub struct Outcome { status: int, messages: List[str], error: str, report: bool }
 
 /// Apply W onto the current index/worktree. Without --index the index keeps
 /// its previous entries (as zero-stat tree entries where the merge changed
 /// them) except paths new in the result, which stay staged; AUTO_MERGE names
-/// the merged tree. Unmerged indices, untracked snapshots and content
-/// conflicts are refused by name before any write.
+/// the merged tree. Unmerged indices, untracked snapshots and unattributed
+/// content conflicts are refused by name before any write.
 pub fn apply(ctx: worktree.Context, stash: oid.Oid, name: str) -> Outcome ! commit.CommitErrors {
     let item = walk.read(ctx.repo, stash) else |e| match e {
         Unsupported(feature) => { return Unsupported(feature) },
@@ -117,10 +118,13 @@ pub fn apply(ctx: worktree.Context, stash: oid.Oid, name: str) -> Outcome ! comm
             FlatEntry { path: copy entry.path, mode: entry.stat[6], id: copy entry.id })
     }
     var merged = List[worktree.FlatEntry](), messages = List[str]()
+    var stages = List[index.Entry](), conflicts = List[str]()
     if oid.equal(base.tree, current.root) {
         merged = worktree.flatten_tree(ctx.repo, stash)?
     } else {
-        let plan = mergetree.plan(
+        let plan = mergetree.plan_with_policy(
+            ctx,
+            tx.value,
             mergetree.files(ctx.repo, item.parents[0])?,
             index_files(ctx, ours)?,
             mergetree.files(ctx.repo, stash)?,
@@ -129,7 +133,17 @@ pub fn apply(ctx: worktree.Context, stash: oid.Oid, name: str) -> Outcome ! comm
             "Stashed changes",
             ctx.repo.config["merge.conflictstyle"] else "merge",
         )?
-        if plan.conflicts.len > 0 { return Unsupported("stash apply conflict") }
+        // The pinned attribute fixture covers these conflict publications.
+        // Keep the older refusal for ordinary, unattributed content conflicts.
+        for path in plan.conflicts {
+            let name = path.bytes()
+            let policy = worktree.attribute_policy(ctx, name, tx.value)?
+            if policy.merge == "" && policy.conflict_marker_size == 7 {
+                return Unsupported("stash apply conflict")
+            }
+        }
+        stages = plan.stages
+        conflicts = plan.conflicts
         merged = flat(plan.files)
         messages = plan.messages
         for file in plan.files { let _ = object.write_object(ctx.repo, "blob", file.data)? }
@@ -159,6 +173,15 @@ pub fn apply(ctx: worktree.Context, stash: oid.Oid, name: str) -> Outcome ! comm
         if same(ours, o, merged, m) || o < 0 { continue }
         tx.value = index.replace_entry(tx.value, zero_stat(ours[o])?)?
     }
+    // Remove each stage-zero path once, then install all recorded stages in
+    // index order. Binary attribute conflicts keep ours in the worktree.
+    for path in conflicts { tx.value = index.remove_path(tx.value, path.bytes())? }
+    for stage in stages { tx.value = index.replace_entry(tx.value, stage)? }
     index.commit(mut tx)?
-    Outcome { status: 0, messages: messages, error: "", report: true }
+    Outcome {
+        status: if conflicts.len > 0 then 1 else 0,
+        messages: messages,
+        error: "",
+        report: true,
+    }
 }
