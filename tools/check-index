@@ -23,4 +23,7 @@ assert len(rows)==1 and rows[0]['verdict']=='exit(0)',rows
 PYCODE
 done
 python3 -I tools/index-proof-test.py
-echo 'index: native/release units and independent Git interop; five bounded actual checked exits; full native test retained'
+# An index of 100,000 entries in 10,000 directories with its cache tree, read
+# beside Git; den is bounded relative to Git in the same take (native tier).
+tools/env python3 -I tools/index-scale-test.py --tier native
+echo 'index: native/release units and independent Git interop; five bounded actual checked exits; full native test retained; index-scale rows beside Git'

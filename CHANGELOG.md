@@ -1,5 +1,27 @@
 # Changes
 
+## Unreleased — status of large trees
+
+- Reading an index checks its cache tree against the entries in near-linear
+  time. Each directory's record was tested against every entry, and the
+  records against one another, so an index of 100,000 entries in 10,000
+  directories took den about a minute to read where Git takes 17 ms, and
+  plain `status` of 10,000 files in 1,000 directories spent two fifths of its
+  time there. `tools/index-scale-test.py` holds `ls-files` of that index to
+  Git's CPU time and peak memory.
+- The status walk finds a directory's gitlink entry by binary search. It
+  scanned every index entry for each directory it met, so status of 20,000
+  files, one in each of 20,000 directories, took 6.7 s where Git takes
+  0.15 s. `tools/status-scale-test.py` holds that shape to Git's CPU time and
+  peak memory.
+- Opening a repository's packs no longer hashes each pack index whole or
+  spells every object name in it in hex. An index keeps its name table as
+  stored, and a name is spelled only when one is printed. Git's reads skip
+  that checksum too; verify-pack and fsck still check it. Status beside
+  390,000 packed objects took 0.71 s where Git takes a millisecond, and now
+  takes 0.20 s. `tools/status-scale-test.py`'s objects shape holds it to Git's
+  CPU time and peak memory.
+
 ## Unreleased — adding thousands of files
 
 - Repositories whose `.gitattributes` say `* text=auto eol=lf`, mark files

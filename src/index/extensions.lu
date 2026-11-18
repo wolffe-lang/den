@@ -107,9 +107,6 @@ fn parse_cache(data: List[byte]) -> List[CacheNode] ! IndexErrors {
             append(mut path, component)
             frames[last].remaining -= 1
         }
-        for previous in nodes {
-            if byte_compare(previous.path, path) == 0 { return invalid_index }
-        }
         (mut nodes).push(CacheNode {
             path: owned_path(path),
             component: component,
@@ -125,7 +122,60 @@ fn parse_cache(data: List[byte]) -> List[CacheNode] ! IndexErrors {
         if frames.len == 0 { break }
     }
     if pos != data.len { return invalid_index }
+    // No two records name one directory: checked over the records in path
+    // order, neighbours only, where comparing each record with every earlier
+    // one was quadratic in the number of directories.
+    let order = node_order(nodes)
+    for rank in 1..order.len {
+        if byte_compare(nodes[order[rank - 1]].path, nodes[order[rank]].path) == 0 {
+            return invalid_index
+        }
+    }
     nodes
+}
+
+/// The records' positions in unsigned path order: a stable bottom-up merge sort.
+fn node_order(nodes: List[CacheNode]) -> List[int] {
+    var order = List[int](), scratch = List[int]()
+    (mut order).reserve(nodes.len)
+    (mut scratch).reserve(nodes.len)
+    for i in 0..nodes.len {
+        (mut order).push(i)
+        (mut scratch).push(i)
+    }
+    var width = 1
+    while width < order.len {
+        var lo = 0
+        while lo < order.len {
+            let mid = if lo + width < order.len then lo + width else order.len
+            let hi = if lo + 2 * width < order.len then lo + 2 * width else order.len
+            var i = lo, j = mid, k = lo
+            while i < mid && j < hi {
+                if byte_compare(nodes[order[j]].path, nodes[order[i]].path) < 0 {
+                    scratch[k] = order[j]
+                    j += 1
+                } else {
+                    scratch[k] = order[i]
+                    i += 1
+                }
+                k += 1
+            }
+            while i < mid {
+                scratch[k] = order[i]
+                i += 1
+                k += 1
+            }
+            while j < hi {
+                scratch[k] = order[j]
+                j += 1
+                k += 1
+            }
+            lo = hi
+        }
+        for i in 0..order.len { order[i] = scratch[i] }
+        width *= 2
+    }
+    order
 }
 
 fn validate_reuc(data: List[byte]) -> () ! IndexErrors {
@@ -178,21 +228,62 @@ fn validate_extensions(extensions: List[Extension]) -> () ! IndexErrors {
 
 // Nonnegative TREE counts describe the actual entry span, not merely syntax.
 // Invalidated nodes may retain stale child structure and carry no trusted count.
+// With the entries in path order, those below a directory D (the paths that
+// start with D/) are one run: from the first path at or after D/ to the first
+// at or after D0, '0' being the byte after '/'. Two binary searches and a pass
+// over that run replace a pass over every entry for every record, which was
+// quadratic. Entries out of path order (a caller's own value) keep that pass.
 fn validate_cache_spans(value: Index) -> () ! IndexErrors {
+    var ordered = true
+    for i in 1..value.entries.len {
+        if byte_compare(value.entries[i - 1].path, value.entries[i].path) > 0 {
+            ordered = false
+            break
+        }
+    }
     for extension in value.extensions {
         if extension.signature != "TREE" { continue }
         for node in parse_cache(extension.data)? {
             if node.count < 0 { continue }
-            var actual = 0
-            for entry in value.entries {
-                if parent_of(node.path, entry.path) {
-                    if stage(entry) != 0 || entry.extended & 0x2000 != 0 { return invalid_index }
-                    actual += 1
+            if !ordered {
+                var actual = 0
+                for entry in value.entries {
+                    if parent_of(node.path, entry.path) {
+                        if stage(entry) != 0 || entry.extended & 0x2000 != 0 {
+                            return invalid_index
+                        }
+                        actual += 1
+                    }
+                }
+                if actual != node.count { return invalid_index }
+                continue
+            }
+            var lo = 0, hi = value.entries.len
+            if node.path.len > 0 {
+                var bound = owned_path(node.path)
+                (mut bound).push(47 as byte)
+                lo = first_from(value.entries, bound)
+                bound[bound.len - 1] = 48 as byte
+                hi = first_from(value.entries, bound)
+            }
+            if hi - lo != node.count { return invalid_index }
+            for i in lo..hi {
+                if stage(value.entries[i]) != 0 || value.entries[i].extended & 0x2000 != 0 {
+                    return invalid_index
                 }
             }
-            if actual != node.count { return invalid_index }
         }
     }
+}
+
+/// The first position in entries (in path order) whose path is at or after key.
+fn first_from(entries: List[Entry], key: List[byte]) -> int {
+    var lo = 0, hi = entries.len
+    while lo < hi {
+        let mid = (lo + hi) / 2
+        if byte_compare(entries[mid].path, key) < 0 { lo = mid + 1 } else { hi = mid }
+    }
+    lo
 }
 
 fn cache_record(component: List[byte], count: int, children: int, id: List[byte]) -> List[byte] {
