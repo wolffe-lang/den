@@ -60,4 +60,5 @@ step porcelain-pull-scale tools/env python3 -I tools/pull-scale-test.py --tier n
 step actual-checked-config-edit checked_program config_edit_test
 step actual-checked-text-attributes checked_program text_attributes_test
 step actual-checked-ssh-parser checked_program ssh_test
+step porcelain-summary-scale tools/env python3 -I tools/summary-scale-test.py --tier native
 step porcelain-format tools/check-fmt
