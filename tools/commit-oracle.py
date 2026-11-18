@@ -23,12 +23,21 @@ p=seed('amend-orig');(p/'.git/ORIG_HEAD').write_bytes(b'1'*40+b'\n')
 seed('merge','merge')
 p=seeds/'root';p.mkdir();git(p,'init','-q');(p/'a').write_bytes(b'alpha\n');(p/'b').write_bytes(b'beta\n');git(p,'add','.')
 p=seeds/'empty';p.mkdir();git(p,'init','-q')
+# A clone Git makes with its default template: .git/hooks holds only Git's
+# disabled samples, which Git never runs (githooks(5)). The test environment's
+# template is empty, so the pinned Git's own samples are copied in.
+p=seed('samples');(p/'a.txt').write_bytes(b'alpha changed\n');git(p,'add','a.txt')
+T=pathlib.Path(G).resolve().parent.parent/'share/git-core/templates/hooks'
+assert sorted(T.glob('*.sample')),T
+(p/'.git/hooks').mkdir(exist_ok=True)
+for s in sorted(T.glob('*.sample')):shutil.copy2(s,p/'.git/hooks'/s.name)
 cases=[]
 def case(name,args,fixture='staged',message=None,config='',env=None,lock=None):
  cases.append(dict(name=name,args=args,fixture=fixture,message_hex=None if message is None else message.hex(),config=config,env=env or {},lock=lock))
 for fixture in ('clean','staged','both','dirty','rename','root','empty'):
  case(fixture+'-message',['-m','subject'],fixture)
  case(fixture+'-quiet',['-q','-m','subject'],fixture)
+case('samples-message',['-m','subject'],'samples')
 case('allow-empty',['--allow-empty','-m','empty'],'clean')
 case('root-allow-empty',['--allow-empty','-m','empty'],'empty')
 case('allow-empty-message',['--allow-empty-message','-m',''])
