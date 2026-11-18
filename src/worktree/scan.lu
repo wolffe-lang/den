@@ -491,6 +491,8 @@ fn walk_submodules(
         },
     ]
     var files = List[FileState]()
+    // A worktree mostly holds what its index lists: one buffer for the files.
+    (mut files).reserve(value.entries.len)
     var directories = List[List[byte]]()
     while pending.len > 0 {
         let todo = (mut pending).pop() else |_| { return invalid }
@@ -501,16 +503,31 @@ fn walk_submodules(
         bytes_add(mut attribute_path, ".gitattributes".bytes())
         if index_at(value.entries, attribute_path) >= 0 { attributes_seen = true }
         var listed = true
-        let items = fs.entries(absolute(ctx, parent)?) else |e| match e {
-            denied => {
-                if parent.len == 0 { return denied }
-                listed = false
-                List[fs.Entry]()
-            },
-            not_found => { return not_found },
-            io => { return io },
+        // The listing's own rows live in a region; only the visits are kept.
+        var visits = copy region {
+            let items = fs.entries(absolute(ctx, parent)?) else |e| match e {
+                denied => {
+                    if parent.len == 0 { return denied }
+                    listed = false
+                    List[fs.Entry]()
+                },
+                not_found => { return not_found },
+                io => { return io },
+            }
+            var listing = List[Visit]()
+            (mut listing).reserve(items.len)
+            for item in items {
+                if attribute_basename(item.name) { attributes_seen = true }
+                if compare(item.name, ".git".bytes()) == 0 { continue }
+                var path = List[byte]()
+                (mut path).reserve(parent.len + 1 + item.name.len)
+                bytes_add(mut path, parent)
+                if path.len > 0 { (mut path).push(47 as byte) }
+                bytes_add(mut path, item.name)
+                (mut listing).push(Visit { path: path, kind: item.kind, probe: false })
+            }
+            listing
         }
-        var visits = List[Visit]()
         if !listed {
             if include_untracked {
                 (mut warnings).push(
@@ -525,14 +542,6 @@ fn walk_submodules(
                 }
                 (mut visits).push(Visit { path: copy entry.path, kind: -1, probe: true })
             }
-        }
-        for item in items {
-            if attribute_basename(item.name) { attributes_seen = true }
-            if compare(item.name, ".git".bytes()) == 0 { continue }
-            var path = copy parent
-            if path.len > 0 { (mut path).push(47 as byte) }
-            bytes_add(mut path, item.name)
-            (mut visits).push(Visit { path: path, kind: item.kind, probe: false })
         }
         let attribute_modes = if listed && attributes_seen {
             attributes_directory_modes(ctx, parent, value)?
@@ -567,16 +576,23 @@ fn walk_submodules(
                 }
                 if !tracked { continue }
             }
-            let full = absolute(ctx, path)?
-            var looked = true
-            let info = fs_lstat(full) else |e| match e {
-                not_found => { continue },
-                denied => {
-                    looked = false
-                    List[int]()
-                },
-                io => { return io },
+            var looked = true, gone = false
+            // The lstat record is copied out of the region its call and the
+            // absolute path were made in.
+            let info = copy region {
+                fs_lstat(absolute(ctx, path)?) else |e| match e {
+                    not_found => {
+                        gone = true
+                        List[int]()
+                    },
+                    denied => {
+                        looked = false
+                        List[int]()
+                    },
+                    io => { return io },
+                }
             }
+            if gone { continue }
             if !looked {
                 let tracked_at = index_at(value.entries, path)
                 if tracked_at >= 0 && index.stage(value.entries[tracked_at]) == 0 {
@@ -730,7 +746,8 @@ fn walk_submodules(
                 // An untracked repository is one opaque directory, including
                 // under -uall. Keep its plain path here for add/path selection;
                 // only status appends '/'. No inner HEAD or file is read.
-                if !tracked_under(value.entries, path) && repository.embedded(full)? {
+                if !tracked_under(value.entries, path) &&
+                    repository.embedded(absolute(ctx, path)?)? {
                     if files.len >= 1000000 {
                         return Fatal("limit: more than 1000000 paths in the work tree scan")
                     }
@@ -762,10 +779,16 @@ fn walk_submodules(
                 } else {
                     0o120000
                 }
+                // A tracked file whose stat data matches its entry is taken
+                // as the entry's blob unread.
+                let clean = hashing &&
+                    staged >= 0 &&
+                    (info[0] == 0 || link_judged(info, prior_mode, symlinks)) &&
+                    stat_clean(value.entries[staged], info, mode, written)
                 var file = FileState {
                     path: owned_bytes(path),
                     mode: mode,
-                    id: copy empty,
+                    id: if clean then copy value.entries[staged].id else copy empty,
                     data: List[byte](),
                     // status renders paths and modes only; full walks keep the record.
                     stat: if status then List[int]() else copy info,
@@ -786,13 +809,9 @@ fn walk_submodules(
                     if decision.ignored { continue }
                 } else if status && info[0] == 0 && at < 0 {
                     // Untracked or ignored: status renders the path alone.
-                } else if hashing &&
-                    staged >= 0 &&
-                    (info[0] == 0 || link_judged(info, prior_mode, symlinks)) &&
-                    stat_clean(value.entries[staged], info, mode, written) {
+                } else if clean {
                     // A stat-clean entry is its blob, unread whatever its
-                    // attributes say, as Git takes it.
-                    file.id = copy value.entries[staged].id
+                    // attributes say, as Git takes it: its id is given above.
                 } else if hashing {
                     if identity_check && info[0] == 0 {
                         check_path_identity(ctx, path, value, mut identity_caches)?
@@ -853,10 +872,28 @@ fn walk_submodules(
             (mut warnings).push(next)
         }
     }
-    var names = List[List[byte]]()
-    for file in files { (mut names).push(copy file.path) }
+    // The files move into path order; the sort's keys and order live in a
+    // region of their own.
+    var order = copy region {
+        var names = List[List[byte]]()
+        (mut names).reserve(files.len)
+        for file in files { (mut names).push(copy file.path) }
+        path_order(names)
+    }
     var sorted = List[FileState]()
-    for i in path_order(names) { (mut sorted).push(copy files[i]) }
+    (mut sorted).reserve(files.len)
+    for i in order {
+        (mut sorted).push(take files[i])
+        files[i] = FileState {
+            path: List[byte](),
+            mode: 0,
+            id: oid.Oid { algorithm: "", bytes: List[byte]() },
+            data: List[byte](),
+            stat: List[int](),
+            kind: 0,
+            dirt: 0,
+        }
+    }
     Walk { files: sorted, directories: directories }
 }
 
