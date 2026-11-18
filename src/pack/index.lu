@@ -120,12 +120,17 @@ fn same(a: List[byte], b: List[byte]) -> bool {
     true
 }
 
-fn parse_index(data: List[byte]) -> Index ! PackErrors {
+/// summed: the idx's own trailing SHA-1 is checked, as verify-pack, fsck and
+/// installation check it. An object read does not check it, as the pinned Git
+/// does not (measured): what a read relies on is checked whatever summed says
+/// (the fanout, name order and offsets here, the idx-to-pack trailer binding,
+/// and the read entry's CRC32 and reconstructed identity).
+fn parse_index(data: List[byte], summed: bool) -> Index ! PackErrors {
     if data.len < 1072 { return Unsupported("pack index truncated") }
     if !same(data[0..4], [255 as byte, 116 as byte, 79 as byte, 99 as byte]) || be32(data, 4) != 2 {
         return Unsupported("pack index version (requires v2)")
     }
-    if !same(hash.sum1(data[0..data.len - 20]), data[data.len - 20..]) {
+    if summed && !same(hash.sum1(data[0..data.len - 20]), data[data.len - 20..]) {
         return Unsupported("pack index checksum")
     }
     let count = be32(data, 1028)
