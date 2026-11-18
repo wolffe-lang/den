@@ -1363,6 +1363,7 @@ pub struct Edit { old_start: int, old_count: int,
     new_start: int, new_count: int }
 pub fn difftext.lines(data: List[byte]) -> List[Line] ! DeltaErrors
 pub fn difftext.edits(before: List[byte], after: List[byte]) -> List[Edit] ! DeltaErrors
+pub fn difftext.counts(before: List[byte], after: List[byte]) -> Counts ! DeltaErrors
 pub fn difftext.hunks(before: List[byte], after: List[byte],
     context: int, indent: bool) -> List[byte] ! DeltaErrors
 pub fn diffbinary.patch(before: List[byte], after: List[byte]) -> List[byte] ! BinaryPatchErrors
@@ -1372,6 +1373,15 @@ pub fn diffbinary.patch(before: List[byte], after: List[byte]) -> List[byte] ! B
 hash prefilter. It keeps a bounded Myers trace; direct empty-side edits avoid
 that search. General searches cap at 2,000 changed lines, inputs at 200,000
 lines/16 MiB, context at 200,000. Invalid arguments and limits are explicit rows.
+`counts` gives a minimal script's inserted and deleted line counts from the
+forward pass alone (one row of furthest reaching points, never the trace), so
+in space linear in the inputs and with no bound on changed lines or on lines;
+the common prefix and suffix are matched first, and lines whose hash the other
+side lacks are set aside. Stats count with it (den#105). Its counts are
+minimal. Git's default diff is not always: on dense random edits of text drawn
+from a few distinct lines it counted 3,788 and 3,800 where `--minimal` (and
+den) count 3,784 and 3,796; on generated tables and real parser files the
+two agree.
 Its default boundary ranking matches 676/684 measured hunk outputs; the oracle
 changes output in 56/684 when its indent heuristic is disabled. The remaining
 seeded-21/seeded-116 cases at four context widths are fixed full-input/output

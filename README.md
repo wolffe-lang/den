@@ -291,8 +291,11 @@ reads objects parses each pack index once, when it starts, not once an object.
 
 Diff bodies are limited to 16 MiB per file, the bodies a diff reads to 128 MiB,
 text sequences to 200,000 lines and general edit searches to 2,000 changed
-lines. Rename pools are limited to 2,000 candidates per side. Exceeding a bound
-returns a named failure, never an approximate result presented as exact.
+lines. A stat's counts (`--stat`, `--numstat`, `--shortstat`, and the summary a
+pull or merge prints after it moves HEAD) have neither of the last two bounds:
+they are a minimal script's counts, found in space linear in the two bodies
+(den#105). Rename pools are limited to 2,000 candidates per side. Exceeding a
+bound returns a named failure, never an approximate result presented as exact.
 
 A bound that fetch, pull, clone, merge or checkout reaches is a fatal error that
 names the bound and its value, exit 128: `fatal: limit: more than 100000
