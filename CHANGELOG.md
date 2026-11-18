@@ -36,6 +36,14 @@
   390,000 packed objects took 0.71 s where Git takes a millisecond, and now
   takes 0.20 s. `tools/status-scale-test.py`'s objects shape holds it to Git's
   CPU time and peak memory.
+- `status` keeps about what it needs. Nothing is freed before a region ends,
+  so every outgrown list buffer, every lstat record, listing and absolute path
+  of its walk, and its copies of the index stayed until it exited. Status of
+  10,000 files in 1,000 directories peaked at 68 MB, nearly ten times Git's
+  7 MB; it now peaks at 36 MB. Status of 20,000 files, one in each of 20,000
+  directories, went from 230 MB to 137 MB. A pack file's byte range is read
+  into one buffer of its size, where it grew a byte at a time.
+  `tools/status-scale-test.py` holds both shapes to Git's peak memory.
 
 ## Unreleased — adding thousands of files
 
