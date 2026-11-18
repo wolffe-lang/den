@@ -46,7 +46,7 @@ pub fn bases(
 /// (gitformat-index(5) mode 120000). A link's body is that target text, so it
 /// is compared, counted in a change summary and written like a file's.
 fn blob_mode(mode: int) -> bool {
-    mode == 0o100644 || mode == 0o100755 || mode == 0o120000
+    mode == 0o100644 || mode == 0o100755
 }
 
 /// Collect bounded blob tree input (files and symbolic links), preserving
