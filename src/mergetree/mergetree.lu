@@ -41,7 +41,16 @@ pub fn bases(
     out
 }
 
-/// Collect bounded regular-file tree input, preserving byte paths and objects.
+/// Whether a tree entry of `mode` is a blob a merge carries: a regular or
+/// executable file, or a symbolic link, whose blob is the link's target
+/// (gitformat-index(5) mode 120000). A link's body is that target text, so it
+/// is compared, counted in a change summary and written like a file's.
+fn blob_mode(mode: int) -> bool {
+    mode == 0o100644 || mode == 0o100755 || mode == 0o120000
+}
+
+/// Collect bounded blob tree input (files and symbolic links), preserving
+/// byte paths and objects.
 pub fn files(repo: repository.Repo, id: oid.Oid) -> List[diff.File] ! worktree.WorkErrors {
     var out = List[diff.File](), total = 0
     var reader = object.reader_batch(repo)
@@ -57,9 +66,7 @@ pub fn files(repo: repository.Repo, id: oid.Oid) -> List[diff.File] ! worktree.W
             })
             continue
         }
-        if entry.mode != 0o100644 && entry.mode != 0o100755 {
-            return Unsupported("merge nonregular tree entry")
-        }
+        if !blob_mode(entry.mode) { return Unsupported("merge nonregular tree entry") }
         let blob = object.read_cached(mut reader, entry.id, 16777216)?
         if blob.kind != "blob" { return bad_oid }
         total += blob.data.len
@@ -116,7 +123,7 @@ pub fn compared(
                     break
                 }
             }
-            if entry.mode != 0o100644 && entry.mode != 0o100755 && entry.mode != 0o160000 {
+            if !blob_mode(entry.mode) && entry.mode != 0o160000 {
                 return Unsupported("merge nonregular tree entry")
             }
             var exceeded = false
@@ -253,6 +260,13 @@ fn plan_inner(
             t >= 0 && theirs[t].mode == 0o160000 ||
             b >= 0 && base[b].mode == 0o160000 {
             return Unsupported("merge of a submodule changed on both sides")
+        }
+        // A symbolic link changed on one side passes through above. Changed on
+        // both sides, or against a file, its target is never merged as text.
+        if o >= 0 && ours[o].mode == 0o120000 ||
+            t >= 0 && theirs[t].mode == 0o120000 ||
+            b >= 0 && base[b].mode == 0o120000 {
+            return Unsupported("merge of a symbolic link changed on both sides")
         }
         if o < 0 || t < 0 { return Unsupported("merge modify/delete conflict") }
         if ours[o].mode != theirs[t].mode &&
