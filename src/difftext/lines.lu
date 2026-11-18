@@ -100,6 +100,98 @@ fn trace_matches(
     matches
 }
 
+/// The inserted and deleted line counts of a minimal edit script.
+pub struct Counts { added: int, deleted: int }
+
+// Line spans as lines() makes them, with no bound on their number.
+fn spans(data: List[byte]) -> List[Line] {
+    var result = List[Line]()
+    var start = 0, pos = 0
+    var hash: int = 0
+    while pos < data.len {
+        hash = hash * 33 + data[pos] as int & 0xffffffff
+        pos += 1
+        if data[pos - 1] == 10 as byte || pos == data.len {
+            (mut result).push(Line { start: start, end: pos, hash: hash })
+            start = pos
+            hash = 0
+        }
+    }
+    result
+}
+
+// The length of a longest common subsequence of two line lists, from the
+// forward pass of Myers (1986), section 2: one row of furthest reaching x per
+// diagonal is kept, never the trace, so space is linear in the inputs. The
+// first distance D at which the pass reaches the end gives the length,
+// (n + m - D) / 2.
+fn common_length(a: List[byte], left: List[Line], b: List[byte], right: List[Line]) -> int {
+    let n = left.len, m = right.len
+    if n == 0 || m == 0 { return 0 }
+    let maximum = n + m
+    let offset = maximum + 1
+    var v = List[int]()
+    (mut v).reserve(2 * maximum + 3)
+    for _ in 0..2 * maximum + 3 { (mut v).push(0) }
+    var distance = 0
+    while distance <= maximum {
+        var k = -distance
+        while k <= distance {
+            var x = if k == -distance || k != distance && v[offset + k - 1] < v[offset + k + 1] {
+                v[offset + k + 1]
+            } else {
+                v[offset + k - 1] + 1
+            }
+            var y = x - k
+            while x < n && y < m && equal_line(a, left[x], b, right[y]) {
+                x += 1
+                y += 1
+            }
+            v[offset + k] = x
+            if x >= n && y >= m { return (n + m - distance) / 2 }
+            k += 2
+        }
+        distance += 1
+    }
+    0
+}
+
+/// The counts of a minimal insertion/deletion script, in space linear in the
+/// inputs and with no bound on the number of differing lines. A minimal
+/// script's counts depend only on the length L of a longest common
+/// subsequence: n - L lines deleted, m - L inserted. Before the pass, the
+/// common prefix and suffix are matched, and a line whose hash occurs nowhere
+/// on the other side is set aside: it can be in no common subsequence, so L
+/// is unchanged, and a rewrite of every line costs no search at all.
+pub fn counts(before: List[byte], after: List[byte]) -> Counts ! DeltaErrors {
+    if before.len > 16777216 || after.len > 16777216 { return limit }
+    let left = spans(before)
+    let right = spans(after)
+    var low = 0
+    while low < left.len && low < right.len && equal_line(before, left[low], after, right[low]) {
+        low += 1
+    }
+    var high_left = left.len, high_right = right.len
+    while high_left > low &&
+        high_right > low &&
+        equal_line(before, left[high_left - 1], after, right[high_right - 1]) {
+        high_left -= 1
+        high_right -= 1
+    }
+    var in_left = Map[int, bool](), in_right = Map[int, bool]()
+    for i in low..high_left { in_left[left[i].hash] = true }
+    for j in low..high_right { in_right[right[j].hash] = true }
+    var kept_left = List[Line](), kept_right = List[Line]()
+    for i in low..high_left {
+        if in_right[left[i].hash] else false { (mut kept_left).push(copy left[i]) }
+    }
+    for j in low..high_right {
+        if in_left[right[j].hash] else false { (mut kept_right).push(copy right[j]) }
+    }
+    let common = low + (left.len - high_left) + common_length(before, kept_left, after, kept_right)
+    Counts { added: right.len - common, deleted: left.len - common }
+}
+
 /// Minimal insertion/deletion script, at most 2,000 changed lines and 200,000
 /// lines per input. Exhausting these explicit budgets returns limit, not an
 /// approximate script. Counts are not affected by byte-level similarity hashes.
