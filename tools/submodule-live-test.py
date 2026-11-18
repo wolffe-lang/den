@@ -28,6 +28,12 @@ print must carry the last line Git wrote, so a red live row names its cause.
 wolf-web by each tool on this machine, wall time and the child's CPU from
 wait4, written to target/runs/submodule-live-timed.json.
 
+--web-url URL and --between-clones CMD are for tests only: they aim
+live-wolf-web at another superproject and run CMD (a shell command) after the
+pinned Git's clone and before the row's first listing of the submodules'
+remotes. tools/submodule-live-moved-test.py uses them to move a submodule
+remote's refs at that point; without them the row is unchanged.
+
 Every row SKIPs by name when github.com:443 is unreachable or when no
 distribution root bundle exists. Run through tools/env.
 Sources: git-clone(1), git-submodule(1), git-ls-remote(1) of Git v2.56.0.
@@ -58,6 +64,11 @@ p.add_argument('--field', action='store_true', help='a Git other than the pinned
 p.add_argument('--only', default='', help='run the rows whose names match this pattern')
 p.add_argument('--self-test', action='store_true', help='the clone-problem row alone, with no network')
 p.add_argument('--url', default='', help='--timed only: another public superproject, measured locally')
+p.add_argument('--web-url', default='',
+               help='test only (tools/submodule-live-moved-test.py): live-wolf-web against another superproject')
+p.add_argument('--between-clones', default='',
+               help='test only (tools/submodule-live-moved-test.py): a shell command live-wolf-web runs after the '
+                    'pinned Git\'s clone and before its first listing of the submodules\' remotes; inert unless given')
 p.add_argument('--ssh-to-https', action='store_true',
                help='--timed only: url.https://github.com/.insteadOf=git@github.com: for scp-like submodule URLs')
 a = p.parse_args()
@@ -218,9 +229,9 @@ def verdict(name, problems, detail=None):
         failed.append(name)
 
 
-def remotes_of(top):
+def remotes_of(top, web=WEB):
     """The superproject's URL and every submodule's, as the clone took them."""
-    urls = [WEB]
+    urls = [web]
     for gitdir in gitdirs(top)[1:]:
         q = subprocess.run([git, '--git-dir=' + str(gitdir), 'config', 'remote.origin.url'], env=env,
                            capture_output=True, timeout=60)
@@ -231,13 +242,14 @@ def remotes_of(top):
 
 def web_row():
     name = 'live-wolf-web'
+    web = a.web_url or WEB
     problems = []
     for attempt in range(2):
         problems = []
         work = clones / ('web-%d' % attempt)
         work.mkdir()
-        before = cloned_refs(WEB)
-        oracle = run([git, 'clone', '-q', '--recurse-submodules', WEB, 'git'], work, target=work / 'git', row=name,
+        before = cloned_refs(web)
+        oracle = run([git, 'clone', '-q', '--recurse-submodules', web, 'git'], work, target=work / 'git', row=name,
                      tool='git')
         stalled = stalled_twice(('git', oracle))
         if stalled:
@@ -246,9 +258,12 @@ def web_row():
         if oracle['exit']:
             problems.append('pinned Git could not clone wolf-web: ' + oracle['stderr'][-300:])
             break
-        urls = remotes_of(work / 'git')
+        urls = remotes_of(work / 'git', web)
+        if a.between_clones:
+            # Test only: the local witness moves a submodule remote's refs here.
+            subprocess.run(a.between_clones, shell=True, check=True, env=env, timeout=120)
         middle = [cloned_refs(url) for url in urls[1:]]
-        candidate = run([den, 'clone', '-q', '--recurse-submodules', WEB, 'den'], work, target=work / 'den',
+        candidate = run([den, 'clone', '-q', '--recurse-submodules', web, 'den'], work, target=work / 'den',
                         row=name, tool='den')
         print('LIVE %s attempt=%d retries=den:%d,git:%d quiet=den:%.1fs,git:%.1fs wall=den:%.2fs,git:%.2fs' % (
             name, attempt, candidate['retries'], oracle['retries'], candidate['quiet'], oracle['quiet'],
@@ -257,7 +272,7 @@ def web_row():
         if stalled:
             problems.extend(stalled)
             break
-        after = cloned_refs(WEB)
+        after = cloned_refs(web)
         # What both clones took, held from before Git's to after den's (the
         # submodules' remotes from Git's clone on).
         moved = before is None or after is None or before != after or middle != [cloned_refs(u) for u in urls[1:]]
