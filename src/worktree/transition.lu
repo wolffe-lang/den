@@ -283,17 +283,31 @@ fn transition_mode(
             (mut entries).push(copy entry)
         }
     }
-    // Preserve the index's unsigned pathname order independent of target order.
-    for i in 1..entries.len {
-        var n = i
-        while n > 0 && compare(entries[n - 1].path, entries[n].path) > 0 {
-            let temp = copy entries[n - 1]
-            entries[n - 1] = copy entries[n]
-            entries[n] = temp
-            n -= 1
+    // Preserve the index's unsigned pathname order independent of target
+    // order: a stable sort of positions, its keys in a region of their own,
+    // then each entry moved once into place. An insertion sort that copied
+    // every entry it shifted kept each copy to the end of the command: a
+    // pull adding 440 paths through a 10,000-entry index held 2.6 GB of
+    // them (den#138).
+    var order = copy region {
+        var names = List[List[byte]]()
+        (mut names).reserve(entries.len)
+        for entry in entries { (mut names).push(copy entry.path) }
+        path_order(names)
+    }
+    var sorted = List[index.Entry]()
+    (mut sorted).reserve(entries.len)
+    for i in order {
+        (mut sorted).push(take entries[i])
+        entries[i] = index.Entry {
+            stat: List[int](),
+            id: oid.Oid { algorithm: "", bytes: List[byte]() },
+            flags: 0,
+            extended: 0,
+            path: List[byte](),
         }
     }
-    value.entries = entries
+    value.entries = sorted
     if mode == "mixed" {
         value.extensions = copy previous.extensions
         for path in paths {
