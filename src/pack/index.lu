@@ -1,9 +1,7 @@
 // Git 2.56.0 gitformat-pack, Version 2 pack-*.idx files and Checksums.
 use hash
-use oid
 
 struct Entry {
-    name: str,
     offset: int,
     crc: int,
 }
@@ -11,20 +9,72 @@ struct Entry {
 /// entries are in the idx's validated name order; by_offset holds the same
 /// slots in increasing offset order. Lookups are binary searches (the
 /// runtime Map is a linear scan, which made every idx parse quadratic).
+/// names holds the idx's own name table, 20 raw bytes a slot: a name is
+/// spelled in hex only when one is printed or matched by a prefix.
 struct Index {
     entries: List[Entry],
     by_offset: List[int],
     pack_sum: List[byte],
+    names: List[byte],
 }
 
-/// The slot named name, or -1.
+/// The 20 raw bytes a 40-digit lowercase or uppercase hex name spells, or an
+/// empty list when it is not one.
+fn raw_name(name: str) -> List[byte] {
+    var out = List[byte]()
+    if name.len != 40 { return out }
+    (mut out).reserve(20)
+    for k in 0..20 {
+        let hi = hex_digit(name.bytes()[2 * k] as int)
+        let lo = hex_digit(name.bytes()[2 * k + 1] as int)
+        if hi < 0 || lo < 0 { return List[byte]() }
+        (mut out).push((hi * 16 + lo) as byte)
+    }
+    out
+}
+
+// A hex digit's value, or -1 (nameset's nibble folds every byte into 0-15).
+fn hex_digit(c: int) -> int {
+    if c >= 48 && c <= 57 { return c - 48 }
+    if c >= 97 && c <= 102 { return c - 87 }
+    if c >= 65 && c <= 70 { return c - 55 }
+    -1
+}
+
+/// How slot's raw name compares with raw (20 bytes): negative, zero or positive.
+fn name_cmp(index: Index, slot: int, raw: List[byte]) -> int {
+    let at = 20 * slot
+    for k in 0..20 {
+        let a = index.names[at + k] as int, b = raw[k] as int
+        if a != b { return a - b }
+    }
+    0
+}
+
+/// slot's name in lowercase hex.
+fn name_hex(index: Index, slot: int) -> str {
+    let digits = "0123456789abcdef"
+    var out = List[byte]()
+    (mut out).reserve(40)
+    let at = 20 * slot
+    for k in 0..20 {
+        let b = index.names[at + k] as int
+        (mut out).push(digits.bytes()[b / 16])
+        (mut out).push(digits.bytes()[b % 16])
+    }
+    str_from_utf8(out) else ""
+}
+
+/// The slot named name (hex), or -1.
 fn slot_named(index: Index, name: str) -> int {
+    let raw = raw_name(name)
+    if raw.len != 20 { return -1 }
     var lo = 0, hi = index.entries.len
     while lo < hi {
         let mid = (lo + hi) / 2
-        if index.entries[mid].name < name { lo = mid + 1 } else { hi = mid }
+        if name_cmp(index, mid, raw) < 0 { lo = mid + 1 } else { hi = mid }
     }
-    if lo < index.entries.len && index.entries[lo].name == name { return lo }
+    if lo < index.entries.len && name_cmp(index, lo, raw) == 0 { return lo }
     -1
 }
 
@@ -56,10 +106,12 @@ fn next_offset(index: Index, offset: int, end: int) -> int {
     end
 }
 
-// An object name's hex from its 20 raw bytes, or "" when they are not one.
-fn hex_name(raw: List[byte]) -> str {
-    let id = oid.from_bytes("sha1", raw) else { return "" }
-    oid.hex(id) else ""
+// Whether the 20 raw bytes at a sort before those at b (unsigned).
+fn name_before(data: List[byte], a: int, b: int) -> bool {
+    for k in 0..20 {
+        if data[a + k] != data[b + k] { return data[a + k] < data[b + k] }
+    }
+    false
 }
 
 /// Slots ordered by offset: a stable bottom-up merge sort. Each pass merges
@@ -144,9 +196,9 @@ fn parse_index(data: List[byte], summed: bool) -> Index ! PackErrors {
         if n < previous || n > count { return Unsupported("pack index fanout") }
         previous = n
     }
-    // den#63: the entries are reserved to the count and each entry's name is
-    // decoded in its own region, so a parse keeps one name and two ints an
-    // object rather than every slice, id and copy made on the way.
+    // den#63: the entries are reserved to the count, and a parse keeps two
+    // ints an object and the name table as the idx holds it; names are
+    // ordered by their raw bytes, as their hex orders them.
     var entries = List[Entry]()
     (mut entries).reserve(count)
     var bucket = 0
@@ -158,13 +210,9 @@ fn parse_index(data: List[byte], summed: bool) -> Index ! PackErrors {
             if be32(data, 8 + bucket * 4) != i { return Unsupported("pack index fanout") }
             bucket += 1
         }
-        let name = copy region {
-            var raw = List[byte]()
-            for k in pos..pos + 20 { (mut raw).push(data[k]) }
-            hex_name(raw)
+        if i > 0 && !name_before(data, pos - 20, pos) {
+            return Unsupported("pack index name order")
         }
-        if name == "" { return Unsupported("pack index name") }
-        if i > 0 && name <= entries[i - 1].name { return Unsupported("pack index name order") }
         var offset = be32(data, 1032 + count * 24 + i * 4)
         if offset >= 2147483648 {
             let slot = offset - 2147483648
@@ -179,7 +227,6 @@ fn parse_index(data: List[byte], summed: bool) -> Index ! PackErrors {
         }
         if offset < 12 { return Unsupported("pack index offsets") }
         (mut entries).push(Entry {
-            name: name,
             offset: offset,
             crc: be32(data, 1032 + count * 20 + i * 4),
         })
@@ -200,5 +247,6 @@ fn parse_index(data: List[byte], summed: bool) -> Index ! PackErrors {
         entries: entries,
         by_offset: by_offset,
         pack_sum: data[data.len - 40..data.len - 20],
+        names: data[1032..1032 + 20 * count],
     }
 }
