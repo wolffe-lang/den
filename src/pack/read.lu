@@ -48,14 +48,22 @@ fn open_pack(path: str) -> int ! PackErrors {
     }
 }
 
-fn load_index(path: str) -> Index ! PackErrors {
+/// A pack index for verify-pack, fsck, installation and housekeeping: its own
+/// checksum included.
+fn load_index(path: str) -> Index ! PackErrors { load_index_summed(path, true)? }
+
+/// A pack index for object reads and lookups: its own checksum is not read, as
+/// the pinned Git reads one (parse_index).
+fn load_read_index(path: str) -> Index ! PackErrors { load_index_summed(path, false)? }
+
+fn load_index_summed(path: str, summed: bool) -> Index ! PackErrors {
     let fd = fs_open(path)?
     defer fs_close(fd) else |_| {}
     let size = file_size(fd)?
     if size > 16777216 { return Unsupported("limit: a pack index larger than 16777216 bytes") }
     let bytes = range_bytes(fd, 0, size)?
     if file_size(fd)? != size { return Unsupported("pack index changed") }
-    parse_index(bytes)?
+    parse_index(bytes, summed)?
 }
 
 /// Header, object count and offset bounds against the parsed index; the size.
@@ -412,7 +420,7 @@ pub fn read_object(gitdir: str, name: str, cap: int) -> Body ! PackErrors {
         // Per-pack scratch is reclaimed; the returned body is explicitly owned.
         var result = Body { kind: "", data: List[byte]() }, found = false
         region candidate {
-            let index = load_index(path)?
+            let index = load_read_index(path)?
             let fd = open_pack("{path[0..path.len - 4]}.pack")?
             defer fs_close(fd) else |_| {}
             let end = bounds(fd, index)?
@@ -453,12 +461,12 @@ pub fn packed_count(gitdir: str) -> int ! PackErrors {
 }
 
 /// Return at most two distinct matching names, sufficient for ambiguity checks.
-/// Validate the idx checksum and the trailer binding even for prefix-only reads.
+/// Validate the trailer binding even for prefix-only reads.
 pub fn prefix(gitdir: str, prefix: str) -> List[str] ! PackErrors {
     var out = List[str]()
     for path in indexes(gitdir)? {
         region candidate {
-            let index = load_index(path)?
+            let index = load_read_index(path)?
             let fd = open_pack("{path[0..path.len - 4]}.pack")?
             defer fs_close(fd) else |_| {}
             let _ = bounds(fd, index)?
@@ -502,7 +510,7 @@ pub fn session(gitdir: str) -> Session {
 
 fn load_session(mut s: Session) -> () ! PackErrors {
     for path in indexes(s.gitdir)? {
-        let index = load_index(path)?
+        let index = load_read_index(path)?
         let fd = open_pack("{path[0..path.len - 4]}.pack")?
         defer fs_close(fd) else |_| {}
         let end = bounds(fd, index)?
