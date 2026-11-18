@@ -40,18 +40,21 @@ SHAPES = {
     'directories': dict(files=20000, directories=20000, objects=0),
     'objects': dict(files=100, directories=10, objects=390000),
 }
-# Stated for the native tier on Linux. files: the peak bound fails a status
-# that keeps every list's outgrown buffers, its walk's lstat records and
-# listings, and copies of the index and its entries. directories: the peak
-# bound fails a walk that keeps all it made of each directory; the CPU bound
-# fails a walk whose work per directory grows with the number of entries.
+# Stated for the native tier on Linux. files: the peak bound holds status's
+# memory as it stands, about a tenth above it, so that undoing one of its
+# gains fails it: a status that copies every file state into path order and
+# keeps the sort's keys does, as does one that keeps every list's outgrown
+# buffers, its walk's lstat records and listings, and copies of the index and
+# its entries. directories: the peak bound fails a walk that keeps all it
+# made of each directory; the CPU bound fails a walk whose work per directory
+# grows with the number of entries.
 # objects: den still reads every pack index whole where Git reads what it
 # looks up, and the peak bound is today's. Git's own time there is a
 # millisecond, so the CPU bound is nearly all slack: it fails a read that
 # hashes every index and spells every name in it, on a machine up to half
 # again as fast as the one it was set on.
 RELATIVE = {
-    'files': dict(cpu_factor=10.0, cpu_slack=0.05, rss_factor=6.0, rss_slack_kib=8192),
+    'files': dict(cpu_factor=10.0, cpu_slack=0.05, rss_factor=5.0, rss_slack_kib=5120),
     'directories': dict(cpu_factor=10.0, cpu_slack=0.05, rss_factor=14.0, rss_slack_kib=16384),
     'objects': dict(cpu_factor=10.0, cpu_slack=0.40, rss_factor=8.0, rss_slack_kib=98304),
 }
