@@ -43,7 +43,11 @@ pub fn read_bytes(path: str, cap: int) -> List[byte] ! RepoErrors {
     let info = fs_fstat_record(f.fd) else |_| { return io }
     // The bound is named as fetch, pull, merge and checkout print it.
     if info[1] > cap { return Unsupported(file_limit(cap)) }
+    // One buffer of the file's size: grown a byte at a time it kept every
+    // smaller buffer it outgrew, about twice the file. A file that grows
+    // after the fstat still reads whole, and still within cap.
     var out = List[byte](), exceeded = false
+    if info[1] > 0 { (mut out).reserve(info[1]) }
     loop {
         region chunk {
             let bytes = fs.read_chunk(mut f, 65536) else |e| match e {
