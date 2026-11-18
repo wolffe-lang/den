@@ -262,6 +262,7 @@ fn head_flat(ctx: Context, value: index.Index, commit: oid.Oid) -> List[FlatEntr
     let root = index.parsed_root(value)?
     if root.len == 1 && oid.equal(root[0], tree_id(ctx.repo, commit)?) {
         var out = List[FlatEntry]()
+        (mut out).reserve(value.entries.len)
         for entry in value.entries {
             (mut out).push(FlatEntry {
                 path: copy entry.path,
@@ -871,69 +872,75 @@ fn status_rows(
     mut ignores: ignore.Cache,
     mut warnings: List[str],
 ) -> List[StatusRow] ! WorkErrors {
-    // The sorted, deduplicated union of HEAD and index paths; rows are put in
-    // path order below, so the union's own order only needs to be stable.
-    var paths = List[List[byte]]()
-    var t = 0, n = 0
-    while t < tree.len || n < value.entries.len {
-        var candidate = List[byte]()
-        if n >= value.entries.len ||
-            t < tree.len && compare(tree[t].path, value.entries[n].path) <= 0 {
-            candidate = copy tree[t].path
-            t += 1
-        } else {
-            candidate = copy value.entries[n].path
-            n += 1
-        }
-        if paths.len == 0 || compare(paths[paths.len - 1], candidate) != 0 {
-            (mut paths).push(candidate)
-        }
-    }
+    // HEAD's entries and the index's are merged where they lie, both in path
+    // order; a path is copied only into a row. The file cursor finds each
+    // path's file as file_at did.
     var rows = List[StatusRow]()
-    // paths, tree, index entries and files are all in path order: one cursor
-    // each finds the first equal position, as index_at/flat_at/file_at did.
     var ti = 0, ni = 0, fi = 0
-    for path in paths {
-        while ti < tree.len && compare(tree[ti].path, path) < 0 { ti += 1 }
-        while ni < value.entries.len && compare(value.entries[ni].path, path) < 0 { ni += 1 }
-        while fi < files.len && compare(files[fi].path, path) < 0 { fi += 1 }
-        let staged = if ni < value.entries.len && compare(value.entries[ni].path, path) == 0 {
-            ni
+    while ti < tree.len || ni < value.entries.len {
+        // The next path is the smaller of the two cursors' (on a tie, both).
+        var old = -1, staged = -1
+        if ni >= value.entries.len {
+            old = ti
+        } else if ti >= tree.len {
+            staged = ni
         } else {
-            -1
+            let order = compare(tree[ti].path, value.entries[ni].path)
+            if order <= 0 { old = ti }
+            if order >= 0 { staged = ni }
         }
-        let old = if ti < tree.len && compare(tree[ti].path, path) == 0 then ti else -1
-        let disk = if fi < files.len && compare(files[fi].path, path) == 0 then fi else -1
-        if staged < 0 { (mut rows).push(status_row(path, "D", " ")); continue }
-        let entry = copy value.entries[staged]
-        if index.stage(entry) != 0 {
-            var bits = 0
-            for item in value.entries {
-                if compare(item.path, path) == 0 { bits = bits | 1 << index.stage(item) }
+        // An unmerged path's stages follow one another: staged..next.
+        var next = ni
+        if staged >= 0 {
+            next = ni + 1
+            while next < value.entries.len &&
+                compare(value.entries[next].path, value.entries[ni].path) == 0 {
+                next += 1
             }
+        }
+        if old >= 0 { ti = old + 1 }
+        ni = next
+        var disk = -1
+        if staged >= 0 {
+            while fi < files.len && compare(files[fi].path, value.entries[staged].path) < 0 {
+                fi += 1
+            }
+            if fi < files.len && compare(files[fi].path, value.entries[staged].path) == 0 {
+                disk = fi
+            }
+        } else {
+            while fi < files.len && compare(files[fi].path, tree[old].path) < 0 { fi += 1 }
+            if fi < files.len && compare(files[fi].path, tree[old].path) == 0 { disk = fi }
+        }
+        if staged < 0 { (mut rows).push(status_row(tree[old].path, "D", " ")); continue }
+        if index.stage(value.entries[staged]) != 0 {
+            var bits = 0
+            for k in staged..next { bits = bits | 1 << index.stage(value.entries[k]) }
             let (x, y) = unmerged_code(bits)
-            (mut rows).push(status_row(path, x, y))
+            (mut rows).push(status_row(value.entries[staged].path, x, y))
             continue
         }
-        let intent = entry.extended & 0x2000 != 0
+        let mode = value.entries[staged].stat[6]
+        let intent = value.entries[staged].extended & 0x2000 != 0
         let x = if intent {
             " "
         } else if old < 0 {
             "A"
         } else {
-            change(tree[old].mode, tree[old].id, entry.stat[6], entry.id)
+            change(tree[old].mode, tree[old].id, mode, value.entries[staged].id)
         }
         var y = " "
         var sub = 0
-        if entry.flags & 0x8000 == 0 && entry.extended & 0x4000 == 0 {
+        if value.entries[staged].flags & 0x8000 == 0 &&
+            value.entries[staged].extended & 0x4000 == 0 {
             y = if disk < 0 {
                 "D"
             } else if intent {
                 "A"
             } else {
-                change(entry.stat[6], entry.id, files[disk].mode, files[disk].id)
+                change(mode, value.entries[staged].id, files[disk].mode, files[disk].id)
             }
-            if disk >= 0 && entry.stat[6] == 0o160000 && files[disk].mode == 0o160000 {
+            if disk >= 0 && mode == 0o160000 && files[disk].mode == 0o160000 {
                 if y == "M" { sub = 1 }
                 if files[disk].dirt & 1 != 0 { sub = sub | 2 }
                 if files[disk].dirt & 2 != 0 { sub = sub | 4 }
@@ -941,7 +948,7 @@ fn status_rows(
             }
         }
         if x != " " || y != " " {
-            var row = status_row(path, x, y)
+            var row = status_row(value.entries[staged].path, x, y)
             row.sub = sub
             (mut rows).push(row)
         }
@@ -1092,7 +1099,7 @@ pub fn scan_status_ignoring(
     Snapshot {
         context: copy ctx,
         head: current_head,
-        index: copy value,
+        index: value,
         head_entries: entries,
         files: walked.files,
         directories: walked.directories,
