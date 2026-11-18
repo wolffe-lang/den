@@ -1,5 +1,18 @@
 # Changes
 
+## Unreleased — symbolic links in pulls
+
+- `pull` and `merge` carry symbolic links (mode 120000) as Git does: a link's
+  blob is its target, so it is compared, counted in the change summary and
+  checked out as a link like any other entry. Before, any tree holding a link,
+  changed or not, stopped a pull after it had fetched with `merge nonregular
+  tree entry` (den#137). A link changed on one side of a true merge is taken
+  from that side; a link changed on both sides, or against a file, stays a
+  named refusal (`merge of a symbolic link changed on both sides`).
+- `tools/pull-test.py` holds to the pinned Git a fast-forward that leaves a
+  link alone, retargets one, adds one and removes one, and a true merge that
+  retargets a link on one side.
+
 ## Unreleased — change summaries of any size
 
 - A stat, numstat or shortstat, and the change summary a pull or merge prints
