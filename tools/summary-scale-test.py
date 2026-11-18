@@ -8,8 +8,8 @@ the pinned Git alone; each remote is one or two commits ahead of its clone.
 
   summary-rewrite-pull    a fast-forward pull that rewrites every line of a
                           2,500-line file (5,000 differing lines);
-  summary-rewrite-merge   the same through a true merge (`merge --no-edit`
-                          after a fetch, beside one local commit);
+  summary-rewrite-merge   the same through a true merge (`pull --no-rebase`
+                          beside one local commit);
   summary-generated-pull  a fast-forward pull of a generated table of --lines
                           lines (a parser's shape: lines drawn from a
                           vocabulary of --vocabulary, so every changed line
@@ -164,7 +164,7 @@ def main():
         row('summary-rewrite-pull', case, ['pull', '--ff-only', 'origin', 'main'])
     if want('summary-rewrite-merge'):
         case = fixture('rewrite-merge', {'long.txt': old, 'a.txt': b'a\n'}, {'long.txt': new}, local=True)
-        row('summary-rewrite-merge', case, ['merge', '--no-edit', 'origin/main'])
+        row('summary-rewrite-merge', case, ['pull', '--no-rebase', 'origin', 'main'])
 
     if want('summary-generated') or want('summary-diff'):
         r = random.Random(105)
