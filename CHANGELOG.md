@@ -38,6 +38,21 @@
   A status that must hash its files gains the same. `tools/hash-scale-test.py`
   holds `hash-object` to Git's CPU time and peak memory.
 
+## Unreleased — clones Git made
+
+- `pull`, `merge`, `commit`, `branch`, `tag`, `switch`, `checkout`, `reset`,
+  `revert`, `cherry-pick` and `rebase` work in a clone Git made with its
+  default template. Its `.git/hooks` holds only
+  Git's disabled samples (`pre-commit.sample` and the rest), which Git never
+  runs: githooks(5) enables one only by removing its `.sample` suffix. den
+  counted any entry there as a hook it could not run and refused with
+  `nonempty hooks directory`, after a pull had already fetched. Entries named
+  `*.sample` no longer count; anything else in the hooks directory is still
+  refused by name.
+- `tools/pull-test.py` (`pull-ff-sample-hooks`) and `tools/commit-oracle.py`
+  (`samples-message`) hold a fast-forward pull and a commit in such a clone to
+  the pinned Git, with the pinned Git's own samples.
+
 ## Unreleased — adding thousands of files
 
 - Repositories whose `.gitattributes` say `* text=auto eol=lf`, mark files
