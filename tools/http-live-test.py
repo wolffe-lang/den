@@ -9,7 +9,15 @@ are compared, and the pinned Git checks den's clone (fsck, status).
 http-live-self: den and the pinned Git clone den's own public repository
 (a pack over 300 MB, over the old 140,000,000-byte wire cap, den#61) and
 compare as the read row does, within the time and the peak RSS predicted in
-tests/vc23-prediction.txt; the pinned Git checks den's clone.
+tests/vc23-prediction.txt; the pinned Git checks den's clone. Other lanes
+push to that repository at any time, so the row compares what held still:
+`ls-remote --symref` before and after the two clones names the refs that
+moved. If HEAD or the branch it names moved, the clones' checkouts differ for
+reasons not den's, and the row runs once more (`RETRY http-live-self
+moved=<refs>`); a second such move is a FAIL. Any other moved branch or tag
+is left out of the comparison, its refs and the objects only it reaches, and
+named on a `NARROWED http-live-self excluded=<refs>` line and in the LIVE
+line's `excluded` list, so a reader sees when the row was narrowed.
 
 http-live-identity: den and the pinned Git clone i3's public repository,
 whose commit 5f453914 has an empty email (`walker0643 <>`, author and
@@ -95,6 +103,34 @@ def moved(before, after):
     return cloned(before) != cloned(after)
 
 
+def held(before, after):
+    """The refs a clone takes (HEAD, branches, tags) in two `ls-remote
+    --symref` listings (hex stdout), as (held, moved, critical): held and
+    moved are ref names (a tag's peeled line folds into its tag, HEAD's symref
+    line into HEAD); critical is the part of moved that is HEAD or the branch
+    HEAD names in either listing."""
+    def table(listing):
+        refs, target = {}, None
+        for line in cloned(listing):
+            value, name = line.split(b'\t', 1)
+            name = name.decode('utf-8', 'surrogateescape')
+            if value.startswith(b'ref: '):
+                target = value[5:].decode('utf-8', 'surrogateescape')
+                refs['HEAD symref'] = target
+                continue
+            base = name[:-3] if name.endswith('^{}') else name
+            refs.setdefault(base, []).append(value.decode())
+        return {key: (value if isinstance(value, str) else tuple(value)) for key, value in refs.items()}, target
+    first, head_before = table(before)
+    second, head_after = table(after)
+    names = sorted((set(first) | set(second)) - {'HEAD symref'})
+    moved = [name for name in names if first.get(name) != second.get(name)]
+    if first.get('HEAD symref') != second.get('HEAD symref') and 'HEAD' not in moved:
+        moved = sorted(moved + ['HEAD'])
+    critical = {'HEAD', head_before, head_after} - {None}
+    return [name for name in names if name not in moved], moved, [name for name in moved if name in critical]
+
+
 def guard_selftest():
     """The guard holds what a clone takes. A change GitHub makes outside it
     (refs/pull/*, which no clone fetches) must not count as moved; a branch or
@@ -114,6 +150,24 @@ def guard_selftest():
         problems.append('a new branch does not count as moved')
     if not moved(base.hex(), tag.hex()):
         problems.append('a moved tag does not count as moved')
+    symref = b'ref: refs/heads/main\tHEAD\n' + base
+    cases = (
+        ('nothing moved', symref, ([], [])),
+        ('a pull ref', symref.replace(b'2222222222222222222222222222222222222222', b'4444444444444444444444444444444444444444'),
+         ([], [])),
+        ('a new branch', symref + b'6666666666666666666666666666666666666666\trefs/heads/lane\n', (['refs/heads/lane'], [])),
+        ('a deleted tag beside a new branch', symref.replace(b'3333333333333333333333333333333333333333\trefs/tags/v1\n', b'')
+         + b'8888888888888888888888888888888888888888\trefs/heads/gone\n', (['refs/heads/gone', 'refs/tags/v1'], [])),
+        ('a moved tag', symref.replace(b'3333333333333333333333333333333333333333', b'7777777777777777777777777777777777777777'),
+         (['refs/tags/v1'], [])),
+        ('the default branch', symref.replace(b'1111111111111111111111111111111111111111\trefs/heads/main',
+                                              b'9999999999999999999999999999999999999999\trefs/heads/main'),
+         (['refs/heads/main'], ['refs/heads/main'])),
+    )
+    for label, after, want in cases:
+        _, gone, critical = held(symref.hex(), after.hex())
+        if (gone, critical) != want:
+            problems.append('%s: moved %r critical %r, not %r' % (label, gone, critical, want))
     print(('PASS ' if not problems else 'FAIL ') + 'http-live-guard' + ('' if not problems else ' ' + '; '.join(problems)),
           flush=True)
     if problems:
@@ -450,9 +504,28 @@ def main():
                                  result.stderr.decode(errors='replace').strip())
         return result.stdout
 
-    def state(repo):
+    def state(repo, keep=None):
+        """A clone's refs, objects, HEAD, config and worktree. With keep (the
+        remote's refs that held still), only the clone's refs for those, and
+        only the objects they reach."""
         refs = git_out(repo, 'for-each-ref', '--format=%(refname) %(objectname) %(symref)')
-        ids = sorted({line.split()[0] for line in git_out(repo, 'rev-list', '--objects', '--all').splitlines()})
+        if keep is None:
+            listed = git_out(repo, 'rev-list', '--objects', '--all')
+        else:
+            held_names = set(keep)
+
+            def kept(refname):
+                if refname.startswith('refs/remotes/origin/'):
+                    rest = refname[len('refs/remotes/origin/'):]
+                    return rest == 'HEAD' or 'refs/heads/' + rest in held_names
+                if refname.startswith(('refs/heads/', 'refs/tags/')):
+                    return refname in held_names
+                return True
+            lines = [line for line in refs.decode().splitlines() if kept(line.split(' ', 1)[0])]
+            refs = ('\n'.join(lines) + '\n').encode() if lines else b''
+            tips = ''.join(line.split(' ', 1)[0] + '\n' for line in lines)
+            listed = git_out(repo, 'rev-list', '--objects', '--stdin', data=tips.encode())
+        ids = sorted({line.split()[0] for line in listed.splitlines()})
         # Streamed: den's own repository's objects are hundreds of megabytes.
         digest = hashlib.sha256()
         batch = subprocess.Popen([git, '-C', str(repo), 'cat-file', '--batch'], env=env,
@@ -590,26 +663,43 @@ def main():
     if 'self' in rows:
         name = names['self']
         den_dir, git_dir = out / 'self-den', out / 'self-git'
-        before = run([git, 'ls-remote', args.self_url], out, name + '-ls-remote-before', 120)
-        candidate = run([den, 'clone', '-q', args.self_url, den_dir], out, name + '-den', args.self_seconds, 'den',
-                        target=den_dir, row=name)
-        oracle = run([git, 'clone', '-q', args.self_url, git_dir], out, name + '-git', args.self_seconds,
-                     target=git_dir, row=name)
-        after = run([git, 'ls-remote', args.self_url], out, name + '-ls-remote-after', 120)
-        bound = stall_bound(args.self_seconds)
-        measured = dict(den_exit=candidate['exit'], den_elapsed=candidate['elapsed'],
-                        den_maxrss_kib=candidate['maxrss_kib'], den_user=candidate['user'],
-                        git_exit=oracle['exit'], git_elapsed=oracle['elapsed'], git_maxrss_kib=oracle['maxrss_kib'],
-                        git_user=oracle['user'], bound_kib=SELF_RSS_KIB, stall_s=bound,
-                        den_retries=candidate['retries'], git_retries=oracle['retries'],
-                        den_quiet_s=candidate['quiet'], git_quiet_s=oracle['quiet'])
-        problems = stalls(candidate, oracle, bound)
-        # A clone that stalled twice has nothing else to compare.
-        if not problems:
+        for attempt in range(2):
+            for path in (den_dir, git_dir):
+                if path.exists():
+                    shutil.rmtree(path)
+            before = run([git, 'ls-remote', '--symref', args.self_url], out, name + '-ls-remote-before', 120)
+            candidate = run([den, 'clone', '-q', args.self_url, den_dir], out, name + '-den', args.self_seconds, 'den',
+                            target=den_dir, row=name)
+            oracle = run([git, 'clone', '-q', args.self_url, git_dir], out, name + '-git', args.self_seconds,
+                         target=git_dir, row=name)
+            after = run([git, 'ls-remote', '--symref', args.self_url], out, name + '-ls-remote-after', 120)
+            bound = stall_bound(args.self_seconds)
+            measured = dict(den_exit=candidate['exit'], den_elapsed=candidate['elapsed'],
+                            den_maxrss_kib=candidate['maxrss_kib'], den_user=candidate['user'],
+                            git_exit=oracle['exit'], git_elapsed=oracle['elapsed'],
+                            git_maxrss_kib=oracle['maxrss_kib'], git_user=oracle['user'], bound_kib=SELF_RSS_KIB,
+                            stall_s=bound, den_retries=candidate['retries'], git_retries=oracle['retries'],
+                            den_quiet_s=candidate['quiet'], git_quiet_s=oracle['quiet'], moved_retries=attempt,
+                            excluded=[])
+            problems = stalls(candidate, oracle, bound)
+            # A clone that stalled twice has nothing else to compare.
+            if problems:
+                break
             if oracle['exit'] or before['exit'] or after['exit']:
                 problems.append('pinned Git could not read den\'s repository')
-            elif moved(before['stdout'], after['stdout']):
-                problems.append('den\'s refs moved during the row')
+                break
+            kept, moved_refs, critical = held(before['stdout'], after['stdout'])
+            if critical:
+                # HEAD or its branch moved: the clones check out different
+                # commits for a reason that is not den's; run the row again.
+                if attempt == 0:
+                    print('RETRY %s moved=%s' % (name, ','.join(critical)), flush=True)
+                    continue
+                problems.append('den\'s HEAD or default branch moved during the row twice: ' + ','.join(critical))
+                break
+            measured['excluded'] = moved_refs
+            if moved_refs:
+                print('NARROWED %s excluded=%s' % (name, ','.join(moved_refs)), flush=True)
             for field in ('exit', 'stdout', 'stderr'):
                 if candidate[field] != oracle[field]:
                     problems.append('process %s differs: den exit %d stderr %r' % (
@@ -621,13 +711,15 @@ def main():
             if not problems:
                 packs = sorted((git_dir / '.git/objects/pack').glob('*.pack'))
                 measured['git_pack_bytes'] = [path.stat().st_size for path in packs]
-                ours, theirs = state(den_dir), state(git_dir)
+                keep = kept if moved_refs else None
+                ours, theirs = state(den_dir, keep), state(git_dir, keep)
                 differ = [key for key in ours if ours[key] != theirs[key]]
                 git_out(den_dir, 'fsck', '--full', '--no-reflogs')
                 dirty = git_out(den_dir, 'status', '--porcelain')
                 measured.update(objects=theirs['objects'], differ=differ, status=dirty.decode()[:400])
                 if differ or dirty:
                     problems.append('state differs: ' + ', '.join(differ) + (' (den worktree dirty)' if dirty else ''))
+            break
         results[name] = measured
         print('LIVE ' + name + ' ' + json.dumps(measured, sort_keys=True), flush=True)
         print(('PASS ' if not problems else 'FAIL ') + name + ('' if not problems else ' ' + '; '.join(problems)),
