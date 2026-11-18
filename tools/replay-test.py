@@ -182,7 +182,7 @@ for n,(name,kind,setup,steps) in enumerate(CASES):
         refusal=None
         if name.startswith(('scope-rebase-','scope-cherry-pick-')):
             refusal=(0,steps[0][0]+' '+steps[0][1])
-        inherited={'scope-repeat':'merge repeated-line alignment','scope-binary':'merge binary conflict','scope-delete':'merge modify/delete conflict','scope-symlink':'merge nonregular tree entry','scope-rename':'merge rename topology'}
+        inherited={'scope-repeat':'merge repeated-line alignment','scope-binary':'merge binary conflict','scope-delete':'merge modify/delete conflict','scope-rename':'merge rename topology'}
         if name in inherited: refusal=(0,inherited[name])
         if name=='scope-config-rebase': refusal=(0,'replay configuration rebase.autostash')
         if name=='scope-config-pick': refusal=(0,'replay configuration commit.cleanup')
