@@ -1,0 +1,87 @@
+//! member: false
+
+// Attribute-selected widths use the same engine for merge/diff3/zdiff3.
+fn main() -> !int {
+    for style in ["merge", "diff3", "zdiff3"] {
+        let merged = merge_markers(
+            "old".bytes(),
+            "ours".bytes(),
+            "theirs".bytes(),
+            "HEAD",
+            "base",
+            "topic",
+            style,
+            32,
+        )?
+        assert(merged.conflicts == 1)
+        let middle = if style == "merge" then "" else "|||||||||||||||||||||||||||||||| base\nold\n"
+        assert(
+            str_from_utf8(merged.data)? ==
+                "<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< HEAD\nours\n{middle}================================\ntheirs\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> topic\n",
+        )
+    }
+    for width in [1, 7, 32, 1024] {
+        let merged = merge_markers(
+            "old\n".bytes(),
+            "ours\n".bytes(),
+            "theirs\n".bytes(),
+            "",
+            "",
+            "",
+            "merge",
+            width,
+        )?
+        assert(merged.conflicts == 1)
+        let lines = str_from_utf8(merged.data)?.split("\n")
+        assert(lines[0].len == width + 1 && lines[2].len == width && lines[4].len == width + 1)
+        for b in lines[0].bytes()[0..width] { assert(b == 60 as byte) }
+        for b in lines[2].bytes() { assert(b == 61 as byte) }
+        for b in lines[4].bytes()[0..width] { assert(b == 62 as byte) }
+    }
+    let legacy = merge("old".bytes(), "ours".bytes(), "theirs".bytes(), "", "", "", "diff3")?
+    let seven = merge_markers(
+        "old".bytes(),
+        "ours".bytes(),
+        "theirs".bytes(),
+        "",
+        "",
+        "",
+        "diff3",
+        7,
+    )?
+    assert(str_from_utf8(legacy.data)? == str_from_utf8(seven.data)?)
+    let clean = merge_markers(
+        "a\nb\nc\n".bytes(),
+        "A\nb\nc\n".bytes(),
+        "a\nb\nC\n".bytes(),
+        "ours",
+        "base",
+        "theirs",
+        "merge",
+        32,
+    )?
+    assert(clean.conflicts == 0 && str_from_utf8(clean.data)? == "A\nb\nC\n")
+    for width in [0, 1025] {
+        var rejected = false
+        let _ = merge_markers(
+            "old\n".bytes(),
+            "ours\n".bytes(),
+            "theirs\n".bytes(),
+            "ours",
+            "base",
+            "theirs",
+            "merge",
+            width,
+        ) else |e| {
+            rejected = match e {
+                invalid => true,
+                limit => false,
+                binary => false,
+            }
+            Result { data: [], conflicts: 0 }
+        }
+        assert(rejected)
+    }
+    print("PASS attribute marker widths, styles, clean merge, legacy labels and width bounds")
+    0
+}

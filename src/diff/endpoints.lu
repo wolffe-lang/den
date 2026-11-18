@@ -221,7 +221,27 @@ struct Pending { file: File, source: int, at: int }
 struct Hashed { entry: index.Entry, state: worktree.FileState }
 
 /// collect's answer with the hashes the worktree side made.
-struct Collected { changes: List[Change], hashed: List[Hashed] }
+/// policies are the changes' diff drivers as rendering needs them, resolved
+/// while collect's own index is alive, so rendering neither parses the index
+/// again nor holds it (empty when the display needs no attributes).
+struct Collected { changes: List[Change], hashed: List[Hashed], policies: List[str] }
+
+/// Whether a display renders bodies, so needs the changes' diff drivers.
+fn wanted_policies(options: Options) -> bool {
+    !options.quiet &&
+        !(options.names || options.name_status) &&
+        (options.patch || options.stat || options.numstat || options.shortstat)
+}
+
+fn known_policies(
+    ctx: worktree.Context,
+    changes: List[Change],
+    options: Options,
+    value: index.Index,
+) -> List[str] ! worktree.WorkErrors {
+    if !wanted_policies(options) { return List[str]() }
+    diff_policies(ctx, changes, options.patch, value)?
+}
 
 fn pending_entry(
     ctx: worktree.Context,
@@ -281,6 +301,8 @@ fn pending_worktree(
     var verified = List[List[byte]]()
     var out = List[Pending]()
     var parsed = List[gitmodules.Parsed]()
+    var directories = worktree.directory_modes()
+    var identity = List[worktree.AttributeCache]()
     for at in 0..value.entries.len {
         let entry = copy value.entries[at]
         if index.stage(entry) != 0 { return Unsupported("diff unmerged index") }
@@ -323,8 +345,24 @@ fn pending_worktree(
             (mut out).push(pending_entry(ctx, worktree.FlatEntry { path: owned(entry.path), mode: entry.stat[6], id: copy entry.id })?)
             continue
         }
-        let seen = worktree.tracked(ctx, entry, written, filemode, symlinks, mut verified)?
+        // A stat-clean entry is its blob, unread whatever its attributes
+        // say, as Git takes it.
+        var seen = worktree.tracked_stat(ctx, entry, written, filemode, symlinks, mut verified)?
         if !seen.present { continue }
+        if !seen.clean {
+            // A text rule can make a changed body differ once cleaned, so
+            // such a path is hashed and its CR-LF checked, as status does.
+            var text_check = false
+            if entry.stat[6] == 0o100644 || entry.stat[6] == 0o100755 {
+                let modes = worktree.path_modes(ctx, entry.path, value, mut directories)?
+                // Identity-breaking metadata refuses before the body is read.
+                if modes[1] && fs.is_file("{ctx.root}/{text(entry.path)?}") {
+                    worktree.check_path_identity(ctx, entry.path, value, mut identity)?
+                }
+                text_check = modes[0] || modes[1]
+            }
+            seen = worktree.tracked_read(ctx, entry, filemode, symlinks, text_check)?
+        }
         if !seen.clean { (mut hashed).push(Hashed { entry: copy entry, state: copy seen.state }) }
         (mut out).push(Pending {
             file: File {
@@ -445,15 +483,87 @@ fn chosen(list: List[Pending], specs: List[Spec]) -> List[Pending] ! worktree.Wo
     out
 }
 
+fn endpoint_attributes(
+    ctx: worktree.Context,
+    files: List[File],
+    value: index.Index,
+) -> () ! worktree.WorkErrors {
+    // Endpoints are path ordered: one directory cache, no per-file key.
+    var directories = worktree.directory_modes()
+    var identity = List[worktree.AttributeCache]()
+    for file in files {
+        if file.mode != 0o100644 && file.mode != 0o100755 { continue }
+        let modes = worktree.path_modes(ctx, file.path, value, mut directories)?
+        // Identity-breaking metadata resolves per path through one shared
+        // resolver; an LF body under text rules pays only the byte scan.
+        if modes[1] { worktree.check_path_identity(ctx, file.path, value, mut identity)? }
+        if modes[0] || modes[1] { worktree.check_text_content(ctx, file.path, file.data)? }
+    }
+}
+
+fn regular_change(change: Change) -> bool {
+    for file in change.before {
+        if file.mode == 0o100644 || file.mode == 0o100755 { return true }
+    }
+    for file in change.after {
+        if file.mode == 0o100644 || file.mode == 0o100755 { return true }
+    }
+    false
+}
+
+// Resolve at the destination (or the source for a deletion), using the same
+// worktree/index attribute sources as staging. Symlinks and gitlinks do not
+// acquire a regular file's diff policy.
+fn attribute_diff(
+    ctx: worktree.Context,
+    change: Change,
+    value: index.Index,
+    mut cache: worktree.AttributeCache,
+) -> str ! worktree.WorkErrors {
+    if !regular_change(change) { return "" }
+    let policy = worktree.attribute_policy_cached(ctx, path(change), value, mut cache)?
+    policy.diff
+}
+
+fn check_diff_driver(
+    ctx: worktree.Context,
+    path: List[byte],
+    driver: str,
+) -> () ! worktree.WorkErrors {
+    if driver == "" || driver == "-" || driver == "+" { return }
+    if driver == "cpp" ||
+        driver == "dts" ||
+        driver == "perl" ||
+        driver == "python" ||
+        driver == "rust" ||
+        worktree.configured_attribute_driver(ctx, "diff", driver) {
+        return Unsupported("diff driver {driver} at {text(path)?}")
+    }
+    // An unconfigured custom driver is Git's default content-based diff.
+}
+
+fn diff_policies(
+    ctx: worktree.Context,
+    changes: List[Change],
+    patch: bool,
+    value: index.Index,
+) -> List[str] ! worktree.WorkErrors {
+    var out = List[str]()
+    if changes.len == 0 { return out }
+    var cache = worktree.attribute_cache(ctx)?
+    for change in changes {
+        let driver = attribute_diff(ctx, change, value, mut cache)?
+        if patch { check_diff_driver(ctx, path(change), driver)? }
+        (mut out).push(worktree.diff_driver_binary(ctx, driver)?)
+    }
+    out
+}
+
 /// collect's answer and the worktree hashes it made (den#101). Endpoints carry
 /// ids first; bodies are read only for paths that differ; the worktree side
 /// reads a file only when its stat is not clean against its entry.
 fn collect_known(ctx: worktree.Context, options: Options) -> Collected ! worktree.WorkErrors {
-    if ctx.root != "" && fs.exists("{ctx.root}/.gitattributes") ||
-        fs.exists("{ctx.repo.gitdir}/info/attributes") ||
-        (ctx.repo.config["core.attributesfile"] else "") != "" {
-        return Unsupported("diff attributes")
-    }
+    worktree.check_attributes(ctx)?
     var hashed = List[Hashed]()
     var before = List[Pending](), after = List[Pending]()
     var value = index.empty(2)?
@@ -480,21 +590,23 @@ fn collect_known(ctx: worktree.Context, options: Options) -> Collected ! worktre
                 },
             ]
             if oid.equal(old[0].id, new[0].id) {
-                return Collected { changes: List[Change](), hashed: hashed }
+                return Collected { changes: List[Change](), hashed: hashed, policies: List[str]() }
             }
+            // The blobs' diff attributes resolve with index fallback.
+            value = worktree.read_index(ctx)?
             if options.reverse {
-                return Collected {
-                    changes: [Change { before: new, after: old, status: "M", percent: 0 }],
-                    hashed: hashed,
-                }
+                let changes = [Change { before: new, after: old, status: "M", percent: 0 }]
+                let policies = known_policies(ctx, changes, options, value)?
+                return Collected { changes: changes, hashed: hashed, policies: policies }
             }
-            return Collected {
-                changes: [Change { before: old, after: new, status: "M", percent: 0 }],
-                hashed: hashed,
-            }
+            let changes = [Change { before: old, after: new, status: "M", percent: 0 }]
+            let policies = known_policies(ctx, changes, options, value)?
+            return Collected { changes: changes, hashed: hashed, policies: policies }
         }
         before = pending_tree(ctx, options.revisions[0])?
         after = pending_tree(ctx, options.revisions[1])?
+        // Attribute sources fall back to the index, as for every other diff.
+        value = worktree.read_index(ctx)?
     } else {
         value = worktree.read_index(ctx)?
         if options.cached {
@@ -523,13 +635,24 @@ fn collect_known(ctx: worktree.Context, options: Options) -> Collected ! worktre
     var total: int = 0
     let selected_old = bodies(ctx, value, old, mut total)?
     let selected_new = bodies(ctx, value, new, mut total)?
+    // Every body a diff shows passes the worktree attribute policy. The
+    // worktree side was also checked as it was hashed (pending_worktree).
+    endpoint_attributes(ctx, selected_old, value)?
+    endpoint_attributes(ctx, selected_new, value)?
     var result = if options.reverse {
         changes(selected_new, selected_old, options)?
     } else {
         changes(selected_old, selected_new, options)?
     }
     stat_only_names(ctx, options, mut result)?
-    Collected { changes: result, hashed: hashed }
+    let policies = known_policies(ctx, result, options, value)?
+    Collected { changes: result, hashed: hashed, policies: policies }
+}
+
+/// collect and render with one index read, for history's per-commit output.
+pub fn collect_render(ctx: worktree.Context, options: Options) -> List[byte] ! worktree.WorkErrors {
+    let collected = collect_known(ctx, options)?
+    render_known(ctx, collected.changes, options, [collected.policies])?
 }
 
 /// Resolve supported loose endpoints without refreshing or publishing the index.

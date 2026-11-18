@@ -74,7 +74,7 @@ fn replay_controls(ctx: worktree.Context, command: str) -> () ! commit.CommitErr
         if key.starts_with("rebase.") ||
             key.starts_with("sequencer.") ||
             key.starts_with("rerere.") ||
-            key.starts_with("merge.") && key != "merge.conflictstyle" ||
+            key.starts_with("merge.") && key != "merge.conflictstyle" && !key[6..].contains(".") ||
             key == "commit.cleanup" ||
             (key == "core.commentchar" || key == "core.commentstring") && value != "#" ||
             key == "advice.mergeconflict" && value != "true" {
@@ -104,7 +104,9 @@ fn replay_plan(
     if item.parents.len == 1 { base = mergetree.files(ctx.repo, item.parents[0])? }
     let short = abbrev(ctx.repo, item.id)?,
         subject = str_from_utf8(commit.subject(item.headers.message)?)?
-    mergetree.plan(
+    mergetree.plan_with_policy(
+        ctx,
+        worktree.read_index(ctx)?,
         base,
         mergetree.files(ctx.repo, head)?,
         mergetree.files(ctx.repo, item.id)?,

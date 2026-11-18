@@ -37,6 +37,8 @@ pub fn abbreviate(repo: repository.Repo, id: oid.Oid, minimum: int) -> str ! wor
 
 fn root_files(ctx: worktree.Context, id: oid.Oid) -> List[diff.File] ! worktree.WorkErrors {
     var out = List[diff.File](), total = 0
+    let attribute_index = worktree.read_index(ctx)?
+    var attribute_cache = Map[str, bool]()
     for entry in worktree.flatten_tree(ctx.repo, id)? {
         if entry.mode == 0o160000 {
             (mut out).push(diff.File {
@@ -49,6 +51,10 @@ fn root_files(ctx: worktree.Context, id: oid.Oid) -> List[diff.File] ! worktree.
         }
         let value = object.read_object(ctx.repo, entry.id, 16777216)?
         if value.kind != "blob" { return invalid_tree }
+        if (entry.mode == 0o100644 || entry.mode == 0o100755) &&
+            worktree.text_path_policy(ctx, entry.path, attribute_index, mut attribute_cache)? {
+            worktree.check_text_content(ctx, entry.path, value.data)?
+        }
         total += value.data.len
         if total > 134217728 { return limit }
         (mut out).push(diff.File {
@@ -72,19 +78,14 @@ pub fn patch(
     if !options.patch && !options.stat { return List[byte]() }
     if value.parents.len > 1 && !first_parent { return List[byte]() }
     var display = copy options
-    var changes = List[diff.Change]()
     if value.parents.len == 0 {
-        if fs.exists("{ctx.root}/.gitattributes") ||
-            fs.exists("{ctx.repo.gitdir}/info/attributes") ||
-            (ctx.repo.config["core.attributesfile"] else "") != "" {
-            return Unsupported("diff attributes")
-        }
-        changes = diff.changes(List[diff.File](), root_files(ctx, value.tree)?, display)?
-    } else {
-        display.revisions = [oid.hex(value.parents[0])?, oid.hex(value.id)?]
-        changes = diff.collect(ctx, display)?
+        worktree.check_attributes(ctx)?
+        let changes = diff.changes(List[diff.File](), root_files(ctx, value.tree)?, display)?
+        return diff.render(ctx, changes, display)?
     }
-    diff.render(ctx, changes, display)?
+    display.revisions = [oid.hex(value.parents[0])?, oid.hex(value.id)?]
+    // One index read per commit serves the endpoints and the diff attributes.
+    diff.collect_render(ctx, display)?
 }
 
 fn dispatch(args: List[str]) -> int ! worktree.WorkErrors {
@@ -171,6 +172,8 @@ fn dispatch(args: List[str]) -> int ! worktree.WorkErrors {
             display.context = number(arg[2..])?
             display.patch = true
             explicit_patch = true
+        } else if arg == "-a" || arg == "--text" {
+            display.text = true
         } else if arg == "--binary" {
             display.binary_patch = true
             display.patch = true
@@ -411,11 +414,6 @@ fn dispatch(args: List[str]) -> int ! worktree.WorkErrors {
         if merged && display.patch {
             if format != "medium" { return Unsupported("show combined merge format {format}") }
             if display.binary_patch { return Unsupported("show combined merge binary patch") }
-            if fs.exists("{ctx.root}/.gitattributes") ||
-                fs.exists("{ctx.repo.gitdir}/info/attributes") ||
-                (ctx.repo.config["core.attributesfile"] else "") != "" {
-                return Unsupported("diff attributes")
-            }
         }
         if user_given {
             if user == "" { continue }

@@ -395,6 +395,9 @@ fn loaded(
     if files.len == 0 { return List[File]() }
     let value = object.read_object(ctx.repo, files[0].id, 16777216)?
     if value.kind != "blob" { return invalid_tree }
+    if files[0].mode == 0o100644 || files[0].mode == 0o100755 {
+        worktree.check_text_content(ctx, files[0].path, value.data)?
+    }
     if value.data.len > 134217728 - total { return limit }
     total += value.data.len
     [
@@ -425,18 +428,15 @@ pub fn combined(
         options.abbreviate > 40 {
         return invalid
     }
+    worktree.check_attributes(ctx)?
+    let attributes = worktree.read_index(ctx)?
+    var attribute_cache = worktree.attribute_cache(ctx)?
     let after = worktree.flatten_tree(ctx.repo, result)?
     var trees = List[List[worktree.FlatEntry]]()
     for parent in parents { (mut trees).push(worktree.flatten_tree(ctx.repo, parent)?) }
     var paths = List[List[byte]]()
     sorted_union(mut paths, after)
     for tree in trees { sorted_union(mut paths, tree) }
-    for path in paths {
-        let name = text(path)?
-        if name == ".gitattributes" || name.ends_with("/.gitattributes") {
-            return Unsupported("diff attributes")
-        }
-    }
     let label = if dense then "cc" else "combined"
     var out = List[byte](), total = 0
     for path in paths {
@@ -449,13 +449,26 @@ pub fn combined(
             (mut sides).push(side)
         }
         if !everywhere { continue }
+        var driver = "", regular = false
         for side in sides {
             for file in side {
+                if file.mode == 0o100644 || file.mode == 0o100755 { regular = true }
                 if file.mode == 0o160000 { return Unsupported("history submodule diff") }
             }
         }
         for file in target {
+            if file.mode == 0o100644 || file.mode == 0o100755 { regular = true }
             if file.mode == 0o160000 { return Unsupported("history submodule diff") }
+        }
+        if regular {
+            let policy = worktree.attribute_policy_cached(
+                ctx,
+                path,
+                attributes,
+                mut attribute_cache,
+            )?
+            driver = policy.diff
+            check_diff_driver(ctx, path, driver)?
         }
         region path_scratch {
             var head = List[byte]()
@@ -509,7 +522,7 @@ pub fn combined(
                 if value.len > 0 && delta.binary(value[0].data) { binary = true }
                 (mut bodies).push(if value.len > 0 then copy value[0].data else List[byte]())
             }
-            if binary {
+            if binary_policy(driver, options, binary) {
                 add(mut out, head)
                 add(mut out, "Binary files differ\n".bytes())
             } else {

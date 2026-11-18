@@ -1,0 +1,237 @@
+use std.map
+// Future attribute sources for checkout/restore. No normalization is done.
+use index
+use object
+use oid
+
+struct PlannedAttributes {
+    files: Map[str, List[byte]],
+    fallback: index.Index,
+    info: List[byte],
+    complete: bool,
+    possible: bool,
+    identity: bool,
+    ignore_case: bool,
+    fold_filesystem: bool,
+    bytes: int,
+}
+
+fn planned_base(path: List[byte], fold: bool) -> List[List[byte]] {
+    var begin = 0
+    for i in 0..path.len { if path[i] == 47 as byte { begin = i + 1 } }
+    let name = path[begin..]
+    if compare(name, ".gitattributes".bytes()) != 0 && !(fold && attribute_basename(name)) {
+        return List[List[byte]]()
+    }
+    [owned_bytes(if begin == 0 then List[byte]() else path[0..begin - 1])]
+}
+
+fn planned_key(base: List[byte], fold: bool) -> str ! WorkErrors {
+    text(if fold then attribute_fold(base) else copy base)?
+}
+
+fn planned_empty(
+    ctx: Context,
+    previous: index.Index,
+    complete: bool,
+) -> PlannedAttributes ! WorkErrors {
+    var fallback = index.empty(2)?
+    // Index fallback recognizes the canonical name, even on a case-folding FS.
+    for entry in previous.entries {
+        if planned_base(entry.path, false).len == 1 { (mut fallback.entries).push(copy entry) }
+    }
+    let info = attributes_data("{ctx.repo.gitdir}/info/attributes")?
+    PlannedAttributes {
+        files: Map[str, List[byte]](),
+        fallback: fallback,
+        info: copy info,
+        complete: complete,
+        possible: !complete || text_tokens(info) || attribute_identity_tokens(ctx, info)?,
+        identity: !complete || attribute_identity_tokens(ctx, info)?,
+        ignore_case: config_bool(ctx, "core.ignorecase", false)?,
+        fold_filesystem: attributes_fs_casefold(ctx)?,
+        bytes: info.len,
+    }
+}
+
+fn planned_object(
+    reader: object.Reader,
+    id: oid.Oid,
+    supplied: Map[str, List[byte]],
+    cap: int,
+) -> object.Object ! WorkErrors {
+    let data = supplied[oid.hex(id)?] else |_| { return object.read_loaded(reader, id, cap)? }
+    if data.len > cap { return Fatal("limit: a supplied checkout blob larger than {cap} bytes") }
+    if !oid.equal(id, object.identify("blob", data)?) { return bad_oid }
+    object.Object { kind: "blob", data: copy data }
+}
+
+fn planned_data(reader: object.Reader, entry: FlatEntry) -> List[byte] ! WorkErrors {
+    planned_supplied_data(reader, entry, Map[str, List[byte]]())?
+}
+
+fn planned_supplied_data(
+    reader: object.Reader,
+    entry: FlatEntry,
+    supplied: Map[str, List[byte]],
+) -> List[byte] ! WorkErrors {
+    if entry.mode != 0o100644 && entry.mode != 0o100755 {
+        return Unsupported("worktree attributes: not a regular file")
+    }
+    let stored = planned_object(reader, entry.id, supplied, 1048576) else |e| match e {
+        limit => { return Fatal("limit: an attributes file larger than 1048576 bytes") },
+        Fatal(reason) => { return Fatal(reason) },
+        Unsupported(reason) => {
+            if reason.starts_with("limit: ") {
+                return Fatal("limit: an attributes file larger than 1048576 bytes")
+            }
+            return Unsupported(reason)
+        },
+        _ => { return Unsupported("worktree attributes: unreadable target") },
+    }
+    if stored.kind != "blob" { return invalid_tree }
+    var refused = ""
+    region parsing {
+        let reason = attributes_refusal(stored.data)?
+        refused = copy reason
+    }
+    if refused != "" { return Unsupported(refused) }
+    owned_bytes(stored.data)
+}
+
+fn planned_length(policy: PlannedAttributes, key: str) -> int {
+    let value = policy.files[key] else List[byte]()
+    value.len
+}
+
+fn planned_put(
+    ctx: Context,
+    mut policy: PlannedAttributes,
+    base: List[byte],
+    data: List[byte],
+) -> () ! WorkErrors {
+    let key = planned_key(base, policy.fold_filesystem)?
+    policy.bytes -= planned_length(policy, key)
+    if data.len > 16777216 - policy.bytes {
+        return Fatal("limit: more than 16777216 bytes of checkout attributes")
+    }
+    policy.bytes += data.len
+    if text_tokens(data) { policy.possible = true }
+    if attribute_identity_tokens(ctx, data)? { policy.identity = true; policy.possible = true }
+    policy.files[key] = copy data
+}
+
+fn planned_tree_attributes(
+    ctx: Context,
+    reader: object.Reader,
+    target: List[FlatEntry],
+    supplied: Map[str, List[byte]],
+) -> PlannedAttributes ! WorkErrors {
+    let empty = index.empty(2)?
+    var policy = planned_empty(ctx, empty, true)?
+    for entry in target {
+        let bases = planned_base(entry.path, policy.fold_filesystem)
+        if bases.len == 0 { continue }
+        let key = planned_key(bases[0], policy.fold_filesystem)?
+        if map.has(policy.files, key) {
+            return Unsupported("worktree attributes: case-colliding target sources")
+        }
+        planned_put(ctx, mut policy, bases[0], planned_supplied_data(reader, entry, supplied)?)?
+    }
+    policy
+}
+
+fn planned_restore_attributes(
+    ctx: Context,
+    reader: object.Reader,
+    previous: index.Index,
+    source: List[FlatEntry],
+    targets: List[List[byte]],
+    options: RestoreOptions,
+) -> PlannedAttributes ! WorkErrors {
+    var policy = planned_empty(ctx, previous, false)?
+    // First compute the resulting index metadata for missing-file fallback.
+    if options.staged {
+        for path in targets {
+            if planned_base(path, false).len == 0 { continue }
+            let at = flat_at(source, path)
+            if at >= 0 {
+                // Staged-only restores still introduce index fallback sources.
+                // Validate and charge them even when every selected body is LF.
+                if !options.worktree {
+                    let data = planned_data(reader, source[at])?
+                    if data.len > 16777216 - policy.bytes {
+                        return Fatal("limit: more than 16777216 bytes of checkout attributes")
+                    }
+                    policy.bytes += data.len
+                }
+                policy.fallback = index.replace_entry(
+                    policy.fallback,
+                    cached_entry(source[at], []),
+                )?
+            } else if !options.overlay {
+                policy.fallback = index.remove_path(policy.fallback, path)?
+            }
+        }
+    }
+    if options.worktree {
+        for path in targets {
+            let bases = planned_base(path, policy.fold_filesystem)
+            if bases.len == 0 { continue }
+            let at = flat_at(source, path)
+            if at >= 0 {
+                planned_put(ctx, mut policy, bases[0], planned_data(reader, source[at])?)?
+            } else if !options.overlay {
+                let fallback = index_at(policy.fallback.entries, path)
+                if fallback < 0 {
+                    planned_put(ctx, mut policy, bases[0], [])?
+                } else {
+                    let entry = copy policy.fallback.entries[fallback]
+                    planned_put(ctx, mut policy, bases[0], planned_data(reader, FlatEntry {
+                            path: copy entry.path,
+                            mode: entry.stat[6],
+                            id: copy entry.id,
+                        })?)?
+                }
+            }
+        }
+    }
+    policy
+}
+
+fn planned_rules_at(
+    ctx: Context,
+    policy: PlannedAttributes,
+    base: List[byte],
+    path: List[byte],
+    mut state: Attributes,
+) -> () ! WorkErrors {
+    let key = planned_key(base, policy.fold_filesystem)?
+    let data = policy.files[key] else |_| {
+        if policy.complete {
+            List[byte]()
+        } else {
+            attributes_source(ctx, base, policy.fallback)?
+        }
+    }
+    apply_attribute_bytes(data, base, path, mut state, policy.ignore_case)?
+}
+
+fn planned_check_content(
+    ctx: Context,
+    policy: PlannedAttributes,
+    path: List[byte],
+    crlf: bool,
+    binary: bool,
+) -> () ! WorkErrors {
+    var state = attributes_empty()
+    planned_rules_at(ctx, policy, [], path, mut state)?
+    for i in 0..path.len {
+        if path[i] == 47 as byte { planned_rules_at(ctx, policy, path[0..i], path, mut state)? }
+    }
+    apply_attribute_bytes(policy.info, [], path, mut state, policy.ignore_case)?
+    check_attribute_identity(ctx, path, state)?
+    if crlf && text_conversion_needed(state, binary) {
+        return Unsupported("worktree attributes: text at {text(path)?} (CR-LF conversion)")
+    }
+}

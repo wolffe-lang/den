@@ -3,57 +3,45 @@
 // merge, whitespace, export-ignore, export-subst, delta; USING MACRO
 // ATTRIBUTES; DEFINING MACRO ATTRIBUTES), measured against the pinned Git.
 // No implementation consulted.
+use index
+use object
 use repository
 
-// The refusal for one `name`, `-name`, `!name` or `name=value` token that
-// den would have to act on, or "" when den behaves as Git does without acting:
-// - text and crlf unset or unspecified: no line-ending conversion, which is
-//   den's only behaviour (core.autocrlf other than false is refused apart);
-// - diff, merge, eol, filter, ident, working-tree-encoding,
-//   conflict-marker-size and the binary macro unspecified (`!name`): Git's
-//   default, den's;
-// - whitespace, export-ignore, export-subst and delta in any form, and any
-//   name Git gives no meaning: they change apply, archive or pack choices
-//   only, never what checkout, status, add, merge or pull do.
-fn attribute_refused(token: List[byte]) -> str ! WorkErrors {
-    var start = 0, state = "set"
-    if token.len > 0 && token[0] == 45 as byte {
-        state = "unset"
-        start = 1
-    } else if token.len > 0 && token[0] == 33 as byte {
-        state = "unspecified"
-        start = 1
-    }
-    var end = token.len
-    for i in start..token.len {
-        if token[i] == 61 as byte {
-            end = i
-            if state == "set" { state = "value" }
-            break
+// Only an initial double quote quotes the pattern. A literal quote within an
+// unquoted name must not swallow the attributes; escaped quotes inside a
+// quoted pattern must not end it. Preserve pattern bytes for the CR-LF guard.
+fn attribute_tokens(raw: List[byte]) -> List[List[byte]] {
+    var tokens = List[List[byte]](), current = List[byte](), quoted = false, escaped = false
+    for b in raw {
+        if b == 0 as byte { break }
+        if quoted {
+            (mut current).push(b)
+            if escaped {
+                escaped = false
+            } else if b == 92 as byte {
+                escaped = true
+            } else if b == 34 as byte {
+                quoted = false
+                (mut tokens).push(copy current)
+                current = List[byte]()
+            }
+            continue
+        }
+        if tokens.len == 0 && current.len == 0 && b == 34 as byte { quoted = true }
+        if !quoted && (b == 32 as byte || b == 9 as byte || b == 13 as byte) {
+            if current.len > 0 {
+                (mut tokens).push(copy current)
+                current = List[byte]()
+            }
+        } else {
+            (mut current).push(b)
         }
     }
-    let name = str_from_utf8(token[start..end]) else |_| { return "" }
-    // Literals only: a refusal can leave the region its scan ran in (a
-    // rebase step's), and a message built at run time would leave with it.
-    if name == "text" || name == "crlf" {
-        if state == "unset" || state == "unspecified" { return "" }
-        return if name == "text" then "worktree attributes: text" else "worktree attributes: crlf"
-    }
-    if state == "unspecified" { return "" }
-    if name == "diff" { return "worktree attributes: diff" }
-    if name == "merge" { return "worktree attributes: merge" }
-    if name == "eol" { return "worktree attributes: eol" }
-    if name == "filter" { return "worktree attributes: filter" }
-    if name == "ident" { return "worktree attributes: ident" }
-    if name == "working-tree-encoding" { return "worktree attributes: working-tree-encoding" }
-    if name == "conflict-marker-size" { return "worktree attributes: conflict-marker-size" }
-    if name == "binary" { return "worktree attributes: binary" }
-    ""
+    if current.len > 0 { (mut tokens).push(current) }
+    tokens
 }
 
-/// The refusal for the first attribute in an attributes file's bytes that
-/// den would have to act on (a macro definition counts), or "" for none.
-pub fn attributes_refusal(data: List[byte]) -> str ! WorkErrors {
+fn attribute_lines(data: List[byte]) -> List[List[byte]] {
     var lines = List[List[byte]](), line = List[byte]()
     for b in data {
         if b == 10 as byte {
@@ -64,44 +52,33 @@ pub fn attributes_refusal(data: List[byte]) -> str ! WorkErrors {
         }
     }
     (mut lines).push(copy line)
-    for raw in lines {
-        // Tokens split at blanks; a quoted pattern keeps its blanks.
-        var tokens = List[List[byte]](), current = List[byte](), quoted = false
-        for b in raw {
-            if b == 34 as byte { quoted = !quoted }
-            if !quoted && (b == 32 as byte || b == 9 as byte || b == 13 as byte) {
-                if current.len > 0 {
-                    (mut tokens).push(copy current)
-                    current = List[byte]()
-                }
-            } else {
-                (mut current).push(b)
-            }
-        }
-        if current.len > 0 { (mut tokens).push(copy current) }
+    lines
+}
+
+/// Reject unsupported macro definitions. Acting fields are resolved per path,
+/// in precedence order, before any context-specific conversion refusal.
+pub fn attributes_refusal(data: List[byte]) -> str ! WorkErrors {
+    for raw in attribute_lines(data) {
+        let tokens = attribute_tokens(raw)
         if tokens.len == 0 || tokens[0][0] == 35 as byte { continue }
         let first = copy tokens[0]
         let head = if first.len >= 6 then (str_from_utf8(first[0..6]) else "") else ""
         if head == "[attr]" { return "worktree attributes: macro definition" }
-        for i in 1..tokens.len {
-            let refused = attribute_refused(copy tokens[i])?
-            if refused != "" { return refused }
-        }
     }
     ""
 }
 
 /// Refuse, by attribute, an attributes file that sets what den does not do;
 /// one that sets only what den need not act on is accepted.
-fn attributes_file(full: str) -> () ! WorkErrors {
+fn attributes_data(full: str) -> List[byte] ! WorkErrors {
     let named = fs_lstat(full) else |e| match e {
-        not_found => { return },
+        not_found => { return List[byte]() },
         denied => { return denied },
         io => { return io },
     }
     if named[0] != 0 { return Unsupported("worktree attributes: not a regular file") }
     let data = repository.read_bytes(full, 1048576) else |e| match e {
-        not_found => { return },
+        not_found => { return List[byte]() },
         limit => { return Fatal("limit: an attributes file larger than 1048576 bytes") },
         denied => { return denied },
         io => { return io },
@@ -115,6 +92,11 @@ fn attributes_file(full: str) -> () ! WorkErrors {
     }
     let refused = attributes_refusal(data)?
     if refused != "" { return Unsupported(refused) }
+    data
+}
+
+fn attributes_file(full: str) -> () ! WorkErrors {
+    let _ = attributes_data(full)?
 }
 
 /// Every .gitattributes a walk listed, checked as attributes_file checks it.
@@ -125,4 +107,276 @@ fn supported_attributes(ctx: Context, files: List[FileState]) -> () ! WorkErrors
         if path != ".gitattributes" && !path.ends_with("/.gitattributes") { continue }
         attributes_file(absolute(ctx, file.path)?)?
     }
+}
+
+// text: -1 unset, 0 unspecified, 1 forced, 2 auto. eol: 0 unspecified, 1 LF.
+// Auto binary bodies retain their bytes; forced text/eol still needs conversion.
+fn attribute_basename(name: List[byte]) -> bool {
+    let wanted = ".gitattributes".bytes()
+    if name.len != wanted.len { return false }
+    for i in 0..name.len {
+        let b = name[i]
+        let folded = if b >= 65 as byte && b <= 90 as byte then (b as int + 32) as byte else b
+        if folded != wanted[i] { return false }
+    }
+    true
+}
+
+// A read-only alias check on the worktree's own administrative entry avoids
+// assuming that a manually overridden core.ignorecase describes its filesystem.
+fn attributes_fs_casefold(ctx: Context) -> bool ! WorkErrors {
+    if ctx.root == "" { return false }
+    let original = fs_lstat("{ctx.root}/.git") else |_| { return false }
+    let alias = fs_lstat("{ctx.root}/.GIT") else |_| { return false }
+    original.len == 20 &&
+        alias.len == 20 &&
+        (original[9] != 0 || original[10] != 0) &&
+        original[9] == alias[9] &&
+        original[10] == alias[10]
+}
+
+fn attribute_fold(data: List[byte]) -> List[byte] {
+    var out = List[byte]()
+    for b in data {
+        (mut out).push(if b >= 65 as byte && b <= 90 as byte then (b as int + 32) as byte else b)
+    }
+    out
+}
+
+/// Apply decoded rules to existing fields in source precedence order.
+pub fn apply_attribute_bytes(
+    data: List[byte],
+    base: List[byte],
+    path: List[byte],
+    mut state: Attributes,
+    fold: bool,
+) -> () ! WorkErrors {
+    let rules = compile_attributes(data, base, fold)?
+    apply_attribute_rules(rules, path, fold, mut state)?
+}
+
+// Git falls back to the index when a worktree attributes file is absent.
+// In particular deleting .gitattributes must not enable an unsafe raw add.
+// An object reader (with its pack session's base cache) is made only for an
+// index fallback: a scan of many directories never holds one per directory.
+fn attributes_source(
+    ctx: Context,
+    base: List[byte],
+    value: index.Index,
+) -> List[byte] ! WorkErrors {
+    var path = copy base
+    if path.len > 0 { (mut path).push(47 as byte) }
+    bytes_add(mut path, ".gitattributes".bytes())
+    let full = absolute(ctx, path)?
+    let named = fs_lstat(full) else |e| match e {
+        not_found => { List[int]() },
+        denied => { return denied },
+        io => { return io },
+    }
+    if named.len > 0 { return attributes_data(full)? }
+    let at = index_at(value.entries, path)
+    if at < 0 { return List[byte]() }
+    let entry = copy value.entries[at]
+    if entry.stat[6] != 0o100644 && entry.stat[6] != 0o100755 {
+        return Unsupported("worktree attributes: not a regular file")
+    }
+    planned_data(object.reader(ctx.repo), FlatEntry {
+        path: copy entry.path,
+        mode: entry.stat[6],
+        id: copy entry.id,
+    })?
+}
+
+// Only a CR-LF body pays for path matching. LF bodies retain their existing
+// byte/hash path, and a CR at a chunk's end is carried into the next chunk.
+fn text_conversion_needed(state: Attributes, binary: bool) -> bool {
+    let value = attribute_text(state)
+    value == 1 || value == 2 && !binary || value == 0 && state.eol == 1
+}
+
+fn check_crlf(ctx: Context, path: List[byte], binary: bool) -> () ! WorkErrors {
+    let value = attribute_policy(ctx, path, read_index(ctx)?)?
+    check_attribute_identity(ctx, path, value)?
+    if text_conversion_needed(value, binary) {
+        return Unsupported("worktree attributes: text at {text(path)?} (CR-LF conversion)")
+    }
+}
+
+/// Refuse a CR-LF body by path when its effective text/eol rules would clean
+/// it. An LF body pays no per-path resolution: identity-breaking metadata is
+/// checked apart (check_path_identity) where a directory's sources hold it.
+pub fn check_text_content(ctx: Context, path: List[byte], data: List[byte]) -> () ! WorkErrors {
+    let stats = text_content_bytes(data)
+    if stats.crlf { check_crlf(ctx, path, text_content_binary(stats))? }
+}
+
+/// Refuse a regular path whose effective fields den cannot apply as identity
+/// (eol=crlf, an unknown text value, legacy crlf, ident, working-tree-encoding,
+/// a configured filter). One resolver, created on first use, serves a batch.
+pub fn check_path_identity(
+    ctx: Context,
+    path: List[byte],
+    value: index.Index,
+    mut caches: List[AttributeCache],
+) -> () ! WorkErrors {
+    if caches.len == 0 { (mut caches).push(attribute_cache(ctx)?) }
+    var cache = (mut caches).pop() else |_| { return invalid }
+    let policy = attribute_policy_cached(ctx, path, value, mut cache)?
+    (mut caches).push(cache)
+    check_attribute_identity(ctx, path, policy)?
+}
+
+fn attribute_identity_tokens(ctx: Context, data: List[byte]) -> bool ! WorkErrors {
+    for raw in attribute_lines(data) {
+        let tokens = attribute_tokens(raw)
+        if tokens.len < 2 || tokens[0][0] == 35 as byte { continue }
+        for i in 1..tokens.len {
+            let token = str_from_utf8(tokens[i]) else ""
+            if token.starts_with("eol=") && token != "eol=lf" ||
+                token == "eol" ||
+                token.starts_with("text=") && token != "text=auto" ||
+                token == "crlf" ||
+                token.starts_with("crlf=") ||
+                token == "ident" ||
+                token.starts_with("ident=") ||
+                token == "working-tree-encoding" ||
+                token.starts_with("working-tree-encoding=") {
+                return true
+            }
+            if token.starts_with("filter=") &&
+                configured_attribute_driver(ctx, "filter", token[7..]) {
+                return true
+            }
+        }
+    }
+    false
+}
+
+// A newly introduced text rule can invalidate an otherwise stat-clean entry:
+// stat equality is not evidence that its bytes contain no CR-LF. Check once
+// per directory, not per path. Inert attributes keep the old stat fast path.
+fn text_tokens(data: List[byte]) -> bool {
+    for line in attribute_lines(data) {
+        let tokens = attribute_tokens(line)
+        if tokens.len == 0 || tokens[0][0] == 35 as byte { continue }
+        for i in 1..tokens.len {
+            let token = copy tokens[i]
+            if compare(token, "text".bytes()) == 0 ||
+                compare(token, "text=auto".bytes()) == 0 ||
+                compare(token, "eol=lf".bytes()) == 0 {
+                return true
+            }
+        }
+    }
+    false
+}
+
+/// Validate all attribute sources applying below directory. True means a
+/// text rule may invalidate a stat-clean entry, or identity-breaking metadata
+/// may apply; it does not mean every path matches that rule.
+pub fn attributes_directory(
+    ctx: Context,
+    directory: List[byte],
+    value: index.Index,
+) -> bool ! WorkErrors {
+    let modes = attributes_directory_modes(ctx, directory, value)?
+    modes[0] || modes[1]
+}
+
+/// [a text rule may apply, identity-breaking metadata may apply] below directory.
+pub fn attributes_directory_modes(
+    ctx: Context,
+    directory: List[byte],
+    value: index.Index,
+) -> List[bool] ! WorkErrors {
+    var content = false, identity = false
+    region attributes {
+        let info = attributes_data("{ctx.repo.gitdir}/info/attributes")?
+        content = text_tokens(info)
+        identity = attribute_identity_tokens(ctx, info)?
+    }
+    if ctx.root == "" { return [content, identity] }
+    var bases = [List[byte]()]
+    for i in 0..=directory.len {
+        if i == directory.len || directory[i] == 47 as byte {
+            if i > 0 { (mut bases).push(copy directory[0..i]) }
+        }
+    }
+    for base in bases {
+        region attributes {
+            let data = attributes_source(ctx, base, value)?
+            if text_tokens(data) { content = true }
+            if attribute_identity_tokens(ctx, data)? { identity = true }
+        }
+    }
+    [content, identity]
+}
+
+/// A path-ordered batch's directory policy: the last directory's
+/// [text rule may apply, identity-breaking metadata may apply], reused while
+/// consecutive paths share that directory (no per-path key allocation).
+pub struct DirectoryModes { directory: List[byte], known: bool, modes: List[bool] }
+
+/// An empty DirectoryModes for one batch.
+pub fn directory_modes() -> DirectoryModes {
+    DirectoryModes { directory: List[byte](), known: false, modes: [false, false] }
+}
+
+/// path's directory modes through cache, recomputed only when the directory
+/// differs from the previous path's.
+pub fn path_modes(
+    ctx: Context,
+    path: List[byte],
+    value: index.Index,
+    mut cache: DirectoryModes,
+) -> List[bool] ! WorkErrors {
+    var end = 0
+    for i in 0..path.len { if path[i] == 47 as byte { end = i } }
+    var same = cache.known && cache.directory.len == end
+    if same {
+        for i in 0..end { if cache.directory[i] != path[i] { same = false; break } }
+    }
+    if !same {
+        cache.directory = owned_bytes(path[0..end])
+        cache.modes = attributes_directory_modes(ctx, cache.directory, value)?
+        cache.known = true
+    }
+    copy cache.modes
+}
+
+/// Read the shared attribute sources without acquiring unrelated worktree
+/// conversion-configuration limits for pure index/tree history readers.
+pub fn check_attributes(ctx: Context) -> () ! WorkErrors {
+    if (ctx.repo.config["core.attributesfile"] else "") != "" {
+        return Unsupported("worktree attributes: core.attributesFile")
+    }
+    attributes_file("{ctx.repo.gitdir}/info/attributes")?
+    if ctx.root != "" { attributes_file("{ctx.root}/.gitattributes")? }
+}
+
+/// Directory-scoped policy cache for readers of tree/index endpoints.
+pub fn text_path_policy(
+    ctx: Context,
+    path: List[byte],
+    value: index.Index,
+    mut cache: Map[str, bool],
+) -> bool ! WorkErrors {
+    var end = 0
+    for i in 0..path.len { if path[i] == 47 as byte { end = i } }
+    let directory = path[0..end]
+    let key = text(directory)?
+    let cached = cache[key] else |_| {
+        let possible = attributes_directory(ctx, directory, value)?
+        cache[key] = possible
+        return possible
+    }
+    cached
+}
+
+/// Whether bytes contain adjacent CR and LF; NUL and bare CR are ordinary bytes.
+pub fn has_crlf(data: List[byte]) -> bool {
+    for i in 1..data.len {
+        if data[i - 1] == 13 as byte && data[i] == 10 as byte { return true }
+    }
+    false
 }

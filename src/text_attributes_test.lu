@@ -1,0 +1,135 @@
+//! member: false
+
+use worktree
+
+fn density(control: byte, count: int, printable: int, final_sub: bool) -> List[byte] {
+    var out = List[byte]()
+    for _ in 0..count { (mut out).push(control) }
+    for _ in 0..printable { (mut out).push(65 as byte) }
+    (mut out).push(13 as byte)
+    (mut out).push(10 as byte)
+    if final_sub { (mut out).push(26 as byte) }
+    out
+}
+
+fn main() -> int ! worktree.WorkErrors {
+    for rule in [
+        "* text\n",
+        "* text=auto\n",
+        "* text=auto eol=lf\n",
+        "* eol=lf\n",
+        "* -text\n",
+        "* !text !eol\n",
+        "*.txt linguist-generated\n",
+        "a\"b.txt text=auto eol=lf\n",
+        "\"a\\\"b.txt\" text=auto eol=lf\n",
+        "* text\rfoo\n",
+        "\"a.txt\"text\n",
+        "* text\0junk\n* -text\n",
+    ] {
+        assert(worktree.attributes_refusal(rule.bytes())? == "")
+    }
+    for rule in [
+        "* text=unknown\n",
+        "* eol=crlf\n",
+        "* filter=lfs\n",
+        "* ident\n",
+        "* working-tree-encoding=UTF-16\n",
+        "*.png binary\n",
+        "* -diff\n",
+        "* merge=custom\n",
+    ] { assert(worktree.attributes_refusal(rule.bytes())? == "") }
+    assert(
+        worktree.attributes_refusal("[attr]custom text\n".bytes())? ==
+            "worktree attributes: macro definition",
+    )
+    for (rules, expected) in [
+        ("f binary\n", "-1/0/-/-//7"),
+        ("f binary diff=lockb\n", "-1/0/lockb/-//7"),
+        ("f diff=lockb binary\n", "-1/0/-/-//7"),
+        ("f text eol=crlf -text -eol\n", "-1/-1////7"),
+        ("f filter=lfs -filter\n", "0/0////7"),
+        ("f filter=lfs\nf -filter\n", "0/0////7"),
+        ("f filter=lfs\nf !filter\n", "0/0////7"),
+        ("f binary\nf !text !diff merge=ours\n", "0/0//ours//7"),
+        ("f conflict-marker-size=32\n", "0/0////32"),
+        ("f conflict-marker-size=32\nf !conflict-marker-size\n", "0/0////7"),
+        ("f text\0ignored\nf -text\n", "-1/0////7"),
+        ("\"f\"binary\n", "-1/0/-/-//7"),
+    ] {
+        var value = worktree.attributes_empty()
+        let data = rules.bytes(), name = "f".bytes()
+        worktree.apply_attribute_bytes(data, [], name, mut value, false)?
+        assert(
+            "{value.text}/{value.eol}/{value.diff}/{value.merge}/{value.filter}/{value.conflict_marker_size}" ==
+                expected,
+        )
+    }
+    // A specified text field wins over legacy crlf in either order; -crlf
+    // acts as -text only while text is unspecified.
+    for (rules, expected) in [
+        ("f text -crlf\n", "1/-1"),
+        ("f -crlf text\n", "1/-1"),
+        ("f text !crlf\n", "1/0"),
+        ("f text=auto -crlf\n", "2/-1"),
+        ("f -text crlf\n", "-1/1"),
+        ("f -crlf\n", "-1/-1"),
+        ("f crlf\n", "0/1"),
+        ("f crlf=input\n", "0/1"),
+        ("f -crlf\nf !crlf\n", "0/0"),
+        ("f binary\nf !text -crlf\n", "-1/-1"),
+    ] {
+        var value = worktree.attributes_empty()
+        let data = rules.bytes(), name = "f".bytes()
+        worktree.apply_attribute_bytes(data, [], name, mut value, false)?
+        assert("{worktree.attribute_text(value)}/{value.crlf}" == expected)
+    }
+    for (rules, path) in [
+        ("\"a b\" binary\n", "a b"),
+        ("\"#name\" binary\n", "#name"),
+        ("\"a \" binary\n", "a "),
+        ("\"a\\040b\" binary\n", "a b"),
+        ("\"a\\012b\" binary\n", "a\nb"),
+        ("\"a\\015\" binary\n", "a\r"),
+        ("\"a\\\"b\" binary\n", "a\"b"),
+    ] {
+        var value = worktree.attributes_empty()
+        let data = rules.bytes(), name = path.bytes()
+        worktree.apply_attribute_bytes(data, [], name, mut value, false)?
+        assert(value.diff == "-" && value.merge == "-" && value.text == -1)
+    }
+    var folded = worktree.attributes_empty()
+    let folded_rules = "[A-z].TXT -diff\n".bytes(), folded_base = "DIR".bytes()
+    let folded_path = "dir/_.txt".bytes()
+    worktree.apply_attribute_bytes(folded_rules, folded_base, folded_path, mut folded, true)?
+    assert(folded.diff == "-")
+    var excluded = worktree.attributes_empty()
+    let excluded_rules = "[!A].TXT -diff\n".bytes(), excluded_path = "a.txt".bytes()
+    worktree.apply_attribute_bytes(excluded_rules, [], excluded_path, mut excluded, true)?
+    assert(excluded.diff == "")
+    for body in ["", "\n", "\r", "a\rb\n", "\0a\n"] {
+        assert(!worktree.has_crlf(body.bytes()))
+    }
+    for body in ["\r\n", "a\r\nb", "\0\r\n", "a\n\r\n"] {
+        assert(worktree.has_crlf(body.bytes()))
+    }
+    for body in ["\0\r\n", "one\rtwo\r\n", "\r\nlast\r", "\r\0end\r\n"] {
+        assert(worktree.auto_binary(body.bytes()))
+    }
+    for control in [1, 7, 11, 14, 26, 31, 127] {
+        assert(worktree.auto_binary(density(control as byte, 1, 127, false)))
+        assert(!worktree.auto_binary(density(control as byte, 1, 128, false)))
+    }
+    for control in [8, 9, 12, 27, 128, 255] {
+        assert(!worktree.auto_binary(density(control as byte, 100, 0, false)))
+    }
+    for count in [2, 3, 8] {
+        assert(worktree.auto_binary(density(1 as byte, count, count * 128 - 1, false)))
+        assert(!worktree.auto_binary(density(1 as byte, count, count * 128, false)))
+    }
+    assert(!worktree.auto_binary(density(26 as byte, 0, 0, true)))
+    assert(worktree.auto_binary(density(1 as byte, 1, 127, true)))
+    assert(!worktree.auto_binary(density(1 as byte, 1, 128, true)))
+    print("PASS text-attributes-policy-units")
+    0
+}
