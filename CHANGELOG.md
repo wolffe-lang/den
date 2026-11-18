@@ -14,6 +14,13 @@
   files, one in each of 20,000 directories, took 6.7 s where Git takes
   0.15 s. `tools/status-scale-test.py` holds that shape to Git's CPU time and
   peak memory.
+- Opening a repository's packs no longer hashes each pack index whole or
+  spells every object name in it in hex. An index keeps its name table as
+  stored, and a name is spelled only when one is printed. Git's reads skip
+  that checksum too; verify-pack and fsck still check it. Status beside
+  390,000 packed objects took 0.71 s where Git takes a millisecond, and now
+  takes 0.20 s. `tools/status-scale-test.py`'s objects shape holds it to Git's
+  CPU time and peak memory.
 
 ## Unreleased — adding thousands of files
 
