@@ -67,6 +67,9 @@ def main():
         ('no-rebase-overrides-config', 'clean', ['--no-rebase'], [('pull.rebase', 'true')]),
         ('rebase-overrides-config', 'clean', ['--rebase'], [('pull.rebase', 'false')]),
         ('ff-true-config', 'clean', [], [('pull.ff', 'true')]),
+        # A clone Git makes with its default template: .git/hooks holds only
+        # Git's disabled samples, which Git never runs.
+        ('ff-sample-hooks', 'ff-sample-hooks', ['--ff-only'], []),
     ]
     rows = []
     for name, kind, flags, config in cases:
@@ -91,6 +94,17 @@ def main():
         run([git, 'clone', '-q', source, seed])
         for key, value in [('gc.auto', '0'), ('maintenance.auto', 'false'), *config]:
             run([git, 'config', key, value], seed)
+        if kind == 'ff-sample-hooks':
+            # The test environment's template is empty, so the pinned Git's
+            # own default samples are copied in, as `git clone` writes them
+            # with no init.templateDir (githooks(5): a sample is enabled by
+            # removing its .sample suffix).
+            templates = Path(git).resolve().parent.parent / 'share/git-core/templates/hooks'
+            samples = sorted(templates.glob('*.sample'))
+            assert samples, templates
+            (seed / '.git/hooks').mkdir(exist_ok=True)
+            for sample in samples:
+                shutil.copy2(sample, seed / '.git/hooks' / sample.name)
         if kind in ('clean', 'conflict') or kind.startswith('merge-large'):
             (seed / 'a').write_text('ours\nmiddle\nlast\n')
             run([git, 'commit', '-qam', 'ours'], seed)
