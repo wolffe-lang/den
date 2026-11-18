@@ -67,6 +67,14 @@ def main():
         ('no-rebase-overrides-config', 'clean', ['--no-rebase'], [('pull.rebase', 'true')]),
         ('rebase-overrides-config', 'clean', ['--rebase'], [('pull.rebase', 'false')]),
         ('ff-true-config', 'clean', [], [('pull.ff', 'true')]),
+        # Symbolic links (mode 120000, the blob is the target): left alone,
+        # retargeted, added and removed by a fast-forward, and retargeted on
+        # one side of a true merge.
+        ('ff-link-unchanged', 'ff-link-unchanged', ['--ff-only'], []),
+        ('ff-link-changed', 'ff-link-changed', ['--ff-only'], []),
+        ('ff-link-added', 'ff-link-added', ['--ff-only'], []),
+        ('ff-link-removed', 'ff-link-removed', ['--ff-only'], []),
+        ('merge-link-changed', 'merge-link-changed', ['--no-rebase'], []),
     ]
     rows = []
     for name, kind, flags, config in cases:
@@ -84,6 +92,8 @@ def main():
             # Clone/fetch support this blob; an unchanged pull must not apply
             # the true merge's 16 MiB per-file limit to it.
             (origin / 'big').write_bytes(b'\0' * (16777216 + 1))
+        if 'link' in kind and kind != 'ff-link-added':
+            os.symlink('a', origin / 'link')
         run([git, 'add', '.'], origin)
         run([git, 'commit', '-qm', 'base'], origin)
         run([git, 'clone', '-q', '--bare', origin, server])
@@ -91,11 +101,19 @@ def main():
         run([git, 'clone', '-q', source, seed])
         for key, value in [('gc.auto', '0'), ('maintenance.auto', 'false'), *config]:
             run([git, 'config', key, value], seed)
-        if kind in ('clean', 'conflict') or kind.startswith('merge-large'):
+        if kind in ('clean', 'conflict') or kind.startswith(('merge-large', 'merge-link')):
             (seed / 'a').write_text('ours\nmiddle\nlast\n')
             run([git, 'commit', '-qam', 'ours'], seed)
         if not kind.startswith('uptodate'):
             (origin / 'a').write_text('theirs\nmiddle\nlast\n' if kind == 'conflict' else 'first\nmiddle\ntheirs\n')
+            if kind.endswith('link-changed'):
+                (origin / 'link').unlink()
+                os.symlink('keep', origin / 'link')
+            elif kind == 'ff-link-added':
+                os.symlink('keep', origin / 'link')
+                run([git, 'add', 'link'], origin)
+            elif kind == 'ff-link-removed':
+                (origin / 'link').unlink()
             run([git, 'commit', '-qam', 'theirs'], origin)
             run([git, 'push', '-q', server.as_uri(), 'HEAD:refs/heads/main'], origin)
         results = []
