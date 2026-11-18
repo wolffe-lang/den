@@ -39,11 +39,7 @@ fn controls_tracking(
         }
     }
     if fs.is_dir("{ctx.repo.gitdir}/worktrees") { return Unsupported("{command} linked worktrees") }
-    let hook = ctx.repo.config["core.hookspath"] else "{ctx.repo.gitdir}/hooks"
-    let path = if hook.starts_with("/") then hook else "{ctx.root}/{hook}"
-    if fs.is_dir(path) && fs.entries(path)?.len > 0 {
-        return Unsupported("{command} nonempty hooks directory")
-    }
+    if commit.runnable_hooks(ctx)? { return Unsupported("{command} nonempty hooks directory") }
     for (key, value) in ctx.repo.config.pairs() {
         if key.starts_with("branch.") &&
             key != "branch.autosetupmerge" &&

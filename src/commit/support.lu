@@ -1,3 +1,4 @@
+use std.bytes
 use std.fs
 use std.time
 use commit_format
@@ -394,12 +395,24 @@ pub fn utc_timezone(zone: str) -> bool ! {io} {
     false
 }
 
-fn hooks_empty(ctx: worktree.Context) -> () ! CommitErrors {
+/// Whether the hooks directory (`core.hooksPath`, else `.git/hooks`) holds
+/// anything Git could run. Git's default template fills it with disabled
+/// samples, each named `<hook>.sample`, and githooks(5) enables one only by
+/// removing that suffix, so a directory of samples runs nothing. Any other
+/// entry counts: den runs no hooks, so it refuses rather than skip one.
+pub fn runnable_hooks(ctx: worktree.Context) -> bool ! CommitErrors {
     let path = ctx.repo.config["core.hookspath"] else "{ctx.repo.gitdir}/hooks"
     let root = if path.starts_with("/") then path else "{ctx.root}/{path}"
-    if fs.is_dir(root) && fs.entries(root)?.len > 0 {
-        return Unsupported("commit nonempty hooks directory")
+    if !fs.is_dir(root) { return false }
+    let sample = ".sample".bytes()
+    for entry in fs.entries(root)? {
+        if !bytes.ends_with(entry.name, sample) || entry.name.len == sample.len { return true }
     }
+    false
+}
+
+fn hooks_empty(ctx: worktree.Context) -> () ! CommitErrors {
+    if runnable_hooks(ctx)? { return Unsupported("commit nonempty hooks directory") }
     if worktree.config_bool(ctx, "commit.gpgsign", false)? { return Unsupported("commit signing") }
     if (env_get("GIT_INDEX_FILE") else "") != "" { return Unsupported("commit GIT_INDEX_FILE") }
 }
