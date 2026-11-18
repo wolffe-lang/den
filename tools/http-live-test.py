@@ -143,6 +143,8 @@ def judge(name, moved, critical, attempt):
     'retry' when HEAD or its branch moved on the first attempt (a RETRY
     line), 'fail' when they moved again, else 'compare' over what held still,
     naming the rest on a NARROWED line."""
+    if moved:
+        return 'fail'
     if critical:
         if attempt == 0:
             print('RETRY %s moved=%s' % (name, ','.join(critical)), flush=True)
