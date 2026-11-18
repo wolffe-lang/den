@@ -310,7 +310,7 @@ fn unpack(
     let id = oid.from_bytes("sha1", hash.final1(take digest)) else |_| {
         return Unsupported("pack object identity")
     }
-    if (oid.hex(id) else "") != index.entries[slot].name {
+    if id.bytes.len != 20 || name_cmp(index, slot, id.bytes) != 0 {
         return Unsupported("pack object identity")
     }
     cache_keep(mut cache, pack_no, offset, result)
@@ -470,11 +470,12 @@ pub fn prefix(gitdir: str, prefix: str) -> List[str] ! PackErrors {
             let fd = open_pack("{path[0..path.len - 4]}.pack")?
             defer fs_close(fd) else |_| {}
             let _ = bounds(fd, index)?
-            for entry in index.entries {
-                if entry.name.starts_with(prefix) {
+            for slot in 0..index.entries.len {
+                let name = name_hex(index, slot)
+                if name.starts_with(prefix) {
                     var duplicate = false
-                    for name in out { if name == entry.name { duplicate = true } }
-                    if !duplicate && out.len < 2 { (mut out).push(copy entry.name) }
+                    for seen in out { if seen == name { duplicate = true } }
+                    if !duplicate && out.len < 2 { (mut out).push(copy name) }
                 }
             }
         }
@@ -659,12 +660,13 @@ pub fn session_prefix(s: Session, prefix_text: str) -> List[str] ! PackErrors {
         var lo = 0, hi = index.entries.len
         while lo < hi {
             let mid = (lo + hi) / 2
-            if index.entries[mid].name < prefix_text { lo = mid + 1 } else { hi = mid }
+            if name_hex(index, mid) < prefix_text { lo = mid + 1 } else { hi = mid }
         }
-        while lo < index.entries.len && index.entries[lo].name.starts_with(prefix_text) {
+        while lo < index.entries.len && name_hex(index, lo).starts_with(prefix_text) {
+            let name = name_hex(index, lo)
             var duplicate = false
-            for name in out { if name == index.entries[lo].name { duplicate = true } }
-            if !duplicate && out.len < 2 { (mut out).push(copy index.entries[lo].name) }
+            for seen in out { if seen == name { duplicate = true } }
+            if !duplicate && out.len < 2 { (mut out).push(copy name) }
             if out.len == 2 { break }
             lo += 1
         }
