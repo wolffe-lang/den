@@ -164,26 +164,19 @@ pub fn parse(data: List[byte]) -> Index ! IndexErrors {
     let version = be(data, 4, 4)
     check_version(version)?
     let end = data.len - 20
-    // The checksum is taken over the bytes in place, and every list is made
-    // at its final size: parse allocates what the index keeps, not a copy of
-    // the file and each list's earlier, smaller buffers.
-    var state = hash.new1()
-    hash.update1_prefix(mut state, data, end)
-    let digest = hash.final1(take state)
+    let digest = hash.sum1(data[0..end])
     for i in 0..20 { if digest[i] != data[end + i] { return checksum } }
     let count = be(data, 8, 4)
     if count > (end - 12) / 64 { return invalid_index }
     var result = empty(version)?
-    (mut result.entries).reserve(count)
     var pos = 12
     var previous = List[byte]()
     for _ in 0..count {
         let start = pos
         if end - pos < 62 { return invalid_index }
         var words = List[int]()
-        (mut words).reserve(10)
         for i in 0..10 { (mut words).push(be(data, pos + i * 4, 4)) }
-        let id = oid.Oid { algorithm: "sha1", bytes: data[pos + 40..pos + 60] }
+        let id = oid.from_bytes("sha1", data[pos + 40..pos + 60])?
         let flags = be(data, pos + 60, 2)
         pos += 62
         var extended = 0
@@ -192,7 +185,7 @@ pub fn parse(data: List[byte]) -> Index ! IndexErrors {
             extended = be(data, pos, 2)
             pos += 2
         }
-        var stem = 0
+        var path = List[byte]()
         if version == 4 {
             // OFS_DELTA integer: continuation increments before shifting.
             if pos == end { return invalid_index }
@@ -206,16 +199,13 @@ pub fn parse(data: List[byte]) -> Index ! IndexErrors {
                 strip = (strip + 1) * 128 + (b & 127)
             }
             if strip > previous.len { return invalid_index }
-            stem = previous.len - strip
+            append(mut path, previous[0..previous.len - strip])
         }
-        var stop = pos
-        while stop < end && data[stop] != 0 as byte { stop += 1 }
-        if stop == end { return invalid_index }
-        var path = List[byte]()
-        (mut path).reserve(stem + stop - pos)
-        for k in 0..stem { (mut path).push(previous[k]) }
-        for k in pos..stop { (mut path).push(data[k]) }
-        pos = stop
+        while pos < end && data[pos] != 0 as byte {
+            (mut path).push(data[pos])
+            pos += 1
+        }
+        if pos == end { return invalid_index }
         if flags & 0xfff != name_flags(path) { return invalid_index }
         pos += 1
         if version != 4 {
@@ -224,14 +214,14 @@ pub fn parse(data: List[byte]) -> Index ! IndexErrors {
                 pos += 1
             }
         }
-        if version == 4 { previous = copy path }
         (mut result.entries).push(Entry {
             stat: words,
             id: id,
             flags: flags,
             extended: extended,
-            path: path,
+            path: owned_path(path),
         })
+        previous = path
     }
     while pos < end {
         if end - pos < 8 { return invalid_index }
@@ -358,7 +348,6 @@ pub fn parse_v2(data: List[byte]) -> List[object.TreeEntry] ! IndexErrors {
 // explicitly materializes the API's owned return without changing its contract.
 fn owned_path(bytes: List[byte]) -> List[byte] {
     var out = List[byte]()
-    (mut out).reserve(bytes.len)
     for b in bytes { (mut out).push(b) }
     out
 }

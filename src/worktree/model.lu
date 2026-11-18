@@ -99,7 +99,6 @@ pub struct Snapshot {
 
 fn owned_bytes(bytes: List[byte]) -> List[byte] {
     var out = List[byte]()
-    (mut out).reserve(bytes.len)
     for b in bytes { (mut out).push(b) }
     out
 }
