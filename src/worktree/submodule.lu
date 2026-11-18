@@ -99,14 +99,17 @@ pub fn subproject_text(id: oid.Oid, dirty: bool) -> List[byte] ! WorkErrors {
     (if dirty then "Subproject commit {hex}-dirty\n" else "Subproject commit {hex}\n").bytes()
 }
 
-/// The stage-zero gitlink entry at PATH in VALUE, or -1.
+/// The stage-zero gitlink entry at PATH in VALUE, or -1. The entries are in
+/// index order (path, then stage), as the walk's other lookups need them, so
+/// this is a binary search: the walk asks it for every directory it meets,
+/// and a scan of every entry for each directory was quadratic.
 pub fn gitlink_at(value: index.Index, path: List[byte]) -> int {
-    var i = 0
-    for entry in value.entries {
-        if entry.stat[6] == 0o160000 && index.stage(entry) == 0 && compare(entry.path, path) == 0 {
-            return i
+    var at = index_lower(value.entries, path)
+    while at < value.entries.len && compare(value.entries[at].path, path) == 0 {
+        if value.entries[at].stat[6] == 0o160000 && index.stage(value.entries[at]) == 0 {
+            return at
         }
-        i += 1
+        at += 1
     }
     -1
 }
