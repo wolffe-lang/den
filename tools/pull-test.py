@@ -25,6 +25,7 @@ def main():
     os.environ.update(GIT_AUTHOR_NAME='Den Tester', GIT_AUTHOR_EMAIL='den@example.invalid',
                       GIT_COMMITTER_NAME='Den Tester', GIT_COMMITTER_EMAIL='den@example.invalid', GIT_MERGE_AUTOEDIT='no')
     environment = {k: v for k, v in os.environ.items() if k.startswith(('GIT_', 'DEN_')) or k in ('HOME', 'TZ', 'LC_ALL', 'PATH', 'TMPDIR')}
+    shared = os.environ['GIT_CONFIG_GLOBAL']
     captures = out / 'captures.jsonl'
     captures.write_text('')
     def run(argv, cwd=None):
@@ -67,6 +68,9 @@ def main():
         ('no-rebase-overrides-config', 'clean', ['--no-rebase'], [('pull.rebase', 'true')]),
         ('rebase-overrides-config', 'clean', ['--rebase'], [('pull.rebase', 'false')]),
         ('ff-true-config', 'clean', [], [('pull.ff', 'true')]),
+        # A clone Git makes with its default template: .git/hooks holds only
+        # Git's disabled samples, which Git never runs.
+        ('ff-sample-hooks', 'ff-sample-hooks', ['--ff-only'], []),
     ]
     rows = []
     for name, kind, flags, config in cases:
@@ -91,6 +95,27 @@ def main():
         run([git, 'clone', '-q', source, seed])
         for key, value in [('gc.auto', '0'), ('maintenance.auto', 'false'), *config]:
             run([git, 'config', key, value], seed)
+        if kind == 'ff-sample-hooks':
+            # The test environment's template is empty, so the pinned Git's
+            # own default samples are copied in, as `git clone` writes them
+            # with no init.templateDir (githooks(5): a sample is enabled by
+            # removing its .sample suffix).
+            templates = Path(git).resolve().parent.parent / 'share/git-core/templates/hooks'
+            samples = sorted(templates.glob('*.sample'))
+            assert samples, templates
+            (seed / '.git/hooks').mkdir(exist_ok=True)
+            for sample in samples:
+                shutil.copy2(sample, seed / '.git/hooks' / sample.name)
+            # The test environment's global config points core.hooksPath at
+            # an empty directory, which would hide .git/hooks from both tools.
+            # A clone Git made has no hooksPath, so this case runs under a
+            # global config without it.
+            lines = Path(shared).read_text().splitlines(keepends=True)
+            kept = [line for line in lines if not line.strip().lower().startswith('hookspath')]
+            assert len(kept) == len(lines) - 1, shared
+            plain = directory / 'gitconfig'
+            plain.write_text(''.join(kept))
+            os.environ['GIT_CONFIG_GLOBAL'] = environment['GIT_CONFIG_GLOBAL'] = str(plain)
         if kind in ('clean', 'conflict') or kind.startswith('merge-large'):
             (seed / 'a').write_text('ours\nmiddle\nlast\n')
             run([git, 'commit', '-qam', 'ours'], seed)
@@ -112,6 +137,7 @@ def main():
         equal = oracle['equivalent'](*results, 'index-stat-proven')
         rows.append(dict(name=name, kind=kind, argv=['pull', *flags], config=config, parity=equal, outcomes=results))
         print(('PASS' if equal else 'FAIL') + ' pull-' + name, flush=True)
+        os.environ['GIT_CONFIG_GLOBAL'] = environment['GIT_CONFIG_GLOBAL'] = shared
     assert rows, 'empty pull selection'
     (out / 'summary.json').write_text(json.dumps(dict(rows=rows, zero_skips=True), indent=2) + '\n')
     failures = sum(not row['parity'] for row in rows)
