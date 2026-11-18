@@ -21,6 +21,9 @@ for tier in native release; do
 done
 # den#91: add and commit -a of thousands of files under a peak bound, beside Git.
 tools/env python3 -I tools/add-scale-test.py --tier release
+# Plain status of 20,000 files, one in each of 20,000 directories, beside Git:
+# the walk's work per directory, bounded relative to Git's (native tier).
+tools/env python3 -I tools/status-scale-test.py --tier native
 "$WOLF" conform-run src/worktree_test.lu --checked --json > target/worktree-checked.json
 cat target/worktree-checked.json
 python3 -I - target/worktree-checked.json <<'PY'
@@ -28,4 +31,4 @@ import json,sys
 rows=[json.loads(line) for line in open(sys.argv[1]) if line.startswith('{')]
 assert len(rows)==1 and rows[0]['verdict']=='exit(0)',rows
 PY
-echo 'worktree: native/release unit, API exercise, strict repository matrix, unreadable-directory and add-scale rows; actual checked exit(0)'
+echo 'worktree: native/release unit, API exercise, strict repository matrix, unreadable-directory, add-scale and status-scale rows; actual checked exit(0)'
