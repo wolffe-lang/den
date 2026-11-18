@@ -104,9 +104,11 @@ pub fn subproject_text(id: oid.Oid, dirty: bool) -> List[byte] ! WorkErrors {
 /// this is a binary search: the walk asks it for every directory it meets,
 /// and a scan of every entry for each directory was quadratic.
 pub fn gitlink_at(value: index.Index, path: List[byte]) -> int {
-    var at = index_lower(value.entries, path)
-    while at < value.entries.len && compare(value.entries[at].path, path) == 0 {
-        if value.entries[at].stat[6] == 0o160000 && index.stage(value.entries[at]) == 0 {
+    var at = 0
+    while at < value.entries.len {
+        if value.entries[at].stat[6] == 0o160000 &&
+            index.stage(value.entries[at]) == 0 &&
+            compare(value.entries[at].path, path) == 0 {
             return at
         }
         at += 1
