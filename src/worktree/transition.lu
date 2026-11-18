@@ -289,22 +289,14 @@ fn transition_mode(
     // every entry it shifted kept each copy to the end of the command: a
     // pull adding 440 paths through a 10,000-entry index held 2.6 GB of
     // them (den#138).
-    var order = copy region {
-        var names = List[List[byte]]()
-        (mut names).reserve(entries.len)
-        for entry in entries { (mut names).push(copy entry.path) }
-        path_order(names)
-    }
-    var sorted = List[index.Entry]()
-    (mut sorted).reserve(entries.len)
-    for i in order {
-        (mut sorted).push(take entries[i])
-        entries[i] = index.Entry {
-            stat: List[int](),
-            id: oid.Oid { algorithm: "", bytes: List[byte]() },
-            flags: 0,
-            extended: 0,
-            path: List[byte](),
+    var sorted = entries
+    for i in 1..sorted.len {
+        var n = i
+        while n > 0 && compare(sorted[n - 1].path, sorted[n].path) > 0 {
+            let temp = copy sorted[n - 1]
+            sorted[n - 1] = copy sorted[n]
+            sorted[n] = temp
+            n -= 1
         }
     }
     value.entries = sorted
