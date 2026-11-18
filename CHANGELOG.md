@@ -1,5 +1,20 @@
 # Changes
 
+## Unreleased — change summaries of any size
+
+- A stat, numstat or shortstat, and the change summary a pull or merge prints
+  after it moves HEAD, count a file's lines with no bound on differing lines
+  (den#105). They stopped past 2,000 with a named bound, after the pull had
+  moved HEAD, so a caller saw a failed pull: a week of a public repository
+  whose generated parser changed by 15,273 lines did. The counts are a
+  minimal script's, found in space linear in the two bodies; that week's
+  stat now matches Git's byte for byte in 0.3 s. `tools/summary-scale-test.py`
+  holds pulls, merges and diffs past 2,000 differing lines to Git's output,
+  and a generated table's to a multiple of Git's peak memory.
+- A binary file's `Bin` in a stat stands right-aligned in the count column,
+  as Git puts it; with a count of four or more digits beside it, den's row
+  differed from Git's.
+
 ## Unreleased — clones Git made
 
 - `pull`, `merge`, `commit`, `branch`, `tag`, `switch`, `checkout`, `reset`,
