@@ -9,7 +9,10 @@ others-search, fails that upload with EACCES. This check reads the upload's
 own path list from the workflow and refuses such entries by name before the
 upload runs, so the mode bits decide, not the uid that runs the check. It also
 refuses private key material anywhere in the collected tree: a test CA's key
-is still a key, and evidence is published.
+is still a key, and evidence is published. And it refuses a file or directory
+name the upload cannot carry: upload-artifact rejects the whole artifact for a
+name with a double quote, colon, less-than, greater-than, vertical bar,
+asterisk, question mark, carriage return or line feed.
 """
 import glob
 import os
@@ -19,6 +22,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parent.parent
 HEAD = 65536
+UNCARRIED = set('":<>|*?\r\n')
 
 
 def upload_paths():
@@ -48,7 +52,7 @@ def upload_paths():
 
 def main():
     patterns = upload_paths()
-    unreadable, keys = [], []
+    unreadable, keys, names = [], [], []
     files = dirs = 0
     seen = set()
     for pattern in patterns:
@@ -62,6 +66,8 @@ def main():
                 seen.add(path)
                 info = path.lstat()
                 relative = path.relative_to(ROOT).as_posix()
+                if UNCARRIED & set(path.name):
+                    names.append(relative)
                 if stat.S_ISLNK(info.st_mode):
                     continue
                 if stat.S_ISDIR(info.st_mode):
@@ -83,10 +89,13 @@ def main():
         print('FAIL evidence-unreadable %s mode=%04o' % (relative, stat.S_IMODE(mode)), flush=True)
     for relative in keys:
         print('FAIL evidence-private-key %s' % relative, flush=True)
-    if unreadable or keys:
-        raise SystemExit('FAIL evidence-modes: %d unreadable, %d private keys in the upload' % (len(unreadable), len(keys)))
-    print('PASS evidence-modes: %d files and %d directories under %d upload paths, all readable by others, no private keys'
-          % (files, dirs, len(patterns)), flush=True)
+    for relative in names:
+        print('FAIL evidence-name %r' % relative, flush=True)
+    if unreadable or keys or names:
+        raise SystemExit('FAIL evidence-modes: %d unreadable, %d private keys, %d names the upload cannot carry'
+                         % (len(unreadable), len(keys), len(names)))
+    print('PASS evidence-modes: %d files and %d directories under %d upload paths, all readable by others, no private keys,'
+          ' every name uploadable' % (files, dirs, len(patterns)), flush=True)
 
 
 if __name__ == '__main__':
