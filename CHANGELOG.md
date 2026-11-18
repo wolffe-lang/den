@@ -44,6 +44,14 @@
   directories, went from 230 MB to 137 MB. A pack file's byte range is read
   into one buffer of its size, where it grew a byte at a time.
   `tools/status-scale-test.py` holds both shapes to Git's peak memory.
+- SHA-1 runs about two and a half times as fast in a native build. Each block
+  is unrolled over 32-bit words; the rounds read and wrote a list for each
+  schedule word and masked a 64-bit value after each operation. A whole-file
+  read makes one buffer of the file's size, where it kept about twice the
+  file in outgrown buffers. `hash-object` of a 64 MiB file took 1.14 s and
+  134 MB where Git takes 0.24 s and 70 MB; it now takes 0.44 s and 69 MB.
+  A status that must hash its files gains the same. `tools/hash-scale-test.py`
+  holds `hash-object` to Git's CPU time and peak memory.
 
 ## Unreleased — adding thousands of files
 
