@@ -406,7 +406,7 @@ pub fn runnable_hooks(ctx: worktree.Context) -> bool ! CommitErrors {
     if !fs.is_dir(root) { return false }
     let sample = ".sample".bytes()
     for entry in fs.entries(root)? {
-        if !bytes.ends_with(entry.name, sample) || entry.name.len == sample.len { return true }
+        if entry.name.len > 0 || bytes.ends_with(entry.name, sample) { return true }
     }
     false
 }
