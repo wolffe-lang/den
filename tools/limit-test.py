@@ -103,26 +103,6 @@ def main():
         (work / '.git/packed-refs').write_text(''.join(lines))
         return work
 
-    def long_rewrite(name):
-        """A clone behind its remote, which rewrote every line of a 2,500-line file."""
-        base = out / name
-        base.mkdir()
-        origin, work = base / 'origin', base / 'work'
-        run([git, 'init', '-q', origin], base)
-        (origin / 'long.txt').write_text(''.join(f'old line {i}\n' for i in range(2500)))
-        (origin / 'a').write_text('a\n')
-        run([git, 'add', '.'], origin)
-        run([git, 'commit', '-qm', 'base'], origin)
-        run([git, 'clone', '-q', origin, work], base)
-        if name.startswith('merge'):
-            (work / 'local').write_text('local\n')
-            run([git, 'add', 'local'], work)
-            run([git, 'commit', '-qm', 'local'], work)
-        (origin / 'long.txt').write_text(''.join(f'new line {i}\n' for i in range(2500)))
-        run([git, 'commit', '-qam', 'rewrite'], origin)
-        run([git, 'fetch', '-q', 'origin'], work)
-        return work
-
     rows = []
 
     def row(name, setup, argv, expected, published=False):
@@ -173,9 +153,9 @@ def main():
         return base / 'work'
     row('clone-url', plain, ['clone', 'git://127.0.0.1:1/' + 'x' * 5000, 'unused'],
         lambda w, _: 'limit: a remote URL longer than 4096 bytes')
-    stat_bound = lambda w, _: 'limit: a file whose line diff passes 2000 differing lines, 200000 lines or 16777216 bytes'
-    row('pull-diffstat-lines', long_rewrite, ['pull', 'origin', 'main'], stat_bound, published=True)
-    row('merge-diffstat-lines', long_rewrite, ['merge', '--no-edit', 'origin/main'], stat_bound, published=True)
+    # A 2,500-line rewrite under pull and merge reached the stat's bound on
+    # differing lines; it has none now, and tools/summary-scale-test.py holds
+    # those pulls to Git's output (den#105).
     assert rows, 'empty selection'
     (out / 'summary.json').write_text(json.dumps(rows, indent=2) + '\n')
     failures = sum(not r['passed'] for r in rows)
