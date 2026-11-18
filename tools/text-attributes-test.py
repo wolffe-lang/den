@@ -21,9 +21,14 @@ def main():
     a = ap.parse_args()
     root = Path(__file__).resolve().parents[1]
     out = root / 'target/runs' / ('text-attributes-' + a.tier)
-    if out.exists():
-        shutil.rmtree(out)
-    out.mkdir(parents=True)
+    # The rows' repositories stay out of target/runs, which CI uploads as
+    # evidence: a quoting row's path has a double quote, which the upload
+    # cannot carry (tools/evidence-modes.py). Only the summary is evidence.
+    trees = root / 'target' / ('text-attributes-' + a.tier)
+    for d in (out, trees):
+        if d.exists():
+            shutil.rmtree(d)
+        d.mkdir(parents=True)
     git = os.environ['DEN_GIT']
     digest = hashlib.sha256(Path(git).read_bytes()).hexdigest()
     if a.dev_oracle:
@@ -118,7 +123,7 @@ def main():
                 name = f'text-attributes-{kind}-{"crlf" if crlf else "lf"}-{command}'
                 if a.filter not in name:
                     continue
-                case = out / name
+                case = trees / name
                 case.mkdir()
                 seed = case / 'seed'
                 run(git, ['init', '-q', seed], root)
@@ -197,7 +202,7 @@ def main():
             name = f'text-attributes-review-incoming-{command}-{"crlf" if crlf else "lf"}{suffix}'
             if a.filter not in name:
                 continue
-            case = out / name
+            case = trees / name
             case.mkdir()
             origin = case / 'origin'
             run(git, ['init', '-q', origin], root)
@@ -260,7 +265,7 @@ def main():
         name = f'text-attributes-review-policy-{kind}'
         if a.filter not in name:
             continue
-        case = out / name
+        case = trees / name
         case.mkdir()
         seed = case / 'seed'
         run(git, ['init', '-q', seed], root)
@@ -333,7 +338,7 @@ def main():
         name = f'text-attributes-review-policy-limit-{kind}'
         if a.filter not in name:
             continue
-        case = out / name
+        case = trees / name
         case.mkdir()
         seed = case / 'seed'
         run(git, ['init', '-q', seed], root)
@@ -374,7 +379,7 @@ def main():
     # safety preflight must inspect that supplied content, not require storage.
     name = 'text-attributes-review-policy-revert-synthesized-lf'
     if a.filter in name:
-        case = out / name
+        case = trees / name
         case.mkdir()
         seed = case / 'seed'
         run(git, ['init', '-q', seed], root)
