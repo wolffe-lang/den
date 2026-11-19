@@ -15,12 +15,18 @@
   read takes one buffer of its size, and a commit's checks, a summary's pairs
   and a true merge's files are each reclaimed before the next. Over a 16 MB
   blob every row of `tools/large-blob-test.py` peaks within four times Git's
-  peak plus 64 MiB.
+  peak plus 64 MiB, but `pull --rebase`, within six: a rebase scans the work
+  tree several times, and each scan keeps the bodies of the files it reads.
+- `pull --rebase`, a cherry-pick and each replayed commit read only the bodies
+  that differ between the trees they compare, as a merge does, where every
+  blob of three trees was read for each commit; `show` of a blob and a root
+  commit's patch take one past 16 MiB.
 - Rename scores of a body past 1 MiB sum their weights in slots, not a Map:
   one renamed 16 MB file took 100 s of CPU. A true merge finds a repeated
   line by its bytes, where two distinct lines whose hashes collided refused.
 - The 2,000-line budget of a patch and of a three-way file merge is named
-  when reached (Git has none). `tools/limit-test.py` holds both.
+  when reached (Git has none), as is the 128 MiB of file bodies one diff
+  holds. `tools/limit-test.py` holds the budget's two.
 - A line count's totals are a minimal script's, Git's `--minimal`; where
   Git's default diff departs from minimal (a 486,000-line JSON file rewritten
   by a third), den's stat differs from Git's in that file's counts.
