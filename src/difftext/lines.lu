@@ -9,8 +9,10 @@ pub struct Line { start: int, end: int, hash: int }
 pub struct Edit { old_start: int, old_count: int, new_start: int, new_count: int }
 
 /// Owned line offsets. Empty input has no lines; a final non-LF span is a line.
+/// A body may be as large as an object read allows (1,000,000,000 bytes),
+/// with any number of lines: the table is in proportion to the body.
 pub fn lines(data: List[byte]) -> List[Line] ! DeltaErrors {
-    if data.len > 16777216 { return limit }
+    if data.len > 1000000000 { return limit }
     var result = List[Line]()
     var start = 0, pos = 0
     var hash: int = 0
@@ -19,7 +21,6 @@ pub fn lines(data: List[byte]) -> List[Line] ! DeltaErrors {
         pos += 1
         if data[pos - 1] == 10 as byte || pos == data.len {
             (mut result).push(Line { start: start, end: pos, hash: hash })
-            if result.len > 200000 { return limit }
             start = pos
             hash = 0
         }
@@ -192,7 +193,7 @@ fn hash_member(slots: List[int], hash: int) -> bool {
 /// on the other side is set aside: it can be in no common subsequence, so L
 /// is unchanged, and a rewrite of every line costs no search at all.
 pub fn counts(before: List[byte], after: List[byte]) -> Counts ! DeltaErrors {
-    if before.len > 16777216 || after.len > 16777216 { return limit }
+    if before.len > 1000000000 || after.len > 1000000000 { return limit }
     let left = spans(before)
     let right = spans(after)
     var low = 0
@@ -219,9 +220,10 @@ pub fn counts(before: List[byte], after: List[byte]) -> Counts ! DeltaErrors {
     Counts { added: right.len - common, deleted: left.len - common }
 }
 
-/// Minimal insertion/deletion script, at most 2,000 changed lines and 200,000
-/// lines per input. Exhausting these explicit budgets returns limit, not an
-/// approximate script. Counts are not affected by byte-level similarity hashes.
+/// Minimal insertion/deletion script, at most 2,000 changed lines, over inputs
+/// as large as lines() takes. Exhausting this explicit budget returns limit,
+/// not an approximate script. Counts are not affected by byte-level similarity
+/// hashes.
 pub fn edits(before: List[byte], after: List[byte]) -> List[Edit] ! DeltaErrors {
     let left = lines(before)?
     let right = lines(after)?
