@@ -1,20 +1,41 @@
 #!/bin/sh
-# den#50's ratio row: status within 5x of the pinned git's child CPU on the
-# 454-file fixture, cold and warm, with a 1.10 guardband (status-measure.py).
+# The speed rows: status (den#50), diff --quiet, diff --cached --quiet and
+# pull, each within its ceiling of the pinned git's child CPU on the 454-file
+# fixture, cold and warm, native and release, with a 1.10 guardband
+# (status-measure.py, speed-measure.py; ceilings in speed-bounds.json).
 # Timed rows need an exclusive performance block: DEN_PERF_ROWS=1 declares
-# one. Without it this row is not measured and says so; it is never a pass.
+# one. A record taken on the record host's performance block declares it;
+# hosted CI never does (speed-rows-test.py holds that). Without it the rows
+# are not measured and say so, each by name; that is never a pass.
 set -eu
 DEN_ROOT=$(cd "$(dirname "$0")/.." && pwd)
 export DEN_ROOT
 cd "$DEN_ROOT"
 . tools/lib-toolchain.sh
+python3 -I tools/speed-rows-test.py
 if [ "${DEN_PERF_ROWS:-0}" != 1 ]; then
-    echo 'status-speed: NOT MEASURED (no performance block declared; DEN_PERF_ROWS=1)'
+    python3 -I tools/speed-rows-test.py --names | sed 's/^/status-speed: NOT MEASURED /'
+    echo 'status-speed: NOT MEASURED rows=16 (no performance block declared; DEN_PERF_ROWS=1)'
     exit 0
 fi
 tools/build --native
+tools/build --release
 rm -rf target/status-shape
+mkdir -p target/runs
 tools/env python3 -I tools/status-fixture.py --root "$DEN_ROOT/target/status-shape"
-tools/env python3 -I tools/status-measure.py --fixture target/status-shape \
-    --den target/native/den --output target/runs/status-ratio.json --samples 5
-echo 'status-speed: cold and warm ratios within 5x with a 1.10 guardband, process bytes identical'
+cc -O2 -Wall -Werror -o target/status-shape/minimal-parent tools/minimal-parent.c
+# Every row of both tiers is measured even after a red one, so one take names
+# them all; the leaf is red if any row is.
+log=target/runs/status-speed.log
+: > "$log"
+for tier in native release; do
+    tools/env python3 -I tools/status-measure.py --fixture target/status-shape --tier "$tier" \
+        --den "target/$tier/den" --output "target/runs/status-ratio-$tier.json" --samples 5 2>&1 | tee -a "$log" || true
+    tools/env python3 -I tools/speed-measure.py --fixture target/status-shape --tier "$tier" \
+        --den "target/$tier/den" --parent target/status-shape/minimal-parent \
+        --output "target/runs/speed-rows-$tier.json" --samples 5 2>&1 | tee -a "$log" || true
+done
+pass=$(grep -c -E '^PASS [a-z-]+-ratio-(cold|warm)-(native|release) ' "$log" || true)
+fail=$(grep -c -E '^FAIL ' "$log" || true)
+echo "status-speed: MEASURED rows=16 pass=$pass fail=$fail (ceilings in tools/speed-bounds.json, guardband 1.10, process bytes identical)"
+[ "$pass" = 16 ] && [ "$fail" = 0 ]
