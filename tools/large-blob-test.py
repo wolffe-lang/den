@@ -24,8 +24,10 @@ Rows, each run by both tools in a fresh copy of one template at one path:
                           file (a true merge; big.json changed on one side);
   pull-merge-both         the same with big.json's first line changed locally,
                           so the merge combines both sides' big.json;
+  pull-rebase             `pull --rebase` of that local commit of another file;
   checkout-back           `checkout -q HEAD~1` in a clone of grow;
   checkout-forward        `checkout -q main` from base, detached;
+  checkout-path           `checkout HEAD~1 -- big.json`;
   status                  `status` with big.json changed in the work tree;
   status-untracked        `status` with a new file of --size bytes;
   status-touched          `status --porcelain` with big.json's stat data
@@ -37,6 +39,7 @@ Rows, each run by both tools in a fresh copy of one template at one path:
   add, add-new            `add` the changed big.json, and a new large file;
   commit, commit-all      `commit -m` with it staged, and `commit -am`;
   commit-new              `commit -m` with a new large file staged;
+  show-blob, log-patch    `show HEAD:big.json` and `log -p -1`;
   rename-stat             `diff -M --stat origin/main origin/moved`;
   merge-rename            `merge --ff-only origin/moved`, its stat and rename.
 
@@ -233,8 +236,10 @@ def main():
         ('pull-ff-quiet', 'behind', ['pull', '--ff-only', '-q'], '.'),
         ('pull-merge', 'behind-local', ['pull', '--no-rebase'], '.'),
         ('pull-merge-both', 'behind-big', ['pull', '--no-rebase'], '.'),
+        ('pull-rebase', 'behind-local', ['pull', '--rebase'], '.'),
         ('checkout-back', 'current', ['checkout', '-q', 'HEAD~1'], '.'),
         ('checkout-forward', 'detached-base', ['checkout', '-q', 'main'], '.'),
+        ('checkout-path', 'current', ['checkout', 'HEAD~1', '--', 'big.json'], '.'),
         ('status', 'edited', ['status'], '.'),
         ('status-untracked', 'untracked', ['status'], '.'),
         ('status-touched', 'touched', ['status', '--porcelain'], '.'),
@@ -249,6 +254,8 @@ def main():
         ('commit', 'staged', ['commit', '-m', 'change'], '.'),
         ('commit-all', 'edited', ['commit', '-am', 'change'], '.'),
         ('commit-new', 'new-staged', ['commit', '-m', 'new'], '.'),
+        ('show-blob', 'current', ['show', 'HEAD:big.json'], '.'),
+        ('log-patch', 'current', ['log', '-p', '-1'], '.'),
         ('rename-stat', 'current', ['diff', '-M', '--stat', 'origin/main', 'origin/moved'], '.'),
         ('merge-rename', 'current', ['merge', '--ff-only', 'origin/moved'], '.'),
     ]
