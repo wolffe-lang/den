@@ -100,20 +100,38 @@ fn replay_plan(
             return Unsupported("replay commit header {field.key}")
         }
     }
-    var base = List[diff.File]()
-    if item.parents.len == 1 { base = mergetree.files(ctx.repo, item.parents[0])? }
     let short = abbrev(ctx.repo, item.id)?,
         subject = str_from_utf8(commit.subject(item.headers.message)?)?
+    // Only the bodies that differ between HEAD, the commit and its parent are
+    // read (mergetree.compared), as a merge reads them: every blob of all
+    // three trees was read, and kept, for each picked commit (den#145).
+    var ids = [copy head, copy item.id]
+    if item.parents.len == 1 { (mut ids).push(copy item.parents[0]) }
+    let trees = mergetree.compared(ctx.repo, ids, true)?
+    let style = ctx.repo.config["merge.conflictstyle"] else "merge"
+    if trees.len == 3 {
+        return mergetree.plan_with_policy(
+            ctx,
+            worktree.read_index(ctx)?,
+            trees[2],
+            trees[0],
+            trees[1],
+            "HEAD",
+            "parent of {short} ({subject})",
+            "{short} ({subject})",
+            style,
+        )?
+    }
     mergetree.plan_with_policy(
         ctx,
         worktree.read_index(ctx)?,
-        base,
-        mergetree.files(ctx.repo, head)?,
-        mergetree.files(ctx.repo, item.id)?,
+        List[diff.File](),
+        trees[0],
+        trees[1],
         "HEAD",
         "parent of {short} ({subject})",
         "{short} ({subject})",
-        ctx.repo.config["merge.conflictstyle"] else "merge",
+        style,
     )?
 }
 
