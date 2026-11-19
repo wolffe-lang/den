@@ -147,9 +147,11 @@ fn patch_one(
         }
         (mut out).push(10 as byte)
     }
-    let before = data(change.before), after = data(change.after)
     if binary {
-        if options.binary_patch { add(mut out, diffbinary.patch(before, after)?); return }
+        if options.binary_patch {
+            add(mut out, diffbinary.patch(data(change.before), data(change.after))?)
+            return
+        }
         add(mut out, "Binary files ".bytes())
         add(
             mut out,
@@ -173,7 +175,7 @@ fn patch_one(
     }
     // The script's own budget is named as the stat's bound is: a patch's
     // line diff stops past 2,000 differing lines, where Git's continues.
-    let body = difftext.hunks(before, after, options.context, options.indent) else |e| match e {
+    let body = change_hunks(change, options) else |e| match e {
         limit => { return Fatal("limit: a file whose line diff passes 2000 differing lines in a patch") },
         invalid => { return invalid },
     }
@@ -182,6 +184,18 @@ fn patch_one(
         header_name(mut out, "+++ ", if options.reverse then "a/" else "b/", change.after, options)
         add(mut out, body)
     }
+}
+
+/// A change's hunks, each side's body read where the change holds it: a copy
+/// of each kept the pair twice while the change rendered (den#145).
+fn change_hunks(change: Change, options: Options) -> List[byte] ! difftext.DeltaErrors {
+    let has_old = change.before.len > 0, has_new = change.after.len > 0
+    if has_old && has_new {
+        return difftext.hunks(change.before[0].data, change.after[0].data, options.context, options.indent)?
+    }
+    if has_old { return difftext.hunks(change.before[0].data, List[byte](), options.context, options.indent)? }
+    if has_new { return difftext.hunks(List[byte](), change.after[0].data, options.context, options.indent)? }
+    difftext.hunks(List[byte](), List[byte](), options.context, options.indent)?
 }
 
 fn name_record(mut out: List[byte], change: Change, options: Options) {

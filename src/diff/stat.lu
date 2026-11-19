@@ -51,8 +51,7 @@ fn statistics(change: Change, options: Options, driver: str) -> Stat ! worktree.
         // with no bound on differing lines (den#105): the script itself, and
         // its trace, are never made.
         region count_scratch {
-            let before = data(change.before), after = data(change.after)
-            let counted = difftext.counts(before, after) else |e| match e {
+            let counted = change_counts(change) else |e| match e {
                 limit => {
                     exceeded = true
                     difftext.Counts { added: 0, deleted: 0 }
@@ -74,6 +73,16 @@ fn statistics(change: Change, options: Options, driver: str) -> Stat ! worktree.
         old_size: size(change.before),
         new_size: size(change.after),
     }
+}
+
+/// A change's counts, each side's body read where the change holds it: a
+/// copy of each kept the pair twice while it was counted (den#145).
+fn change_counts(change: Change) -> difftext.Counts ! difftext.DeltaErrors {
+    let has_old = change.before.len > 0, has_new = change.after.len > 0
+    if has_old && has_new { return difftext.counts(change.before[0].data, change.after[0].data)? }
+    if has_old { return difftext.counts(change.before[0].data, List[byte]())? }
+    if has_new { return difftext.counts(List[byte](), change.after[0].data)? }
+    difftext.counts(List[byte](), List[byte]())?
 }
 
 fn pad(mut out: List[byte], n: int) { for _ in 0..n { (mut out).push(32 as byte) } }
