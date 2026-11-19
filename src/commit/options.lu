@@ -56,8 +56,10 @@ struct Options {
     edit: int,
 }
 
+// One buffer of the body's size, as diff's copy takes one (den#145).
 fn owned(bytes: List[byte]) -> List[byte] {
     var out = List[byte]()
+    (mut out).reserve(bytes.len)
     for b in bytes { (mut out).push(b) }
     out
 }

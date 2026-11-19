@@ -80,8 +80,11 @@ pub fn defaults() -> Options {
 
 fn add(mut out: List[byte], value: List[byte]) { for b in value { (mut out).push(b) } }
 
+// One buffer of the value's size: grown a byte at a time, a body's copy kept
+// every smaller buffer it outgrew, about twice the body (den#145).
 fn owned(value: List[byte]) -> List[byte] {
     var out = List[byte]()
+    (mut out).reserve(value.len)
     add(mut out, value)
     out
 }
