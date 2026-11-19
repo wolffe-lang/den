@@ -149,14 +149,16 @@ fn main() -> int ! commit.CommitErrors {
             ),
         )
     }
-    var bounded = false
+    // Past the old bounds of 200,000 lines and 4,000,000 line pairs (den#145):
+    // the counts are a minimal script's, as before, with no bound on lines.
     let many = "a\n".repeat(2001)
-    let _ = commit.line_counts(many.bytes(), many.bytes()) else |e| {
-        bounded = "{e}" ==
-            "Fatal(limit: more than 4000000 line pairs in one file of a change summary)"
-        commit.LineCounts { added: 0, deleted: 0, binary: false }
-    }
-    assert(bounded)
+    let same = commit.line_counts(many.bytes(), many.bytes())?
+    assert(same.added == 0 && same.deleted == 0 && !same.binary)
+    let grown = commit.line_counts(many.bytes(), "{many}b\n{many}".bytes())?
+    assert(grown.added == 2002 && grown.deleted == 0)
+    let long = "x\n".repeat(200001)
+    let rewritten = commit.line_counts(long.bytes(), "y\n{long}".bytes())?
+    assert(rewritten.added == 1 && rewritten.deleted == 0)
     // vc23: TZ values std.time refuses, read as the C library reads them.
     for (value, posixrules, spelling, refused) in [
         ("garbage", false, "", false),
