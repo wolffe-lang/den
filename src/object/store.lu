@@ -338,31 +338,38 @@ pub fn write_object(repo: repository.Repo, kind: str, data: List[byte]) -> oid.O
 /// write_object's own check parsed every pack's index for every object.
 pub fn write_loaded(r: Reader, kind: str, data: List[byte]) -> oid.Oid ! StoreErrors {
     let id = identify(kind, data)?
-    let existing = read_loaded(r, id, data.len) else |e| match e {
-        not_found => { return write_injected(r.repo, kind, data, "")? },
-        invalid => { return invalid },
-        invalid_oid => { return invalid_oid },
-        unsupported_format => { return unsupported_format },
-        bad_header => { return bad_header },
-        bad_size => { return bad_size },
-        bad_oid => { return bad_oid },
-        truncated => { return truncated },
-        dictionary => { return dictionary },
-        checksum => { return checksum },
-        limit => { return limit },
-        trailing => { return trailing },
-        unsupported_level => { return unsupported_level },
-        denied => { return denied },
-        io => { return io },
-        exists => { return exists },
-        unsupported => { return unsupported },
-        Unsupported(name) => { return Unsupported(name) },
-        ambiguous => { return ambiguous },
-        cross_device => { return cross_device },
+    // The stored copy is compared in a region of its own and reclaimed: a
+    // tree assembly kept every changed blob it found stored (den#145). A read
+    // that fails for any reason but absence runs again outside, where its
+    // error's message can leave.
+    var outcome = 0
+    region stored {
+        let existing = read_loaded(r, id, data.len) else |e| match e {
+            not_found => {
+                outcome = 2
+                Object { kind: "", data: List[byte]() }
+            },
+            _ => {
+                outcome = 3
+                Object { kind: "", data: List[byte]() }
+            },
+        }
+        if outcome == 0 && !same_object(existing, kind, data) { outcome = 1 }
     }
-    if existing.kind != kind || existing.data.len != data.len { return bad_oid }
-    for i in 0..data.len { if existing.data[i] != data[i] { return bad_oid } }
+    if outcome == 2 { return write_injected(r.repo, kind, data, "")? }
+    if outcome == 3 {
+        let existing = read_loaded(r, id, data.len)?
+        if !same_object(existing, kind, data) { return bad_oid }
+    }
+    if outcome == 1 { return bad_oid }
     id
+}
+
+/// Whether a stored object is kind with exactly data's bytes.
+fn same_object(existing: Object, kind: str, data: List[byte]) -> bool {
+    if existing.kind != kind || existing.data.len != data.len { return false }
+    for i in 0..data.len { if existing.data[i] != data[i] { return false } }
+    true
 }
 
 /// Explicit dependency-injection seam for owned-fixture failure tests only.
@@ -378,35 +385,31 @@ pub fn write_injected(
     let _ = repository.compression(checked)?
     let id = identify(kind, data)?
     let destination = path(checked, id)?
-    var present = true
     // The caller's repository answers: its packs may be opened (den#101).
-    let existing = read_object(repo, id, data.len) else |e| match e {
-        not_found => { present = false; Object { kind: "", data: List[byte]() } },
-        invalid => { return invalid },
-        invalid_oid => { return invalid_oid },
-        unsupported_format => { return unsupported_format },
-        bad_header => { return bad_header },
-        bad_size => { return bad_size },
-        bad_oid => { return bad_oid },
-        truncated => { return truncated },
-        dictionary => { return dictionary },
-        checksum => { return checksum },
-        limit => { return limit },
-        trailing => { return trailing },
-        unsupported_level => { return unsupported_level },
-        denied => { return denied },
-        io => { return io },
-        exists => { return exists },
-        unsupported => { return unsupported },
-        Unsupported(name) => { return Unsupported(name) },
-        ambiguous => { return ambiguous },
-        cross_device => { return cross_device },
+    // The stored copy is compared in a region of its own and reclaimed
+    // (den#145); a read that fails for any reason but absence runs again
+    // outside, where its error's message can leave.
+    var outcome = 0
+    region stored {
+        let existing = read_object(repo, id, data.len) else |e| match e {
+            not_found => {
+                outcome = 2
+                Object { kind: "", data: List[byte]() }
+            },
+            _ => {
+                outcome = 3
+                Object { kind: "", data: List[byte]() }
+            },
+        }
+        if outcome == 0 && !same_object(existing, kind, data) { outcome = 1 }
     }
-    if present {
-        if existing.kind != kind || existing.data.len != data.len { return bad_oid }
-        for i in 0..data.len { if existing.data[i] != data[i] { return bad_oid } }
+    if outcome == 3 {
+        let existing = read_object(repo, id, data.len)?
+        if !same_object(existing, kind, data) { return bad_oid }
         return id
     }
+    if outcome == 1 { return bad_oid }
+    if outcome == 0 { return id }
     let dir = fs.parent(destination) else |_| { return invalid }
     fs.create_dir_all(dir)?
     // The frame and the compressor's scratch are reclaimed here; only the
