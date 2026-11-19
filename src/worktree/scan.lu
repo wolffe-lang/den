@@ -1145,6 +1145,65 @@ pub fn scan_index_with_warnings(
     }
 }
 
+/// scan_index_with_warnings' snapshot without the bodies its walk read, for a
+/// caller that reads its rows, ids, modes and stat words alone (commit): a
+/// racily clean file is read whole, and a scan kept every such body until
+/// its command ended (den#145). The scan runs in a region of its own and
+/// only the snapshot without bodies, and its warnings, are copied out; a
+/// scan that fails runs again outside, where its message can leave.
+pub fn scan_index_without_bodies(
+    ctx: Context,
+    value: index.Index,
+    include_untracked: bool,
+    mut warnings: List[str],
+) -> Snapshot ! WorkErrors {
+    var held = List[Snapshot](), failed = false
+    region scanning {
+        var found_warnings = List[str]()
+        let found = scan_listed(ctx, value, include_untracked, mut found_warnings) else |_| {
+            failed = true
+            List[Snapshot]()
+        }
+        if !failed {
+            for warning in found_warnings { (mut warnings).push(copy warning) }
+            var files = List[FileState]()
+            for file in found[0].files {
+                (mut files).push(FileState {
+                    path: copy file.path,
+                    mode: file.mode,
+                    id: copy file.id,
+                    data: List[byte](),
+                    stat: copy file.stat,
+                    kind: file.kind,
+                    dirt: file.dirt,
+                })
+            }
+            (mut held).push(
+                copy Snapshot {
+                    context: copy found[0].context,
+                    head: copy found[0].head,
+                    index: copy found[0].index,
+                    head_entries: copy found[0].head_entries,
+                    files: files,
+                    directories: copy found[0].directories,
+                    rows: copy found[0].rows,
+                },
+            )
+        }
+    }
+    if failed { return scan_index_with_warnings(ctx, value, include_untracked, mut warnings)? }
+    copy held[0]
+}
+
+fn scan_listed(
+    ctx: Context,
+    value: index.Index,
+    include_untracked: bool,
+    mut warnings: List[str],
+) -> List[Snapshot] ! WorkErrors {
+    [scan_index_with_warnings(ctx, value, include_untracked, mut warnings)?]
+}
+
 /// status's own snapshot (walk_mode status=true): FileState bodies are empty,
 /// rows and modes are exactly scan_with_warnings'. show_ignored keeps every
 /// ignored directory walked so ignored rows can be rendered.

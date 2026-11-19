@@ -257,7 +257,7 @@ fn dispatch(
     var tx = index.begin(ctx.repo, 1000000000, worktree.index_version(ctx)?)?
     defer index.abort(mut tx)
     var warnings = List[str]()
-    var snapshot = worktree.scan_index_with_warnings(ctx, tx.value, false, mut warnings)?
+    var snapshot = worktree.scan_index_without_bodies(ctx, tx.value, false, mut warnings)?
     if snapshot.head.reference != expected.reference { return Fatal("HEAD changed during commit") }
     var baseline = List[worktree.FlatEntry]()
     if value.amend {
@@ -278,7 +278,7 @@ fn dispatch(
         if !same_flat(preview, flat_index(tx.value)?) {
             return Failure("worktree changed while staging for commit")
         }
-        snapshot = worktree.scan_index_with_warnings(ctx, tx.value, false, mut warnings)?
+        snapshot = worktree.scan_index_without_bodies(ctx, tx.value, false, mut warnings)?
         if snapshot.head.reference != expected.reference {
             return Fatal("HEAD changed during commit")
         }
