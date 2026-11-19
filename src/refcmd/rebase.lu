@@ -302,11 +302,15 @@ fn rebase_resume(ctx: worktree.Context, action: str) -> int ! commit.CommitError
 fn rebase_change_key(ctx: worktree.Context, item: walk.Commit) -> str ! commit.CommitErrors {
     var sum: wrapping[u64] = 0
     if item.parents.len > 1 { return Unsupported("rebase upstream merge comparison") }
-    for file in mergetree.files(ctx.repo, item.id)? { sum += sequencer.line_sum(file.data)? }
-    if item.parents.len == 1 {
-        for file in mergetree.files(ctx.repo, item.parents[0])? {
-            sum -= sequencer.line_sum(file.data)?
-        }
+    if item.parents.len == 0 {
+        for file in mergetree.files(ctx.repo, item.id)? { sum += sequencer.line_sum(file.data)? }
+    } else {
+        // Only the bodies that differ from the parent are read: an unchanged
+        // file adds its sum to both sides, and the two cancel, where every
+        // blob of both trees was read and kept for each commit (den#145).
+        let trees = mergetree.compared(ctx.repo, [copy item.id, copy item.parents[0]], true)?
+        for file in trees[0] { sum += sequencer.line_sum(file.data)? }
+        for file in trees[1] { sum -= sequencer.line_sum(file.data)? }
     }
     "{(sum >> 32) as int}:{(sum & 4294967295) as int}"
 }
