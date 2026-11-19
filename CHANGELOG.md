@@ -43,6 +43,23 @@
   so a probe that builds the module as a path dependency was the first to
   find `commit` using `difftext` unlisted.
 
+## Unreleased — speed rows for diff and pull
+
+- `tools/check-status-speed` measures sixteen rows where it measured two:
+  `status --porcelain`, `diff --quiet`, `diff --cached --quiet` and a
+  fast-forward `pull` over `file://`, each with a cold and a warm index, for
+  the native and the release build, on the 454-file fixture. A row holds
+  den's CPU time to a multiple of the pinned Git's (the least of five
+  interleaved samples, a 1.10 guardband) with exit status, output and end
+  state equal to Git's, and states both tools' peak memory. The ceilings are
+  one table, `tools/speed-bounds.json`, set from measurements and meant to be
+  lowered as den gets faster.
+- The rows are timed in records taken on the record host, which holds a block
+  of cores alone and declares it with `DEN_PERF_ROWS=1`, and not in hosted CI,
+  whose runners are shared: there each row prints `NOT MEASURED` by name.
+  `tools/speed-rows-test.py` fails if a workflow or the container wrapper
+  sets the switch.
+
 ## Unreleased — symbolic links in pulls
 
 - `pull` and `merge` carry symbolic links (mode 120000) as Git does: a link's
