@@ -32,7 +32,7 @@ fn bucket(low: int, high: int) -> int {
 /// CR immediately before LF is skipped for text, but original sizes are kept
 /// by similarity(). Hash collisions intentionally combine their byte weights.
 pub fn span_counts(data: List[byte]) -> Map[int, int] ! DeltaErrors {
-    if data.len > 16777216 { return limit }
+    if data.len > 1000000000 { return limit }
     var counts = Map[int, int]()
     let text = !binary(data)
     var low: int = 0, high: int = 0, length = 0
@@ -61,7 +61,7 @@ pub fn span_counts(data: List[byte]) -> Map[int, int] ! DeltaErrors {
 /// Content similarity only. Type eligibility, exact OIDs and multi-candidate
 /// assignment belong to the pairer. Returned records retain no input storage.
 pub fn similarity(before: List[byte], after: List[byte]) -> Similarity ! DeltaErrors {
-    if before.len > 16777216 || after.len > 16777216 { return limit }
+    if before.len > 1000000000 || after.len > 1000000000 { return limit }
     let maximum = if before.len > after.len then before.len else after.len
     if same_bytes(before, after) {
         return Similarity { common: maximum, maximum: maximum, units: 60000, percent: 100 }
