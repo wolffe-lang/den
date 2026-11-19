@@ -24,21 +24,33 @@ fn message_input(path: str) -> List[byte] ! CommitErrors {
             exists => { return exists },
             unsupported => { return unsupported },
             limit => { return limit },
-            Unsupported(reason) => { return Unsupported(reason) },
+            Unsupported(reason) => {
+                // A commit message keeps its 16 MiB bound, named with its
+                // file (den#145).
+                if reason.starts_with("limit: ") {
+                    return Fatal("limit: the message file '{path}' is larger than 16777216 bytes")
+                }
+                return Unsupported(reason)
+            },
         }
     }
     var file = fs.stdin()
-    var out = List[byte]()
+    var out = List[byte](), exceeded = false
     loop {
         region chunk {
             let data = fs.read_chunk(mut file, 65536) else |e| match e {
                 eof => { break },
                 io => { return io },
             }
-            if data.len > 16777216 - out.len { return limit }
+            if data.len > 16777216 - out.len {
+                exceeded = true
+                break
+            }
             add_bytes(mut out, data)
         }
     }
+    // Named outside the region the read ran in.
+    if exceeded { return Fatal("limit: a message on standard input larger than 16777216 bytes") }
     out
 }
 

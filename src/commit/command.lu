@@ -294,7 +294,22 @@ fn dispatch(
     } else if value.amend {
         raw = owned(previous[0].message)
     } else if merging || reverting || picking {
-        raw = repository.read_bytes("{ctx.repo.gitdir}/MERGE_MSG", 16777216)?
+        // MERGE_MSG keeps a message's 16 MiB bound, named with its path.
+        raw = repository.read_bytes("{ctx.repo.gitdir}/MERGE_MSG", 16777216) else |e| match e {
+            Unsupported(reason) => {
+                if reason.starts_with("limit: ") {
+                    return Fatal("limit: {ctx.repo.gitdir}/MERGE_MSG is larger than 16777216 bytes")
+                }
+                return Unsupported(reason)
+            },
+            not_found => { return not_found },
+            denied => { return denied },
+            io => { return io },
+            invalid => { return invalid },
+            exists => { return exists },
+            unsupported => { return unsupported },
+            limit => { return limit },
+        }
     }
     let file_mode = if cleanup_setting == "verbatim" then "verbatim" else "whitespace"
     let file_body = commit_format.cleanup(raw, file_mode, comment, false)?
