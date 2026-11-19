@@ -220,6 +220,11 @@ fn dispatch(args: List[str]) -> int ! worktree.WorkErrors {
     if bare && !options.cached && options.revisions.len < 2 {
         return Fatal("this operation must be run in a work tree")
     }
+    var again = 0
+    while again < 12 {
+        let _ = collect_known(ctx, options)?
+        again += 1
+    }
     let collected = collect_known(ctx, options)?
     let bytes = render_known(ctx, collected.changes, options, [collected.policies])?
     var stdout = fs.stdout()
