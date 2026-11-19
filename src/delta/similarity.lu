@@ -89,6 +89,16 @@ fn spans(data: List[byte]) -> List[int] {
 /// Content similarity only. Type eligibility, exact OIDs and multi-candidate
 /// assignment belong to the pairer. Returned records retain no input storage.
 pub fn similarity(before: List[byte], after: List[byte]) -> Similarity ! DeltaErrors {
+    similarity_with(before, after, 1048576)?
+}
+
+/// similarity's answer, its weights in slots once a side passes slots_from
+/// bytes (similarity passes 1 MiB; a unit passes less to compare the two).
+pub fn similarity_with(
+    before: List[byte],
+    after: List[byte],
+    slots_from: int,
+) -> Similarity ! DeltaErrors {
     if before.len > 1000000000 || after.len > 1000000000 { return limit }
     let maximum = if before.len > after.len then before.len else after.len
     if same_bytes(before, after) {
@@ -96,8 +106,8 @@ pub fn similarity(before: List[byte], after: List[byte]) -> Similarity ! DeltaEr
     }
     if maximum == 0 { return invalid }
     var common: int = 0
-    if before.len > 1048576 || after.len > 1048576 {
-        // Past 1 MiB a side, slots: the same sums as the Maps below.
+    if before.len > slots_from || after.len > slots_from {
+        // Past slots_from bytes a side, slots: the same sums as the Maps below.
         let left = bucket_weights(before)
         let right = bucket_weights(after)
         for key in 0..107927 {

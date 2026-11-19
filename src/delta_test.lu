@@ -32,27 +32,20 @@ fn main() -> int ! delta.DeltaErrors {
     assert(!delta.binary(nul))
     nul[7999] = 0 as byte
     assert(delta.binary(nul))
-    // Past 1 MiB a side the weights sit in one slot per bucket (den#145): the
-    // sums equal the Maps' on the same bodies.
-    var large = repeated(120 as byte, 63), edited = repeated(120 as byte, 63)
-    (mut large).push(10 as byte)
-    (mut edited).push(10 as byte)
-    for n in 1..17000 {
-        for _ in 0..63 { (mut large).push(120 as byte) }
-        for _ in 0..63 { (mut edited).push(if n % 3 == 0 then 121 as byte else 120 as byte) }
-        (mut large).push(10 as byte)
-        (mut edited).push(10 as byte)
+    // Past 1 MiB a side the weights sit in one slot per bucket (den#145): on
+    // bodies of either kind the slots' scores equal the Maps'.
+    for (old_body, new_body) in [
+        ("a\nb\nc\n", "a\nb\nX\n"),
+        ("a\r\nb\r\nc\r\n", "a\nb\nc\n"),
+        ("one\ntwo\nthree\nfour\n", "four\nthree\ntwo\none\nfive\n"),
+    ] {
+        let mapped = delta.similarity_with(old_body.bytes(), new_body.bytes(), 1048576)?
+        let slotted = delta.similarity_with(old_body.bytes(), new_body.bytes(), 0)?
+        assert(mapped.common == slotted.common && mapped.units == slotted.units)
     }
-    assert(large.len > 1048576)
-    let left = delta.span_counts(large)?
-    let right = delta.span_counts(edited)?
-    var common = 0
-    for (key, count) in left.pairs() {
-        let other = right[key] else 0
-        common += if count < other then count else other
-    }
-    let scored = delta.similarity(large, edited)?
-    assert(scored.common == common && common > 0 && scored.percent < 100)
+    let mapped = delta.similarity_with(old, fresh, 1048576)?
+    let slotted = delta.similarity_with(old, fresh, 0)?
+    assert(mapped.common == slotted.common && slotted.percent == 48)
     print("delta: similarity boundaries, multiset weighting and text detection pass")
     0
 }
