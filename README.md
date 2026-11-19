@@ -88,6 +88,30 @@ programs, constructs the corpus twice, compares against the pinned oracle and
 builds the static Linux archive. `tools/mkden OUTDIR` checks ET_EXEC/no PT_INTERP
 and prints full/stripped binary digests. No host-specific glibc is substituted.
 
+### Speed rows
+
+`tools/check-status-speed` holds four everyday commands to a multiple of the
+pinned Git's CPU time on one generated repository (454 tracked files, 42
+untracked, a 19 MB pack, a 187 MB work tree): `status --porcelain`,
+`diff --quiet`, `diff --cached --quiet`, and a `pull --ff-only` of one commit
+over `file://`. Each is measured with a cold index (copied stat words, so every
+tracked file is read) and a warm one (refreshed), for the native and the
+release build: sixteen rows. A row takes the child's user plus system CPU,
+summed over repeated runs to a 0.2 s floor, in five samples interleaved between
+the two tools, and compares the least of each. It passes when the ratio times
+a 1.10 guardband is at most the row's ceiling in `tools/speed-bounds.json`
+and every run's exit status, output and end state equal Git's. The same run
+states each command's peak resident set beside Git's; peaks are not gated here.
+
+The rows are timed only where the clocks can be trusted. A record taken on the
+record host holds a block of cores alone and declares it with
+`DEN_PERF_ROWS=1`; there a row over its ceiling fails the leaf by name. Hosted
+CI shares its runners and never declares it: the leaf then prints
+`NOT MEASURED` for each row and exits 0, which is not a pass, and
+`tools/speed-rows-test.py` (run by the leaf everywhere) fails if a workflow or
+the container wrapper sets the switch. To tighten a row, lower its ceiling in
+`tools/speed-bounds.json` in the change that earns it.
+
 Inside that container, with `DEN_GIT` set to the pinned built Git:
 
 ```sh
