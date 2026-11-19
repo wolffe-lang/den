@@ -195,15 +195,27 @@ fn text_merge(
     // ort defaults to histogram, whereas the file API is measured against
     // merge-file's Myers default. Preserve the existing alignment limits.
     // A line repeated byte for byte; two lines whose hashes collide are not
-    // one line repeated (past about 65,000 lines they often collide, den#145).
-    if difftext.repeated(data)? { return Unsupported("merge repeated-line alignment") }
+    // one line repeated (past about 65,000 lines they often collide). The
+    // check's table is reclaimed before the scripts are built (den#145).
+    var repeated = false, failed = false
+    region repeats {
+        repeated = difftext.repeated(data) else |_| {
+            failed = true
+            false
+        }
+    }
+    if failed { repeated = difftext.repeated(data)? }
+    if repeated { return Unsupported("merge repeated-line alignment") }
+    // Each side's line table and script are built once, here, and the file
+    // merge takes them (mergefile.merge_with): it built both again (den#145).
     // A side's line diff keeps the script's budget of 2,000 differing lines,
     // named as a patch names it.
-    let ours_edits = difftext.edits(data, ours) else |e| match e {
+    let bl = difftext.lines(data)?, ol = difftext.lines(ours)?, tl = difftext.lines(theirs)?
+    let ours_edits = difftext.edits_with(data, bl, ours, ol) else |e| match e {
         limit => { return Fatal(budget()) },
         invalid => { return invalid },
     }
-    let theirs_edits = difftext.edits(data, theirs) else |e| match e {
+    let theirs_edits = difftext.edits_with(data, bl, theirs, tl) else |e| match e {
         limit => { return Fatal(budget()) },
         invalid => { return invalid },
     }
@@ -211,10 +223,15 @@ fn text_merge(
         return Unsupported("merge multi-hunk alignment")
     }
     let safe_markers = marker_size >= 1 && marker_size <= 1024
-    mergefile.merge_markers(
+    mergefile.merge_with(
         data,
         ours,
         theirs,
+        bl,
+        ol,
+        tl,
+        ours_edits,
+        theirs_edits,
         ours_label,
         base_label,
         theirs_label,
