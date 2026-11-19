@@ -4,9 +4,10 @@ under it, beside the pinned Git.
 
 The remote (bare, reached by a file URL or a path) has two commits on main:
 
-  base  big.json, a text file of --size less 256 KiB; blob.bin, 4 KiB of
+  base  big.json, a text file of --size less 64 KiB; blob.bin, 4 KiB of
         binary; a, a small text file;
-  grow  big.json grown to --size by lines appended at its end (one hunk, so
+  grow  big.json grown to --size by about 1,200 lines appended at its end
+        (one hunk within a line diff's budget of 2,000 differing lines, so
         den's three-way merge, which takes one hunk a side, can combine it);
         blob.bin replaced by --size bytes of binary.
 
@@ -120,7 +121,7 @@ def main():
         return p.stdout
 
     # The remote and its history, made by the pinned Git alone.
-    base_size = size - 262144
+    base_size = size - 65536
     big0, big1 = text(base_size, False), text(size, False)
     bin0, bin1 = binary(4096, 1), binary(size, 2)
     work = out / 'origin'
