@@ -63,6 +63,21 @@ def main():
             (work / 'f').write_text('one\ntwo\nthree\n' + more)
         return work
 
+    def big_message(name):
+        """A clone with a 17 MB commit message file beside a staged change."""
+        work = plain(name)
+        (work / 'a').write_text('changed\n')
+        run([git, 'add', 'a'], work)
+        (work / 'message').write_bytes(b'subject\n\n' + b'body line\n' * 1700000)
+        return work
+
+    def big_config(name):
+        """A clone whose .git/config is past 1 MiB (a long comment)."""
+        work = plain(name)
+        with (work / '.git/config').open('a') as f:
+            f.write(('# ' + 'x' * 1022 + '\n') * 1100)
+        return work
+
     def many_packs(name):
         """A clone whose objects/pack holds 257 packs; its remote moved one commit on."""
         base = out / name
@@ -159,6 +174,12 @@ def main():
         return base / 'work'
     row('clone-url', plain, ['clone', 'git://127.0.0.1:1/' + 'x' * 5000, 'unused'],
         lambda w, _: 'limit: a remote URL longer than 4096 bytes')
+    # Kept as protections, named with their paths (den#145): a commit message
+    # file past 16 MiB, a configuration file past 1 MiB. Git takes both.
+    row('commit-message-file', big_message, ['commit', '-F', 'message'],
+        lambda w, _: "limit: the message file 'message' is larger than 16777216 bytes")
+    row('config-file', big_config, ['status'],
+        lambda w, _: 'limit: the configuration file .git/config is larger than 1048576 bytes')
     # A 2,500-line rewrite under pull and merge reached the stat's bound on
     # differing lines; it has none now, and tools/summary-scale-test.py holds
     # those pulls to Git's output (den#105).
