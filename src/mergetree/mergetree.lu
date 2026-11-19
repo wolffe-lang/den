@@ -133,7 +133,7 @@ pub fn compared(
                 if entry.mode == 0o160000 {
                     data = worktree.subproject_text(entry.id, false)?
                 } else if bodies && changed {
-                    let blob = object.read_cached(mut reader, entry.id, 1000000000)?
+                    let blob = object.read_cached(mut reader, entry.id, 16777216)?
                     if blob.kind != "blob" { return bad_oid }
                     if blob.data.len > 134217728 - total {
                         exceeded = true
