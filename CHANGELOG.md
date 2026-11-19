@@ -27,6 +27,11 @@
 - The 2,000-line budget of a patch and of a three-way file merge is named
   when reached (Git has none), as is the 128 MiB of file bodies one diff
   holds. `tools/limit-test.py` holds the budget's two.
+- The bounds kept as protections name their files: a commit or merge message
+  past 16 MiB (`limit: the message file 'NAME' is larger than 16777216
+  bytes`, and MERGE_MSG's path) and a configuration file past 1 MiB (`limit:
+  the configuration file PATH is larger than 1048576 bytes`). Git takes both;
+  `tools/limit-test.py` holds the two messages.
 - A line count's totals are a minimal script's, Git's `--minimal`; where
   Git's default diff departs from minimal (a 486,000-line JSON file rewritten
   by a third), den's stat differs from Git's in that file's counts.
