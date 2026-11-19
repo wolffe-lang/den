@@ -79,8 +79,26 @@ pub fn opened(repo: repository.Repo) -> repository.Repo {
     out
 }
 
-/// Read a bounded loose object first; only absence falls back to validated packs.
+/// Read a bounded loose object first; only absence falls back to validated
+/// packs. The read's scratch (the compressed bytes, a loose object's inflated
+/// stream and the header cut from it, a packed object's rebuilt copy) is
+/// reclaimed before it returns, and only the body is kept: a read of a 16 MB
+/// blob kept two to three times its size until its command ended (den#145).
 pub fn read_object(repo: repository.Repo, id: oid.Oid, max_output: int) -> Object ! StoreErrors {
+    var out = Object { kind: "", data: List[byte]() }, failed = false
+    region reading {
+        let value = read_object_whole(repo, id, max_output) else |_| {
+            failed = true
+            Object { kind: "", data: List[byte]() }
+        }
+        if !failed { out = copy value }
+    }
+    // A failed read runs again here, where its error's message can leave.
+    if failed { return read_object_whole(repo, id, max_output)? }
+    out
+}
+
+fn read_object_whole(repo: repository.Repo, id: oid.Oid, max_output: int) -> Object ! StoreErrors {
     if max_output < 0 { return invalid }
     if max_output > 1000000000 { return Unsupported(read_limit()) }
     let input = repository.read_bytes(
@@ -167,7 +185,21 @@ pub fn reader_batch(repo: repository.Repo) -> Reader {
 
 /// read_with's answer through an opened reader, which it never changes, so
 /// a caller may read inside its own region (one object's memory at a time).
+/// Its scratch is reclaimed as read_object's is.
 pub fn read_loaded(r: Reader, id: oid.Oid, max_output: int) -> Object ! StoreErrors {
+    var out = Object { kind: "", data: List[byte]() }, failed = false
+    region reading {
+        let value = read_loaded_whole(r, id, max_output) else |_| {
+            failed = true
+            Object { kind: "", data: List[byte]() }
+        }
+        if !failed { out = copy value }
+    }
+    if failed { return read_loaded_whole(r, id, max_output)? }
+    out
+}
+
+fn read_loaded_whole(r: Reader, id: oid.Oid, max_output: int) -> Object ! StoreErrors {
     if max_output < 0 { return invalid }
     if max_output > 1000000000 { return Unsupported(read_limit()) }
     let input = repository.read_bytes(
@@ -197,6 +229,19 @@ pub fn read_loaded(r: Reader, id: oid.Oid, max_output: int) -> Object ! StoreErr
 /// a pack writer or a closure walk. Only bytes and ints change in the
 /// reader, so a caller may read inside its own region.
 pub fn read_cached(mut r: Reader, id: oid.Oid, max_output: int) -> Object ! StoreErrors {
+    var out = Object { kind: "", data: List[byte]() }, failed = false
+    region reading {
+        let value = read_cached_whole(mut r, id, max_output) else |_| {
+            failed = true
+            Object { kind: "", data: List[byte]() }
+        }
+        if !failed { out = copy value }
+    }
+    if failed { return read_cached_whole(mut r, id, max_output)? }
+    out
+}
+
+fn read_cached_whole(mut r: Reader, id: oid.Oid, max_output: int) -> Object ! StoreErrors {
     if max_output < 0 { return invalid }
     if max_output > 1000000000 { return Unsupported(read_limit()) }
     let input = repository.read_bytes(
