@@ -12,8 +12,10 @@
 - A commit's summary counts lines as a stat does, in space linear in the two
   bodies, where a table of every line pair stopped past 4,000,000 pairs.
 - Memory: each object read keeps only the body it returns, a copy or a file
-  read takes one buffer of its size, and a commit's checks, a summary's pairs
-  and a true merge's files are each reclaimed before the next. Over a 16 MB
+  read takes one buffer of its size, a commit's scans keep no bodies, a true
+  merge builds each file's line tables once, and a commit's checks, a
+  summary's pairs and a true merge's files are each reclaimed before the
+  next. Over a 16 MB
   blob every row of `tools/large-blob-test.py` peaks within four times Git's
   peak plus 64 MiB, but `pull --rebase`, within six: a rebase scans the work
   tree several times, and each scan keeps the bodies of the files it reads.
