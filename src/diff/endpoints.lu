@@ -151,7 +151,9 @@ pub fn changes(
                     status: status,
                     percent: 0,
                 })
-                (mut modified).push(copy before[a])
+                // A modified file is a source only for copies: its body is not
+                // kept again otherwise (den#145).
+                if options.copies { (mut modified).push(copy before[a]) }
             }
             a += 1
             b += 1
