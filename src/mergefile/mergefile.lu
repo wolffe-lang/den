@@ -86,7 +86,7 @@ pub fn merge_markers(
     for label in [ours_label, base_label, theirs_label] {
         if label.contains("\n") || label.contains("\r") || label.contains("\0") { return invalid }
     }
-    if base.len > 16777216 || ours.len > 16777216 || theirs.len > 16777216 { return limit }
+    if base.len > 1000000000 || ours.len > 1000000000 || theirs.len > 1000000000 { return limit }
     if equal(ours, theirs) { return Result { data: copy ours, conflicts: 0 } }
     if equal(base, ours) { return Result { data: copy theirs, conflicts: 0 } }
     if equal(base, theirs) { return Result { data: copy ours, conflicts: 0 } }

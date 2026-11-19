@@ -67,7 +67,7 @@ pub fn files(repo: repository.Repo, id: oid.Oid) -> List[diff.File] ! worktree.W
             continue
         }
         if !blob_mode(entry.mode) { return Unsupported("merge nonregular tree entry") }
-        let blob = object.read_cached(mut reader, entry.id, 16777216)?
+        let blob = object.read_cached(mut reader, entry.id, 1000000000)?
         if blob.kind != "blob" { return bad_oid }
         total += blob.data.len
         if total > 134217728 {
@@ -133,7 +133,7 @@ pub fn compared(
                 if entry.mode == 0o160000 {
                     data = worktree.subproject_text(entry.id, false)?
                 } else if bodies && changed {
-                    let blob = object.read_cached(mut reader, entry.id, 16777216)?
+                    let blob = object.read_cached(mut reader, entry.id, 1000000000)?
                     if blob.kind != "blob" { return bad_oid }
                     if blob.data.len > 134217728 - total {
                         exceeded = true
@@ -341,7 +341,7 @@ fn plan_inner(
                 invalid => { return invalid },
                 limit => {
                     return Fatal(
-                        "limit: a file larger than 16777216 bytes in a three-way file merge",
+                        "limit: a file larger than 1000000000 bytes in a three-way file merge",
                     )
                 },
             }
