@@ -36,8 +36,12 @@ pub fn valid_kind(kind: str) -> bool {
 /// Canonical ASCII framing, byte length (not character count).
 pub fn frame(kind: str, data: List[byte]) -> List[byte] ! {bad_header} {
     if !valid_kind(kind) { return bad_header }
+    let header = "{kind} {data.len}\0".bytes()
+    // One buffer of the frame's size: grown a byte at a time it kept every
+    // smaller buffer it outgrew, about twice the body (den#145).
     var out = List[byte]()
-    for b in "{kind} {data.len}\0".bytes() { (mut out).push(b) }
+    (mut out).reserve(header.len + data.len)
+    for b in header { (mut out).push(b) }
     for b in data { (mut out).push(b) }
     out
 }

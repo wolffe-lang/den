@@ -409,7 +409,17 @@ pub fn write_injected(
     }
     let dir = fs.parent(destination) else |_| { return invalid }
     fs.create_dir_all(dir)?
-    let encoded = encode(kind, data, data.len + data.len / 100 + 65536)?
+    // The frame and the compressor's scratch are reclaimed here; only the
+    // compressed bytes are kept for the write (den#145).
+    var encoded = List[byte](), encode_failed = false
+    region encoding {
+        let bytes = encode(kind, data, data.len + data.len / 100 + 65536) else |_| {
+            encode_failed = true
+            List[byte]()
+        }
+        if !encode_failed { encoded = copy bytes }
+    }
+    if encode_failed { encoded = encode(kind, data, data.len + data.len / 100 + 65536)? }
     // Exclusive numbered candidates work across processes without shared state.
     for serial in 0..1024 {
         let temp = "{dir}/tmp_den_{serial}"
