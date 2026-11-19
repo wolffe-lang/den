@@ -249,6 +249,18 @@ pub fn counts(before: List[byte], after: List[byte]) -> Counts ! DeltaErrors {
 pub fn edits(before: List[byte], after: List[byte]) -> List[Edit] ! DeltaErrors {
     let left = lines(before)?
     let right = lines(after)?
+    edits_with(before, left, after, right)?
+}
+
+/// edits' script over line tables the caller made with lines(): a caller
+/// that holds the tables already (a three-way merge) does not build them
+/// again (den#145).
+pub fn edits_with(
+    before: List[byte],
+    left: List[Line],
+    after: List[byte],
+    right: List[Line],
+) -> List[Edit] ! DeltaErrors {
     if left.len == 0 || right.len == 0 {
         if left.len == 0 && right.len == 0 { return List[Edit]() }
         return [Edit { old_start: 0, old_count: left.len, new_start: 0, new_count: right.len }]
