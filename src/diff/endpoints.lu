@@ -22,6 +22,10 @@ fn blob(ctx: worktree.Context, entry: worktree.FlatEntry) -> File ! worktree.Wor
     File { path: owned(entry.path), mode: entry.mode, id: copy entry.id, data: stored.data }
 }
 
+/// The bound on the bodies one diff holds, named as fetch, pull, merge and
+/// checkout print a bound (a literal: an error can leave a region).
+fn bodies_bound() -> str { "limit: more than 134217728 bytes of file bodies in one diff" }
+
 fn from_tree(ctx: worktree.Context, name: str) -> List[File] ! worktree.WorkErrors {
     let id = resolve(ctx, name)?
     var out = List[File]()
@@ -29,7 +33,7 @@ fn from_tree(ctx: worktree.Context, name: str) -> List[File] ! worktree.WorkErro
     for entry in worktree.flatten_tree(ctx.repo, id)? {
         let file = blob(ctx, entry)?
         total += file.data.len
-        if total > 134217728 { return limit }
+        if total > 134217728 { return Fatal(bodies_bound()) }
         (mut out).push(file)
     }
     out
@@ -81,7 +85,7 @@ fn from_worktree_ignoring(
             let file = blob(ctx, worktree.
                 FlatEntry { path: owned(entry.path), mode: entry.stat[6], id: copy entry.id })?
             total += file.data.len
-            if total > 134217728 { return limit }
+            if total > 134217728 { return Fatal(bodies_bound()) }
             (mut out).push(file)
             continue
         }
@@ -93,7 +97,7 @@ fn from_worktree_ignoring(
         if stat[0] == 1 { continue }
         let file = worktree.read_file(ctx, entry.path, [copy entry])?
         total += file.data.len
-        if total > 134217728 { return limit }
+        if total > 134217728 { return Fatal(bodies_bound()) }
         (mut out).push(File {
             path: owned(file.path),
             mode: file.mode,
@@ -519,7 +523,7 @@ fn bodies(
             }
         }
         total += file.data.len
-        if total > 134217728 { return limit }
+        if total > 134217728 { return Fatal(bodies_bound()) }
         (mut out).push(file)
     }
     out

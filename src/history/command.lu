@@ -56,7 +56,9 @@ fn root_files(ctx: worktree.Context, id: oid.Oid) -> List[diff.File] ! worktree.
             worktree.check_text_content(ctx, entry.path, value.data)?
         }
         total += value.data.len
-        if total > 134217728 { return limit }
+        if total > 134217728 {
+            return Fatal("limit: more than 134217728 bytes of file bodies in one diff")
+        }
         (mut out).push(diff.File {
             path: copy entry.path,
             mode: entry.mode,

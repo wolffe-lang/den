@@ -398,7 +398,9 @@ fn loaded(
     if files[0].mode == 0o100644 || files[0].mode == 0o100755 {
         worktree.check_text_content(ctx, files[0].path, value.data)?
     }
-    if value.data.len > 134217728 - total { return limit }
+    if value.data.len > 134217728 - total {
+        return Fatal("limit: more than 134217728 bytes of file bodies in one diff")
+    }
     total += value.data.len
     [
         File {
