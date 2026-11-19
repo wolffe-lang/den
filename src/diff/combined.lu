@@ -393,7 +393,7 @@ fn loaded(
     mut total: int,
 ) -> List[File] ! worktree.WorkErrors {
     if files.len == 0 { return List[File]() }
-    let value = object.read_object(ctx.repo, files[0].id, 16777216)?
+    let value = object.read_object(ctx.repo, files[0].id, 1000000000)?
     if value.kind != "blob" { return invalid_tree }
     if files[0].mode == 0o100644 || files[0].mode == 0o100755 {
         worktree.check_text_content(ctx, files[0].path, value.data)?

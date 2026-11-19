@@ -16,7 +16,7 @@ fn blob(ctx: worktree.Context, entry: worktree.FlatEntry) -> File ! worktree.Wor
             data: worktree.subproject_text(entry.id, false)?,
         }
     }
-    let stored = object.read_object(ctx.repo, entry.id, 16777216)?
+    let stored = object.read_object(ctx.repo, entry.id, 1000000000)?
     if stored.kind != "blob" { return invalid_tree }
     File { path: owned(entry.path), mode: entry.mode, id: copy entry.id, data: owned(stored.data) }
 }
@@ -621,8 +621,8 @@ fn collect_known(ctx: worktree.Context, options: Options) -> Collected ! worktre
     if options.revisions.len == 2 {
         let a = resolve(ctx, options.revisions[0])?
         let b = resolve(ctx, options.revisions[1])?
-        let left = object.read_object(ctx.repo, a, 16777216)?
-        let right = object.read_object(ctx.repo, b, 16777216)?
+        let left = object.read_object(ctx.repo, a, 1000000000)?
+        let right = object.read_object(ctx.repo, b, 1000000000)?
         if left.kind == "blob" && right.kind == "blob" {
             let old = [
                 File {

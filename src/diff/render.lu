@@ -171,7 +171,12 @@ fn patch_one(
         add(mut out, " differ\n".bytes())
         return
     }
-    let body = difftext.hunks(before, after, options.context, options.indent)?
+    // The script's own budget is named as the stat's bound is: a patch's
+    // line diff stops past 2,000 differing lines, where Git's continues.
+    let body = difftext.hunks(before, after, options.context, options.indent) else |e| match e {
+        limit => { return Fatal("limit: a file whose line diff passes 2000 differing lines in a patch") },
+        invalid => { return invalid },
+    }
     if body.len > 0 {
         header_name(mut out, "--- ", if options.reverse then "b/" else "a/", change.before, options)
         header_name(mut out, "+++ ", if options.reverse then "a/" else "b/", change.after, options)
@@ -217,8 +222,8 @@ fn validate_side(files: List[File]) -> () ! worktree.WorkErrors {
     for file in files {
         if file.path.len == 0 { return invalid }
         for b in file.path { if b == 0 as byte { return invalid } }
-        if file.data.len > 16777216 {
-            return Fatal("limit: a file larger than 16777216 bytes in a diff")
+        if file.data.len > 1000000000 {
+            return Fatal("limit: a file larger than 1000000000 bytes in a diff")
         }
         if file.mode != 0o100644 &&
             file.mode != 0o100755 &&
