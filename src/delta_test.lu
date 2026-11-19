@@ -32,6 +32,24 @@ fn main() -> int ! delta.DeltaErrors {
     assert(!delta.binary(nul))
     nul[7999] = 0 as byte
     assert(delta.binary(nul))
+    // Past 1 MiB a side the weights sit in one slot per bucket (den#145): the
+    // sums equal the Maps' on the same bodies.
+    var large = List[byte](), edited = List[byte]()
+    for n in 0..50000 {
+        for b in "line {n} of a large body\n".bytes() { (mut large).push(b) }
+        let text = if n % 3 == 0 then "edited {n}\n" else "line {n} of a large body\n"
+        for b in text.bytes() { (mut edited).push(b) }
+    }
+    assert(large.len > 1048576)
+    let left = delta.span_counts(large)?
+    let right = delta.span_counts(edited)?
+    var common = 0
+    for (key, count) in left.pairs() {
+        let other = right[key] else 0
+        common += if count < other then count else other
+    }
+    let scored = delta.similarity(large, edited)?
+    assert(scored.common == common && common > 0 && scored.percent < 100)
     print("delta: similarity boundaries, multiset weighting and text detection pass")
     0
 }

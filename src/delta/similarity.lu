@@ -34,6 +34,34 @@ fn bucket(low: int, high: int) -> int {
 pub fn span_counts(data: List[byte]) -> Map[int, int] ! DeltaErrors {
     if data.len > 1000000000 { return limit }
     var counts = Map[int, int]()
+    let keyed = spans(data)
+    var at = 0
+    while at < keyed.len {
+        counts[keyed[at]] = (counts[keyed[at]] else 0) + keyed[at + 1]
+        at += 2
+    }
+    counts
+}
+
+/// span_counts' weights in one slot per bucket (bucket's range), for a large
+/// body: a Map's update grew with its size here, and a 16 MB file's 286,000
+/// spans took 100 s of CPU through one; the slots take one pass.
+fn bucket_weights(data: List[byte]) -> List[int] {
+    var slots = List[int]()
+    (mut slots).reserve(107927)
+    for _ in 0..107927 { (mut slots).push(0) }
+    let keyed = spans(data)
+    var at = 0
+    while at < keyed.len {
+        slots[keyed[at]] += keyed[at + 1]
+        at += 2
+    }
+    slots
+}
+
+/// Each span's bucket and weight in body order: key, weight, key, weight.
+fn spans(data: List[byte]) -> List[int] {
+    var out = List[int]()
     let text = !binary(data)
     var low: int = 0, high: int = 0, length = 0
     for i in 0..data.len {
@@ -44,18 +72,18 @@ pub fn span_counts(data: List[byte]) -> Map[int, int] ! DeltaErrors {
         high = (high << 7 | previous >> 25) & 0xffffffff
         length += 1
         if b == 10 || length == 64 {
-            let key = bucket(low, high)
-            counts[key] = (counts[key] else 0) + length
+            (mut out).push(bucket(low, high))
+            (mut out).push(length)
             low = 0
             high = 0
             length = 0
         }
     }
     if length > 0 {
-        let key = bucket(low, high)
-        counts[key] = (counts[key] else 0) + length
+        (mut out).push(bucket(low, high))
+        (mut out).push(length)
     }
-    counts
+    out
 }
 
 /// Content similarity only. Type eligibility, exact OIDs and multi-candidate
@@ -67,12 +95,21 @@ pub fn similarity(before: List[byte], after: List[byte]) -> Similarity ! DeltaEr
         return Similarity { common: maximum, maximum: maximum, units: 60000, percent: 100 }
     }
     if maximum == 0 { return invalid }
-    let left = span_counts(before)?
-    let right = span_counts(after)?
     var common: int = 0
-    for (key, count) in left.pairs() {
-        let other = right[key] else 0
-        common += if count < other then count else other
+    if before.len > 1048576 || after.len > 1048576 {
+        // Past 1 MiB a side, slots: the same sums as the Maps below.
+        let left = bucket_weights(before)
+        let right = bucket_weights(after)
+        for key in 0..107927 {
+            common += if left[key] < right[key] then left[key] else right[key]
+        }
+    } else {
+        let left = span_counts(before)?
+        let right = span_counts(after)?
+        for (key, count) in left.pairs() {
+            let other = right[key] else 0
+            common += if count < other then count else other
+        }
     }
     let units = common * 60000 / maximum
     Similarity { common: common, maximum: maximum, units: units, percent: units / 600 }
