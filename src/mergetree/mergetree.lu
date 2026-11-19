@@ -160,6 +160,10 @@ pub fn compared(
     result
 }
 
+/// The three-way file merge's line diff budget, named (a literal: an error
+/// can leave the region the merge ran in).
+fn budget() -> str { "limit: a file whose line diff passes 2000 differing lines in a three-way file merge" }
+
 fn at(files: List[diff.File], path: List[byte]) -> int {
     for i in 0..files.len { if compare(files[i].path, path) == 0 { return i } }
     -1
@@ -319,8 +323,17 @@ fn plan_inner(
             // are not one line repeated (past about 65,000 lines they often
             // collide, den#145).
             if difftext.repeated(data)? { return Unsupported("merge repeated-line alignment") }
-            if difftext.edits(data, ours[o].data)?.len > 1 ||
-                difftext.edits(data, theirs[t].data)?.len > 1 {
+            // A side's line diff keeps the script's budget of 2,000 differing
+            // lines, named as a patch names it.
+            let ours_edits = difftext.edits(data, ours[o].data) else |e| match e {
+                limit => { return Fatal(budget()) },
+                invalid => { return invalid },
+            }
+            let theirs_edits = difftext.edits(data, theirs[t].data) else |e| match e {
+                limit => { return Fatal(budget()) },
+                invalid => { return invalid },
+            }
+            if ours_edits.len > 1 || theirs_edits.len > 1 {
                 return Unsupported("merge multi-hunk alignment")
             }
             let safe_markers = marker_size >= 1 && marker_size <= 1024
@@ -336,11 +349,9 @@ fn plan_inner(
             ) else |e| match e {
                 binary => { return Unsupported("merge binary conflict") },
                 invalid => { return invalid },
-                limit => {
-                    return Fatal(
-                        "limit: a file larger than 1000000000 bytes in a three-way file merge",
-                    )
-                },
+                // Each side was read whole within an object read's bound, so a
+                // limit here is the line diff's budget.
+                limit => { return Fatal(budget()) },
             }
             if merged.conflicts > 0 && !safe_markers {
                 return Unsupported("merge conflict-marker-size={marker_size} for {name}")

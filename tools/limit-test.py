@@ -41,6 +41,28 @@ def main():
     def head(w):
         return run([git, 'rev-parse', 'HEAD'], w).strip().decode()
 
+    def appended(name, local):
+        """A clone one commit behind its remote, whose remote appended 2,500
+        lines to a 3-line file; with `local`, a local commit changed its first
+        line (a true merge of that file), else the work tree appended them."""
+        base = out / name
+        base.mkdir()
+        origin, work = base / 'origin', base / 'work'
+        run([git, 'init', '-q', origin], base)
+        (origin / 'f').write_text('one\ntwo\nthree\n')
+        run([git, 'add', '.'], origin)
+        run([git, 'commit', '-qm', 'base'], origin)
+        run([git, 'clone', '-q', origin, work], base)
+        more = ''.join(f'appended {i}\n' for i in range(2500))
+        if local:
+            (work / 'f').write_text('first\ntwo\nthree\n')
+            run([git, 'commit', '-qam', 'local'], work)
+            (origin / 'f').write_text('one\ntwo\nthree\n' + more)
+            run([git, 'commit', '-qam', 'append'], origin)
+        else:
+            (work / 'f').write_text('one\ntwo\nthree\n' + more)
+        return work
+
     def many_packs(name):
         """A clone whose objects/pack holds 257 packs; its remote moved one commit on."""
         base = out / name
@@ -114,6 +136,12 @@ def main():
     # readers' 16 MiB bound; tools/large-blob-test.py holds those pulls, and
     # the other everyday commands over such a blob, to Git's output (den#145).
     packs_bound = lambda w, _: 'limit: more than 256 packs in objects/pack'
+    # A line diff's script keeps a budget of 2,000 differing lines (Git's has
+    # none): a patch and a three-way file merge past it name it.
+    row('diff-patch-lines', lambda n: appended(n, False), ['diff'],
+        lambda w, _: 'limit: a file whose line diff passes 2000 differing lines in a patch')
+    row('pull-merge-lines', lambda n: appended(n, True), ['pull', '--no-rebase', 'origin', 'main'],
+        lambda w, _: 'limit: a file whose line diff passes 2000 differing lines in a three-way file merge')
     row('fetch-pack-count', many_packs, ['fetch', 'origin'], packs_bound)
     row('pull-pack-count', many_packs, ['pull', 'origin', 'main'], packs_bound)
     row('checkout-pack-count', many_packs, ['checkout', '-q', 'origin/other'], packs_bound)
