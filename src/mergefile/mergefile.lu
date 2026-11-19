@@ -24,6 +24,18 @@ fn span(data: List[byte], lines: List[difftext.Line], start: int, end: int) -> L
     data[lines[start].start..lines[end - 1].end]
 }
 
+/// span's bytes appended to out where they stand, with no copy cut first.
+fn append_span(
+    mut out: List[byte],
+    data: List[byte],
+    lines: List[difftext.Line],
+    start: int,
+    end: int,
+) {
+    if start == end { return }
+    for i in lines[start].start..lines[end - 1].end { (mut out).push(data[i]) }
+}
+
 fn side(
     base: List[byte],
     lines: List[difftext.Line],
@@ -92,13 +104,98 @@ pub fn merge_markers(
     if equal(base, theirs) { return Result { data: copy ours, conflicts: 0 } }
     if delta.binary(base) || delta.binary(ours) || delta.binary(theirs) { return binary }
     let bl = difftext.lines(base)?, ol = difftext.lines(ours)?, tl = difftext.lines(theirs)?
-    let oe = difftext.edits(base, ours)?, te = difftext.edits(base, theirs)?
+    let oe = difftext.edits_with(base, bl, ours, ol)?,
+        te = difftext.edits_with(base, bl, theirs, tl)?
+    merged(
+        base,
+        ours,
+        theirs,
+        bl,
+        ol,
+        tl,
+        oe,
+        te,
+        ours_label,
+        base_label,
+        theirs_label,
+        style,
+        marker_size,
+    )?
+}
+
+/// merge_markers' answer over line tables and scripts the caller made with
+/// difftext.lines and difftext.edits_with (base to ours, base to theirs): a
+/// caller that checked the scripts already does not build them again
+/// (den#145). The checks merge_markers makes before it builds them are made.
+pub fn merge_with(
+    base: List[byte],
+    ours: List[byte],
+    theirs: List[byte],
+    bl: List[difftext.Line],
+    ol: List[difftext.Line],
+    tl: List[difftext.Line],
+    oe: List[difftext.Edit],
+    te: List[difftext.Edit],
+    ours_label: str,
+    base_label: str,
+    theirs_label: str,
+    style: str,
+    marker_size: int,
+) -> Result ! MergeErrors {
+    if marker_size < 1 || marker_size > 1024 { return invalid }
+    if style != "merge" && style != "diff3" && style != "zdiff3" { return invalid }
+    for label in [ours_label, base_label, theirs_label] {
+        if label.contains("\n") || label.contains("\r") || label.contains("\0") { return invalid }
+    }
+    if base.len > 1000000000 || ours.len > 1000000000 || theirs.len > 1000000000 { return limit }
+    if equal(ours, theirs) { return Result { data: copy ours, conflicts: 0 } }
+    if equal(base, ours) { return Result { data: copy theirs, conflicts: 0 } }
+    if equal(base, theirs) { return Result { data: copy ours, conflicts: 0 } }
+    if delta.binary(base) || delta.binary(ours) || delta.binary(theirs) { return binary }
+    merged(
+        base,
+        ours,
+        theirs,
+        bl,
+        ol,
+        tl,
+        oe,
+        te,
+        ours_label,
+        base_label,
+        theirs_label,
+        style,
+        marker_size,
+    )?
+}
+
+fn merged(
+    base: List[byte],
+    ours: List[byte],
+    theirs: List[byte],
+    bl: List[difftext.Line],
+    ol: List[difftext.Line],
+    tl: List[difftext.Line],
+    oe: List[difftext.Edit],
+    te: List[difftext.Edit],
+    ours_label: str,
+    base_label: str,
+    theirs_label: str,
+    style: str,
+    marker_size: int,
+) -> Result ! MergeErrors {
     var oi = 0, ti = 0, pos = 0, conflicts = 0, out = List[byte]()
+    // One buffer of about the result's size: a side's change added to the
+    // base's length. The base's unchanged lines are copied in place, not cut
+    // out first (a cut is a copy of its own): a 16 MB merge kept the base's
+    // spans and every buffer its result outgrew (den#145).
+    let guess = ours.len + theirs.len - base.len
+    if guess > 0 { (mut out).reserve(guess + guess / 64) }
     while oi < oe.len || ti < te.len {
         var lo = bl.len
         if oi < oe.len { lo = oe[oi].old_start }
         if ti < te.len && te[ti].old_start < lo { lo = te[ti].old_start }
-        append(mut out, span(base, bl, pos, lo))
+        append_span(mut out, base, bl, pos, lo)
         let ob = oi, tb = ti
         var hi = lo, changed = true
         while changed {
@@ -216,6 +313,6 @@ pub fn merge_markers(
         }
         pos = hi
     }
-    append(mut out, span(base, bl, pos, bl.len))
+    append_span(mut out, base, bl, pos, bl.len)
     Result { data: out, conflicts: conflicts }
 }
