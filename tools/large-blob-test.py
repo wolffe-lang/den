@@ -358,6 +358,12 @@ def main():
         results.append(dict(row=row, passed=ok, same=not diffs, bounded=bounded, best=best, bound=bound,
                             den_exit=d['status'], den_stderr=d['stderr'].decode(errors='replace')[-400:]))
     assert results, 'empty selection'
+    # The fixtures are hundreds of megabytes; the gate's evidence keeps only
+    # the summary.
+    for path in (templates, remote):
+        shutil.rmtree(path)
+    for path in (parent, report):
+        path.unlink(missing_ok=True)
     (out / 'summary.json').write_text(json.dumps(dict(size=size, floor_kib=floor_kib, rows=results), indent=2) + '\n')
     failures = sum(not r['passed'] for r in results)
     print(f'large-blob {label}: {len(results)} rows, {failures} failures; floor {floor_kib} KiB; zero skips',
