@@ -18,7 +18,8 @@ fn blob(ctx: worktree.Context, entry: worktree.FlatEntry) -> File ! worktree.Wor
     }
     let stored = object.read_object(ctx.repo, entry.id, 1000000000)?
     if stored.kind != "blob" { return invalid_tree }
-    File { path: owned(entry.path), mode: entry.mode, id: copy entry.id, data: owned(stored.data) }
+    // The read's body is the file's own: a second copy kept it twice (den#145).
+    File { path: owned(entry.path), mode: entry.mode, id: copy entry.id, data: stored.data }
 }
 
 fn from_tree(ctx: worktree.Context, name: str) -> List[File] ! worktree.WorkErrors {
@@ -514,7 +515,7 @@ fn bodies(
                 path: owned(read.path),
                 mode: read.mode,
                 id: copy read.id,
-                data: owned(read.data),
+                data: read.data,
             }
         }
         total += file.data.len
