@@ -189,9 +189,40 @@ fn merge_stat(
     options.patch = false
     options.stat = true
     var stdout = fs.stdout()
-    fs.write_chunk(mut stdout, diff.render(ctx, diff.changes(before, after, options)?, options)?)?
+    // Each part's scratch (the changes' copies of every changed body, a rename
+    // pairing's reads and scores, the count tables) is reclaimed before the
+    // next part; only the printed bytes are kept (den#145). A part that fails
+    // runs again outside its region, where its message can leave.
+    var text = List[byte](), failed = false
+    region stat {
+        let found = stat_text(ctx, before, after, options) else |_| {
+            failed = true
+            List[byte]()
+        }
+        if !failed { text = copy found }
+    }
+    if failed { text = stat_text(ctx, before, after, options)? }
+    fs.write_chunk(mut stdout, text)?
     // The rows below the stat; the stat above already counted every line.
-    fs.write_chunk(mut stdout, commit.change_rows(ctx, flat_files(before), flat_files(after))?)?
+    var rows = List[byte](), rows_failed = false
+    region detail {
+        let found = commit.change_rows(ctx, flat_files(before), flat_files(after)) else |_| {
+            rows_failed = true
+            List[byte]()
+        }
+        if !rows_failed { rows = copy found }
+    }
+    if rows_failed { rows = commit.change_rows(ctx, flat_files(before), flat_files(after))? }
+    fs.write_chunk(mut stdout, rows)?
+}
+
+fn stat_text(
+    ctx: worktree.Context,
+    before: List[diff.File],
+    after: List[diff.File],
+    options: diff.Options,
+) -> List[byte] ! commit.CommitErrors {
+    diff.render(ctx, diff.changes(before, after, options)?, options)?
 }
 
 fn merge_command(args: List[str]) -> int ! commit.CommitErrors {
