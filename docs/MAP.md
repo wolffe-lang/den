@@ -1367,6 +1367,7 @@ pub struct Edit { old_start: int, old_count: int,
     new_start: int, new_count: int }
 pub fn difftext.lines(data: List[byte]) -> List[Line] ! DeltaErrors
 pub fn difftext.edits(before: List[byte], after: List[byte]) -> List[Edit] ! DeltaErrors
+pub fn difftext.edits_with(before: List[byte], left: List[Line], after: List[byte], right: List[Line]) -> List[Edit] ! DeltaErrors
 pub fn difftext.counts(before: List[byte], after: List[byte]) -> Counts ! DeltaErrors
 pub fn difftext.repeated(data: List[byte]) -> bool ! DeltaErrors
 pub fn difftext.hunks(before: List[byte], after: List[byte],
@@ -1585,7 +1586,10 @@ rather than choosing one: recursive virtual-base merging is still open.
 
 `mergefile.merge(base, ours, theirs, ours_label, base_label, theirs_label,
 style)` returns owned `{data, conflicts}`; `merge_markers(..., style, size)` is
-the same engine with a marker width of 1 to 1,024 (`merge` uses 7). It reuses `difftext.edits`, preserves
+the same engine with a marker width of 1 to 1,024 (`merge` uses 7), and
+`merge_with(base, ours, theirs, bl, ol, tl, oe, te, ..., style, size)` the same
+again over line tables and scripts its caller built (a true merge builds them
+once). It reuses `difftext.edits`, preserves
 raw bytes and final-newline behavior, and renders merge/diff3/zdiff3 markers.
 Labels are single physical lines. Invalid options, binary conflicts and inherited
 file/edit bounds are distinct errors. The default-style nearby-conflict joining
@@ -1594,8 +1598,10 @@ The independent file client compares 1,521 input/style combinations per native
 tier; the independent graph client compares 84 complete base sets and repository
 immutability. Three actual-checked programs cover graph, text and REUC.
 
-`mergetree.files` collects owned regular-file endpoints, capped at 16 MiB per
-blob and 128 MiB per endpoint. `mergetree.plan` returns files, higher stages,
+`mergetree.files` collects owned regular-file endpoints, capped at
+1,000,000,000 bytes per blob and 128 MiB per endpoint; `mergetree.compared`
+reads only the bodies that differ between its trees, as merge, cherry-pick and
+rebase take them. `mergetree.plan` returns files, higher stages,
 ordered diagnostics and conflict paths without publication.
 `plan_with_policy(ctx, value, ...)` resolves merge attributes only for a path that
 needs a content merge: `-merge`, `binary` and the built-in `binary` driver keep
