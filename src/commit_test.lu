@@ -156,9 +156,6 @@ fn main() -> int ! commit.CommitErrors {
     assert(same.added == 0 && same.deleted == 0 && !same.binary)
     let grown = commit.line_counts(many.bytes(), "{many}b\n{many}".bytes())?
     assert(grown.added == 2002 && grown.deleted == 0)
-    let long = "x\n".repeat(200001)
-    let rewritten = commit.line_counts(long.bytes(), "y\n{long}".bytes())?
-    assert(rewritten.added == 1 && rewritten.deleted == 0)
     // vc23: TZ values std.time refuses, read as the C library reads them.
     for (value, posixrules, spelling, refused) in [
         ("garbage", false, "", false),

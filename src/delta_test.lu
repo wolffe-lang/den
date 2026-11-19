@@ -34,11 +34,14 @@ fn main() -> int ! delta.DeltaErrors {
     assert(delta.binary(nul))
     // Past 1 MiB a side the weights sit in one slot per bucket (den#145): the
     // sums equal the Maps' on the same bodies.
-    var large = List[byte](), edited = List[byte]()
-    for n in 0..50000 {
-        for b in "line {n} of a large body\n".bytes() { (mut large).push(b) }
-        let text = if n % 3 == 0 then "edited {n}\n" else "line {n} of a large body\n"
-        for b in text.bytes() { (mut edited).push(b) }
+    var large = repeated(120 as byte, 63), edited = repeated(120 as byte, 63)
+    (mut large).push(10 as byte)
+    (mut edited).push(10 as byte)
+    for n in 1..17000 {
+        for _ in 0..63 { (mut large).push(120 as byte) }
+        for _ in 0..63 { (mut edited).push(if n % 3 == 0 then 121 as byte else 120 as byte) }
+        (mut large).push(10 as byte)
+        (mut edited).push(10 as byte)
     }
     assert(large.len > 1048576)
     let left = delta.span_counts(large)?
