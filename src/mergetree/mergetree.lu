@@ -231,7 +231,9 @@ fn text_merge(
 
 /// The three-way file merge's line diff budget, named (a literal: an error
 /// can leave the region the merge ran in).
-fn budget() -> str { "limit: a file whose line diff passes 2000 differing lines in a three-way file merge" }
+fn budget() -> str {
+    "limit: a file whose line diff passes 2000 differing lines in a three-way file merge"
+}
 
 fn at(files: List[diff.File], path: List[byte]) -> int {
     for i in 0..files.len { if compare(files[i].path, path) == 0 { return i } }
@@ -401,8 +403,15 @@ fn plan_inner(
             var failed = false
             region content {
                 let found = text_merge(
-                    base, base_at, ours[o].data, theirs[t].data, ours_label, base_label,
-                    theirs_label, style, marker_size,
+                    base,
+                    base_at,
+                    ours[o].data,
+                    theirs[t].data,
+                    ours_label,
+                    base_label,
+                    theirs_label,
+                    style,
+                    marker_size,
                 ) else |_| {
                     failed = true
                     mergefile.Result { data: List[byte](), conflicts: 0 }
@@ -411,8 +420,15 @@ fn plan_inner(
             }
             if failed {
                 merged = text_merge(
-                    base, base_at, ours[o].data, theirs[t].data, ours_label, base_label,
-                    theirs_label, style, marker_size,
+                    base,
+                    base_at,
+                    ours[o].data,
+                    theirs[t].data,
+                    ours_label,
+                    base_label,
+                    theirs_label,
+                    style,
+                    marker_size,
                 )?
             }
             if merged.conflicts > 0 && !(marker_size >= 1 && marker_size <= 1024) {

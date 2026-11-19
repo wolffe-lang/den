@@ -176,7 +176,9 @@ fn patch_one(
     // The script's own budget is named as the stat's bound is: a patch's
     // line diff stops past 2,000 differing lines, where Git's continues.
     let body = change_hunks(change, options) else |e| match e {
-        limit => { return Fatal("limit: a file whose line diff passes 2000 differing lines in a patch") },
+        limit => {
+            return Fatal("limit: a file whose line diff passes 2000 differing lines in a patch")
+        },
         invalid => { return invalid },
     }
     if body.len > 0 {
@@ -191,10 +193,19 @@ fn patch_one(
 fn change_hunks(change: Change, options: Options) -> List[byte] ! difftext.DeltaErrors {
     let has_old = change.before.len > 0, has_new = change.after.len > 0
     if has_old && has_new {
-        return difftext.hunks(change.before[0].data, change.after[0].data, options.context, options.indent)?
+        return difftext.hunks(
+            change.before[0].data,
+            change.after[0].data,
+            options.context,
+            options.indent,
+        )?
     }
-    if has_old { return difftext.hunks(change.before[0].data, List[byte](), options.context, options.indent)? }
-    if has_new { return difftext.hunks(List[byte](), change.after[0].data, options.context, options.indent)? }
+    if has_old {
+        return difftext.hunks(change.before[0].data, List[byte](), options.context, options.indent)?
+    }
+    if has_new {
+        return difftext.hunks(List[byte](), change.after[0].data, options.context, options.indent)?
+    }
     difftext.hunks(List[byte](), List[byte](), options.context, options.indent)?
 }
 
