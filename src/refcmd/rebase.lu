@@ -300,8 +300,23 @@ fn rebase_resume(ctx: worktree.Context, action: str) -> int ! commit.CommitError
 }
 
 fn rebase_change_key(ctx: worktree.Context, item: walk.Commit) -> str ! commit.CommitErrors {
-    var sum: wrapping[u64] = 0
     if item.parents.len > 1 { return Unsupported("rebase upstream merge comparison") }
+    // Each commit's bodies are reclaimed before the next commit is keyed; only
+    // the sum is kept (den#145). A sum that fails runs again outside, where
+    // its message can leave.
+    var sum: wrapping[u64] = 0, failed = false
+    region keying {
+        sum = change_sum(ctx, item) else |_| {
+            failed = true
+            0
+        }
+    }
+    if failed { sum = change_sum(ctx, item)? }
+    "{(sum >> 32) as int}:{(sum & 4294967295) as int}"
+}
+
+fn change_sum(ctx: worktree.Context, item: walk.Commit) -> wrapping[u64] ! commit.CommitErrors {
+    var sum: wrapping[u64] = 0
     if item.parents.len == 0 {
         for file in mergetree.files(ctx.repo, item.id)? { sum += sequencer.line_sum(file.data)? }
     } else {
@@ -312,7 +327,7 @@ fn rebase_change_key(ctx: worktree.Context, item: walk.Commit) -> str ! commit.C
         for file in trees[0] { sum += sequencer.line_sum(file.data)? }
         for file in trees[1] { sum -= sequencer.line_sum(file.data)? }
     }
-    "{(sum >> 32) as int}:{(sum & 4294967295) as int}"
+    sum
 }
 
 fn rebase_equivalence_scope(
