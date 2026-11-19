@@ -3,7 +3,10 @@
 Restores the captured index before each timed child, never times restoration or
 fixture hashing. Samples are interleaved, use child user+system CPU, and retain
 raw process bytes plus exact before/after indexes. Intended for an exclusive
-performance block, not a light slot or mixed-core block.
+performance block, not a light slot or mixed-core block. The ceilings and the
+guardband are tools/speed-bounds.json's "status" line, read through
+speed-measure.py, whose rows share this one's shape; --tier names the build in
+each row.
 """
 import argparse
 import hashlib
@@ -11,6 +14,7 @@ import json
 import os
 from pathlib import Path
 import resource
+import runpy
 import subprocess
 import time
 
@@ -19,12 +23,16 @@ p.add_argument('--fixture', type=Path, required=True)
 p.add_argument('--den', type=Path, required=True)
 p.add_argument('--output', type=Path, required=True)
 p.add_argument('--samples', type=int, default=3)
+p.add_argument('--tier', default='native')
 p.add_argument('--cpu-floor', type=float, default=0.2)
 p.add_argument('--profile-only', action='store_true')
 a = p.parse_args()
 G = Path(os.environ['DEN_GIT'])
 assert hashlib.sha256(G.read_bytes()).hexdigest() == 'c4848492938c4ebfffbefe1fbbaa68b9af90c86d1f6a20e76816c5ff37fcfa60'
 assert a.samples >= 3 and a.cpu_floor >= 0.1
+shared = runpy.run_path(str(Path(__file__).resolve().parent / 'speed-measure.py'))
+bounds = shared['load_bounds']()
+guard = bounds['guardband']
 fixture = a.fixture.resolve()
 repo = fixture / 'case'
 index = repo / '.git/index'
@@ -92,13 +100,18 @@ try:
             expected = {(q['status'], q['stdout'], q['stderr']) for x in left for q in x['results']}
             actual = {(q['status'], q['stdout'], q['stderr']) for x in right for q in x['results']}
             same = expected == actual and len(expected) == 1
-            ratio = min(x['mean_cpu'] for x in right) / min(x['mean_cpu'] for x in left)
-            # A ten-percent multiplicative uncertainty must still fit below 5x.
-            ok = valid and same and ratio * 1.10 <= 5
-            print(('PASS' if ok else 'FAIL'), 'status-ratio-' + label,
-                  'ratio=%.6f guardband=1.10 ceiling=5' % ratio,
+            den_cpu = min(x['mean_cpu'] for x in right)
+            git_cpu = min(x['mean_cpu'] for x in left)
+            ratio = den_cpu / git_cpu
+            ceiling = bounds['rows']['status'][label]
+            # The guardband's multiplicative uncertainty must still fit the ceiling.
+            ok = valid and same and shared['verdict'](ratio, ceiling, guard)
+            print(('PASS' if ok else 'FAIL'), 'status-ratio-%s-%s' % (label, a.tier),
+                  'ratio=%.6f guardband=%.2f ceiling=%g' % (ratio, guard, ceiling),
+                  'den_cpu=%.6f git_cpu=%.6f' % (den_cpu, git_cpu),
                   'process_same=' + str(same), flush=True)
-            rows.append(dict(verdict=label, equal=ok, ratio=ratio, margin=1.10, ceiling=5))
+            rows.append(dict(verdict=label, tier=a.tier, equal=ok, ratio=ratio, margin=guard, ceiling=ceiling,
+                             den_cpu=den_cpu, git_cpu=git_cpu))
 finally:
     index.write_bytes(inputs['warm'])
     a.output.parent.mkdir(parents=True, exist_ok=True)
