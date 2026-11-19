@@ -41,28 +41,6 @@ def main():
     def head(w):
         return run([git, 'rev-parse', 'HEAD'], w).strip().decode()
 
-    big = b'0123456789abcdef' * (17000000 // 16)
-
-    def large_change(name):
-        """A clone one true merge behind its remote; the remote changed a 17 MB file."""
-        base = out / name
-        base.mkdir()
-        origin, work = base / 'origin', base / 'work'
-        run([git, 'init', '-q', origin], base)
-        (origin / 'big').write_bytes(b'small\n')
-        (origin / 'a').write_text('a\n')
-        run([git, 'add', '.'], origin)
-        run([git, 'commit', '-qm', 'base'], origin)
-        run([git, 'clone', '-q', origin, work], base)
-        (work / 'local').write_text('local\n')
-        run([git, 'add', 'local'], work)
-        run([git, 'commit', '-qm', 'local'], work)
-        (origin / 'big').write_bytes(big)
-        run([git, 'commit', '-qam', 'grow'], origin)
-        run([git, 'fetch', '-q', 'origin'], work)
-        blob = run([git, 'rev-parse', 'origin/main:big'], work).strip().decode()
-        return work, blob
-
     def many_packs(name):
         """A clone whose objects/pack holds 257 packs; its remote moved one commit on."""
         base = out / name
@@ -132,10 +110,10 @@ def main():
                          stderr=p.stderr.decode(errors='replace'), git_exit=oracle.returncode))
         shutil.rmtree(mirror)
 
-    blob_bound = lambda w, blob: 'limit: an object larger than 16777216 bytes'
+    # A merge and a pull of a changed 17 MB file stopped at the object
+    # readers' 16 MiB bound; tools/large-blob-test.py holds those pulls, and
+    # the other everyday commands over such a blob, to Git's output (den#145).
     packs_bound = lambda w, _: 'limit: more than 256 packs in objects/pack'
-    row('merge-changed-file', large_change, ['merge', '--no-edit', 'origin/main'], blob_bound)
-    row('pull-changed-file', large_change, ['pull', '--no-rebase', 'origin', 'main'], blob_bound)
     row('fetch-pack-count', many_packs, ['fetch', 'origin'], packs_bound)
     row('pull-pack-count', many_packs, ['pull', 'origin', 'main'], packs_bound)
     row('checkout-pack-count', many_packs, ['checkout', '-q', 'origin/other'], packs_bound)
