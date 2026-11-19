@@ -160,6 +160,75 @@ pub fn compared(
     result
 }
 
+/// Whether either side's changes from base hold a rename (the pairing a
+/// diff gives with its defaults).
+fn renamed_side(
+    base: List[diff.File],
+    ours: List[diff.File],
+    theirs: List[diff.File],
+) -> bool ! worktree.WorkErrors {
+    for change in diff.changes(base, ours, diff.defaults())? {
+        if change.status == "R" { return true }
+    }
+    for change in diff.changes(base, theirs, diff.defaults())? {
+        if change.status == "R" { return true }
+    }
+    false
+}
+
+/// A text file's three-way merge: base[at] (none when at < 0), ours and
+/// theirs, within the alignments den takes (no repeated line in base, one
+/// hunk a side) and the line diff's budget.
+fn text_merge(
+    base: List[diff.File],
+    at: int,
+    ours: List[byte],
+    theirs: List[byte],
+    ours_label: str,
+    base_label: str,
+    theirs_label: str,
+    style: str,
+    marker_size: int,
+) -> mergefile.Result ! worktree.WorkErrors {
+    let empty = List[byte]()
+    let data = if at < 0 then empty else base[at].data
+    // ort defaults to histogram, whereas the file API is measured against
+    // merge-file's Myers default. Preserve the existing alignment limits.
+    // A line repeated byte for byte; two lines whose hashes collide are not
+    // one line repeated (past about 65,000 lines they often collide, den#145).
+    if difftext.repeated(data)? { return Unsupported("merge repeated-line alignment") }
+    // A side's line diff keeps the script's budget of 2,000 differing lines,
+    // named as a patch names it.
+    let ours_edits = difftext.edits(data, ours) else |e| match e {
+        limit => { return Fatal(budget()) },
+        invalid => { return invalid },
+    }
+    let theirs_edits = difftext.edits(data, theirs) else |e| match e {
+        limit => { return Fatal(budget()) },
+        invalid => { return invalid },
+    }
+    if ours_edits.len > 1 || theirs_edits.len > 1 {
+        return Unsupported("merge multi-hunk alignment")
+    }
+    let safe_markers = marker_size >= 1 && marker_size <= 1024
+    mergefile.merge_markers(
+        data,
+        ours,
+        theirs,
+        ours_label,
+        base_label,
+        theirs_label,
+        style,
+        if safe_markers then marker_size else 7,
+    ) else |e| match e {
+        binary => { return Unsupported("merge binary conflict") },
+        invalid => { return invalid },
+        // Each side was read whole within an object read's bound, so a limit
+        // here is the line diff's budget.
+        limit => { return Fatal(budget()) },
+    }
+}
+
 /// The three-way file merge's line diff budget, named (a literal: an error
 /// can leave the region the merge ran in).
 fn budget() -> str { "limit: a file whose line diff passes 2000 differing lines in a three-way file merge" }
@@ -225,11 +294,19 @@ fn plan_inner(
     theirs_label: str,
     style: str,
 ) -> Plan ! worktree.WorkErrors {
-    for endpoint in [copy ours, copy theirs] {
-        for change in diff.changes(base, endpoint, diff.defaults())? {
-            if change.status == "R" { return Unsupported("merge rename topology") }
+    // The rename check's pairing copies every changed body into its changes
+    // and candidates: it runs in a region, and only its answer is kept
+    // (den#145). A check that fails runs again outside, where its message
+    // can leave.
+    var renamed = false, rename_failed = false
+    region renames {
+        renamed = renamed_side(base, ours, theirs) else |_| {
+            rename_failed = true
+            false
         }
     }
+    if rename_failed { renamed = renamed_side(base, ours, theirs)? }
+    if renamed { return Unsupported("merge rename topology") }
     var paths = List[List[byte]]()
     for entry in base { (mut paths).push(copy entry.path) }
     for entry in ours { if at(base, entry.path) < 0 { (mut paths).push(copy entry.path) } }
@@ -294,7 +371,6 @@ fn plan_inner(
             continue
         }
         let name = str_from_utf8(path)?
-        let data = if b < 0 then List[byte]() else copy base[b].data
         var driver = "", marker_size = 7
         if contexts.len > 0 {
             let policy = worktree.attribute_policy(contexts[0], path, value)?
@@ -311,49 +387,35 @@ fn plan_inner(
             if driver == "binary" { driver = "-" }
             if driver == "union" { return Unsupported("merge driver union for {name}") }
         }
-        var merged = mergefile.Result { data: copy ours[o].data, conflicts: 1 }
+        var merged = mergefile.Result { data: List[byte](), conflicts: 1 }
         if driver == "-" {
+            merged.data = copy ours[o].data
             (mut result.messages).push(
                 "warning: Cannot merge binary files: {name} ({ours_label} vs. {theirs_label})",
             )
         } else {
-            // ort defaults to histogram, whereas the file API is measured against
-            // merge-file's Myers default. Preserve the existing alignment limits.
-            // A line repeated byte for byte; two lines whose hashes collide
-            // are not one line repeated (past about 65,000 lines they often
-            // collide, den#145).
-            if difftext.repeated(data)? { return Unsupported("merge repeated-line alignment") }
-            // A side's line diff keeps the script's budget of 2,000 differing
-            // lines, named as a patch names it.
-            let ours_edits = difftext.edits(data, ours[o].data) else |e| match e {
-                limit => { return Fatal(budget()) },
-                invalid => { return invalid },
+            // One file's line tables, scripts and result at a time: the region
+            // reclaims them, and only the merged body is kept (den#145). A
+            // merge that fails runs again outside, where its message can leave.
+            let base_at = b
+            var failed = false
+            region content {
+                let found = text_merge(
+                    base, base_at, ours[o].data, theirs[t].data, ours_label, base_label,
+                    theirs_label, style, marker_size,
+                ) else |_| {
+                    failed = true
+                    mergefile.Result { data: List[byte](), conflicts: 0 }
+                }
+                if !failed { merged = copy found }
             }
-            let theirs_edits = difftext.edits(data, theirs[t].data) else |e| match e {
-                limit => { return Fatal(budget()) },
-                invalid => { return invalid },
+            if failed {
+                merged = text_merge(
+                    base, base_at, ours[o].data, theirs[t].data, ours_label, base_label,
+                    theirs_label, style, marker_size,
+                )?
             }
-            if ours_edits.len > 1 || theirs_edits.len > 1 {
-                return Unsupported("merge multi-hunk alignment")
-            }
-            let safe_markers = marker_size >= 1 && marker_size <= 1024
-            merged = mergefile.merge_markers(
-                data,
-                ours[o].data,
-                theirs[t].data,
-                ours_label,
-                base_label,
-                theirs_label,
-                style,
-                if safe_markers then marker_size else 7,
-            ) else |e| match e {
-                binary => { return Unsupported("merge binary conflict") },
-                invalid => { return invalid },
-                // Each side was read whole within an object read's bound, so a
-                // limit here is the line diff's budget.
-                limit => { return Fatal(budget()) },
-            }
-            if merged.conflicts > 0 && !safe_markers {
+            if merged.conflicts > 0 && !(marker_size >= 1 && marker_size <= 1024) {
                 return Unsupported("merge conflict-marker-size={marker_size} for {name}")
             }
         }
