@@ -347,11 +347,14 @@ fn merge_command_with(args: List[str], reflog: str, label: str) -> int ! commit.
         inputs = copy found
     }
     if compare_failed { inputs = mergetree.compared(ctx.repo, input_ids, bodies)? }
-    let ours = copy inputs[0], theirs = copy inputs[1]
     if !fast && !upto && !stop && !squash && !noedit {
         return Unsupported("merge editor execution")
     }
-    var plan = mergetree.Plan { files: copy theirs, stages: [], messages: [], conflicts: [] }
+    // The compared trees are read where they stand: ours inputs[0], theirs
+    // inputs[1], the base inputs[2]. A copy of each kept every changed body
+    // over again until the merge ended (den#145).
+    var plan = mergetree.Plan { files: [], stages: [], messages: [], conflicts: [] }
+    if fast { plan.files = copy inputs[1] }
     if !fast && !upto {
         var dirty = false, scan_failed = false
         region dirt {
@@ -366,9 +369,9 @@ fn merge_command_with(args: List[str], reflog: str, label: str) -> int ! commit.
         plan = mergetree.plan_with_policy(
             ctx,
             value,
-            copy inputs[2],
-            ours,
-            theirs,
+            inputs[2],
+            inputs[0],
+            inputs[1],
             "HEAD",
             abbrev(ctx.repo, bases[0])?,
             display_name,
@@ -415,7 +418,7 @@ fn merge_command_with(args: List[str], reflog: str, label: str) -> int ! commit.
     }
     defer index.abort(mut tx)
     let flat = flat_files(plan.files)
-    if !fast { worktree.transition(ctx, mut tx.value, flat_files(ours), "merge")? }
+    if !fast { worktree.transition(ctx, mut tx.value, flat_files(inputs[0]), "merge")? }
     var assembled = List[index.TreeAssembly]()
     if !fast { (mut assembled).push(assembled_trees(ctx, plan.files)?) }
     var refused = false
@@ -544,7 +547,7 @@ fn merge_command_with(args: List[str], reflog: str, label: str) -> int ! commit.
     // The merge is complete: its state files go before the stat is printed,
     // so a stat that reaches a bound never leaves a merge looking unfinished.
     merge_cleanup(ctx)
-    if stat && !quiet { merge_stat(ctx, ours, plan.files)? }
+    if stat && !quiet { merge_stat(ctx, inputs[0], plan.files)? }
     0
 }
 
