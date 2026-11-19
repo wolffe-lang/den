@@ -1,0 +1,9 @@
+{
+  "guardband": 1.10,
+  "rows": {
+    "status": {"cold": 5, "warm": 5},
+    "diff-quiet": {"cold": 5, "warm": 5},
+    "diff-cached-quiet": {"cold": 5, "warm": 5},
+    "pull": {"cold": 5, "warm": 5}
+  }
+}
