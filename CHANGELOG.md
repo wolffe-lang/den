@@ -1,5 +1,30 @@
 # Changes
 
+## Unreleased — blobs past 16 MiB
+
+- `pull`, `merge`, `diff` (with `--stat`, `--cached` and between commits), a
+  rename's score and `commit`'s summary read and count a file as large as an
+  object read allows (1,000,000,000 bytes), as checkout and add already did.
+  They stopped at 16 MiB (den#145): a pull of a repository whose 18 MB test
+  oracle had grown past it fetched, then failed with `limit: an object larger
+  than 16777216 bytes` and left HEAD where it was. Under 16 MiB, a diff, a
+  commit or a true merge of a file past 200,000 lines stopped too.
+- A commit's summary counts lines as a stat does, in space linear in the two
+  bodies, where a table of every line pair stopped past 4,000,000 pairs.
+- Memory: each object read keeps only the body it returns, a copy or a file
+  read takes one buffer of its size, and a commit's checks, a summary's pairs
+  and a true merge's files are each reclaimed before the next. Over a 16 MB
+  blob every row of `tools/large-blob-test.py` peaks within four times Git's
+  peak plus 64 MiB.
+- Rename scores of a body past 1 MiB sum their weights in slots, not a Map:
+  one renamed 16 MB file took 100 s of CPU. A true merge finds a repeated
+  line by its bytes, where two distinct lines whose hashes collided refused.
+- The 2,000-line budget of a patch and of a three-way file merge is named
+  when reached (Git has none). `tools/limit-test.py` holds both.
+- A line count's totals are a minimal script's, Git's `--minimal`; where
+  Git's default diff departs from minimal (a 486,000-line JSON file rewritten
+  by a third), den's stat differs from Git's in that file's counts.
+
 ## Unreleased — symbolic links in pulls
 
 - `pull` and `merge` carry symbolic links (mode 120000) as Git does: a link's
