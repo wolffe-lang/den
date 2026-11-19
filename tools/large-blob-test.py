@@ -48,8 +48,8 @@ for byte, and the state after it: HEAD, every ref, the index (`ls-files
 -s`), MERGE_HEAD, and every work tree file's mode and digest, read by the
 pinned Git. Each tool starts through minimal-parent.c, so its peak resident
 set is its own; den's peak is bounded by Git's in the same take (RSS_FACTOR
-times Git's plus RSS_SLACK_KIB) and its CPU likewise, stated for the native
-tier on Linux. A den run past --timeout seconds is ended and fails its row.
+times Git's plus RSS_SLACK_KIB, pull-rebase's ROW_RSS_FACTOR) and its CPU
+likewise, stated for the native tier on Linux. A den run past --timeout seconds is ended and fails its row.
 """
 import argparse
 import hashlib
@@ -63,7 +63,16 @@ import stat
 import subprocess
 
 MIB = 1048576
+# Stated for the native tier on Linux. Every row but one peaks within four
+# times Git's peak plus 64 MiB: each object read keeps only its body, a copy
+# takes one buffer of its size, and a commit's checks, a summary's pairs, a
+# merge's files and its stat are each reclaimed before the next. The rebase a
+# pull --rebase runs scans the work tree several times, and each mutation
+# scan keeps the bodies of the files it reads (a racily clean 16 MB file is
+# read whole): it is bounded at six times Git's, the gap stated. CPU is slack
+# against a search that grows with the square of a body's lines.
 RSS_FACTOR, RSS_SLACK_KIB = 4.0, 65536
+ROW_RSS_FACTOR = {'pull-rebase': 6.0}
 CPU_FACTOR, CPU_SLACK = 40.0, 5.0
 
 
@@ -333,7 +342,8 @@ def main():
         if g['status'] != 0:
             diffs.append(f'Git exited {g["status"]}: the fixture does not make this row')
         bound = dict(cpu=round(best['git']['cpu'] * CPU_FACTOR + CPU_SLACK, 3),
-                     rss_kib=int(best['git']['maxrss_kib'] * RSS_FACTOR) + RSS_SLACK_KIB)
+                     rss_kib=int(best['git']['maxrss_kib'] * ROW_RSS_FACTOR.get(name, RSS_FACTOR)) +
+                     RSS_SLACK_KIB)
         bounded = (not d['ended'] and best['den']['cpu'] <= bound['cpu'] and
                    best['den']['maxrss_kib'] <= bound['rss_kib'])
         ok = not diffs and bounded
