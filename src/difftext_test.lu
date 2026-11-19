@@ -85,5 +85,12 @@ fn main() -> int ! difftext.DeltaErrors {
     let rewrite = difftext.counts(old_text, new_text)?
     assert(rewrite.added == 1001 && rewrite.deleted == 1001)
     print("difftext: minimal counts in linear space, past the script's 2,000-line bound")
+    // Repeated lines are found by bytes: "Ab" and "BA" hash alike, yet are
+    // two lines (den#145).
+    assert(difftext.repeated("a\nb\na\n".bytes())?)
+    assert(!difftext.repeated("a\nb\nc\n".bytes())?)
+    assert(!difftext.repeated("Ab\nBA\n".bytes())?)
+    assert(difftext.repeated("Ab\nBA\nAb\n".bytes())?)
+    print("difftext: repeated lines by bytes")
     0
 }

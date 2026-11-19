@@ -185,6 +185,28 @@ fn hash_member(slots: List[int], hash: int) -> bool {
     false
 }
 
+/// Whether any line of data occurs twice, byte for byte. Lines whose hashes
+/// collide but whose bytes differ are distinct: past about 65,000 lines the
+/// 32-bit hashes of distinct lines collide often. An open-addressed table of
+/// line numbers plus one, probed as hash_set's.
+pub fn repeated(data: List[byte]) -> bool ! DeltaErrors {
+    let rows = lines(data)?
+    var size = 16
+    while size < 2 * rows.len { size *= 2 }
+    var slots = List[int]()
+    (mut slots).reserve(size)
+    for _ in 0..size { (mut slots).push(0) }
+    for i in 0..rows.len {
+        var at = rows[i].hash * 40503 & size - 1
+        while slots[at] != 0 {
+            if equal_line(data, rows[slots[at] - 1], data, rows[i]) { return true }
+            at = at + 1 & size - 1
+        }
+        slots[at] = i + 1
+    }
+    false
+}
+
 /// The counts of a minimal insertion/deletion script, in space linear in the
 /// inputs and with no bound on the number of differing lines. A minimal
 /// script's counts depend only on the length L of a longest common

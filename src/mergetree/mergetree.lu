@@ -315,13 +315,10 @@ fn plan_inner(
         } else {
             // ort defaults to histogram, whereas the file API is measured against
             // merge-file's Myers default. Preserve the existing alignment limits.
-            var line_hashes = Map[int, bool]()
-            for line in difftext.lines(data)? {
-                if line_hashes[line.hash] else false {
-                    return Unsupported("merge repeated-line alignment")
-                }
-                line_hashes[line.hash] = true
-            }
+            // A line repeated byte for byte; two lines whose hashes collide
+            // are not one line repeated (past about 65,000 lines they often
+            // collide, den#145).
+            if difftext.repeated(data)? { return Unsupported("merge repeated-line alignment") }
             if difftext.edits(data, ours[o].data)?.len > 1 ||
                 difftext.edits(data, theirs[t].data)?.len > 1 {
                 return Unsupported("merge multi-hunk alignment")
