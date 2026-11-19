@@ -119,8 +119,19 @@ fn prepare_commit_index(
         if entry.extended & 0x2000 != 0 { continue }
         // A gitlink names a commit in its submodule, never this store (vc25).
         if entry.stat[6] == 0o160000 { continue }
-        let stored = object.read_object(ctx.repo, entry.id, 1000000000)?
-        if stored.kind != "blob" { return invalid_index }
+        // One blob's body at a time: each read is reclaimed before the next,
+        // where every body read stayed until the commit ended (den#145). A
+        // read that fails runs again outside, where its message can leave.
+        var blob = true, failed = false
+        region verify {
+            let stored = object.read_object(ctx.repo, entry.id, 1000000000) else |_| {
+                failed = true
+                object.Object { kind: "blob", data: List[byte]() }
+            }
+            blob = stored.kind == "blob"
+        }
+        if failed { let _ = object.read_object(ctx.repo, entry.id, 1000000000)? }
+        if !blob { return invalid_index }
     }
     for tree in trees.objects {
         let data = owned(tree.data)

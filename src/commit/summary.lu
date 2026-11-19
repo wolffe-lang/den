@@ -233,6 +233,22 @@ fn blob(reader: object.Reader, entry: worktree.FlatEntry) -> List[byte] ! Commit
     owned(stored.data)
 }
 
+/// One change's counts, its bodies read here. Driver execution and custom
+/// hunk headers are patch-only: named drivers never make commit's shortstat
+/// refuse.
+fn pair_counts(
+    reader: object.Reader,
+    before: List[worktree.FlatEntry],
+    after: List[worktree.FlatEntry],
+    change: Change,
+    driver: str,
+) -> LineCounts ! CommitErrors {
+    var old_data = List[byte](), new_data = List[byte]()
+    if change.old_at >= 0 { old_data = blob(reader, before[change.old_at])? }
+    if change.new_at >= 0 { new_data = blob(reader, after[change.new_at])? }
+    line_counts_with_diff(old_data, new_data, driver)?
+}
+
 /// Metadata-only preview policy: -a may reference blobs not yet published.
 /// Scoring belongs to change_summary after staging. Quiet commit skips both.
 pub fn check_summary_policy(
@@ -317,20 +333,24 @@ fn summary_with(
         let change = copy edits[i]
         if change.dropped { continue }
         files += 1
-        var old_data = List[byte](), new_data = List[byte]()
-        {
-            let same = change.old_at >= 0 &&
-                change.new_at >= 0 &&
-                oid.equal(before[change.old_at].id, after[change.new_at].id)
-            if counts && !same {
-                if change.old_at >= 0 { old_data = blob(reader, before[change.old_at])? }
-                if change.new_at >= 0 { new_data = blob(reader, after[change.new_at])? }
-                // Driver execution and custom hunk headers are patch-only:
-                // named drivers never make commit's shortstat refuse.
-                let count = line_counts_with_diff(old_data, new_data, policies[i])?
-                added += count.added
-                deleted += count.deleted
+        let same = change.old_at >= 0 &&
+            change.new_at >= 0 &&
+            oid.equal(before[change.old_at].id, after[change.new_at].id)
+        if counts && !same {
+            // One pair's bodies and count tables at a time (den#145): the
+            // region reclaims them before the next pair is read. A count that
+            // fails runs again outside, where its message can leave.
+            var count = LineCounts { added: 0, deleted: 0, binary: false }, failed = false
+            region pair {
+                let found = pair_counts(reader, before, after, change, policies[i]) else |_| {
+                    failed = true
+                    LineCounts { added: 0, deleted: 0, binary: false }
+                }
+                count = found
             }
+            if failed { count = pair_counts(reader, before, after, change, policies[i])? }
+            added += count.added
+            deleted += count.deleted
         }
         if change.rename {
             add_bytes(mut detail, " rename ".bytes())
