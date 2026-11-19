@@ -13,8 +13,12 @@ fn stable(a: List[int], b: List[int]) -> bool {
     true
 }
 
-fn read_held(fd: int, path: List[byte]) -> List[byte] ! WorkErrors {
+/// The file's bytes, in one buffer of the size its fstat gave: grown a chunk
+/// at a time, a 16 MB file kept every smaller buffer it outgrew, about twice
+/// its size (den#145). A file that grows after the fstat still reads whole.
+fn read_held(fd: int, path: List[byte], size: int) -> List[byte] ! WorkErrors {
     var out = List[byte](), exceeded = false
+    if size > 0 && size <= 1000000000 { (mut out).reserve(size) }
     loop {
         region chunk {
             let part = fs_read_chunk(fd, 65536) else |e| match e {
@@ -64,7 +68,7 @@ pub fn read_file(
         defer fs.close(take file) else |_| {}
         let before = fs_fstat_record(file.fd)?
         if !stable(named, before) { return Failure("'{text(path)?}' changed while opening") }
-        data = read_held(file.fd, path)?
+        data = read_held(file.fd, path, before[1])?
         record = fs_fstat_record(file.fd)?
         if !stable(before, record) || !stable(record, fs_lstat(full)?) {
             return Failure("'{text(path)?}' changed while reading")
