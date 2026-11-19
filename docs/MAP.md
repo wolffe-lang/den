@@ -627,7 +627,7 @@ empty/single list, never a fabricated parent. Identical whole-file parents take
 priority; otherwise raw parent order controls transfers. Missing paths follow
 whole-file rename pairs from the existing diff collector/pairer, not `-M`/`-C`
 line-movement heuristics. Commit/blob/rename-input payload and line-position
-charges cap at 128 MiB, work items at 10,000, bodies at 16 MiB/200,000 lines;
+charges cap at 128 MiB, work items at 10,000, bodies at 16 MiB;
 these are operation/payload bounds, not a streaming or peak-RSS guarantee.
 
 `blame.render(context, result, options)` validates public result indices and
@@ -1251,7 +1251,8 @@ are independently measured. No source/destination index is an absence sentinel.
 Commit's metadata-only preview does not require unpublished `-a` blobs. Quiet
 commit skips display work. Nonquiet summaries count actual OID differences,
 even when a hash collision yields a 100-percent content score. The pairer is
-bounded at 2,000 candidates per side and body scoring at 16 MiB per file.
+bounded at 2,000 candidates per side and body scoring at 1,000,000,000 bytes per
+file. A summary counts each pair with `difftext.counts`, in a region of its own.
 
 vc05 should reuse lossless object headers, `head`, `flatten_tree`, owned rows and
 the new pure diff consumer API below. `diff.collect`/`render` never refresh the
@@ -1325,9 +1326,12 @@ pub struct Similarity { common: int, maximum: int, units: int, percent: int }
 pub fn delta.binary(data: List[byte]) -> bool
 pub fn delta.span_counts(data: List[byte]) -> Map[int, int] ! DeltaErrors
 pub fn delta.similarity(before: List[byte], after: List[byte]) -> Similarity ! DeltaErrors
+pub fn delta.similarity_with(before: List[byte], after: List[byte], slots_from: int) -> Similarity ! DeltaErrors
 ```
 
-It owns returned storage, limits inputs to 16 MiB, uses original size as the
+It owns returned storage, limits inputs to 1,000,000,000 bytes (past 1 MiB a
+side its weights sit in one slot per bucket, `similarity_with` naming the
+threshold; the sums are the Maps'), uses original size as the
 denominator and returns a 60,000-unit score plus floored percentage. Exact byte
 identity, including two empty inputs, scores 100; unequal chunks may collide.
 The native and release external clients each match all 1,510 inherited records
@@ -1364,6 +1368,7 @@ pub struct Edit { old_start: int, old_count: int,
 pub fn difftext.lines(data: List[byte]) -> List[Line] ! DeltaErrors
 pub fn difftext.edits(before: List[byte], after: List[byte]) -> List[Edit] ! DeltaErrors
 pub fn difftext.counts(before: List[byte], after: List[byte]) -> Counts ! DeltaErrors
+pub fn difftext.repeated(data: List[byte]) -> bool ! DeltaErrors
 pub fn difftext.hunks(before: List[byte], after: List[byte],
     context: int, indent: bool) -> List[byte] ! DeltaErrors
 pub fn diffbinary.patch(before: List[byte], after: List[byte]) -> List[byte] ! BinaryPatchErrors
@@ -1371,8 +1376,10 @@ pub fn diffbinary.patch(before: List[byte], after: List[byte]) -> List[byte] ! B
 
 `difftext` uses byte lines, including LF, and verifies line equality after a
 hash prefilter. It keeps a bounded Myers trace; direct empty-side edits avoid
-that search. General searches cap at 2,000 changed lines, inputs at 200,000
-lines/16 MiB, context at 200,000. Invalid arguments and limits are explicit rows.
+that search. General searches cap at 2,000 changed lines, inputs at
+1,000,000,000 bytes with any number of lines, context at 200,000. `repeated`
+answers whether a line occurs twice, comparing the bytes of lines whose hashes
+collide. Invalid arguments and limits are explicit rows.
 `counts` gives a minimal script's inserted and deleted line counts from the
 forward pass alone (one row of furthest reaching points, never the trace), so
 in space linear in the inputs and with no bound on changed lines or on lines;

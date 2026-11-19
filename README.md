@@ -289,18 +289,24 @@ entry is racily clean (its mtime in the index file's own second or later). The
 autoRefreshIndex step reuses the hashes the comparison made. A command that
 reads objects parses each pack index once, when it starts, not once an object.
 
-Diff bodies are limited to 16 MiB per file, the bodies a diff reads to 128 MiB,
-text sequences to 200,000 lines and general edit searches to 2,000 changed
-lines. A stat's counts (`--stat`, `--numstat`, `--shortstat`, and the summary a
-pull or merge prints after it moves HEAD) have neither of the last two bounds:
-they are a minimal script's counts, found in space linear in the two bodies
-(den#105). Rename pools are limited to 2,000 candidates per side. Exceeding a
+Diff bodies are limited to 1,000,000,000 bytes per file (an object read's
+bound, as a checkout's), with any number of lines, and the bodies a diff reads
+to 128 MiB (den#145). General edit searches (a patch, a three-way file merge)
+keep a budget of 2,000 changed lines, named when reached (`limit: a file whose
+line diff passes 2000 differing lines in a patch`, or `in a three-way file
+merge`); Git's have none. A stat's counts (`--stat`, `--numstat`,
+`--shortstat`, the summary a pull or merge prints after it moves HEAD, and a
+commit's summary) have no bound on differing lines: they are a minimal
+script's counts, found in space linear in the two bodies (den#105). They equal
+Git's `--minimal` counts, and Git's default ones wherever its default diff is
+minimal. Rename pools are limited to 2,000 candidates per side. Exceeding a
 bound returns a named failure, never an approximate result presented as exact.
 
 A bound that fetch, pull, clone, merge or checkout reaches is a fatal error that
 names the bound and its value, exit 128: `fatal: limit: more than 100000
 commits in the ancestry walk`, `fatal: limit: more than 256 packs in
-objects/pack`, `fatal: limit: an object larger than 16777216 bytes` (den#100).
+objects/pack`, `fatal: limit: more than 134217728 bytes of compared merge input
+in one tree` (den#100).
 `tools/limit-census.py` keeps the code those commands run free of unnamed bounds.
 
 History readers never write the index, objects, refs or reflogs. Root patches
@@ -527,7 +533,7 @@ display widths and unsupported blame/diff configuration remain named limits.
 Porcelain retains raw identity/content bytes; the public path API accepts raw
 non-UTF-8 tree names, while argv remains UTF-8-limited.
 
-Bodies cap at 16 MiB/200,000 lines, inherited edit searches at 2,000 changes,
+Bodies cap at 16 MiB, inherited edit searches at 2,000 changes,
 and attribution at 10,000 work items with 128 MiB of charged commit/blob,
 rename-input and line-position payload. Numeric ranges cap at 256 operands of
 4,096 bytes. Rendering caps at 128 MiB and reclaims per-line scratch; the shared
