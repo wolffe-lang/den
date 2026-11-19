@@ -48,9 +48,11 @@ pub fn render(steps: List[Step]) -> List[byte] ! SequenceErrors {
 /// Conservative order-independent checksum of whitespace-normalized lines.
 /// A matching net change is only a POSSIBLE patch-equivalence match: callers
 /// refuse it, never drop a commit on this checksum. Collisions only refuse more.
-/// Inputs above 16 MiB return limit; all intentional arithmetic wraps.
+/// Inputs above an object read's bound (1,000,000,000 bytes) return limit;
+/// the sum streams over the body, so a large one costs no memory (den#145).
+/// All intentional arithmetic wraps.
 pub fn line_sum(data: List[byte]) -> wrapping[u64] ! {limit} {
-    if data.len > 16777216 { return limit }
+    if data.len > 1000000000 { return limit }
     var total: wrapping[u64] = 0
     var line: wrapping[u64] = 14695981039346656037
     var start = 0
