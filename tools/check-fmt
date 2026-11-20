@@ -1,9 +1,11 @@
 #!/bin/sh
 # Adapted from wolffe-lang/aspen 476edee3 tools/check-fmt; own code.
-# check-fmt — `wolf fmt --check` over every .lu in src/.
+# check-fmt — `wolf fmt --check` over every .lu in src/ and probes/, after
+# tools/module-deps.py holds every package manifest to the modules its files use.
 set -eu
 DEN_ROOT=$(cd "$(dirname "$0")/.." && pwd)
 export DEN_ROOT
 cd "$DEN_ROOT"
 . tools/lib-toolchain.sh
+python3 -I tools/module-deps.py
 "$WOLF" fmt --check src probes
