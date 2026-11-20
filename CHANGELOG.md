@@ -2,6 +2,43 @@
 
 ## Unreleased — fast-forward pull
 
+- A fast-forward `pull` of one commit over `file://` on the 454-file speed
+  fixture takes about 2 to 3 times Git's CPU where it took 5 to 23 times
+  (record host, den over Git, cold / warm index): native 12.69 / 23.26 ->
+  2.08 / 2.92, release 5.14 / 8.77 -> 1.42 / 1.91; den's CPU 841 / 760 ms
+  -> 137 / 93 ms native and 337 / 274 ms -> 94 / 62 ms release, against
+  Git's 66 / 32 ms. Peak memory 19.6 -> 18.1 MB native and 16.8 -> 15.4 MB
+  release, about twice Git's 8.5 MB.
+- A fetch's closure check typed each object the received trees name that
+  the repository already held by reading it whole: inflating it, checking
+  its pack entry's CRC-32 and hashing it, for every unchanged file of the
+  tree (most of a pull's time). It now types such an object from its pack
+  entry's header, a delta's from its base's (a loose one is still read), and
+  does not read it again: a fetch does not re-verify packed objects the
+  repository already held, as Git's does not; `fsck` checks every object.
+  What a fetch receives is checked as before, and
+  `tools/fetch-damage-test.py` (in `tools/check-wire`) holds a pull to
+  refusing a received object damaged in transit, leaving the repository as
+  it was.
+- A fast-forward merge scanned the work tree twice, once for its checks and
+  once for its transition, hashing every stat-dirty tracked file each time,
+  and built and stored every tree of its target, which it never used; it
+  now scans once and assembles no trees.
+- A rename's score below 1 MiB sums its span weights from two sorted lists
+  instead of a Map, whose every update and lookup scanned its keys: a
+  pull's change summary scores each deleted path against each added one,
+  twice. The scores are the same.
+- A packed read checks an entry of 2,048 bytes or more against its CRC-32
+  through the 256-entry table, a byte a step, where it took eight steps a
+  byte; the value is the same.
+- A fetch of fewer than 100 objects writes them loose through packs opened
+  once, where each write's check for a stored copy parsed every pack index
+  again.
+- The pull speed rows' ceilings came down in two steps, each by the README's
+  rule from the record host's measurement and each committed before the
+  changes that earn it: native 18 / 34 -> 5 / 6.5 -> 3 / 4, release 7 / 12
+  -> 3.5 / 4 -> 3 / 3 (cold / warm). The second step covers four smaller
+  changes together, since none alone moves a ceiling by a half step.
 - The warm `diff --quiet` speed row of the native build has a ceiling of 7
   where it had 6.5. Three takes of the row on two core sets read 4.89 and
   5.57 (den at 54dc6c8 and at 4f73a20) and 5.93 (den at d7927e2, which also
