@@ -201,6 +201,8 @@ def main():
     def key(q):
         return json.dumps([q['status'], q['stdout'], q['stderr'], q['after']], sort_keys=True)
 
+    a.output = a.output.resolve()
+    a.output.parent.mkdir(parents=True, exist_ok=True)
     report = a.output.parent / (a.output.name + '.usage')
 
     def peak(exe, row):
