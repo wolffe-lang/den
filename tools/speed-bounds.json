@@ -8,7 +8,7 @@
     },
     "diff-quiet": {
       "cold": {"native": 3, "release": 3},
-      "warm": {"native": 6.5, "release": 6}
+      "warm": {"native": 7, "release": 6}
     },
     "diff-cached-quiet": {
       "cold": {"native": 4, "release": 3.5},

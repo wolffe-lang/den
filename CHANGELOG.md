@@ -1,5 +1,15 @@
 # Changes
 
+## Unreleased — fast-forward pull
+
+- The warm `diff --quiet` speed row of the native build has a ceiling of 7
+  where it had 6.5. Three takes of the row on two core sets read 4.89 and
+  5.57 (den at 54dc6c8 and at 4f73a20) and 5.93 (den at d7927e2, which also
+  carries den#146's changes to object reads); the last fails 6.5 once the
+  1.10 guardband applies. Git's side of the row is about 0.6 ms of CPU, and
+  the spread between takes of so short a row is wider than the fifth the
+  ceilings leave. No other ceiling rises.
+
 ## Unreleased — blobs past 16 MiB
 
 - `pull`, `merge`, `diff` (with `--stat`, `--cached` and between commits), a

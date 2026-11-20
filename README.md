@@ -107,11 +107,17 @@ Each ceiling is set from the record host's measurement: the lowest half step
 that leaves a fifth above the measured ratio times the guardband, and never
 under the table's target of 3. Rows den already runs within 3 times Git stand
 at 3. The rest stand where den is today: warm `status` in the native build at
-4, `diff --cached --quiet` at 3.5 to 4, warm `diff --quiet` at 6 to 6.5 (Git
+4, `diff --cached --quiet` at 3.5 to 4, warm `diff --quiet` at 6 to 7 (Git
 answers in about 0.6 ms; den's fixed start-up costs show), and `pull` at 7 to
 34 (den's fast-forward does work Git's does not). A change that makes a row
 faster lowers its ceiling by the same rule in the same change; a ceiling
 rises only with a stated cause.
+
+The warm `diff --quiet` row of the native build rose from 6.5 to 7 for the
+spread between takes on a row whose Git side is about 0.6 ms of CPU: three
+takes on two core sets read 4.89 and 5.57 (den at 54dc6c8 and at 4f73a20) and
+5.93 (den at d7927e2, which also carries den#146's changes to object reads),
+and the last fails 6.5 once the guardband applies (6.52).
 
 The rows are timed only where the clocks can be trusted. A record taken on the
 record host holds a block of cores alone and declares it with
