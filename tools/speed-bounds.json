@@ -15,8 +15,8 @@
       "warm": {"native": 4, "release": 3.5}
     },
     "pull": {
-      "cold": {"native": 18, "release": 7},
-      "warm": {"native": 34, "release": 12}
+      "cold": {"native": 5, "release": 3.5},
+      "warm": {"native": 6.5, "release": 4}
     }
   }
 }
