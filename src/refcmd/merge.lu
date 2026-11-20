@@ -490,7 +490,8 @@ fn merge_command_with(args: List[str], reflog: str, label: str) -> int ! commit.
             _ => { return Unsupported("merge safety: {e}") },
         }
     }
-    let tree = if fast then assembled_trees(ctx, plan.files)? else copy assembled[0]
+    // A fast-forward assembles no trees: its target's trees and blobs are
+    // stored already, and only AUTO_MERGE and a merge commit name a root.
     if !fast {
         let path = "{ctx.repo.gitdir}/AUTO_MERGE.lock"
         let file = fs.create_new_with_mode(path, 0o666) else |e| match e {
@@ -503,7 +504,7 @@ fn merge_command_with(args: List[str], reflog: str, label: str) -> int ! commit.
             },
             _ => { return Fatal("AUTO_MERGE: {e}") },
         }
-        fs_write_chunk(file.fd, "{oid.hex(tree.root)?}\n".bytes())?
+        fs_write_chunk(file.fd, "{oid.hex(assembled[0].root)?}\n".bytes())?
         fs_close(file.fd)?
         fs_rename(path, "{ctx.repo.gitdir}/AUTO_MERGE")?
     }
@@ -581,7 +582,7 @@ fn merge_command_with(args: List[str], reflog: str, label: str) -> int ! commit.
             )?
             let message_bytes = "{message}\n".bytes()
             let body = object.build_commit(
-                tree.root,
+                assembled[0].root,
                 [copy head.commits[0], copy target],
                 author,
                 who,
