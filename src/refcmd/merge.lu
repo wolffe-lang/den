@@ -471,9 +471,19 @@ fn merge_command_with(args: List[str], reflog: str, label: str) -> int ! commit.
     if !fast { worktree.transition(ctx, mut tx.value, flat_files(inputs[0]), "merge")? }
     var assembled = List[index.TreeAssembly]()
     if !fast { (mut assembled).push(assembled_trees(ctx, plan.files)?) }
-    var refused = false
+    // A fast-forward writes nothing between its checks and its transition, so
+    // the transition takes the checks' scan of the work tree.
+    var refused = false, scanned = List[worktree.Snapshot]()
     region safety {
-        worktree.merge_check(ctx, tx.value, flat) else |_| { refused = true }
+        if fast {
+            let found = worktree.merge_check_scan(ctx, tx.value, flat) else |_| {
+                refused = true
+                List[worktree.Snapshot]()
+            }
+            if !refused { scanned = copy found }
+        } else {
+            worktree.merge_check(ctx, tx.value, flat) else |_| { refused = true }
+        }
     }
     if refused {
         worktree.merge_check(ctx, tx.value, flat) else |e| match e {
@@ -508,7 +518,11 @@ fn merge_command_with(args: List[str], reflog: str, label: str) -> int ! commit.
         fs_close(file.fd)?
         fs_rename(path, "{ctx.repo.gitdir}/AUTO_MERGE")?
     }
-    worktree.transition(ctx, mut tx.value, flat, "merge")?
+    if scanned.len == 1 {
+        worktree.transition_scanned(ctx, mut tx.value, flat, "merge", scanned[0])?
+    } else {
+        worktree.transition(ctx, mut tx.value, flat, "merge")?
+    }
     conflict_index(mut tx.value, plan.stages)?
     index.commit(mut tx)?
     for line in plan.messages { print(line) }

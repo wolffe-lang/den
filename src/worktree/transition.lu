@@ -27,6 +27,33 @@ pub fn merge_check(ctx: Context, value: index.Index, target: List[FlatEntry]) ->
     merge_check_supplied(ctx, value, target, Map[str, List[byte]]())?
 }
 
+/// merge_check, answering the scan its checks read: a fast-forward passes it
+/// to transition_scanned, which makes the same checks again from it before
+/// any write, so the work tree is scanned once (each of two scans hashed
+/// every stat-dirty tracked file).
+pub fn merge_check_scan(
+    ctx: Context,
+    value: index.Index,
+    target: List[FlatEntry],
+) -> List[Snapshot] ! WorkErrors {
+    let snapshot = scan_index(ctx, value)?
+    var scratch = copy value
+    transition_from(ctx, mut scratch, target, "merge", true, Map[str, List[byte]](), snapshot)?
+    [snapshot]
+}
+
+/// transition from a merge_check_scan of the same index value, with nothing
+/// written between them: no second scan.
+pub fn transition_scanned(
+    ctx: Context,
+    mut value: index.Index,
+    target: List[FlatEntry],
+    mode: str,
+    snapshot: Snapshot,
+) -> () ! WorkErrors {
+    transition_from(ctx, mut value, target, mode, false, Map[str, List[byte]](), snapshot)?
+}
+
 /// Validate merge safety before publishing newly synthesized blob bodies. Map
 /// keys are full blob OIDs; supplied bytes are identity-checked and never stored.
 pub fn merge_check_supplied(
@@ -111,6 +138,20 @@ fn transition_mode(
 ) -> () ! WorkErrors {
     if mode != "switch" && mode != "merge" && mode != "hard" && mode != "mixed" { return invalid }
     let snapshot = scan_index(ctx, value)?
+    transition_from(ctx, mut value, target, mode, dry, supplied, snapshot)?
+}
+
+// transition_mode from a scan of value already taken (scan_index).
+fn transition_from(
+    ctx: Context,
+    mut value: index.Index,
+    target: List[FlatEntry],
+    mode: str,
+    dry: bool,
+    supplied: Map[str, List[byte]],
+    snapshot: Snapshot,
+) -> () ! WorkErrors {
+    if mode != "switch" && mode != "merge" && mode != "hard" && mode != "mixed" { return invalid }
     var indexed = List[FlatEntry]()
     for entry in value.entries {
         if index.stage(entry) != 0 { return Unsupported("unmerged tree transition") }
