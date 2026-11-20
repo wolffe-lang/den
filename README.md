@@ -823,7 +823,13 @@ smaller fetch is rebuilt into loose objects one at a time. Peak memory follows
 the largest object, not the pack: at most about 64 MiB + 96 MiB + 5 times the
 largest object, measured by `tools/large-pack-test.py` under a hard
 address-space cap. The selected closures are checked before refs change,
-typing blobs from the received pack's own table without reading them.
+typing blobs from the received pack's own table without reading them. An
+object the received trees name that the repository already held is typed from
+its pack entry's header (a loose one is read) and is not read again: a fetch
+does not re-verify packed objects the repository already held, as Git's does
+not, and `fsck` checks every object. Objects a fetch receives are checked as
+before; `tools/fetch-damage-test.py` damages one in transit and holds a pull
+to a refusal that leaves the repository as it was.
 
 Serving, pushing and receiving a push have no object count (den#73). The
 closure to send is walked through one reader, whose cache rebuilds each base

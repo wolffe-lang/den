@@ -300,6 +300,13 @@ autoRefreshIndex step (`refresh_known`) answers each entry from collect's hash
 when the locked index still holds the entry collect compared, and otherwise
 as `refresh` did, skipping a stat-clean entry, so no file is read twice.
 
+`pack.session_kind(s, name)` and `object.kind_cached(r, id)` answer an
+object's type without rebuilding it: a packed object's from its entry header,
+a delta's from its base's header in turn, with a read's header, size and
+delta-base checks and no inflate, CRC or identity hash; a loose object is read
+whole. `closure_received` types so each object the repository held before a
+fetch; what the fetch received is read and checked as before.
+
 vc24 (den#72): `clone_name` derives a clone's directory from its URL when none
 is given; `clone_mode` fills an existing empty destination and empties it again
 on failure, and reports an empty repository for Git's warning. A local clone's
