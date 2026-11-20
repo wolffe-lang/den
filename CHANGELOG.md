@@ -37,6 +37,11 @@
 - A line count's totals are a minimal script's, Git's `--minimal`; where
   Git's default diff departs from minimal (a 486,000-line JSON file rewritten
   by a third), den's stat differs from Git's in that file's counts.
+- `tools/module-deps.py`, run first by the format gate, holds every package
+  manifest (`src/*/wolf.pkg`, `probes/*/wolf.pkg`) to the den modules its
+  files `use`: den's own build resolves a sibling module without the entry,
+  so a probe that builds the module as a path dependency was the first to
+  find `commit` using `difftext` unlisted.
 
 ## Unreleased — symbolic links in pulls
 

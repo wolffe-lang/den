@@ -82,7 +82,8 @@ core-block lock and applying `taskset` inside the container. Rootless hosts
 without delegated cpusets must not rely on pinning only the outer process.
 Keep the CI build mount `/work/den`: the default oracle binary's pinned digest
 also depends on its build path, not merely the base image and version.
-The gate checks formatting, builds native/release binaries, runs actual checked
+The gate checks formatting and that every package manifest lists the den modules
+its files use (`tools/module-deps.py`), builds native/release binaries, runs actual checked
 programs, constructs the corpus twice, compares against the pinned oracle and
 builds the static Linux archive. `tools/mkden OUTDIR` checks ET_EXEC/no PT_INTERP
 and prints full/stripped binary digests. No host-specific glibc is substituted.
