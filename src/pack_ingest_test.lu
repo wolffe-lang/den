@@ -114,6 +114,9 @@ fn units() -> () ! pack.PackErrors {
     }
     var input = List[byte]()
     for i in 0..70000 { (mut input).push((i * 7 % 251) as byte) }
+    // The table and the bit-by-bit CRC agree on a long input too: a read
+    // checks an entry of 2048 bytes or more through the table.
+    assert(pack.crc32_update(table, 0, input, input.len) == pack.crc32(input))
     let deflated = zlib.deflate(input, 1, 200000) else |_| { return Unsupported("deflate") }
     var framed = [1 as byte, 2 as byte, 3 as byte]
     for b in deflated { (mut framed).push(b) }

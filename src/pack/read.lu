@@ -158,6 +158,15 @@ fn charge(mut total: int, count: int) -> () ! PackErrors {
     total += count
 }
 
+/// An entry's CRC-32, crc32's value: bit by bit for a short entry, a byte a
+/// step through the 256-entry table for a long one, where building the table
+/// costs less than the eight steps a byte it saves (a 40 KB blob's check
+/// took most of its read).
+fn entry_crc(bytes: List[byte]) -> int {
+    if bytes.len < 2048 { return crc32(bytes) }
+    crc32_update(crc32_table(), 0, bytes, bytes.len)
+}
+
 fn unpack(
     fd: int,
     end: int,
@@ -180,7 +189,7 @@ fn unpack(
     }
     charge(mut total, length)?
     let bytes = range_bytes(fd, offset, length)?
-    if crc32(bytes) != index.entries[slot].crc { return Unsupported("pack entry CRC") }
+    if entry_crc(bytes) != index.entries[slot].crc { return Unsupported("pack entry CRC") }
     if bytes.len == 0 { return Unsupported("pack entry header") }
     var byte0 = bytes[0] as int, pos: int = 1, size: int = byte0 & 15, scale: int = 16
     let kind = byte0 >> 4 & 7
