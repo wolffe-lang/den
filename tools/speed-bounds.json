@@ -1,9 +1,22 @@
 {
   "guardband": 1.10,
+  "target": 3,
   "rows": {
-    "status": {"cold": 5, "warm": 5},
-    "diff-quiet": {"cold": 5, "warm": 5},
-    "diff-cached-quiet": {"cold": 5, "warm": 5},
-    "pull": {"cold": 5, "warm": 5}
+    "status": {
+      "cold": {"native": 3, "release": 3},
+      "warm": {"native": 4, "release": 3}
+    },
+    "diff-quiet": {
+      "cold": {"native": 3, "release": 3},
+      "warm": {"native": 6.5, "release": 6}
+    },
+    "diff-cached-quiet": {
+      "cold": {"native": 4, "release": 3.5},
+      "warm": {"native": 4, "release": 3.5}
+    },
+    "pull": {
+      "cold": {"native": 18, "release": 7},
+      "warm": {"native": 34, "release": 12}
+    }
   }
 }

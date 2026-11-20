@@ -23,7 +23,7 @@ p.add_argument('--fixture', type=Path, required=True)
 p.add_argument('--den', type=Path, required=True)
 p.add_argument('--output', type=Path, required=True)
 p.add_argument('--samples', type=int, default=3)
-p.add_argument('--tier', default='native')
+p.add_argument('--tier', default='native', choices=['native', 'release'])
 p.add_argument('--cpu-floor', type=float, default=0.2)
 p.add_argument('--profile-only', action='store_true')
 a = p.parse_args()
@@ -103,7 +103,7 @@ try:
             den_cpu = min(x['mean_cpu'] for x in right)
             git_cpu = min(x['mean_cpu'] for x in left)
             ratio = den_cpu / git_cpu
-            ceiling = bounds['rows']['status'][label]
+            ceiling = bounds['rows']['status'][label][a.tier]
             # The guardband's multiplicative uncertainty must still fit the ceiling.
             ok = valid and same and shared['verdict'](ratio, ceiling, guard)
             print(('PASS' if ok else 'FAIL'), 'status-ratio-%s-%s' % (label, a.tier),
