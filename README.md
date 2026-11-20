@@ -108,9 +108,9 @@ that leaves a fifth above the measured ratio times the guardband, and never
 under the table's target of 3. Rows den already runs within 3 times Git stand
 at 3. The rest stand where den is today: warm `status` in the native build at
 4, `diff --cached --quiet` at 3.5 to 4, warm `diff --quiet` at 6 to 7 (Git
-answers in about 0.6 ms; den's fixed start-up costs show), and `pull` at 3.5
-to 6.5. A change that makes a row faster lowers its ceiling by the same rule
-in the same change; a ceiling rises only with a stated cause.
+answers in about 0.6 ms; den's fixed start-up costs show), and warm `pull` in
+the native build at 4. A change that makes a row faster lowers its ceiling by
+the same rule in the same change; a ceiling rises only with a stated cause.
 
 The warm `diff --quiet` row of the native build rose from 6.5 to 7 for the
 spread between takes on a row whose Git side is about 0.6 ms of CPU: three
