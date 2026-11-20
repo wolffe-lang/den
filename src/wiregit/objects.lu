@@ -453,10 +453,13 @@ pub fn publish_received(
         let _ = pack.received_install(ix)?
         return
     }
+    // Each write first asks whether the object is stored already: through
+    // packs opened once here, where each asked parsed every pack index again.
+    let stored = object.opened(repo)
     for slot in 0..pack.received_count(ix) {
         region one {
             let body = pack.received_body(ix, slot)?
-            let _ = object.write_object(repo, body.kind, body.data)?
+            let _ = object.write_object(stored, body.kind, body.data)?
         }
     }
 }
