@@ -41,6 +41,7 @@ for tier in native release; do
     step "$tier-receive-service-build" "$WOLF" build $flag --deny-warnings probes/receive-service/main.lu -o "target/$tier/receive-service"
     step "$tier-wire-peers" tools/env python3 -I tools/wire-test.py --tier "$tier"
     step "$tier-received-pack-peers" tools/env python3 -I tools/wire-pack-test.py --tier "$tier"
+    step "$tier-fetch-damage" tools/env python3 -I tools/fetch-damage-test.py --tier "$tier"
 done
 step actual-checked-wire checked wire_test
 step actual-checked-pack-stream checked pack_stream_test
