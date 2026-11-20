@@ -5,6 +5,7 @@ pkg {
     deps: {
         rename: {path: "../rename"},
         commit_format: {path: "../commit_format"},
+        difftext: {path: "../difftext"},
         worktree: {path: "../worktree"},
         index: {path: "../index"},
         object: {path: "../object"},
