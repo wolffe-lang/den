@@ -5,7 +5,9 @@ fixture, a cold index (copied stat words) and a warm one (refreshed), samples
 interleaved between the tools, child user+system CPU summed to a floor, the
 minimum over the samples, and a row passes when ratio x guardband <= ceiling
 with every run's process bytes and end state equal to Git's. Ceilings and the
-guardband are tools/speed-bounds.json's, one line per row to ratchet.
+guardband are tools/speed-bounds.json's: one ceiling per row, index state and
+build, set from the record host's measurements and lowered toward the table's
+target as den gets faster.
 
   diff-quiet         `diff --quiet` on the clean work tree;
   diff-cached-quiet  `diff --cached --quiet`;
@@ -33,18 +35,21 @@ import time
 
 ROOT = Path(__file__).resolve().parent.parent
 STATES = ('cold', 'warm')
+TIERS = ('native', 'release')
 ROWS = ('status', 'diff-quiet', 'diff-cached-quiet', 'pull')
 MTIME = 1_700_000_000_123456789
 GIT_SHA256 = 'c4848492938c4ebfffbefe1fbbaa68b9af90c86d1f6a20e76816c5ff37fcfa60'
 
 
 def load_bounds(path=ROOT / 'tools/speed-bounds.json'):
-    """The ratchet table: {'guardband': g, 'rows': {row: {state: ceiling}}}."""
+    """The ratchet table: guardband, target and rows[row][state][tier] = ceiling."""
     table = json.loads(Path(path).read_text())
-    assert set(table) == {'guardband', 'rows'}, sorted(table)
+    assert set(table) == {'guardband', 'target', 'rows'}, sorted(table)
     assert set(table['rows']) == set(ROWS), sorted(table['rows'])
     for row, states in table['rows'].items():
         assert set(states) == set(STATES), (row, sorted(states))
+        for state, tiers in states.items():
+            assert set(tiers) == set(TIERS), (row, state, sorted(tiers))
     return table
 
 
@@ -67,7 +72,7 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument('--fixture', type=Path, required=True)
     p.add_argument('--den', type=Path, required=True)
-    p.add_argument('--tier', required=True)
+    p.add_argument('--tier', required=True, choices=TIERS)
     p.add_argument('--parent', type=Path, required=True)
     p.add_argument('--output', type=Path, required=True)
     p.add_argument('--samples', type=int, default=5)
@@ -291,7 +296,7 @@ def main():
                 den_cpu = min(s['mean_cpu'] for s in right)
                 git_cpu = min(s['mean_cpu'] for s in left)
                 ratio = den_cpu / git_cpu
-                ceiling = bounds['rows'][name_row][state]
+                ceiling = bounds['rows'][name_row][state][a.tier]
                 ok = valid and same and verdict(ratio, ceiling, guard)
                 failed = failed or not ok
                 print(('PASS' if ok else 'FAIL'), '%s-ratio-%s-%s' % (name_row, state, a.tier),

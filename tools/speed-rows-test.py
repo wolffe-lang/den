@@ -12,7 +12,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parent.parent
 shared = runpy.run_path(str(ROOT / 'tools/speed-measure.py'))
-TIERS = ('native', 'release')
+TIERS = shared['TIERS']
 names = ['%s-ratio-%s-%s' % (row, state, tier)
          for tier in TIERS for row in shared['ROWS'] for state in shared['STATES']]
 if sys.argv[1:] == ['--names']:
@@ -30,8 +30,10 @@ def say(ok, text):
 
 bounds = shared['load_bounds']()
 say(bounds['guardband'] == 1.10, 'speed-rows-guardband is 1.10')
-ceilings = [c for states in bounds['rows'].values() for c in states.values()]
-say(all(type(c) in (int, float) and 1 < c for c in ceilings), 'speed-rows-ceilings are numbers above 1')
+ceilings = [c for states in bounds['rows'].values() for tiers in states.values() for c in tiers.values()]
+target = bounds['target']
+say(target == 3 and len(ceilings) == 16 and all(type(c) in (int, float) and c >= target for c in ceilings),
+    'speed-rows-ceilings sixteen numbers, none under the target of 3')
 say(len(names) == 16 and len(set(names)) == 16, 'speed-rows-names 16 rows: four commands, cold and warm, two tiers')
 verdict = shared['verdict']
 say(verdict(4.5454, 5, 1.10) and not verdict(4.5455, 5, 1.10) and not verdict(5, 5, 1.10),
