@@ -102,14 +102,23 @@ a 1.10 guardband is at most the row's ceiling in `tools/speed-bounds.json`
 and every run's exit status, output and end state equal Git's. The same run
 states each command's peak resident set beside Git's; peaks are not gated here.
 
+Each ceiling is set from the record host's measurement: the lowest half step
+that leaves a fifth above the measured ratio times the guardband, and never
+under the table's target of 3. Rows den already runs within 3 times Git stand
+at 3. The rest stand where den is today: warm `status` in the native build at
+4, `diff --cached --quiet` at 3.5 to 4, warm `diff --quiet` at 6 to 6.5 (Git
+answers in about 0.6 ms; den's fixed start-up costs show), and `pull` at 7 to
+34 (den's fast-forward does work Git's does not). A change that makes a row
+faster lowers its ceiling by the same rule in the same change; a ceiling
+rises only with a stated cause.
+
 The rows are timed only where the clocks can be trusted. A record taken on the
 record host holds a block of cores alone and declares it with
 `DEN_PERF_ROWS=1`; there a row over its ceiling fails the leaf by name. Hosted
 CI shares its runners and never declares it: the leaf then prints
 `NOT MEASURED` for each row and exits 0, which is not a pass, and
 `tools/speed-rows-test.py` (run by the leaf everywhere) fails if a workflow or
-the container wrapper sets the switch. To tighten a row, lower its ceiling in
-`tools/speed-bounds.json` in the change that earns it.
+the container wrapper sets the switch.
 
 Inside that container, with `DEN_GIT` set to the pinned built Git:
 

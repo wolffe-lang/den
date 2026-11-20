@@ -9,8 +9,10 @@
   den's CPU time to a multiple of the pinned Git's (the least of five
   interleaved samples, a 1.10 guardband) with exit status, output and end
   state equal to Git's, and states both tools' peak memory. The ceilings are
-  one table, `tools/speed-bounds.json`, set from measurements and meant to be
-  lowered as den gets faster.
+  one table, `tools/speed-bounds.json`, one per row, index state and build,
+  set from the record host's measurements: 3 where den is already within 3
+  times Git, up to 6.5 for a warm `diff --quiet` and 34 for a warm native
+  `pull`, each to be lowered toward 3 by the change that earns it.
 - The rows are timed in records taken on the record host, which holds a block
   of cores alone and declares it with `DEN_PERF_ROWS=1`, and not in hosted CI,
   whose runners are shared: there each row prints `NOT MEASURED` by name.
