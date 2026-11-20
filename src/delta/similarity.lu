@@ -59,6 +59,67 @@ fn bucket_weights(data: List[byte]) -> List[int] {
     slots
 }
 
+/// span_counts' sums as two lists in ascending bucket order, its keys and
+/// their weights, for a body below the slots: a Map's update and lookup scan
+/// its keys, so two bodies of 40 KB took a million steps a score (a pull's
+/// summary scores every deleted path against every added one, twice); a sort
+/// of the spans and one merge of the two lists take n log n.
+fn sorted_weights(data: List[byte]) -> (List[int], List[int]) {
+    let keyed = spans(data)
+    let n = keyed.len / 2
+    // A stable bottom-up merge sort of span positions by bucket.
+    var order = List[int](), scratch = List[int]()
+    (mut order).reserve(n)
+    (mut scratch).reserve(n)
+    for i in 0..n {
+        (mut order).push(i)
+        (mut scratch).push(i)
+    }
+    var width = 1
+    while width < n {
+        var lo = 0
+        while lo < n {
+            let mid = if lo + width < n then lo + width else n
+            let hi = if lo + 2 * width < n then lo + 2 * width else n
+            var i = lo, j = mid, k = lo
+            while i < mid && j < hi {
+                if keyed[2 * order[j]] < keyed[2 * order[i]] {
+                    scratch[k] = order[j]
+                    j += 1
+                } else {
+                    scratch[k] = order[i]
+                    i += 1
+                }
+                k += 1
+            }
+            while i < mid {
+                scratch[k] = order[i]
+                i += 1
+                k += 1
+            }
+            while j < hi {
+                scratch[k] = order[j]
+                j += 1
+                k += 1
+            }
+            lo = hi
+        }
+        for i in 0..n { order[i] = scratch[i] }
+        width *= 2
+    }
+    var keys = List[int](), weights = List[int]()
+    for at in order {
+        let key = keyed[2 * at]
+        if keys.len > 0 && keys[keys.len - 1] == key {
+            weights[weights.len - 1] += keyed[2 * at + 1]
+        } else {
+            (mut keys).push(key)
+            (mut weights).push(keyed[2 * at + 1])
+        }
+    }
+    (keys, weights)
+}
+
 /// Each span's bucket and weight in body order: key, weight, key, weight.
 fn spans(data: List[byte]) -> List[int] {
     var out = List[int]()
@@ -114,11 +175,25 @@ pub fn similarity_with(
             common += if left[key] < right[key] then left[key] else right[key]
         }
     } else {
-        let left = span_counts(before)?
-        let right = span_counts(after)?
-        for (key, count) in left.pairs() {
-            let other = right[key] else 0
-            common += if count < other then count else other
+        // span_counts' sums, as sorted lists: the same common weight.
+        let (left_keys, left_weights) = sorted_weights(before)
+        let (right_keys, right_weights) = sorted_weights(after)
+        var i = 0, j = 0
+        while i < left_keys.len && j < right_keys.len {
+            if left_keys[i] < right_keys[j] {
+                i += 1
+            } else if right_keys[j] < left_keys[i] {
+                j += 1
+            } else {
+                let least = if left_weights[i] < right_weights[j] {
+                    left_weights[i]
+                } else {
+                    right_weights[j]
+                }
+                common += least
+                i += 1
+                j += 1
+            }
         }
     }
     let units = common * 60000 / maximum
