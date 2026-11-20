@@ -1623,7 +1623,11 @@ messages, unborn merge and dirty/staged true-merge recovery. Fast-forward safety
 and clean regular-file merges remain supported, not approximated fallbacks.
 
 `worktree.merge_check` previews safety without writing objects/index/worktree;
-`transition(..., "merge")` installs under the caller's index lock.
+`transition(..., "merge")` installs under the caller's index lock. A
+fast-forward scans the work tree once: `merge_check_scan` makes merge_check's
+checks and returns the snapshot they read, and `transition_scanned` makes the
+same checks again from it before any write; nothing is written between them,
+and a fast-forward assembles no trees (its target's are stored already).
 `abort_merge` restores unmerged paths from HEAD, preserves unchanged entries and
 dirty paths, and checks stage-zero stat identity before replacing such a path.
 `commit.refresh_index` exposes the existing content-equal-only refresh policy.
