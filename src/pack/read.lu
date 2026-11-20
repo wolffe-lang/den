@@ -320,6 +320,79 @@ fn unpack(
     result
 }
 
+/// The type code (1 commit, 2 tree, 3 blob, 4 tag) of the entry at slot from
+/// its header alone, a delta's from its base's header in turn: for a check
+/// that needs an object's presence and type and not its body (a fetch's
+/// closure check of an object the repository held before it). The header,
+/// size and delta-base checks are unpack's; nothing is inflated, CRC-checked
+/// or hashed, so a damaged body is found by the read that needs it.
+fn entry_kind(
+    fd: int,
+    end: int,
+    index: Index,
+    slot: int,
+    mut seen: Map[int, bool],
+    depth: int,
+) -> int ! PackErrors {
+    if depth > 64 { return Unsupported("limit: a delta chain deeper than 64") }
+    let offset = index.entries[slot].offset
+    if seen[offset] else false { return Unsupported("pack delta cycle") }
+    seen[offset] = true
+    let next = next_offset(index, offset, end)
+    // The longest header: ten size bytes, then a 20-byte base name.
+    let bytes = range_bytes(fd, offset, if next - offset > 32 then 32 else next - offset)?
+    if bytes.len == 0 { return Unsupported("pack entry header") }
+    var byte0 = bytes[0] as int, pos: int = 1, size: int = byte0 & 15, scale: int = 16
+    let kind = byte0 >> 4 & 7
+    while byte0 >= 128 {
+        if pos == bytes.len { return Unsupported("pack entry header") }
+        byte0 = bytes[pos] as int
+        pos += 1
+        if byte0 & 127 > (object_limit() - size) / scale {
+            return Unsupported("limit: a pack object larger than 536870912 bytes")
+        }
+        size += (byte0 & 127) * scale
+        if byte0 >= 128 {
+            if scale > object_limit() / 128 {
+                return Unsupported("limit: a pack object larger than 536870912 bytes")
+            }
+            scale *= 128
+        }
+    }
+    if size > object_limit() {
+        return Unsupported("limit: a pack object larger than 536870912 bytes")
+    }
+    if kind == 6 {
+        if pos == bytes.len { return Unsupported("pack OFS_DELTA offset") }
+        var b = bytes[pos] as int, distance: int = b & 127
+        pos += 1
+        while b >= 128 {
+            if pos == bytes.len || distance >= offset / 128 {
+                return Unsupported("pack OFS_DELTA offset")
+            }
+            b = bytes[pos] as int
+            pos += 1
+            distance = (distance + 1) * 128 + (b & 127)
+        }
+        if distance <= 0 || distance > offset - 12 { return Unsupported("pack OFS_DELTA offset") }
+        let base_slot = slot_at(index, offset - distance)
+        if base_slot < 0 { return Unsupported("pack OFS_DELTA base boundary") }
+        return entry_kind(fd, end, index, base_slot, mut seen, depth + 1)?
+    }
+    if kind == 7 {
+        if bytes.len - pos < 20 { return Unsupported("pack REF_DELTA name") }
+        let id = oid.from_bytes("sha1", bytes[pos..pos + 20]) else |_| {
+            return Unsupported("pack REF_DELTA name")
+        }
+        let name = oid.hex(id) else |_| { return Unsupported("pack REF_DELTA name") }
+        let base_slot = slot_named(index, name)
+        if base_slot < 0 { return Unsupported("thin pack REF_DELTA base") }
+        return entry_kind(fd, end, index, base_slot, mut seen, depth + 1)?
+    }
+    if kind < 1 || kind > 4 { return Unsupported("pack object type") }
+    kind
+}
+
 /// den#73: objects rebuilt along delta chains, by pack and offset, so reads
 /// in walk order rebuild each base once rather than once for every object
 /// above it in its chain (git-config(1)'s core.deltaBaseCacheLimit describes
@@ -580,6 +653,28 @@ pub fn session_cached(mut s: Session, name: str, cap: int) -> Body ! PackErrors 
             return Unsupported(capped(cap))
         }
         return result
+    }
+    not_found
+}
+
+/// The type of the object name ("commit", "tree", "blob" or "tag") from its
+/// entry header (entry_kind), through the session's indexes, each pack's
+/// header and trailer binding checked again (rebound) as a read checks it;
+/// not_found when no loaded pack holds it. Its body is never rebuilt.
+pub fn session_kind(mut s: Session, name: str) -> str ! PackErrors {
+    if !s.loaded { load_session(mut s)? }
+    for i in 0..s.paths.len {
+        let slot = slot_named(s.indexes[i], name)
+        if slot < 0 { continue }
+        var code = 0
+        region candidate {
+            let fd = open_pack("{s.paths[i][0..s.paths[i].len - 4]}.pack")?
+            defer fs_close(fd) else |_| {}
+            let end = rebound(fd, s.indexes[i], s.ends[i])?
+            var seen = Map[int, bool]()
+            code = entry_kind(fd, end, s.indexes[i], slot, mut seen, 0)?
+        }
+        return kind_label(code)
     }
     not_found
 }

@@ -266,6 +266,17 @@ fn read_cached_whole(mut r: Reader, id: oid.Oid, max_output: int) -> Object ! St
     decoded(input, id, max_output)?
 }
 
+/// The type of id with read_cached's precedence, from no more than tells it:
+/// a loose object is read whole (read_cached), a packed one is typed from
+/// its pack entry's header, a delta's from its base's (pack.session_kind),
+/// and never rebuilt. For a check that needs an object's presence and type,
+/// not its body: a fetch's closure check of an object the repository held
+/// before the fetch.
+pub fn kind_cached(mut r: Reader, id: oid.Oid) -> str ! StoreErrors {
+    if fs.exists(path(r.repo, id)?) { return read_cached(mut r, id, pack.object_limit())?.kind }
+    pack.session_kind(mut r.packs, oid.hex(id)?)?
+}
+
 /// The short-name length Git prints when core.abbrev is unset or "auto": seven
 /// below 2^14 packed objects, then one more each time the packed count
 /// reaches another factor of four (8 from 16384, 9 from 65536, 10 from
