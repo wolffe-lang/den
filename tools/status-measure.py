@@ -3,10 +3,11 @@
 Restores the captured index before each timed child, never times restoration or
 fixture hashing. Samples are interleaved, use child user+system CPU, and retain
 raw process bytes plus exact before/after indexes. Intended for an exclusive
-performance block, not a light slot or mixed-core block. The ceilings and the
-guardband are tools/speed-bounds.json's "status" line, read through
-speed-measure.py, whose rows share this one's shape; --tier names the build in
-each row.
+performance block, not a light slot or mixed-core block. The ceilings, the
+guardband, the statistic and each index state's sampling are
+tools/speed-bounds.json's "status" lines, read through speed-measure.py, whose
+rows share this one's shape and whose judge() this one uses; --tier names the
+build in each row.
 """
 import argparse
 import hashlib
@@ -41,7 +42,10 @@ rows, refresh = [], []
 env = dict(os.environ)
 
 
-def child(exe, optional):
+def child(exe, optional, keep=True):
+    """One status run. keep: the index's bytes before and after in hex (the
+    refresh witnesses); a timed run keeps their digests, since a 1 s floor
+    takes a thousand runs of Git's status."""
     e = dict(env, GIT_OPTIONAL_LOCKS=str(optional))
     before = index.read_bytes()
     c0 = resource.getrusage(resource.RUSAGE_CHILDREN)
@@ -52,8 +56,9 @@ def child(exe, optional):
     c1 = resource.getrusage(resource.RUSAGE_CHILDREN)
     cpu = (c1.ru_utime - c0.ru_utime) + (c1.ru_stime - c0.ru_stime)
     after = index.read_bytes()
+    shown = (lambda b: b.hex()) if keep else (lambda b: hashlib.sha256(b).hexdigest())
     return dict(status=q.returncode, stdout=q.stdout.hex(), stderr=q.stderr.hex(),
-                cpu=cpu, wall=wall, index_before=before.hex(), index_after=after.hex(),
+                cpu=cpu, wall=wall, index_before=shown(before), index_after=shown(after),
                 index_changed=before != after)
 
 
@@ -72,46 +77,47 @@ try:
                           'cpu=%.6f' % q['cpu'], 'wall=%.6f' % q['wall'],
                           'index_changed=' + str(q['index_changed']), flush=True)
     if not a.profile_only:
-        for sample in range(a.samples):
+        plan = {label: shared['sampling'](bounds, 'status', label, a.samples, a.cpu_floor) for label in ['cold', 'warm']}
+        for sample in range(max(n for n, _ in plan.values())):
             order = [('git', G), ('den', a.den.resolve())]
             if sample % 2:
                 order.reverse()
             for label in ['cold', 'warm']:
+                count, floor = plan[label]
+                if sample >= count:
+                    continue
                 for name, exe in order:
                     results, elapsed = [], 0.0
-                    while elapsed < a.cpu_floor and len(results) < 512:
+                    while elapsed < floor and len(results) < shared['RUN_CAP']:
                         index.write_bytes(inputs[label])
-                        q = child(exe, 0)
+                        q = child(exe, 0, keep=False)
                         results.append(q)
                         elapsed += q['cpu']
                         if q['status']:
                             break
-                    rows.append(dict(sample=sample, state=label, tool=name,
-                                     results=results, mean_cpu=elapsed / len(results),
+                    rows.append(dict(sample=sample, state=label, tool=name, runs=len(results),
+                                     outcomes=sorted({(q['status'], q['stdout'], q['stderr']) for q in results}),
+                                     statuses=sorted({q['status'] for q in results}),
+                                     index_changed=any(q['index_changed'] for q in results),
+                                     first=results[0], mean_cpu=elapsed / len(results),
                                      mean_wall=sum(x['wall'] for x in results) / len(results),
-                                     cpu_floor_reached=elapsed >= a.cpu_floor))
+                                     cpu_floor=floor, cpu_floor_reached=elapsed >= floor))
                     print('SAMPLE', sample, label, name, 'runs=' + str(len(results)),
                           'cpu=%.6f' % (elapsed / len(results)), flush=True)
         for label in ['cold', 'warm']:
             left = [x for x in rows if x.get('state') == label and x['tool'] == 'git']
             right = [x for x in rows if x.get('state') == label and x['tool'] == 'den']
-            valid = all(x['cpu_floor_reached'] and all(q['status'] == 0 for q in x['results'])
-                        for x in left + right)
-            expected = {(q['status'], q['stdout'], q['stderr']) for x in left for q in x['results']}
-            actual = {(q['status'], q['stdout'], q['stderr']) for x in right for q in x['results']}
+            valid = all(x['cpu_floor_reached'] and x['statuses'] == [0] for x in left + right)
+            expected = {tuple(o) for x in left for o in x['outcomes']}
+            actual = {tuple(o) for x in right for o in x['outcomes']}
             same = expected == actual and len(expected) == 1
-            den_cpu = min(x['mean_cpu'] for x in right)
-            git_cpu = min(x['mean_cpu'] for x in left)
-            ratio = den_cpu / git_cpu
-            ceiling = bounds['rows']['status'][label][a.tier]
-            # The guardband's multiplicative uncertainty must still fit the ceiling.
-            ok = valid and same and shared['verdict'](ratio, ceiling, guard)
-            print(('PASS' if ok else 'FAIL'), 'status-ratio-%s-%s' % (label, a.tier),
-                  'ratio=%.6f guardband=%.2f ceiling=%g' % (ratio, guard, ceiling),
-                  'den_cpu=%.6f git_cpu=%.6f' % (den_cpu, git_cpu),
-                  'process_same=' + str(same), flush=True)
-            rows.append(dict(verdict=label, tier=a.tier, equal=ok, ratio=ratio, margin=guard, ceiling=ceiling,
-                             den_cpu=den_cpu, git_cpu=git_cpu))
+            # Sample order pairs each den batch with the Git batch beside it.
+            den = [x['mean_cpu'] for x in sorted(right, key=lambda x: x['sample'])]
+            git = [x['mean_cpu'] for x in sorted(left, key=lambda x: x['sample'])]
+            ok, words, judged = shared['judge'](bounds, 'status', label, a.tier, den, git, valid, same)
+            print(('PASS' if ok else 'FAIL'), 'status-ratio-%s-%s' % (label, a.tier), words,
+                  'process_same=' + str(same) + ('' if valid else ' valid=False'), flush=True)
+            rows.append(dict(verdict=label, tier=a.tier, equal=ok, margin=guard, **judged))
 finally:
     index.write_bytes(inputs['warm'])
     a.output.parent.mkdir(parents=True, exist_ok=True)
