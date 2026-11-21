@@ -1,5 +1,5 @@
 {
- "about": "Speed-row takes from den records on the record host, for tools/speed-band-test.py. Each row is [ratio, den CPU s, Git CPU s] as the record printed it. A take's sampling is its samples per row-state, the CPU floor each sample is summed to, and the ratio's statistic.",
+ "about": "Speed-row takes from den records on the record host, for tools/speed-band-test.py. Each row is [ratio, den CPU s, Git CPU s] as the record printed it. A take's sampling is its samples per row-state, the CPU floor each sample is summed to, and the ratio's statistic. A take's samples and cpu_floor are those of its sub-millisecond rows; its other rows took 5 samples of 0.2 s. The ratios are least over least, the table's statistic.",
  "takes": [
   {
    "source": "record at den 4f73a203, 2026-11-20 03:28Z",
@@ -378,6 +378,622 @@
      2.357008,
      0.002143,
      0.000909
+    ]
+   }
+  },
+  {
+   "source": "measure take at den 7a5f90ba with these tools (3f62d16), cores 6-11, 2026-11-21 02:50Z",
+   "samples": 9,
+   "cpu_floor": 1.0,
+   "statistic": "least",
+   "rows": {
+    "diff-cached-quiet-ratio-cold-native": [
+     2.89139,
+     0.001575,
+     0.000545
+    ],
+    "diff-cached-quiet-ratio-cold-release": [
+     2.450559,
+     0.001325,
+     0.000541
+    ],
+    "diff-cached-quiet-ratio-warm-native": [
+     2.943791,
+     0.0016,
+     0.000544
+    ],
+    "diff-cached-quiet-ratio-warm-release": [
+     2.429093,
+     0.001319,
+     0.000543
+    ],
+    "diff-quiet-ratio-cold-native": [
+     0.966404,
+     0.047987,
+     0.049655
+    ],
+    "diff-quiet-ratio-cold-release": [
+     0.79949,
+     0.035006,
+     0.043785
+    ],
+    "diff-quiet-ratio-warm-native": [
+     5.06293,
+     0.003214,
+     0.000635
+    ],
+    "diff-quiet-ratio-warm-release": [
+     4.242518,
+     0.002719,
+     0.000641
+    ],
+    "pull-ratio-cold-native": [
+     2.114226,
+     0.134192,
+     0.063471
+    ],
+    "pull-ratio-cold-release": [
+     1.478027,
+     0.093439,
+     0.063218
+    ],
+    "pull-ratio-warm-native": [
+     3.247062,
+     0.09806,
+     0.0302
+    ],
+    "pull-ratio-warm-release": [
+     1.968272,
+     0.059662,
+     0.030312
+    ],
+    "status-ratio-cold-native": [
+     1.36131,
+     0.046437,
+     0.034112
+    ],
+    "status-ratio-cold-release": [
+     0.990416,
+     0.033366,
+     0.033689
+    ],
+    "status-ratio-warm-native": [
+     2.93487,
+     0.002678,
+     0.000912
+    ],
+    "status-ratio-warm-release": [
+     2.336325,
+     0.002097,
+     0.000897
+    ]
+   }
+  },
+  {
+   "source": "measure take at den 7a5f90ba with these tools (3f62d16), cores 6-11, 2026-11-21 02:54Z",
+   "samples": 9,
+   "cpu_floor": 1.0,
+   "statistic": "least",
+   "rows": {
+    "diff-cached-quiet-ratio-cold-native": [
+     3.06563,
+     0.001577,
+     0.000515
+    ],
+    "diff-cached-quiet-ratio-cold-release": [
+     2.391473,
+     0.001234,
+     0.000516
+    ],
+    "diff-cached-quiet-ratio-warm-native": [
+     2.948744,
+     0.001613,
+     0.000547
+    ],
+    "diff-cached-quiet-ratio-warm-release": [
+     2.397256,
+     0.001252,
+     0.000522
+    ],
+    "diff-quiet-ratio-cold-native": [
+     1.138359,
+     0.049678,
+     0.04364
+    ],
+    "diff-quiet-ratio-cold-release": [
+     0.805823,
+     0.035423,
+     0.043959
+    ],
+    "diff-quiet-ratio-warm-native": [
+     4.938999,
+     0.003074,
+     0.000622
+    ],
+    "diff-quiet-ratio-warm-release": [
+     4.474653,
+     0.002714,
+     0.000606
+    ],
+    "pull-ratio-cold-native": [
+     2.116477,
+     0.1344,
+     0.063502
+    ],
+    "pull-ratio-cold-release": [
+     1.4424,
+     0.092958,
+     0.064447
+    ],
+    "pull-ratio-warm-native": [
+     2.975072,
+     0.090483,
+     0.030414
+    ],
+    "pull-ratio-warm-release": [
+     1.961503,
+     0.061877,
+     0.031546
+    ],
+    "status-ratio-cold-native": [
+     1.369171,
+     0.04609,
+     0.033663
+    ],
+    "status-ratio-cold-release": [
+     0.98961,
+     0.032846,
+     0.033191
+    ],
+    "status-ratio-warm-native": [
+     2.926543,
+     0.00272,
+     0.000929
+    ],
+    "status-ratio-warm-release": [
+     2.355164,
+     0.002016,
+     0.000856
+    ]
+   }
+  },
+  {
+   "source": "measure take at den 7a5f90ba with these tools (3f62d16), cores 6-11, 2026-11-21 02:57Z",
+   "samples": 9,
+   "cpu_floor": 1.0,
+   "statistic": "least",
+   "rows": {
+    "diff-cached-quiet-ratio-cold-native": [
+     3.013141,
+     0.001577,
+     0.000523
+    ],
+    "diff-cached-quiet-ratio-cold-release": [
+     2.484348,
+     0.00133,
+     0.000535
+    ],
+    "diff-cached-quiet-ratio-warm-native": [
+     2.979674,
+     0.001578,
+     0.000529
+    ],
+    "diff-cached-quiet-ratio-warm-release": [
+     2.466306,
+     0.001295,
+     0.000525
+    ],
+    "diff-quiet-ratio-cold-native": [
+     1.100749,
+     0.048497,
+     0.044058
+    ],
+    "diff-quiet-ratio-cold-release": [
+     0.803207,
+     0.035789,
+     0.044557
+    ],
+    "diff-quiet-ratio-warm-native": [
+     5.310638,
+     0.003245,
+     0.000611
+    ],
+    "diff-quiet-ratio-warm-release": [
+     4.473488,
+     0.002731,
+     0.00061
+    ],
+    "pull-ratio-cold-native": [
+     2.093182,
+     0.133298,
+     0.063682
+    ],
+    "pull-ratio-cold-release": [
+     1.42816,
+     0.092327,
+     0.064647
+    ],
+    "pull-ratio-warm-native": [
+     2.924951,
+     0.091029,
+     0.031121
+    ],
+    "pull-ratio-warm-release": [
+     1.944016,
+     0.061823,
+     0.031802
+    ],
+    "status-ratio-cold-native": [
+     1.372492,
+     0.046282,
+     0.033721
+    ],
+    "status-ratio-cold-release": [
+     0.990796,
+     0.03366,
+     0.033972
+    ],
+    "status-ratio-warm-native": [
+     2.946186,
+     0.002608,
+     0.000885
+    ],
+    "status-ratio-warm-release": [
+     2.300254,
+     0.002077,
+     0.000903
+    ]
+   }
+  },
+  {
+   "source": "measure take at den 7a5f90ba with these tools (3f62d16), cores 0-5, 2026-11-21 03:06Z",
+   "samples": 9,
+   "cpu_floor": 1.0,
+   "statistic": "least",
+   "rows": {
+    "diff-cached-quiet-ratio-cold-native": [
+     3.154291,
+     0.001635,
+     0.000518
+    ],
+    "diff-cached-quiet-ratio-cold-release": [
+     2.436502,
+     0.001264,
+     0.000519
+    ],
+    "diff-cached-quiet-ratio-warm-native": [
+     3.084137,
+     0.001611,
+     0.000522
+    ],
+    "diff-cached-quiet-ratio-warm-release": [
+     2.491299,
+     0.001292,
+     0.000519
+    ],
+    "diff-quiet-ratio-cold-native": [
+     1.107737,
+     0.048267,
+     0.043573
+    ],
+    "diff-quiet-ratio-cold-release": [
+     0.804572,
+     0.035281,
+     0.04385
+    ],
+    "diff-quiet-ratio-warm-native": [
+     5.232074,
+     0.003191,
+     0.00061
+    ],
+    "diff-quiet-ratio-warm-release": [
+     4.537195,
+     0.002764,
+     0.000609
+    ],
+    "pull-ratio-cold-native": [
+     2.104518,
+     0.1338,
+     0.063578
+    ],
+    "pull-ratio-cold-release": [
+     1.444709,
+     0.091704,
+     0.063476
+    ],
+    "pull-ratio-warm-native": [
+     2.888479,
+     0.089903,
+     0.031125
+    ],
+    "pull-ratio-warm-release": [
+     1.983147,
+     0.060293,
+     0.030402
+    ],
+    "status-ratio-cold-native": [
+     1.369106,
+     0.046744,
+     0.034142
+    ],
+    "status-ratio-cold-release": [
+     0.988156,
+     0.033321,
+     0.033721
+    ],
+    "status-ratio-warm-native": [
+     3.032413,
+     0.002742,
+     0.000904
+    ],
+    "status-ratio-warm-release": [
+     2.359546,
+     0.002111,
+     0.000895
+    ]
+   }
+  },
+  {
+   "source": "measure take at den 7a5f90ba with these tools (3f62d16), cores 0-5, 2026-11-21 03:09Z",
+   "samples": 9,
+   "cpu_floor": 1.0,
+   "statistic": "least",
+   "rows": {
+    "diff-cached-quiet-ratio-cold-native": [
+     3.043924,
+     0.001567,
+     0.000515
+    ],
+    "diff-cached-quiet-ratio-cold-release": [
+     2.580668,
+     0.00134,
+     0.000519
+    ],
+    "diff-cached-quiet-ratio-warm-native": [
+     3.072093,
+     0.001558,
+     0.000507
+    ],
+    "diff-cached-quiet-ratio-warm-release": [
+     2.572998,
+     0.001316,
+     0.000511
+    ],
+    "diff-quiet-ratio-cold-native": [
+     1.096219,
+     0.048245,
+     0.04401
+    ],
+    "diff-quiet-ratio-cold-release": [
+     0.816628,
+     0.035491,
+     0.04346
+    ],
+    "diff-quiet-ratio-warm-native": [
+     5.115518,
+     0.003055,
+     0.000597
+    ],
+    "diff-quiet-ratio-warm-release": [
+     4.316658,
+     0.002657,
+     0.000616
+    ],
+    "pull-ratio-cold-native": [
+     2.109715,
+     0.133008,
+     0.063045
+    ],
+    "pull-ratio-cold-release": [
+     1.4374,
+     0.091355,
+     0.063555
+    ],
+    "pull-ratio-warm-native": [
+     2.980512,
+     0.08915,
+     0.029911
+    ],
+    "pull-ratio-warm-release": [
+     1.982018,
+     0.059657,
+     0.030099
+    ],
+    "status-ratio-cold-native": [
+     1.37386,
+     0.046992,
+     0.034204
+    ],
+    "status-ratio-cold-release": [
+     0.986522,
+     0.033401,
+     0.033857
+    ],
+    "status-ratio-warm-native": [
+     2.944432,
+     0.002705,
+     0.000919
+    ],
+    "status-ratio-warm-release": [
+     2.297827,
+     0.00205,
+     0.000892
+    ]
+   }
+  },
+  {
+   "source": "measure take at den 7a5f90ba with these tools (3f62d16), cores 0-5, 2026-11-21 03:13Z",
+   "samples": 9,
+   "cpu_floor": 1.0,
+   "statistic": "least",
+   "rows": {
+    "diff-cached-quiet-ratio-cold-native": [
+     3.100191,
+     0.001598,
+     0.000516
+    ],
+    "diff-cached-quiet-ratio-cold-release": [
+     2.414507,
+     0.001243,
+     0.000515
+    ],
+    "diff-cached-quiet-ratio-warm-native": [
+     3.083892,
+     0.001583,
+     0.000513
+    ],
+    "diff-cached-quiet-ratio-warm-release": [
+     2.517422,
+     0.001279,
+     0.000508
+    ],
+    "diff-quiet-ratio-cold-native": [
+     1.107836,
+     0.048517,
+     0.043794
+    ],
+    "diff-quiet-ratio-cold-release": [
+     0.796949,
+     0.034414,
+     0.043182
+    ],
+    "diff-quiet-ratio-warm-native": [
+     5.195587,
+     0.003116,
+     0.0006
+    ],
+    "diff-quiet-ratio-warm-release": [
+     4.229794,
+     0.002503,
+     0.000592
+    ],
+    "pull-ratio-cold-native": [
+     2.129934,
+     0.134656,
+     0.063221
+    ],
+    "pull-ratio-cold-release": [
+     1.448949,
+     0.088968,
+     0.061402
+    ],
+    "pull-ratio-warm-native": [
+     3.014021,
+     0.089878,
+     0.02982
+    ],
+    "pull-ratio-warm-release": [
+     2.014143,
+     0.058832,
+     0.02921
+    ],
+    "status-ratio-cold-native": [
+     1.375868,
+     0.04605,
+     0.03347
+    ],
+    "status-ratio-cold-release": [
+     0.981321,
+     0.033562,
+     0.034201
+    ],
+    "status-ratio-warm-native": [
+     2.911294,
+     0.002604,
+     0.000894
+    ],
+    "status-ratio-warm-release": [
+     2.322915,
+     0.002101,
+     0.000904
+    ]
+   }
+  },
+  {
+   "source": "measure take at den 7a5f90ba with these tools (3f62d16), cores 0-5, 2026-11-21 03:16Z",
+   "samples": 9,
+   "cpu_floor": 1.0,
+   "statistic": "least",
+   "rows": {
+    "diff-cached-quiet-ratio-cold-native": [
+     2.95342,
+     0.001489,
+     0.000504
+    ],
+    "diff-cached-quiet-ratio-cold-release": [
+     2.41237,
+     0.00127,
+     0.000526
+    ],
+    "diff-cached-quiet-ratio-warm-native": [
+     3.23717,
+     0.001587,
+     0.00049
+    ],
+    "diff-cached-quiet-ratio-warm-release": [
+     2.6113,
+     0.001347,
+     0.000516
+    ],
+    "diff-quiet-ratio-cold-native": [
+     1.112898,
+     0.047218,
+     0.042428
+    ],
+    "diff-quiet-ratio-cold-release": [
+     0.799736,
+     0.034702,
+     0.043392
+    ],
+    "diff-quiet-ratio-warm-native": [
+     5.210197,
+     0.003103,
+     0.000596
+    ],
+    "diff-quiet-ratio-warm-release": [
+     4.700744,
+     0.0028,
+     0.000596
+    ],
+    "pull-ratio-cold-native": [
+     2.093643,
+     0.129026,
+     0.061628
+    ],
+    "pull-ratio-cold-release": [
+     1.449045,
+     0.091376,
+     0.063059
+    ],
+    "pull-ratio-warm-native": [
+     2.987094,
+     0.08686,
+     0.029078
+    ],
+    "pull-ratio-warm-release": [
+     1.938317,
+     0.057877,
+     0.029859
+    ],
+    "status-ratio-cold-native": [
+     1.360337,
+     0.045552,
+     0.033486
+    ],
+    "status-ratio-cold-release": [
+     0.981984,
+     0.03328,
+     0.033891
+    ],
+    "status-ratio-warm-native": [
+     2.922932,
+     0.002523,
+     0.000863
+    ],
+    "status-ratio-warm-release": [
+     2.231083,
+     0.002086,
+     0.000935
     ]
    }
   }

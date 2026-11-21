@@ -5,7 +5,7 @@
   "statistic": "least",
   "fine": {
     "rows": ["status/warm", "diff-quiet/warm", "diff-cached-quiet/cold", "diff-cached-quiet/warm"],
-    "headroom": 1.25,
+    "headroom": 1.20,
     "samples": 9,
     "cpu_floor": 1.0
   },
