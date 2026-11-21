@@ -58,6 +58,20 @@ and carries a recomputed checksum. Commands: diff --quiet, diff --exit-code,
 diff (patch), diff --cached --quiet, status --porcelain. Each must equal Git's
 exit status, stdout, stderr and repository bytes; the index's inode and time
 words compare only where proved against each tool's own files.
+
+Around each tool's run the test also observes what it did to .git: the .git
+directory, dated to a fixed old time just before the run, has its mtime moved
+by any file created or removed in it (a lock taken and dropped leaves no bytes
+behind, but moves it), and the index file's inode and mtime show whether it
+was written again. For the worktree diffs (diff --quiet, diff --exit-code,
+diff) in the clean and touch-all cases, den's observation must equal Git's,
+and on the clean tree both must leave the index's bytes as they were. The
+pinned Git leaves a clean tree's .git untouched, and takes the lock and writes
+the index again when every file is stat-dirty with its content unchanged
+(measured). Every other row records the observation and asserts nothing on it:
+status --porcelain takes the lock on a clean tree in Git and not in den, and
+writes a stat-dirty index again in Git and not in den (measured; a separate
+status difference, present before this test).
 """
 import argparse, hashlib, json, os, pathlib, runpy, shutil, subprocess, time
 
@@ -69,6 +83,23 @@ CASES = ['clean', 'same-size', 'trusted', 'racy-equal', 'racy-same-second', 'rac
          'same-second', 'mode-only', 'link-trusted', 'link-retarget', 'file-to-dir', 'dir-back', 'touch-all',
          'touch-twice']
 CRAFTED = ('trusted', 'racy-equal', 'racy-same-second', 'racy-older', 'link-trusted')
+# Where den must touch .git exactly as Git does (the docstring's observation).
+TOUCH_CASES = ('clean', 'touch-all')
+OLD_DIR_TIME = 1_600_000_000_000_000_000
+
+
+def observed(repo, run):
+    """run()'s result, and what it did to .git: whether any file was created
+    or removed there (the directory's mtime moved from a fixed old time), and
+    whether the index was written again (its inode or mtime moved), with the
+    index's bytes afterwards."""
+    os.utime(repo / '.git', ns=(OLD_DIR_TIME, OLD_DIR_TIME))
+    before = os.stat(repo / '.git/index')
+    result = run()
+    after = os.stat(repo / '.git/index')
+    touched = dict(dir_moved=os.stat(repo / '.git').st_mtime_ns != OLD_DIR_TIME,
+                   index_written=(before.st_ino, before.st_mtime_ns) != (after.st_ino, after.st_mtime_ns))
+    return result, touched, (repo / '.git/index').read_bytes()
 
 
 def swap_entry(index, path, oid):
@@ -220,18 +251,30 @@ def main():
             repo, saved, mtime = prepare(case)
             if case == 'touch-twice':
                 subprocess.run([git, 'diff'], cwd=repo, capture_output=True)
-            expected = O['capture']([git, *command], repo, index_proof=True)
+            before = (repo / '.git/index').read_bytes()
+            expected, git_touched, git_index = observed(
+                repo, lambda: O['capture']([git, *command], repo, index_proof=True))
             put_back(repo, saved, mtime)
             if case == 'touch-twice':
                 subprocess.run([den, 'diff'], cwd=repo, capture_output=True)
-            actual = O['capture']([den, *command], repo, index_proof=True)
+            actual, den_touched, den_index = observed(
+                repo, lambda: O['capture']([den, *command], repo, index_proof=True))
             ok = O['equivalent'](expected, actual, 'index-stat-proven')
+            asserted = case in TOUCH_CASES and command[0] == 'diff' and '--cached' not in command
+            if asserted:
+                ok = ok and den_touched == git_touched
+                if case == 'clean':
+                    ok = ok and git_index == before and den_index == before and not git_touched['dir_moved']
             name = f'racy-{case}-{"-".join(c.strip("-") for c in command)}'
-            print(('PASS ' if ok else 'FAIL ') + name + f" git status {expected['status']} den status {actual['status']}"
+            touch = (f" touched git {int(git_touched['dir_moved'])}{int(git_touched['index_written'])}"
+                     f" den {int(den_touched['dir_moved'])}{int(den_touched['index_written'])}"
+                     + (' (asserted)' if asserted else ''))
+            print(('PASS ' if ok else 'FAIL ') + name + f" git status {expected['status']} den status {actual['status']}" + touch
                   + ('' if ok else f" git stdout {bytes.fromhex(expected['stdout'])[:120]!r}"
                                     f" den stdout {bytes.fromhex(actual['stdout'])[:120]!r}"
                                     f" den stderr {bytes.fromhex(actual['stderr'])[:160]!r}"), flush=True)
-            rows.append(dict(name=name, case=case, command=command, ok=ok, git=expected, den=actual))
+            rows.append(dict(name=name, case=case, command=command, ok=ok, git=expected, den=actual,
+                             git_touched=git_touched, den_touched=den_touched, touch_asserted=asserted))
     (ROOT / f'target/diff-racy-{a.tier}.json').write_text(json.dumps({'rows': rows}, indent=2) + '\n')
     failures = [r['name'] for r in rows if not r['ok']]
     print(f'diff-racy: {len(rows)} rows, {len(failures)} failures; zero skips', flush=True)
