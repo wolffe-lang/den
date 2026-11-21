@@ -109,6 +109,7 @@ PY
 fi
 leaf format tools/check-fmt
 leaf build tools/build --all
+leaf newest-wolf tools/check-newest-wolf
 leaf wire tools/check-wire
 leaf http tools/check-http
 leaf housekeeping tools/check-housekeeping

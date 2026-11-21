@@ -1,0 +1,47 @@
+#!/bin/sh
+# check-newest-wolf — den builds with the newest wolf release as well as with
+# the pinned toolchain. The newest release ([wolf-newest] in
+# wolf-toolchain.toml, staged by tools/fetch-newest-wolf with the std it
+# bundles, as a user or a system that ships that release builds den) builds
+# src/den.lu on both tiers with warnings denied, as tools/build does with the
+# pin. A compiler that refuses the tree the pin accepts fails here by name, so
+# the gap is seen before anyone builds den with the release. Rows:
+#   newest-wolf-version        the staged compiler prints the pin's version line
+#   newest-wolf-build-native   src/den.lu builds natively
+#   newest-wolf-build-release  src/den.lu builds on the release tier
+# A failing build's own compiler lines follow its row, two spaces in.
+set -eu
+DEN_ROOT=$(cd "$(dirname "$0")/.." && pwd)
+export DEN_ROOT
+cd "$DEN_ROOT"
+. tools/lib-toml.sh
+tools/fetch-newest-wolf
+wolf=$DEN_ROOT/.wolf-newest/wolf
+want=$(toml_value wolf-newest version_line)
+have=$("$wolf" --version 2>/dev/null | head -1)
+failed=0
+if [ "$have" = "$want" ]; then
+    echo "PASS newest-wolf-version $have"
+else
+    echo "FAIL newest-wolf-version: the staged compiler prints '$have', the pin wants '$want'"
+    failed=1
+fi
+mkdir -p target/newest-wolf
+for tier in native release; do
+    flag=
+    [ "$tier" != release ] || flag=--release
+    log=target/newest-wolf/build-$tier.log
+    if WOLF_STD="$DEN_ROOT/.wolf-newest/std" "$wolf" build $flag --deny-warnings src/den.lu \
+        -o "target/newest-wolf/$tier-den" >"$log" 2>&1; then
+        echo "PASS newest-wolf-build-$tier ($have)"
+    else
+        rc=$?
+        echo "FAIL newest-wolf-build-$tier: exit $rc ($have)"
+        sed 's/^/  /' "$log"
+        failed=1
+    fi
+done
+if [ "$failed" = 0 ]; then
+    echo "newest-wolf: src/den.lu builds with $have on both tiers, warnings denied"
+fi
+exit "$failed"
