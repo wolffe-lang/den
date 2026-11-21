@@ -1,5 +1,24 @@
 # Changes
 
+## Unreleased — a warm diff --quiet without the duplicate work
+
+- A diff of the worktree against the index no longer runs its autoRefreshIndex
+  step when every entry was stat-clean and nothing was hashed: that step took
+  the index lock, parsed the index a second time and checked every entry's
+  stat a second time, and found nothing to refresh. Git takes neither the
+  lock nor a second pass there; den now matches it. A tree whose files are
+  stat-dirty with their contents unchanged, or that has a racily clean
+  entry, refreshes exactly as before.
+- Such a diff opens the packs only when it reads a body from them; on a
+  clean tree it reads no object and parses no pack index.
+- A whole-file read keeps its one chunk as the answer instead of copying it
+  into a buffer a byte at a time (about twenty instructions a byte).
+- `tools/diff-racy-test.py` observes what each tool does to `.git` (any file
+  created or removed there, and whether the index was written again) and
+  holds den's worktree diffs to Git's on a clean tree and on a stat-dirty one.
+- The warm `diff --quiet` ceilings are 4.5 (native) and 4 (release), from 7
+  and 6.
+
 ## Unreleased — den builds with the newest wolf release
 
 - The newest wolf release, 0.2.40, refused to compile den (E1010 at the two
