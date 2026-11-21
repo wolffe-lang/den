@@ -373,8 +373,13 @@ paths that differ only. A tracked file or symbolic link whose stat data matches
 its index entry, compared as Git compares it (times by whole seconds, the
 inode, mode and size), is taken as unchanged without being read; not when the
 entry is racily clean (its mtime in the index file's own second or later). The
-autoRefreshIndex step reuses the hashes the comparison made. A command that
-reads objects parses each pack index once, when it starts, not once an object.
+autoRefreshIndex step reuses the hashes the comparison made. When every entry
+was stat-clean and nothing was hashed there is nothing to refresh, and the step
+takes neither the index lock nor a second reading of the index, as Git takes
+neither. A command that reads objects parses each pack index once, not once an
+object: when it starts, or, for a diff of the worktree against the index, when
+it first reads a body from the packs, so such a diff of a clean tree never
+parses them.
 
 Diff bodies are limited to 1,000,000,000 bytes per file (an object read's
 bound, as a checkout's), with any number of lines, and the bodies a diff reads
