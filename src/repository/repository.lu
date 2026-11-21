@@ -43,18 +43,25 @@ pub fn read_bytes(path: str, cap: int) -> List[byte] ! RepoErrors {
     let info = fs_fstat_record(f.fd) else |_| { return io }
     // The bound is named as fetch, pull, merge and checkout print it.
     if info[1] > cap { return Unsupported(file_limit(cap)) }
-    // One read of the file's size takes it whole, and that chunk is the
-    // answer as it came: copied into a buffer a byte at a time it cost about
-    // twenty instructions a byte (8% of a warm diff --quiet), and a buffer
-    // grown a byte at a time kept every smaller one it outgrew. A short read,
-    // or a file that grows after the fstat, reads on below a chunk at a
-    // time, still whole and still within cap.
+    // A file no larger than the loop's 64 KiB chunk is taken in one read,
+    // and that chunk is the answer as it came: copied into a buffer a byte at
+    // a time it cost about twenty instructions a byte (8% of a warm diff
+    // --quiet). The runtime builds a chunk and hands back a copy of it, so a
+    // one-read chunk briefly holds its file twice, which for such a file is
+    // no more than the loop held (its chunk and the buffer it fills). A larger
+    // file is read into one buffer of its size, a chunk at a time: read in one
+    // chunk, a 64 MiB file peaked at 131 MiB, against 67 MiB in chunks
+    // (hash-scale-64mib). A buffer grown a byte at a time kept every smaller
+    // one it outgrew. A short read, or a file that grows after the fstat,
+    // reads on below, still whole and still within cap.
     var out = List[byte](), exceeded = false
-    if info[1] > 0 {
+    if info[1] > 0 && info[1] <= 65536 {
         out = fs.read_chunk(mut f, info[1]) else |e| match e {
             eof => { List[byte]() },
             io => { return io },
         }
+    } else if info[1] > 0 {
+        (mut out).reserve(info[1])
     }
     loop {
         region chunk {
