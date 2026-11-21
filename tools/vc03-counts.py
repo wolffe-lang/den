@@ -15,7 +15,7 @@ for c in cases:
   label='parity'
   if c.get('comparison')=='index-stat-proven':mainproof+=proofs(g,d)
  elif c.get('kind')=='version':
-  assert d['status']==0 and d['stderr']=='' and bytes.fromhex(d['stdout'])==b'den 0.0.0 (built with wolf 0.2.36)\n'
+  assert d['status']==0 and d['stderr']=='' and bytes.fromhex(d['stdout'])==b'den 0.1.0 (built with unrecorded compiler; local source build)\n'
   label='shape'
  else:
   feature=c.get('refusal_feature',c['args'][0]);suffix='' if c.get('refusal_style')=='feature-only' else f" ({c['lane']})"
