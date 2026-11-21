@@ -299,6 +299,13 @@ names HEAD's tree) unless an entry is unmerged or intent-to-add. The
 autoRefreshIndex step (`refresh_known`) answers each entry from collect's hash
 when the locked index still holds the entry collect compared, and otherwise
 as `refresh` did, skipping a stat-clean entry, so no file is read twice.
+When collect found every entry stat-clean and hashed none
+(`Collected.stat_clean`, counted by `pending_worktree`), `diff.dispatch` does
+not call it: no index lock, no second parse of the index, no second lstat of
+each entry. A diff of the worktree against the index starts from an unopened
+context; `collect_known` opens the packs (`worktree.opened`) only when a
+differing body is read from them (`known_bodies`). `repository.read_bytes`
+takes a file whole in one read of its size and keeps that chunk as its answer.
 
 `pack.session_kind(s, name)` and `object.kind_cached(r, id)` answer an
 object's type without rebuilding it: a packed object's from its entry header,
