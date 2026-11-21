@@ -127,20 +127,35 @@ untracked, a 19 MB pack, a 187 MB work tree): `status --porcelain`,
 over `file://`. Each is measured with a cold index (copied stat words, so every
 tracked file is read) and a warm one (refreshed), for the native and the
 release build: sixteen rows. A row takes the child's user plus system CPU,
-summed over repeated runs to a 0.2 s floor, in five samples interleaved between
-the two tools, and compares the least of each. It passes when the ratio times
-a 1.10 guardband is at most the row's ceiling in `tools/speed-bounds.json`
-and every run's exit status, output and end state equal Git's. The same run
-states each command's peak resident set beside Git's; peaks are not gated here.
+summed over repeated runs to a floor, in samples interleaved between the two
+tools, and compares the least of each (the median of the per-sample ratios is
+printed beside it). Most rows take five samples of 0.2 s. The four rows whose
+Git side takes about a millisecond of CPU or less (warm `status`, warm
+`diff --quiet`, and `diff --cached --quiet` cold and warm, named in the table)
+take nine samples of 1 s: at five of 0.2 s they moved by up to 22% between
+takes. A row passes when the ratio times a 1.10 guardband is at most the row's
+ceiling in `tools/speed-bounds.json` and every run's exit status, output and
+end state equal Git's. The same run states each command's peak resident set
+beside Git's; peaks are not gated here. The leaf counts a row only when its
+line and its script's report agree, so a script that stops after printing its
+lines fails the leaf by name.
 
 Each ceiling is set from the record host's measurement: the lowest half step
-that leaves a fifth above the measured ratio times the guardband, and never
-under the table's target of 3. Rows den already runs within 3 times Git stand
-at 3. The rest stand where den is today: warm `status` in the native build at
-4, `diff --cached --quiet` at 3.5 to 4, warm `diff --quiet` at 6 to 7 (Git
-answers in about 0.6 ms; den's fixed start-up costs show), and warm `pull` in
-the native build at 4. A change that makes a row faster lowers its ceiling by
-the same rule in the same change; a ceiling rises only with a stated cause.
+at or above the row's headroom times the guardband times the measured ratio,
+and never under the table's target of 3 (`ceiling_for` in
+`tools/speed-measure.py`; every row prints the ceiling its take would set, as
+`proposed=`). The headroom is a fifth. The four short rows have their own,
+their band: the spread between takes measured with their sampling, rounded up
+to a twentieth and never under a fifth. Seven takes on two core sets on
+2026-11-21 spread them by at most 11% (`tools/speed-band-takes.json`), so
+their band is also 1.20 and no ceiling moved. Rows den already runs within 3
+times Git stand at 3. The rest stand where den is today: warm `status` in the
+native build at 4, `diff --cached --quiet` at 3.5 to 4, warm `diff --quiet` at
+6 to 7 (Git answers in about 0.6 ms; den's fixed start-up costs show), and warm
+`pull` in the native build at 4. A change that makes a row faster lowers its
+ceiling by the same rule in the same change; a ceiling rises only with a stated
+cause. `tools/speed-band-test.py` holds the rule, the sampling and the band to
+the recorded takes.
 
 The warm `diff --quiet` row of the native build rose from 6.5 to 7 for the
 spread between takes on a row whose Git side is about 0.6 ms of CPU: three
