@@ -11,8 +11,11 @@
   entry, refreshes exactly as before.
 - Such a diff opens the packs only when it reads a body from them; on a
   clean tree it reads no object and parses no pack index.
-- A whole-file read keeps its one chunk as the answer instead of copying it
-  into a buffer a byte at a time (about twenty instructions a byte).
+- A whole-file read of 64 KiB or less keeps its one chunk as the answer
+  instead of copying it into a buffer a byte at a time (about twenty
+  instructions a byte). A larger file is still read in chunks into one buffer
+  of its size: read in one chunk it was held twice, and `hash-object` of a
+  64 MiB file peaked at 131 MiB instead of 67.
 - `tools/diff-racy-test.py` observes what each tool does to `.git` (any file
   created or removed there, and whether the index was written again) and
   holds den's worktree diffs to Git's on a clean tree and on a stat-dirty one.
