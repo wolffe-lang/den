@@ -375,9 +375,10 @@ def main():
                 actual = {k for s in right for k in s['outcomes']}
                 same = expected == actual and len(expected) == 1
                 # Sample order pairs each den batch with the Git batch beside it.
-                den = [s['mean_cpu'] for s in sorted(right, key=lambda s: s['sample'])]
-                git = [s['mean_cpu'] for s in sorted(left, key=lambda s: s['sample'])]
-                ok, words, judged = judge(bounds, name_row, state, a.tier, den, git, valid, same)
+                # (Not `den` and `git`: those name the den binary and the Git helper.)
+                den_cpus = [s['mean_cpu'] for s in sorted(right, key=lambda s: s['sample'])]
+                git_cpus = [s['mean_cpu'] for s in sorted(left, key=lambda s: s['sample'])]
+                ok, words, judged = judge(bounds, name_row, state, a.tier, den_cpus, git_cpus, valid, same)
                 failed = failed or not ok
                 print(('PASS' if ok else 'FAIL'), '%s-ratio-%s-%s' % (name_row, state, a.tier), words,
                       'den_kib=%d git_kib=%d' % (memory[name_row, state, 'den'], memory[name_row, state, 'git']),
