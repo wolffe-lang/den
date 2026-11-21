@@ -55,6 +55,7 @@ known; preparation does not imply that either package is already available.
 | CI PR gate | ubuntu-24.04, pinned container and oracle, including planner tests |
 | CI full field leg | macOS arm64 with Homebrew Git; nonblocking observation, not the oracle |
 | Toolchain | wolf 0.2.36 5adf3d91, lupin 0.1.58 tag 6240efe5 (binary embeds a5378e3), pinned std d4a4d4ca (release bundles 78b9d3cb) |
+| Newest wolf release | wolf 0.2.40 (b333b9d) with the std it bundles (be1d10fa): den must build with it too (`tools/check-newest-wolf`) |
 
 Archive and oracle pins are in `wolf-toolchain.toml` and `den-oracle.toml`.
 Downloads fail on a digest mismatch. Both release-metadata reads are retained
@@ -113,7 +114,9 @@ without delegated cpusets must not rely on pinning only the outer process.
 Keep the CI build mount `/work/den`: the default oracle binary's pinned digest
 also depends on its build path, not merely the base image and version.
 The gate checks formatting and that every package manifest lists the den modules
-its files use (`tools/module-deps.py`), builds native/release binaries, runs actual checked
+its files use (`tools/module-deps.py`), builds native/release binaries, builds them
+again with the newest wolf release and the std it bundles (`tools/check-newest-wolf`;
+a release that refuses the tree fails the gate by name), runs actual checked
 programs, constructs the corpus twice, compares against the pinned oracle and
 builds the static Linux archive. `tools/mkden OUTDIR` checks ET_EXEC/no PT_INTERP
 and prints full/stripped binary digests. No host-specific glibc is substituted.
