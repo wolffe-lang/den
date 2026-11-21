@@ -669,7 +669,11 @@ pub fn session_cached(mut s: Session, name: str, cap: int) -> Body ! PackErrors 
 /// The type of the object name ("commit", "tree", "blob" or "tag") from its
 /// entry header (entry_kind), through the session's indexes, each pack's
 /// header and trailer binding checked again (rebound) as a read checks it;
-/// not_found when no loaded pack holds it. Its body is never rebuilt.
+/// not_found when no loaded pack holds it. Its body is never rebuilt. An
+/// unopened session answers through read_object, as session_cached does, and
+/// is never loaded here: nothing in the session changes, so a caller may type
+/// objects inside its own region ([mem.region.outer-write]); a load there
+/// would leave the session holding indexes the region frees.
 pub fn session_kind(s: Session, name: str) -> str ! PackErrors {
     if !s.loaded { return read_object(s.gitdir, name, object_limit())?.kind }
     for i in 0..s.paths.len {
