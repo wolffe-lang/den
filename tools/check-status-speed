@@ -24,10 +24,14 @@ tools/build --native
 tools/build --release
 rm -rf target/status-shape
 mkdir -p target/runs
+# An earlier take's reports must not stand in for this take's.
+rm -f target/runs/status-ratio-*.json target/runs/speed-rows-*.json
 tools/env python3 -I tools/status-fixture.py --root "$DEN_ROOT/target/status-shape"
 cc -O2 -Wall -Werror -o target/status-shape/minimal-parent tools/minimal-parent.c
 # Every row of both tiers is measured even after a red one, so one take names
-# them all; the leaf is red if any row is.
+# them all; the leaf is red if any row is. A script's exit status cannot tell
+# a red row from a crash, so speed-summary.py counts a row only when its line
+# and its script's report agree, and fails a missing report by name.
 log=target/runs/status-speed.log
 : > "$log"
 for tier in native release; do
@@ -37,7 +41,4 @@ for tier in native release; do
         --den "target/$tier/den" --parent target/status-shape/minimal-parent \
         --output "target/runs/speed-rows-$tier.json" --samples 5 2>&1 | tee -a "$log" || true
 done
-pass=$(grep -c -E '^PASS [a-z-]+-ratio-(cold|warm)-(native|release) ' "$log" || true)
-fail=$(grep -c -E '^FAIL ' "$log" || true)
-echo "status-speed: MEASURED rows=16 pass=$pass fail=$fail (ceilings in tools/speed-bounds.json, guardband 1.10, process bytes identical)"
-[ "$pass" = 16 ] && [ "$fail" = 0 ]
+python3 -I tools/speed-summary.py "$log" target/runs
