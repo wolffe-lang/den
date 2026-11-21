@@ -670,8 +670,8 @@ pub fn session_cached(mut s: Session, name: str, cap: int) -> Body ! PackErrors 
 /// entry header (entry_kind), through the session's indexes, each pack's
 /// header and trailer binding checked again (rebound) as a read checks it;
 /// not_found when no loaded pack holds it. Its body is never rebuilt.
-pub fn session_kind(mut s: Session, name: str) -> str ! PackErrors {
-    if !s.loaded { load_session(mut s)? }
+pub fn session_kind(s: Session, name: str) -> str ! PackErrors {
+    if !s.loaded { return read_object(s.gitdir, name, object_limit())?.kind }
     for i in 0..s.paths.len {
         let slot = slot_named(s.indexes[i], name)
         if slot < 0 { continue }

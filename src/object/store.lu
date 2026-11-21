@@ -274,7 +274,7 @@ fn read_cached_whole(mut r: Reader, id: oid.Oid, max_output: int) -> Object ! St
 /// before the fetch.
 pub fn kind_cached(mut r: Reader, id: oid.Oid) -> str ! StoreErrors {
     if fs.exists(path(r.repo, id)?) { return read_cached(mut r, id, pack.object_limit())?.kind }
-    pack.session_kind(mut r.packs, oid.hex(id)?)?
+    pack.session_kind(r.packs, oid.hex(id)?)?
 }
 
 /// The short-name length Git prints when core.abbrev is unset or "auto": seven
