@@ -1,4 +1,5 @@
 .wolf-bin/
+.wolf-newest/
 target/
 .lu-cache/
 __pycache__/
