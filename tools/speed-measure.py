@@ -2,12 +2,19 @@
 
 The rows have the status row's shape (status-measure.py): the 454-file
 fixture, a cold index (copied stat words) and a warm one (refreshed), samples
-interleaved between the tools, child user+system CPU summed to a floor, the
-minimum over the samples, and a row passes when ratio x guardband <= ceiling
-with every run's process bytes and end state equal to Git's. Ceilings and the
-guardband are tools/speed-bounds.json's: one ceiling per row, index state and
-build, set from the record host's measurements and lowered toward the table's
-target as den gets faster.
+interleaved between the tools, child user+system CPU summed to a floor, and a
+row passes when ratio x guardband <= ceiling with every run's process bytes
+and end state equal to Git's. The ratio is the table's statistic: the least
+den sample over the least Git sample, or the median over samples of den's
+sample over Git's in the same sample (the two batches run back to back, so a
+drift of the host's clock between samples cancels); both are printed.
+Ceilings, the guardband and the sampling are tools/speed-bounds.json's: one
+ceiling per row, index state and build, set by ceiling_for from the record
+host's measurements and lowered toward the table's target as den gets faster.
+A row whose Git side takes about a millisecond of CPU or less (the table's
+"fine" rows) sums each sample to the table's longer floor, takes more samples
+and is set with the table's wider headroom, its band; each row prints the
+ceiling its take would set.
 
   diff-quiet         `diff --quiet` on the clean work tree;
   diff-cached-quiet  `diff --cached --quiet`;
@@ -26,6 +33,7 @@ Intended for an exclusive performance block, not a light slot or mixed cores.
 import argparse
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import resource
@@ -37,14 +45,26 @@ ROOT = Path(__file__).resolve().parent.parent
 STATES = ('cold', 'warm')
 TIERS = ('native', 'release')
 ROWS = ('status', 'diff-quiet', 'diff-cached-quiet', 'pull')
+STATISTICS = ('least', 'paired-median')
+# Runs one sample may take before its CPU floor is reached; a sample short of
+# its floor is not valid. Git's fastest row takes about 0.5 ms, so a 1 s
+# floor needs about 2,000 runs.
+RUN_CAP = 4096
 MTIME = 1_700_000_000_123456789
 GIT_SHA256 = 'c4848492938c4ebfffbefe1fbbaa68b9af90c86d1f6a20e76816c5ff37fcfa60'
 
 
 def load_bounds(path=ROOT / 'tools/speed-bounds.json'):
-    """The ratchet table: guardband, target and rows[row][state][tier] = ceiling."""
+    """The ratchet table: guardband, target, headroom, statistic, the fine
+    (sub-millisecond) rows' band and sampling, and rows[row][state][tier] = ceiling."""
     table = json.loads(Path(path).read_text())
-    assert set(table) == {'guardband', 'target', 'rows'}, sorted(table)
+    assert set(table) == {'guardband', 'target', 'headroom', 'statistic', 'fine', 'rows'}, sorted(table)
+    assert table['statistic'] in STATISTICS, table['statistic']
+    assert set(table['fine']) == {'rows', 'headroom', 'samples', 'cpu_floor'}, sorted(table['fine'])
+    assert table['fine']['headroom'] >= table['headroom'], (table['fine']['headroom'], table['headroom'])
+    for name in table['fine']['rows']:
+        row, _, state = name.partition('/')
+        assert row in ROWS and state in STATES, name
     assert set(table['rows']) == set(ROWS), sorted(table['rows'])
     for row, states in table['rows'].items():
         assert set(states) == set(STATES), (row, sorted(states))
@@ -56,6 +76,64 @@ def load_bounds(path=ROOT / 'tools/speed-bounds.json'):
 def verdict(ratio, ceiling, guardband):
     """A multiplicative uncertainty of the guardband must still fit the ceiling."""
     return ratio * guardband <= ceiling
+
+
+def is_fine(table, row, state):
+    """A row whose Git side takes about a millisecond of CPU or less, by name."""
+    return '%s/%s' % (row, state) in table['fine']['rows']
+
+
+def headroom(table, row, state):
+    """What a ceiling leaves above ratio x guardband: the fine rows' band, else a fifth."""
+    return table['fine']['headroom'] if is_fine(table, row, state) else table['headroom']
+
+
+def sampling(table, row, state, samples, cpu_floor):
+    """(samples, CPU floor of each sample) for one row and index state: the
+    fine rows' from the table, at least; every other row's as asked."""
+    if is_fine(table, row, state):
+        return max(samples, table['fine']['samples']), max(cpu_floor, table['fine']['cpu_floor'])
+    return samples, cpu_floor
+
+
+def ceiling_for(ratio, room, guardband, target):
+    """The README's ratchet rule: the lowest half step at or above
+    room x guardband x ratio, never under the target."""
+    return max(target, math.ceil(ratio * guardband * room * 2 - 1e-9) / 2)
+
+
+def least(den, git):
+    """The least den sample over the least Git sample."""
+    return min(den) / min(git)
+
+
+def paired_median(den, git):
+    """The median over samples of den's sample over Git's in the same sample."""
+    assert den and len(den) == len(git), (len(den), len(git))
+    r = sorted(d / g for d, g in zip(den, git))
+    n = len(r)
+    return r[n // 2] if n % 2 else (r[n // 2 - 1] + r[n // 2]) / 2
+
+
+def statistic(name, den, git):
+    return least(den, git) if name == 'least' else paired_median(den, git)
+
+
+def judge(table, row, state, tier, den, git, valid, same):
+    """One row's verdict from its samples (den's and Git's, in sample order).
+    -> (ok, the line's words after the row's name, the verdict's record)."""
+    guard = table['guardband']
+    ceiling = table['rows'][row][state][tier]
+    both = dict(least=least(den, git), paired=paired_median(den, git))
+    ratio = statistic(table['statistic'], den, git)
+    room = headroom(table, row, state)
+    ok = valid and same and verdict(ratio, ceiling, guard)
+    words = ('ratio=%.6f guardband=%.2f ceiling=%g' % (ratio, guard, ceiling),
+             'den_cpu=%.6f git_cpu=%.6f' % (min(den), min(git)),
+             'least=%.6f paired=%.6f statistic=%s' % (both['least'], both['paired'], table['statistic']),
+             'samples=%d headroom=%.2f proposed=%g' % (len(den), room, ceiling_for(ratio, room, guard, table['target'])))
+    return ok, ' '.join(words), dict(ratio=ratio, least=both['least'], paired=both['paired'], ceiling=ceiling,
+                                     headroom=room, samples=len(den), den_cpu=min(den), git_cpu=min(git))
 
 
 def pseudorandom(seed, size):
@@ -239,17 +317,20 @@ def main():
                 print(('PASS' if same else 'FAIL'), '%s-dirty-witness-%s' % (form, a.tier),
                       'git=%d den=%d' % (seen['git'][0], seen['den'][0]), flush=True)
             restore_index('warm')
-        cap = 4096
-        for sample in range(a.samples):
+        plan = {(r, s): sampling(bounds, r, s, a.samples, a.cpu_floor) for r in chosen for s in STATES}
+        for sample in range(max(n for n, _ in plan.values())):
             order = list(tools)
             if sample % 2:
                 order.reverse()
             for name_row in chosen:
                 row = rows[name_row]
                 for state in STATES:
+                    count, floor = plan[name_row, state]
+                    if sample >= count:
+                        continue
                     for name, exe in order:
                         results, elapsed = [], 0.0
-                        while elapsed < a.cpu_floor and len(results) < cap:
+                        while elapsed < floor and len(results) < RUN_CAP:
                             row['restore'](state)
                             q = child(exe, row)
                             q['after'] = row['observe']()
@@ -262,7 +343,7 @@ def main():
                             row=name_row, sample=sample, state=state, tool=name, runs=len(results),
                             mean_cpu=elapsed / len(results),
                             mean_wall=sum(q['wall'] for q in results) / len(results),
-                            cpu_floor_reached=elapsed >= a.cpu_floor,
+                            cpu_floor=floor, cpu_floor_reached=elapsed >= floor,
                             statuses=sorted({q['status'] for q in results}),
                             outcomes=keys, first=results[0]))
                         print('SAMPLE', sample, name_row, state, name, 'runs=' + str(len(results)),
@@ -293,19 +374,15 @@ def main():
                 expected = {k for s in left for k in s['outcomes']}
                 actual = {k for s in right for k in s['outcomes']}
                 same = expected == actual and len(expected) == 1
-                den_cpu = min(s['mean_cpu'] for s in right)
-                git_cpu = min(s['mean_cpu'] for s in left)
-                ratio = den_cpu / git_cpu
-                ceiling = bounds['rows'][name_row][state][a.tier]
-                ok = valid and same and verdict(ratio, ceiling, guard)
+                # Sample order pairs each den batch with the Git batch beside it.
+                den = [s['mean_cpu'] for s in sorted(right, key=lambda s: s['sample'])]
+                git = [s['mean_cpu'] for s in sorted(left, key=lambda s: s['sample'])]
+                ok, words, judged = judge(bounds, name_row, state, a.tier, den, git, valid, same)
                 failed = failed or not ok
-                print(('PASS' if ok else 'FAIL'), '%s-ratio-%s-%s' % (name_row, state, a.tier),
-                      'ratio=%.6f guardband=%.2f ceiling=%g' % (ratio, guard, ceiling),
-                      'den_cpu=%.6f git_cpu=%.6f' % (den_cpu, git_cpu),
+                print(('PASS' if ok else 'FAIL'), '%s-ratio-%s-%s' % (name_row, state, a.tier), words,
                       'den_kib=%d git_kib=%d' % (memory[name_row, state, 'den'], memory[name_row, state, 'git']),
                       'process_same=' + str(same) + ('' if valid else ' valid=False'), flush=True)
-                out['verdicts'].append(dict(row=name_row, state=state, ok=ok, valid=valid, same=same, ratio=ratio,
-                                            den_cpu=den_cpu, git_cpu=git_cpu, ceiling=ceiling))
+                out['verdicts'].append(dict(row=name_row, state=state, ok=ok, valid=valid, same=same, **judged))
     finally:
         restore_index('warm')
         report.unlink(missing_ok=True)
