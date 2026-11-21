@@ -722,6 +722,32 @@ fn collect_known(ctx: worktree.Context, options: Options) -> Collected ! worktre
     }
     let specs = pathspecs(ctx, options.paths)?
     let (old, new) = differing(chosen(before, specs)?, chosen(after, specs)?)
+    // A worktree diff's context comes unopened (diff.dispatch): its packs
+    // open here, once, only when a body is read from the object store.
+    if !ctx.repo.packs.loaded && (reads_store(old) || reads_store(new)) {
+        return known_bodies(worktree.opened(ctx), options, value, old, new, hashed, stat_clean)?
+    }
+    known_bodies(ctx, options, value, old, new, hashed, stat_clean)?
+}
+
+/// Whether an endpoint is read from the object store (Pending.source 1).
+fn reads_store(list: List[Pending]) -> bool {
+    for item in list { if item.source == 1 { return true } }
+    false
+}
+
+/// collect_known's answer from its differing endpoints: their bodies, their
+/// changes and the changes' diff drivers, in the context ctx (opened when a
+/// body comes from the object store).
+fn known_bodies(
+    ctx: worktree.Context,
+    options: Options,
+    value: index.Index,
+    old: List[Pending],
+    new: List[Pending],
+    hashed: List[Hashed],
+    stat_clean: bool,
+) -> Collected ! worktree.WorkErrors {
     var total: int = 0
     let selected_old = bodies(ctx, value, old, mut total)?
     let selected_new = bodies(ctx, value, new, mut total)?
@@ -736,7 +762,7 @@ fn collect_known(ctx: worktree.Context, options: Options) -> Collected ! worktre
     }
     stat_only_names(ctx, options, mut result)?
     let policies = known_policies(ctx, result, options, value)?
-    Collected { changes: result, hashed: hashed, policies: policies, stat_clean: stat_clean }
+    Collected { changes: result, hashed: copy hashed, policies: policies, stat_clean: stat_clean }
 }
 
 /// collect and render with one index read, for history's per-commit output.

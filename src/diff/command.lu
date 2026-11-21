@@ -215,8 +215,15 @@ fn dispatch(args: List[str]) -> int ! worktree.WorkErrors {
     } else {
         worktree.discover(".")?
     }
-    let ctx = worktree.opened(found)
-    let options = parse(ctx, args[1..])?
+    // Packs open up front only for a diff that reads objects from its start
+    // (a tree, or HEAD's side of a cached diff); a worktree diff opens them
+    // when it first reads a body (collect_known), and a clean tree never does.
+    let options = parse(found, args[1..])?
+    let ctx = if options.cached || options.revisions.len > 0 {
+        worktree.opened(found)
+    } else {
+        found
+    }
     if bare && !options.cached && options.revisions.len < 2 {
         return Fatal("this operation must be run in a work tree")
     }
