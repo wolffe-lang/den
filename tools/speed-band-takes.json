@@ -1,0 +1,455 @@
+{
+ "about": "Speed-row takes from den records on the record host, for tools/speed-band-test.py. Each row is [ratio, den CPU s, Git CPU s] as the record printed it. A take's sampling is its samples per row-state, the CPU floor each sample is summed to, and the ratio's statistic.",
+ "takes": [
+  {
+   "source": "record at den 4f73a203, 2026-11-20 03:28Z",
+   "samples": 5,
+   "cpu_floor": 0.2,
+   "statistic": "least",
+   "rows": {
+    "diff-cached-quiet-ratio-cold-native": [
+     2.723225,
+     0.001548,
+     0.000569
+    ],
+    "diff-cached-quiet-ratio-cold-release": [
+     2.537337,
+     0.001422,
+     0.00056
+    ],
+    "diff-cached-quiet-ratio-warm-native": [
+     3.148476,
+     0.001771,
+     0.000562
+    ],
+    "diff-cached-quiet-ratio-warm-release": [
+     2.337444,
+     0.001316,
+     0.000563
+    ],
+    "diff-quiet-ratio-cold-native": [
+     1.0769,
+     0.048563,
+     0.045095
+    ],
+    "diff-quiet-ratio-cold-release": [
+     0.802003,
+     0.036136,
+     0.045058
+    ],
+    "diff-quiet-ratio-warm-native": [
+     5.567081,
+     0.003567,
+     0.000641
+    ],
+    "diff-quiet-ratio-warm-release": [
+     4.682246,
+     0.002999,
+     0.00064
+    ],
+    "pull-ratio-cold-native": [
+     12.996489,
+     0.848635,
+     0.065297
+    ],
+    "pull-ratio-cold-release": [
+     5.209127,
+     0.337011,
+     0.064696
+    ],
+    "pull-ratio-warm-native": [
+     24.728499,
+     0.760525,
+     0.030755
+    ],
+    "pull-ratio-warm-release": [
+     8.85368,
+     0.275844,
+     0.031156
+    ],
+    "status-ratio-cold-native": [
+     1.356582,
+     0.047235,
+     0.034819
+    ],
+    "status-ratio-cold-release": [
+     0.995747,
+     0.034655,
+     0.034803
+    ],
+    "status-ratio-warm-native": [
+     2.806902,
+     0.002744,
+     0.000978
+    ],
+    "status-ratio-warm-release": [
+     2.250437,
+     0.002151,
+     0.000956
+    ]
+   }
+  },
+  {
+   "source": "record at den 8c1ecf85 (a plant; its diff rows were planted and are left out), 2026-11-20 05:17Z",
+   "samples": 5,
+   "cpu_floor": 0.2,
+   "statistic": "least",
+   "rows": {
+    "pull-ratio-cold-native": [
+     13.181428,
+     0.835228,
+     0.063364
+    ],
+    "pull-ratio-cold-release": [
+     5.221182,
+     0.330664,
+     0.063331
+    ],
+    "pull-ratio-warm-native": [
+     24.852522,
+     0.751345,
+     0.030232
+    ],
+    "pull-ratio-warm-release": [
+     8.98317,
+     0.270156,
+     0.030074
+    ],
+    "status-ratio-cold-native": [
+     1.358431,
+     0.046298,
+     0.034082
+    ],
+    "status-ratio-cold-release": [
+     0.985095,
+     0.033707,
+     0.034217
+    ],
+    "status-ratio-warm-native": [
+     2.849338,
+     0.002586,
+     0.000908
+    ],
+    "status-ratio-warm-release": [
+     2.274876,
+     0.002104,
+     0.000925
+    ]
+   }
+  },
+  {
+   "source": "record at den fbfe0852, 2026-11-20 08:59Z",
+   "samples": 5,
+   "cpu_floor": 0.2,
+   "statistic": "least",
+   "rows": {
+    "diff-cached-quiet-ratio-cold-native": [
+     3.143321,
+     0.001849,
+     0.000588
+    ],
+    "diff-cached-quiet-ratio-cold-release": [
+     2.515235,
+     0.001497,
+     0.000595
+    ],
+    "diff-cached-quiet-ratio-warm-native": [
+     3.022294,
+     0.001795,
+     0.000594
+    ],
+    "diff-cached-quiet-ratio-warm-release": [
+     2.513395,
+     0.001504,
+     0.000599
+    ],
+    "diff-quiet-ratio-cold-native": [
+     1.10807,
+     0.048738,
+     0.043985
+    ],
+    "diff-quiet-ratio-cold-release": [
+     0.814951,
+     0.035658,
+     0.043755
+    ],
+    "diff-quiet-ratio-warm-native": [
+     5.405695,
+     0.003797,
+     0.000702
+    ],
+    "diff-quiet-ratio-warm-release": [
+     4.641757,
+     0.003272,
+     0.000705
+    ],
+    "pull-ratio-cold-native": [
+     2.080811,
+     0.136495,
+     0.065597
+    ],
+    "pull-ratio-cold-release": [
+     1.408775,
+     0.09363,
+     0.066462
+    ],
+    "pull-ratio-warm-native": [
+     2.777774,
+     0.092936,
+     0.033457
+    ],
+    "pull-ratio-warm-release": [
+     1.890736,
+     0.062505,
+     0.033058
+    ],
+    "status-ratio-cold-native": [
+     1.365131,
+     0.046192,
+     0.033837
+    ],
+    "status-ratio-cold-release": [
+     0.989946,
+     0.033968,
+     0.034314
+    ],
+    "status-ratio-warm-native": [
+     2.784877,
+     0.002799,
+     0.001005
+    ],
+    "status-ratio-warm-release": [
+     2.311788,
+     0.002443,
+     0.001057
+    ]
+   }
+  },
+  {
+   "source": "record at den d987c49f (a plant; its pull rows were planted and are left out), 2026-11-20 10:41Z",
+   "samples": 5,
+   "cpu_floor": 0.2,
+   "statistic": "least",
+   "rows": {
+    "diff-cached-quiet-ratio-cold-native": [
+     3.219479,
+     0.001641,
+     0.00051
+    ],
+    "diff-cached-quiet-ratio-cold-release": [
+     2.648289,
+     0.001379,
+     0.000521
+    ],
+    "diff-cached-quiet-ratio-warm-native": [
+     3.315312,
+     0.0017,
+     0.000513
+    ],
+    "diff-cached-quiet-ratio-warm-release": [
+     2.4833,
+     0.001318,
+     0.000531
+    ],
+    "diff-quiet-ratio-cold-native": [
+     1.102162,
+     0.048504,
+     0.044008
+    ],
+    "diff-quiet-ratio-cold-release": [
+     0.813945,
+     0.03546,
+     0.043565
+    ],
+    "diff-quiet-ratio-warm-native": [
+     5.647512,
+     0.003385,
+     0.000599
+    ],
+    "diff-quiet-ratio-warm-release": [
+     4.375287,
+     0.002701,
+     0.000617
+    ],
+    "status-ratio-cold-native": [
+     1.366134,
+     0.046553,
+     0.034076
+    ],
+    "status-ratio-cold-release": [
+     0.990468,
+     0.033615,
+     0.033939
+    ],
+    "status-ratio-warm-native": [
+     3.151992,
+     0.002874,
+     0.000912
+    ],
+    "status-ratio-warm-release": [
+     2.305528,
+     0.00211,
+     0.000915
+    ]
+   }
+  },
+  {
+   "source": "record at den dccd7f85, 2026-11-20 22:45Z",
+   "samples": 5,
+   "cpu_floor": 0.2,
+   "statistic": "least",
+   "rows": {
+    "diff-cached-quiet-ratio-cold-native": [
+     2.949031,
+     0.001604,
+     0.000544
+    ],
+    "diff-cached-quiet-ratio-cold-release": [
+     2.293849,
+     0.001381,
+     0.000602
+    ],
+    "diff-cached-quiet-ratio-warm-native": [
+     3.082601,
+     0.001687,
+     0.000547
+    ],
+    "diff-cached-quiet-ratio-warm-release": [
+     2.448775,
+     0.001321,
+     0.00054
+    ],
+    "diff-quiet-ratio-cold-native": [
+     1.188227,
+     0.052537,
+     0.044215
+    ],
+    "diff-quiet-ratio-cold-release": [
+     0.79824,
+     0.035503,
+     0.044476
+    ],
+    "diff-quiet-ratio-warm-native": [
+     4.927727,
+     0.003119,
+     0.000633
+    ],
+    "diff-quiet-ratio-warm-release": [
+     4.476087,
+     0.002766,
+     0.000618
+    ],
+    "pull-ratio-cold-native": [
+     2.2533,
+     0.145054,
+     0.064374
+    ],
+    "pull-ratio-cold-release": [
+     1.503423,
+     0.098145,
+     0.065281
+    ],
+    "pull-ratio-warm-native": [
+     3.215167,
+     0.098333,
+     0.030584
+    ],
+    "pull-ratio-warm-release": [
+     2.000935,
+     0.061393,
+     0.030682
+    ],
+    "status-ratio-cold-native": [
+     1.480565,
+     0.050785,
+     0.034301
+    ],
+    "status-ratio-cold-release": [
+     0.975413,
+     0.033761,
+     0.034612
+    ],
+    "status-ratio-warm-native": [
+     2.901441,
+     0.002694,
+     0.000928
+    ],
+    "status-ratio-warm-release": [
+     2.357008,
+     0.002143,
+     0.000909
+    ]
+   }
+  }
+ ],
+ "ratchets": [
+  {
+   "row": "diff-quiet-ratio-warm-native",
+   "ratio": 4.89,
+   "ceiling": 6.5,
+   "source": "den at 54dc6c8; the ceiling the table took first"
+  },
+  {
+   "row": "pull-ratio-cold-native",
+   "ratio": 3.55,
+   "ceiling": 5,
+   "source": "first pull step"
+  },
+  {
+   "row": "pull-ratio-warm-native",
+   "ratio": 4.56,
+   "ceiling": 6.5,
+   "source": "first pull step"
+  },
+  {
+   "row": "pull-ratio-cold-release",
+   "ratio": 2.36,
+   "ceiling": 3.5,
+   "source": "first pull step"
+  },
+  {
+   "row": "pull-ratio-warm-release",
+   "ratio": 2.87,
+   "ceiling": 4,
+   "source": "first pull step"
+  },
+  {
+   "row": "pull-ratio-cold-native",
+   "ratio": 2.08,
+   "ceiling": 3,
+   "source": "second pull step"
+  },
+  {
+   "row": "pull-ratio-warm-native",
+   "ratio": 2.92,
+   "ceiling": 4,
+   "source": "second pull step"
+  },
+  {
+   "row": "pull-ratio-cold-release",
+   "ratio": 1.42,
+   "ceiling": 3,
+   "source": "second pull step"
+  },
+  {
+   "row": "pull-ratio-warm-release",
+   "ratio": 1.91,
+   "ceiling": 3,
+   "source": "second pull step"
+  }
+ ],
+ "overran": {
+  "row": "diff-quiet-ratio-warm-native",
+  "set_from": 4.89,
+  "later": 5.93,
+  "ceiling": 6.5,
+  "source": "den at 54dc6c8, then at d7927e2: the take that failed the ceiling the rule set"
+ },
+ "outliers": [
+  {
+   "row": "diff-cached-quiet-ratio-warm-native",
+   "ratio": 24.091467,
+   "source": "plant record at den 8c1ecf85: a diff that collects its changes twelve more times"
+  }
+ ]
+}
