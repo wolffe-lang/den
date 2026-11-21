@@ -305,7 +305,10 @@ not call it: no index lock, no second parse of the index, no second lstat of
 each entry. A diff of the worktree against the index starts from an unopened
 context; `collect_known` opens the packs (`worktree.opened`) only when a
 differing body is read from them (`known_bodies`). `repository.read_bytes`
-takes a file whole in one read of its size and keeps that chunk as its answer.
+takes a file of 64 KiB or less in one read and keeps that chunk as its answer;
+a larger file is read in 64 KiB chunks into one buffer of its size, since the
+runtime hands back a copy of each chunk it builds and one read would hold a
+large file twice.
 
 `pack.session_kind(s, name)` and `object.kind_cached(r, id)` answer an
 object's type without rebuilding it: a packed object's from its entry header,
