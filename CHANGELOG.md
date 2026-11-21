@@ -1,5 +1,30 @@
 # Changes
 
+## Unreleased — the speed rows' sampling and band
+
+- The four speed rows whose Git side takes about a millisecond of CPU or less
+  (warm `status`, warm `diff --quiet`, and `diff --cached --quiet` cold and
+  warm) sum each sample to 1 s of CPU and take nine samples, where they took
+  five of 0.2 s. Across the records taken with the rows on, they moved by up
+  to 22% between takes, more than the fifth a ceiling leaves above the
+  measured ratio; seven takes of the longer sampling on two core sets moved
+  by at most 11% (least over least; 7% as the median of per-sample ratios,
+  which every row now prints beside it). The other rows keep five samples
+  of 0.2 s.
+- The ratchet rule is code (`ceiling_for`), and the short rows have a band of
+  their own: the spread between takes of their sampling, rounded up to a
+  twentieth and never under a fifth. Measured, it is 1.20, the same as every
+  other row's fifth, so no ceiling moves. Each row prints the ceiling its take
+  would set. `tools/speed-band-test.py` holds the rule, the sampling and the
+  band to recorded takes, on every host.
+- The speed leaf counted PASS lines and ignored its scripts' exit statuses,
+  so a measuring script that stopped after printing its rows (one did, at a
+  head of this change, before writing its report) still read sixteen passes.
+  The leaf now counts a row only when its line and its script's report agree,
+  removes an earlier take's reports first, and fails a missing report by name
+  (`tools/speed-summary.py`, held by `tools/speed-summary-test.py`).
+- Den's own speed and memory are unchanged: these are the measuring tools.
+
 ## 0.1.0 — 2026-11-20
 
 - First 0.1.0 preview of Git-compatible objects, local history, worktree operations and experimental transports. This is not a complete replacement for Git.
