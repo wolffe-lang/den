@@ -220,6 +220,19 @@ for abbrev in (False, True):
                                                     (d/'pack-fixture.pack', '-'), (d/'pack-fixture.idx', '-')],
                must='second blob 9 ', abbrev=abbrev)
     opened_row('opened-read' + tag, repo('opened-read' + tag, pack, idx), middle, must='first blob', abbrev=abbrev)
+# A fetch's closure walk types each object the repository held from its pack
+# entry header, one step per region. Typing through a reader whose packs are
+# not loaded must answer each kind (a base, an offset delta, a reference delta)
+# without loading them: a load inside the step's region would leave the reader
+# holding indexes the region frees, and the next object would be typed from them.
+def kinds_row(name, r, bodies):
+    names = [oid('blob', b).hex() for b in bodies]
+    p = subprocess.run([str(CLIENT), '--kinds', str(r), *names], capture_output=True, timeout=60)
+    expected = 'before loaded=false\n' + ''.join(f'{n} blob loaded=false\n' for n in names)
+    good = p.returncode == 0 and p.stdout.decode(errors='replace') == expected and not p.stderr
+    rows.append(dict(name=name, ok=good, code=p.returncode, stdout=p.stdout.decode(errors='replace'), expected=expected, stderr=p.stderr.decode(errors='replace')))
+    if not good: print(name, p.returncode, p.stdout[:400], 'expected', expected, p.stderr[:300], flush=True)
+kinds_row('kinds-unloaded-reader', repo('kinds-unloaded', pack, idx), [base, middle, last, base])
 (OUT/'results.json').write_text(json.dumps(rows,indent=2)+'\n')
 print(f'pack structural: {sum(x["ok"] for x in rows)}/{len(rows)}; zero skips',flush=True)
 raise SystemExit(not all(x['ok'] for x in rows))
