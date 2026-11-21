@@ -231,10 +231,7 @@ fn dispatch(args: List[str]) -> int ! worktree.WorkErrors {
     let bytes = render_known(ctx, collected.changes, options, [collected.policies])?
     var stdout = fs.stdout()
     fs.write_chunk(mut stdout, bytes)?
-    // Every entry stat-clean and nothing hashed leaves autoRefreshIndex
-    // nothing to refresh: the step is skipped, taking neither the lock nor a
-    // second reading of the index, as Git takes neither (measured).
-    if !collected.stat_clean { refresh_known(ctx, options, collected.hashed) else |_| {} }
+    refresh_known(ctx, options, collected.hashed) else |_| {}
     if options.exit_code && collected.changes.len > 0 then 1 else 0
 }
 
