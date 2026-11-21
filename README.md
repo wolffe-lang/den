@@ -1123,5 +1123,5 @@ reproducer; an unimplemented feature is not silently approximated.
 
 ## Licence
 
-GPL-3.0-only (`LICENSE`) with the wolf Training Data Permission
+GPL-3.0-or-later (`LICENSE`) with the wolf Training Data Permission
 (`LICENSE-TRAINING-DATA`). Vendored organisation-owned files retain provenance.
