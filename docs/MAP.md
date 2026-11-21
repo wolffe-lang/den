@@ -305,7 +305,11 @@ object's type without rebuilding it: a packed object's from its entry header,
 a delta's from its base's header in turn, with a read's header, size and
 delta-base checks and no inflate, CRC or identity hash; a loose object is read
 whole. `closure_received` types so each object the repository held before a
-fetch; what the fetch received is read and checked as before.
+fetch; what the fetch received is read and checked as before. Neither loads a
+session: through an unopened one a packed object is read whole, as
+`session_cached` and `session_peek` answer, so a caller may type objects inside
+its own region. `closure_received` opens its reader's packs once, before the
+walk's per-step regions.
 
 vc24 (den#72): `clone_name` derives a clone's directory from its URL when none
 is given; `clone_mode` fills an existing empty destination and empties it again

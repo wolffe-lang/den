@@ -271,7 +271,9 @@ fn read_cached_whole(mut r: Reader, id: oid.Oid, max_output: int) -> Object ! St
 /// its pack entry's header, a delta's from its base's (pack.session_kind),
 /// and never rebuilt. For a check that needs an object's presence and type,
 /// not its body: a fetch's closure check of an object the repository held
-/// before the fetch.
+/// before the fetch. Through an unopened reader a packed object is read whole
+/// (pack.session_kind), and the reader's packs stay unopened, so a caller may
+/// type objects inside its own region.
 pub fn kind_cached(mut r: Reader, id: oid.Oid) -> str ! StoreErrors {
     if fs.exists(path(r.repo, id)?) { return read_cached(mut r, id, pack.object_limit())?.kind }
     pack.session_kind(r.packs, oid.hex(id)?)?

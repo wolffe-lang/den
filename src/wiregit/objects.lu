@@ -477,6 +477,8 @@ pub fn closure_received(
     roots: List[str],
     ix: pack.Indexed,
 ) -> () ! object.StoreErrors {
+    // The reader's packs load here, once, before the walk's regions: typing a
+    // held object (object.kind_cached) inside a step never loads them.
     var reader = object.reader_open(repo)?
     let count = pack.received_count(ix)
     var seen = List[bool]()
