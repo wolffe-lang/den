@@ -282,7 +282,16 @@ struct Hashed { entry: index.Entry, state: worktree.FileState }
 /// policies are the changes' diff drivers as rendering needs them, resolved
 /// while collect's own index is alive, so rendering neither parses the index
 /// again nor holds it (empty when the display needs no attributes).
-struct Collected { changes: List[Change], hashed: List[Hashed], policies: List[str] }
+/// stat_clean: the worktree side compared every index entry by its lstat
+/// alone and found each one stat-clean (present, every stat word equal, not
+/// racily clean), hashing nothing, so the autoRefreshIndex step
+/// (refresh_known) has nothing to refresh. False for every other diff.
+struct Collected {
+    changes: List[Change],
+    hashed: List[Hashed],
+    policies: List[str],
+    stat_clean: bool,
+}
 
 /// Whether a display renders bodies, so needs the changes' diff drivers.
 fn wanted_policies(options: Options) -> bool {
@@ -344,12 +353,16 @@ fn pending_index(ctx: worktree.Context, value: index.Index) -> List[Pending] ! w
 
 /// from_worktree_ignoring's answer with ids only: a stat-clean file takes its
 /// entry's id unread, any other is hashed as it streams (worktree.tracked),
-/// and each hash is kept in hashed for the refresh step.
+/// and each hash is kept in hashed for the refresh step. clean counts the
+/// entries found stat-clean by their lstat alone; an entry it does not count
+/// (a gitlink, an assume-valid or skip-worktree entry, an absent path, one
+/// hashed) leaves the refresh step to run.
 fn pending_worktree(
     ctx: worktree.Context,
     value: index.Index,
     ignore_option: str,
     mut hashed: List[Hashed],
+    mut clean: int,
 ) -> List[Pending] ! worktree.WorkErrors {
     let autocrlf = (ctx.repo.config["core.autocrlf"] else "false").lower()
     if autocrlf != "false" && autocrlf != "0" { return Unsupported("core.autocrlf={autocrlf}") }
@@ -407,6 +420,7 @@ fn pending_worktree(
         // say, as Git takes it.
         var seen = worktree.tracked_stat(ctx, entry, written, filemode, symlinks, mut verified)?
         if !seen.present { continue }
+        if seen.clean { clean += 1 }
         if !seen.clean {
             // A text rule can make a changed body differ once cleaned, so
             // such a path is hashed and its CR-LF checked, as status does.
@@ -625,6 +639,7 @@ fn collect_known(ctx: worktree.Context, options: Options) -> Collected ! worktre
     var hashed = List[Hashed]()
     var before = List[Pending](), after = List[Pending]()
     var value = index.empty(2)?
+    var stat_clean = false
     if options.revisions.len == 2 {
         let a = resolve(ctx, options.revisions[0])?
         let b = resolve(ctx, options.revisions[1])?
@@ -648,18 +663,33 @@ fn collect_known(ctx: worktree.Context, options: Options) -> Collected ! worktre
                 },
             ]
             if oid.equal(old[0].id, new[0].id) {
-                return Collected { changes: List[Change](), hashed: hashed, policies: List[str]() }
+                return Collected {
+                    changes: List[Change](),
+                    hashed: hashed,
+                    policies: List[str](),
+                    stat_clean: false,
+                }
             }
             // The blobs' diff attributes resolve with index fallback.
             value = worktree.read_index(ctx)?
             if options.reverse {
                 let changes = [Change { before: new, after: old, status: "M", percent: 0 }]
                 let policies = known_policies(ctx, changes, options, value)?
-                return Collected { changes: changes, hashed: hashed, policies: policies }
+                return Collected {
+                    changes: changes,
+                    hashed: hashed,
+                    policies: policies,
+                    stat_clean: false,
+                }
             }
             let changes = [Change { before: old, after: new, status: "M", percent: 0 }]
             let policies = known_policies(ctx, changes, options, value)?
-            return Collected { changes: changes, hashed: hashed, policies: policies }
+            return Collected {
+                changes: changes,
+                hashed: hashed,
+                policies: policies,
+                stat_clean: false,
+            }
         }
         before = pending_tree(ctx, options.revisions[0])?
         after = pending_tree(ctx, options.revisions[1])?
@@ -681,7 +711,9 @@ fn collect_known(ctx: worktree.Context, options: Options) -> Collected ! worktre
             } else {
                 pending_index(ctx, value)?
             }
-            after = pending_worktree(ctx, value, options.ignore_submodules, mut hashed)?
+            var clean = 0
+            after = pending_worktree(ctx, value, options.ignore_submodules, mut hashed, mut clean)?
+            stat_clean = clean == value.entries.len && hashed.len == 0
         }
     }
     if options.ignore_submodules == "all" {
@@ -704,7 +736,7 @@ fn collect_known(ctx: worktree.Context, options: Options) -> Collected ! worktre
     }
     stat_only_names(ctx, options, mut result)?
     let policies = known_policies(ctx, result, options, value)?
-    Collected { changes: result, hashed: hashed, policies: policies }
+    Collected { changes: result, hashed: hashed, policies: policies, stat_clean: stat_clean }
 }
 
 /// collect and render with one index read, for history's per-commit output.

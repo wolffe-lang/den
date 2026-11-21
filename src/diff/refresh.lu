@@ -87,7 +87,9 @@ fn state_of(
 /// hashed answers from that hash; an entry collect did not hash (it was
 /// stat-clean, or outside the pathspec) answers as refresh does, by reading
 /// it, unless its lstat is stat-clean, when refresh would find its stat
-/// unchanged and leave it.
+/// unchanged and leave it. diff does not call it when collect found every
+/// entry stat-clean and hashed none (Collected.stat_clean): there is nothing
+/// to refresh, so neither the lock nor the second reading is taken.
 fn refresh_known(
     ctx: worktree.Context,
     options: Options,
