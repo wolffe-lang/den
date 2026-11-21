@@ -25,3 +25,17 @@ aarch64-unknown-linux-gnu = "00e40fa22d99046b28357f56092075cdb3e3e36a21cc44bf04d
 [std]
 repo = "wolffe-lang/wolf-std"
 rev = "d4a4d4cab358e1e8c174f0206f9e13ad5cfe6c61"
+
+# The newest wolf release, which den must also build with (tools/check-newest-wolf):
+# its own archive and the std it bundles, as a user or a system that ships the
+# release builds den. Raised by hand when wolf releases. 0.2.40 (release
+# 443798290): read twice from the release API, asset ids and digests agreeing;
+# each archive downloaded twice and hashed, equal to the API's digests.
+[wolf-newest]
+version = "0.2.40"
+repo = "wolffe-lang/wolf-lang"
+version_line = "wolf 0.2.40 (wolfgang, pin b333b9d)"
+std_rev = "be1d10fa2798cc6bc2a1fd0b2e559e283469c9bf"
+aarch64-apple-darwin = "3f18a56562fb089da05a50a612e031cd297f20a617b9e6e7ada768fbeb69e72b"
+x86_64-unknown-linux-gnu = "bc2020e0b7400c18162a6072c299c65c0582ea74a0eba22aaa57ca04ae13e7e1"
+aarch64-unknown-linux-gnu = "cea26eea215e7cdba60db2870c0eb4d2c5738065046ec5fe6e0eec7da55e48cd"
