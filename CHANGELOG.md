@@ -1,5 +1,27 @@
 # Changes
 
+## Unreleased — den builds with the newest wolf release
+
+- The newest wolf release, 0.2.40, refused to compile den (E1010 at the two
+  calls of the fetch closure walk's `follow`, `src/wiregit/objects.lu`), while
+  the pinned 0.2.36 accepted it. The refusal is right: typing an object the
+  repository held (`object.kind_cached`, through `pack.session_kind`) loaded
+  the reader's packs when they were not loaded yet, so a first call inside the
+  walk's per-step region would have left the reader holding pack indexes the
+  region frees. The walk never took that path (its reader's packs load before
+  the walk), but the code allowed it. `pack.session_kind` now reads the session
+  and never loads it, answering an unopened session through a whole read as
+  `pack.session_cached` does. What a fetch or pull checks, prints and writes is
+  unchanged, and so are their timings.
+- `tools/check-newest-wolf` builds `src/den.lu` on both tiers with the newest
+  wolf release and the std it bundles, warnings denied, as well as with the pin;
+  it is a gate leaf, so CI and every record run it. The release is pinned by
+  digest beside the toolchain (`[wolf-newest]` in `wolf-toolchain.toml`,
+  staged by `tools/fetch-newest-wolf`) and raised by hand when wolf releases.
+- `tools/pack-test.py` types a base, an offset delta and a reference delta
+  through a reader whose packs are not loaded, one region each, and requires
+  each kind and the packs still unloaded after every call.
+
 ## Unreleased — the speed rows' sampling and band
 
 - The four speed rows whose Git side takes about a millisecond of CPU or less
