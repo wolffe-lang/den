@@ -558,8 +558,8 @@ fn lower_within(
     skip: int,
     mut counts: Lookups,
 ) -> int {
-    var l = lo, r = hi
-    let from = skip
+    var l = 0, r = entries.len
+    let from = 0
     while l < r {
         let mid = (l + r) / 2
         counts.compares += 1
