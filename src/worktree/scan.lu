@@ -274,16 +274,24 @@ pub fn head_tree(
     value: index.Index,
     commit: oid.Oid,
 ) -> List[FlatEntry] ! WorkErrors {
-    head_flat(ctx, value, commit)?
+    var copied = false
+    head_flat(ctx, value, commit, mut copied)?
 }
 
 /// HEAD's flattened tree for status (value straight from read_index). When the index's valid cache-tree root
 /// names HEAD's own tree, HEAD holds exactly the index's entries, so no tree
-/// object is read; otherwise the full walk.
-fn head_flat(ctx: Context, value: index.Index, commit: oid.Oid) -> List[FlatEntry] ! WorkErrors {
+/// object is read; otherwise the full walk. copied says which: true when the
+/// answer is the index's entries, copied in order.
+fn head_flat(
+    ctx: Context,
+    value: index.Index,
+    commit: oid.Oid,
+    mut copied: bool,
+) -> List[FlatEntry] ! WorkErrors {
     // status passes the index read_index just parsed and validated.
     let root = index.parsed_root(value)?
     if root.len == 1 && oid.equal(root[0], tree_id(ctx.repo, commit)?) {
+        copied = true
         var out = List[FlatEntry]()
         (mut out).reserve(value.entries.len)
         for entry in value.entries {
@@ -989,7 +997,31 @@ pub fn compare_status_with_warnings(
         mut warnings,
         mut counts,
         mut merged,
+        false,
     )?
+}
+
+/// The position of path's file at or after the cursor fi, or -1. The rows'
+/// merge asks in increasing path order, so files below path are passed, the
+/// last compare says whether the cursor's file is path, and a match is passed
+/// too; compares are counted.
+fn file_at_cursor(
+    files: List[FileState],
+    path: List[byte],
+    mut fi: int,
+    mut merged: Lookups,
+) -> int {
+    var order = 1
+    while fi < files.len {
+        order = compare_counted(files[fi].path, path, mut merged)
+        if order >= 0 { break }
+        fi += 1
+    }
+    if fi < files.len && order == 0 {
+        fi += 1
+        return fi - 1
+    }
+    -1
 }
 
 /// compare_status_with_warnings without its validation pass, for an index
@@ -1005,6 +1037,7 @@ fn status_rows(
     mut warnings: List[str],
     mut counts: Lookups,
     mut merged: Lookups,
+    same: bool,
 ) -> List[StatusRow] ! WorkErrors {
     // HEAD's entries and the index's are merged where they lie, both in path
     // order; a path is copied only into a row. The file cursor finds each
@@ -1020,6 +1053,11 @@ fn status_rows(
             old = ti
         } else if ti >= tree.len {
             staged = ni
+        } else if same && ti == ni {
+            // same: tree is the index's entries, copied in order (head_flat),
+            // so one position holds one path on both sides.
+            old = ti
+            staged = ni
         } else {
             let order = compare_counted(tree[ti].path, value.entries[ni].path, mut merged)
             if order <= 0 { old = ti }
@@ -1029,31 +1067,22 @@ fn status_rows(
         var next = ni
         if staged >= 0 {
             next = ni + 1
-            while next < value.entries.len &&
-                compare_counted(value.entries[next].path, value.entries[ni].path, mut merged) == 0 {
-                next += 1
+            // index.parse refuses a stage-0 path beside any other entry for it:
+            // only a conflict's stages can follow.
+            if index.stage(value.entries[ni]) != 0 {
+                while next < value.entries.len &&
+                    compare_counted(value.entries[next].path, value.entries[ni].path, mut merged) ==
+                        0 {
+                    next += 1
+                }
             }
         }
         if old >= 0 { ti = old + 1 }
         ni = next
-        var disk = -1
-        if staged >= 0 {
-            while fi < files.len &&
-                compare_counted(files[fi].path, value.entries[staged].path, mut merged) < 0 {
-                fi += 1
-            }
-            if fi < files.len &&
-                compare_counted(files[fi].path, value.entries[staged].path, mut merged) == 0 {
-                disk = fi
-            }
+        let disk = if staged >= 0 {
+            file_at_cursor(files, value.entries[staged].path, mut fi, mut merged)
         } else {
-            while fi < files.len &&
-                compare_counted(files[fi].path, tree[old].path, mut merged) < 0 {
-                fi += 1
-            }
-            if fi < files.len && compare_counted(files[fi].path, tree[old].path, mut merged) == 0 {
-                disk = fi
-            }
+            file_at_cursor(files, tree[old].path, mut fi, mut merged)
         }
         if staged < 0 { (mut rows).push(status_row(tree[old].path, "D", " ")); continue }
         if index.stage(value.entries[staged]) != 0 {
@@ -1069,6 +1098,9 @@ fn status_rows(
             " "
         } else if old < 0 {
             "A"
+        } else if same && old == staged {
+            // HEAD's entry is this entry's copy: no staged change.
+            " "
         } else {
             merged.compares += 1
             change(tree[old].mode, tree[old].id, mode, value.entries[staged].id)
@@ -1141,7 +1173,10 @@ pub fn scan_index(ctx: Context, value: index.Index) -> Snapshot ! WorkErrors {
     let _ = index.serialize(value)?
     let current_head = head(ctx)?
     var entries = List[FlatEntry]()
-    if current_head.commits.len == 1 { entries = head_flat(ctx, value, current_head.commits[0])? }
+    var copied = false
+    if current_head.commits.len == 1 {
+        entries = head_flat(ctx, value, current_head.commits[0], mut copied)?
+    }
     ensure_filters(ctx)?
     let walked = walk_transition(ctx, value, mut warnings)?
     supported_attributes(ctx, walked.files)?
@@ -1285,7 +1320,10 @@ pub fn scan_status_ignoring(
     let value = read_index(ctx)?
     let current_head = head(ctx)?
     var entries = List[FlatEntry]()
-    if current_head.commits.len == 1 { entries = head_flat(ctx, value, current_head.commits[0])? }
+    var same = false
+    if current_head.commits.len == 1 {
+        entries = head_flat(ctx, value, current_head.commits[0], mut same)?
+    }
     ensure_filters(ctx)?
     var ignores = ignore.cache()
     let walked = walk_submodules(
@@ -1314,6 +1352,7 @@ pub fn scan_status_ignoring(
         mut warnings,
         mut row_lookups,
         mut merge_counts,
+        same,
     )?
     Snapshot {
         context: copy ctx,
