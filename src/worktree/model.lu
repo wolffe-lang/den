@@ -184,6 +184,84 @@ pub fn config_bool(ctx: Context, key: str, fallback: bool) -> bool ! WorkErrors 
     return Unsupported("boolean configuration {key}={value}")
 }
 
+/// GIT_OPTIONAL_LOCKS as Git reads it, a boolean that is true when unset:
+/// false, no, off and the empty value, in any case, are false, as is an
+/// integer that is zero; true, yes, on and a nonzero integer are true. Any
+/// other value is fatal with Git's message. Only status's refresh reads it
+/// (git(1); Git's diff refreshes whatever it says).
+pub fn optional_locks() -> bool ! WorkErrors {
+    let value = env_get("GIT_OPTIONAL_LOCKS") else |_| { return true }
+    let lower = value.lower()
+    if lower == "true" || lower == "yes" || lower == "on" { return true }
+    if lower == "false" || lower == "no" || lower == "off" || lower == "" { return false }
+    let number = integer_value(value) else |_| {
+        return Fatal("bad boolean environment value '{value}' for 'GIT_OPTIONAL_LOCKS'")
+    }
+    number != 0
+}
+
+/// A configuration integer as Git reads one: leading white space, an optional
+/// sign, digits in the base their prefix names (0x hexadecimal, 0 octal,
+/// otherwise decimal), then at most one unit, k, m or g in either case (times
+/// 1024, 1024 squared or 1024 cubed), and nothing after it. The value must fit
+/// in 32 signed bits; anything else is invalid.
+fn integer_value(text: str) -> int ! {invalid} {
+    let b = text.bytes()
+    var i = 0
+    while i < b.len && (b[i] == 32 as byte || b[i] >= 9 as byte && b[i] <= 13 as byte) { i += 1 }
+    var negative = false
+    if i < b.len && (b[i] == 43 as byte || b[i] == 45 as byte) {
+        negative = b[i] == 45 as byte
+        i += 1
+    }
+    var base = 10
+    if i + 2 < b.len &&
+        b[i] == 48 as byte &&
+        (b[i + 1] == 120 as byte || b[i + 1] == 88 as byte) &&
+        digit_value(b[i + 2], 16) >= 0 {
+        base = 16
+        i += 2
+    } else if i < b.len && b[i] == 48 as byte {
+        base = 8
+    }
+    let start = i
+    var value = 0
+    while i < b.len && digit_value(b[i], base) >= 0 {
+        value = value * base + digit_value(b[i], base)
+        if value > 4294967296 { return invalid }
+        i += 1
+    }
+    if i == start { return invalid }
+    var factor = 1
+    if i < b.len {
+        let unit = b[i]
+        if unit == 107 as byte || unit == 75 as byte {
+            factor = 1024
+        } else if unit == 109 as byte || unit == 77 as byte {
+            factor = 1048576
+        } else if unit == 103 as byte || unit == 71 as byte {
+            factor = 1073741824
+        } else {
+            return invalid
+        }
+        i += 1
+    }
+    if i != b.len { return invalid }
+    let number = if negative then 0 - value * factor else value * factor
+    if number > 2147483647 || number < 0 - 2147483648 { return invalid }
+    number
+}
+
+/// The value of one digit c in base, or -1.
+fn digit_value(c: byte, base: int) -> int {
+    var d = -1
+    if c >= 48 as byte && c <= 57 as byte { d = c as int - 48 }
+    if c >= 97 as byte && c <= 102 as byte { d = c as int - 87 }
+    if c >= 65 as byte && c <= 70 as byte { d = c as int - 55 }
+    if d >= base { return -1 }
+    d
+}
+
 /// ctx with its repository's packs opened once for the command (den#101,
 /// object.opened): every object read through it shares one parse of each
 /// pack index. For commands that read objects and write no pack.

@@ -90,6 +90,8 @@ fn status_command(ctx: Context, args: List[str]) -> int ! WorkErrors {
         }
     }
     if options.nul && !format { options.porcelain = true; options.short = true }
+    // Read before the scan, as Git does: a bad value ends status unprinted.
+    let optional = optional_locks()?
     var warnings = List[str]()
     defer emit_ignore_warnings(warnings)
     // vc25: the commit summary of status.submoduleSummary stays a named refusal.
