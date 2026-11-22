@@ -1,5 +1,24 @@
 # Changes
 
+## Unreleased — status refreshes the index as Git's does
+
+- `status` writes the index again when an entry it read was stat-dirty with
+  its content and mode unchanged, with the stat words Git's status writes. The
+  next command then finds the entry stat-clean instead of reading the file
+  again. On a clean tree it takes no lock (Git takes one and drops it). A
+  lock another process holds leaves the index as it was, silently.
+- `GIT_OPTIONAL_LOCKS` is read as Git reads it, and only by status. false,
+  no, off, an empty value, or an integer that is zero turns the refresh off.
+  A value that is neither a boolean nor an integer ends status with Git's
+  message and exit 128. `--no-optional-locks` before the command sets it to
+  0, as git(1) has it. Git's diff refreshes the index whatever the variable
+  says, and den's diff still does too.
+- `tools/status-refresh-test.py` holds the refresh to Git on a clean tree,
+  stat-dirty files, changed ones, both together and files dated ahead of the
+  index, with optional locks on, off by the variable or the option, and with
+  the lock already held, and holds the variable's values to Git's reading.
+- The README states that the timed speed rows run with optional locks off.
+
 ## Unreleased — status finds each path among its own directory's entries
 
 - `status` looked each path its walk visited up by a binary search of the
