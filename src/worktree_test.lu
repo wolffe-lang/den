@@ -573,6 +573,52 @@ fn main() -> int ! worktree.WorkErrors {
         }
         assert(refused)
     }
+    // The status scan's lookups answer as a plain scan does: the first entry
+    // whose path is the probe (stage 1 of three), else -1. index_after from
+    // every hint; index_within inside the ranges the walk's directories give.
+    var near = List[index.Entry]()
+    for p in ["a", "a.c", "a/x", "a/y", "b"] { (mut near).push(entry(p, p, 0)?) }
+    (mut near).push(entry("m", "1", 4096)?)
+    (mut near).push(entry("m", "2", 8192)?)
+    (mut near).push(entry("m", "3", 12288)?)
+    for p in ["n/a/b", "n/c", "z"] { (mut near).push(entry(p, p, 0)?) }
+    let probes = [
+        "",
+        "0",
+        "a",
+        "a.b",
+        "a.c",
+        "a/x",
+        "a/y",
+        "a/z",
+        "a0",
+        "b",
+        "c",
+        "m",
+        "n",
+        "n/a",
+        "n/a/b",
+        "n/a/c",
+        "n/c",
+        "q/r",
+        "y",
+        "z",
+        "zz",
+    ]
+    for probe in probes {
+        var expected = -1
+        for i in 0..near.len {
+            if equal(near[i].path, bytes(probe)) {
+                expected = i
+                break
+            }
+        }
+        assert(worktree.index_within_seam(near, bytes(probe)) == expected)
+        for hint in -1..near.len + 2 {
+            assert(worktree.index_after_seam(near, bytes(probe), hint) == expected)
+        }
+    }
+
     print(
         "PASS worktree paths, raw quoting, status codes, flags, ITA, conflicts, exact rename and grouping",
     )

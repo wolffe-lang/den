@@ -508,20 +508,151 @@ fn index_at(entries: List[index.Entry], path: List[byte]) -> int {
     -1
 }
 
-/// index_at's answer, its search's path compares added to counts.
-fn index_counted(entries: List[index.Entry], path: List[byte], mut counts: Lookups) -> int {
-    counts.calls += 1
-    var lo = 0, hi = entries.len
-    while lo < hi {
-        let mid = (lo + hi) / 2
-        counts.compares += 1
-        if compare(entries[mid].path, path) < 0 { lo = mid + 1 } else { hi = mid }
+/// compare's answer for two paths that share their first skip bytes, read
+/// from byte skip on.
+fn compare_from(a: List[byte], b: List[byte], skip: int) -> int {
+    var i = skip
+    while i < a.len && i < b.len {
+        if a[i] != b[i] { return a[i] as int - b[i] as int }
+        i += 1
     }
-    if lo < entries.len {
+    if a.len < b.len { return -1 }
+    if a.len > b.len { return 1 }
+    0
+}
+
+/// Whether a orders below b, one compare counted.
+fn below(a: List[byte], b: List[byte], mut counts: Lookups) -> bool {
+    counts.compares += 1
+    compare(a, b) < 0
+}
+
+/// The first position in [lo, hi) whose path is not below path, or hi: the
+/// bracket holds that position, and its entries share path's first skip
+/// bytes, so each compare reads from there on. Its compares are counted.
+fn lower_within(
+    entries: List[index.Entry],
+    path: List[byte],
+    lo: int,
+    hi: int,
+    skip: int,
+    mut counts: Lookups,
+) -> int {
+    var l = lo, r = hi
+    let from = skip
+    while l < r {
+        let mid = (l + r) / 2
         counts.compares += 1
-        if compare(entries[lo].path, path) == 0 { return lo }
+        if compare_from(entries[mid].path, path, from) < 0 { l = mid + 1 } else { r = mid }
+    }
+    l
+}
+
+/// index_at's answer for a path the walk visits, searched only among its
+/// directory's entries, [lo, hi), which share its first skip bytes (the
+/// directory and its slash): about five compares among 32 entries where the
+/// whole index took about ten, each over the name alone.
+fn index_within(
+    entries: List[index.Entry],
+    path: List[byte],
+    lo: int,
+    hi: int,
+    skip: int,
+    mut counts: Lookups,
+) -> int {
+    counts.calls += 1
+    let at = lower_within(entries, path, lo, hi, skip, mut counts)
+    if at < hi {
+        counts.compares += 1
+        if compare_from(entries[at].path, path, skip) == 0 { return at }
     }
     -1
+}
+
+/// The entries beneath directory, as [first, end): found within [lo, hi),
+/// its parent's own entries, which share directory's first skip bytes.
+fn range_beneath(
+    entries: List[index.Entry],
+    directory: List[byte],
+    lo: int,
+    hi: int,
+    skip: int,
+    mut counts: Lookups,
+) -> List[int] {
+    // directory/ starts the range; directory0 ('/' + 1) is past its end.
+    var key = copy directory
+    (mut key).push(47 as byte)
+    let first = lower_within(entries, key, lo, hi, skip, mut counts)
+    key[key.len - 1] = 48 as byte
+    [first, lower_within(entries, key, first, hi, skip, mut counts)]
+}
+
+/// index_at's answer for the rows, which ask in path order: the search
+/// gallops from hint, the position the last lookup found, to a bracket around
+/// path and searches only that; hint becomes this lookup's position. A path
+/// next to the last costs about three compares; any order is still answered.
+fn index_after(
+    entries: List[index.Entry],
+    path: List[byte],
+    mut hint: int,
+    mut counts: Lookups,
+) -> int {
+    counts.calls += 1
+    let n = entries.len
+    var h = hint
+    if h < 0 { h = 0 }
+    if h > n { h = n }
+    var lo = 0, hi = n
+    if h < n && below(entries[h].path, path, mut counts) {
+        lo = h + 1
+        var step = 1
+        while h + step < n && below(entries[h + step].path, path, mut counts) {
+            lo = h + step + 1
+            step *= 2
+        }
+        hi = if h + step < n then h + step else n
+    } else {
+        hi = h
+        var step = 1
+        while h - step >= 0 && !below(entries[h - step].path, path, mut counts) {
+            hi = h - step
+            step *= 2
+        }
+        lo = if h - step >= 0 then h - step + 1 else 0
+    }
+    let at = lower_within(entries, path, lo, hi, 0, mut counts)
+    hint = at
+    if at < n {
+        counts.compares += 1
+        if compare(entries[at].path, path) == 0 { return at }
+    }
+    -1
+}
+
+/// Seam for the worktree unit test only: index_after's answer for path from
+/// hint, so the test can hold it to a plain scan from every hint.
+pub fn index_after_seam(entries: List[index.Entry], path: List[byte], hint: int) -> int {
+    var h = hint
+    var counts = no_lookups()
+    index_after(entries, path, mut h, mut counts)
+}
+
+/// Seam for the worktree unit test only: index_within's answer for path in
+/// the range of its parent directory, found as the walk finds it.
+pub fn index_within_seam(entries: List[index.Entry], path: List[byte]) -> int {
+    var counts = no_lookups()
+    var lo = 0, hi = entries.len, skip = 0, i = 0
+    // Each directory on path's way narrows the range, as the walk's stack does.
+    while i < path.len {
+        if path[i] == 47 as byte {
+            let range = range_beneath(entries, path[0..i], lo, hi, skip, mut counts)
+            lo = range[0]
+            hi = range[1]
+            skip = i + 1
+        }
+        i += 1
+    }
+    index_within(entries, path, lo, hi, skip, mut counts)
 }
 
 /// Whether any index entry is path itself or lies beneath it.

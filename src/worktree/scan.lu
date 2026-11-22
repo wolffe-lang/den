@@ -302,7 +302,9 @@ struct Walk { files: List[FileState], directories: List[List[byte]], lookups: Lo
 
 // Attribute presence follows the traversal stack. An ordinary directory with
 // no inherited, indexed or listed attributes needs no extra filesystem probe.
-struct PendingWalk { path: List[byte], attributes: bool }
+// [lo, hi) holds the index entries beneath the directory: its visits are
+// looked up there alone (index_within).
+struct PendingWalk { path: List[byte], attributes: bool, lo: int, hi: int }
 
 // One path the walk visits: an entry a directory listed (`kind` its own kind
 // from the listing), or a tracked path below a directory that could not be
@@ -492,6 +494,8 @@ fn walk_submodules(
         PendingWalk {
             path: List[byte](),
             attributes: fs.exists("{ctx.repo.gitdir}/info/attributes"),
+            lo: 0,
+            hi: value.entries.len,
         },
     ]
     var files = List[FileState]()
@@ -503,6 +507,8 @@ fn walk_submodules(
     while pending.len > 0 {
         let todo = (mut pending).pop() else |_| { return invalid }
         let parent = copy todo.path
+        // Every path beneath parent starts with parent and its slash.
+        let skip = if parent.len > 0 then parent.len + 1 else 0
         var attributes_seen = todo.attributes
         var attribute_path = copy parent
         if attribute_path.len > 0 { (mut attribute_path).push(47 as byte) }
@@ -600,7 +606,14 @@ fn walk_submodules(
             }
             if gone { continue }
             if !looked {
-                let tracked_at = index_counted(value.entries, path, mut lookups)
+                let tracked_at = index_within(
+                    value.entries,
+                    path,
+                    todo.lo,
+                    todo.hi,
+                    skip,
+                    mut lookups,
+                )
                 if tracked_at >= 0 && index.stage(value.entries[tracked_at]) == 0 {
                     if !status {
                         return Unsupported("worktree tracked path {text(path)?}: Permission denied")
@@ -771,7 +784,7 @@ fn walk_submodules(
                 (mut deeper).push(path)
             } else if info[0] == 0 || info[0] == 3 {
                 if !selected(path, paths) { continue }
-                let at = index_counted(value.entries, path, mut lookups)
+                let at = index_within(value.entries, path, todo.lo, todo.hi, skip, mut lookups)
                 var staged = -1
                 if at >= 0 {
                     if value.entries[at].stat[6] == 0o160000 {
@@ -855,13 +868,19 @@ fn walk_submodules(
                 }
                 total_bytes += file.data.len
                 (mut files).push(file)
-            } else if index_counted(value.entries, path, mut lookups) >= 0 {
+            } else if index_within(value.entries, path, todo.lo, todo.hi, skip, mut lookups) >= 0 {
                 return Unsupported("tracked worktree file kind {info[0]} at {text(path)?}")
             }
         }
         while deeper.len > 0 {
             let next = (mut deeper).pop() else |_| { return invalid }
-            (mut pending).push(PendingWalk { path: next, attributes: attributes_seen })
+            let range = range_beneath(value.entries, next, todo.lo, todo.hi, skip, mut lookups)
+            (mut pending).push(PendingWalk {
+                path: next,
+                attributes: attributes_seen,
+                lo: range[0],
+                hi: range[1],
+            })
         }
     }
     // Git refreshes the tracked paths before it looks for untracked ones:
@@ -1056,9 +1075,11 @@ fn status_rows(
             (mut rows).push(row)
         }
     }
+    // The files come in path order: each lookup starts where the last landed.
+    var hint = 0
     for file in files {
         if !include_untracked { break }
-        if index_counted(value.entries, file.path, mut counts) >= 0 { continue }
+        if index_after(value.entries, file.path, mut hint, mut counts) >= 0 { continue }
         let decision = ignore.query_cached(
             ctx.repo,
             ctx.root,
