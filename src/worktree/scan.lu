@@ -295,11 +295,9 @@ fn head_flat(
         var out = List[FlatEntry]()
         (mut out).reserve(value.entries.len)
         for entry in value.entries {
-            (mut out).push(FlatEntry {
-                path: copy entry.path,
-                mode: entry.stat[6],
-                id: copy entry.id,
-            })
+            // The entry's own copies move into the list: a plain push would copy them again.
+            let flat = FlatEntry { path: copy entry.path, mode: entry.stat[6], id: copy entry.id }
+            (mut out).push(take flat)
         }
         return out
     }
