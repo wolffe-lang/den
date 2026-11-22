@@ -553,7 +553,8 @@ fn walk_submodules(
                 bytes_add(mut path, parent)
                 if path.len > 0 { (mut path).push(47 as byte) }
                 bytes_add(mut path, item.name)
-                (mut listing).push(Visit { path: path, kind: item.kind, probe: false })
+                let visit = Visit { path: path, kind: item.kind, probe: false }
+                (mut listing).push(take visit)
             }
             listing
         }
