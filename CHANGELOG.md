@@ -1,5 +1,20 @@
 # Changes
 
+## Unreleased — status finds each path among its own directory's entries
+
+- `status` looked each path its walk visited up by a binary search of the
+  whole index, and looked each file up again the same way to tell tracked
+  from untracked: about ten path compares a lookup, each over the full path,
+  a fifth of a warm status's instructions on a 454-entry index. The walk now
+  searches only the index entries beneath the directory it is in, comparing
+  names past the directory's prefix, and the second lookup starts where the
+  last file's landed: 6.8 and 3.0 compares a lookup on the test's 600 paths,
+  from 10.2.
+- The status scan counts those lookups and their compares
+  (`Snapshot.walk_lookups`, `row_lookups`). `probes/status-phases` prints
+  them and `tools/status-lookups-test.py` bounds them at 8 and 5 a lookup;
+  the counts are exact on every host and tier.
+
 ## Unreleased — a warm diff --quiet without the duplicate work
 
 - A diff of the worktree against the index no longer runs its autoRefreshIndex
