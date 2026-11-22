@@ -68,10 +68,10 @@ diff) in the clean and touch-all cases, den's observation must equal Git's,
 and on the clean tree both must leave the index's bytes as they were. The
 pinned Git leaves a clean tree's .git untouched, and takes the lock and writes
 the index again when every file is stat-dirty with its content unchanged
-(measured). Every other row records the observation and asserts nothing on it:
-status --porcelain takes the lock on a clean tree in Git and not in den, and
-writes a stat-dirty index again in Git and not in den (measured; a separate
-status difference, present before this test).
+(measured). Every other row records the observation and asserts nothing on it.
+status --porcelain runs here, as every command does, with optional locks off
+(tools/env), so neither tool takes the lock or writes. status's refresh with
+optional locks on is held to Git by tools/status-refresh-test.py.
 """
 import argparse, hashlib, json, os, pathlib, runpy, shutil, subprocess, time
 
