@@ -33,6 +33,9 @@ The sort: every file sorted (600), and at most 1 path compare a file. A merge
 sort of the paths takes 6.4 a file here (3,844 in all), each over the path,
 and fails.
 
+The scan's files (the probe's `paths` lines) are exactly the fixture's files,
+in byte order of their paths.
+
 The counts are exact on every host and tier: they depend neither on the order
 a directory is listed in nor on time.
 """
@@ -90,7 +93,7 @@ def main():
     probe = root / 'target' / a.tier / 'status-phases'
     flags = ['--release'] if a.tier == 'release' else []
     run([wolf, 'build', *flags, '--deny-warnings', root / 'probes/status-phases/main.lu', '-o', probe], root)
-    text = run([probe, work], work).decode()
+    text = run([probe, work, 'paths'], work).decode()
     found = re.search(r'^walk_lookups=(\d+) walk_compares=(\d+) row_lookups=(\d+) row_compares=(\d+)$',
                       text, re.M)
     assert found, text
@@ -101,6 +104,7 @@ def main():
     sort = re.search(r'^sorted_files=(\d+) sort_compares=(\d+)$', text, re.M)
     assert sort, text
     sorted_files, sort_compares = (int(x) for x in sort.groups())
+    listed = re.findall(r'^file=(.*)$', text, re.M)
     files = TRACKED + UNTRACKED
     rows = [
         ('walk-lookups-one-a-file', walk_calls == files, 'walk_lookups=%d (expected %d)' % (walk_calls, files)),
@@ -112,6 +116,8 @@ def main():
         ('merge-steps-one-a-path', merge_steps == TRACKED, 'merge_steps=%d (expected %d)' % (merge_steps, TRACKED)),
         ('merge-compares-a-step', merge_steps > 0 and merge_compares <= MERGE_BOUND * merge_steps,
          'merge_compares=%d, %.3f a step (bound %.1f)' % (merge_compares, merge_compares / max(1, merge_steps), MERGE_BOUND)),
+        ('files-in-path-order', listed == sorted(tracked + untracked, key=lambda x: x.encode()),
+         'files=%d, in byte order of their paths: %s' % (len(listed), listed == sorted(listed, key=lambda x: x.encode()))),
         ('sort-files-one-a-file', sorted_files == files, 'sorted_files=%d (expected %d)' % (sorted_files, files)),
         ('sort-compares-a-file', sorted_files > 0 and sort_compares <= SORT_BOUND * sorted_files,
          'sort_compares=%d, %.3f a file (bound %.1f)' % (sort_compares, sort_compares / max(1, sorted_files), SORT_BOUND)),

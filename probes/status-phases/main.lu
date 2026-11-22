@@ -2,7 +2,7 @@
 use std.time
 use worktree
 
-fn measured(root: str, untracked: bool, full: bool) -> () ! worktree.WorkErrors {
+fn measured(root: str, untracked: bool, full: bool, paths: bool) -> () ! worktree.WorkErrors {
     var start = time.monotonic_ns()
     let ctx = worktree.discover(root)?
     print("discover_ns={time.monotonic_ns() - start}")
@@ -36,6 +36,10 @@ fn measured(root: str, untracked: bool, full: bool) -> () ! worktree.WorkErrors 
     )
     print("merge_steps={status.merge_counts.calls} merge_compares={status.merge_counts.compares}")
     print("sorted_files={status.sort_counts.calls} sort_compares={status.sort_counts.compares}")
+    // paths: the scan's files in its order, one a line (UTF-8 paths only).
+    if paths {
+        for file in status.files { print("file={str_from_utf8(file.path) else "?"}") }
+    }
     start = time.monotonic_ns()
     let bytes = worktree.render_status(status, worktree.status_options(ctx)?)?
     print("render_ns={time.monotonic_ns() - start} bytes={bytes.len}")
@@ -43,12 +47,16 @@ fn measured(root: str, untracked: bool, full: bool) -> () ! worktree.WorkErrors 
 
 fn main() -> int {
     let args = env_args()
-    if args.len < 1 { eprint("usage: status-phases ROOT [no-untracked] [full]"); return 2 }
-    var untracked = true, full = false
+    if args.len < 1 { eprint("usage: status-phases ROOT [no-untracked] [full] [paths]"); return 2 }
+    var untracked = true, full = false, paths = false
     for i in 1..args.len {
         if args[i] == "no-untracked" { untracked = false }
         if args[i] == "full" { full = true }
+        if args[i] == "paths" { paths = true }
     }
-    measured(args[0], untracked, full) else |error| { eprint("phase failure: {error}"); return 1 }
+    measured(args[0], untracked, full, paths) else |error| {
+        eprint("phase failure: {error}")
+        return 1
+    }
     0
 }
