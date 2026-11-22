@@ -1217,7 +1217,16 @@ read-only check of the worktree's administrative entry. Metadata files retain th
 1,048,576-byte bound; retained incoming payload plus info metadata is bounded at
 16,777,216 bytes, with named limit errors rather than an unbounded snapshot.
 
-Scan/read operations do not refresh the index or acquire its write lock.
+Scan/read operations do not refresh the index or acquire its write lock. The
+`status` command refreshes it, as Git's does. After its scan, when an entry it
+read is stat-dirty with its content and mode unchanged, it writes the index
+again under index.lock with those entries' fresh stat words. When no entry is,
+it takes no lock; Git takes one and drops it. A lock another process holds, or
+an index that changed since the scan read it, leaves the index as it was.
+`GIT_OPTIONAL_LOCKS` turns the refresh off, read as Git reads a boolean
+(integers included; a bad value is fatal), and so does `--no-optional-locks`
+before the command. Git's diff refreshes whatever the variable says, and den's
+does too. `tools/status-refresh-test.py` holds all of this to Git.
 `include_untracked=false` skips ignore queries and untracked file-body reads,
 not just their displayed rows. `compare_status_with_warnings` offers the same
 control when comparing caller-supplied snapshots. Silent compatibility wrappers
