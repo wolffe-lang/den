@@ -26,7 +26,7 @@ import shutil
 import subprocess
 
 # The pinned Git's options for every command this harness runs.
-MAINTENANCE = []
+MAINTENANCE = ['-c', 'maintenance.autoDetach=false']
 
 
 def main():
