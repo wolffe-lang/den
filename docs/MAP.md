@@ -863,7 +863,7 @@ Recorded earlier witnesses are not the final expanded verification:
 
 | Component | Earlier recorded coverage | Current gate |
 |---|---|---|
-| Worktree | 186 command cases per native/release tier and an actual checked unit exit | `tools/check-worktree`: units, external client, full repository snapshots and the status scan's lookup counts |
+| Worktree | 186 command cases per native/release tier and an actual checked unit exit | `tools/check-worktree`: units, external client, full repository snapshots and the status scan's path-work counts |
 | Ignore | 840 pattern rows per native/release tier and actual checked unit exit; 479 filesystem rows on native | `tools/check-ignore` plus `tools/ignore-filesystem-oracle.py`: precedence, tracked/prefix bypass, relative sources, warnings and no-write checks |
 | Commit | 51 native full-repository comparisons after the initial fixes | `tools/check-commit`: CLI state, failure/ref tests and actual checked units |
 | Commit formatting | 150 API comparisons | Date/identity/message outputs; **not** 150 CLI stdout/stderr/status parity cases |
@@ -1128,8 +1128,8 @@ so metacharacters in an operand do not become wildcard selections.
 `FlatEntry {path, mode, id}`, `FileState {path, mode, id, data, stat, kind}`,
 `StatusRow {path, original_path, x, y, ignored, untracked}` and
 `Snapshot {context, head, index, head_entries, files, directories, rows,
-walk_lookups, row_lookups}` own their data (`Lookups {calls, compares}`: a status
-scan's counts, `no_lookups()` elsewhere). File content and symlink target bytes are distinct; no followed
+walk_lookups, row_lookups, merge_counts, sort_counts}` own their data (`Lookups
+{calls, compares}`: a status scan's counts, `no_lookups()` elsewhere). File content and symlink target bytes are distinct; no followed
 referent is used as link metadata. `Head` represents unborn/attached/detached
 state and optional checkout-origin data without writing HEAD.
 
@@ -1238,11 +1238,19 @@ first in the host's listing order. Each walked directory carries the range of in
 entries beneath it, found within its parent's, and the walk looks each path it
 visits up in that range alone, comparing past the directory's own prefix; the rows
 look each file up onward from where the last file's lookup landed (the files are
-in path order by then). `Snapshot.walk_lookups` and `row_lookups` count those
-lookups and their path compares; `probes/status-phases` prints them, and
+in path order by then). The walk sorts its files by the index position each
+lookup found (twice a tracked path's position, plus one; twice the position an
+untracked path would take), comparing paths only between untracked files that
+share a position. The rows' merge of HEAD's entries with the index's takes a
+position as one path on both sides when HEAD's entries are the index's own
+(the cache tree names HEAD's tree), checks for further stages only after a
+conflict entry, and passes each matched file. `Snapshot.walk_lookups`,
+`row_lookups`, `merge_counts` and `sort_counts` count that work and its compares;
+`probes/status-phases` prints them (`paths` lists the files), and
 `tools/status-lookups-test.py` (through `check-worktree`) bounds them on its
-600-path fixture at 8 and 5 compares a lookup, where a whole-index search takes
-10.2. `stage_paths_with_warnings` leaves an ignored
+600-path fixture: 8 and 5 compares a lookup (a whole-index search takes 10.2),
+3 a merge step (7.0 before), 1 a sorted file (6.4 for a merge sort of the paths),
+with the files in path order. `stage_paths_with_warnings` leaves an ignored
 directory with no tracked descendant unopened unless `force`; the ignore reader
 warns `unable to access 'DIR/.gitignore': Permission denied` and reads no rules
 there.
