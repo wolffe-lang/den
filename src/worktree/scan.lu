@@ -1241,7 +1241,7 @@ fn status_rows(
         if x != " " || y != " " {
             var row = status_row(value.entries[staged].path, x, y)
             row.sub = sub
-            (mut rows).push(row)
+            (mut rows).push(take row)
         }
     }
     // The files come in path order: each lookup starts where the last landed.
@@ -1266,11 +1266,14 @@ fn status_rows(
         )
         row.ignored = decision.ignored
         row.untracked = !decision.ignored
-        (mut rows).push(row)
+        (mut rows).push(take row)
     }
     // Stable unsigned path order, independent of directory enumeration order.
     var names = List[List[byte]]()
-    for row in rows { (mut names).push(copy row.path) }
+    for row in rows {
+        let name = copy row.path
+        (mut names).push(take name)
+    }
     var sorted = List[StatusRow]()
     for i in path_order(names) { (mut sorted).push(copy rows[i]) }
     sorted
