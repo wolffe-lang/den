@@ -30,6 +30,11 @@ server has sent den's first fetch response (den clones first):
                          line naming HEAD and refs/heads/main, then PASS
                          http-live-self with nothing excluded.
 
+http-live-stall-pause-default, first and with no server: the live rows' pause
+with DEN_LIVE_UNREACHABLE_PAUSE unset is 60 s, read from tools/http-live-test.py
+as that leaf reads it (and tools/submodule-live-test.py through it), without
+waiting it out, so a changed default is noticed.
+
 The served repository is put back after each of these. Three more aim at
 the host going away, as a network outage takes it: right after the server
 sends the first fetch response (den's, since den clones first) it stops
@@ -366,6 +371,20 @@ def scenario(label, stalls, move, outage, tier, srv, git, env):
     return not problems
 
 
+def pause_default():
+    """The live rows' pause with DEN_LIVE_UNREACHABLE_PAUSE unset, as the leaf reads it at load."""
+    saved = os.environ.pop('DEN_LIVE_UNREACHABLE_PAUSE', None)
+    try:
+        pause = runpy.run_path(str(R / 'tools/http-live-test.py'), run_name='http_live_pause')['UNREACHABLE_PAUSE']
+    finally:
+        if saved is not None:
+            os.environ['DEN_LIVE_UNREACHABLE_PAUSE'] = saved
+    ok = pause == 60
+    print(('PASS ' if ok else 'FAIL ') + 'http-live-stall-pause-default' +
+          ('' if ok else ' the pause with nothing set is %r s, not 60' % (pause,)), flush=True)
+    return ok
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--tier', choices=('native', 'release'), default='native')
@@ -374,6 +393,8 @@ def main():
     assert hashlib.sha256(Path(git).read_bytes()).hexdigest() == GIT_SHA256, 'pinned Git digest'
     if not (R / 'target' / args.tier / 'den').is_file():
         raise SystemExit('FAIL http-live-stall-input: build target/' + args.tier + '/den first')
+    if not pause_default():
+        raise SystemExit('FAIL http-live-stall: pause-default')
     if not Path(os.environ.get('DEN_LIVE_ROOTS_PEM', '/etc/ssl/certs/ca-certificates.crt')).is_file():
         for label, _, _, _ in SCENARIOS:
             print('SKIP http-live-stall-%s reason=no distribution root bundle (the live row needs one)' % label,
