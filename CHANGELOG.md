@@ -10,10 +10,20 @@
   names past the directory's prefix, and the second lookup starts where the
   last file's landed: 6.8 and 3.0 compares a lookup on the test's 600 paths,
   from 10.2.
-- The status scan counts those lookups and their compares
-  (`Snapshot.walk_lookups`, `row_lookups`). `probes/status-phases` prints
-  them and `tools/status-lookups-test.py` bounds them at 8 and 5 a lookup;
-  the counts are exact on every host and tier.
+- The walk sorted its files into path order by comparing their paths (6.4
+  compares a file on the test's paths). It now sorts them by the index
+  position each lookup already found, and compares paths only between
+  untracked files that would sit at one position: 41 compares for 600 files.
+- When the index's cache tree names HEAD's tree, HEAD's entries are the
+  index's own, and status compared each of them, path and id, with its own
+  copy. It now takes them as one, looks for further stages only after a
+  conflict entry, and passes a file once it has matched it: 2.0 compares a
+  path, from 7.0.
+- The status scan counts that work and its compares (`Snapshot.walk_lookups`,
+  `row_lookups`, `merge_counts`, `sort_counts`). `probes/status-phases`
+  prints them and `tools/status-lookups-test.py` bounds them: 8 and 5 a
+  lookup, 3 a merge step, 1 a sorted file. The counts are exact on every host
+  and tier.
 
 ## Unreleased — a warm diff --quiet without the duplicate work
 
