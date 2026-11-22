@@ -288,7 +288,6 @@ fn row_path(mut out: List[byte], ctx: Context, row: StatusRow, options: StatusOp
 /// the parent lane's pinned-oracle byte matrix confirms each heading/hint.
 pub fn render_status(snapshot: Snapshot, options: StatusOptions) -> List[byte] ! WorkErrors {
     let rows = grouped(snapshot, renames(snapshot, options)?, options)
-    let ctx = copy snapshot.context
     let unborn = snapshot.head.commits.len == 0
     var out = List[byte]()
     if options.short || options.porcelain || options.nul {
@@ -318,14 +317,14 @@ pub fn render_status(snapshot: Snapshot, options: StatusOptions) -> List[byte] !
             }
             bytes_add(mut out, "{row.x}{y} ".bytes())
             if options.nul {
-                bytes_add(mut out, display(ctx, row.path, options))
+                bytes_add(mut out, display(snapshot.context, row.path, options))
                 (mut out).push(0 as byte)
                 if row.original_path.len > 0 {
-                    bytes_add(mut out, display(ctx, row.original_path, options))
+                    bytes_add(mut out, display(snapshot.context, row.original_path, options))
                     (mut out).push(0 as byte)
                 }
             } else {
-                row_path(mut out, ctx, row, options)
+                row_path(mut out, snapshot.context, row, options)
                 (mut out).push(10 as byte)
             }
         }
@@ -363,7 +362,7 @@ pub fn render_status(snapshot: Snapshot, options: StatusOptions) -> List[byte] !
         }
     }
     if unborn { line(mut out, "") }
-    let merging = fs.is_file("{ctx.repo.gitdir}/MERGE_HEAD")
+    let merging = fs.is_file("{snapshot.context.repo.gitdir}/MERGE_HEAD")
     if merging {
         if conflicts {
             line(mut out, "You have unmerged paths.")
@@ -392,7 +391,7 @@ pub fn render_status(snapshot: Snapshot, options: StatusOptions) -> List[byte] !
         for row in rows {
             if row.untracked || row.ignored || row.x == " " || conflict_row(row) { continue }
             bytes_add(mut out, "\t{label(row.x)}".bytes())
-            row_path(mut out, ctx, row, options)
+            row_path(mut out, snapshot.context, row, options)
             line(mut out, "")
         }
         line(mut out, "")
@@ -401,9 +400,9 @@ pub fn render_status(snapshot: Snapshot, options: StatusOptions) -> List[byte] !
         line(mut out, "Unmerged paths:")
         if options.hints {
             if !merging &&
-                !fs.is_file("{ctx.repo.gitdir}/CHERRY_PICK_HEAD") &&
-                !fs.is_file("{ctx.repo.gitdir}/REVERT_HEAD") &&
-                !fs.is_file("{ctx.repo.gitdir}/REBASE_HEAD") {
+                !fs.is_file("{snapshot.context.repo.gitdir}/CHERRY_PICK_HEAD") &&
+                !fs.is_file("{snapshot.context.repo.gitdir}/REVERT_HEAD") &&
+                !fs.is_file("{snapshot.context.repo.gitdir}/REBASE_HEAD") {
                 line(mut out, "  (use \"git restore --staged <file>...\" to unstage)")
             }
             line(mut out, "  (use \"git add <file>...\" to mark resolution)")
@@ -421,7 +420,7 @@ pub fn render_status(snapshot: Snapshot, options: StatusOptions) -> List[byte] !
                 _ => "both modified:  ",
             }
             bytes_add(mut out, "\t{name} ".bytes())
-            row_path(mut out, ctx, row, options)
+            row_path(mut out, snapshot.context, row, options)
             line(mut out, "")
         }
         line(mut out, "")
@@ -457,7 +456,7 @@ pub fn render_status(snapshot: Snapshot, options: StatusOptions) -> List[byte] !
         for row in rows {
             if row.untracked || row.ignored || row.y == " " || conflict_row(row) { continue }
             bytes_add(mut out, "\t{label(row.y)}".bytes())
-            bytes_add(mut out, display(ctx, row.path, options))
+            bytes_add(mut out, display(snapshot.context, row.path, options))
             if row.sub != 0 {
                 var parts = List[str]()
                 if row.sub & 1 != 0 { (mut parts).push("new commits") }
@@ -489,7 +488,7 @@ pub fn render_status(snapshot: Snapshot, options: StatusOptions) -> List[byte] !
         for row in rows {
             if ignored_group && row.ignored || !ignored_group && row.untracked {
                 bytes_add(mut out, "\t".bytes())
-                bytes_add(mut out, display(ctx, row.path, options))
+                bytes_add(mut out, display(snapshot.context, row.path, options))
                 line(mut out, "")
             }
         }
