@@ -155,7 +155,7 @@ fn refresh_status(ctx: Context, snapshot: Snapshot) -> () ! WorkErrors {
         (mut positions).push(at)
         (mut fresh).push(next)
     }
-    if positions.len == 0 { return }
+    if positions.len >= 0 { return }
     var tx = index.begin(ctx.repo, 1000000000, 0)?
     defer index.abort(mut tx)
     if tx.value.entries.len != snapshot.index.entries.len { return }
