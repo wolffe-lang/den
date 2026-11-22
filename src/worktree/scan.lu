@@ -584,8 +584,17 @@ fn walk_submodules(
         // Subdirectories are entered depth first in the order the host lists
         // them, as Git enters them, so the warnings come in Git's order.
         var deeper = List[List[byte]]()
-        for visit in visits {
-            let path = copy visit.path
+        var at_visit = 0
+        while at_visit < visits.len {
+            // Each visit's path moves out of this directory's listing (a
+            // binding moves), and an empty path takes its place, so the
+            // element is whole again before the next one moves. The listing
+            // is dropped with the directory: no second copy of a path is made.
+            let visit_kind = visits[at_visit].kind
+            let visit_probe = visits[at_visit].probe
+            let path = visits[at_visit].path
+            visits[at_visit].path = List[byte]()
+            at_visit += 1
             // A selected leaf may need its ancestors traversed, but unrelated
             // paths must not be opened incidentally by add <tracked> or -u.
             var relevant = selected(path, paths)
@@ -608,10 +617,16 @@ fn walk_submodules(
                 if !tracked { continue }
             }
             var looked = true, gone = false
-            // The lstat record is copied out of the region its call and the
-            // absolute path were made in.
+            var kind = -1, wanted = false, at = -1, file_lower = 0
+            var staged = -1, mode = 0, clean = false, submodule = false
+            // The lstat record stays in the region its call and the absolute
+            // path were made in. A file's index lookup, mode and stat check
+            // are made there, and the record is copied out only where the
+            // walk keeps it: a directory's, and for status a tracked file it
+            // reads (its refresh writes the record); full walks keep every
+            // file's.
             let info = copy region {
-                fs_lstat(absolute(ctx, path)?) else |e| match e {
+                let record = fs_lstat(absolute(ctx, path)?) else |e| match e {
                     not_found => {
                         gone = true
                         List[int]()
@@ -621,6 +636,46 @@ fn walk_submodules(
                         List[int]()
                     },
                     io => { return io },
+                }
+                if gone || !looked {
+                    List[int]()
+                } else if (record[0] == 0 || record[0] == 3) && selected(path, paths) {
+                    kind = record[0]
+                    wanted = true
+                    at = index_lower_within(
+                        value.entries,
+                        path,
+                        todo.lo,
+                        todo.hi,
+                        skip,
+                        mut file_lower,
+                        mut lookups,
+                    )
+                    if at >= 0 {
+                        // A gitlink is refused after the region: an error
+                        // value built in it could not outlive it.
+                        if value.entries[at].stat[6] == 0o160000 {
+                            submodule = true
+                        } else if index.stage(value.entries[at]) == 0 {
+                            staged = at
+                        }
+                    }
+                    let prior_mode = if staged >= 0 then value.entries[staged].stat[6] else -1
+                    mode = if kind == 0 {
+                        entry_disk_mode(record, prior_mode, filemode, symlinks)
+                    } else {
+                        0o120000
+                    }
+                    // A tracked file whose stat data matches its entry is
+                    // taken as the entry's blob unread.
+                    clean = hashing &&
+                        staged >= 0 &&
+                        (kind == 0 || link_judged(record, prior_mode, symlinks)) &&
+                        stat_clean(value.entries[staged], record, mode, written)
+                    if status && (clean || staged < 0) then List[int]() else record
+                } else {
+                    kind = record[0]
+                    record
                 }
             }
             if gone { continue }
@@ -656,7 +711,7 @@ fn walk_submodules(
                     })
                     continue
                 }
-                if visit.probe || tracked_at >= 0 { continue }
+                if visit_probe || tracked_at >= 0 { continue }
                 if !status {
                     // Git reads the directory's ignore file before the entry.
                     if include_untracked {
@@ -671,7 +726,7 @@ fn walk_submodules(
                     }
                     return Fatal("unable to stat '{text(path)?}': Permission denied")
                 }
-                if visit.kind == 1 {
+                if visit_kind == 1 {
                     if include_untracked && !show_ignored && !tracked_under(value.entries, path) {
                         let decision = ignore.query_cached(
                             ctx.repo,
@@ -690,25 +745,25 @@ fn walk_submodules(
                     (mut deeper).push(path)
                     continue
                 }
-                if visit.kind != 0 && visit.kind != 3 || !selected(path, paths) { continue }
+                if visit_kind != 0 && visit_kind != 3 || !selected(path, paths) { continue }
                 if files.len >= 1000000 {
                     return Fatal("limit: more than 1000000 paths in the work tree scan")
                 }
                 (mut keys).push(2 * tracked_lower)
                 (mut files).push(FileState {
                     path: owned_bytes(path),
-                    mode: if visit.kind == 3 then 0o120000 else 0o100644,
+                    mode: if visit_kind == 3 then 0o120000 else 0o100644,
                     id: copy empty,
                     data: List[byte](),
                     stat: List[int](),
-                    kind: visit.kind,
+                    kind: visit_kind,
                     dirt: 0,
                 })
                 continue
             }
             // A tracked path looked up by name is a file or nothing.
-            if visit.probe && info[0] == 1 && gitlink_at(value, path) < 0 { continue }
-            if info[0] == 1 && gitlink_at(value, path) >= 0 {
+            if visit_probe && kind == 1 && gitlink_at(value, path) < 0 { continue }
+            if kind == 1 && gitlink_at(value, path) >= 0 {
                 if !selected(path, paths) { continue }
                 let at = gitlink_at(value, path)
                 if parsed.len == 0 { (mut parsed).push(modules(ctx)?) }
@@ -741,7 +796,7 @@ fn walk_submodules(
                 })
                 continue
             }
-            if info[0] == 1 && transition && !tracked_under(value.entries, path) {
+            if kind == 1 && transition && !tracked_under(value.entries, path) {
                 let decision = ignore.query_cached(
                     ctx.repo,
                     ctx.root,
@@ -770,7 +825,7 @@ fn walk_submodules(
                 })
                 continue
             }
-            if info[0] == 1 {
+            if kind == 1 {
                 if (status || skip_ignored && !selector_inside(paths, path)) &&
                     include_untracked &&
                     !show_ignored &&
@@ -812,37 +867,9 @@ fn walk_submodules(
                     continue
                 }
                 (mut deeper).push(path)
-            } else if info[0] == 0 || info[0] == 3 {
-                if !selected(path, paths) { continue }
-                var file_lower = 0
-                let at = index_lower_within(
-                    value.entries,
-                    path,
-                    todo.lo,
-                    todo.hi,
-                    skip,
-                    mut file_lower,
-                    mut lookups,
-                )
-                var staged = -1
-                if at >= 0 {
-                    if value.entries[at].stat[6] == 0o160000 {
-                        return Unsupported("submodule worktree")
-                    }
-                    if index.stage(value.entries[at]) == 0 { staged = at }
-                }
-                let prior_mode = if staged >= 0 then value.entries[staged].stat[6] else -1
-                let mode = if info[0] == 0 {
-                    entry_disk_mode(info, prior_mode, filemode, symlinks)
-                } else {
-                    0o120000
-                }
-                // A tracked file whose stat data matches its entry is taken
-                // as the entry's blob unread.
-                let clean = hashing &&
-                    staged >= 0 &&
-                    (info[0] == 0 || link_judged(info, prior_mode, symlinks)) &&
-                    stat_clean(value.entries[staged], info, mode, written)
+            } else if kind == 0 || kind == 3 {
+                if !wanted { continue }
+                if submodule { return Unsupported("submodule worktree") }
                 var file = FileState {
                     path: owned_bytes(path),
                     mode: mode,
@@ -850,9 +877,9 @@ fn walk_submodules(
                     data: List[byte](),
                     // status renders paths and modes only, and keeps the record
                     // only of a tracked file it reads (its refresh writes it);
-                    // full walks keep every record.
-                    stat: if status && (clean || staged < 0) then List[int]() else copy info,
-                    kind: info[0],
+                    // full walks keep every record: info is empty otherwise.
+                    stat: info,
+                    kind: kind,
                     dirt: 0,
                 }
                 if transition && at < 0 {
@@ -867,13 +894,13 @@ fn walk_submodules(
                         mut warnings,
                     )?
                     if decision.ignored { continue }
-                } else if status && info[0] == 0 && at < 0 {
+                } else if status && kind == 0 && at < 0 {
                     // Untracked or ignored: status renders the path alone.
                 } else if clean {
                     // A stat-clean entry is its blob, unread whatever its
                     // attributes say, as Git takes it: its id is given above.
                 } else if hashing {
-                    if identity_check && info[0] == 0 {
+                    if identity_check && kind == 0 {
                         check_path_identity(ctx, path, value, mut identity_caches)?
                     }
                     // Each read's scratch lives in its own region and only
@@ -889,7 +916,7 @@ fn walk_submodules(
                 } else {
                     var prior = List[index.Entry]()
                     if staged >= 0 { (mut prior).push(copy value.entries[staged]) }
-                    if identity_check && info[0] == 0 {
+                    if identity_check && kind == 0 {
                         check_path_identity(ctx, path, value, mut identity_caches)?
                     }
                     file = read_file(ctx, path, prior)?
@@ -911,7 +938,7 @@ fn walk_submodules(
                 (mut keys).push(if at >= 0 then 2 * at + 1 else 2 * file_lower)
                 (mut files).push(file)
             } else if index_within(value.entries, path, todo.lo, todo.hi, skip, mut lookups) >= 0 {
-                return Unsupported("tracked worktree file kind {info[0]} at {text(path)?}")
+                return Unsupported("tracked worktree file kind {kind} at {text(path)?}")
             }
         }
         while deeper.len > 0 {
