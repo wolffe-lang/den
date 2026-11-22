@@ -225,13 +225,9 @@ pub fn parse(data: List[byte]) -> Index ! IndexErrors {
             }
         }
         if version == 4 { previous = copy path }
-        (mut result.entries).push(Entry {
-            stat: words,
-            id: id,
-            flags: flags,
-            extended: extended,
-            path: path,
-        })
+        // The entry moves into the list: a plain push would copy its three lists.
+        let entry = Entry { stat: words, id: id, flags: flags, extended: extended, path: path }
+        (mut result.entries).push(take entry)
     }
     while pos < end {
         if end - pos < 8 { return invalid_index }
