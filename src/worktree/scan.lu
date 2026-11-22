@@ -514,6 +514,12 @@ fn walk_submodules(
     var files = List[FileState]()
     // A worktree mostly holds what its index lists: one buffer for the files.
     (mut files).reserve(value.entries.len)
+    // Each file's sort key, from the index position its lookup found: twice
+    // the position of a tracked path, plus one; twice the position an
+    // untracked path would take. The keys order the files as their paths do,
+    // but for untracked paths at one position (key_order).
+    var keys = List[int]()
+    (mut keys).reserve(value.entries.len)
     var directories = List[List[byte]]()
     // The visits' index lookups, counted (Snapshot.walk_lookups).
     var lookups = no_lookups()
@@ -619,12 +625,14 @@ fn walk_submodules(
             }
             if gone { continue }
             if !looked {
-                let tracked_at = index_within(
+                var tracked_lower = 0
+                let tracked_at = index_lower_within(
                     value.entries,
                     path,
                     todo.lo,
                     todo.hi,
                     skip,
+                    mut tracked_lower,
                     mut lookups,
                 )
                 if tracked_at >= 0 && index.stage(value.entries[tracked_at]) == 0 {
@@ -636,6 +644,7 @@ fn walk_submodules(
                     if files.len >= 1000000 {
                         return Fatal("limit: more than 1000000 paths in the work tree scan")
                     }
+                    (mut keys).push(2 * tracked_at + 1)
                     (mut files).push(FileState {
                         path: owned_bytes(path),
                         mode: value.entries[tracked_at].stat[6],
@@ -685,6 +694,7 @@ fn walk_submodules(
                 if files.len >= 1000000 {
                     return Fatal("limit: more than 1000000 paths in the work tree scan")
                 }
+                (mut keys).push(2 * tracked_lower)
                 (mut files).push(FileState {
                     path: owned_bytes(path),
                     mode: if visit.kind == 3 then 0o120000 else 0o100644,
@@ -719,6 +729,7 @@ fn walk_submodules(
                 if files.len >= 1000000 {
                     return Fatal("limit: more than 1000000 paths in the work tree scan")
                 }
+                (mut keys).push(2 * at + 1)
                 (mut files).push(FileState {
                     path: owned_bytes(path),
                     mode: 0o160000,
@@ -745,6 +756,9 @@ fn walk_submodules(
                 if files.len >= 1000000 {
                     return Fatal("limit: more than 1000000 paths in the work tree scan")
                 }
+                (mut keys).push(
+                    2 * lower_within(value.entries, path, todo.lo, todo.hi, skip, mut lookups),
+                )
                 (mut files).push(FileState {
                     path: copy path,
                     mode: 0,
@@ -783,6 +797,9 @@ fn walk_submodules(
                     if files.len >= 1000000 {
                         return Fatal("limit: more than 1000000 paths in the work tree scan")
                     }
+                    (mut keys).push(
+                        2 * lower_within(value.entries, path, todo.lo, todo.hi, skip, mut lookups),
+                    )
                     (mut files).push(FileState {
                         path: copy path,
                         mode: 0,
@@ -797,7 +814,16 @@ fn walk_submodules(
                 (mut deeper).push(path)
             } else if info[0] == 0 || info[0] == 3 {
                 if !selected(path, paths) { continue }
-                let at = index_within(value.entries, path, todo.lo, todo.hi, skip, mut lookups)
+                var file_lower = 0
+                let at = index_lower_within(
+                    value.entries,
+                    path,
+                    todo.lo,
+                    todo.hi,
+                    skip,
+                    mut file_lower,
+                    mut lookups,
+                )
                 var staged = -1
                 if at >= 0 {
                     if value.entries[at].stat[6] == 0o160000 {
@@ -880,6 +906,7 @@ fn walk_submodules(
                     return Fatal("limit: more than 1000000 paths in the work tree scan")
                 }
                 total_bytes += file.data.len
+                (mut keys).push(if at >= 0 then 2 * at + 1 else 2 * file_lower)
                 (mut files).push(file)
             } else if index_within(value.entries, path, todo.lo, todo.hi, skip, mut lookups) >= 0 {
                 return Unsupported("tracked worktree file kind {info[0]} at {text(path)?}")
@@ -910,15 +937,10 @@ fn walk_submodules(
             (mut warnings).push(next)
         }
     }
-    // The files move into path order; the sort's keys and order live in a
-    // region of their own.
+    // The files move into path order by their keys; only untracked paths that
+    // share a key are compared.
     var sorted_counts = no_lookups()
-    var order = copy region {
-        var names = List[List[byte]]()
-        (mut names).reserve(files.len)
-        for file in files { (mut names).push(copy file.path) }
-        path_order_counted(names, mut sorted_counts)
-    }
+    let order = key_order(keys, files, mut sorted_counts)
     var sorted = List[FileState]()
     (mut sorted).reserve(files.len)
     for i in order {
@@ -934,6 +956,55 @@ fn walk_submodules(
         }
     }
     Walk { files: sorted, directories: directories, lookups: lookups, sorted: sorted_counts }
+}
+
+/// Positions of files in path order, from keys that order them but for ties
+/// (see walk_submodules' keys): a stable merge sort of the keys, a tie decided
+/// by the two paths. The files and the path compares are added to counts.
+fn key_order(keys: List[int], files: List[FileState], mut counts: Lookups) -> List[int] {
+    counts.calls += files.len
+    var order = List[int]()
+    for i in 0..files.len { (mut order).push(i) }
+    var scratch = copy order
+    var width = 1
+    while width < order.len {
+        var lo = 0
+        while lo < order.len {
+            let mid = if lo + width < order.len then lo + width else order.len
+            let hi = if lo + 2 * width < order.len then lo + 2 * width else order.len
+            var i = lo, j = mid, k = lo
+            while i < mid && j < hi {
+                if key_below(keys, files, order[j], order[i], mut counts) {
+                    scratch[k] = order[j]
+                    j += 1
+                } else {
+                    scratch[k] = order[i]
+                    i += 1
+                }
+                k += 1
+            }
+            while i < mid {
+                scratch[k] = order[i]
+                i += 1
+                k += 1
+            }
+            while j < hi {
+                scratch[k] = order[j]
+                j += 1
+                k += 1
+            }
+            lo = hi
+        }
+        order = copy scratch
+        width *= 2
+    }
+    order
+}
+
+/// Whether file a orders below file b: by key, a tie by path (counted).
+fn key_below(keys: List[int], files: List[FileState], a: int, b: int, mut counts: Lookups) -> bool {
+    if keys[a] != keys[b] { return keys[a] < keys[b] }
+    compare_counted(files[a].path, files[b].path, mut counts) < 0
 }
 
 fn status_row(path: List[byte], x: str, y: str) -> StatusRow {

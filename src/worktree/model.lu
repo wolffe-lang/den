@@ -580,8 +580,24 @@ fn index_within(
     skip: int,
     mut counts: Lookups,
 ) -> int {
+    var lower = 0
+    index_lower_within(entries, path, lo, hi, skip, mut lower, mut counts)
+}
+
+/// index_within's answer, with lower set to the first position whose path is
+/// not below path (where an untracked path would go): the walk's sort key.
+fn index_lower_within(
+    entries: List[index.Entry],
+    path: List[byte],
+    lo: int,
+    hi: int,
+    skip: int,
+    mut lower: int,
+    mut counts: Lookups,
+) -> int {
     counts.calls += 1
     let at = lower_within(entries, path, lo, hi, skip, mut counts)
+    lower = at
     if at < hi {
         counts.compares += 1
         if compare_from(entries[at].path, path, skip) == 0 { return at }
