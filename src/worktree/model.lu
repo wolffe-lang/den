@@ -497,6 +497,60 @@ fn index_at(entries: List[index.Entry], path: List[byte]) -> int {
     -1
 }
 
+/// index_at's answer, searched outward from hint, the position the previous
+/// lookup of the same walk found; hint becomes this lookup's. A walk visits
+/// a directory's names in path order, so its next path is usually the next
+/// entry: two compares, where a fresh search took about nine at 454 entries
+/// (a warm status looked up each worktree path twice, 19% of its work). Any
+/// order still answers right; a jump costs a gallop, then a binary search.
+fn index_near(entries: List[index.Entry], path: List[byte], mut hint: int) -> int {
+    let at = lower_near(entries, path, hint)
+    hint = at
+    if at < entries.len && compare(entries[at].path, path) == 0 { return at }
+    -1
+}
+
+/// Seam for the worktree unit test only: index_near's answer for path,
+/// searched from hint, so the test can hold it to a plain scan from any hint.
+pub fn index_near_seam(entries: List[index.Entry], path: List[byte], hint: int) -> int {
+    var h = hint
+    index_near(entries, path, mut h)
+}
+
+/// index_lower's answer (the first position whose path is not below path),
+/// found by galloping from hint toward it, then searching the bracket.
+fn lower_near(entries: List[index.Entry], path: List[byte], hint: int) -> int {
+    let n = entries.len
+    var h = hint
+    if h < 0 { h = 0 }
+    if h > n { h = n }
+    // Invariant of the search: lo is -1 or below path; hi is n or not below.
+    var lo = -1, hi = n
+    if h < n && compare(entries[h].path, path) < 0 {
+        lo = h
+        var step = 1
+        while h + step < n && compare(entries[h + step].path, path) < 0 {
+            lo = h + step
+            step *= 2
+        }
+        hi = if h + step < n then h + step else n
+    } else {
+        hi = h
+        var step = 1
+        while h - step >= 0 && compare(entries[h - step].path, path) >= 0 {
+            hi = h - step
+            step *= 2
+        }
+        lo = if h - step >= 0 then h - step else -1
+    }
+    var l = lo + 1, r = hi
+    while l < r {
+        let mid = (l + r) / 2
+        if compare(entries[mid].path, path) < 0 { l = mid + 1 } else { r = mid }
+    }
+    l
+}
+
 /// Whether any index entry is path itself or lies beneath it.
 fn tracked_under(entries: List[index.Entry], path: List[byte]) -> bool {
     if path.len == 0 { return entries.len > 0 }

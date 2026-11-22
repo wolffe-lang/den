@@ -498,6 +498,8 @@ fn walk_submodules(
     // A worktree mostly holds what its index lists: one buffer for the files.
     (mut files).reserve(value.entries.len)
     var directories = List[List[byte]]()
+    // Where the last tracked-path lookup landed (index_near).
+    var hint = 0
     while pending.len > 0 {
         let todo = (mut pending).pop() else |_| { return invalid }
         let parent = copy todo.path
@@ -598,7 +600,7 @@ fn walk_submodules(
             }
             if gone { continue }
             if !looked {
-                let tracked_at = index_at(value.entries, path)
+                let tracked_at = index_near(value.entries, path, mut hint)
                 if tracked_at >= 0 && index.stage(value.entries[tracked_at]) == 0 {
                     if !status {
                         return Unsupported("worktree tracked path {text(path)?}: Permission denied")
@@ -769,7 +771,7 @@ fn walk_submodules(
                 (mut deeper).push(path)
             } else if info[0] == 0 || info[0] == 3 {
                 if !selected(path, paths) { continue }
-                let at = index_at(value.entries, path)
+                let at = index_near(value.entries, path, mut hint)
                 var staged = -1
                 if at >= 0 {
                     if value.entries[at].stat[6] == 0o160000 {
@@ -853,7 +855,7 @@ fn walk_submodules(
                 }
                 total_bytes += file.data.len
                 (mut files).push(file)
-            } else if index_at(value.entries, path) >= 0 {
+            } else if index_near(value.entries, path, mut hint) >= 0 {
                 return Unsupported("tracked worktree file kind {info[0]} at {text(path)?}")
             }
         }
@@ -1052,9 +1054,10 @@ fn status_rows(
             (mut rows).push(row)
         }
     }
+    var hint = 0
     for file in files {
         if !include_untracked { break }
-        if index_at(value.entries, file.path) >= 0 { continue }
+        if index_near(value.entries, file.path, mut hint) >= 0 { continue }
         let decision = ignore.query_cached(
             ctx.repo,
             ctx.root,
