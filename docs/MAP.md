@@ -863,7 +863,7 @@ Recorded earlier witnesses are not the final expanded verification:
 
 | Component | Earlier recorded coverage | Current gate |
 |---|---|---|
-| Worktree | 186 command cases per native/release tier and an actual checked unit exit | `tools/check-worktree`: units, external client and full repository snapshots |
+| Worktree | 186 command cases per native/release tier and an actual checked unit exit | `tools/check-worktree`: units, external client, full repository snapshots and the status scan's lookup counts |
 | Ignore | 840 pattern rows per native/release tier and actual checked unit exit; 479 filesystem rows on native | `tools/check-ignore` plus `tools/ignore-filesystem-oracle.py`: precedence, tracked/prefix bypass, relative sources, warnings and no-write checks |
 | Commit | 51 native full-repository comparisons after the initial fixes | `tools/check-commit`: CLI state, failure/ref tests and actual checked units |
 | Commit formatting | 150 API comparisons | Date/identity/message outputs; **not** 150 CLI stdout/stderr/status parity cases |
@@ -1127,8 +1127,9 @@ so metacharacters in an operand do not become wildcard selections.
 
 `FlatEntry {path, mode, id}`, `FileState {path, mode, id, data, stat, kind}`,
 `StatusRow {path, original_path, x, y, ignored, untracked}` and
-`Snapshot {context, head, index, head_entries, files, directories, rows}` own
-their data. File content and symlink target bytes are distinct; no followed
+`Snapshot {context, head, index, head_entries, files, directories, rows,
+walk_lookups, row_lookups}` own their data (`Lookups {calls, compares}`: a status
+scan's counts, `no_lookups()` elsewhere). File content and symlink target bytes are distinct; no followed
 referent is used as link metadata. `Head` represents unborn/attached/detached
 state and optional checkout-origin data without writing HEAD.
 
@@ -1233,7 +1234,15 @@ the walk's warnings, and an unchanged `FileState` (`kind` -1, no stat); a full w
 refuses it by name. An entry a directory lists but that cannot be looked up is,
 for status, an untracked path of the listing's kind, and for a full walk
 `fatal: unable to stat 'PATH': Permission denied`. Subdirectories are entered depth
-first in the host's listing order. `stage_paths_with_warnings` leaves an ignored
+first in the host's listing order. Each walked directory carries the range of index
+entries beneath it, found within its parent's, and the walk looks each path it
+visits up in that range alone, comparing past the directory's own prefix; the rows
+look each file up onward from where the last file's lookup landed (the files are
+in path order by then). `Snapshot.walk_lookups` and `row_lookups` count those
+lookups and their path compares; `probes/status-phases` prints them, and
+`tools/status-lookups-test.py` (through `check-worktree`) bounds them on its
+600-path fixture at 8 and 5 compares a lookup, where a whole-index search takes
+10.2. `stage_paths_with_warnings` leaves an ignored
 directory with no tracked descendant unopened unless `force`; the ignore reader
 warns `unable to access 'DIR/.gitignore': Permission denied` and reads no rules
 there.
