@@ -1,5 +1,6 @@
 use std.fs
 use index
+use oid
 use repository
 
 fn arguments(ctx: Context, words: List[str]) -> List[List[byte]] ! WorkErrors {
@@ -116,6 +117,8 @@ fn status_command(ctx: Context, args: List[str]) -> int ! WorkErrors {
             }
         }
     }
+    // The refresh is optional: any failure leaves the index as it was.
+    if optional { refresh_status(ctx, snapshot) else |_| {} }
     let bytes = if version2 {
         render_status_v2(snapshot, options)?
     } else {
@@ -124,6 +127,94 @@ fn status_command(ctx: Context, args: List[str]) -> int ! WorkErrors {
     var output = fs.stdout()
     fs.write_chunk(mut output, bytes)?
     0
+}
+
+/// status's refresh, as git-status(1) describes it: when an entry the scan
+/// read is stat-dirty with its content and mode unchanged, the index is
+/// written again with that entry's fresh stat words, under index.lock, and
+/// leaves the bytes Git's status leaves. When no entry is, no lock is taken.
+/// A lock another process holds (index.begin's error), or an index that
+/// changed since the scan read it, leaves the index as it was.
+fn refresh_status(ctx: Context, snapshot: Snapshot) -> () ! WorkErrors {
+    var positions = List[int]()
+    var fresh = List[index.Entry]()
+    var fi = 0
+    for at in 0..snapshot.index.entries.len {
+        if !refreshable(snapshot.index.entries[at]) { continue }
+        while fi < snapshot.files.len &&
+            compare(snapshot.files[fi].path, snapshot.index.entries[at].path) < 0 {
+            fi += 1
+        }
+        if fi >= snapshot.files.len ||
+            compare(snapshot.files[fi].path, snapshot.index.entries[at].path) != 0 {
+            continue
+        }
+        if !read_unchanged(snapshot.files[fi], snapshot.index.entries[at]) { continue }
+        let next = refreshed_entry(snapshot.files[fi], snapshot.index.entries[at])?
+        if same_stat(next, snapshot.index.entries[at]) { continue }
+        (mut positions).push(at)
+        (mut fresh).push(next)
+    }
+    if positions.len == 0 { return }
+    var tx = index.begin(ctx.repo, 1000000000, 0)?
+    defer index.abort(mut tx)
+    if tx.value.entries.len != snapshot.index.entries.len { return }
+    for k in 0..positions.len {
+        let at = positions[k]
+        if !entry_as_scanned(tx.value.entries[at], snapshot.index.entries[at]) { return }
+        tx.value.entries[at] = copy fresh[k]
+    }
+    index.commit(mut tx)?
+}
+
+/// Whether status may refresh prior: stage 0, neither assume-valid nor
+/// skip-worktree nor intent-to-add.
+fn refreshable(prior: index.Entry) -> bool {
+    index.stage(prior) == 0 && prior.flags & 0x8000 == 0 && prior.extended & 0x6000 == 0
+}
+
+/// Whether the scan read file (only a file it read keeps its lstat record,
+/// scan.lu) and found prior's content and mode.
+fn read_unchanged(file: FileState, prior: index.Entry) -> bool {
+    (file.kind == 0 || file.kind == 3) &&
+        file.stat.len > 0 &&
+        file.mode == prior.stat[6] &&
+        oid.equal(file.id, prior.id)
+}
+
+/// prior with file's lstat record as its stat words, its mode kept.
+fn refreshed_entry(file: FileState, prior: index.Entry) -> index.Entry ! WorkErrors {
+    var next = if file.kind == 3 {
+        index.entry_from_lstat(file.stat, prior.path, prior.id, prior.flags, prior.extended)?
+    } else {
+        index.entry_from_stat(
+            file.stat,
+            prior.path,
+            prior.id,
+            if file.mode == 0o120000 then 0o100644 else file.mode,
+            prior.flags,
+            prior.extended,
+        )?
+    }
+    next.stat[6] = prior.stat[6]
+    next
+}
+
+/// Whether two entries' ten stat words are the same.
+fn same_stat(a: index.Entry, b: index.Entry) -> bool {
+    if a.stat.len != 10 || b.stat.len != 10 { return false }
+    for i in 0..10 { if a.stat[i] != b.stat[i] { return false } }
+    true
+}
+
+/// Whether the locked index's entry is the one the scan read: path, id, flags
+/// and stat words.
+fn entry_as_scanned(a: index.Entry, b: index.Entry) -> bool {
+    compare(a.path, b.path) == 0 &&
+        oid.equal(a.id, b.id) &&
+        a.flags == b.flags &&
+        a.extended == b.extended &&
+        same_stat(a, b)
 }
 
 fn add_command(ctx: Context, args: List[str]) -> int ! WorkErrors {
