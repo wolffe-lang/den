@@ -43,7 +43,12 @@ fn compiler_provenance() -> str {
 }
 
 fn main() -> int {
-    let args = env_args()
+    var args = env_args()
+    // git(1): --no-optional-locks before the command is GIT_OPTIONAL_LOCKS=0.
+    while args.len > 0 && args[0] == "--no-optional-locks" {
+        env_set("GIT_OPTIONAL_LOCKS", "0") else |_| {}
+        args = args[1..args.len]
+    }
     if args.len == 1 && args[0] == "--version" {
         print("den 0.1.0 (built with {compiler_provenance()})")
         return 0
