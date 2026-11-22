@@ -9,7 +9,9 @@ holds a subdirectory of 32 more, and 24 untracked files spread over the root
 and three directories. probes/status-phases scans it (the status scan a
 command runs, untracked files included) and prints the scan's counts:
 walk_lookups, one for each path the walk visits, and row_lookups, one for each
-file the rows ask whether the index tracks.
+file the rows ask whether the index tracks; merge_steps, one for each path of
+the rows' merge of HEAD's entries with the index's, and merge_compares, its
+path compares and change checks.
 
 The rows: the number of lookups is exact (one a visited file), and each
 side's compares a lookup are at most its bound: 8 for the walk, 5 for the
@@ -18,9 +20,16 @@ here on each side (about nine halvings and the equality check), each over the
 full path, and fails both. The walk passes by searching only the visited
 directory's own entries (five halvings among 32 and the equality check, and
 two searches a directory to find its range: 6.8 a lookup); the rows, by
-starting where the last file's lookup landed (3.0). The counts are exact on
-every host and tier: they depend neither on the order a directory is listed
-in nor on time.
+starting where the last file's lookup landed (3.0).
+
+The merge: one step a tracked path (576), and at most 3 compares a step. HEAD's
+tree here is the index's own (its cache tree names HEAD's tree), and a tree
+merged with itself compared each path and each id with its own copy, looked
+for a second stage of every path and found each file with three compares:
+7.0 compares a step, which fails.
+
+The counts are exact on every host and tier: they depend neither on the order
+a directory is listed in nor on time.
 """
 import argparse
 import os
@@ -31,6 +40,7 @@ import subprocess
 
 WALK_BOUND = 8.0
 ROW_BOUND = 5.0
+MERGE_BOUND = 3.0
 TRACKED = 576
 UNTRACKED = 24
 
@@ -79,6 +89,9 @@ def main():
                       text, re.M)
     assert found, text
     walk_calls, walk_compares, row_calls, row_compares = (int(x) for x in found.groups())
+    merge = re.search(r'^merge_steps=(\d+) merge_compares=(\d+)$', text, re.M)
+    assert merge, text
+    merge_steps, merge_compares = (int(x) for x in merge.groups())
     files = TRACKED + UNTRACKED
     rows = [
         ('walk-lookups-one-a-file', walk_calls == files, 'walk_lookups=%d (expected %d)' % (walk_calls, files)),
@@ -87,6 +100,9 @@ def main():
          'walk_compares=%d, %.3f a lookup (bound %.1f)' % (walk_compares, walk_compares / max(1, walk_calls), WALK_BOUND)),
         ('row-compares-a-lookup', row_calls > 0 and row_compares <= ROW_BOUND * row_calls,
          'row_compares=%d, %.3f a lookup (bound %.1f)' % (row_compares, row_compares / max(1, row_calls), ROW_BOUND)),
+        ('merge-steps-one-a-path', merge_steps == TRACKED, 'merge_steps=%d (expected %d)' % (merge_steps, TRACKED)),
+        ('merge-compares-a-step', merge_steps > 0 and merge_compares <= MERGE_BOUND * merge_steps,
+         'merge_compares=%d, %.3f a step (bound %.1f)' % (merge_compares, merge_compares / max(1, merge_steps), MERGE_BOUND)),
     ]
     failed = 0
     for name, ok, words in rows:

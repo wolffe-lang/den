@@ -978,7 +978,18 @@ pub fn compare_status_with_warnings(
     let _ = index.serialize(value)?
     var ignores = ignore.cache()
     var counts = no_lookups()
-    status_rows(ctx, value, tree, files, include_untracked, mut ignores, mut warnings, mut counts)?
+    var merged = no_lookups()
+    status_rows(
+        ctx,
+        value,
+        tree,
+        files,
+        include_untracked,
+        mut ignores,
+        mut warnings,
+        mut counts,
+        mut merged,
+    )?
 }
 
 /// compare_status_with_warnings without its validation pass, for an index
@@ -993,13 +1004,16 @@ fn status_rows(
     mut ignores: ignore.Cache,
     mut warnings: List[str],
     mut counts: Lookups,
+    mut merged: Lookups,
 ) -> List[StatusRow] ! WorkErrors {
     // HEAD's entries and the index's are merged where they lie, both in path
     // order; a path is copied only into a row. The file cursor finds each
-    // path's file as file_at did.
+    // path's file as file_at did. merged counts the steps, path compares and
+    // change checks.
     var rows = List[StatusRow]()
     var ti = 0, ni = 0, fi = 0
     while ti < tree.len || ni < value.entries.len {
+        merged.calls += 1
         // The next path is the smaller of the two cursors' (on a tie, both).
         var old = -1, staged = -1
         if ni >= value.entries.len {
@@ -1007,7 +1021,7 @@ fn status_rows(
         } else if ti >= tree.len {
             staged = ni
         } else {
-            let order = compare(tree[ti].path, value.entries[ni].path)
+            let order = compare_counted(tree[ti].path, value.entries[ni].path, mut merged)
             if order <= 0 { old = ti }
             if order >= 0 { staged = ni }
         }
@@ -1016,7 +1030,7 @@ fn status_rows(
         if staged >= 0 {
             next = ni + 1
             while next < value.entries.len &&
-                compare(value.entries[next].path, value.entries[ni].path) == 0 {
+                compare_counted(value.entries[next].path, value.entries[ni].path, mut merged) == 0 {
                 next += 1
             }
         }
@@ -1024,15 +1038,22 @@ fn status_rows(
         ni = next
         var disk = -1
         if staged >= 0 {
-            while fi < files.len && compare(files[fi].path, value.entries[staged].path) < 0 {
+            while fi < files.len &&
+                compare_counted(files[fi].path, value.entries[staged].path, mut merged) < 0 {
                 fi += 1
             }
-            if fi < files.len && compare(files[fi].path, value.entries[staged].path) == 0 {
+            if fi < files.len &&
+                compare_counted(files[fi].path, value.entries[staged].path, mut merged) == 0 {
                 disk = fi
             }
         } else {
-            while fi < files.len && compare(files[fi].path, tree[old].path) < 0 { fi += 1 }
-            if fi < files.len && compare(files[fi].path, tree[old].path) == 0 { disk = fi }
+            while fi < files.len &&
+                compare_counted(files[fi].path, tree[old].path, mut merged) < 0 {
+                fi += 1
+            }
+            if fi < files.len && compare_counted(files[fi].path, tree[old].path, mut merged) == 0 {
+                disk = fi
+            }
         }
         if staged < 0 { (mut rows).push(status_row(tree[old].path, "D", " ")); continue }
         if index.stage(value.entries[staged]) != 0 {
@@ -1049,6 +1070,7 @@ fn status_rows(
         } else if old < 0 {
             "A"
         } else {
+            merged.compares += 1
             change(tree[old].mode, tree[old].id, mode, value.entries[staged].id)
         }
         var y = " "
@@ -1060,6 +1082,7 @@ fn status_rows(
             } else if intent {
                 "A"
             } else {
+                merged.compares += 1
                 change(mode, value.entries[staged].id, files[disk].mode, files[disk].id)
             }
             if disk >= 0 && mode == 0o160000 && files[disk].mode == 0o160000 {
@@ -1133,6 +1156,7 @@ pub fn scan_index(ctx: Context, value: index.Index) -> Snapshot ! WorkErrors {
         rows: rows,
         walk_lookups: no_lookups(),
         row_lookups: no_lookups(),
+        merge_counts: no_lookups(),
     }
 }
 
@@ -1171,6 +1195,7 @@ pub fn scan_index_with_warnings(
         rows: rows,
         walk_lookups: no_lookups(),
         row_lookups: no_lookups(),
+        merge_counts: no_lookups(),
     }
 }
 
@@ -1218,6 +1243,7 @@ pub fn scan_index_without_bodies(
                     rows: copy found[0].rows,
                     walk_lookups: no_lookups(),
                     row_lookups: no_lookups(),
+                    merge_counts: no_lookups(),
                 },
             )
         }
@@ -1277,6 +1303,7 @@ pub fn scan_status_ignoring(
     )?
     supported_attributes(ctx, walked.files)?
     var row_lookups = no_lookups()
+    var merge_counts = no_lookups()
     let rows = status_rows(
         ctx,
         value,
@@ -1286,6 +1313,7 @@ pub fn scan_status_ignoring(
         mut ignores,
         mut warnings,
         mut row_lookups,
+        mut merge_counts,
     )?
     Snapshot {
         context: copy ctx,
@@ -1297,6 +1325,7 @@ pub fn scan_status_ignoring(
         rows: rows,
         walk_lookups: copy walked.lookups,
         row_lookups: row_lookups,
+        merge_counts: merge_counts,
     }
 }
 

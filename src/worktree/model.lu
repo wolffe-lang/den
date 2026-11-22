@@ -98,11 +98,15 @@ pub struct Snapshot {
     /// The walk's and the rows' index lookups (none outside a status scan).
     walk_lookups: Lookups,
     row_lookups: Lookups,
+    /// The rows' merge of HEAD's entries with the index's: its steps, and its
+    /// path compares and change checks.
+    merge_counts: Lookups,
 }
 
-/// Index lookups by path and the path compares they took: a status scan's
-/// count, which probes/status-phases prints and a worktree row bounds per
-/// lookup. Counting is one add a compare; nothing reads it in a command.
+/// Path work a status scan does, counted: calls (index lookups by path, or
+/// steps of the rows' merge) and the compares they took. probes/status-phases
+/// prints the counts and a worktree row bounds each per call. Counting is one
+/// add a compare; nothing reads it in a command.
 pub struct Lookups { calls: int, compares: int }
 
 /// No lookups: the count of a scan that does not count them.
@@ -519,6 +523,12 @@ fn compare_from(a: List[byte], b: List[byte], skip: int) -> int {
     if a.len < b.len { return -1 }
     if a.len > b.len { return 1 }
     0
+}
+
+/// compare's answer, one compare counted.
+fn compare_counted(a: List[byte], b: List[byte], mut counts: Lookups) -> int {
+    counts.compares += 1
+    compare(a, b)
 }
 
 /// Whether a orders below b, one compare counted.

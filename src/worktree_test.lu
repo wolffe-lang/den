@@ -160,6 +160,7 @@ fn main() -> int ! worktree.WorkErrors {
         rows: rows,
         walk_lookups: worktree.no_lookups(),
         row_lookups: worktree.no_lookups(),
+        merge_counts: worktree.no_lookups(),
     }
     var opts = options()
     assert(equal(worktree.render_status(snapshot, opts)?, bytes("MM a\n")))
