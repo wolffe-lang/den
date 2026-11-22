@@ -30,7 +30,26 @@ server has sent den's first fetch response (den clones first):
                          line naming HEAD and refs/heads/main, then PASS
                          http-live-self with nothing excluded.
 
-The served repository is put back after each of these.
+The served repository is put back after each of these. Three more aim at
+the host going away, as a network outage takes it: right after the server
+sends the first fetch response (den's, since den clones first) it stops
+listening, so each later connection is refused. The live row waits
+PAUSE seconds (DEN_LIVE_UNREACHABLE_PAUSE) before it reruns:
+
+  http-live-stall-unreachable-once  the server listens again BACK seconds
+                         after it stopped, within the pause: one RETRY line
+                         naming the pinned Git's reads that could not reach
+                         it (its clone and the listing after), then PASS
+                         http-live-self, one unreachable retry in the LIVE
+                         line.
+  http-live-stall-unreachable-twice  the server never listens again: the
+                         same RETRY line, then FAIL http-live-self naming
+                         the second attempt's failed reads, and no third.
+  http-live-stall-den-refused  the server closes den's fetch without an
+                         answer and serves Git's: den's clone fails while
+                         every read of the pinned Git succeeds, so no
+                         RETRY line, and FAIL http-live-self on the
+                         process difference.
 
 A client is told apart by its User-Agent header (den sends none). Each
 scenario must reach its verdict within BOUND seconds; the row stops its own
@@ -57,8 +76,12 @@ STALL = 3
 LIMIT = 60
 BOUND = 240
 HOLD = 200
-SCENARIOS = (('none', 0, None), ('once', 1, None), ('twice', 2, None), ('moved-branch', 0, 'branch'),
-             ('moved-head', 0, 'head'))
+BACK = 2
+PAUSE = 4
+SCENARIOS = (('none', 0, None, None), ('once', 1, None, None), ('twice', 2, None, None),
+             ('moved-branch', 0, 'branch', None), ('moved-head', 0, 'head', None),
+             ('unreachable-once', 0, None, 'once'), ('unreachable-twice', 0, None, 'twice'),
+             ('den-refused', 0, None, 'den'))
 
 http_git = runpy.run_path(str(R / 'tools/http-git-test.py'), run_name='http_git')
 Server, Reader, Stopped = http_git['Server'], http_git['Reader'], http_git['Stopped']
@@ -66,10 +89,16 @@ Server, Reader, Stopped = http_git['Server'], http_git['Reader'], http_git['Stop
 
 class StallServer(Server):
     """The plain gateway with a thread per connection, stalling each client's
-    first `stalls` fetch responses halfway through their bodies."""
+    first `stalls` fetch responses halfway through their bodies. With an
+    outage, 'once' or 'twice', it stops listening right after it sends the
+    first fetch response, and listens again BACK s later ('once') or never
+    ('twice'); with 'den', it closes den's fetch requests unanswered."""
 
-    def __init__(self, root, git, env, stalls, mover=None):
+    def __init__(self, root, git, env, stalls, mover=None, outage=None):
         self.stalls = stalls
+        self.outage = outage
+        self.went_down = None
+        self.refused_den = 0
         # mover() moves the served refs once, right after den's first fetch
         # response has been sent (den sends no User-Agent).
         self.mover = mover
@@ -87,7 +116,22 @@ class StallServer(Server):
             except socket.timeout:
                 continue
             except OSError:
-                break
+                # An outage shuts the listener (accept fails at once); anything else ends the loop.
+                if self.went_down is None or self.outage != 'once':
+                    break
+                if self.stop.wait(max(0.0, self.went_down + BACK - time.monotonic())):
+                    break
+                try:
+                    self.listener.close()
+                except OSError:
+                    pass
+                listener = socket.socket()
+                listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                listener.bind(('127.0.0.1', self.port))
+                listener.listen(8)
+                listener.settimeout(0.2)
+                self.listener = listener
+                continue
             worker = threading.Thread(target=self.serve, args=(peer,), name='http-live-stall-peer', daemon=True)
             self.workers.append(worker)
             worker.start()
@@ -106,8 +150,25 @@ class StallServer(Server):
                     with self.guard:
                         count = self.fetches[agent] = self.fetches.get(agent, 0) + 1
                     stall = count <= self.stalls
+                if fetch and self.outage == 'den' and agent == '(none)':
+                    with self.guard:
+                        self.refused_den += 1
+                    return
                 if not stall:
                     peer.sendall(reply)
+                    if fetch and self.outage in ('once', 'twice'):
+                        with self.guard:
+                            first = self.went_down is None
+                            if first:
+                                self.went_down = time.monotonic()
+                        if first:
+                            # Stop listening now, before any client can connect again: a
+                            # connection is refused from here on, as when the host is gone.
+                            try:
+                                self.listener.shutdown(socket.SHUT_RDWR)
+                            except OSError:
+                                pass
+                            self.listener.close()
                     if fetch and agent == '(none)' and self.mover is not None:
                         with self.guard:
                             first, self.moved = not self.moved, True
@@ -204,21 +265,22 @@ def mover(kind, srv, git, env):
     return move, restore, lambda: g('rev-parse', 'refs/heads/main')
 
 
-def scenario(label, stalls, move, tier, srv, git, env):
+def scenario(label, stalls, move, outage, tier, srv, git, env):
     name = 'http-live-stall-' + label
     out = R / 'target/runs' / ('http-live-stall-%s-%s' % (tier, label))
     if out.exists():
         shutil.rmtree(out)
     moving, restore, tip = mover(move, srv, git, env) if move else (None, None, None)
     main = tip() if move else None
-    server = StallServer(srv, git, env, stalls, moving)
+    server = StallServer(srv, git, env, stalls, moving, outage)
     argv = [sys.executable, '-I', str(R / 'tools/http-live-test.py'), '--tier', tier, '--rows', 'self',
             '--self-url', server.url, '--self-seconds', str(LIMIT), '--output', str(out)]
     started = time.monotonic()
     bounded = True
     try:
-        child = subprocess.Popen(argv, env={**env, 'DEN_LIVE_STALL_SECONDS': str(STALL)}, stdin=subprocess.DEVNULL,
-                                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        child = subprocess.Popen(argv, env={**env, 'DEN_LIVE_STALL_SECONDS': str(STALL),
+                                            'DEN_LIVE_UNREACHABLE_PAUSE': str(PAUSE)},
+                                 stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         try:
             output, _ = child.communicate(timeout=BOUND)
         except subprocess.TimeoutExpired:
@@ -240,17 +302,30 @@ def scenario(label, stalls, move, tier, srv, git, env):
         if stalls else []
     if move == 'head':
         want_retries = ['RETRY http-live-self moved=HEAD,refs/heads/main']
+    if outage in ('once', 'twice'):
+        # The server stops right after den's fetch: Git's clone and the listing after it are refused.
+        want_retries = ['RETRY http-live-self unreachable=git,ls-remote-after']
     narrowed = [line for line in lines if line.startswith('NARROWED ')]
     want_narrowed = ['NARROWED http-live-self excluded=refs/heads/unrelated'] if move == 'branch' else []
     # A row from before the narrowing prints neither field: nothing excluded, no move retried.
     excluded = live[0].get('excluded', []) if len(live) == 1 else None
     want_excluded = ['refs/heads/unrelated'] if move == 'branch' else []
     moved_retries = live[0].get('moved_retries', 0) if len(live) == 1 else None
-    if stalls < 2:
+    unreachable_retries = live[0].get('unreachable_retries', 0) if len(live) == 1 else None
+    if outage == 'twice':
+        want_verdicts = ['FAIL http-live-self pinned Git could not reach den\'s repository twice: '
+                         'ls-remote-before,git,ls-remote-after']
+    elif outage == 'den':
+        # Only the verdict's start: den's own words for a closed connection follow it.
+        want_verdicts = [verdict for verdict in verdicts
+                         if verdict.startswith('FAIL http-live-self process exit differs: den exit ')] or \
+            ['FAIL http-live-self process exit differs: den exit ...']
+    elif stalls < 2:
         want_verdicts = ['PASS http-live-self']
     else:
         want_verdicts = ['FAIL http-live-self ' + '; '.join(
             '%s: the remote sent nothing for %d s twice' % (tool, STALL) for tool in ('den', 'git'))]
+    passes = stalls < 2 and outage not in ('twice', 'den')
     counts = (live[0].get('den_retries'), live[0].get('git_retries')) if len(live) == 1 else None
     problems = []
     if not bounded:
@@ -259,7 +334,7 @@ def scenario(label, stalls, move, tier, srv, git, env):
         problems.append('RETRY lines %r, not %r' % (retries, want_retries))
     if verdicts != want_verdicts:
         problems.append('verdict %r, not %r' % (verdicts, want_verdicts))
-    if (child.returncode == 0) != (stalls < 2):
+    if (child.returncode == 0) != passes:
         problems.append('the live row exited %d' % child.returncode)
     if counts != (min(stalls, 1), min(stalls, 1)):
         problems.append('LIVE retries den,git %r, not %r' % (counts, (min(stalls, 1), min(stalls, 1))))
@@ -269,6 +344,13 @@ def scenario(label, stalls, move, tier, srv, git, env):
         problems.append('LIVE excluded %r, not %r' % (excluded, want_excluded))
     if moved_retries != (1 if move == 'head' else 0):
         problems.append('LIVE moved_retries %r, not %r' % (moved_retries, 1 if move == 'head' else 0))
+    if unreachable_retries != (1 if outage in ('once', 'twice') else 0):
+        problems.append('LIVE unreachable_retries %r, not %r' % (unreachable_retries,
+                                                                1 if outage in ('once', 'twice') else 0))
+    if (outage in ('once', 'twice')) != (server.went_down is not None):
+        problems.append('the server %s' % ('never stopped listening' if outage else 'stopped listening unasked'))
+    if (outage == 'den') != (server.refused_den > 0):
+        problems.append('the server %s' % ('never closed den\'s fetch' if outage == 'den' else 'closed den\'s fetch'))
     if bool(move) != server.moved:
         problems.append('the served refs %s' % ('never moved' if move else 'moved unasked'))
     if len(server.stalled) != 2 * stalls:
@@ -276,7 +358,9 @@ def scenario(label, stalls, move, tier, srv, git, env):
     if server.errors:
         problems.append('server: ' + '; '.join(server.errors[:3]))
     print('STALL %s %s' % (name, json.dumps(dict(elapsed=elapsed, exit=child.returncode, fetches=server.fetches,
-                                                  stalled=server.stalled), sort_keys=True)), flush=True)
+                                                  stalled=server.stalled, refused_den=server.refused_den,
+                                                  went_down=server.went_down is not None), sort_keys=True)),
+          flush=True)
     print(('PASS ' if not problems else 'FAIL ') + name + ('' if not problems else ' ' + '; '.join(problems)),
           flush=True)
     return not problems
@@ -291,7 +375,7 @@ def main():
     if not (R / 'target' / args.tier / 'den').is_file():
         raise SystemExit('FAIL http-live-stall-input: build target/' + args.tier + '/den first')
     if not Path(os.environ.get('DEN_LIVE_ROOTS_PEM', '/etc/ssl/certs/ca-certificates.crt')).is_file():
-        for label, _, _ in SCENARIOS:
+        for label, _, _, _ in SCENARIOS:
             print('SKIP http-live-stall-%s reason=no distribution root bundle (the live row needs one)' % label,
                   flush=True)
         return
@@ -301,12 +385,13 @@ def main():
     srv.mkdir(parents=True)
     env = dict(os.environ)
     fixture(srv, git, env)
-    failed = [label for label, stalls, move in SCENARIOS
-              if not scenario(label, stalls, move, args.tier, srv, git, env)]
+    failed = [label for label, stalls, move, outage in SCENARIOS
+              if not scenario(label, stalls, move, outage, args.tier, srv, git, env)]
     shutil.rmtree(srv)
     if failed:
         raise SystemExit('FAIL http-live-stall: ' + ', '.join(failed))
-    print('http-live-stall: %s none,once,twice,moved-branch,moved-head; zero skips' % args.tier, flush=True)
+    print('http-live-stall: %s %s; zero skips' % (args.tier, ','.join(label for label, _, _, _ in SCENARIOS)),
+          flush=True)
 
 
 if __name__ == '__main__':
