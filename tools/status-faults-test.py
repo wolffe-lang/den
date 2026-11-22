@@ -10,6 +10,15 @@ its exec, so this process's own size does not enter them (a peak would; peaks
 are read through tools/minimal-parent.c and are not bound here). The row keeps
 the least of the 9.
 
+den runs from a copy of its binary in memory (memfd_create(2), executed as
+/proc/self/fd/N), not from the file the build wrote. A fault maps the binary's
+pages as the host's page cache holds them: a kernel that caches a file in large
+folios maps more pages per fault, so the same binary read 11 to 14 fewer faults
+from a fresh build directory than from a memory copy, and its count moved by 11
+between two build directories. A memory copy maps one page per fault on every
+host, so the row counts den's work and not the cache's layout. Git runs from its
+pinned path: its count is printed beside den's and bound to nothing.
+
 A minor fault is a page the process touches for the first time. den's ambient
 region never frees (wolf-lang#191), so its faults past start-up follow the
 bytes a status allocates: 22 chunks of 64 KiB on this fixture before the walk
@@ -39,14 +48,16 @@ BOUND = {'native': 441, 'release': 415}
 RUNS = 9
 
 
-def least_faults(argv, repo, index, warm, env):
+def least_faults(argv, repo, index, warm, env, keep=()):
     """The least minor faults of RUNS runs of argv in repo, each from the warm
-    index; the first run's process output, which every run must repeat."""
+    index, with the descriptors keep left open in the child; the first run's
+    process output, which every run must repeat."""
     counts, first = [], None
     for _ in range(RUNS):
         index.write_bytes(warm)
         c0 = resource.getrusage(resource.RUSAGE_CHILDREN)
-        q = subprocess.run(argv, cwd=repo, env=env, stdin=subprocess.DEVNULL, capture_output=True, timeout=120)
+        q = subprocess.run(argv, cwd=repo, env=env, stdin=subprocess.DEVNULL, capture_output=True, timeout=120,
+                           pass_fds=keep)
         c1 = resource.getrusage(resource.RUSAGE_CHILDREN)
         out = (q.returncode, q.stdout, q.stderr)
         if first is None:
@@ -81,7 +92,12 @@ def main():
     index = repo / '.git/index'
     warm = (root / 'warm.index').read_bytes()
     env = dict(os.environ, GIT_OPTIONAL_LOCKS='0')
-    mine, ours = least_faults([str(den), 'status', '--porcelain'], repo, index, warm, env)
+    image = os.memfd_create('den-' + a.tier)
+    with open(den, 'rb') as source, os.fdopen(os.dup(image), 'wb') as copy:
+        shutil.copyfileobj(source, copy)
+    in_memory = '/proc/self/fd/%d' % image
+    mine, ours = least_faults([in_memory, 'status', '--porcelain'], repo, index, warm, env, (image,))
+    os.close(image)
     theirs_faults, theirs = least_faults([git, 'status', '--porcelain'], repo, index, warm, env)
     problems = []
     if ours != theirs:
