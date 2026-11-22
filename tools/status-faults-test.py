@@ -21,16 +21,19 @@ pinned path: its count is printed beside den's and bound to nothing.
 
 A minor fault is a page the process touches for the first time. den's ambient
 region never frees (wolf-lang#191), so its faults past start-up follow the
-bytes a status allocates: 22 chunks of 64 KiB on this fixture before the walk
-kept its scratch in a region per directory. The bounds, warm status:
+bytes a status allocates: 28 chunks of 64 KiB on this fixture while den
+deep-copied values it was done with (a plain push copies its operand, one
+allocation of 46 bytes and up per list it reaches), 20 after. The bounds,
+warm status:
 
-  status-faults-warm-native    at most 441 faults (571 before)
-  status-faults-warm-release   at most 415 faults (544 before)
+  status-faults-warm-native    at most 448 faults (571 before)
+  status-faults-warm-release   at most 422 faults (545 before)
 
-They are the change's predicted ceiling, from a measure that ran the base and
-the head interleaved in one hold, through the minimal parent for peaks: every
-comparison of den's memory is taken that way, never across two holds, whose
-spread alone moves a peak by 0.5 MiB.
+Each is the change's measure plus 8, half a chunk: the least of 31 samples
+(440 and 414) from a measure that ran the base and the head interleaved in one
+hold, each binary from a copy in memory. Every comparison of den's memory is
+taken that way, never across two holds, whose spread alone moves a peak by
+0.5 MiB.
 
 Linux only: a macOS page is 16 KiB and the fixture needs the pinned Linux Git,
 so elsewhere each row SKIPs by name.
@@ -44,7 +47,7 @@ import subprocess
 import sys
 
 R = Path(__file__).resolve().parent.parent
-BOUND = {'native': 441, 'release': 415}
+BOUND = {'native': 448, 'release': 422}
 RUNS = 9
 
 
