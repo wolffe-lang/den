@@ -944,7 +944,7 @@ fn walk_submodules(
                 total_bytes += file.data.len
                 (mut keys).push(if at >= 0 then 2 * at + 1 else 2 * file_lower)
                 // The file moves into the list: a plain push would copy its four lists.
-                (mut files).push(take file)
+                (mut files).push(file)
             } else if index_within(value.entries, path, todo.lo, todo.hi, skip, mut lookups) >= 0 {
                 return Unsupported("tracked worktree file kind {kind} at {text(path)?}")
             }
