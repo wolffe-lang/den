@@ -240,7 +240,7 @@ fn grouped(snapshot: Snapshot, rows: List[StatusRow], options: StatusOptions) ->
                 break
             }
         }
-        if !seen { (mut result).push(row) }
+        if !seen { (mut result).push(take row) }
     }
     // Git emits three status sections even in short/porcelain/-z output.
     // Keep unsigned path order within each section, never interleave ignored
