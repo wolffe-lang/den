@@ -23,6 +23,8 @@ for tier in native release; do
     # status's index refresh beside Git's: written only when an entry was
     # stat-dirty with its content unchanged, never with optional locks off.
     tools/env python3 -I tools/status-refresh-test.py --tier "$tier"
+    # status's memory in minor faults on the speed rows' fixture, bounded (Linux).
+    tools/env python3 -I tools/status-faults-test.py --tier "$tier"
 done
 # den#91: add and commit -a of thousands of files under a peak bound, beside Git.
 tools/env python3 -I tools/add-scale-test.py --tier release
