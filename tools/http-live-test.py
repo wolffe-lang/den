@@ -52,6 +52,17 @@ the clone's process tree (/proc/PID/io rchar). A second stall is `FAIL
 <row> <tool>: the remote sent nothing for <s> s twice`. --self-url,
 --self-seconds and --output aim the self row at another repository
 (tools/http-live-stall-test.py's local server).
+
+Unreachable: when a read by the pinned Git in a clone row (the listing
+before, its clone, the listing after) fails because the host could not be
+reached, Git's `unable to access` line naming a failed name lookup or
+connect, the row waits UNREACHABLE_PAUSE (60 s, or
+DEN_LIVE_UNREACHABLE_PAUSE) and runs once more, printing `RETRY <row>
+unreachable=<reads>`; the LIVE line counts it. A second such failure is
+`FAIL <row> pinned Git could not reach <repository> twice: <reads>`, with
+no third attempt. Only the pinned Git's reads decide: a den clone that
+fails while Git's reads succeed is a difference, never a reason to rerun.
+tools/submodule-live-test.py's clone rows use the same rule.
 """
 import argparse
 import base64
@@ -136,6 +147,55 @@ def held(before, after):
     critical = {'HEAD', head_before, head_after} - {None}
     return ([name for name in sorted(set(first) | set(second)) if name not in moved], moved,
             [name for name in moved if name in critical])
+
+
+# Git's words, from curl, for a host it could not reach: a failed name lookup or connect.
+UNREACHABLE_WORDS = ('Could not resolve host', 'Resolving timed out', 'Failed to connect to',
+                     "Couldn't connect to server", 'Connection refused', 'Connection timed out',
+                     'Network is unreachable')
+UNREACHABLE_PAUSE = int(os.environ.get('DEN_LIVE_UNREACHABLE_PAUSE') or 60)
+
+
+def out_of_reach(reads):
+    """The labels of reads, (label, exit status, stderr text) of the pinned
+    Git's, that failed because the host could not be reached: a nonzero exit
+    and an `unable to access` line naming a failed lookup or connect. Each
+    label once, in order."""
+    lost = []
+    for label, code, err in reads:
+        if code and 'unable to access' in err and any(words in err for words in UNREACHABLE_WORDS) \
+                and label not in lost:
+            lost.append(label)
+    return lost
+
+
+def rerun_unreachable(name, lost):
+    """The one rerun after the pinned Git could not reach the host: a RETRY
+    line naming its failed reads, then UNREACHABLE_PAUSE seconds."""
+    print('RETRY %s unreachable=%s' % (name, ','.join(lost)), flush=True)
+    time.sleep(UNREACHABLE_PAUSE)
+
+
+def unreachable_selftest():
+    """The rule on the words Git wrote in a record's outage (2026-11-22), and
+    on failures that are not the host's absence."""
+    outage = [
+        "fatal: unable to access 'https://github.com/i3/i3.git/': Failed to connect to github.com port 443 after "
+        "19603 ms: Couldn't connect to server\n",
+        "fatal: unable to access 'https://github.com/i3/i3.git/': Could not resolve host: github.com\n",
+        "fatal: unable to access 'http://127.0.0.1:41835/remote.git/': Failed to connect to 127.0.0.1 port 41835 "
+        "after 0 ms: Couldn't connect to server\n"]
+    others = [
+        "fatal: unable to access 'https://github.com/x/y.git/': The requested URL returned error: 500\n",
+        "fatal: unable to access 'https://github.com/x/y.git/': SSL certificate problem: unable to get local issuer "
+        "certificate\n",
+        "remote: Repository not found.\nfatal: repository 'https://github.com/x/y.git/' not found\n",
+        "fatal: early EOF\nfatal: fetch-pack: invalid index-pack output\n"]
+    reads = [('r%d' % i, 128, err) for i, err in enumerate(outage + others)]
+    reads += [('ok', 0, outage[0]), ('r0', 128, outage[1])]
+    got = out_of_reach(reads)
+    if got != ['r0', 'r1', 'r2']:
+        raise SystemExit('FAIL http-live-unreachable-rule: %r' % got)
 
 
 def judge(name, moved, critical, attempt):
@@ -426,6 +486,7 @@ def main():
     rows = args.rows.split(',')
     assert set(rows) <= {'read', 'identity', 'self', 'push'} and rows, 'rows'
     guard_selftest()
+    unreachable_selftest()
     root = Path(__file__).resolve().parent.parent
     git = str(Path(os.environ['DEN_GIT']).resolve())
     assert hashlib.sha256(Path(git).read_bytes()).hexdigest() == GIT_SHA256, 'pinned Git digest'
@@ -589,9 +650,12 @@ def main():
         when HEAD or its branch moved, else compare what held still. Returns
         problems (why the row cannot compare; [] when it can), the captures,
         the directories, keep (the held refs, or None when nothing moved),
-        excluded and moved_retries."""
+        excluded, moved_retries and unreachable_retries. A read the pinned
+        Git could not make for want of the host reruns the pair once, after
+        UNREACHABLE_PAUSE."""
         den_dir, git_dir = out / (prefix + '-den'), out / (prefix + '-git')
-        for attempt in range(2):
+        moved_tries = unreachable_tries = 0
+        while True:
             for path in (den_dir, git_dir):
                 if path.exists():
                     shutil.rmtree(path)
@@ -601,15 +665,27 @@ def main():
             oracle = run([git, 'clone', '-q', url, git_dir], out, name + '-git', seconds, target=git_dir, row=name)
             after = run([git, 'ls-remote', '--symref', url], out, name + '-ls-remote-after', 120)
             got = dict(candidate=candidate, oracle=oracle, den_dir=den_dir, git_dir=git_dir, keep=None, excluded=[],
-                       moved_retries=attempt, problems=stalls(candidate, oracle, stall_bound(seconds)))
+                       moved_retries=moved_tries, unreachable_retries=unreachable_tries,
+                       problems=stalls(candidate, oracle, stall_bound(seconds)))
             if got['problems']:
                 return got
             if before['exit'] or after['exit'] or oracle['exit']:
-                got['problems'] = ['pinned Git could not read ' + what]
+                # Only the pinned Git's reads decide whether the host was out of reach.
+                reads = (('ls-remote-before', before), ('git', oracle), ('ls-remote-after', after))
+                lost = out_of_reach([(label, capture['exit'],
+                                      bytes.fromhex(capture['stderr']).decode('utf-8', 'replace'))
+                                     for label, capture in reads])
+                if lost and not unreachable_tries:
+                    rerun_unreachable(name, lost)
+                    unreachable_tries += 1
+                    continue
+                got['problems'] = [('pinned Git could not reach %s twice: %s' % (what, ','.join(lost))) if lost
+                                   else 'pinned Git could not read ' + what]
                 return got
             kept, moved_refs, critical = held(before['stdout'], after['stdout'])
-            action = judge(name, moved_refs, critical, attempt)
+            action = judge(name, moved_refs, critical, moved_tries)
             if action == 'retry':
+                moved_tries += 1
                 continue
             if action == 'fail':
                 got['problems'] = ['refs moved during the row: ' + ','.join(critical or moved_refs)]
@@ -639,16 +715,17 @@ def main():
                                  den_elapsed=candidate['elapsed'], den_maxrss_kib=candidate['maxrss_kib'],
                                  git_elapsed=oracle['elapsed'], git_maxrss_kib=oracle['maxrss_kib'],
                                  den_retries=candidate['retries'], git_retries=oracle['retries'],
-                                 excluded=got['excluded'], moved_retries=got['moved_retries'])
+                                 excluded=got['excluded'], moved_retries=got['moved_retries'],
+                                 unreachable_retries=got['unreachable_retries'])
             if differ or dirty:
                 problems.append('state differs: ' + ', '.join(differ) + (' (den worktree dirty)' if dirty else ''))
             else:
                 print('LIVE %s head=%s objects=%d den=%.2fs/%sKiB git=%.2fs/%sKiB retries=den:%d,git:%d '
-                      'quiet=den:%.1fs,git:%.1fs moved_retries=%d excluded=%s' % (
+                      'quiet=den:%.1fs,git:%.1fs moved_retries=%d excluded=%s unreachable_retries=%d' % (
                           name, ours['refs'].split('\n')[0], ours['objects'], candidate['elapsed'],
                           candidate['maxrss_kib'], oracle['elapsed'], oracle['maxrss_kib'], candidate['retries'],
                           oracle['retries'], candidate['quiet'], oracle['quiet'], got['moved_retries'],
-                          ','.join(got['excluded']) or '-'), flush=True)
+                          ','.join(got['excluded']) or '-', got['unreachable_retries']), flush=True)
         print(('PASS ' if not problems else 'FAIL ') + name + ('' if not problems else ' ' + '; '.join(problems)),
               flush=True)
         if problems:
@@ -680,16 +757,18 @@ def main():
                                  den_elapsed=candidate['elapsed'], den_maxrss_kib=candidate['maxrss_kib'],
                                  git_elapsed=oracle['elapsed'], git_maxrss_kib=oracle['maxrss_kib'],
                                  den_retries=candidate['retries'], git_retries=oracle['retries'],
-                                 excluded=got['excluded'], moved_retries=got['moved_retries'])
+                                 excluded=got['excluded'], moved_retries=got['moved_retries'],
+                                 unreachable_retries=got['unreachable_retries'])
             if differ or dirty or reads:
                 problems.append('state differs: ' + ', '.join(differ + reads) +
                                 (' (den worktree dirty)' if dirty else ''))
             else:
                 print('LIVE %s objects=%d den=%.2fs/%sKiB git=%.2fs/%sKiB retries=den:%d,git:%d '
-                      'quiet=den:%.1fs,git:%.1fs moved_retries=%d excluded=%s' % (
+                      'quiet=den:%.1fs,git:%.1fs moved_retries=%d excluded=%s unreachable_retries=%d' % (
                           name, ours['objects'], candidate['elapsed'], candidate['maxrss_kib'], oracle['elapsed'],
                           oracle['maxrss_kib'], candidate['retries'], oracle['retries'], candidate['quiet'],
-                          oracle['quiet'], got['moved_retries'], ','.join(got['excluded']) or '-'), flush=True)
+                          oracle['quiet'], got['moved_retries'], ','.join(got['excluded']) or '-',
+                          got['unreachable_retries']), flush=True)
         print(('PASS ' if not problems else 'FAIL ') + name + ('' if not problems else ' ' + '; '.join(problems)),
               flush=True)
         if problems:
@@ -706,7 +785,8 @@ def main():
                         git_user=oracle['user'], bound_kib=SELF_RSS_KIB, stall_s=stall_bound(args.self_seconds),
                         den_retries=candidate['retries'], git_retries=oracle['retries'],
                         den_quiet_s=candidate['quiet'], git_quiet_s=oracle['quiet'],
-                        moved_retries=got['moved_retries'], excluded=got['excluded'])
+                        moved_retries=got['moved_retries'], excluded=got['excluded'],
+                        unreachable_retries=got['unreachable_retries'])
         # A clone that stalled twice, or a remote that moved twice, has nothing else to compare.
         if not problems:
             for field in ('exit', 'stdout', 'stderr'):
