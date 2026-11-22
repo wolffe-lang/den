@@ -1,5 +1,23 @@
 # Changes
 
+## Unreleased — status stops copying what it is done with
+
+- A warm `status` on the speed rows' fixture (454 tracked files) made about
+  11,500 deep list copies, each list costing 46 bytes before its contents in a
+  region that never frees: a plain push copies its operand, and the walk, the
+  index parser, HEAD's flattened tree and the status rows pushed values they
+  never used again. They now move them (`push(take x)`), the walk keeps each
+  directory's lstat scratch in its region, and a visit's path moves into its
+  file. Measured against the previous trunk in one hold: minor faults 571 to
+  440 (native) and 545 to 414 (release), heap peak 1.86 to 1.30 MB, CPU 0.18 ms
+  less. Git's status reads about 162 faults; most of the rest is the runtime's
+  cost per list (wolf-lang#1177).
+- `tools/status-faults-test.py` gates it on both tiers (Linux): the least of
+  nine runs, den from an in-memory copy of its binary, at most 448 and 422
+  faults.
+- `tools/http-live-stall-test.py` also checks that the live rows' pause is
+  60 s when `DEN_LIVE_UNREACHABLE_PAUSE` is not set.
+
 ## Unreleased — a live row runs once more when the host is out of reach
 
 - The live clone rows (the HTTP leaf's read, identity and self rows, and the
