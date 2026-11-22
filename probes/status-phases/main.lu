@@ -30,6 +30,10 @@ fn measured(root: str, untracked: bool, full: bool) -> () ! worktree.WorkErrors 
     print(
         "status_scan_inclusive_ns={time.monotonic_ns() - start} files={status.files.len} rows={status.rows.len}",
     )
+    // The scan's index lookups and the path compares they took: exact counts.
+    print(
+        "walk_lookups={status.walk_lookups.calls} walk_compares={status.walk_lookups.compares} row_lookups={status.row_lookups.calls} row_compares={status.row_lookups.compares}",
+    )
     start = time.monotonic_ns()
     let bytes = worktree.render_status(status, worktree.status_options(ctx)?)?
     print("render_ns={time.monotonic_ns() - start} bytes={bytes.len}")

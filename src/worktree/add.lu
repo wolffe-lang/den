@@ -175,7 +175,11 @@ pub fn stage_paths_with_warnings(
     }
     // den#91: the walk's scratch (lstat records, parent checks, hash states,
     // its sorted copy) lives in its own region; only what it found is kept.
-    var walked = Walk { files: List[FileState](), directories: List[List[byte]]() }
+    var walked = Walk {
+        files: List[FileState](),
+        directories: List[List[byte]](),
+        lookups: no_lookups(),
+    }
     region walking {
         var found_warnings = List[str]()
         errdefer keep_warnings(mut warnings, found_warnings)

@@ -298,7 +298,7 @@ fn head_flat(ctx: Context, value: index.Index, commit: oid.Oid) -> List[FlatEntr
     flatten_tree(ctx.repo, commit)?
 }
 
-struct Walk { files: List[FileState], directories: List[List[byte]] }
+struct Walk { files: List[FileState], directories: List[List[byte]], lookups: Lookups }
 
 // Attribute presence follows the traversal stack. An ordinary directory with
 // no inherited, indexed or listed attributes needs no extra filesystem probe.
@@ -498,6 +498,8 @@ fn walk_submodules(
     // A worktree mostly holds what its index lists: one buffer for the files.
     (mut files).reserve(value.entries.len)
     var directories = List[List[byte]]()
+    // The visits' index lookups, counted (Snapshot.walk_lookups).
+    var lookups = no_lookups()
     while pending.len > 0 {
         let todo = (mut pending).pop() else |_| { return invalid }
         let parent = copy todo.path
@@ -598,7 +600,7 @@ fn walk_submodules(
             }
             if gone { continue }
             if !looked {
-                let tracked_at = index_at(value.entries, path)
+                let tracked_at = index_counted(value.entries, path, mut lookups)
                 if tracked_at >= 0 && index.stage(value.entries[tracked_at]) == 0 {
                     if !status {
                         return Unsupported("worktree tracked path {text(path)?}: Permission denied")
@@ -769,7 +771,7 @@ fn walk_submodules(
                 (mut deeper).push(path)
             } else if info[0] == 0 || info[0] == 3 {
                 if !selected(path, paths) { continue }
-                let at = index_at(value.entries, path)
+                let at = index_counted(value.entries, path, mut lookups)
                 var staged = -1
                 if at >= 0 {
                     if value.entries[at].stat[6] == 0o160000 {
@@ -853,7 +855,7 @@ fn walk_submodules(
                 }
                 total_bytes += file.data.len
                 (mut files).push(file)
-            } else if index_at(value.entries, path) >= 0 {
+            } else if index_counted(value.entries, path, mut lookups) >= 0 {
                 return Unsupported("tracked worktree file kind {info[0]} at {text(path)?}")
             }
         }
@@ -898,7 +900,7 @@ fn walk_submodules(
             dirt: 0,
         }
     }
-    Walk { files: sorted, directories: directories }
+    Walk { files: sorted, directories: directories, lookups: lookups }
 }
 
 fn status_row(path: List[byte], x: str, y: str) -> StatusRow {
@@ -956,7 +958,8 @@ pub fn compare_status_with_warnings(
 ) -> List[StatusRow] ! WorkErrors {
     let _ = index.serialize(value)?
     var ignores = ignore.cache()
-    status_rows(ctx, value, tree, files, include_untracked, mut ignores, mut warnings)?
+    var counts = no_lookups()
+    status_rows(ctx, value, tree, files, include_untracked, mut ignores, mut warnings, mut counts)?
 }
 
 /// compare_status_with_warnings without its validation pass, for an index
@@ -970,6 +973,7 @@ fn status_rows(
     include_untracked: bool,
     mut ignores: ignore.Cache,
     mut warnings: List[str],
+    mut counts: Lookups,
 ) -> List[StatusRow] ! WorkErrors {
     // HEAD's entries and the index's are merged where they lie, both in path
     // order; a path is copied only into a row. The file cursor finds each
@@ -1054,7 +1058,7 @@ fn status_rows(
     }
     for file in files {
         if !include_untracked { break }
-        if index_at(value.entries, file.path) >= 0 { continue }
+        if index_counted(value.entries, file.path, mut counts) >= 0 { continue }
         let decision = ignore.query_cached(
             ctx.repo,
             ctx.root,
@@ -1106,6 +1110,8 @@ pub fn scan_index(ctx: Context, value: index.Index) -> Snapshot ! WorkErrors {
         files: walked.files,
         directories: walked.directories,
         rows: rows,
+        walk_lookups: no_lookups(),
+        row_lookups: no_lookups(),
     }
 }
 
@@ -1142,6 +1148,8 @@ pub fn scan_index_with_warnings(
         files: walked.files,
         directories: walked.directories,
         rows: rows,
+        walk_lookups: no_lookups(),
+        row_lookups: no_lookups(),
     }
 }
 
@@ -1187,6 +1195,8 @@ pub fn scan_index_without_bodies(
                     files: files,
                     directories: copy found[0].directories,
                     rows: copy found[0].rows,
+                    walk_lookups: no_lookups(),
+                    row_lookups: no_lookups(),
                 },
             )
         }
@@ -1245,6 +1255,7 @@ pub fn scan_status_ignoring(
         mut warnings,
     )?
     supported_attributes(ctx, walked.files)?
+    var row_lookups = no_lookups()
     let rows = status_rows(
         ctx,
         value,
@@ -1253,6 +1264,7 @@ pub fn scan_status_ignoring(
         include_untracked,
         mut ignores,
         mut warnings,
+        mut row_lookups,
     )?
     Snapshot {
         context: copy ctx,
@@ -1262,6 +1274,8 @@ pub fn scan_status_ignoring(
         files: walked.files,
         directories: walked.directories,
         rows: rows,
+        walk_lookups: copy walked.lookups,
+        row_lookups: row_lookups,
     }
 }
 

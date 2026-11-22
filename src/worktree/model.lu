@@ -95,7 +95,18 @@ pub struct Snapshot {
     files: List[FileState],
     directories: List[List[byte]],
     rows: List[StatusRow],
+    /// The walk's and the rows' index lookups (none outside a status scan).
+    walk_lookups: Lookups,
+    row_lookups: Lookups,
 }
+
+/// Index lookups by path and the path compares they took: a status scan's
+/// count, which probes/status-phases prints and a worktree row bounds per
+/// lookup. Counting is one add a compare; nothing reads it in a command.
+pub struct Lookups { calls: int, compares: int }
+
+/// No lookups: the count of a scan that does not count them.
+pub fn no_lookups() -> Lookups { Lookups { calls: 0, compares: 0 } }
 
 fn owned_bytes(bytes: List[byte]) -> List[byte] {
     var out = List[byte]()
@@ -494,6 +505,22 @@ fn index_lower(entries: List[index.Entry], path: List[byte]) -> int {
 fn index_at(entries: List[index.Entry], path: List[byte]) -> int {
     let at = index_lower(entries, path)
     if at < entries.len && compare(entries[at].path, path) == 0 { return at }
+    -1
+}
+
+/// index_at's answer, its search's path compares added to counts.
+fn index_counted(entries: List[index.Entry], path: List[byte], mut counts: Lookups) -> int {
+    counts.calls += 1
+    var lo = 0, hi = entries.len
+    while lo < hi {
+        let mid = (lo + hi) / 2
+        counts.compares += 1
+        if compare(entries[mid].path, path) < 0 { lo = mid + 1 } else { hi = mid }
+    }
+    if lo < entries.len {
+        counts.compares += 1
+        if compare(entries[lo].path, path) == 0 { return lo }
+    }
     -1
 }
 
