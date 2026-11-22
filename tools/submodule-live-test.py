@@ -177,9 +177,13 @@ def git_out(cwd, *argv):
     return q.stdout
 
 
-def listing(url):
-    """The remote's `ls-remote --symref` (hex stdout), or None."""
+def listing(url, reads=None, label=None):
+    """The remote's `ls-remote --symref` (hex stdout), or None. With reads, the
+    read is noted there as (label, exit status, stderr) for the unreachable
+    rule (tools/http-live-test.py's out_of_reach)."""
     q = run([git, 'ls-remote', '--symref', url], out, 120)
+    if reads is not None:
+        reads.append((label, q['exit'], q['stderr']))
     return None if q['exit'] else q['stdout'].encode().hex()
 
 
@@ -286,19 +290,30 @@ def web_row():
     name = 'live-wolf-web'
     web = a.web_url or WEB
     problems = []
-    for attempt in range(2):
+    tries = moved_tries = unreachable_tries = 0
+    while True:
         problems = []
-        work = clones / ('web-%d' % attempt)
+        work = clones / ('web-%d' % tries)
+        tries += 1
         work.mkdir()
-        before = listing(web)
+        reads = []
+        before = listing(web, reads, 'ls-remote-before')
         oracle = run([git, 'clone', '-q', '--recurse-submodules', web, 'git'], work, target=work / 'git', row=name,
                      tool='git')
+        reads.append(('git', oracle['exit'], oracle['stderr']))
         stalled = stalled_twice(('git', oracle))
         if stalled:
             problems.extend(stalled)
             break
         if oracle['exit']:
-            problems.append('pinned Git could not clone wolf-web: ' + oracle['stderr'][-300:])
+            lost = live['out_of_reach'](reads)
+            if lost and not unreachable_tries:
+                live['rerun_unreachable'](name, lost)
+                unreachable_tries += 1
+                shutil.rmtree(work)
+                continue
+            problems.append('pinned Git could not reach wolf-web twice: ' + ','.join(lost) if lost
+                            else 'pinned Git could not clone wolf-web: ' + oracle['stderr'][-300:])
             break
         urls = remotes_of(work / 'git', web)
         top = work / 'git'
@@ -316,20 +331,28 @@ def web_row():
         if a.between_clones:
             # Test only: the local witness moves a submodule remote's refs here.
             subprocess.run(a.between_clones, shell=True, check=True, env=env, timeout=120)
-        middle = {rel: listing(url) for rel, url, _ in repos if rel != '.git'}
+        middle = {rel: listing(url, reads, 'ls-remote-middle') for rel, url, _ in repos if rel != '.git'}
         candidate = run([den, 'clone', '-q', '--recurse-submodules', web, 'den'], work, target=work / 'den',
                         row=name, tool='den')
         print('LIVE %s attempt=%d retries=den:%d,git:%d quiet=den:%.1fs,git:%.1fs wall=den:%.2fs,git:%.2fs' % (
-            name, attempt, candidate['retries'], oracle['retries'], candidate['quiet'], oracle['quiet'],
+            name, tries - 1, candidate['retries'], oracle['retries'], candidate['quiet'], oracle['quiet'],
             candidate['wall'], oracle['wall']), flush=True)
         stalled = stalled_twice(('den', candidate))
         if stalled:
             problems.extend(stalled)
             break
-        after = listing(web)
-        ends = {rel: listing(url) for rel, url, _ in repos if rel != '.git'}
+        after = listing(web, reads, 'ls-remote-after')
+        ends = {rel: listing(url, reads, 'ls-remote-end') for rel, url, _ in repos if rel != '.git'}
         if before is None or after is None or None in middle.values() or None in ends.values():
-            problems.append('pinned Git could not list a remote of wolf-web')
+            # Only the pinned Git's reads decide; den's clone, refused or not, never reruns the row.
+            lost = live['out_of_reach'](reads)
+            if lost and not unreachable_tries:
+                live['rerun_unreachable'](name, lost)
+                unreachable_tries += 1
+                shutil.rmtree(work)
+                continue
+            problems.append('pinned Git could not reach wolf-web twice: ' + ','.join(lost) if lost
+                            else 'pinned Git could not list a remote of wolf-web')
             break
         # What held, repository by repository: the superproject's refs from
         # before Git's clone to after den's, and each submodule's from what
@@ -355,8 +378,9 @@ def web_row():
             if gone:
                 keeps[rel] = set(first) - set(gone)
                 moved += [label + r for r in gone]
-        action = live['judge'](name, sorted(moved), sorted(critical), attempt)
+        action = live['judge'](name, sorted(moved), sorted(critical), moved_tries)
         if action == 'retry':
+            moved_tries += 1
             shutil.rmtree(work)
             continue
         if action == 'fail':
@@ -380,7 +404,7 @@ def web_row():
                 problems.append('state differs: ' + '; '.join(fields))
         detail = dict(urls=urls, git_wall=oracle['wall'], den_wall=candidate['wall'],
                       git_retries=oracle['retries'], den_retries=candidate['retries'],
-                      moved_retries=attempt, excluded=sorted(moved))
+                      moved_retries=moved_tries, excluded=sorted(moved), unreachable_retries=unreachable_tries)
         verdict(name, problems, detail)
         return
     verdict(name, problems)
@@ -392,7 +416,13 @@ def pinned_rows():
         url = 'https://github.com/wolffe-lang/%s.git' % repo
         work = clones / repo
         work.mkdir()
-        q = run([git, 'clone', '-q', url, 'c'], work, target=work / 'c', row=name, tool='git')
+        for unreachable_tries in (0, 1):
+            q = run([git, 'clone', '-q', url, 'c'], work, target=work / 'c', row=name, tool='git')
+            lost = live['out_of_reach']([('git', q['exit'], q['stderr'])])
+            if not lost or unreachable_tries:
+                break
+            live['rerun_unreachable'](name, lost)
+            shutil.rmtree(work / 'c', ignore_errors=True)
         print('LIVE %s retries=git:%d quiet=git:%.1fs wall=git:%.2fs' % (name, q['retries'], q['quiet'], q['wall']),
               flush=True)
         stalled = stalled_twice(('git', q))
@@ -400,7 +430,7 @@ def pinned_rows():
             verdict(name, stalled)
             continue
         if q['exit']:
-            verdict(name, [clone_problem(repo, q)])
+            verdict(name, ['pinned Git could not reach %s twice: git' % repo if lost else clone_problem(repo, q)])
             continue
         c = work / 'c'
         moved = git_out(c, 'log', '-1', '--format=%H', '--', 'upstream').decode().strip()
