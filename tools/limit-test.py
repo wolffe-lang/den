@@ -7,6 +7,15 @@ last stderr line `fatal: limit: <the bound and its value>`, no bare
 `fatal: limit` line and no `not yet implemented` line, and HEAD unchanged.
 The pinned Git is run on the same fixture and its exit status recorded beside
 each row: these are bounds den keeps, not parity rows.
+
+Every pinned-Git command here runs with MAINTENANCE: a commit, fetch, pull or
+merge starts `git maintenance run --auto`, which takes the object database's
+lock (maintenance.lock) and, by default, detaches and goes on in the
+background (git-config(1), maintenance.autoDetach). A detached run outlived
+its command and took or dropped its lock while this harness copied or removed
+the repository (copytree, rmtree): `FileNotFoundError: maintenance.lock`.
+limit-git-maintenance-foreground, first, traces one pinned-Git commit run
+that way and requires the maintenance it starts not to detach.
 """
 import argparse
 import hashlib
@@ -15,6 +24,9 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+
+# The pinned Git's options for every command this harness runs.
+MAINTENANCE = []
 
 
 def main():
@@ -34,6 +46,8 @@ def main():
     os.environ['GIT_MERGE_AUTOEDIT'] = 'no'
 
     def run(args, cwd, data=None):
+        if args and args[0] == git:
+            args = [git, *MAINTENANCE, *args[1:]]
         p = subprocess.run([str(x) for x in args], cwd=cwd, capture_output=True, input=data)
         assert p.returncode == 0, (args, p.stdout, p.stderr)
         return p.stdout
@@ -120,6 +134,31 @@ def main():
 
     rows = []
 
+    def maintenance_foreground():
+        """A pinned-Git commit as this harness runs one, traced: the automatic
+        maintenance it starts must not detach (no `--detach` child)."""
+        name = 'git-maintenance-foreground'
+        probe = out / 'maintenance-probe'
+        probe.mkdir()
+        run([git, 'init', '-q', probe], out)
+        (probe / 'a').write_text('a\n')
+        run([git, 'add', 'a'], probe)
+        trace = out / 'maintenance-probe.trace'
+        q = subprocess.run([git, *MAINTENANCE, 'commit', '-qm', 'probe'], cwd=probe, capture_output=True,
+                           env=dict(os.environ, GIT_TRACE=str(trace)))
+        started = [line.split('start_command: ', 1)[1] for line in trace.read_text().splitlines()
+                   if 'start_command: ' in line and ' maintenance run ' in line]
+        detached = [line for line in started if '--detach' in line.split()]
+        ok = q.returncode == 0 and bool(started) and not detached
+        print(('PASS ' if ok else 'FAIL ') + f'limit-{name}' +
+              ('' if ok else f' git exit {q.returncode}; maintenance started {started!r}'), flush=True)
+        rows.append(dict(row=name, passed=ok, argv=['commit'], expected='no detached maintenance',
+                         exit=q.returncode, stderr=q.stderr.decode(errors='replace'), git_exit=q.returncode))
+        shutil.rmtree(probe)
+
+    if a.filter in 'git-maintenance-foreground':
+        maintenance_foreground()
+
     def row(name, setup, argv, expected, published=False):
         if a.filter not in name:
             return
@@ -129,7 +168,7 @@ def main():
         before = head(work)
         mirror = out / (name + '-git')
         shutil.copytree(work.parent, mirror, symlinks=True)
-        oracle = subprocess.run([git, *argv], cwd=mirror / 'work', capture_output=True)
+        oracle = subprocess.run([git, *MAINTENANCE, *argv], cwd=mirror / 'work', capture_output=True)
         p = subprocess.run([den, *argv], cwd=work, capture_output=True)
         lines = p.stderr.decode(errors='replace').splitlines()
         last_ok = (lines and lines[-1].startswith(f'fatal: {wanted[0]}') and lines[-1].endswith(wanted[1])
