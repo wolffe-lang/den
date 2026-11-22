@@ -24,6 +24,8 @@
   prints them and `tools/status-lookups-test.py` bounds them: 8 and 5 a
   lookup, 3 a merge step, 1 a sorted file. The counts are exact on every host
   and tier.
+- The warm `status` ceiling of the native build is 3.5, from 4: the record
+  read 2.30 against Git's 0.92 ms (ratio 2.52), from 2.63 ms.
 
 ## Unreleased — a warm diff --quiet without the duplicate work
 
