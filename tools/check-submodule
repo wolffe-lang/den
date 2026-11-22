@@ -38,6 +38,10 @@ tools/env python3 -I tools/submodule-live-test.py --self-test
 for tier in native release; do
     tools/env python3 -I tools/submodule-live-moved-test.py --tier "$tier"
 done
+# live-wolf-web when the superproject's host goes away mid-row, once and twice (loopback).
+for tier in native release; do
+    tools/env python3 -I tools/submodule-live-unreachable-test.py --tier "$tier"
+done
 # Public wolffe-lang superprojects over https, natively; named SKIPs offline.
 tools/env python3 -I tools/submodule-live-test.py --tier native
 echo 'submodule: native/release units, actual checked units, exact rows (reflog identity KNOWN only); fixture rows never skip, live rows SKIP by name offline'
