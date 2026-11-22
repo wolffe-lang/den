@@ -161,6 +161,7 @@ fn main() -> int ! worktree.WorkErrors {
         walk_lookups: worktree.no_lookups(),
         row_lookups: worktree.no_lookups(),
         merge_counts: worktree.no_lookups(),
+        sort_counts: worktree.no_lookups(),
     }
     var opts = options()
     assert(equal(worktree.render_status(snapshot, opts)?, bytes("MM a\n")))

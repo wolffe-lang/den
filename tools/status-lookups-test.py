@@ -11,7 +11,8 @@ command runs, untracked files included) and prints the scan's counts:
 walk_lookups, one for each path the walk visits, and row_lookups, one for each
 file the rows ask whether the index tracks; merge_steps, one for each path of
 the rows' merge of HEAD's entries with the index's, and merge_compares, its
-path compares and change checks.
+path compares and change checks; sorted_files, the files the walk sorts into
+path order, and sort_compares, the path compares that took.
 
 The rows: the number of lookups is exact (one a visited file), and each
 side's compares a lookup are at most its bound: 8 for the walk, 5 for the
@@ -28,6 +29,10 @@ merged with itself compared each path and each id with its own copy, looked
 for a second stage of every path and found each file with three compares:
 7.0 compares a step, which fails.
 
+The sort: every file sorted (600), and at most 1 path compare a file. A merge
+sort of the paths takes 6.4 a file here (3,844 in all), each over the path,
+and fails.
+
 The counts are exact on every host and tier: they depend neither on the order
 a directory is listed in nor on time.
 """
@@ -41,6 +46,7 @@ import subprocess
 WALK_BOUND = 8.0
 ROW_BOUND = 5.0
 MERGE_BOUND = 3.0
+SORT_BOUND = 1.0
 TRACKED = 576
 UNTRACKED = 24
 
@@ -92,6 +98,9 @@ def main():
     merge = re.search(r'^merge_steps=(\d+) merge_compares=(\d+)$', text, re.M)
     assert merge, text
     merge_steps, merge_compares = (int(x) for x in merge.groups())
+    sort = re.search(r'^sorted_files=(\d+) sort_compares=(\d+)$', text, re.M)
+    assert sort, text
+    sorted_files, sort_compares = (int(x) for x in sort.groups())
     files = TRACKED + UNTRACKED
     rows = [
         ('walk-lookups-one-a-file', walk_calls == files, 'walk_lookups=%d (expected %d)' % (walk_calls, files)),
@@ -103,6 +112,9 @@ def main():
         ('merge-steps-one-a-path', merge_steps == TRACKED, 'merge_steps=%d (expected %d)' % (merge_steps, TRACKED)),
         ('merge-compares-a-step', merge_steps > 0 and merge_compares <= MERGE_BOUND * merge_steps,
          'merge_compares=%d, %.3f a step (bound %.1f)' % (merge_compares, merge_compares / max(1, merge_steps), MERGE_BOUND)),
+        ('sort-files-one-a-file', sorted_files == files, 'sorted_files=%d (expected %d)' % (sorted_files, files)),
+        ('sort-compares-a-file', sorted_files > 0 and sort_compares <= SORT_BOUND * sorted_files,
+         'sort_compares=%d, %.3f a file (bound %.1f)' % (sort_compares, sort_compares / max(1, sorted_files), SORT_BOUND)),
     ]
     failed = 0
     for name, ok, words in rows:

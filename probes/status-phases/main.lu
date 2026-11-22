@@ -35,6 +35,7 @@ fn measured(root: str, untracked: bool, full: bool) -> () ! worktree.WorkErrors 
         "walk_lookups={status.walk_lookups.calls} walk_compares={status.walk_lookups.compares} row_lookups={status.row_lookups.calls} row_compares={status.row_lookups.compares}",
     )
     print("merge_steps={status.merge_counts.calls} merge_compares={status.merge_counts.compares}")
+    print("sorted_files={status.sort_counts.calls} sort_compares={status.sort_counts.compares}")
     start = time.monotonic_ns()
     let bytes = worktree.render_status(status, worktree.status_options(ctx)?)?
     print("render_ns={time.monotonic_ns() - start} bytes={bytes.len}")

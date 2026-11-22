@@ -179,6 +179,7 @@ pub fn stage_paths_with_warnings(
         files: List[FileState](),
         directories: List[List[byte]](),
         lookups: no_lookups(),
+        sorted: no_lookups(),
     }
     region walking {
         var found_warnings = List[str]()

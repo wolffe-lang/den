@@ -101,10 +101,13 @@ pub struct Snapshot {
     /// The rows' merge of HEAD's entries with the index's: its steps, and its
     /// path compares and change checks.
     merge_counts: Lookups,
+    /// The walk's sort of its files into path order: the files, and the path
+    /// compares.
+    sort_counts: Lookups,
 }
 
-/// Path work a status scan does, counted: calls (index lookups by path, or
-/// steps of the rows' merge) and the compares they took. probes/status-phases
+/// Path work a status scan does, counted: calls (index lookups by path, steps
+/// of the rows' merge, or files sorted) and the compares they took. probes/status-phases
 /// prints the counts and a worktree row bounds each per call. Counting is one
 /// add a compare; nothing reads it in a command.
 pub struct Lookups { calls: int, compares: int }
@@ -456,6 +459,13 @@ pub fn flatten_tree(repo: repository.Repo, id: oid.Oid) -> List[FlatEntry] ! Wor
 /// Stable bottom-up merge sort of positions by unsigned path order: the
 /// order the former per-insert insertion sorts produced, in O(n log n).
 fn path_order(paths: List[List[byte]]) -> List[int] {
+    var counts = no_lookups()
+    path_order_counted(paths, mut counts)
+}
+
+/// path_order's answer, its sorted paths and path compares added to counts.
+fn path_order_counted(paths: List[List[byte]], mut counts: Lookups) -> List[int] {
+    counts.calls += paths.len
     var order = List[int]()
     for i in 0..paths.len { (mut order).push(i) }
     var scratch = copy order
@@ -467,7 +477,7 @@ fn path_order(paths: List[List[byte]]) -> List[int] {
             let hi = if lo + 2 * width < order.len then lo + 2 * width else order.len
             var i = lo, j = mid, k = lo
             while i < mid && j < hi {
-                if compare(paths[order[j]], paths[order[i]]) < 0 {
+                if compare_counted(paths[order[j]], paths[order[i]], mut counts) < 0 {
                     scratch[k] = order[j]
                     j += 1
                 } else {

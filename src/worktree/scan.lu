@@ -306,7 +306,12 @@ fn head_flat(
     flatten_tree(ctx.repo, commit)?
 }
 
-struct Walk { files: List[FileState], directories: List[List[byte]], lookups: Lookups }
+struct Walk {
+    files: List[FileState],
+    directories: List[List[byte]],
+    lookups: Lookups,
+    sorted: Lookups,
+}
 
 // Attribute presence follows the traversal stack. An ordinary directory with
 // no inherited, indexed or listed attributes needs no extra filesystem probe.
@@ -907,11 +912,12 @@ fn walk_submodules(
     }
     // The files move into path order; the sort's keys and order live in a
     // region of their own.
+    var sorted_counts = no_lookups()
     var order = copy region {
         var names = List[List[byte]]()
         (mut names).reserve(files.len)
         for file in files { (mut names).push(copy file.path) }
-        path_order(names)
+        path_order_counted(names, mut sorted_counts)
     }
     var sorted = List[FileState]()
     (mut sorted).reserve(files.len)
@@ -927,7 +933,7 @@ fn walk_submodules(
             dirt: 0,
         }
     }
-    Walk { files: sorted, directories: directories, lookups: lookups }
+    Walk { files: sorted, directories: directories, lookups: lookups, sorted: sorted_counts }
 }
 
 fn status_row(path: List[byte], x: str, y: str) -> StatusRow {
@@ -1192,6 +1198,7 @@ pub fn scan_index(ctx: Context, value: index.Index) -> Snapshot ! WorkErrors {
         walk_lookups: no_lookups(),
         row_lookups: no_lookups(),
         merge_counts: no_lookups(),
+        sort_counts: no_lookups(),
     }
 }
 
@@ -1231,6 +1238,7 @@ pub fn scan_index_with_warnings(
         walk_lookups: no_lookups(),
         row_lookups: no_lookups(),
         merge_counts: no_lookups(),
+        sort_counts: no_lookups(),
     }
 }
 
@@ -1279,6 +1287,7 @@ pub fn scan_index_without_bodies(
                     walk_lookups: no_lookups(),
                     row_lookups: no_lookups(),
                     merge_counts: no_lookups(),
+                    sort_counts: no_lookups(),
                 },
             )
         }
@@ -1365,6 +1374,7 @@ pub fn scan_status_ignoring(
         walk_lookups: copy walked.lookups,
         row_lookups: row_lookups,
         merge_counts: merge_counts,
+        sort_counts: copy walked.sorted,
     }
 }
 
