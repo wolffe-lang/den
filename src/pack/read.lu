@@ -421,7 +421,8 @@ pub fn base_cache() -> Cache {
     for _ in 0..256 {
         (mut keys).push(-1)
         (mut kinds).push(0)
-        (mut data).push(List[byte]())
+        let slot = List[byte]()
+        (mut data).push(take slot)
     }
     Cache { keys: keys, kinds: kinds, data: data }
 }
