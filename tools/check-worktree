@@ -20,6 +20,9 @@ for tier in native release; do
     tools/env python3 -I tools/embedded-test.py --tier "$tier"
     # The status scan's index lookups, counted: compares a lookup, bounded.
     tools/env python3 -I tools/status-lookups-test.py --tier "$tier" --wolf "$WOLF"
+    # status's index refresh beside Git's: written only when an entry was
+    # stat-dirty with its content unchanged, never with optional locks off.
+    tools/env python3 -I tools/status-refresh-test.py --tier "$tier"
 done
 # den#91: add and commit -a of thousands of files under a peak bound, beside Git.
 tools/env python3 -I tools/add-scale-test.py --tier release
@@ -33,4 +36,4 @@ import json,sys
 rows=[json.loads(line) for line in open(sys.argv[1]) if line.startswith('{')]
 assert len(rows)==1 and rows[0]['verdict']=='exit(0)',rows
 PY
-echo 'worktree: native/release unit, API exercise, strict repository matrix, unreadable-directory, status-lookups, add-scale and status-scale rows; actual checked exit(0)'
+echo 'worktree: native/release unit, API exercise, strict repository matrix, unreadable-directory, status-lookups, status-refresh, add-scale and status-scale rows; actual checked exit(0)'
