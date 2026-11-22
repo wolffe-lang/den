@@ -848,8 +848,10 @@ fn walk_submodules(
                     mode: mode,
                     id: if clean then copy value.entries[staged].id else copy empty,
                     data: List[byte](),
-                    // status renders paths and modes only; full walks keep the record.
-                    stat: if status then List[int]() else copy info,
+                    // status renders paths and modes only, and keeps the record
+                    // only of a tracked file it reads (its refresh writes it);
+                    // full walks keep every record.
+                    stat: if status && (clean || staged < 0) then List[int]() else copy info,
                     kind: info[0],
                     dirt: 0,
                 }
