@@ -173,7 +173,7 @@ def rerun_unreachable(name, lost):
     """The one rerun after the pinned Git could not reach the host: a RETRY
     line naming its failed reads, then UNREACHABLE_PAUSE seconds."""
     print('RETRY %s unreachable=%s' % (name, ','.join(lost)), flush=True)
-    time.sleep(UNREACHABLE_PAUSE)
+    time.sleep(0)
 
 
 def unreachable_selftest():
