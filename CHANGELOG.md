@@ -1,5 +1,24 @@
 # Changes
 
+## Unreleased — a live row runs once more when the host is out of reach
+
+- The live clone rows (the HTTP leaf's read, identity and self rows, and the
+  submodule leaf's clone rows) failed at once when the pinned Git could not
+  reach github.com for one of its reads: a record lost its HTTP leaf to a
+  35-second outage that the native tier, minutes earlier, did not meet. When
+  a read of the pinned Git fails with a failed name lookup or connect, the
+  row now prints `RETRY <row> unreachable=<reads>`, waits 60 s
+  (`DEN_LIVE_UNREACHABLE_PAUSE`) and runs once more; a second such failure
+  fails the row, naming the reads, with no third attempt. Only Git's reads
+  decide: a den clone that fails while Git's succeed is never rerun.
+- `tools/http-live-stall-test.py` holds it with three local rows: the server
+  stops listening after its first fetch and comes back within the pause
+  (one RETRY, then PASS), never comes back (one RETRY, then FAIL), or answers
+  Git and closes den's fetch (no RETRY, FAIL on the difference).
+  `tools/submodule-live-unreachable-test.py` holds the first two for
+  live-wolf-web. The live leaf checks its rule on Git's words from that
+  outage each time it starts.
+
 ## Unreleased — status refreshes the index as Git's does
 
 - `status` writes the index again when an entry it read was stat-dirty with
