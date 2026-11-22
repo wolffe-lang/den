@@ -150,6 +150,12 @@ command's peak resident set beside Git's; peaks are not gated here. The leaf cou
 line and its script's report agree, so a script that stops after printing its
 lines fails the leaf by name.
 
+A warm `status`'s memory is gated in minor page faults instead, by
+`tools/status-faults-test.py` (Linux only): the least of nine runs on the same
+fixture, den run from a copy of its binary in memory so that the count does
+not depend on how the host's page cache maps the file, against a bound of the
+measure plus half a chunk (448 native, 422 release; Git reads about 162).
+
 Each ceiling is set from the record host's measurement: the lowest half step
 at or above the row's headroom times the guardband times the measured ratio,
 and never under the table's target of 3 (`ceiling_for` in
