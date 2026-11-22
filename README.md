@@ -138,8 +138,15 @@ Git side takes about a millisecond of CPU or less (warm `status`, warm
 take nine samples of 1 s: at five of 0.2 s they moved by up to 22% between
 takes. A row passes when the ratio times a 1.10 guardband is at most the row's
 ceiling in `tools/speed-bounds.json` and every run's exit status, output and
-end state equal Git's. The same run states each command's peak resident set
-beside Git's; peaks are not gated here. The leaf counts a row only when its
+end state equal Git's. Every timed run, Git's and den's, has optional locks
+off (`GIT_OPTIONAL_LOCKS=0`, set by `tools/speed-measure.py` and on each of
+`tools/status-measure.py`'s timed runs): neither tool takes the index lock or
+writes a refreshed index while timed, so a row times the same read-only work
+in both, from the restored cold or warm index. Whether `status` writes a
+refreshed index with optional locks on is held separately, by
+`tools/status-refresh-test.py`; `tools/status-measure.py` records each tool's
+two untimed runs with optional locks on and off. The same run states each
+command's peak resident set beside Git's; peaks are not gated here. The leaf counts a row only when its
 line and its script's report agree, so a script that stops after printing its
 lines fails the leaf by name.
 
