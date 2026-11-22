@@ -870,7 +870,8 @@ fn walk_submodules(
                 if !wanted { continue }
                 if submodule { return Unsupported("submodule worktree") }
                 var file = FileState {
-                    path: owned_bytes(path),
+                    // The visit's path is this walk's own: it moves into the file.
+                    path: path,
                     mode: mode,
                     id: if clean then copy value.entries[staged].id else copy empty,
                     data: List[byte](),
@@ -888,7 +889,7 @@ fn walk_submodules(
                         ctx.repo,
                         ctx.root,
                         mut ignores,
-                        text(path)?,
+                        text(file.path)?,
                         false,
                         mut warnings,
                     )?
@@ -900,7 +901,7 @@ fn walk_submodules(
                     // attributes say, as Git takes it: its id is given above.
                 } else if hashing {
                     if identity_check && kind == 0 {
-                        check_path_identity(ctx, path, value, mut identity_caches)?
+                        check_path_identity(ctx, file.path, value, mut identity_caches)?
                     }
                     // Each read's scratch lives in its own region and only
                     // its FileState is kept, so a walk that reads every
@@ -909,21 +910,28 @@ fn walk_submodules(
                     region one {
                         var prior = List[index.Entry]()
                         if staged >= 0 { (mut prior).push(copy value.entries[staged]) }
-                        let hashed = hash_file(ctx, path, prior, filemode, symlinks, text_check)?
+                        let hashed = hash_file(
+                            ctx,
+                            file.path,
+                            prior,
+                            filemode,
+                            symlinks,
+                            text_check,
+                        )?
                         file = copy hashed
                     }
                 } else {
                     var prior = List[index.Entry]()
                     if staged >= 0 { (mut prior).push(copy value.entries[staged]) }
                     if identity_check && kind == 0 {
-                        check_path_identity(ctx, path, value, mut identity_caches)?
+                        check_path_identity(ctx, file.path, value, mut identity_caches)?
                     }
-                    file = read_file(ctx, path, prior)?
+                    file = read_file(ctx, file.path, prior)?
                 }
                 if (text_check || identity_check) &&
                     !hashing &&
                     (file.mode == 0o100644 || file.mode == 0o100755) {
-                    check_text_content(ctx, path, file.data)?
+                    check_text_content(ctx, file.path, file.data)?
                 }
                 if file.data.len > 1000000000 - total_bytes {
                     return Fatal(
