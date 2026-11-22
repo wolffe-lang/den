@@ -32,7 +32,8 @@
 - The walk sorted its files into path order by comparing their paths (6.4
   compares a file on the test's paths). It now sorts them by the index
   position each lookup already found, and compares paths only between
-  untracked files that would sit at one position: 41 compares for 600 files.
+  untracked files that would sit at one position: 35 to 41 compares for 600
+  files, as the host lists the directories.
 - When the index's cache tree names HEAD's tree, HEAD's entries are the
   index's own, and status compared each of them, path and id, with its own
   copy. It now takes them as one, looks for further stages only after a
@@ -41,10 +42,13 @@
 - The status scan counts that work and its compares (`Snapshot.walk_lookups`,
   `row_lookups`, `merge_counts`, `sort_counts`). `probes/status-phases`
   prints them and `tools/status-lookups-test.py` bounds them: 8 and 5 a
-  lookup, 3 a merge step, 1 a sorted file. The counts are exact on every host
-  and tier.
+  lookup, 3 a merge step, 1 a sorted file. The lookup and merge counts are
+  exact on every host and tier; the sort's depends on the order the host
+  lists a directory, within its bound.
 - The warm `status` ceiling of the native build is 3.5, from 4: the record
   read 2.30 against Git's 0.92 ms (ratio 2.52), from 2.63 ms.
+- `tools/status-lookups-test.py` makes its probe's directory itself, so it
+  runs in a checkout no build has touched.
 
 ## Unreleased — a warm diff --quiet without the duplicate work
 

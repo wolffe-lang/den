@@ -30,14 +30,17 @@ for a second stage of every path and found each file with three compares:
 7.0 compares a step, which fails.
 
 The sort: every file sorted (600), and at most 1 path compare a file. A merge
-sort of the paths takes 6.4 a file here (3,844 in all), each over the path,
-and fails.
+sort of the paths takes about 6.4 a file here (3,844 in all on macOS), each
+over the path, and fails.
 
 The scan's files (the probe's `paths` lines) are exactly the fixture's files,
 in byte order of their paths.
 
-The counts are exact on every host and tier: they depend neither on the order
-a directory is listed in nor on time.
+The walk's, the rows' and the merge's counts are exact on every host and
+tier: they depend neither on the order a directory is listed in nor on time.
+The sort's count depends on the listing order where untracked files share a
+key, since those are compared in the order the walk met them: 35 on Linux and
+41 on macOS at the head, both far under the bound.
 """
 import argparse
 import os
@@ -91,6 +94,7 @@ def main():
         (work / name).write_text(name + '\n')
 
     probe = root / 'target' / a.tier / 'status-phases'
+    probe.parent.mkdir(parents=True, exist_ok=True)
     flags = ['--release'] if a.tier == 'release' else []
     run([wolf, 'build', *flags, '--deny-warnings', root / 'probes/status-phases/main.lu', '-o', probe], root)
     text = run([probe, work, 'paths'], work).decode()
