@@ -185,16 +185,7 @@ fn scan(path: str, mut t: Table) -> List[byte] ! PackErrors {
     for slot in 0..count {
         if pos >= end { return Unsupported("pack truncated") }
         region entry {
-            pos += scan_entry(fd, mut t, mut digest, table, slot, pos, end) else |e| match e {
-                Unsupported(message) => {
-                    error_payload = copy message
-                    failed = true
-                    0
-                },
-                not_found => { return not_found },
-                denied => { return denied },
-                io => { return io },
-            }
+            pos += scan_entry(fd, mut t, mut digest, table, slot, pos, end)?
         }
         if failed { return Unsupported(error_payload) }
     }
