@@ -5,6 +5,16 @@ DEN_ROOT=$(cd "$(dirname "$0")/.." && pwd)
 export DEN_ROOT
 cd "$DEN_ROOT"
 . tools/lib-candidate.sh
+programs='den index_checked_flags index_checked_format index_checked_malformed index_checked_stat index_checked_trees'
+tiers='native release'
+while [ "$#" -gt 0 ]; do
+    case "$1:${2:-}" in
+        --program:den|--program:index_checked_flags|--program:index_checked_format|--program:index_checked_malformed|--program:index_checked_stat|--program:index_checked_trees) programs=$2 ;;
+        --tier:native|--tier:release) tiers=$2 ;;
+        *) echo 'FAIL candidate-wolf-arguments: expected --program ENTRYPOINT or --tier native|release'; exit 1 ;;
+    esac
+    shift 2
+done
 if [ -z "${DEN_CANDIDATE_WOLF:-}" ]; then
     tools/fetch-candidate-wolf || { echo 'FAIL candidate-wolf-inputs: staging failed'; exit 1; }
 fi
@@ -30,10 +40,10 @@ fi
 echo "PASS candidate-wolf-std $(candidate_value std_rev)"
 mkdir -p "$out"
 failed=0
-for tier in native release; do
+for tier in $tiers; do
     flag=
     [ "$tier" != release ] || flag=--release
-    for program in den index_checked_flags index_checked_format index_checked_malformed index_checked_stat index_checked_trees; do
+    for program in $programs; do
         log=$out/$program-$tier.log
         if WOLF_STD="$std" "$wolf" build $flag --deny-warnings "src/$program.lu" -o "$out/$program-$tier" >"$log" 2>&1; then
             echo "PASS candidate-wolf-build-$program-$tier"
