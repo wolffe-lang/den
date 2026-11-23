@@ -347,27 +347,98 @@ fn pick_reset(ctx: worktree.Context, target: oid.Oid) -> () ! commit.CommitError
     cleanup_state(ctx)
 }
 
+// One step of a pick, in its caller's replay_step region: the step's result.
+fn pick_step(
+    ctx: worktree.Context,
+    steps: List[sequencer.Step],
+    at: int,
+    options: PickOptions,
+    persistent: bool,
+) -> int ! commit.CommitErrors {
+    if persistent { replay_write(ctx, "sequencer/todo", sequencer.render(steps[at..])?)? }
+    let item = walk.read(ctx.repo, replay_target(ctx, steps[at].name)?)?
+    let result = pick_one(ctx, item, options, false)?
+    if persistent {
+        replay_write(
+            ctx,
+            "sequencer/abort-safety",
+            "{oid.hex(worktree.head(ctx)?.commits[0])?}\n".bytes(),
+        )?
+    }
+    result
+}
+
 fn pick_steps(
     ctx: worktree.Context,
     steps: List[sequencer.Step],
     options: PickOptions,
     persistent: bool,
 ) -> int ! commit.CommitErrors {
+    // A diagnostic built in a scratch region below is copied out of it (raised:
+    // 1 Unsupported, 2 Pathspec, 3 Fatal, 4 Failure) and raised once the region
+    // is freed.
+    var error_payload = "", raised = 0
     for at in 0..steps.len {
         region replay_step {
-            if persistent { replay_write(ctx, "sequencer/todo", sequencer.render(steps[at..])?)? }
-            let item = walk.read(ctx.repo, replay_target(ctx, steps[at].name)?)?
-            let result = pick_one(ctx, item, options, false)?
-            if persistent {
-                replay_write(
-                    ctx,
-                    "sequencer/abort-safety",
-                    "{oid.hex(worktree.head(ctx)?.commits[0])?}\n".bytes(),
-                )?
+            let result = pick_step(ctx, steps, at, options, persistent) else |e| match e {
+                invalid_index => { return invalid_index },
+                unmerged => { return unmerged },
+                invalid_tree => { return invalid_tree },
+                duplicate_name => { return duplicate_name },
+                invalid => { return invalid },
+                invalid_oid => { return invalid_oid },
+                unsupported_format => { return unsupported_format },
+                bad_header => { return bad_header },
+                bad_size => { return bad_size },
+                bad_oid => { return bad_oid },
+                truncated => { return truncated },
+                dictionary => { return dictionary },
+                checksum => { return checksum },
+                limit => { return limit },
+                trailing => { return trailing },
+                unsupported_level => { return unsupported_level },
+                not_found => { return not_found },
+                denied => { return denied },
+                io => { return io },
+                exists => { return exists },
+                unsupported => { return unsupported },
+                Unsupported(message) => {
+                    error_payload = copy message
+                    raised = 1
+                    break
+                },
+                ambiguous => { return ambiguous },
+                cross_device => { return cross_device },
+                invalid_header => { return invalid_header },
+                Pathspec(message) => {
+                    error_payload = copy message
+                    raised = 2
+                    break
+                },
+                Fatal(message) => {
+                    error_payload = copy message
+                    raised = 3
+                    break
+                },
+                Failure(message) => {
+                    error_payload = copy message
+                    raised = 4
+                    break
+                },
+                invalid_date => { return invalid_date },
+                invalid_timezone => { return invalid_timezone },
+                invalid_identity => { return invalid_identity },
+                invalid_cleanup => { return invalid_cleanup },
+                invalid_comment => { return invalid_comment },
+                utf8 => { return utf8 },
             }
             if result != 0 { return result }
         }
     }
+    if raised == 1 { return Unsupported(error_payload) }
+    if raised == 2 { return Pathspec(error_payload) }
+    if raised == 3 { return Fatal(error_payload) }
+    if raised == 4 { return Failure(error_payload) }
     if persistent { sequence_remove(ctx)? }
     0
 }
