@@ -112,6 +112,10 @@ pub fn compared(
     for id in ids { (mut trees).push(worktree.flatten_tree(repo, id)?) }
     var reader = object.reader_batch(repo)
     var result = List[List[diff.File]]()
+    // A diagnostic built in a scratch region below is copied out of it (raised:
+    // 1 Unsupported, 2 Pathspec, 3 Fatal, 4 Failure) and raised once the region
+    // is freed.
+    var error_payload = "", raised = 0
     for tree in trees {
         var files = List[diff.File](), total = 0
         for entry in tree {
@@ -133,7 +137,36 @@ pub fn compared(
                 if entry.mode == 0o160000 {
                     data = worktree.subproject_text(entry.id, false)?
                 } else if bodies && changed {
-                    let blob = object.read_cached(mut reader, entry.id, 1000000000)?
+                    let blob = object.read_cached(
+                        mut reader,
+                        entry.id,
+                        1000000000,
+                    ) else |e| match e {
+                        invalid => { return invalid },
+                        invalid_oid => { return invalid_oid },
+                        unsupported_format => { return unsupported_format },
+                        bad_header => { return bad_header },
+                        bad_size => { return bad_size },
+                        bad_oid => { return bad_oid },
+                        truncated => { return truncated },
+                        dictionary => { return dictionary },
+                        checksum => { return checksum },
+                        limit => { return limit },
+                        trailing => { return trailing },
+                        unsupported_level => { return unsupported_level },
+                        not_found => { return not_found },
+                        denied => { return denied },
+                        io => { return io },
+                        exists => { return exists },
+                        unsupported => { return unsupported },
+                        Unsupported(message) => {
+                            error_payload = copy message
+                            raised = 1
+                            break
+                        },
+                        ambiguous => { return ambiguous },
+                        cross_device => { return cross_device },
+                    }
                     if blob.kind != "blob" { return bad_oid }
                     if blob.data.len > 134217728 - total {
                         exceeded = true
@@ -155,6 +188,7 @@ pub fn compared(
                 return Fatal("limit: more than 134217728 bytes of compared merge input in one tree")
             }
         }
+        if raised == 1 { return Unsupported(error_payload) }
         (mut result).push(files)
     }
     result
