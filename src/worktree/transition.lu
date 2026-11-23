@@ -152,6 +152,10 @@ fn transition_from(
     snapshot: Snapshot,
 ) -> () ! WorkErrors {
     if mode != "switch" && mode != "merge" && mode != "hard" && mode != "mixed" { return invalid }
+    // A diagnostic built in a scratch region below is copied out of it (raised:
+    // 1 Unsupported, 2 Pathspec, 3 Fatal, 4 Failure) and raised once the region
+    // is freed.
+    var error_payload = "", raised = 0
     var indexed = List[FlatEntry]()
     for entry in value.entries {
         if index.stage(entry) != 0 { return Unsupported("unmerged tree transition") }
@@ -257,7 +261,53 @@ fn transition_from(
         // One blob at a time (vc23): a clone's checkout holds one file's
         // body, never the whole worktree's.
         region verify {
-            let data = planned_object(reader, entry.id, supplied, 1000000000)?
+            let data = planned_object(reader, entry.id, supplied, 1000000000) else |e| match e {
+                invalid_index => { return invalid_index },
+                unmerged => { return unmerged },
+                invalid_tree => { return invalid_tree },
+                duplicate_name => { return duplicate_name },
+                invalid => { return invalid },
+                invalid_oid => { return invalid_oid },
+                unsupported_format => { return unsupported_format },
+                bad_header => { return bad_header },
+                bad_size => { return bad_size },
+                bad_oid => { return bad_oid },
+                truncated => { return truncated },
+                dictionary => { return dictionary },
+                checksum => { return checksum },
+                limit => { return limit },
+                trailing => { return trailing },
+                unsupported_level => { return unsupported_level },
+                not_found => { return not_found },
+                denied => { return denied },
+                io => { return io },
+                exists => { return exists },
+                unsupported => { return unsupported },
+                Unsupported(message) => {
+                    error_payload = copy message
+                    raised = 1
+                    break
+                },
+                ambiguous => { return ambiguous },
+                cross_device => { return cross_device },
+                invalid_header => { return invalid_header },
+                utf8 => { return utf8 },
+                Pathspec(message) => {
+                    error_payload = copy message
+                    raised = 2
+                    break
+                },
+                Fatal(message) => {
+                    error_payload = copy message
+                    raised = 3
+                    break
+                },
+                Failure(message) => {
+                    error_payload = copy message
+                    raised = 4
+                    break
+                },
+            }
             if data.kind != "blob" { return bad_oid }
             if attributes.possible && (entry.mode == 0o100644 || entry.mode == 0o100755) {
                 let content = text_content_bytes(data.data)
@@ -269,6 +319,10 @@ fn transition_from(
             planned_check_content(ctx, attributes, entry.path, crlf, binary)?
         }
     }
+    if raised == 1 { return Unsupported(error_payload) }
+    if raised == 2 { return Pathspec(error_payload) }
+    if raised == 3 { return Fatal(error_payload) }
+    if raised == 4 { return Failure(error_payload) }
     if dry { return }
     let filemode = config_bool(ctx, "core.filemode", true)?
     let symlinks = config_bool(ctx, "core.symlinks", true)?
@@ -320,10 +374,60 @@ fn transition_from(
                 mode,
                 filemode,
                 symlinks,
-            )?
+            ) else |e| match e {
+                invalid_index => { return invalid_index },
+                unmerged => { return unmerged },
+                invalid_tree => { return invalid_tree },
+                duplicate_name => { return duplicate_name },
+                invalid => { return invalid },
+                invalid_oid => { return invalid_oid },
+                unsupported_format => { return unsupported_format },
+                bad_header => { return bad_header },
+                bad_size => { return bad_size },
+                bad_oid => { return bad_oid },
+                truncated => { return truncated },
+                dictionary => { return dictionary },
+                checksum => { return checksum },
+                limit => { return limit },
+                trailing => { return trailing },
+                unsupported_level => { return unsupported_level },
+                not_found => { return not_found },
+                denied => { return denied },
+                io => { return io },
+                exists => { return exists },
+                unsupported => { return unsupported },
+                Unsupported(message) => {
+                    error_payload = copy message
+                    raised = 1
+                    break
+                },
+                ambiguous => { return ambiguous },
+                cross_device => { return cross_device },
+                invalid_header => { return invalid_header },
+                utf8 => { return utf8 },
+                Pathspec(message) => {
+                    error_payload = copy message
+                    raised = 2
+                    break
+                },
+                Fatal(message) => {
+                    error_payload = copy message
+                    raised = 3
+                    break
+                },
+                Failure(message) => {
+                    error_payload = copy message
+                    raised = 4
+                    break
+                },
+            }
             (mut entries).push(copy entry)
         }
     }
+    if raised == 1 { return Unsupported(error_payload) }
+    if raised == 2 { return Pathspec(error_payload) }
+    if raised == 3 { return Fatal(error_payload) }
+    if raised == 4 { return Failure(error_payload) }
     // Preserve the index's unsigned pathname order independent of target
     // order: a stable sort of positions, its keys in a region of their own,
     // then each entry moved once into place. An insertion sort that copied
