@@ -7,12 +7,35 @@ fn validate_pair(pack_path: str, idx_path: str) -> () ! PackErrors {
     let fd = open_pack(pack_path)?
     defer fs_close(fd) else |_| {}
     let end = verify(fd, index)?
+    // An object's diagnostic is built in object_check: it is copied out and
+    // raised once the region is freed.
+    var error_payload = "", failed = false
     for slot in 0..index.entries.len {
         region object_check {
             var seen = Map[int, bool](), total = 0, none = no_cache()
-            let _ = unpack(fd, end, index, slot, mut seen, mut total, 0, mut none, 0)?
+            let _ = unpack(
+                fd,
+                end,
+                index,
+                slot,
+                mut seen,
+                mut total,
+                0,
+                mut none,
+                0,
+            ) else |e| match e {
+                Unsupported(message) => {
+                    error_payload = copy message
+                    failed = true
+                    break
+                },
+                not_found => { return not_found },
+                denied => { return denied },
+                io => { return io },
+            }
         }
     }
+    if failed { return Unsupported(error_payload) }
 }
 
 /// Atomically publish each component, pack before idx; never prune loose data.
