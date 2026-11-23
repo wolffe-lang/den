@@ -174,6 +174,9 @@ fn hash_object(args: List[str]) -> int ! Errors {
             return Unsupported("hash-object filters")
         }
     }
+    // An item's diagnostic is built in its scratch region: it is copied out and
+    // raised once the region is freed.
+    var error_payload = "", failed = false
     for path in paths {
         region item {
             let data = input(path) else |e| match e {
@@ -201,13 +204,39 @@ fn hash_object(args: List[str]) -> int ! Errors {
                 }
             }
             let id = if write {
-                object.write_object(repo, kind, data)?
+                object.write_object(repo, kind, data) else |e| match e {
+                    invalid => { return invalid },
+                    invalid_oid => { return invalid_oid },
+                    unsupported_format => { return unsupported_format },
+                    bad_header => { return bad_header },
+                    bad_size => { return bad_size },
+                    bad_oid => { return bad_oid },
+                    truncated => { return truncated },
+                    dictionary => { return dictionary },
+                    checksum => { return checksum },
+                    limit => { return limit },
+                    trailing => { return trailing },
+                    unsupported_level => { return unsupported_level },
+                    not_found => { return not_found },
+                    denied => { return denied },
+                    io => { return io },
+                    exists => { return exists },
+                    unsupported => { return unsupported },
+                    Unsupported(message) => {
+                        error_payload = copy message
+                        failed = true
+                        break
+                    },
+                    ambiguous => { return ambiguous },
+                    cross_device => { return cross_device },
+                }
             } else {
                 object.identify(kind, data)?
             }
             print(oid.hex(id)?)
         }
     }
+    if failed { return Unsupported(error_payload) }
     0
 }
 
