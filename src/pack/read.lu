@@ -502,6 +502,9 @@ fn indexes(gitdir: str) -> List[str] ! PackErrors {
 
 /// Full-width lookup. Loose precedence is the caller's responsibility.
 pub fn read_object(gitdir: str, name: str, cap: int) -> Body ! PackErrors {
+    // A read's diagnostic is built in candidate: it is copied out and raised
+    // once the region is freed.
+    var error_payload = "", failed = false
     for path in indexes(gitdir)? {
         // Per-pack scratch is reclaimed; the returned body is explicitly owned.
         var result = Body { kind: "", data: List[byte]() }, found = false
@@ -513,7 +516,26 @@ pub fn read_object(gitdir: str, name: str, cap: int) -> Body ! PackErrors {
             let slot = slot_named(index, name)
             if slot >= 0 {
                 var seen = Map[int, bool](), total: int = 0, none = no_cache()
-                let value = unpack(fd, end, index, slot, mut seen, mut total, 0, mut none, 0)?
+                let value = unpack(
+                    fd,
+                    end,
+                    index,
+                    slot,
+                    mut seen,
+                    mut total,
+                    0,
+                    mut none,
+                    0,
+                ) else |e| match e {
+                    Unsupported(message) => {
+                        error_payload = copy message
+                        failed = true
+                        break
+                    },
+                    not_found => { return not_found },
+                    denied => { return denied },
+                    io => { return io },
+                }
                 result = copy value
                 found = true
             }
@@ -525,6 +547,7 @@ pub fn read_object(gitdir: str, name: str, cap: int) -> Body ! PackErrors {
             return result
         }
     }
+    if failed { return Unsupported(error_payload) }
     not_found
 }
 
@@ -620,6 +643,9 @@ pub fn session_open(gitdir: str) -> Session ! PackErrors {
 /// unopened session answers through read_object itself.
 pub fn session_peek(s: Session, name: str, cap: int) -> Body ! PackErrors {
     if !s.loaded { return read_object(s.gitdir, name, cap)? }
+    // A read's diagnostic is built in candidate: it is copied out and raised
+    // once the region is freed.
+    var error_payload = "", failed = false
     for i in 0..s.paths.len {
         let slot = slot_named(s.indexes[i], name)
         if slot < 0 { continue }
@@ -629,7 +655,26 @@ pub fn session_peek(s: Session, name: str, cap: int) -> Body ! PackErrors {
             defer fs_close(fd) else |_| {}
             let end = rebound(fd, s.indexes[i], s.ends[i])?
             var seen = Map[int, bool](), total: int = 0, none = no_cache()
-            let value = unpack(fd, end, s.indexes[i], slot, mut seen, mut total, 0, mut none, 0)?
+            let value = unpack(
+                fd,
+                end,
+                s.indexes[i],
+                slot,
+                mut seen,
+                mut total,
+                0,
+                mut none,
+                0,
+            ) else |e| match e {
+                Unsupported(message) => {
+                    error_payload = copy message
+                    failed = true
+                    break
+                },
+                not_found => { return not_found },
+                denied => { return denied },
+                io => { return io },
+            }
             result = copy value
         }
         if result.data.len > cap {
@@ -637,6 +682,7 @@ pub fn session_peek(s: Session, name: str, cap: int) -> Body ! PackErrors {
         }
         return result
     }
+    if failed { return Unsupported(error_payload) }
     not_found
 }
 
@@ -647,6 +693,9 @@ pub fn session_peek(s: Session, name: str, cap: int) -> Body ! PackErrors {
 /// its own region. Bases the cache serves are not read from the pack again.
 pub fn session_cached(mut s: Session, name: str, cap: int) -> Body ! PackErrors {
     if !s.loaded { return read_object(s.gitdir, name, cap)? }
+    // A read's diagnostic is built in candidate: it is copied out and raised
+    // once the region is freed.
+    var error_payload = "", failed = false
     for i in 0..s.paths.len {
         let slot = slot_named(s.indexes[i], name)
         if slot < 0 { continue }
@@ -656,7 +705,26 @@ pub fn session_cached(mut s: Session, name: str, cap: int) -> Body ! PackErrors 
             defer fs_close(fd) else |_| {}
             let end = rebound(fd, s.indexes[i], s.ends[i])?
             var seen = Map[int, bool](), total: int = 0
-            let value = unpack(fd, end, s.indexes[i], slot, mut seen, mut total, 0, mut s.cache, i)?
+            let value = unpack(
+                fd,
+                end,
+                s.indexes[i],
+                slot,
+                mut seen,
+                mut total,
+                0,
+                mut s.cache,
+                i,
+            ) else |e| match e {
+                Unsupported(message) => {
+                    error_payload = copy message
+                    failed = true
+                    break
+                },
+                not_found => { return not_found },
+                denied => { return denied },
+                io => { return io },
+            }
             result = copy value
         }
         if result.data.len > cap {
@@ -664,6 +732,7 @@ pub fn session_cached(mut s: Session, name: str, cap: int) -> Body ! PackErrors 
         }
         return result
     }
+    if failed { return Unsupported(error_payload) }
     not_found
 }
 
@@ -719,14 +788,37 @@ pub fn with_cache(s: Session) -> Session {
 /// trailer binding checked again (rebound), as session_peek reads it.
 fn read_slot(s: Session, i: int, slot: int) -> Body ! PackErrors {
     var result = Body { kind: "", data: List[byte]() }
+    // A read's diagnostic is built in candidate: it is copied out and raised
+    // once the region is freed.
+    var error_payload = "", failed = false
     region candidate {
         let fd = open_pack("{s.paths[i][0..s.paths[i].len - 4]}.pack")?
         defer fs_close(fd) else |_| {}
         let end = rebound(fd, s.indexes[i], s.ends[i])?
         var seen = Map[int, bool](), total: int = 0, none = no_cache()
-        let value = unpack(fd, end, s.indexes[i], slot, mut seen, mut total, 0, mut none, 0)?
+        let value = unpack(
+            fd,
+            end,
+            s.indexes[i],
+            slot,
+            mut seen,
+            mut total,
+            0,
+            mut none,
+            0,
+        ) else |e| match e {
+            Unsupported(message) => {
+                error_payload = copy message
+                failed = true
+                Body { kind: "", data: List[byte]() }
+            },
+            not_found => { return not_found },
+            denied => { return denied },
+            io => { return io },
+        }
         result = copy value
     }
+    if failed { return Unsupported(error_payload) }
     result
 }
 
@@ -789,6 +881,9 @@ pub fn session_prefix(s: Session, prefix_text: str) -> List[str] ! PackErrors {
 /// read_object's answer through the session's parsed indexes.
 pub fn session_read(mut s: Session, name: str, cap: int) -> Body ! PackErrors {
     if !s.loaded { load_session(mut s)? }
+    // A read's diagnostic is built in candidate: it is copied out and raised
+    // once the region is freed.
+    var error_payload = "", failed = false
     for i in 0..s.paths.len {
         let slot = slot_named(s.indexes[i], name)
         if slot < 0 { continue }
@@ -798,7 +893,26 @@ pub fn session_read(mut s: Session, name: str, cap: int) -> Body ! PackErrors {
             defer fs_close(fd) else |_| {}
             let end = rebound(fd, s.indexes[i], s.ends[i])?
             var seen = Map[int, bool](), total: int = 0, none = no_cache()
-            let value = unpack(fd, end, s.indexes[i], slot, mut seen, mut total, 0, mut none, 0)?
+            let value = unpack(
+                fd,
+                end,
+                s.indexes[i],
+                slot,
+                mut seen,
+                mut total,
+                0,
+                mut none,
+                0,
+            ) else |e| match e {
+                Unsupported(message) => {
+                    error_payload = copy message
+                    failed = true
+                    break
+                },
+                not_found => { return not_found },
+                denied => { return denied },
+                io => { return io },
+            }
             result = copy value
         }
         if result.data.len > cap {
@@ -806,5 +920,6 @@ pub fn session_read(mut s: Session, name: str, cap: int) -> Body ! PackErrors {
         }
         return result
     }
+    if failed { return Unsupported(error_payload) }
     not_found
 }
