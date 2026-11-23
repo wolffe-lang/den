@@ -90,14 +90,46 @@ pub fn walk_plan(
     }
     var plan = plan_empty()
     for name in roots { walk_queue(mut w, name)? }
+    // A diagnostic built in a scratch region below is copied out of it (raised:
+    // 1 Unsupported, 2 Pathspec, 3 Fatal, 4 Failure) and raised once the region
+    // is freed.
+    var error_payload = "", raised = 0
     var pos = 0
     while pos < w.queue.len {
         region step {
             let name = str_from_utf8(w.queue[pos..pos + 40]) else |_| { return invalid }
             pos += 40
-            if !pack.names_has(omit, name) { walk_one(mut reader, name, mut w, mut plan)? }
+            if !pack.names_has(omit, name) {
+                walk_one(mut reader, name, mut w, mut plan) else |e| match e {
+                    invalid => { return invalid },
+                    invalid_oid => { return invalid_oid },
+                    unsupported_format => { return unsupported_format },
+                    bad_header => { return bad_header },
+                    bad_size => { return bad_size },
+                    bad_oid => { return bad_oid },
+                    truncated => { return truncated },
+                    dictionary => { return dictionary },
+                    checksum => { return checksum },
+                    limit => { return limit },
+                    trailing => { return trailing },
+                    unsupported_level => { return unsupported_level },
+                    not_found => { return not_found },
+                    denied => { return denied },
+                    io => { return io },
+                    exists => { return exists },
+                    unsupported => { return unsupported },
+                    Unsupported(message) => {
+                        error_payload = copy message
+                        raised = 1
+                        break
+                    },
+                    ambiguous => { return ambiguous },
+                    cross_device => { return cross_device },
+                }
+            }
         }
     }
+    if raised == 1 { return Unsupported(error_payload) }
     plan
 }
 
@@ -215,12 +247,42 @@ pub fn write_plan(repo: repository.Repo, plan: Plan, mode: str) -> PackFile ! ob
     var finished = false
     defer { if !finished { pack.writer_discard(mut w) } }
     var reader = object.reader_batch(repo)
+    // A diagnostic built in a scratch region below is copied out of it (raised:
+    // 1 Unsupported, 2 Pathspec, 3 Fatal, 4 Failure) and raised once the region
+    // is freed.
+    var error_payload = "", raised = 0
     for i in order {
         region one {
             let name = plan_name(plan, i)?
-            write_one(mut w, mut reader, name)?
+            write_one(mut w, mut reader, name) else |e| match e {
+                invalid => { return invalid },
+                invalid_oid => { return invalid_oid },
+                unsupported_format => { return unsupported_format },
+                bad_header => { return bad_header },
+                bad_size => { return bad_size },
+                bad_oid => { return bad_oid },
+                truncated => { return truncated },
+                dictionary => { return dictionary },
+                checksum => { return checksum },
+                limit => { return limit },
+                trailing => { return trailing },
+                unsupported_level => { return unsupported_level },
+                not_found => { return not_found },
+                denied => { return denied },
+                io => { return io },
+                exists => { return exists },
+                unsupported => { return unsupported },
+                Unsupported(message) => {
+                    error_payload = copy message
+                    raised = 1
+                    break
+                },
+                ambiguous => { return ambiguous },
+                cross_device => { return cross_device },
+            }
         }
     }
+    if raised == 1 { return Unsupported(error_payload) }
     let (path, size) = pack.writer_finish(mut w)?
     finished = true
     PackFile { path: path, size: size }
@@ -346,12 +408,45 @@ pub fn ancestor(repo: repository.Repo, older: str, newer: str) -> bool ! object.
     let reader = object.reader_batch(repo)
     var pending = [newer], seen = pack.nameset(), pos = 0
     let _ = pack.names_add(mut seen, newer, "")
+    // A diagnostic built in a scratch region below is copied out of it (raised:
+    // 1 Unsupported, 2 Pathspec, 3 Fatal, 4 Failure) and raised once the region
+    // is freed.
+    var error_payload = "", raised = 0
     while pos < pending.len {
         let name = copy pending[pos]
         pos += 1
         var found = false, commit = true
         region commit_read {
-            let body = object.read_loaded(reader, oid.parse("sha1", name)?, 16777216)?
+            let body = object.read_loaded(
+                reader,
+                oid.parse("sha1", name)?,
+                16777216,
+            ) else |e| match e {
+                invalid => { return invalid },
+                invalid_oid => { return invalid_oid },
+                unsupported_format => { return unsupported_format },
+                bad_header => { return bad_header },
+                bad_size => { return bad_size },
+                bad_oid => { return bad_oid },
+                truncated => { return truncated },
+                dictionary => { return dictionary },
+                checksum => { return checksum },
+                limit => { return limit },
+                trailing => { return trailing },
+                unsupported_level => { return unsupported_level },
+                not_found => { return not_found },
+                denied => { return denied },
+                io => { return io },
+                exists => { return exists },
+                unsupported => { return unsupported },
+                Unsupported(message) => {
+                    error_payload = copy message
+                    raised = 1
+                    break
+                },
+                ambiguous => { return ambiguous },
+                cross_device => { return cross_device },
+            }
             if body.kind != "commit" {
                 commit = false
             } else {
@@ -367,6 +462,7 @@ pub fn ancestor(repo: repository.Repo, older: str, newer: str) -> bool ! object.
         if !commit { return false }
         if found { return true }
     }
+    if raised == 1 { return Unsupported(error_payload) }
     false
 }
 
@@ -537,6 +633,10 @@ pub fn closure_received(
             (mut outside).push(packcmd.Link { name: copy name, kind: "" })
         }
     }
+    // A diagnostic built in a scratch region below is copied out of it (raised:
+    // 1 Unsupported, 2 Pathspec, 3 Fatal, 4 Failure) and raised once the region
+    // is freed.
+    var error_payload = "", raised = 0
     while ranks.len > 0 || outside.len > 0 {
         region step {
             if ranks.len > 0 {
@@ -560,7 +660,32 @@ pub fn closure_received(
                             mut ranks,
                             mut expected,
                             mut outside,
-                        )?
+                        ) else |e| match e {
+                            invalid => { return invalid },
+                            invalid_oid => { return invalid_oid },
+                            unsupported_format => { return unsupported_format },
+                            bad_header => { return bad_header },
+                            bad_size => { return bad_size },
+                            bad_oid => { return bad_oid },
+                            truncated => { return truncated },
+                            dictionary => { return dictionary },
+                            checksum => { return checksum },
+                            limit => { return limit },
+                            trailing => { return trailing },
+                            unsupported_level => { return unsupported_level },
+                            not_found => { return not_found },
+                            denied => { return denied },
+                            io => { return io },
+                            exists => { return exists },
+                            unsupported => { return unsupported },
+                            Unsupported(message) => {
+                                error_payload = copy message
+                                raised = 1
+                                break
+                            },
+                            ambiguous => { return ambiguous },
+                            cross_device => { return cross_device },
+                        }
                     }
                 }
             } else {
@@ -580,11 +705,37 @@ pub fn closure_received(
                         mut ranks,
                         mut expected,
                         mut outside,
-                    )?
+                    ) else |e| match e {
+                        invalid => { return invalid },
+                        invalid_oid => { return invalid_oid },
+                        unsupported_format => { return unsupported_format },
+                        bad_header => { return bad_header },
+                        bad_size => { return bad_size },
+                        bad_oid => { return bad_oid },
+                        truncated => { return truncated },
+                        dictionary => { return dictionary },
+                        checksum => { return checksum },
+                        limit => { return limit },
+                        trailing => { return trailing },
+                        unsupported_level => { return unsupported_level },
+                        not_found => { return not_found },
+                        denied => { return denied },
+                        io => { return io },
+                        exists => { return exists },
+                        unsupported => { return unsupported },
+                        Unsupported(message) => {
+                            error_payload = copy message
+                            raised = 1
+                            break
+                        },
+                        ambiguous => { return ambiguous },
+                        cross_device => { return cross_device },
+                    }
                 }
             }
         }
     }
+    if raised == 1 { return Unsupported(error_payload) }
 }
 
 // kind_code's inverse.
