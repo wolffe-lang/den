@@ -1,0 +1,177 @@
+//! member: false
+
+// The diagnostics of malformed packs, as each reader's caller sees them. A
+// reader builds its diagnostic inside a scratch region; each row reads the
+// error only after other regions have reused memory, so a message that died
+// with the reader's region would show here. tools/pack-payload-test.py
+// builds this program, runs it on every machine and judges the ROW lines.
+
+use std.fs
+use hash
+use oid
+use pack
+use zlib
+
+fn body_raw(body: pack.Body) -> List[byte] {
+    var header = "{body.kind} {body.data.len}\0".bytes()
+    for b in body.data { (mut header).push(b) }
+    hash.sum1(header)
+}
+
+fn body_hex(body: pack.Body) -> str ! pack.PackErrors {
+    let id = oid.from_bytes("sha1", body_raw(body)) else |_| { return Unsupported("identity") }
+    oid.hex(id) else |_| { return Unsupported("identity") }
+}
+
+fn part(data: List[byte], start: int, end: int) -> List[byte] {
+    var out = List[byte]()
+    for i in start..end { (mut out).push(data[i]) }
+    out
+}
+
+fn fresh(name: str) -> str ! pack.PackErrors {
+    let dir = "target/tmp/pack-payload-{name}"
+    if fs.exists(dir) { fs.remove_dir_all(dir) else |_| { return io } }
+    fs.create_dir_all("{dir}/objects/pack") else |_| { return io }
+    dir
+}
+
+// Other regions' allocations, over whatever a freed region held.
+fn reuse() {
+    for k in 0..32 {
+        region scratch {
+            let s = "{k} ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ"
+            if s.len == 0 { print("never") }
+        }
+    }
+}
+
+fn row(name: str, message: str) { print("ROW {name} {message}") }
+
+fn blob(text: str) -> pack.Body { pack.Body { kind: "blob", data: text.bytes() } }
+
+// One blob's pack and idx with the object's zlib header cleared: the pack's
+// checksum, the idx's binding to it and the idx's own checksum are made
+// again, so only the object's stream is wrong.
+fn damaged(body: pack.Body) -> pack.Encoded ! pack.PackErrors {
+    var encoded = pack.encode([copy body], "none")?
+    var at = 12
+    while encoded.data[at] as int & 128 != 0 { at += 1 }
+    at += 1
+    if encoded.data[at] as int != 0x78 { return Unsupported("fixture: no zlib header") }
+    encoded.data[at] = 0 as byte
+    let n = encoded.data.len
+    let sum = hash.sum1(part(encoded.data, 0, n - 20))
+    for i in 0..20 { encoded.data[n - 20 + i] = sum[i] }
+    let m = encoded.index.len
+    for i in 0..20 { encoded.index[m - 40 + i] = sum[i] }
+    let own = hash.sum1(part(encoded.index, 0, m - 20))
+    for i in 0..20 { encoded.index[m - 20 + i] = own[i] }
+    let id = oid.from_bytes("sha1", sum) else |_| { return Unsupported("identity") }
+    encoded.name = oid.hex(id) else |_| { return Unsupported("identity") }
+    encoded
+}
+
+// Receive data in two writes and index it; the receiver is aborted on refusal.
+fn received(dir: str, data: List[byte]) -> pack.Indexed ! pack.PackErrors {
+    var r = pack.receive_begin(dir)?
+    defer pack.receive_abort(mut r)
+    pack.receive_write(mut r, part(data, 0, data.len / 2))?
+    pack.receive_write(mut r, part(data, data.len / 2, data.len))?
+    pack.received_index(mut r)?
+}
+
+fn refused(dir: str, data: List[byte]) -> str ! pack.PackErrors {
+    let ix = received(dir, data) else |e| {
+        reuse()
+        return "{e}"
+    }
+    pack.received_discard(ix)
+    "accepted"
+}
+
+// A pack of a blob and a REF_DELTA from it whose sizes are right and whose
+// one instruction is the reserved opcode 0: refused once deltas are applied.
+fn bad_delta() -> List[byte] ! pack.PackErrors {
+    let base = blob("the base of a delta whose instruction is reserved\n")
+    let n = base.data.len
+    let delta = [n as byte, 5 as byte, 0 as byte]
+    var data = "PACK".bytes()
+    for b in [0, 0, 0, 2, 0, 0, 0, 2] { (mut data).push(b as byte) }
+    (mut data).push((3 << 4 | n & 15 | (if n > 15 then 128 else 0)) as byte)
+    if n > 15 { (mut data).push((n >> 4) as byte) }
+    for b in zlib.deflate(base.data, 1, 1000) else |_| { return Unsupported("deflate") } {
+        (mut data).push(b)
+    }
+    (mut data).push((7 << 4 | delta.len) as byte)
+    for b in body_raw(base) { (mut data).push(b) }
+    for b in zlib.deflate(delta, 1, 1000) else |_| { return Unsupported("deflate") } {
+        (mut data).push(b)
+    }
+    for b in hash.sum1(data) { (mut data).push(b) }
+    data
+}
+
+fn rows() -> () ! pack.PackErrors {
+    let body = blob("a blob whose stored stream is damaged, read through every reader\n")
+    let name = body_hex(body)?
+    let bad = damaged(body)?
+    let cap = 1000000
+
+    row("received-scan-zlib", refused(fresh("scan")?, bad.data)?)
+    row("received-resolve-delta", refused(fresh("resolve")?, bad_delta()?)?)
+
+    let installed = pack.install(fresh("install")?, bad) else |e| {
+        reuse()
+        "{e}"
+    }
+    row("install-zlib", installed)
+
+    let dir = fresh("read")?
+    let stem = "{dir}/objects/pack/pack-{bad.name}"
+    fs.write_bytes("{stem}.pack", bad.data) else |_| { return io }
+    fs.write_bytes("{stem}.idx", bad.index) else |_| { return io }
+    // A refused read answers a body whose kind is the error's rendering; an
+    // accepted one prints its kind, which no row expects.
+    let read = pack.read_object(dir, name, cap) else |e| {
+        reuse()
+        pack.Body { kind: "{e}", data: List[byte]() }
+    }
+    row("read-object-zlib", read.kind)
+    var s = pack.session_open(dir)?
+    let peeked = pack.session_peek(s, name, cap) else |e| {
+        reuse()
+        pack.Body { kind: "{e}", data: List[byte]() }
+    }
+    row("session-peek-zlib", peeked.kind)
+    var cached = pack.with_cache(s)
+    let through = pack.session_cached(mut cached, name, cap) else |e| {
+        reuse()
+        pack.Body { kind: "{e}", data: List[byte]() }
+    }
+    row("session-cached-zlib", through.kind)
+    let found = pack.session_find(s, name, cap) else |e| {
+        reuse()
+        pack.Body { kind: "{e}", data: List[byte]() }
+    }
+    row("session-find-zlib", found.kind)
+    let again = pack.session_read(mut s, name, cap) else |e| {
+        reuse()
+        pack.Body { kind: "{e}", data: List[byte]() }
+    }
+    row("session-read-zlib", again.kind)
+    let inspected = pack.inspect("{stem}.idx") else |e| {
+        reuse()
+        row("inspect-zlib", "{e}")
+        return
+    }
+    row("inspect-zlib", "accepted {inspected.objects.len}")
+}
+
+fn main() -> int {
+    rows() else |e| {
+        eprint("pack payload rows: {e}")
+        return 1
+    }
+    0
+}

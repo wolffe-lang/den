@@ -23,4 +23,7 @@ done
 "$WOLF" conform-run src/pack_test.lu --checked --json > target/pack-checked.json
 cat target/pack-checked.json
 python3 -I -c 'import json; rows=[json.loads(x) for x in open("target/pack-checked.json") if x.startswith("{")]; assert len(rows)==1 and rows[0]["verdict"]=="exit(0)", rows'
+# Malformed packs through every reader: each diagnostic after its scratch region.
+python3 -I tools/checked-exceptions-test.py
+python3 -I tools/pack-payload-test.py
 echo 'pack: native/release interop, corruption, packed history/refs/merge/replay and actual checked; zero skips'
