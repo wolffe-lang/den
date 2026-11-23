@@ -84,6 +84,9 @@ pub fn inspect(path: str) -> Inspection ! PackErrors {
     defer fs_close(fd) else |_| {}
     let end = verify(fd, index)?
     var objects = List[PackedEntry]()
+    // An object's diagnostic is built in object_check: it is copied out and
+    // raised once the region is freed.
+    var error_payload = "", failed = false
     for slot in 0..index.entries.len {
         var row = PackedEntry {
             name: name_hex(index, slot),
@@ -96,7 +99,26 @@ pub fn inspect(path: str) -> Inspection ! PackErrors {
         }
         region object_check {
             var seen = Map[int, bool](), total = 0, none = no_cache()
-            let body = unpack(fd, end, index, slot, mut seen, mut total, 0, mut none, 0)?
+            let body = unpack(
+                fd,
+                end,
+                index,
+                slot,
+                mut seen,
+                mut total,
+                0,
+                mut none,
+                0,
+            ) else |e| match e {
+                Unsupported(message) => {
+                    error_payload = copy message
+                    failed = true
+                    break
+                },
+                not_found => { return not_found },
+                denied => { return denied },
+                io => { return io },
+            }
             let (size, stored, base, depth) = entry_meta(fd, end, index, slot, 0)?
             row.kind = copy body.kind
             row.size = size
@@ -113,6 +135,7 @@ pub fn inspect(path: str) -> Inspection ! PackErrors {
             j -= 1
         }
     }
+    if failed { return Unsupported(error_payload) }
     Inspection { objects: objects, bytes: end + 20 }
 }
 
