@@ -305,6 +305,10 @@ pub fn restore_paths(
     if !options.staged && !options.worktree { return invalid }
     ensure_filters(ctx)?
     let previous = copy value
+    // A diagnostic built in a scratch region below is copied out of it (raised:
+    // 1 Unsupported, 2 Pathspec, 3 Fatal, 4 Failure) and raised once the region
+    // is freed.
+    var error_payload = "", raised = 0
     var source = List[FlatEntry]()
     if options.source != "" || options.staged {
         let name = if options.source == "" then "HEAD" else options.source
@@ -365,7 +369,36 @@ pub fn restore_paths(
             if source[src].mode == 0o160000 { return Unsupported("submodule restore") }
             var crlf = false, binary = false
             region verify {
-                let stored = object.read_loaded(reader, source[src].id, 1000000000)?
+                let stored = object.read_loaded(
+                    reader,
+                    source[src].id,
+                    1000000000,
+                ) else |e| match e {
+                    invalid => { return invalid },
+                    invalid_oid => { return invalid_oid },
+                    unsupported_format => { return unsupported_format },
+                    bad_header => { return bad_header },
+                    bad_size => { return bad_size },
+                    bad_oid => { return bad_oid },
+                    truncated => { return truncated },
+                    dictionary => { return dictionary },
+                    checksum => { return checksum },
+                    limit => { return limit },
+                    trailing => { return trailing },
+                    unsupported_level => { return unsupported_level },
+                    not_found => { return not_found },
+                    denied => { return denied },
+                    io => { return io },
+                    exists => { return exists },
+                    unsupported => { return unsupported },
+                    Unsupported(message) => {
+                        error_payload = copy message
+                        raised = 1
+                        break
+                    },
+                    ambiguous => { return ambiguous },
+                    cross_device => { return cross_device },
+                }
                 if stored.kind != "blob" { return bad_oid }
                 if (text_check || attributes.possible) &&
                     (source[src].mode == 0o100644 || source[src].mode == 0o100755) {
@@ -380,6 +413,7 @@ pub fn restore_paths(
             }
         }
     }
+    if raised == 1 { return Unsupported(error_payload) }
     for path in targets {
         let src = flat_at(source, path)
         if src < 0 && !options.overlay {
