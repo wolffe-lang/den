@@ -155,6 +155,11 @@ class Gate(unittest.TestCase):
                 new = new.replace(cheap, "")
                 # New wiring proof steps add coverage, not replacement commands.
                 new = new.replace("      - name: local gate wiring proof\n        run: python3 -I ci/local-gate-test.py\n", "")
+                # The candidate's separate wiring proof requires this staging step.
+                new = new.replace("      - name: stage the immutable compiler candidate\n"
+                                  "        env:\n"
+                                  "          GH_TOKEN: ${{ github.token }}\n"
+                                  "        run: tools/fetch-candidate-wolf\n", "")
                 self.assertEqual(new, old, (name, job))
         for event in ("schedule", "workflow_dispatch", "push"):
             self.assertTrue(expression(GATE, event))
