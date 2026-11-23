@@ -93,6 +93,17 @@ fn keep_warnings(mut into: List[str], found: List[str]) {
     }
 }
 
+// A walk that found nothing: what add starts from, and what a failed walk's
+// handler yields while its diagnostic is carried out of the walk's region.
+fn no_walk() -> Walk {
+    Walk {
+        files: List[FileState](),
+        directories: List[List[byte]](),
+        lookups: no_lookups(),
+        sorted: no_lookups(),
+    }
+}
+
 // A tracked regular file or symlink whose lstat equals its stage-zero entry
 // and is not racily clean (scan's stat_clean): Git's add leaves it alone.
 // add's racy test is coarser than status's: the pinned Git stages an entry
@@ -175,20 +186,76 @@ pub fn stage_paths_with_warnings(
     }
     // den#91: the walk's scratch (lstat records, parent checks, hash states,
     // its sorted copy) lives in its own region; only what it found is kept.
-    var walked = Walk {
-        files: List[FileState](),
-        directories: List[List[byte]](),
-        lookups: no_lookups(),
-        sorted: no_lookups(),
-    }
+    var walked = no_walk()
+    // A diagnostic built in a scratch region below is copied out of it (raised:
+    // 1 Unsupported, 2 Pathspec, 3 Fatal, 4 Failure) and raised once the region
+    // is freed.
+    var error_payload = "", raised = 0
     region walking {
         var found_warnings = List[str]()
         errdefer keep_warnings(mut warnings, found_warnings)
-        let found = walk(ctx, current, !options.update, paths, !options.force, mut found_warnings)?
+        let found = walk(
+            ctx,
+            current,
+            !options.update,
+            paths,
+            !options.force,
+            mut found_warnings,
+        ) else |e| match e {
+            invalid_index => { return invalid_index },
+            unmerged => { return unmerged },
+            invalid_tree => { return invalid_tree },
+            duplicate_name => { return duplicate_name },
+            invalid => { return invalid },
+            invalid_oid => { return invalid_oid },
+            unsupported_format => { return unsupported_format },
+            bad_header => { return bad_header },
+            bad_size => { return bad_size },
+            bad_oid => { return bad_oid },
+            truncated => { return truncated },
+            dictionary => { return dictionary },
+            checksum => { return checksum },
+            limit => { return limit },
+            trailing => { return trailing },
+            unsupported_level => { return unsupported_level },
+            not_found => { return not_found },
+            denied => { return denied },
+            io => { return io },
+            exists => { return exists },
+            unsupported => { return unsupported },
+            Unsupported(message) => {
+                error_payload = copy message
+                raised = 1
+                no_walk()
+            },
+            ambiguous => { return ambiguous },
+            cross_device => { return cross_device },
+            invalid_header => { return invalid_header },
+            utf8 => { return utf8 },
+            Pathspec(message) => {
+                error_payload = copy message
+                raised = 2
+                no_walk()
+            },
+            Fatal(message) => {
+                error_payload = copy message
+                raised = 3
+                no_walk()
+            },
+            Failure(message) => {
+                error_payload = copy message
+                raised = 4
+                no_walk()
+            },
+        }
         keep_warnings(mut warnings, found_warnings)
         for file in found.files { (mut walked.files).push(copy file) }
         for directory in found.directories { (mut walked.directories).push(copy directory) }
     }
+    if raised == 1 { return Unsupported(error_payload) }
+    if raised == 2 { return Pathspec(error_payload) }
+    if raised == 3 { return Fatal(error_payload) }
+    if raised == 4 { return Failure(error_payload) }
     supported_attributes(ctx, walked.files)?
     var candidates = List[List[byte]]()
     for entry in current.entries {
@@ -346,7 +413,32 @@ pub fn stage_paths_with_warnings(
                             ctx.repo,
                             "blob",
                             if options.intent then List[byte]() else file.data,
-                        )?
+                        ) else |e| match e {
+                            invalid => { return invalid },
+                            invalid_oid => { return invalid_oid },
+                            unsupported_format => { return unsupported_format },
+                            bad_header => { return bad_header },
+                            bad_size => { return bad_size },
+                            bad_oid => { return bad_oid },
+                            truncated => { return truncated },
+                            dictionary => { return dictionary },
+                            checksum => { return checksum },
+                            limit => { return limit },
+                            trailing => { return trailing },
+                            unsupported_level => { return unsupported_level },
+                            not_found => { return not_found },
+                            denied => { return denied },
+                            io => { return io },
+                            exists => { return exists },
+                            unsupported => { return unsupported },
+                            Unsupported(message) => {
+                                error_payload = copy message
+                                raised = 1
+                                break
+                            },
+                            ambiguous => { return ambiguous },
+                            cross_device => { return cross_device },
+                        }
                         (mut staged).push(copy entry)
                     }
                 }
@@ -354,6 +446,7 @@ pub fn stage_paths_with_warnings(
         }
         if staging { (mut changed).push(copy path) }
     }
+    if raised == 1 { return Unsupported(error_payload) }
     if staged.len > 0 || removed.len > 0 { value = index.stage_all(value, staged, removed)? }
     changed
 }
