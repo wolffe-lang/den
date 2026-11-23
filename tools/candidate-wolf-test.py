@@ -53,6 +53,8 @@ sys.exit(int(os.environ.get('MOCK_EXIT', '0')))
         'candidate-wolf-twelve-builds')
     say(sum('--release' in call for call in seen) == 6 and all('--deny-warnings' in call for call in seen),
         'candidate-wolf-tiers-and-warnings')
+    say(all('--error-limit=0' in call for call in seen),
+        'candidate-wolf-complete-diagnostics')
     q, seen = run('--program', 'den', '--tier', 'native')
     say(q.returncode == 0 and len(seen) == 1 and 'PASS candidate-wolf-build-den-native' in q.stdout,
         'candidate-wolf-one-row-dry')
