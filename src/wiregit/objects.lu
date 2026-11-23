@@ -456,12 +456,50 @@ pub fn publish_received(
     // Each write first asks whether the object is stored already: through
     // packs opened once here, where each asked parsed every pack index again.
     let stored = object.opened(repo)
+    // An object's diagnostic is built in its scratch region: it is copied out and
+    // raised once the region is freed.
+    var error_payload = "", failed = false
     for slot in 0..pack.received_count(ix) {
         region one {
-            let body = pack.received_body(ix, slot)?
-            let _ = object.write_object(stored, body.kind, body.data)?
+            let body = pack.received_body(ix, slot) else |e| match e {
+                not_found => { return not_found },
+                denied => { return denied },
+                io => { return io },
+                Unsupported(message) => {
+                    error_payload = copy message
+                    failed = true
+                    break
+                },
+            }
+            let _ = object.write_object(stored, body.kind, body.data) else |e| match e {
+                invalid => { return invalid },
+                invalid_oid => { return invalid_oid },
+                unsupported_format => { return unsupported_format },
+                bad_header => { return bad_header },
+                bad_size => { return bad_size },
+                bad_oid => { return bad_oid },
+                truncated => { return truncated },
+                dictionary => { return dictionary },
+                checksum => { return checksum },
+                limit => { return limit },
+                trailing => { return trailing },
+                unsupported_level => { return unsupported_level },
+                not_found => { return not_found },
+                denied => { return denied },
+                io => { return io },
+                exists => { return exists },
+                unsupported => { return unsupported },
+                Unsupported(message) => {
+                    error_payload = copy message
+                    failed = true
+                    break
+                },
+                ambiguous => { return ambiguous },
+                cross_device => { return cross_device },
+            }
         }
     }
+    if failed { return Unsupported(error_payload) }
 }
 
 /// The typed closure check after a received pack, without the aggregate
