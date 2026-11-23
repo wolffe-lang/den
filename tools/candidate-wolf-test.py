@@ -43,9 +43,9 @@ sys.exit(int(os.environ.get('MOCK_EXIT', '0')))
     env = dict(os.environ, SHELL='/bin/sh', HOME=str(home), DEN_CANDIDATE_WOLF=str(wolf),
                DEN_CANDIDATE_STD=str(std), DEN_CANDIDATE_OUTPUT=str(work / 'out'), MOCK_CALLS=str(calls))
 
-    def run(**updates):
+    def run(*args, **updates):
         calls.write_text('')
-        q = subprocess.run([str(CHECK)], cwd=ROOT, env=dict(env, **updates), capture_output=True, text=True)
+        q = subprocess.run([str(CHECK), *args], cwd=ROOT, env=dict(env, **updates), capture_output=True, text=True)
         return q, calls.read_text().splitlines()
 
     q, seen = run()
@@ -53,6 +53,12 @@ sys.exit(int(os.environ.get('MOCK_EXIT', '0')))
         'candidate-wolf-twelve-builds')
     say(sum('--release' in call for call in seen) == 6 and all('--deny-warnings' in call for call in seen),
         'candidate-wolf-tiers-and-warnings')
+    q, seen = run('--program', 'den', '--tier', 'native')
+    say(q.returncode == 0 and len(seen) == 1 and 'PASS candidate-wolf-build-den-native' in q.stdout,
+        'candidate-wolf-one-row-dry')
+    q, seen = run('--program', 'absent')
+    say(q.returncode != 0 and not seen and 'FAIL candidate-wolf-arguments' in q.stdout,
+        'candidate-wolf-invalid-selection-is-red')
     q, seen = run(MOCK_EXIT='2')
     say(q.returncode != 0 and len(seen) == 12 and q.stdout.count('FAIL candidate-wolf-build-') == 12
         and 'exit 2' in q.stdout and '  compiler diagnostic' in q.stdout,
