@@ -20,6 +20,10 @@ export DEN_GIT
 tools/check-fmt
 tools/build --all
 tools/check-newest-wolf
+python3 -I tools/candidate-wolf-test.py
+python3 -I tools/candidate-fetch-test.py
+python3 -I tools/candidate-wiring-test.py
+tools/check-candidate-wolf
 tools/check-wire
 tools/check-http
 tools/check-housekeeping
