@@ -444,11 +444,40 @@ fn tree_id(repo: repository.Repo, id: oid.Oid) -> oid.Oid ! WorkErrors {
     // One reader for the chain (commit or tag, then the tree): one idx parse,
     // reclaimed with the walk's region (den#63).
     var found = List[oid.Oid]()
+    // A diagnostic built in a scratch region below is copied out of it (raised:
+    // 1 Unsupported, 2 Pathspec, 3 Fatal, 4 Failure) and raised once the region
+    // is freed.
+    var error_payload = "", raised = 0
     region walk {
         var current = copy id
         var reader = object.reader(repo)
         for _ in 0..64 {
-            let stored = object.read_with(mut reader, current, 1000000000)?
+            let stored = object.read_with(mut reader, current, 1000000000) else |e| match e {
+                invalid => { return invalid },
+                invalid_oid => { return invalid_oid },
+                unsupported_format => { return unsupported_format },
+                bad_header => { return bad_header },
+                bad_size => { return bad_size },
+                bad_oid => { return bad_oid },
+                truncated => { return truncated },
+                dictionary => { return dictionary },
+                checksum => { return checksum },
+                limit => { return limit },
+                trailing => { return trailing },
+                unsupported_level => { return unsupported_level },
+                not_found => { return not_found },
+                denied => { return denied },
+                io => { return io },
+                exists => { return exists },
+                unsupported => { return unsupported },
+                Unsupported(message) => {
+                    error_payload = copy message
+                    raised = 1
+                    break
+                },
+                ambiguous => { return ambiguous },
+                cross_device => { return cross_device },
+            }
             if stored.kind == "tree" {
                 (mut found).push(copy current)
                 break
@@ -471,6 +500,7 @@ fn tree_id(repo: repository.Repo, id: oid.Oid) -> oid.Oid ! WorkErrors {
             if !linked { return invalid_header }
         }
     }
+    if raised == 1 { return Unsupported(error_payload) }
     if found.len == 0 { return Fatal("limit: more than 64 tags and commits before a tree") }
     copy found[0]
 }
@@ -483,6 +513,10 @@ struct PendingTree { path: List[byte], id: oid.Oid, ancestors: List[oid.Oid] }
 pub fn flatten_tree(repo: repository.Repo, id: oid.Oid) -> List[FlatEntry] ! WorkErrors {
     let root = tree_id(repo, id)?
     var result = List[FlatEntry](), too_deep = false
+    // A diagnostic built in a scratch region below is copied out of it (raised:
+    // 1 Unsupported, 2 Pathspec, 3 Fatal, 4 Failure) and raised once the region
+    // is freed.
+    var error_payload = "", raised = 0
     // The walk's reader, trees and scratch live in a region, so its idx parse
     // is reclaimed when the walk ends (den#63); only the result is kept.
     region walk {
@@ -502,7 +536,32 @@ pub fn flatten_tree(repo: repository.Repo, id: oid.Oid) -> List[FlatEntry] ! Wor
                 too_deep = true
                 break
             }
-            let stored = object.read_with(mut reader, next.id, 1000000000)?
+            let stored = object.read_with(mut reader, next.id, 1000000000) else |e| match e {
+                invalid => { return invalid },
+                invalid_oid => { return invalid_oid },
+                unsupported_format => { return unsupported_format },
+                bad_header => { return bad_header },
+                bad_size => { return bad_size },
+                bad_oid => { return bad_oid },
+                truncated => { return truncated },
+                dictionary => { return dictionary },
+                checksum => { return checksum },
+                limit => { return limit },
+                trailing => { return trailing },
+                unsupported_level => { return unsupported_level },
+                not_found => { return not_found },
+                denied => { return denied },
+                io => { return io },
+                exists => { return exists },
+                unsupported => { return unsupported },
+                Unsupported(message) => {
+                    error_payload = copy message
+                    raised = 1
+                    break
+                },
+                ambiguous => { return ambiguous },
+                cross_device => { return cross_device },
+            }
             if stored.kind != "tree" { return invalid_tree }
             let children = object.parse_tree(stored.data, "sha1")?
             for child in children {
@@ -530,6 +589,7 @@ pub fn flatten_tree(repo: repository.Repo, id: oid.Oid) -> List[FlatEntry] ! Wor
         (mut result).reserve(entries.len)
         for i in path_order(paths) { (mut result).push(copy entries[i]) }
     }
+    if raised == 1 { return Unsupported(error_payload) }
     if too_deep { return Fatal("limit: a tree nested more than 1024 deep") }
     result
 }
