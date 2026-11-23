@@ -118,10 +118,15 @@ also depends on its build path, not merely the base image and version.
 The gate checks formatting and that every package manifest lists the den modules
 its files use (`tools/module-deps.py`), builds native/release binaries, builds them
 again with the newest wolf release and the std it bundles (`tools/check-newest-wolf`;
-a release that refuses the tree fails the gate by name) and with the next wolf
-(`tools/check-candidate-wolf`, every diagnostic shown), runs actual checked
+a release that refuses the tree fails the gate by name), runs actual checked
 programs, constructs the corpus twice, compares against the pinned oracle and
-builds the static Linux archive. `tools/mkden OUTDIR` checks ET_EXEC/no PT_INTERP
+builds the static Linux archive. The record (`tools/gate-record`) also builds den
+and the five index-check programs with the next wolf (`tools/check-candidate-wolf`,
+every diagnostic shown, from the archive `DEN_CANDIDATE_ARCHIVE` names or a
+`gh run download`); hosted CI does not, since until wolf releases it the next wolf
+is another repository's workflow artifact, which a workflow's own token cannot
+download. When wolf releases it, it becomes the newest release above and the
+leaf and `candidate-wolf.toml` are retired. `tools/mkden OUTDIR` checks ET_EXEC/no PT_INTERP
 and prints full/stripped binary digests. No host-specific glibc is substituted.
 
 ### Speed rows
