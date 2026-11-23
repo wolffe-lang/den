@@ -70,6 +70,10 @@ fn tracking_reference(repo: repository.Repo, branch: str) -> str ! RevisionError
 
 fn tracking_reachable(repo: repository.Repo, tip: oid.Oid) -> Map[str, bool] ! RevisionErrors {
     var seen = Map[str, bool](), pending = [copy tip], used = 0, visited = 0
+    // A diagnostic built in a scratch region below is copied out of it (raised:
+    // 1 Unsupported, 2 Pathspec, 3 Fatal, 4 Failure) and raised once the region
+    // is freed.
+    var error_payload = "", raised = 0
     while pending.len > 0 {
         region node {
             let id = (mut pending).pop() else |_| { return invalid }
@@ -78,12 +82,49 @@ fn tracking_reachable(repo: repository.Repo, tip: oid.Oid) -> Map[str, bool] ! R
             if visited >= 10000 { return limit }
             visited += 1
             seen[copy name] = true
-            for parent in commit_ids(repo, id, "parent", mut used)? {
+            let parents = commit_ids(repo, id, "parent", mut used) else |e| match e {
+                invalid => { return invalid },
+                invalid_oid => { return invalid_oid },
+                unsupported_format => { return unsupported_format },
+                bad_header => { return bad_header },
+                bad_size => { return bad_size },
+                bad_oid => { return bad_oid },
+                truncated => { return truncated },
+                dictionary => { return dictionary },
+                checksum => { return checksum },
+                limit => { return limit },
+                trailing => { return trailing },
+                unsupported_level => { return unsupported_level },
+                not_found => { return not_found },
+                denied => { return denied },
+                io => { return io },
+                exists => { return exists },
+                unsupported => { return unsupported },
+                Unsupported(message) => {
+                    error_payload = copy message
+                    raised = 1
+                    break
+                },
+                ambiguous => { return ambiguous },
+                cross_device => { return cross_device },
+                invalid_header => { return invalid_header },
+                invalid_tree => { return invalid_tree },
+                duplicate_name => { return duplicate_name },
+                utf8 => { return utf8 },
+                Fatal(message) => {
+                    error_payload = copy message
+                    raised = 3
+                    break
+                },
+            }
+            for parent in parents {
                 if pending.len >= 10000 { return limit }
                 (mut pending).push(copy parent)
             }
         }
     }
+    if raised == 1 { return Unsupported(error_payload) }
+    if raised == 3 { return Fatal(error_payload) }
     seen
 }
 
