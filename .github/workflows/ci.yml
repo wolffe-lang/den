@@ -48,7 +48,6 @@ on:
       - 'Cargo.toml'
       - 'Cargo.lock'
       - 'den-oracle.toml'
-      - 'candidate-wolf.toml'
   schedule:
     - cron: "23 4 * * *"
   workflow_dispatch:
@@ -123,10 +122,6 @@ jobs:
             .wolf-bin
             target/oracle
           key: den-linux-${{ hashFiles('wolf-toolchain.toml', 'den-oracle.toml', 'ci/oracle.Containerfile', 'tools/fetch-oracle.py') }}
-      - name: stage the immutable compiler candidate
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: tools/fetch-candidate-wolf
       - name: every gate inside the pinned Ubuntu container
         env:
           DEN_ENGINE: docker
