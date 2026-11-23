@@ -1,0 +1,58 @@
+#!/bin/sh
+# Stage an immutable workflow artifact, or a supplied copy of that same archive.
+set -eu
+DEN_ROOT=$(cd "$(dirname "$0")/.." && pwd)
+export DEN_ROOT
+cd "$DEN_ROOT"
+. tools/lib-toml.sh
+. tools/lib-candidate.sh
+fail() { echo "FAIL candidate-wolf-archive: $*"; exit 1; }
+target=$(host_target) || fail 'unsupported target'
+digest=$(candidate_value "$target")
+[ -n "$digest" ] || fail "no digest for $target"
+stage=${DEN_CANDIDATE_STAGE:-$DEN_ROOT/target/candidate-wolf}
+run=$(candidate_value run)
+repo=$(candidate_value repo)
+std=$(candidate_value std_rev)
+stamp="$target run=$run wolf=$digest std=$std"
+if [ -f "$stage/STAMP" ] && [ "$(cat "$stage/STAMP")" = "$stamp" ] && [ -x "$stage/wolf" ]; then
+    echo "PASS candidate-wolf-archive staged $digest"
+    exit 0
+fi
+mkdir -p "$DEN_ROOT/target"
+tmp=$(mktemp -d "$DEN_ROOT/target/candidate-fetch.XXXXXX")
+trap 'rm -rf "$tmp"' EXIT
+if [ -n "${DEN_CANDIDATE_ARCHIVE:-}" ]; then
+    archive=$DEN_CANDIDATE_ARCHIVE
+    [ -f "$archive" ] || fail 'supplied archive is missing'
+else
+    case "$target" in
+        aarch64-apple-darwin) artifact=archive-macos-latest ;;
+        x86_64-unknown-linux-gnu) artifact=archive-ubuntu-22.04 ;;
+        aarch64-unknown-linux-gnu) artifact=archive-ubuntu-22.04-arm ;;
+        *) fail 'unsupported artifact' ;;
+    esac
+    mkdir "$tmp/download"
+    gh run download "$run" -R "$repo" -n "$artifact" -D "$tmp/download" || fail 'artifact download failed or expired'
+    archive=$tmp/download/wolf-0.2.40-$target.tar.gz
+    [ -f "$archive" ] || fail 'artifact contains no expected archive'
+fi
+if command -v sha256sum >/dev/null 2>&1; then
+    have=$(sha256sum "$archive" | cut -d' ' -f1)
+else
+    have=$(shasum -a 256 "$archive" | cut -d' ' -f1)
+fi
+[ "$have" = "$digest" ] || fail "sha256 $have, expected $digest"
+mkdir "$tmp/unpack"
+tar -xzf "$archive" -C "$tmp/unpack" || fail 'could not extract verified archive'
+base=$tmp/unpack/wolf-0.2.40-$target
+[ -x "$base/wolf" ] && [ -f "$base/std/STD-REV" ] || fail 'compiler or std is missing'
+[ "$(cat "$base/std/STD-REV")" = "$std" ] || fail 'bundled std differs from pin'
+version=$("$base/wolf" --version) || fail 'compiler could not report its version'
+version=$(printf '%s\n' "$version" | sed -n '1p')
+[ "$version" = "$(candidate_value version_line)" ] || fail "compiler version differs: $version"
+printf '%s\n' "$stamp" > "$base/STAMP"
+mkdir -p "$(dirname "$stage")"
+rm -rf "$stage"
+mv "$base" "$stage"
+echo "PASS candidate-wolf-archive $digest"
