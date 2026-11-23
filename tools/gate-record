@@ -110,6 +110,10 @@ fi
 leaf format tools/check-fmt
 leaf build tools/build --all
 leaf newest-wolf tools/check-newest-wolf
+leaf candidate-runner-test python3 -I tools/candidate-wolf-test.py
+leaf candidate-fetch-test python3 -I tools/candidate-fetch-test.py
+leaf candidate-wiring-test python3 -I tools/candidate-wiring-test.py
+leaf candidate-wolf --input target/candidate-wolf -- tools/check-candidate-wolf
 leaf wire tools/check-wire
 leaf http tools/check-http
 leaf housekeeping tools/check-housekeeping
