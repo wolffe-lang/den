@@ -56,8 +56,10 @@ known; preparation does not imply that either package is already available.
 | CI full field leg | macOS arm64 with Homebrew Git; nonblocking observation, not the oracle |
 | Toolchain | wolf 0.2.36 5adf3d91, lupin 0.1.58 tag 6240efe5 (binary embeds a5378e3), pinned std d4a4d4ca (release bundles 78b9d3cb) |
 | Newest wolf release | wolf 0.2.40 (b333b9d) with the std it bundles (be1d10fa): den must build with it too (`tools/check-newest-wolf`) |
+| Next wolf | the wolf-lang release workflow's build of 1add9bb (run 45097601683, `wolf 0.2.40+dev.1add9bb`) with the std it bundles (be1d10fa): den and the five index-check programs must build with it on both tiers (`tools/check-candidate-wolf`) |
 
-Archive and oracle pins are in `wolf-toolchain.toml` and `den-oracle.toml`.
+Archive and oracle pins are in `wolf-toolchain.toml` and `den-oracle.toml`; the
+next wolf's run, revision and archive digests are in `candidate-wolf.toml`.
 Downloads fail on a digest mismatch. Both release-metadata reads are retained
 in `notes/vc15-evidence/pins/`, including archive/staged-runtime and complete std
 comparisons for Linux and Mac. Earlier reads are in `notes/vc14-evidence/pins/`
@@ -116,7 +118,8 @@ also depends on its build path, not merely the base image and version.
 The gate checks formatting and that every package manifest lists the den modules
 its files use (`tools/module-deps.py`), builds native/release binaries, builds them
 again with the newest wolf release and the std it bundles (`tools/check-newest-wolf`;
-a release that refuses the tree fails the gate by name), runs actual checked
+a release that refuses the tree fails the gate by name) and with the next wolf
+(`tools/check-candidate-wolf`, every diagnostic shown), runs actual checked
 programs, constructs the corpus twice, compares against the pinned oracle and
 builds the static Linux archive. `tools/mkden OUTDIR` checks ET_EXEC/no PT_INTERP
 and prints full/stripped binary digests. No host-specific glibc is substituted.
@@ -713,6 +716,17 @@ a bounded actual-checked delta/CRC program, and the existing history, refs, merg
 and replay matrices over packed copies. The fixture builder checks that packing
 preserves the entire object namespace, including unreachable objects. Existing
 M2/M3 refusals and diff representation exceptions remain unchanged.
+
+A pack whose object's stream is damaged goes through every reader (received,
+installed, read, read through each session call, inspected), and a received pack
+whose delta holds a reserved instruction through delta resolution: nine rows, each
+diagnostic held to the one the reader built and read only after other regions have
+reused memory, natively, on the release tier and on the checked machine
+(`tools/pack-payload-test.py`). A reader builds
+its diagnostic inside a scratch region; it is copied out and raised once the
+region is freed. `tools/checked-exceptions.json` names the one row the pinned
+compiler's checked machine renders differently (`<value>` for the tag); the entry
+fails once the pin moves or that machine renders the row correctly.
 
 ## Packed object writes
 
