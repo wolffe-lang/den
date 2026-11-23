@@ -45,7 +45,7 @@ for tier in $tiers; do
     [ "$tier" != release ] || flag=--release
     for program in $programs; do
         log=$out/$program-$tier.log
-        if WOLF_STD="$std" "$wolf" build $flag --deny-warnings "src/$program.lu" -o "$out/$program-$tier" >"$log" 2>&1; then
+        if WOLF_STD="$std" "$wolf" build $flag --error-limit=0 --deny-warnings "src/$program.lu" -o "$out/$program-$tier" >"$log" 2>&1; then
             echo "PASS candidate-wolf-build-$program-$tier"
         else
             rc=$?
