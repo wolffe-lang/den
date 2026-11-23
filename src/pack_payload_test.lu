@@ -50,17 +50,21 @@ fn row(name: str, message: str) { print("ROW {name} {message}") }
 
 fn blob(text: str) -> pack.Body { pack.Body { kind: "blob", data: text.bytes() } }
 
-// One blob's pack and idx with the object's zlib header cleared: the pack's
-// checksum, the idx's binding to it and the idx's own checksum are made
-// again, so only the object's stream is wrong.
+// One blob's pack and idx with the object's zlib header cleared: the entry's
+// CRC-32 in the idx, the pack's checksum, the idx's binding to it and the
+// idx's own checksum are made again, so only the object's stream is wrong.
 fn damaged(body: pack.Body) -> pack.Encoded ! pack.PackErrors {
     var encoded = pack.encode([copy body], "none")?
+    // idx v2 of one object: header 8, fanout 1024, name 20, CRC-32 4, offset 4, sums 40.
+    if encoded.index.len != 1100 { return Unsupported("fixture: not a one-object idx") }
     var at = 12
     while encoded.data[at] as int & 128 != 0 { at += 1 }
     at += 1
     if encoded.data[at] as int != 0x78 { return Unsupported("fixture: no zlib header") }
     encoded.data[at] = 0 as byte
     let n = encoded.data.len
+    let crc = pack.crc32(part(encoded.data, 12, n - 20))
+    for i in 0..4 { encoded.index[1052 + i] = (crc >> 24 - 8 * i & 255) as byte }
     let sum = hash.sum1(part(encoded.data, 0, n - 20))
     for i in 0..20 { encoded.data[n - 20 + i] = sum[i] }
     let m = encoded.index.len
