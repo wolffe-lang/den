@@ -50,6 +50,10 @@ pub fn reachable(repo: repository.Repo) -> List[str] ! object.StoreErrors {
     }
     var pending = List[Link](), seen = Map[str, str](), out = List[str](), total = 0
     for (name, _) in roots.pairs() { (mut pending).push(Link { name: copy name, kind: expected[name] else "" }) }
+    // A diagnostic built in a scratch region below is copied out of it (raised:
+    // 1 Unsupported, 2 Pathspec, 3 Fatal, 4 Failure) and raised once the region
+    // is freed.
+    var error_payload = "", raised = 0
     var at = 0
     while at < pending.len {
         let link = copy pending[at]
@@ -64,7 +68,36 @@ pub fn reachable(repo: repository.Repo) -> List[str] ! object.StoreErrors {
         if out.len >= 10000 { return Unsupported("repack closure count limit") }
         var wrong_type = false, too_large = false
         region closure_object {
-            let body = object.read_object(repo, oid.parse("sha1", link.name)?, 16777216)?
+            let body = object.read_object(
+                repo,
+                oid.parse("sha1", link.name)?,
+                16777216,
+            ) else |e| match e {
+                invalid => { return invalid },
+                invalid_oid => { return invalid_oid },
+                unsupported_format => { return unsupported_format },
+                bad_header => { return bad_header },
+                bad_size => { return bad_size },
+                bad_oid => { return bad_oid },
+                truncated => { return truncated },
+                dictionary => { return dictionary },
+                checksum => { return checksum },
+                limit => { return limit },
+                trailing => { return trailing },
+                unsupported_level => { return unsupported_level },
+                not_found => { return not_found },
+                denied => { return denied },
+                io => { return io },
+                exists => { return exists },
+                unsupported => { return unsupported },
+                Unsupported(message) => {
+                    error_payload = copy message
+                    raised = 1
+                    break
+                },
+                ambiguous => { return ambiguous },
+                cross_device => { return cross_device },
+            }
             wrong_type = link.kind != "" && body.kind != link.kind
             too_large = body.data.len > 134217728 - total
             if !wrong_type && !too_large {
@@ -78,6 +111,7 @@ pub fn reachable(repo: repository.Repo) -> List[str] ! object.StoreErrors {
         if pending.len > 100000 { return Unsupported("repack closure link limit") }
         (mut out).push(copy link.name)
     }
+    if raised == 1 { return Unsupported(error_payload) }
     out
 }
 
@@ -244,11 +278,44 @@ pub fn repack(
         if remove && items.indexes.len > 0 { retire_packs(repo, "empty", items.indexes, fail)? }
         return
     }
+    // A diagnostic built in a scratch region below is copied out of it (raised:
+    // 1 Unsupported, 2 Pathspec, 3 Fatal, 4 Failure) and raised once the region
+    // is freed.
+    var error_payload = "", raised = 0
     var bodies = List[pack.Body](), total = 0
     for name in names {
         var too_large = false
         region selected_object {
-            let value = object.read_object(repo, oid.parse("sha1", name)?, 16777216)?
+            let value = object.read_object(
+                repo,
+                oid.parse("sha1", name)?,
+                16777216,
+            ) else |e| match e {
+                invalid => { return invalid },
+                invalid_oid => { return invalid_oid },
+                unsupported_format => { return unsupported_format },
+                bad_header => { return bad_header },
+                bad_size => { return bad_size },
+                bad_oid => { return bad_oid },
+                truncated => { return truncated },
+                dictionary => { return dictionary },
+                checksum => { return checksum },
+                limit => { return limit },
+                trailing => { return trailing },
+                unsupported_level => { return unsupported_level },
+                not_found => { return not_found },
+                denied => { return denied },
+                io => { return io },
+                exists => { return exists },
+                unsupported => { return unsupported },
+                Unsupported(message) => {
+                    error_payload = copy message
+                    raised = 1
+                    break
+                },
+                ambiguous => { return ambiguous },
+                cross_device => { return cross_device },
+            }
             too_large = value.data.len > 134217728 - total
             if !too_large {
                 total += value.data.len
@@ -257,6 +324,7 @@ pub fn repack(
         }
         if too_large { return Unsupported("repack payload limit") }
     }
+    if raised == 1 { return Unsupported(error_payload) }
     let encoded = pack.encode(bodies, "ofs")?
     if fail == "before-publication" { return io }
     let name = pack.install(repo.gitdir, encoded)?
