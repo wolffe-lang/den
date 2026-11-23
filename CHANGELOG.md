@@ -1,5 +1,37 @@
 # Changes
 
+## Unreleased — den builds with the next wolf
+
+- The next wolf refuses a `?` that hands its caller an error whose payload
+  was built inside a `region` block (E1010): the block's memory is freed
+  before the caller reads the message, and native and release read freed
+  bytes. Built with every diagnostic shown, den had 55 such sites (the first
+  25 were listed when the compiler's default limit cut the list), and
+  repairing the pack readers revealed 14 more in their callers: once a reader
+  raises in its caller's region, a caller that calls it inside a region of its
+  own is a site too. Each site now handles its error inside the region, copies
+  the message into a binding declared before the region, and raises the same
+  tag with it once the region is freed, leaving the region as the `?` did;
+  payload-free tags still return from inside. No region is widened and nothing
+  more is copied on a success path.
+- In the replay loops of cherry-pick and rebase, whose step regions held 5 and
+  15 such calls, each step's body moves unchanged into a function of its own
+  that opens no region (`pick_step`, `rebase_step`), so each region holds one
+  call to handle.
+- `tools/check-candidate-wolf` builds den and the five index-check programs on
+  both tiers with the next wolf (`candidate-wolf.toml`: the wolf-lang release
+  workflow's build of 1add9bb, archives by digest), every diagnostic shown. It
+  runs in the record (`tools/gate-record`) only: hosted CI cannot download
+  another repository's workflow artifact with its own token. When wolf
+  releases this compiler it becomes the newest release in `wolf-toolchain.toml`
+  and the leaf and `candidate-wolf.toml` are retired.
+- `tools/pack-payload-test.py` reads two malformed packs through every pack
+  reader and holds each diagnostic, read after other regions have reused
+  memory, to the one the reader built, on native, release and the checked
+  machine. `tools/checked-exceptions.json` names the row whose tag the pinned
+  compiler's checked machine renders as `<value>`; that entry fails once the
+  pin moves or the machine renders the row correctly.
+
 ## Unreleased — status stops copying what it is done with
 
 - A warm `status` on the speed rows' fixture (454 tracked files) made about
