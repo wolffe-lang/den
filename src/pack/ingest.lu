@@ -181,11 +181,22 @@ fn scan(path: str, mut t: Table) -> List[byte] ! PackErrors {
     hash.update1(mut digest, head)
     let end = size - 20
     var pos: int = 12
+    var error_payload = "", failed = false
     for slot in 0..count {
         if pos >= end { return Unsupported("pack truncated") }
         region entry {
-            pos += scan_entry(fd, mut t, mut digest, table, slot, pos, end)?
+            pos += scan_entry(fd, mut t, mut digest, table, slot, pos, end) else |e| match e {
+                Unsupported(message) => {
+                    error_payload = copy message
+                    failed = true
+                    0
+                },
+                not_found => { return not_found },
+                denied => { return denied },
+                io => { return io },
+            }
         }
+        if failed { return Unsupported(error_payload) }
     }
     if pos != end { return Unsupported("pack trailing bytes") }
     let trailer = range_bytes(fd, end, 20)?
@@ -437,11 +448,21 @@ fn visit(
     held: int,
     mut deferred: List[int],
 ) -> () ! PackErrors {
+    var error_payload = "", failed = false
     for child in children(t, slot) {
         if t.done[child] { continue }
         region step {
-            visit_child(fd, mut t, slot, body, held, child, mut deferred)?
+            visit_child(fd, mut t, slot, body, held, child, mut deferred) else |e| match e {
+                Unsupported(message) => {
+                    error_payload = copy message
+                    failed = true
+                },
+                not_found => { return not_found },
+                denied => { return denied },
+                io => { return io },
+            }
         }
+        if failed { return Unsupported(error_payload) }
     }
 }
 
@@ -474,9 +495,19 @@ fn rebuild(fd: int, t: Table, slot: int, depth: int) -> List[byte] ! PackErrors 
     if depth > 64 { return Unsupported("limit: a delta chain deeper than 64") }
     if t.kinds[slot] < 5 { return entry_data(fd, t, slot)? }
     var out = List[byte]()
+    var error_payload = "", failed = false
     region step {
-        rebuild_into(fd, t, slot, depth, mut out)?
+        rebuild_into(fd, t, slot, depth, mut out) else |e| match e {
+            Unsupported(message) => {
+                error_payload = copy message
+                failed = true
+            },
+            not_found => { return not_found },
+            denied => { return denied },
+            io => { return io },
+        }
     }
+    if failed { return Unsupported(error_payload) }
     out
 }
 
@@ -501,22 +532,41 @@ fn resolve(path: str, mut t: Table) -> () ! PackErrors {
     defer fs_close(fd) else |_| {}
     link(mut t)
     var deferred = List[int]()
+    var error_payload = "", failed = false
     for slot in 0..t.kinds.len {
         if t.kinds[slot] > 4 { continue }
         if t.child_start[slot + 1] == t.child_start[slot] && ref_children(t, slot).len == 0 {
             continue
         }
         region root {
-            visit_from(fd, mut t, slot, mut deferred)?
+            visit_from(fd, mut t, slot, mut deferred) else |e| match e {
+                Unsupported(message) => {
+                    error_payload = copy message
+                    failed = true
+                },
+                not_found => { return not_found },
+                denied => { return denied },
+                io => { return io },
+            }
         }
+        if failed { return Unsupported(error_payload) }
     }
     var next = 0
     while next < deferred.len {
         let slot = deferred[next]
         next += 1
         region again {
-            visit_from(fd, mut t, slot, mut deferred)?
+            visit_from(fd, mut t, slot, mut deferred) else |e| match e {
+                Unsupported(message) => {
+                    error_payload = copy message
+                    failed = true
+                },
+                not_found => { return not_found },
+                denied => { return denied },
+                io => { return io },
+            }
         }
+        if failed { return Unsupported(error_payload) }
     }
     for slot in 0..t.kinds.len {
         if !t.done[slot] { return Unsupported("pack delta base missing") }
