@@ -135,6 +135,61 @@ fn rebase_steps(ctx: worktree.Context) -> int ! commit.CommitErrors {
     rebase_steps_with(ctx, "rebase", false)?
 }
 
+// One step of a rebase, in its caller's replay_step region: the step's
+// result, nonzero where the rebase stops.
+fn rebase_step(
+    ctx: worktree.Context,
+    steps: List[sequencer.Step],
+    at: int,
+    total: int,
+    mut number: int,
+    reflog: str,
+    quiet: bool,
+) -> int ! commit.CommitErrors {
+    var done = if fs.exists("{ctx.repo.gitdir}/rebase-merge/done") {
+        replay_read(ctx, "rebase-merge/done")?
+    } else {
+        ""
+    }
+    let item = walk.read(ctx.repo, replay_target(ctx, steps[at].name)?)?
+    // Fail before advancing progress for an unsupported tree operation.
+    let _ = replay_plan(ctx, worktree.head(ctx)?.commits[0], item)?
+    number += 1
+    done += str_from_utf8(sequencer.render([copy steps[at]])?)?
+    replay_write(ctx, "rebase-merge/done", done.bytes())?
+    replay_write(ctx, "rebase-merge/git-rebase-todo", sequencer.render(steps[at + 1..])?)?
+    replay_write(ctx, "rebase-merge/msgnum", "{number}\n".bytes())?
+    rebase_author(ctx, item)?
+    if !quiet { eprint_raw("Rebasing ({number}/{total})\r") }
+    let result = pick_one_action(
+        ctx,
+        item,
+        PickOptions { allow_empty: true, empty: "drop" },
+        true,
+        reflog,
+    )?
+    if result != 0 {
+        if fs.exists("{ctx.repo.gitdir}/HEAD.lock") &&
+            !fs.exists("{ctx.repo.gitdir}/rebase-merge/stopped-sha") {
+            replay_write(ctx, "CHERRY_PICK_HEAD", "{oid.hex(item.id)?}\n".bytes())?
+            rebase_stop_files(ctx, item)?
+            eprint(
+                "Could not apply {abbrev(ctx.repo, item.id)?}... # {str_from_utf8(commit.subject(item.headers.message)?)?}",
+            )
+        }
+        return result
+    }
+    replay_remove(ctx, "REBASE_HEAD")?
+    var rewritten = if fs.exists("{ctx.repo.gitdir}/rebase-merge/rewritten-list") {
+        replay_read(ctx, "rebase-merge/rewritten-list")?
+    } else {
+        ""
+    }
+    rewritten += "{oid.hex(item.id)?} {oid.hex(worktree.head(ctx)?.commits[0])?}\n"
+    replay_write(ctx, "rebase-merge/rewritten-list", rewritten.bytes())?
+    0
+}
+
 fn rebase_steps_with(ctx: worktree.Context, reflog: str, quiet: bool) -> int ! commit.CommitErrors {
     let steps = sequencer.parse(replay_read(ctx, "rebase-merge/git-rebase-todo")?.bytes())?
     let total = replay_read(ctx, "rebase-merge/end")?.trim().to_int() else |_| { return invalid }
@@ -144,51 +199,79 @@ fn rebase_steps_with(ctx: worktree.Context, reflog: str, quiet: bool) -> int ! c
         ""
     }
     var number = sequencer.parse(initial_done.bytes())?.len
+    // A diagnostic built in a scratch region below is copied out of it (raised:
+    // 1 Unsupported, 2 Pathspec, 3 Fatal, 4 Failure) and raised once the region
+    // is freed.
+    var error_payload = "", raised = 0
     for at in 0..steps.len {
         region replay_step {
-            var done = if fs.exists("{ctx.repo.gitdir}/rebase-merge/done") {
-                replay_read(ctx, "rebase-merge/done")?
-            } else {
-                ""
-            }
-            let item = walk.read(ctx.repo, replay_target(ctx, steps[at].name)?)?
-            // Fail before advancing progress for an unsupported tree operation.
-            let _ = replay_plan(ctx, worktree.head(ctx)?.commits[0], item)?
-            number += 1
-            done += str_from_utf8(sequencer.render([copy steps[at]])?)?
-            replay_write(ctx, "rebase-merge/done", done.bytes())?
-            replay_write(ctx, "rebase-merge/git-rebase-todo", sequencer.render(steps[at + 1..])?)?
-            replay_write(ctx, "rebase-merge/msgnum", "{number}\n".bytes())?
-            rebase_author(ctx, item)?
-            if !quiet { eprint_raw("Rebasing ({number}/{total})\r") }
-            let result = pick_one_action(
+            let result = rebase_step(
                 ctx,
-                item,
-                PickOptions { allow_empty: true, empty: "drop" },
-                true,
+                steps,
+                at,
+                total,
+                mut number,
                 reflog,
-            )?
-            if result != 0 {
-                if fs.exists("{ctx.repo.gitdir}/HEAD.lock") &&
-                    !fs.exists("{ctx.repo.gitdir}/rebase-merge/stopped-sha") {
-                    replay_write(ctx, "CHERRY_PICK_HEAD", "{oid.hex(item.id)?}\n".bytes())?
-                    rebase_stop_files(ctx, item)?
-                    eprint(
-                        "Could not apply {abbrev(ctx.repo, item.id)?}... # {str_from_utf8(commit.subject(item.headers.message)?)?}",
-                    )
-                }
-                return result
+                quiet,
+            ) else |e| match e {
+                invalid_index => { return invalid_index },
+                unmerged => { return unmerged },
+                invalid_tree => { return invalid_tree },
+                duplicate_name => { return duplicate_name },
+                invalid => { return invalid },
+                invalid_oid => { return invalid_oid },
+                unsupported_format => { return unsupported_format },
+                bad_header => { return bad_header },
+                bad_size => { return bad_size },
+                bad_oid => { return bad_oid },
+                truncated => { return truncated },
+                dictionary => { return dictionary },
+                checksum => { return checksum },
+                limit => { return limit },
+                trailing => { return trailing },
+                unsupported_level => { return unsupported_level },
+                not_found => { return not_found },
+                denied => { return denied },
+                io => { return io },
+                exists => { return exists },
+                unsupported => { return unsupported },
+                Unsupported(message) => {
+                    error_payload = copy message
+                    raised = 1
+                    break
+                },
+                ambiguous => { return ambiguous },
+                cross_device => { return cross_device },
+                invalid_header => { return invalid_header },
+                Pathspec(message) => {
+                    error_payload = copy message
+                    raised = 2
+                    break
+                },
+                Fatal(message) => {
+                    error_payload = copy message
+                    raised = 3
+                    break
+                },
+                Failure(message) => {
+                    error_payload = copy message
+                    raised = 4
+                    break
+                },
+                invalid_date => { return invalid_date },
+                invalid_timezone => { return invalid_timezone },
+                invalid_identity => { return invalid_identity },
+                invalid_cleanup => { return invalid_cleanup },
+                invalid_comment => { return invalid_comment },
+                utf8 => { return utf8 },
             }
-            replay_remove(ctx, "REBASE_HEAD")?
-            var rewritten = if fs.exists("{ctx.repo.gitdir}/rebase-merge/rewritten-list") {
-                replay_read(ctx, "rebase-merge/rewritten-list")?
-            } else {
-                ""
-            }
-            rewritten += "{oid.hex(item.id)?} {oid.hex(worktree.head(ctx)?.commits[0])?}\n"
-            replay_write(ctx, "rebase-merge/rewritten-list", rewritten.bytes())?
+            if result != 0 { return result }
         }
     }
+    if raised == 1 { return Unsupported(error_payload) }
+    if raised == 2 { return Pathspec(error_payload) }
+    if raised == 3 { return Fatal(error_payload) }
+    if raised == 4 { return Failure(error_payload) }
     rebase_finish(ctx, reflog, quiet)?
 }
 
