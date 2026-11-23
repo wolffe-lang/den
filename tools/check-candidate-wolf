@@ -1,0 +1,48 @@
+#!/bin/sh
+# Build every affected entrypoint with the immutable next-compiler candidate.
+set -eu
+DEN_ROOT=$(cd "$(dirname "$0")/.." && pwd)
+export DEN_ROOT
+cd "$DEN_ROOT"
+. tools/lib-candidate.sh
+if [ -z "${DEN_CANDIDATE_WOLF:-}" ]; then
+    tools/fetch-candidate-wolf || { echo 'FAIL candidate-wolf-inputs: staging failed'; exit 1; }
+fi
+wolf=${DEN_CANDIDATE_WOLF:-$DEN_ROOT/target/candidate-wolf/wolf}
+std=${DEN_CANDIDATE_STD:-$DEN_ROOT/target/candidate-wolf/std}
+out=${DEN_CANDIDATE_OUTPUT:-$DEN_ROOT/target/candidate-build}
+if [ ! -x "$wolf" ] || [ ! -f "$std/STD-REV" ]; then
+    echo 'FAIL candidate-wolf-inputs: executable compiler and bundled std required'
+    exit 1
+fi
+want=$(candidate_value version_line)
+if have=$("$wolf" --version 2>/dev/null); then :; else
+    echo 'FAIL candidate-wolf-version: compiler could not report its version'; exit 1
+fi
+have=$(printf '%s\n' "$have" | sed -n '1p')
+if [ "$have" != "$want" ]; then
+    echo "FAIL candidate-wolf-version: got '$have', expected '$want'"; exit 1
+fi
+echo "PASS candidate-wolf-version $have"
+if [ "$(cat "$std/STD-REV")" != "$(candidate_value std_rev)" ]; then
+    echo 'FAIL candidate-wolf-std: bundled std differs from the pin'; exit 1
+fi
+echo "PASS candidate-wolf-std $(candidate_value std_rev)"
+mkdir -p "$out"
+failed=0
+for tier in native release; do
+    flag=
+    [ "$tier" != release ] || flag=--release
+    for program in den index_checked_flags index_checked_format index_checked_malformed index_checked_stat index_checked_trees; do
+        log=$out/$program-$tier.log
+        if WOLF_STD="$std" "$wolf" build $flag --deny-warnings "src/$program.lu" -o "$out/$program-$tier" >"$log" 2>&1; then
+            echo "PASS candidate-wolf-build-$program-$tier"
+        else
+            rc=$?
+            echo "FAIL candidate-wolf-build-$program-$tier: exit $rc"
+            sed 's/^/  /' "$log"
+            failed=1
+        fi
+    done
+done
+exit "$failed"
