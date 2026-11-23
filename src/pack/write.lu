@@ -132,13 +132,26 @@ pub fn encode(bodies: List[Body], mode: str) -> Encoded ! PackErrors {
     put32(mut data, 2)
     put32(mut data, order.len)
     var entries = List[Written](), depths = List[int]()
+    // An entry's diagnostic is built in its scratch region: it is copied out
+    // and raised once the regions are freed.
+    var error_payload = "", failed = false
     for slot in 0..order.len {
         let b = order[slot]
         let offset = data.len
         var record = Written { name: copy names[b], offset: offset, crc: 0 }
         region candidate {
             var encoded = entry_header(kind_number(bodies[b].kind)?, bodies[b].data.len)
-            append_write(mut encoded, deflated(bodies[b].data)?)
+            let whole = deflated(bodies[b].data) else |e| match e {
+                Unsupported(message) => {
+                    error_payload = copy message
+                    failed = true
+                    break
+                },
+                not_found => { return not_found },
+                denied => { return denied },
+                io => { return io },
+            }
+            append_write(mut encoded, whole)
             var depth = 0
             if mode != "none" {
                 let start = if slot > 10 then slot - 10 else 0
@@ -146,7 +159,16 @@ pub fn encode(bodies: List[Body], mode: str) -> Encoded ! PackErrors {
                     region delta_candidate {
                         let a = order[prior]
                         if bodies[a].kind != bodies[b].kind || depths[prior] >= 50 { continue }
-                        let delta = instructions(bodies[a].data, bodies[b].data)?
+                        let delta = instructions(bodies[a].data, bodies[b].data) else |e| match e {
+                            Unsupported(message) => {
+                                error_payload = copy message
+                                failed = true
+                                break
+                            },
+                            not_found => { return not_found },
+                            denied => { return denied },
+                            io => { return io },
+                        }
                         if delta.len > 16777216 { continue }
                         var trial = entry_header(if mode == "ofs" then 6 else 7, delta.len)
                         if mode == "ofs" {
@@ -154,13 +176,24 @@ pub fn encode(bodies: List[Body], mode: str) -> Encoded ! PackErrors {
                         } else {
                             append_write(mut trial, raw_id(names[a])?)
                         }
-                        append_write(mut trial, deflated(delta)?)
+                        let compressed = deflated(delta) else |e| match e {
+                            Unsupported(message) => {
+                                error_payload = copy message
+                                failed = true
+                                break
+                            },
+                            not_found => { return not_found },
+                            denied => { return denied },
+                            io => { return io },
+                        }
+                        append_write(mut trial, compressed)
                         if trial.len < encoded.len {
                             encoded = copy trial
                             depth = depths[prior] + 1
                         }
                     }
                 }
+                if failed { break }
             }
             check_output(data.len, encoded.len)?
             record.crc = crc32(encoded)
@@ -169,6 +202,7 @@ pub fn encode(bodies: List[Body], mode: str) -> Encoded ! PackErrors {
         }
         (mut entries).push(record)
     }
+    if failed { return Unsupported(error_payload) }
     let sum = hash.sum1(data)
     append_write(mut data, sum)
     let id = oid.from_bytes("sha1", sum) else |_| { return Unsupported("pack writer identity") }
@@ -306,11 +340,24 @@ pub fn writer_add(mut w: Writer, body: Body, name: str) -> () ! PackErrors {
     }
     var depth = 0
     let start = w.offset
+    // An entry's diagnostic is built in its scratch region: it is copied out
+    // and raised once the region is freed, and nothing after it runs.
+    var error_payload = "", failed = false
     region entry {
         var encoded = List[byte](), whole = false
         if w.mode == "none" || w.filled == 0 {
             encoded = entry_header(code, body.data.len)
-            append_write(mut encoded, deflated_any(mut w.tables, body.data)?)
+            let compressed = deflated_any(mut w.tables, body.data) else |e| match e {
+                Unsupported(message) => {
+                    error_payload = copy message
+                    failed = true
+                    List[byte]()
+                },
+                not_found => { return not_found },
+                denied => { return denied },
+                io => { return io },
+            }
+            append_write(mut encoded, compressed)
             whole = true
         }
         if !whole {
@@ -322,39 +369,86 @@ pub fn writer_add(mut w: Writer, body: Body, name: str) -> () ! PackErrors {
                 region delta_candidate {
                     if w.depths[prior] >= 50 { continue }
                     // Empty once it cannot beat best_len: never chosen.
-                    let delta = instructions_within(w.data[prior], body.data, best_len)?
+                    let delta = instructions_within(
+                        w.data[prior],
+                        body.data,
+                        best_len,
+                    ) else |e| match e {
+                        Unsupported(message) => {
+                            error_payload = copy message
+                            failed = true
+                            break
+                        },
+                        not_found => { return not_found },
+                        denied => { return denied },
+                        io => { return io },
+                    }
                     if delta.len > 0 && delta.len < best_len {
                         best = prior
                         best_len = delta.len
                     }
                 }
             }
-            if best >= 0 {
-                let delta = instructions(w.data[best], body.data)?
-                var trial = entry_header(if w.mode == "ofs" then 6 else 7, delta.len)
-                if w.mode == "ofs" {
-                    append_write(mut trial, offset_bytes(start - w.offsets[best]))
-                } else {
-                    append_write(mut trial, raw_id(window_name(w, best)?)?)
+            if !failed && best >= 0 {
+                let delta = instructions(w.data[best], body.data) else |e| match e {
+                    Unsupported(message) => {
+                        error_payload = copy message
+                        failed = true
+                        List[byte]()
+                    },
+                    not_found => { return not_found },
+                    denied => { return denied },
+                    io => { return io },
                 }
-                append_write(mut trial, deflated_any(mut w.tables, delta)?)
-                encoded = copy trial
-                depth = w.depths[best] + 1
+                if !failed {
+                    var trial = entry_header(if w.mode == "ofs" then 6 else 7, delta.len)
+                    if w.mode == "ofs" {
+                        append_write(mut trial, offset_bytes(start - w.offsets[best]))
+                    } else {
+                        append_write(mut trial, raw_id(window_name(w, best)?)?)
+                    }
+                    let compressed = deflated_any(mut w.tables, delta) else |e| match e {
+                        Unsupported(message) => {
+                            error_payload = copy message
+                            failed = true
+                            List[byte]()
+                        },
+                        not_found => { return not_found },
+                        denied => { return denied },
+                        io => { return io },
+                    }
+                    append_write(mut trial, compressed)
+                    encoded = copy trial
+                    depth = w.depths[best] + 1
+                }
             }
             // A delta under half the object is taken unweighed; otherwise
             // the whole object is deflated too and the smaller one kept.
-            if best < 0 || best_len * 2 >= body.data.len {
+            if !failed && (best < 0 || best_len * 2 >= body.data.len) {
                 var plain = entry_header(code, body.data.len)
-                append_write(mut plain, deflated_any(mut w.tables, body.data)?)
+                let compressed = deflated_any(mut w.tables, body.data) else |e| match e {
+                    Unsupported(message) => {
+                        error_payload = copy message
+                        failed = true
+                        List[byte]()
+                    },
+                    not_found => { return not_found },
+                    denied => { return denied },
+                    io => { return io },
+                }
+                append_write(mut plain, compressed)
                 if best < 0 || plain.len <= encoded.len {
                     encoded = copy plain
                     depth = 0
                 }
             }
         }
-        fs_write_chunk(w.fd, encoded) else |_| { return Unsupported("pack write failed") }
-        w.offset += encoded.len
+        if !failed {
+            fs_write_chunk(w.fd, encoded) else |_| { return Unsupported("pack write failed") }
+            w.offset += encoded.len
+        }
     }
+    if failed { return Unsupported(error_payload) }
     // The window keeps the last 10 objects of this type, as a ring of
     // buffers the writer owns.
     let k = w.next
