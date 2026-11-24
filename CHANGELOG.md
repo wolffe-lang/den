@@ -1,5 +1,16 @@
 # Changes
 
+## Unreleased — the next wolf builds den's test programs too
+
+- `tools/check-candidate-wolf` built only what den ships (den and the five
+  index-check programs), not what den tests, so an E1010 in a test program, or
+  in a module only a test imports, passed the leaf and the record. It now also
+  builds every top-level `src/*_test.lu`, found when it runs, on native. A test
+  program added later is built without an edit to the leaf.
+- The tests build on native alone because the checker's diagnostics do not
+  depend on the tier. The leaf holds that on the programs it builds on both:
+  their E1010 counts must agree (`candidate-wolf-tier-independent`).
+
 ## Unreleased — den builds with the next wolf
 
 - The next wolf refuses a `?` that hands its caller an error whose payload
