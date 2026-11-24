@@ -10,7 +10,9 @@ ROOT = Path(__file__).resolve().parent.parent
 CHECK = ROOT / 'tools/check-candidate-wolf'
 FIXED = ['den', 'index_checked_flags', 'index_checked_format', 'index_checked_malformed',
          'index_checked_stat', 'index_checked_trees']
-TESTS = sorted(p.stem for p in (ROOT / 'src').glob('*_test.lu'))
+# Every test program under src/, by its path there without `.lu` (zlib/huffman_test).
+TESTS = sorted(p.relative_to(ROOT / 'src').with_suffix('').as_posix() for p in (ROOT / 'src').rglob('*_test.lu'))
+NESTED = [t for t in TESTS if '/' in t]
 failures = 0
 
 
@@ -33,7 +35,7 @@ def cells(seen):
 say(CHECK.is_file(), 'candidate-wolf-runner-present')
 if not CHECK.is_file():
     sys.exit(1)
-say(len(TESTS) > 0, 'candidate-wolf-test-programs-present')
+say(len(TESTS) > 0 and len(NESTED) > 0, 'candidate-wolf-test-programs-present')
 (ROOT / 'target').mkdir(exist_ok=True)
 with tempfile.TemporaryDirectory(prefix='candidate-leaf-', dir=ROOT / 'target') as scratch:
     work = Path(scratch)
@@ -88,6 +90,10 @@ sys.exit(int(os.environ.get('MOCK_EXIT', '0')))
     say(q.returncode == 0 and cells(seen) == [(TESTS[0], 'native')]
         and f'PASS candidate-wolf-build-{TESTS[0]}-native' in q.stdout,
         'candidate-wolf-test-program-row')
+    q, seen = run('--program', NESTED[0], '--tier', 'native')
+    say(q.returncode == 0 and cells(seen) == [(NESTED[0], 'native')]
+        and f'PASS candidate-wolf-build-{NESTED[0]}-native' in q.stdout,
+        'candidate-wolf-nested-test-program-row')
     q, seen = run('--program', TESTS[0], '--tier', 'release')
     say(q.returncode != 0 and not seen and 'FAIL candidate-wolf-arguments' in q.stdout,
         'candidate-wolf-test-release-refused')
@@ -123,7 +129,7 @@ sys.exit(int(os.environ.get('MOCK_EXIT', '0')))
     say(q.returncode == 0 and 'candidate-wolf-tier-independent' not in q.stdout,
         'candidate-wolf-tier-row-needs-both')
 
-    # A test program added later is built without an edit to the leaf; only top-level ones are.
+    # A test program added later is built without an edit to the leaf, in src/ or below it.
     tree = work / 'tree'
     (tree / 'tools').mkdir(parents=True)
     (tree / 'src' / 'zlib').mkdir(parents=True)
@@ -136,7 +142,8 @@ sys.exit(int(os.environ.get('MOCK_EXIT', '0')))
     q, seen = run(check=tree / 'tools' / 'check-candidate-wolf', cwd=tree)
     got = cells(seen)
     say(q.returncode == 0 and ('zz_added_test', 'native') in got and ('alpha_test', 'native') in got
-        and not any(p.startswith('zlib') for p, _ in got) and len(got) == 14,
+        and ('zlib/nested_test', 'native') in got and ('zlib/nested_test', 'release') not in got
+        and len(got) == 15 and 'PASS candidate-wolf-build-zlib/nested_test-native' in q.stdout,
         'candidate-wolf-new-test-covered')
 
     (std / 'STD-REV').write_text('wrong\n')
