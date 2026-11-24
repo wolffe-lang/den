@@ -11,7 +11,8 @@ CHECK = ROOT / 'tools/check-candidate-wolf'
 FIXED = ['den', 'index_checked_flags', 'index_checked_format', 'index_checked_malformed',
          'index_checked_stat', 'index_checked_trees']
 # Every test program under src/, by its path there without `.lu` (zlib/huffman_test).
-TESTS = sorted(p.relative_to(ROOT / 'src').with_suffix('').as_posix() for p in (ROOT / 'src').rglob('*_test.lu'))
+TESTS = sorted(p.relative_to(ROOT / 'src').with_suffix('').as_posix() for p in (ROOT / 'src').rglob('*_test.lu')
+               if not any(part.startswith('.') for part in p.relative_to(ROOT / 'src').parts))
 NESTED = [t for t in TESTS if '/' in t]
 failures = 0
 
@@ -139,6 +140,8 @@ sys.exit(int(os.environ.get('MOCK_EXIT', '0')))
     for name in FIXED + ['alpha_test', 'zz_added_test']:
         (tree / 'src' / f'{name}.lu').write_text('fn main() -> int { 0 }\n')
     (tree / 'src' / 'zlib' / 'nested_test.lu').write_text('fn main() -> int { 0 }\n')
+    (tree / 'src' / '.lu-cache').mkdir()
+    (tree / 'src' / '.lu-cache' / 'stale_test.lu').write_text('cached\n')
     q, seen = run(check=tree / 'tools' / 'check-candidate-wolf', cwd=tree)
     got = cells(seen)
     say(q.returncode == 0 and ('zz_added_test', 'native') in got and ('alpha_test', 'native') in got

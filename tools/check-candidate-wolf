@@ -1,14 +1,15 @@
 #!/bin/sh
 # Build every affected entrypoint with the immutable next-compiler candidate: the programs den ships
-# (den and the index-check programs) on both tiers, and every top-level src/*_test.lu that den's own
-# gate builds as a test, on native (the checker's diagnostics do not depend on the tier).
+# (den and the index-check programs) on both tiers, and every test program under src/ (each
+# *_test.lu, nested ones too, named by its path there: zlib/huffman_test), on native (the
+# checker's diagnostics do not depend on the tier).
 set -eu
 DEN_ROOT=$(cd "$(dirname "$0")/.." && pwd)
 export DEN_ROOT
 cd "$DEN_ROOT"
 . tools/lib-candidate.sh
 shipped='den index_checked_flags index_checked_format index_checked_malformed index_checked_stat index_checked_trees'
-tests=$(cd src && for f in *_test.lu; do [ -f "$f" ] && printf '%s\n' "${f%.lu}"; done | LC_ALL=C sort | tr '\n' ' ' | sed 's/ *$//')
+tests=$(cd src && find . -name '.?*' -prune -o -type f -name '*_test.lu' -print | sed 's|^\./||; s|\.lu$||' | LC_ALL=C sort | tr '\n' ' ' | sed 's/ *$//')
 programs="$shipped $tests"
 tiers='native release'
 chosen=
@@ -63,6 +64,7 @@ for tier in $tiers; do
     for program in $programs; do
         if [ "$tier" = release ] && known "$program" "$tests"; then continue; fi
         log=$out/$program-$tier.log
+        mkdir -p "$(dirname "$log")"
         if WOLF_STD="$std" "$wolf" build $flag --error-limit=0 --deny-warnings "src/$program.lu" -o "$out/$program-$tier" >"$log" 2>&1; then
             echo "PASS candidate-wolf-build-$program-$tier"
         else
