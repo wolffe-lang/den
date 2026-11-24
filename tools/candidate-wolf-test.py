@@ -1,12 +1,16 @@
 """The candidate compiler leaf must run every build and reject missing inputs."""
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tempfile
 
 ROOT = Path(__file__).resolve().parent.parent
 CHECK = ROOT / 'tools/check-candidate-wolf'
+FIXED = ['den', 'index_checked_flags', 'index_checked_format', 'index_checked_malformed',
+         'index_checked_stat', 'index_checked_trees']
+TESTS = sorted(p.stem for p in (ROOT / 'src').glob('*_test.lu'))
 failures = 0
 
 
@@ -16,9 +20,20 @@ def say(ok, name):
     failures += not ok
 
 
+def cells(seen):
+    """(program, tier) for every compiler call, from its source argument and flags."""
+    out = []
+    for call in seen:
+        words = call.split()
+        source = next((w for w in words if w.startswith('src/') and w.endswith('.lu')), '')
+        out.append((source[len('src/'):-len('.lu')], 'release' if '--release' in words else 'native'))
+    return out
+
+
 say(CHECK.is_file(), 'candidate-wolf-runner-present')
 if not CHECK.is_file():
     sys.exit(1)
+say(len(TESTS) > 0, 'candidate-wolf-test-programs-present')
 (ROOT / 'target').mkdir(exist_ok=True)
 with tempfile.TemporaryDirectory(prefix='candidate-leaf-', dir=ROOT / 'target') as scratch:
     work = Path(scratch)
@@ -43,14 +58,22 @@ sys.exit(int(os.environ.get('MOCK_EXIT', '0')))
     env = dict(os.environ, SHELL='/bin/sh', HOME=str(home), DEN_CANDIDATE_WOLF=str(wolf),
                DEN_CANDIDATE_STD=str(std), DEN_CANDIDATE_OUTPUT=str(work / 'out'), MOCK_CALLS=str(calls))
 
-    def run(*args, **updates):
+    def run(*args, check=CHECK, cwd=ROOT, **updates):
         calls.write_text('')
-        q = subprocess.run([str(CHECK), *args], cwd=ROOT, env=dict(env, **updates), capture_output=True, text=True)
+        q = subprocess.run([str(check), *args], cwd=cwd, env=dict(env, **updates), capture_output=True, text=True)
         return q, calls.read_text().splitlines()
 
     q, seen = run()
-    say(q.returncode == 0 and len(seen) == 12 and q.stdout.count('PASS candidate-wolf-build-') == 12,
-        'candidate-wolf-twelve-builds')
+    got = cells(seen)
+    want = [(p, t) for t in ('native', 'release') for p in FIXED] + [(p, 'native') for p in TESTS]
+    say(q.returncode == 0 and sorted(c for c in got if c[0] in FIXED) == sorted(want[:12]),
+        'candidate-wolf-fixed-twelve-cells')
+    # den's test programs are built too: the leaf covers what den tests, not only what it ships
+    say(q.returncode == 0 and sorted(got) == sorted(want) and len(got) == len(want)
+        and q.stdout.count('PASS candidate-wolf-build-') == len(want),
+        'candidate-wolf-programs-include-tests')
+    say(all(got.count((p, 'native')) == 1 and (p, 'release') not in got for p in TESTS),
+        'candidate-wolf-test-tier-native')
     say(sum('--release' in call for call in seen) == 6 and all('--deny-warnings' in call for call in seen),
         'candidate-wolf-tiers-and-warnings')
     say(all('--error-limit=0' in call for call in seen),
@@ -58,11 +81,18 @@ sys.exit(int(os.environ.get('MOCK_EXIT', '0')))
     q, seen = run('--program', 'den', '--tier', 'native')
     say(q.returncode == 0 and len(seen) == 1 and 'PASS candidate-wolf-build-den-native' in q.stdout,
         'candidate-wolf-one-row-dry')
+    q, seen = run('--program', TESTS[0], '--tier', 'native')
+    say(q.returncode == 0 and cells(seen) == [(TESTS[0], 'native')]
+        and f'PASS candidate-wolf-build-{TESTS[0]}-native' in q.stdout,
+        'candidate-wolf-test-program-row')
+    q, seen = run('--program', TESTS[0], '--tier', 'release')
+    say(q.returncode != 0 and not seen and 'FAIL candidate-wolf-arguments' in q.stdout,
+        'candidate-wolf-test-release-refused')
     q, seen = run('--program', 'absent')
     say(q.returncode != 0 and not seen and 'FAIL candidate-wolf-arguments' in q.stdout,
         'candidate-wolf-invalid-selection-is-red')
     q, seen = run(MOCK_EXIT='2')
-    say(q.returncode != 0 and len(seen) == 12 and q.stdout.count('FAIL candidate-wolf-build-') == 12
+    say(q.returncode != 0 and len(seen) == len(want) and q.stdout.count('FAIL candidate-wolf-build-') == len(want)
         and 'exit 2' in q.stdout and '  compiler diagnostic' in q.stdout,
         'candidate-wolf-compile-error-is-red')
     q, seen = run(DEN_CANDIDATE_WOLF=str(work / 'absent'))
@@ -70,6 +100,23 @@ sys.exit(int(os.environ.get('MOCK_EXIT', '0')))
     q, seen = run(MOCK_VERSION='wolf wrong')
     say(q.returncode != 0 and not seen and 'FAIL candidate-wolf-version' in q.stdout,
         'candidate-wolf-wrong-version-is-red')
+
+    # A test program added later is built without an edit to the leaf; only top-level ones are.
+    tree = work / 'tree'
+    (tree / 'tools').mkdir(parents=True)
+    (tree / 'src' / 'zlib').mkdir(parents=True)
+    for name in ('check-candidate-wolf', 'lib-candidate.sh'):
+        shutil.copy2(ROOT / 'tools' / name, tree / 'tools' / name)
+    shutil.copy2(ROOT / 'candidate-wolf.toml', tree / 'candidate-wolf.toml')
+    for name in FIXED + ['alpha_test', 'zz_added_test']:
+        (tree / 'src' / f'{name}.lu').write_text('fn main() -> int { 0 }\n')
+    (tree / 'src' / 'zlib' / 'nested_test.lu').write_text('fn main() -> int { 0 }\n')
+    q, seen = run(check=tree / 'tools' / 'check-candidate-wolf', cwd=tree)
+    got = cells(seen)
+    say(q.returncode == 0 and ('zz_added_test', 'native') in got and ('alpha_test', 'native') in got
+        and not any(p.startswith('zlib') for p, _ in got) and len(got) == 14,
+        'candidate-wolf-new-test-covered')
+
     (std / 'STD-REV').write_text('wrong\n')
     q, seen = run()
     say(q.returncode != 0 and not seen and 'FAIL candidate-wolf-std' in q.stdout,
