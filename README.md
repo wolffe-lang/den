@@ -56,7 +56,7 @@ known; preparation does not imply that either package is already available.
 | CI full field leg | macOS arm64 with Homebrew Git; nonblocking observation, not the oracle |
 | Toolchain | wolf 0.2.36 5adf3d91, lupin 0.1.58 tag 6240efe5 (binary embeds a5378e3), pinned std d4a4d4ca (release bundles 78b9d3cb) |
 | Newest wolf release | wolf 0.2.40 (b333b9d) with the std it bundles (be1d10fa): den must build with it too (`tools/check-newest-wolf`) |
-| Next wolf | the wolf-lang release workflow's build of 1add9bb (run 45097601683, `wolf 0.2.40+dev.1add9bb`) with the std it bundles (be1d10fa): den and the five index-check programs must build with it on both tiers (`tools/check-candidate-wolf`) |
+| Next wolf | the wolf-lang release workflow's build of 1add9bb (run 45097601683, `wolf 0.2.40+dev.1add9bb`) with the std it bundles (be1d10fa): den and the five index-check programs must build with it on both tiers, and every top-level `src/*_test.lu` on native (`tools/check-candidate-wolf`) |
 
 Archive and oracle pins are in `wolf-toolchain.toml` and `den-oracle.toml`; the
 next wolf's run, revision and archive digests are in `candidate-wolf.toml`.
@@ -121,9 +121,11 @@ again with the newest wolf release and the std it bundles (`tools/check-newest-w
 a release that refuses the tree fails the gate by name), runs actual checked
 programs, constructs the corpus twice, compares against the pinned oracle and
 builds the static Linux archive. The record (`tools/gate-record`) also builds den
-and the five index-check programs with the next wolf (`tools/check-candidate-wolf`,
-every diagnostic shown, from the archive `DEN_CANDIDATE_ARCHIVE` names or a
-`gh run download`); hosted CI does not, since until wolf releases it the next wolf
+and the five index-check programs on both tiers, and every top-level `src/*_test.lu`
+on native, with the next wolf (`tools/check-candidate-wolf`, every diagnostic shown,
+from the archive `DEN_CANDIDATE_ARCHIVE` names or a `gh run download`); the programs
+built on both tiers must agree on their E1010 count, since that agreement is why the
+test programs build on native alone. Hosted CI does not, since until wolf releases it the next wolf
 is another repository's workflow artifact, which a workflow's own token cannot
 download. When wolf releases it, it becomes the newest release above and the
 leaf and `candidate-wolf.toml` are retired. `tools/mkden OUTDIR` checks ET_EXEC/no PT_INTERP
