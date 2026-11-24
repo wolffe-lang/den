@@ -73,4 +73,21 @@ for tier in $tiers; do
         fi
     done
 done
+# The test programs build on native alone because the checker's diagnostics do not depend on the
+# tier: hold that on the programs built on both, whose E1010 counts must agree.
+if [ "$tiers" = 'native release' ]; then
+    split=0 compared=0
+    for program in $programs; do
+        known "$program" "$shipped" || continue
+        native=$(grep -c '^error\[E1010\]' "$out/$program-native.log" || true)
+        release=$(grep -c '^error\[E1010\]' "$out/$program-release.log" || true)
+        compared=$((compared + 1))
+        if [ "$native" != "$release" ]; then
+            echo "FAIL candidate-wolf-tier-independent: $program E1010 native $native, release $release"
+            split=1
+            failed=1
+        fi
+    done
+    [ "$split" = 1 ] || [ "$compared" = 0 ] || echo "PASS candidate-wolf-tier-independent: E1010 counts agree on both tiers for $compared programs"
+fi
 exit "$failed"
