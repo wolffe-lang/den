@@ -88,6 +88,12 @@ sys.exit(int(os.environ.get('MOCK_EXIT', '0')))
     q, seen = run('--program', TESTS[0], '--tier', 'release')
     say(q.returncode != 0 and not seen and 'FAIL candidate-wolf-arguments' in q.stdout,
         'candidate-wolf-test-release-refused')
+    q, seen = run('--tier', 'release')
+    say(q.returncode == 0 and sorted(cells(seen)) == sorted((p, 'release') for p in FIXED),
+        'candidate-wolf-release-tier-skips-tests')
+    q, seen = run('--program', '')
+    say(q.returncode != 0 and not seen and 'FAIL candidate-wolf-arguments' in q.stdout,
+        'candidate-wolf-empty-selection-is-red')
     q, seen = run('--program', 'absent')
     say(q.returncode != 0 and not seen and 'FAIL candidate-wolf-arguments' in q.stdout,
         'candidate-wolf-invalid-selection-is-red')

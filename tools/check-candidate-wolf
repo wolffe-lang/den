@@ -1,20 +1,37 @@
 #!/bin/sh
-# Build every affected entrypoint with the immutable next-compiler candidate.
+# Build every affected entrypoint with the immutable next-compiler candidate: the programs den ships
+# (den and the index-check programs) on both tiers, and every top-level src/*_test.lu that den's own
+# gate builds as a test, on native (the checker's diagnostics do not depend on the tier).
 set -eu
 DEN_ROOT=$(cd "$(dirname "$0")/.." && pwd)
 export DEN_ROOT
 cd "$DEN_ROOT"
 . tools/lib-candidate.sh
-programs='den index_checked_flags index_checked_format index_checked_malformed index_checked_stat index_checked_trees'
+shipped='den index_checked_flags index_checked_format index_checked_malformed index_checked_stat index_checked_trees'
+tests=$(cd src && for f in *_test.lu; do [ -f "$f" ] && printf '%s\n' "${f%.lu}"; done | LC_ALL=C sort | tr '\n' ' ' | sed 's/ *$//')
+programs="$shipped $tests"
 tiers='native release'
+chosen=
+known() {  # known NAME LIST: NAME is one of LIST's words
+    case " $2 " in *" $1 "*) return 0 ;; esac
+    return 1
+}
 while [ "$#" -gt 0 ]; do
-    case "$1:${2:-}" in
-        --program:den|--program:index_checked_flags|--program:index_checked_format|--program:index_checked_malformed|--program:index_checked_stat|--program:index_checked_trees) programs=$2 ;;
-        --tier:native|--tier:release) tiers=$2 ;;
+    case "$1" in
+        --program)
+            [ -n "${2:-}" ] && known "$2" "$shipped $tests" || { echo 'FAIL candidate-wolf-arguments: expected --program ENTRYPOINT or --tier native|release'; exit 1; }
+            programs=$2; chosen=1 ;;
+        --tier)
+            case "${2:-}" in native|release) tiers=$2 ;;
+                *) echo 'FAIL candidate-wolf-arguments: expected --program ENTRYPOINT or --tier native|release'; exit 1 ;;
+            esac ;;
         *) echo 'FAIL candidate-wolf-arguments: expected --program ENTRYPOINT or --tier native|release'; exit 1 ;;
     esac
     shift 2
 done
+if [ -n "$chosen" ] && [ "$tiers" = release ] && known "$programs" "$tests"; then
+    echo "FAIL candidate-wolf-arguments: test program $programs builds on native only"; exit 1
+fi
 if [ -z "${DEN_CANDIDATE_WOLF:-}" ]; then
     tools/fetch-candidate-wolf || { echo 'FAIL candidate-wolf-inputs: staging failed'; exit 1; }
 fi
@@ -44,6 +61,7 @@ for tier in $tiers; do
     flag=
     [ "$tier" != release ] || flag=--release
     for program in $programs; do
+        if [ "$tier" = release ] && known "$program" "$tests"; then continue; fi
         log=$out/$program-$tier.log
         if WOLF_STD="$std" "$wolf" build $flag --error-limit=0 --deny-warnings "src/$program.lu" -o "$out/$program-$tier" >"$log" 2>&1; then
             echo "PASS candidate-wolf-build-$program-$tier"
