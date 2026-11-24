@@ -121,6 +121,7 @@ fn rows() -> () ! pack.PackErrors {
     let name = body_hex(body)?
     let bad = damaged(body)?
     let cap = 1000000
+    region plant { let _ = pack.install(fresh("plant")?, bad)? }
 
     row("received-scan-zlib", refused(fresh("scan")?, bad.data)?)
     row("received-resolve-delta", refused(fresh("resolve")?, bad_delta()?)?)
