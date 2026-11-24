@@ -50,6 +50,9 @@ if '--version' in sys.argv:
 with open(os.environ['MOCK_CALLS'], 'a') as log:
     log.write(' '.join(sys.argv[1:]) + '\\n')
 print('compiler diagnostic')
+tier = 'RELEASE' if '--release' in sys.argv else 'NATIVE'
+for _ in range(int(os.environ.get('MOCK_E1010_' + tier, '0'))):
+    print('error[E1010]: planted')
 sys.exit(int(os.environ.get('MOCK_EXIT', '0')))
 ''')
     wolf.chmod(0o755)
@@ -106,6 +109,19 @@ sys.exit(int(os.environ.get('MOCK_EXIT', '0')))
     q, seen = run(MOCK_VERSION='wolf wrong')
     say(q.returncode != 0 and not seen and 'FAIL candidate-wolf-version' in q.stdout,
         'candidate-wolf-wrong-version-is-red')
+
+    # The test programs build on native only because the checker's diagnostics do not depend on the
+    # tier. The leaf holds that claim on the programs it builds on both: their E1010 counts agree.
+    q, seen = run()
+    say(q.returncode == 0 and 'PASS candidate-wolf-tier-independent' in q.stdout,
+        'candidate-wolf-tier-equal-passes')
+    q, seen = run(MOCK_EXIT='2', MOCK_E1010_NATIVE='1', MOCK_E1010_RELEASE='0')
+    say(q.returncode != 0 and 'FAIL candidate-wolf-tier-independent: den E1010 native 1, release 0' in q.stdout
+        and 'PASS candidate-wolf-tier-independent' not in q.stdout,
+        'candidate-wolf-tier-split-is-red')
+    q, seen = run('--tier', 'native')
+    say(q.returncode == 0 and 'candidate-wolf-tier-independent' not in q.stdout,
+        'candidate-wolf-tier-row-needs-both')
 
     # A test program added later is built without an edit to the leaf; only top-level ones are.
     tree = work / 'tree'
