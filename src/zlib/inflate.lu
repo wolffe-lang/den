@@ -269,93 +269,148 @@ fn compressed(
     }
 }
 
-fn decode(
+/// Where a resumable inflate stands between its calls (inflate_resume): at
+/// and bit, counted from the stream's first byte, are where its next whole
+/// block begins (once the blocks have ended, its Adler-32), and made is the
+/// output made before it. room is the output reserved so far and window the
+/// header's window size. phase is 0 before the header, 1 in the blocks, 2 at
+/// the Adler-32 and 3 once the stream has been checked.
+pub struct Resume {
+    at: int,
+    bit: int,
+    made: int,
+    room: int,
+    window: int,
+    phase: int,
+}
+
+/// A resumable inflate's place before its first call.
+pub fn resume_start() -> Resume {
+    Resume { at: 0, bit: 0, made: 0, room: 0, window: 0, phase: 0 }
+}
+
+// Back to n bytes of output: a block met the input's end, and is decoded
+// again from its start once more input is there.
+fn cut(mut out: List[byte], n: int) {
+    while out.len > n {
+        let _ = (mut out).pop() else |_| { return }
+    }
+}
+
+// One block at r, its output pushed to out; returns its BFINAL bit.
+fn block(
     src: List[byte],
-    start: int,
+    mut r: Bits,
+    mut out: List[byte],
     cap: int,
     window: int,
-    reserve: int,
+    mut room: int,
     mut total: int,
-) -> Inflated ! InflateErrors {
-    if cap < 0 { return invalid }
-    var r = Bits { pos: start, bit: 0 }
-    var out = List[byte]()
-    // A sized caller reserves once what it may trust (inflate_sized: the
-    // declared size, at most a MiB and what the input can make), and the
-    // output grows past it only as it is made (grow: doubling to an eighth of
-    // cap, then cap): a declared size is never reserved on its claim alone. An
-    // unsized caller reserves nothing and its output grows as lists do. Each
-    // regrowth leaves its old buffer in the caller's region until it ends.
-    // total counts each reservation as it is made, so a caller sees what a
-    // stream that fails reserved too.
-    var room = cap
-    let before = total
-    if reserve > 0 {
-        (mut out).reserve(reserve)
-        room = reserve
-        total += reserve
-    }
-    var final_block = 0
-    while final_block == 0 {
-        final_block = bits(src, mut r, 1)?
-        let kind = bits(src, mut r, 2)?
-        if kind == 0 {
-            align(mut r)
-            let length = bits(src, mut r, 16)?
-            let inverse = bits(src, mut r, 16)?
-            if length + inverse != 65535 { return invalid }
-            if length > src.len - r.pos { return truncated }
-            if length > room - out.len {
-                if length > cap - out.len { return limit }
-                grow(mut out, mut room, cap, length, mut total)
-            }
-            for i in 0..length { (mut out).push(src[r.pos + i]) }
-            r.pos += length
-        } else if kind == 3 {
-            return invalid
-        } else {
-            region block_tables {
-                if kind == 1 {
-                    let none = Tree { counts: List[int](), symbols: List[int]() }
-                    compressed(
-                        src,
-                        mut r,
-                        mut out,
-                        none,
-                        none,
-                        true,
-                        cap,
-                        window,
-                        mut room,
-                        mut total,
-                    )?
-                } else {
-                    let (lt, dt) = dynamic(src, mut r)?
-                    compressed(
-                        src,
-                        mut r,
-                        mut out,
-                        lt,
-                        dt,
-                        false,
-                        cap,
-                        window,
-                        mut room,
-                        mut total,
-                    )?
-                }
+) -> int ! InflateErrors {
+    let final_block = bits(src, mut r, 1)?
+    let kind = bits(src, mut r, 2)?
+    if kind == 0 {
+        align(mut r)
+        let length = bits(src, mut r, 16)?
+        let inverse = bits(src, mut r, 16)?
+        if length + inverse != 65535 { return invalid }
+        if length > src.len - r.pos { return truncated }
+        if length > room - out.len {
+            if length > cap - out.len { return limit }
+            grow(mut out, mut room, cap, length, mut total)
+        }
+        for i in 0..length { (mut out).push(src[r.pos + i]) }
+        r.pos += length
+    } else if kind == 3 {
+        return invalid
+    } else {
+        region block_tables {
+            if kind == 1 {
+                let none = Tree { counts: List[int](), symbols: List[int]() }
+                compressed(src, mut r, mut out, none, none, true, cap, window, mut room, mut total)?
+            } else {
+                let (lt, dt) = dynamic(src, mut r)?
+                compressed(src, mut r, mut out, lt, dt, false, cap, window, mut room, mut total)?
             }
         }
     }
-    align(mut r)
-    Inflated { data: out, consumed: r.pos, reserved: total - before }
+    final_block
+}
+
+// The blocks from st on, then, for a zlib stream (checked), its Adler-32;
+// src[delta + k] is the stream's byte k. Before each block st records where it
+// begins and the output made before it, so on truncated out is cut back to
+// that and the next call decodes the block again from there. A sized caller
+// has reserved the output once (st.room: the declared size, at most a MiB and
+// what the input can make), and the output grows past it only as it is made
+// (grow: doubling to an eighth of cap, then cap); an unsized caller reserves
+// nothing (st.room is cap) and its output grows as lists do. Each regrowth
+// leaves its old buffer in the caller's region until it ends; total counts
+// each reservation as it is made. Returns the stream's length once checked.
+fn run(
+    src: List[byte],
+    delta: int,
+    cap: int,
+    checked: bool,
+    mut st: Resume,
+    mut out: List[byte],
+    mut total: int,
+) -> int ! InflateErrors {
+    if cap < 0 { return invalid }
+    if st.phase == 1 {
+        var r = Bits { pos: delta + st.at, bit: st.bit }
+        var last = 0
+        while last == 0 {
+            st.at = r.pos - delta
+            st.bit = r.bit
+            st.made = out.len
+            // Each tag by name: the pinned compiler's checked machine renders an
+            // error a match examined, read again in a wildcard arm, as <value>.
+            last = block(
+                src,
+                mut r,
+                mut out,
+                cap,
+                st.window,
+                mut st.room,
+                mut total,
+            ) else |e| match e {
+                truncated => {
+                    cut(mut out, st.made)
+                    return truncated
+                },
+                bad_header => { return bad_header },
+                dictionary => { return dictionary },
+                checksum => { return checksum },
+                invalid => { return invalid },
+                limit => { return limit },
+            }
+        }
+        align(mut r)
+        st.at = r.pos - delta
+        st.bit = 0
+        st.made = out.len
+        st.phase = if checked then 2 else 3
+    }
+    if st.phase == 2 {
+        let p = delta + st.at
+        if src.len - p < 4 { return truncated }
+        var expected: int = 0
+        for i in 0..4 { expected = expected * 256 + src[p + i] as int }
+        if expected != adler32(out) { return checksum }
+        st.at += 4
+        st.phase = 3
+    }
+    st.at
 }
 
 /// Decode one RFC 1951 stream, leaving following whole bytes untouched.
 /// max_output is inclusive; negative is invalid. All output owns storage.
 pub fn inflate_raw(src: List[byte], max_output: int) -> Inflated ! InflateErrors {
-    var total: int = 0
-    decode(src, 0, max_output, 32768, 0, mut total)?
+    var st = Resume { at: 0, bit: 0, made: 0, room: max_output, window: 32768, phase: 1 }
+    var out = List[byte](), total: int = 0
+    let consumed = run(src, 0, max_output, false, mut st, mut out, mut total)?
+    Inflated { data: out, consumed: consumed, reserved: total }
 }
 
 /// Decode one RFC 1950 stream; refuse dictionaries and validate Adler-32.
@@ -367,23 +422,26 @@ pub fn inflate(src: List[byte], max_output: int) -> Inflated ! InflateErrors {
     let flg = src[1] as int
     if cmf & 15 != 8 || cmf >> 4 > 7 || (cmf * 256 + flg) % 31 != 0 { return bad_header }
     if flg & 32 != 0 { return dictionary }
-    var total: int = 0
-    var result = decode(src, 2, max_output, 1 << (cmf >> 4) + 8, 0, mut total)?
-    if src.len - result.consumed < 4 { return truncated }
-    var expected: int = 0
-    for i in 0..4 { expected = expected * 256 + src[result.consumed + i] as int }
-    if expected != adler32(result.data) { return checksum }
-    result.consumed += 4
-    result
+    var st = Resume {
+        at: 2,
+        bit: 0,
+        made: 0,
+        room: max_output,
+        window: 1 << (cmf >> 4) + 8,
+        phase: 1,
+    }
+    var out = List[byte](), total: int = 0
+    let consumed = run(src, 0, max_output, true, mut st, mut out, mut total)?
+    Inflated { data: out, consumed: consumed, reserved: total }
 }
 
 /// One RFC 1950 stream of at most size bytes that begins at src[start]. Its
 /// output is reserved once to the least of size, a MiB and what the bytes
-/// after start can make, and grows past that only as bytes are made (decode);
+/// after start can make, and grows past that only as bytes are made (run);
 /// the caller compares the length it expects, and reserved counts what was
 /// reserved, outgrown buffers included. consumed counts from start through the
 /// checksum. Truncated means the stream runs past src's end: a caller reading
-/// a window may extend it.
+/// a window may extend it, or resume it (inflate_resume).
 pub fn inflate_sized(src: List[byte], start: int, size: int) -> Inflated ! InflateErrors {
     var reserved: int = 0
     inflate_sized_counted(src, start, size, mut reserved)?
@@ -397,28 +455,65 @@ pub fn inflate_sized_counted(
     size: int,
     mut reserved: int,
 ) -> Inflated ! InflateErrors {
-    if size < 0 || start < 0 { return invalid }
-    if src.len - start < 2 { return truncated }
-    let cmf = src[start] as int
-    let flg = src[start + 1] as int
-    if cmf & 15 != 8 || cmf >> 4 > 7 || (cmf * 256 + flg) % 31 != 0 { return bad_header }
-    if flg & 32 != 0 { return dictionary }
-    // A declared size is the entry's own claim, read before any check of its
-    // bytes: a damaged one must not reserve what its stream cannot make. A
-    // deflate stream makes at most 1,032 bytes a byte (a 258-byte copy in two
-    // bits), so the bytes after start bound the output, and no more than a
-    // MiB is reserved before any byte is made; past that the output grows as
-    // it is made (decode). A sound entry up to a MiB is reserved exactly.
-    var first = (src.len - start) * 1032 + 258
-    if first > 1048576 { first = 1048576 }
-    if size < first { first = size }
-    var result = decode(src, start + 2, size, 1 << (cmf >> 4) + 8, first, mut reserved)?
-    if src.len - result.consumed < 4 { return truncated }
-    var expected: int = 0
-    for i in 0..4 { expected = expected * 256 + src[result.consumed + i] as int }
-    if expected != adler32(result.data) { return checksum }
-    result.consumed = result.consumed + 4 - start
-    result
+    var st = resume_start()
+    var out = List[byte]()
+    let before = reserved
+    let consumed = inflate_resume(src, start, 0, size, mut st, mut out, mut reserved)?
+    Inflated { data: out, consumed: consumed, reserved: reserved - before }
+}
+
+/// One RFC 1950 stream of at most size bytes, inflated as its bytes arrive.
+/// src[start] is the stream's byte base, at or before st.at; before the first
+/// call st is resume_start(), and src holds the stream's first byte at start.
+/// The first call reads the header and reserves the output once, to the least
+/// of size, a MiB and what the bytes after start can make; past that the
+/// output grows only as bytes are made, in out, which the caller keeps from
+/// call to call, as it keeps st. Each call decodes whole blocks from st on. On
+/// truncated the stream runs past src's end: out holds the output of the
+/// blocks before st.at, and the next call, given src from st.at on (its byte
+/// st.at with bit st.bit next), decodes from there. Returns the stream's
+/// length, header through checksum, once the checksum holds; reserved counts
+/// each reservation as it is made.
+pub fn inflate_resume(
+    src: List[byte],
+    start: int,
+    base: int,
+    size: int,
+    mut st: Resume,
+    mut out: List[byte],
+    mut reserved: int,
+) -> int ! InflateErrors {
+    if size < 0 || start < 0 || base < 0 || base > st.at { return invalid }
+    if st.phase == 0 {
+        if src.len - start < 2 { return truncated }
+        let cmf = src[start] as int
+        let flg = src[start + 1] as int
+        if cmf & 15 != 8 || cmf >> 4 > 7 || (cmf * 256 + flg) % 31 != 0 { return bad_header }
+        if flg & 32 != 0 { return dictionary }
+        // A declared size is the entry's own claim, read before any check of
+        // its bytes: a damaged one must not reserve what its stream cannot
+        // make. A deflate stream makes at most 1,032 bytes a byte (a 258-byte
+        // copy in two bits), so the bytes after start bound the output, and no
+        // more than a MiB is reserved before any byte is made; past that the
+        // output grows as it is made (run). A sound entry up to a MiB is
+        // reserved exactly, and nothing is reserved again on a later call.
+        var first = (src.len - start) * 1032 + 258
+        if first > 1048576 { first = 1048576 }
+        if size < first { first = size }
+        st.room = size
+        if first > 0 {
+            (mut out).reserve(first)
+            st.room = first
+            reserved += first
+        }
+        st.window = 1 << (cmf >> 4) + 8
+        st.at = 2
+        st.bit = 0
+        st.made = 0
+        st.phase = 1
+    }
+    if st.phase == 3 { return st.at }
+    run(src, start - base, size, true, mut st, mut out, mut reserved)
 }
 
 /// Unsigned Adler-32 represented in int; derived from RFC 1950 §2.2 sums.
