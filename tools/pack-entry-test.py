@@ -40,11 +40,17 @@ pack bytes read for the entries, and reserved, the output bytes reserved for the
                          than a first window (4 KiB and a MiB) and reserved no more than a MiB or eight times what
                          the stream decodes
   residual-counts        the same claim on a stream that truly consumes more than a MiB (220,000 empty stored
-                         blocks) before its few bytes: refused as Git refuses it, its reservation at most a MiB; its
-                         read, which may run to the size hint capped by the pack's end, is printed beside the
-                         stream's own length
-  big-*                  a 16 MiB blob, incompressible and compressible: read back as Git reads it, its output
-                         reserved at most 1.4 times its size
+                         blocks) before its few bytes: refused as Git refuses it, its reservation at most a MiB for
+                         each of its two attempts; its read, which may run to the size hint capped by the pack's end,
+                         is printed beside the stream's own length
+  big-incompressible     a 16 MiB blob of random bytes, and one of numbered lines: read back as Git reads it, its
+  big-compressible       output reserved at most 1.4 times its size, and its read at most its entry's bytes, a MiB
+                         and 4 KiB (the first window and the header's read): what the read charges, stated as a
+                         multiple of the size
+  big-four-symbol        a 16 MiB blob of four symbols, whose stream (about a quarter of its size) runs past the
+                         first window: read back as Git reads it; its read is held only to the size hint and its
+                         reservation to two attempts (2.5 times the size), the shape's own bounds, and both are
+                         printed beside its entry's bytes
 """
 import argparse
 import hashlib
@@ -427,7 +433,7 @@ def main():
 
     # The residual, built: a stream that truly consumes more than a MiB (empty stored blocks) before it
     # decodes its few bytes, under the same false claim. Its read may run to the hint, capped by the pack's
-    # end; its reservation stays at a MiB.
+    # end; its reservation stays at a MiB for each of its two attempts (the first meets the window's end).
     data_ = zlib.decompress(padp.pack[hend_:eend_])
     blocks = 220000
     crafted = b'\x78\x01' + b'\x00\x00\x00\xff\xff' * blocks + b'\x01' + struct.pack('<HH', len(data_), 0xffff ^ len(data_)) + \
@@ -439,32 +445,56 @@ def main():
     rc, f, outcome, line = counts(repo, padp.names[victim])
     g = read(git, repo, padp.names[victim])
     row('entry-residual-counts', outcome.startswith('refused') and g[0] != 0 and
-        num(f, 'read') <= 2 * rest + first and 0 < num(f, 'reserved') <= 1 << 20,
+        num(f, 'read') <= 4096 + rest and 0 < num(f, 'reserved') <= 2 << 20,
         f'{line}; Git {g[0]}')
     print(f'  residual: read={num(f, "read")} reserved={num(f, "reserved")}; the stream is {len(crafted)} bytes '
           f'(what Git inflates through); the pack runs on {rest} bytes past the entry', flush=True)
 
-    # A sound entry well over a MiB, incompressible and compressible: its output is reserved at most 1.4
-    # times its size (a MiB first, doubling to an eighth, then the size), and read back as Git reads it.
+    # A sound entry well over a MiB. Its output is reserved at most 1.4 times its size (a MiB first, doubling
+    # to an eighth, then the size), and it is read back as Git reads it. What the read charges is its read
+    # (the header's 4 KiB, the first window, and the rest of the stream appended) and its reservations;
+    # the incompressible and compressible forms read at most their entry's bytes, a MiB and 4 KiB. The
+    # four-symbol form's stream is about a quarter of its size, so it runs past the first window: the window
+    # is extended once, to the size hint, and the entry inflated again, so it is held only to the shape's
+    # own bounds (its read to the hint, its reservation to two attempts), printed beside its entry's bytes.
     big = out / 'big-seed'
     run([git, 'init', '-q', '-b', 'main', big], out)
     lines = b''.join(b'%08d the compressible form of a 16 MiB blob, line by line\n' % i for i in range(300000))
-    bodies = {'incompressible.bin': rng.randbytes(16 << 20), 'compressible.txt': lines[:16 << 20]}
+    symbols = bytes(b'ACGT'[i & 3] for i in range(256))
+    bodies = {'incompressible.bin': rng.randbytes(16 << 20), 'compressible.txt': lines[:16 << 20],
+              'four-symbol.bin': rng.randbytes(16 << 20).translate(symbols)}
     for path, body in bodies.items():
         (big / path).write_bytes(body)
     run([git, 'add', '-A'], big)
     run([git, 'commit', '-q', '--date', '1700001000 +0000', '-m', 'big'], big)
     run([git, 'repack', '-adq'], big)
     run([git, 'prune-packed'], big)
+    big_idx = next((big / '.git/objects/pack').glob('*.idx'))
+    bigp = Pack(big_idx.with_suffix('.pack').read_bytes(), big_idx.read_bytes())
     for path, body in bodies.items():
+        label = path.split('.')[0]
         name = run([git, 'rev-parse', f'HEAD:{path}'], big).decode().strip()
+        slot_ = bigp.names.index(name)
+        _, _, hend_, eend_ = bigp.span(slot_)
+        entry = eend_ - bigp.offsets[slot_]
+        header = hend_ - bigp.offsets[slot_]
+        rest = bigp.end - bigp.offsets[slot_]
+        hint = min(rest, header + len(body) + len(body) // 16 + 64)
         rc, f, outcome, line = counts(big, name)
         g, d = read(git, big, name), read(den, big, name)
-        ratio = num(f, 'reserved') / len(body)
+        size = len(body)
         same = g[0] == 0 and d[0] == 0 and hashlib.sha256(d[1]).digest() == hashlib.sha256(g[1]).digest()
-        row(f'entry-big-{path.split(".")[0]}', outcome == f'read blob {len(body)}' and same and ratio <= 1.4,
-            f'{line}; ratio {ratio:.3f}; same as Git {same}')
-        print(f'  big {path}: reserved={num(f, "reserved")} ({ratio:.3f} of {len(body)}), read={num(f, "read")}', flush=True)
+        read_n, reserved_n = num(f, 'read'), num(f, 'reserved')
+        if label == 'four-symbol':
+            ok = read_n <= 4096 + hint and reserved_n <= 2.5 * size
+        else:
+            ok = read_n <= entry + (1 << 20) + 4096 and reserved_n <= 1.4 * size
+        row(f'entry-big-{label}', outcome == f'read blob {size}' and same and ok,
+            f'{line}; entry {entry} bytes; same as Git {same}')
+        print(f'  big {path}: read={read_n} ({read_n / entry:.3f} of its entry of {entry} bytes, '
+              f'{read_n / size:.3f} of its size), reserved={reserved_n} ({reserved_n / size:.3f} of {size}); '
+              f'charged {(read_n + reserved_n) / size:.3f} times its size; Git maps the entry and holds the '
+              f'output, {(entry + size) / size:.3f} times its size; the pack runs on {rest} bytes', flush=True)
     failures = rows.count(False)
     print(f'pack-entry: {len(rows)} rows, {failures} failures; zero skips', flush=True)
     raise SystemExit(1 if failures else 0)
