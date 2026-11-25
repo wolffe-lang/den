@@ -31,7 +31,7 @@ with it left as it was. Each read of the damaged object must:
 Then what reads cost, from the session's counters (probes/pack-client --read-counts: sorted, resolved, read, the
 pack bytes read for the entries, and reserved, the output bytes reserved for them):
   read-counts-no-delta   a read of an object with no delta orders no offsets and resolves none
-  read-counts-delta      a delta's read orders its index once
+  read-counts-delta      nor does an offset delta's read: its base's slot is the one its rebuilt identity names
   gap-after-first|last   seven junk bytes after an entry: every read answers as Git's, and fsck and verify-pack
                          fail as Git's do
   unused-bit             a bit the stream never reads, flipped, the CRC as it was: den refuses it as `pack entry
@@ -351,11 +351,11 @@ def main():
     rc, f, outcome, line = counts(plain_repo, blob['stored.bin'])
     row('entry-read-counts-no-delta', rc == 0 and outcome.startswith('read blob') and num(f, 'sorted') == 0 and
         num(f, 'resolved') == 0, line)
-    # A delta's read orders its index once: the radix's work for its entries, every offset resolved once.
-    n = delta.count
+    # Nor does a delta's: an offset delta's base is read at its offset, and its slot (for its CRC) is the one
+    # its rebuilt identity names, at that offset.
     rc, f, outcome, line = counts(delta_repo, delta.names[ofs[0]])
-    row('entry-read-counts-delta', rc == 0 and outcome.startswith('read ') and num(f, 'resolved') == n and
-        0 < num(f, 'sorted') <= 3 * n + 257 + 3 * (514 + 2 * n), line)
+    row('entry-read-counts-delta', rc == 0 and outcome.startswith('read ') and num(f, 'sorted') == 0 and
+        num(f, 'resolved') == 0, line)
 
     # Bytes between entries: Git reads every object, as it finds each entry's end from its own stream.
     for name, after in (('gap-after-first', plain.order[0]), ('gap-after-last', plain.order[-1])):
