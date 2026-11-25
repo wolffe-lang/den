@@ -185,6 +185,10 @@ pub fn parse(data: List[byte]) -> Index ! IndexErrors {
     // it (trailer_holds). Every structural check below stays. Every list is
     // made at its final size: parse allocates what the index keeps, not a copy
     // of the file and each list's earlier, smaller buffers.
+    var state = hash.new1()
+    hash.update1_prefix(mut state, data, end)
+    let digest = hash.final1(take state)
+    for i in 0..20 { if digest[i] != data[end + i] { return checksum } }
     let count = be(data, 8, 4)
     if count > (end - 12) / 64 { return invalid_index }
     var result = empty(version)?
