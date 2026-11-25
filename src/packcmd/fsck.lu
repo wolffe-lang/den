@@ -359,7 +359,19 @@ fn fsck(args: List[str]) -> int ! object.StoreErrors {
         if messages.len != count { status |= 2 }
     }
     if fs.exists("{repo.gitdir}/index") {
-        let value = index.read(repo, 16777216) else |_| {
+        let data = repository.read_bytes("{repo.gitdir}/index", 16777216) else |_| {
+            return Unsupported("fsck index diagnostics")
+        }
+        // The trailer, as Git's fsck checks it: the content's SHA-1, or the
+        // zeros index.skipHash writes. Anything else ends fsck as Git's ends,
+        // after what it has already found.
+        if !index.trailer_holds(data) {
+            for message in messages { eprint(message) }
+            eprint("error: bad index file sha1 signature")
+            eprint("fatal: index file corrupt")
+            return 128
+        }
+        let value = index.parse(data) else |_| {
             return Unsupported("fsck index diagnostics")
         }
         let cached = index.cached_trees(value) else |_| {
