@@ -36,6 +36,58 @@ fn run(args: List[str]) -> () ! {
         let result = zlib.inflate_sized(input, level, cap)?
         fs_write_bytes(args[2], result.data) else |_| { return io }
         print("{result.consumed} {result.data.len} {result.reserved}")
+    } else if args[0] == "inflate_splits" {
+        // inflate_splits IN OUT SIZE 0: the zlib stream IN resumed at every
+        // split k from 1 to its length: inflate_resume over IN[0..k), then, if
+        // that met the window's end, again over IN from the resume point on.
+        // One line a split: k, the first call's answer, the resume point (byte,
+        // bit, output made), the final answer, the bytes consumed, the output's
+        // length and its SHA-1. OUT is unused.
+        for k in 1..input.len + 1 {
+            region split {
+                var st = zlib.resume_start()
+                var out = List[byte](), reserved: int = 0, consumed: int = -1
+                var first = "ok", last = "ok"
+                var head = List[byte]()
+                for i in 0..k { (mut head).push(input[i]) }
+                consumed = zlib.inflate_resume(
+                    head,
+                    0,
+                    0,
+                    cap,
+                    mut st,
+                    mut out,
+                    mut reserved,
+                ) else |e| {
+                    first = "{e}"
+                    -1
+                }
+                let at = st.at
+                let bit = st.bit
+                let made = st.made
+                if first == "truncated" {
+                    var rest = List[byte]()
+                    for i in st.at..input.len { (mut rest).push(input[i]) }
+                    consumed = zlib.inflate_resume(
+                        rest,
+                        0,
+                        st.at,
+                        cap,
+                        mut st,
+                        mut out,
+                        mut reserved,
+                    ) else |e| {
+                        last = "{e}"
+                        -1
+                    }
+                } else {
+                    last = first
+                }
+                print(
+                    "{k} {first} {at} {bit} {made} {last} {consumed} {out.len} {sha2.to_hex(hash.sum1(out))}",
+                )
+            }
+        }
     } else if args[0] == "deflate" || args[0] == "deflate_raw" {
         let result = if args[0] == "deflate" {
             zlib.deflate(input, level, cap)?
