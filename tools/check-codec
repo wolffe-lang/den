@@ -6,7 +6,7 @@ export DEN_ROOT
 cd "$DEN_ROOT"
 . tools/lib-toolchain.sh
 mkdir -p target/codec
-for entry in zlib_test zlib_vectors_test zlib_encode_test zlib_fuzz_test zlib/huffman_test; do
+for entry in zlib_test zlib_vectors_test zlib_encode_test zlib_fuzz_test zlib_resume_test zlib/huffman_test; do
     name=$(basename "$entry")
     "$WOLF" build --deny-warnings "src/$entry.lu" -o "target/$name"
     "target/$name"
@@ -24,13 +24,16 @@ for tier in native release; do
         "$WOLF" build --release --deny-warnings src/zpipe.lu -o "target/$tier/zpipe"
         "$WOLF" build --release --deny-warnings src/zlib_first_form_test.lu -o "target/$tier/zlib-first-form-test"
         "$WOLF" build --release --deny-warnings src/zlib_fuzz_test.lu -o "target/$tier/zlib-fuzz-test"
+        "$WOLF" build --release --deny-warnings src/zlib_resume_test.lu -o "target/$tier/zlib-resume-test"
     else
         "$WOLF" build --deny-warnings src/zpipe.lu -o "target/$tier/zpipe"
         "$WOLF" build --deny-warnings src/zlib_first_form_test.lu -o "target/$tier/zlib-first-form-test"
         "$WOLF" build --deny-warnings src/zlib_fuzz_test.lu -o "target/$tier/zlib-fuzz-test"
+        "$WOLF" build --deny-warnings src/zlib_resume_test.lu -o "target/$tier/zlib-resume-test"
     fi
     # The in-program fuzz at four times the checked machine's rounds.
     "target/$tier/zlib-fuzz-test" --more
+    "target/$tier/zlib-resume-test" --more
     # den#73: the encoder's bytes against its first form's, by digest;
     # native and release only, as the checked machine's step budget does
     # not reach the corpus.
@@ -46,4 +49,4 @@ for tier in native release; do
 done
 # The checked program tests all block forms and malformed classes without fs.
 # Large file/100-MB tests are separate native measurements, not checked claims.
-echo 'codec: checked 5 programs pass (the in-program fuzz among them); native and release independent gates and first-form rows pass; unsupported=0'
+echo 'codec: checked 6 programs pass (the in-program fuzz and the resume test among them); native and release independent gates and first-form rows pass; unsupported=0'
