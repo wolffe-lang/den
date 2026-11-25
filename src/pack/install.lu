@@ -12,7 +12,12 @@ fn validate_pair(pack_path: str, idx_path: str) -> () ! PackErrors {
     var error_payload = "", failed = false
     for slot in 0..index.count {
         region object_check {
-            var seen = Map[int, bool](), total = 0, none = no_cache(), read_n = 0, reserved_n = 0
+            var seen = Map[int, bool](),
+                total = 0,
+                none = no_cache(),
+                read_n = 0,
+                reserved_n = 0,
+                span_n = 0
             let _ = unpack(
                 fd,
                 end,
@@ -22,8 +27,10 @@ fn validate_pair(pack_path: str, idx_path: str) -> () ! PackErrors {
                 mut total,
                 mut read_n,
                 mut reserved_n,
+                mut span_n,
                 0,
                 mut none,
+                0,
                 0,
             ) else |e| match e {
                 Unsupported(message) => {

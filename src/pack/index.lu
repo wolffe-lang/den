@@ -7,9 +7,13 @@ use hash
 /// it a byte at a time. A name or a word is read where the file holds it:
 /// slot's name at 1032 + 20 * slot, its CRC32 at 1032 + 20 * count + 4 *
 /// slot; a name is spelled in hex only when one is printed or matched by a
-/// prefix. offsets holds each slot's pack offset, the large-offset table
-/// followed, or -1 where it cannot be followed; by_offset holds the slots with
-/// an offset in increasing offset order. Lookups are binary searches within a
+/// prefix. Once the index is ordered (order: the first read that needs a
+/// slot by its offset, an offset delta's base, or a check of every entry),
+/// offsets holds each slot's pack offset, the large-offset table followed, or
+/// -1 where it cannot be followed, and by_offset holds the slots with an
+/// offset in increasing offset order; before that both are empty and a slot's
+/// offset is read from the file where it is used (slot_pack_offset). A read of an
+/// object with no delta orders nothing. Lookups are binary searches within a
 /// name's fanout bucket (the runtime Map is a linear scan, which made every
 /// idx parse quadratic). The open checks what any use of the index needs; an
 /// entry is checked where a read uses it (slot_offset), and every entry by
@@ -25,6 +29,7 @@ struct Index {
     count: int,
     offsets: List[int],
     by_offset: List[int],
+    ordered: bool,
     pack_sum: List[byte],
     reads: int,
     pushed: int,
@@ -114,10 +119,52 @@ fn slot_named(index: Index, name: str) -> int {
     -1
 }
 
+/// slot's offset as the file holds it, the large-offset table followed, or
+/// -1 where it cannot be followed: a reference past the table, or an offset of
+/// 2^44 or more, past any pack den reads.
+fn offset_in_file(data: List[List[byte]], size: int, count: int, slot: int) -> int {
+    let offset = word(data, 1032 + count * 24 + slot * 4)
+    if offset < 2147483648 { return offset }
+    let large = offset - 2147483648
+    if large >= (size - (1032 + count * 28 + 40)) / 8 { return -1 }
+    let high = word(data, 1032 + count * 28 + large * 8)
+    if high >= 4096 { return -1 }
+    high * 4294967296 + word(data, 1032 + count * 28 + large * 8 + 4)
+}
+
+/// slot's pack offset (offset_in_file), from offsets once the index is ordered.
+fn slot_pack_offset(index: Index, slot: int) -> int {
+    if index.ordered { return index.offsets[slot] }
+    offset_in_file(index.data, index.size, index.count, slot)
+}
+
+/// The refusal a cached read raises when it needs a slot by its offset from an
+/// index not yet ordered: its caller orders the index and reads again
+/// (read.lu's unpack_ordered).
+fn order_needed() -> str { "pack index order" }
+
+/// Orders index once: every offset resolved into offsets, and by_offset in
+/// offset order (offset_order). resolved and sorted count it.
+fn order(mut index: Index) {
+    if index.ordered { return }
+    var steps: int = 0
+    offset_order(
+        index.data,
+        index.size,
+        index.count,
+        mut index.offsets,
+        mut index.by_offset,
+        mut steps,
+    )
+    index.resolved += index.count
+    index.sorted += steps
+    index.ordered = true
+}
+
 /// slot's pack offset for a read of it, below end (the pack's entries end):
 /// the entry's own checks, made where it is used as Git makes them.
 fn slot_offset(index: Index, slot: int, end: int) -> int ! PackErrors {
-    let offset = index.offsets[slot]
+    let offset = slot_pack_offset(index, slot)
     if offset < 0 { return Unsupported("pack index large offsets") }
     if offset < 12 || offset >= end { return Unsupported("pack index offsets") }
     offset
@@ -174,16 +221,26 @@ fn name_before(data: List[List[byte]], a: int, b: int) -> bool {
 /// and a pull opens about a thousand of them. A pass is skipped where every
 /// offset has the same digit. The second list and the counters are the
 /// region's; only the order is kept. steps counts the work: the list slots
-/// set up and the order copied out here, the rest in radix_pass. A slot with
-/// no offset (-1) is left out; parse_index resolves none of 2^44 or more.
-fn offset_order(offsets: List[int], mut steps: int) -> List[int] {
+/// set up and the order copied out here, the rest in radix_pass. Each slot's
+/// offset is resolved into offsets (offset_in_file) on the way; a slot with no offset
+/// (-1) is left out of the order.
+fn offset_order(
+    data: List[List[byte]],
+    size: int,
+    count: int,
+    mut offsets: List[int],
+    mut order: List[int],
+    mut steps: int,
+) {
     var n = 0
     var top: int = 0
-    for o in offsets {
+    (mut offsets).reserve(count)
+    for slot in 0..count {
+        let o = offset_in_file(data, size, count, slot)
+        (mut offsets).push(o)
         if o >= 0 { n += 1 }
         if o > top { top = o }
     }
-    var order = List[int]()
     (mut order).reserve(n)
     let bits = if n >= 65536 then 16 else 8
     let buckets = if n >= 65536 then 65536 else 256
@@ -217,7 +274,6 @@ fn offset_order(offsets: List[int], mut steps: int) -> List[int] {
         }
         steps += n
     }
-    order
 }
 
 /// One stable pass on the digit of buckets values at shift, from keys into to.
@@ -349,38 +405,16 @@ fn parse_index(take data: List[List[byte]], size: int, summed: bool) -> Index ! 
     if count > 400000 { return Unsupported("limit: more than 400000 objects in one pack index") }
     let fixed = 1032 + count * 28 + 40
     if fixed > size || (size - fixed) % 8 != 0 { return Unsupported("pack index length") }
-    let large_count = (size - fixed) / 8
     var previous: int = 0
     for i in 0..256 {
         let n = word(data, 8 + 4 * i)
         if n < previous || n > count { return Unsupported("pack index fanout") }
         previous = n
     }
-    // den#63: the offsets are reserved to the count, and a parse keeps one int
-    // an object beside the file itself. Each slot's offset is resolved as far
-    // as the large-offset table allows and is not judged here: a read judges
-    // the entry it reads (slot_offset), verify-pack every entry
-    // (validate_entries). A large offset of 2^44 or more, past any pack den
-    // reads, is left unresolved (-1), as one past the table is.
-    var offsets = List[int]()
-    (mut offsets).reserve(count)
-    let offset_table = 1032 + count * 24
-    for i in 0..count {
-        var offset = word(data, offset_table + i * 4)
-        if offset >= 2147483648 {
-            let slot = offset - 2147483648
-            offset = -1
-            if slot < large_count {
-                let high = word(data, 1032 + count * 28 + slot * 8)
-                if high < 4096 {
-                    offset = high * 4294967296 + word(data, 1032 + count * 28 + slot * 8 + 4)
-                }
-            }
-        }
-        (mut offsets).push(offset)
-    }
-    var sort_steps: int = 0
-    let by_offset = offset_order(offsets, mut sort_steps)
+    // Nothing an entry holds is resolved or ordered here: a read reads the
+    // offset of the entry it reads (slot_pack_offset), and the index is ordered only
+    // when a read or a check needs it (order). den#63: an ordered index keeps
+    // one int an object for its offsets and one for its order.
     var pack_sum = List[byte]()
     (mut pack_sum).reserve(20)
     for k in 0..20 { (mut pack_sum).push(at(data, size - 40 + k) as byte) }
@@ -388,12 +422,13 @@ fn parse_index(take data: List[List[byte]], size: int, summed: bool) -> Index ! 
         data: data,
         size: size,
         count: count,
-        offsets: offsets,
-        by_offset: by_offset,
+        offsets: List[int](),
+        by_offset: List[int](),
+        ordered: false,
         pack_sum: pack_sum,
         reads: 0,
         pushed: 0,
-        sorted: sort_steps,
-        resolved: count,
+        sorted: 0,
+        resolved: 0,
     }
 }

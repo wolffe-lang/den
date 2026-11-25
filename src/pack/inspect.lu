@@ -96,7 +96,12 @@ pub fn inspect(path: str) -> Inspection ! PackErrors {
             base: "",
         }
         region object_check {
-            var seen = Map[int, bool](), total = 0, none = no_cache(), read_n = 0, reserved_n = 0
+            var seen = Map[int, bool](),
+                total = 0,
+                none = no_cache(),
+                read_n = 0,
+                reserved_n = 0,
+                span_n = 0
             let body = unpack(
                 fd,
                 end,
@@ -106,8 +111,10 @@ pub fn inspect(path: str) -> Inspection ! PackErrors {
                 mut total,
                 mut read_n,
                 mut reserved_n,
+                mut span_n,
                 0,
                 mut none,
+                0,
                 0,
             ) else |e| match e {
                 Unsupported(message) => {
@@ -118,6 +125,14 @@ pub fn inspect(path: str) -> Inspection ! PackErrors {
                 not_found => { return not_found },
                 denied => { return denied },
                 io => { return io },
+            }
+            // verify-pack and fsck walk every entry: each stream must end
+            // where the next entry starts, as a read no longer asks.
+            let offset = index.offsets[slot]
+            if span_n != next_offset(index, offset, end) - offset {
+                error_payload = "pack entry size or trailing bytes"
+                failed = true
+                break
             }
             let (size, stored, base, depth) = entry_meta(fd, end, index, slot, 0)?
             row.kind = copy body.kind

@@ -54,7 +54,8 @@ fn open_pack(path: str) -> int ! PackErrors {
 /// A pack index for verify-pack, fsck, installation and housekeeping: its own
 /// checksum included, and every entry checked (validate_entries).
 fn load_index(path: str) -> Index ! PackErrors {
-    let index = load_index_summed(path, true)?
+    var index = load_index_summed(path, true)?
+    order(mut index)
     validate_entries(index)?
     index
 }
@@ -185,9 +186,14 @@ fn charge(mut total: int, count: int) -> () ! PackErrors {
 /// step through the 256-entry table for a long one, where building the table
 /// costs less than the eight steps a byte it saves (a 40 KB blob's check
 /// took most of its read).
-fn entry_crc(bytes: List[byte]) -> int {
-    if bytes.len < 2048 { return crc32(bytes) }
-    crc32_update(crc32_table(), 0, bytes, bytes.len)
+fn entry_crc(bytes: List[byte], end: int) -> int {
+    if end >= 2048 { return crc32_update(crc32_table(), 0, bytes, end) }
+    var crc: int = 4294967295
+    for i in 0..end {
+        crc ^= bytes[i] as int
+        for _ in 0..8 { crc = if crc & 1 != 0 then crc >> 1 ^ 3988292384 else crc >> 1 }
+    }
+    crc ^ 4294967295
 }
 
 fn unpack(
@@ -199,23 +205,34 @@ fn unpack(
     mut total: int,
     mut read_bytes: int,
     mut reserved: int,
+    mut span: int,
     depth: int,
     mut cache: Cache,
     pack_no: int,
+    at: int,
 ) -> Body ! PackErrors {
     if depth > 64 { return Unsupported("limit: a delta chain deeper than 64") }
-    let offset = slot_offset(index, slot, end)?
+    // slot is the entry's, or -1 for an offset delta's base found by its
+    // offset alone (at) in an index not ordered: its slot is the one its
+    // rebuilt identity names (below), so no read orders an index to find one.
+    var offset = at
+    if slot >= 0 {
+        offset = slot_offset(index, slot, end)?
+    } else if at < 12 || at >= end {
+        return Unsupported("pack OFS_DELTA base boundary")
+    }
     if seen[offset] else false { return Unsupported("pack delta cycle") }
     seen[offset] = true
-    let next = next_offset(index, offset, end)
-    let length = next - offset
-    if length > object_limit() + object_limit() / 16 + 65536 {
-        return Unsupported("limit: a compressed pack entry larger than 570490880 bytes")
-    }
-    charge(mut total, length)?
-    let bytes = range_bytes(fd, offset, length)?
+    // The entry's end is found from its own stream, as Git finds it, so no
+    // read needs the entries in offset order. The header comes in a first
+    // read of 4 KiB at most (a small entry whole); the stream in a window of
+    // the least of the bytes left, the size hint (the declared size, a
+    // sixteenth more and 64 bytes) and a MiB, read once, extended once to the
+    // hint only when the stream runs past it. The CRC is checked after the
+    // inflate, over the bytes the stream used (the owner's ruling).
+    let avail = end - offset
+    var bytes = read_window(fd, offset, if avail > 4096 then 4096 else avail)?
     read_bytes += bytes.len
-    if entry_crc(bytes) != slot_crc(index, slot) { return Unsupported("pack entry CRC") }
     if bytes.len == 0 { return Unsupported("pack entry header") }
     var byte0 = bytes[0] as int, pos: int = 1, size: int = byte0 & 15, scale: int = 16
     let kind = byte0 >> 4 & 7
@@ -237,7 +254,7 @@ fn unpack(
     if size > object_limit() {
         return Unsupported("limit: a pack object larger than 536870912 bytes")
     }
-    var base_slot: int = -1
+    var base_slot: int = -1, base_at: int = -1, has_base = false
     if kind == 6 {
         if pos == bytes.len { return Unsupported("pack OFS_DELTA offset") }
         var b = bytes[pos] as int, distance: int = b & 127
@@ -251,8 +268,16 @@ fn unpack(
             distance = (distance + 1) * 128 + (b & 127)
         }
         if distance <= 0 || distance > offset - 12 { return Unsupported("pack OFS_DELTA offset") }
-        base_slot = slot_at(index, offset - distance)
-        if base_slot < 0 { return Unsupported("pack OFS_DELTA base boundary") }
+        base_at = offset - distance
+        has_base = true
+        if index.ordered {
+            base_slot = slot_at(index, base_at)
+            if base_slot < 0 { return Unsupported("pack OFS_DELTA base boundary") }
+        } else if cache.keys.len > 0 {
+            // A cached read keeps its bases unhashed, so it finds a base's
+            // slot by its offset: its index is ordered first (unpack_ordered).
+            return Unsupported(order_needed())
+        }
     } else if kind == 7 {
         if bytes.len - pos < 20 { return Unsupported("pack REF_DELTA name") }
         let id = oid.from_bytes("sha1", bytes[pos..pos + 20]) else |_| {
@@ -261,24 +286,51 @@ fn unpack(
         let name = oid.hex(id) else |_| { return Unsupported("pack REF_DELTA name") }
         base_slot = slot_named(index, name)
         if base_slot < 0 { return Unsupported("thin pack REF_DELTA base") }
+        base_at = slot_pack_offset(index, base_slot)
+        has_base = true
         pos += 20
     } else if kind < 1 || kind > 4 {
         return Unsupported("pack object type")
     }
     charge(mut total, size)?
-    let inflated = zlib.inflate_sized(bytes, pos, size) else |e| {
-        return Unsupported("pack zlib {e}")
+    let hint = pos + size + size / 16 + 64
+    let most = if hint < avail then hint else avail
+    let want = if most < 1048576 then most else 1048576
+    if want > bytes.len {
+        bytes = read_window(fd, offset, want)?
+        read_bytes += bytes.len
+    }
+    var grown = false
+    var inflated = zlib.inflate_sized(bytes, pos, size) else |e| match e {
+        truncated => {
+            if bytes.len >= most { return Unsupported("pack zlib truncated") }
+            grown = true
+            zlib.Inflated { data: List[byte](), consumed: 0, reserved: 0 }
+        },
+        // Each tag by name: the pinned compiler's checked machine renders an
+        // error a match examined, read again in a wildcard arm, as <value>.
+        bad_header => { return Unsupported("pack zlib bad_header") },
+        dictionary => { return Unsupported("pack zlib dictionary") },
+        checksum => { return Unsupported("pack zlib checksum") },
+        invalid => { return Unsupported("pack zlib invalid") },
+        limit => { return Unsupported("pack zlib limit") },
+    }
+    if grown {
+        bytes = range_bytes(fd, offset, most)?
+        read_bytes += bytes.len
+        inflated = zlib.inflate_sized(bytes, pos, size) else |e| {
+            return Unsupported("pack zlib {e}")
+        }
     }
     reserved += inflated.reserved
-    if inflated.consumed != bytes.len - pos || inflated.data.len != size {
-        return Unsupported("pack entry size or trailing bytes")
-    }
+    if inflated.data.len != size { return Unsupported("pack entry size or trailing bytes") }
+    let used = pos + inflated.consumed
+    span = used
+    charge(mut total, used)?
+    let crc = entry_crc(bytes, used)
+    if slot >= 0 && crc != slot_crc(index, slot) { return Unsupported("pack entry CRC") }
     var result = Body { kind: "", data: List[byte]() }
-    let hit = if base_slot >= 0 {
-        cache_find(cache, pack_no, index.offsets[base_slot])
-    } else {
-        -1
-    }
+    let hit = if has_base then cache_find(cache, pack_no, base_at) else -1
     if hit >= 0 {
         // A base rebuilt and checked by an earlier read (cache_keep).
         var delta_pos: int = 0
@@ -297,7 +349,8 @@ fn unpack(
             return Unsupported("pack delta {e}")
         }
         result = Body { kind: kind_label(cache.kinds[hit]), data: data }
-    } else if base_slot >= 0 {
+    } else if has_base {
+        var base_span: int = 0
         let base = unpack(
             fd,
             end,
@@ -307,9 +360,11 @@ fn unpack(
             mut total,
             mut read_bytes,
             mut reserved,
+            mut base_span,
             depth + 1,
             mut cache,
             pack_no,
+            base_at,
         )?
         var delta_pos: int = 0
         let _ = variable(inflated.data, mut delta_pos) else |_| {
@@ -351,11 +406,88 @@ fn unpack(
     let id = oid.from_bytes("sha1", hash.final1(take digest)) else |_| {
         return Unsupported("pack object identity")
     }
-    if id.bytes.len != 20 || name_cmp(index, slot, id.bytes) != 0 {
-        return Unsupported("pack object identity")
+    if id.bytes.len != 20 { return Unsupported("pack object identity") }
+    var named = slot
+    if slot < 0 {
+        // An offset delta's base found by its offset alone: its slot is the
+        // one its rebuilt identity names, at that offset, and its CRC is that
+        // slot's. An entry no slot names at its offset is refused, as before.
+        let hex = oid.hex(id) else |_| { return Unsupported("pack object identity") }
+        named = slot_named(index, hex)
+        if named < 0 || slot_pack_offset(index, named) != offset {
+            return Unsupported("pack OFS_DELTA base boundary")
+        }
+        if crc != slot_crc(index, named) { return Unsupported("pack entry CRC") }
     }
+    if name_cmp(index, named, id.bytes) != 0 { return Unsupported("pack object identity") }
     cache_keep(mut cache, pack_no, offset, result)
     result
+}
+
+/// unpack for a read that may order its index: a read that needs a slot by
+/// its offset (an offset delta's base) from an index not yet ordered orders it
+/// (index.lu's order) and reads again. sorted and resolved count the order.
+fn unpack_ordered(
+    fd: int,
+    end: int,
+    mut index: Index,
+    slot: int,
+    mut seen: Map[int, bool],
+    mut total: int,
+    mut read_bytes: int,
+    mut reserved: int,
+    mut cache: Cache,
+    pack_no: int,
+    mut sorted: int,
+    mut resolved: int,
+) -> Body ! PackErrors {
+    var again = false, span: int = 0
+    let first = unpack(
+        fd,
+        end,
+        index,
+        slot,
+        mut seen,
+        mut total,
+        mut read_bytes,
+        mut reserved,
+        mut span,
+        0,
+        mut cache,
+        pack_no,
+        0,
+    ) else |e| match e {
+        Unsupported(message) => {
+            if message != order_needed() { return Unsupported(message) }
+            again = true
+            Body { kind: "", data: List[byte]() }
+        },
+        not_found => { return not_found },
+        denied => { return denied },
+        io => { return io },
+    }
+    if !again { return first }
+    let sorted_before = index.sorted, resolved_before = index.resolved
+    order(mut index)
+    sorted += index.sorted - sorted_before
+    resolved += index.resolved - resolved_before
+    seen = Map[int, bool]()
+    total = 0
+    unpack(
+        fd,
+        end,
+        index,
+        slot,
+        mut seen,
+        mut total,
+        mut read_bytes,
+        mut reserved,
+        mut span,
+        0,
+        mut cache,
+        pack_no,
+        0,
+    )?
 }
 
 /// The type code (1 commit, 2 tree, 3 blob, 4 tag) of the entry at slot from
@@ -371,14 +503,21 @@ fn entry_kind(
     slot: int,
     mut seen: Map[int, bool],
     depth: int,
+    at: int,
 ) -> int ! PackErrors {
     if depth > 64 { return Unsupported("limit: a delta chain deeper than 64") }
-    let offset = slot_offset(index, slot, end)?
+    // slot is the entry's, or -1 for an offset delta's base, read at its
+    // offset (at): a type needs no CRC, so no slot and no order.
+    var offset = at
+    if slot >= 0 {
+        offset = slot_offset(index, slot, end)?
+    } else if at < 12 || at >= end {
+        return Unsupported("pack OFS_DELTA base boundary")
+    }
     if seen[offset] else false { return Unsupported("pack delta cycle") }
     seen[offset] = true
-    let next = next_offset(index, offset, end)
     // The longest header: ten size bytes, then a 20-byte base name.
-    let bytes = range_bytes(fd, offset, if next - offset > 32 then 32 else next - offset)?
+    let bytes = range_bytes(fd, offset, if end - offset > 32 then 32 else end - offset)?
     if bytes.len == 0 { return Unsupported("pack entry header") }
     var byte0 = bytes[0] as int, pos: int = 1, size: int = byte0 & 15, scale: int = 16
     let kind = byte0 >> 4 & 7
@@ -413,9 +552,7 @@ fn entry_kind(
             distance = (distance + 1) * 128 + (b & 127)
         }
         if distance <= 0 || distance > offset - 12 { return Unsupported("pack OFS_DELTA offset") }
-        let base_slot = slot_at(index, offset - distance)
-        if base_slot < 0 { return Unsupported("pack OFS_DELTA base boundary") }
-        return entry_kind(fd, end, index, base_slot, mut seen, depth + 1)?
+        return entry_kind(fd, end, index, -1, mut seen, depth + 1, offset - distance)?
     }
     if kind == 7 {
         if bytes.len - pos < 20 { return Unsupported("pack REF_DELTA name") }
@@ -425,7 +562,7 @@ fn entry_kind(
         let name = oid.hex(id) else |_| { return Unsupported("pack REF_DELTA name") }
         let base_slot = slot_named(index, name)
         if base_slot < 0 { return Unsupported("thin pack REF_DELTA base") }
-        return entry_kind(fd, end, index, base_slot, mut seen, depth + 1)?
+        return entry_kind(fd, end, index, base_slot, mut seen, depth + 1, 0)?
     }
     if kind < 1 || kind > 4 { return Unsupported("pack object type") }
     kind
@@ -538,7 +675,7 @@ pub fn read_object(gitdir: str, name: str, cap: int) -> Body ! PackErrors {
         // Per-pack scratch is reclaimed; the returned body is explicitly owned.
         var result = Body { kind: "", data: List[byte]() }, found = false
         region candidate {
-            let index = load_read_index(path)?
+            var index = load_read_index(path)?
             let fd = open_pack("{path[0..path.len - 4]}.pack")?
             defer fs_close(fd) else |_| {}
             let end = bounds(fd, index)?
@@ -549,18 +686,20 @@ pub fn read_object(gitdir: str, name: str, cap: int) -> Body ! PackErrors {
                     none = no_cache(),
                     read_n: int = 0,
                     reserved_n: int = 0
-                let value = unpack(
+                var sorted_n: int = 0, resolved_n: int = 0
+                let value = unpack_ordered(
                     fd,
                     end,
-                    index,
+                    mut index,
                     slot,
                     mut seen,
                     mut total,
                     mut read_n,
                     mut reserved_n,
-                    0,
                     mut none,
                     0,
+                    mut sorted_n,
+                    mut resolved_n,
                 ) else |e| match e {
                     Unsupported(message) => {
                         error_payload = copy message
@@ -719,7 +858,8 @@ pub fn session_peek(s: Session, name: str, cap: int) -> Body ! PackErrors {
                 total: int = 0,
                 none = no_cache(),
                 read_n: int = 0,
-                reserved_n: int = 0
+                reserved_n: int = 0,
+                span_n: int = 0
             let value = unpack(
                 fd,
                 end,
@@ -729,8 +869,10 @@ pub fn session_peek(s: Session, name: str, cap: int) -> Body ! PackErrors {
                 mut total,
                 mut read_n,
                 mut reserved_n,
+                mut span_n,
                 0,
                 mut none,
+                0,
                 0,
             ) else |e| match e {
                 Unsupported(message) => {
@@ -772,18 +914,19 @@ pub fn session_cached(mut s: Session, name: str, cap: int) -> Body ! PackErrors 
             defer fs_close(fd) else |_| {}
             let end = rebound(fd, s.indexes[i], s.ends[i])?
             var seen = Map[int, bool](), total: int = 0
-            let value = unpack(
+            let value = unpack_ordered(
                 fd,
                 end,
-                s.indexes[i],
+                mut s.indexes[i],
                 slot,
                 mut seen,
                 mut total,
                 mut s.read,
                 mut s.reserved,
-                0,
                 mut s.cache,
                 i,
+                mut s.sorted,
+                mut s.resolved,
             ) else |e| match e {
                 Unsupported(message) => {
                     error_payload = copy message
@@ -824,7 +967,7 @@ pub fn session_kind(s: Session, name: str) -> str ! PackErrors {
             defer fs_close(fd) else |_| {}
             let end = rebound(fd, s.indexes[i], s.ends[i])?
             var seen = Map[int, bool]()
-            code = entry_kind(fd, end, s.indexes[i], slot, mut seen, 0)?
+            code = entry_kind(fd, end, s.indexes[i], slot, mut seen, 0, 0)?
         }
         return kind_label(code)
     }
@@ -875,7 +1018,8 @@ fn read_slot(s: Session, i: int, slot: int) -> Body ! PackErrors {
             total: int = 0,
             none = no_cache(),
             read_n: int = 0,
-            reserved_n: int = 0
+            reserved_n: int = 0,
+            span_n: int = 0
         let value = unpack(
             fd,
             end,
@@ -885,8 +1029,10 @@ fn read_slot(s: Session, i: int, slot: int) -> Body ! PackErrors {
             mut total,
             mut read_n,
             mut reserved_n,
+            mut span_n,
             0,
             mut none,
+            0,
             0,
         ) else |e| match e {
             Unsupported(message) => {
@@ -974,23 +1120,20 @@ pub fn session_read(mut s: Session, name: str, cap: int) -> Body ! PackErrors {
             let fd = open_pack("{s.paths[i][0..s.paths[i].len - 4]}.pack")?
             defer fs_close(fd) else |_| {}
             let end = rebound(fd, s.indexes[i], s.ends[i])?
-            var seen = Map[int, bool](),
-                total: int = 0,
-                none = no_cache(),
-                read_n: int = 0,
-                reserved_n: int = 0
-            let value = unpack(
+            var seen = Map[int, bool](), total: int = 0, none = no_cache()
+            let value = unpack_ordered(
                 fd,
                 end,
-                s.indexes[i],
+                mut s.indexes[i],
                 slot,
                 mut seen,
                 mut total,
                 mut s.read,
                 mut s.reserved,
-                0,
                 mut none,
                 0,
+                mut s.sorted,
+                mut s.resolved,
             ) else |e| match e {
                 Unsupported(message) => {
                     error_payload = copy message
