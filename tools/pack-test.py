@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Independent pack/idx writer from gitformat-pack; no implementation oracle code."""
-import argparse, hashlib, json, pathlib, random, shutil, struct, subprocess, zlib
+import argparse, hashlib, json, pathlib, random, re, shutil, struct, subprocess, zlib
 P = argparse.ArgumentParser(); P.add_argument('--tier', default='native'); A = P.parse_args()
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 OUT = ROOT / 'target' / ('pack-' + A.tier); OUT.mkdir(parents=True, exist_ok=True)
@@ -233,6 +233,27 @@ def kinds_row(name, r, bodies):
     rows.append(dict(name=name, ok=good, code=p.returncode, stdout=p.stdout.decode(errors='replace'), expected=expected, stderr=p.stderr.decode(errors='replace')))
     if not good: print(name, p.returncode, p.stdout[:400], 'expected', expected, p.stderr[:300], flush=True)
 kinds_row('kinds-unloaded-reader', repo('kinds-unloaded', pack, idx), [base, middle, last, base])
+# Opening a pack index costs one positional read for each MiB of it (the
+# runtime's read returns at most a MiB) and copies none of it a byte at a time:
+# the session's own counters, printed through the probe (--open-counts). The
+# large index holds 60,000 objects (1.68 MB): its name table crosses the first
+# MiB boundary, and the object whose name straddles it must read back.
+def open_counts_row(name, r, idx_len):
+    p = subprocess.run([str(CLIENT), '--open-counts', str(r)], capture_output=True, timeout=120)
+    out = p.stdout.decode(errors='replace')
+    m = re.fullmatch(r'loaded=true opens=1 reads=(\d+) pushed=(\d+)\n', out)
+    bound = -(-idx_len // 1048576)
+    good = p.returncode == 0 and not p.stderr and m is not None and int(m.group(1)) <= bound and int(m.group(2)) == 0
+    rows.append(dict(name=name, ok=good, code=p.returncode, stdout=out, bound=f'reads<={bound} pushed=0', stderr=p.stderr.decode(errors='replace')))
+    if not good: print(name, p.returncode, out, f'bound reads<={bound} pushed=0', p.stderr[:300], flush=True)
+open_counts_row('open-counts-small', repo('open-counts-small', pack, idx), len(idx))
+many = [b'object %d\n' % i for i in range(60000)]
+pack_many, idx_many, records_many = make([(3, b, b, b'') for b in many])
+by_name = {oid('blob', b): b for b in many}
+r_many = repo('open-counts-large', pack_many, idx_many)
+open_counts_row('open-counts-large', r_many, len(idx_many))
+straddle = next(i for i in range(len(records_many)) if (1032 + 20 * i) // 1048576 != (1032 + 20 * i + 19) // 1048576)
+check('open-counts-straddling-name', r_many, by_name[records_many[straddle][0]])
 (OUT/'results.json').write_text(json.dumps(rows,indent=2)+'\n')
 print(f'pack structural: {sum(x["ok"] for x in rows)}/{len(rows)}; zero skips',flush=True)
 raise SystemExit(not all(x['ok'] for x in rows))
