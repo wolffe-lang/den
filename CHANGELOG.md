@@ -1,5 +1,56 @@
 # Changes
 
+## Unreleased — an entry's end from its own stream
+
+- A read found an entry's end from the next entry's offset, so the first read
+  from a pack ordered every entry by offset (a radix sort over the whole index)
+  and resolved every offset, even for a command that reads one object. It now
+  finds the end from the entry's own zlib stream, as Git does, and checks the
+  entry's CRC32 after the inflate, over the bytes the stream used; the
+  reconstructed identity is checked as before. Opening an index resolves and
+  orders nothing. An offset delta's base is read at its offset, and its slot,
+  for its CRC, is the one its rebuilt identity names at that offset. An index
+  is ordered only by a check of every entry (verify-pack, fsck, installation)
+  or by a batch read that keeps its delta bases unhashed.
+- A read reads an entry's header in one read of at most 4 KiB, then its
+  stream in one read of the least of the bytes left before the trailer, the
+  size hint (the declared size, a sixteenth more and 64 bytes) and a MiB. Only
+  when the stream runs past that window is it read again, to the hint capped
+  by the pack's end. The window is read with one positional read, not a byte
+  at a time.
+- A declared size is the entry's own claim, read before any of its bytes are
+  checked. The output is reserved to the least of the size, a MiB and what the
+  input can make (1,032 bytes a byte), and grows as it is made: doubling to an
+  eighth of the size, then the size. A false claim of 400 MiB now reserves a
+  MiB; it reserved all of it when the stream behind it was over 400 KiB. A
+  sound 16 MiB entry reserves 19 MiB in all (1.19 times its size), against 16
+  MiB before.
+- What changes against Git, and against den before:
+  - bytes between entries no longer stop a read; Git reads past them too.
+    verify-pack and fsck still refuse a stream that does not end where the next
+    entry starts, as Git's do;
+  - a bit a stream never reads, flipped, is refused by the entry's CRC; Git's
+    read does not check the CRC;
+  - a damaged stream is now refused by the inflater's name (`pack zlib …`)
+    where it was refused as `pack entry CRC`, since the inflate comes first;
+  - a false declared size over a stream that truly consumes more than a MiB of
+    input is read to the size hint, capped by the pack's end: 10.5 MB for a
+    crafted 1.1 MB stream with 9.5 MB of pack after it, where Git inflates
+    through the 1.1 MB. Its reservation stays at a MiB.
+- New rows:
+  - the inflater's robustness, before any of this: every zlib vector through
+    `inflate_sized` (the pack reader's entry point), the codec fuzz through it
+    with every prefix of three streams, an in-program fuzz on every tier and on
+    the checked machine, and `tools/pack-entry-test.py`: eight corrupt entries
+    read beside Git, each refused by name, and a bit-flip sweep of four
+    entries' streams;
+  - what a read costs, from the session's counters
+    (`probes/pack-client --read-counts`): no order and no offset resolved for
+    a read with or without a delta; a false claim's read and reservation; the
+    crafted stream's; two 16 MiB entries' reservations;
+  - `tools/read-scale-test.py`: a 16 MiB blob, incompressible and
+    compressible, read beside Git, its CPU and peak bounded against Git's.
+
 ## Unreleased — status beside a large pack
 
 - Opening a pack index read the file 64 KiB at a time and copied every byte
