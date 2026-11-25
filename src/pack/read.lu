@@ -418,7 +418,6 @@ fn unpack(
     let used = pos + consumed
     span = used
     charge(mut total, used)?
-    if slot >= 0 && crc != slot_crc(index, slot) { return Unsupported("pack entry CRC") }
     var result = Body { kind: "", data: List[byte]() }
     let hit = if has_base then cache_find(cache, pack_no, base_at) else -1
     if hit >= 0 {
