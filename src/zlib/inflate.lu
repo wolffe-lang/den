@@ -214,6 +214,18 @@ fn distance_base(code: int) -> int {
     (2 + code % 2) * (1 << distance_extra(code)) + 1
 }
 
+/// Room for need more bytes of out past room: the next reservation doubles
+/// room up to an eighth of cap, then jumps to cap itself, and is at least
+/// what need asks (the caller has checked need against cap). total counts
+/// every reservation, the outgrown ones included.
+fn grow(mut out: List[byte], mut room: int, cap: int, need: int, mut total: int) {
+    var next = if room < cap / 8 then (if 2 * room < cap / 8 then 2 * room else cap / 8) else cap
+    if next < out.len + need { next = out.len + need }
+    (mut out).reserve(next)
+    total += next
+    room = next
+}
+
 fn compressed(
     src: List[byte],
     mut r: Bits,
@@ -223,12 +235,17 @@ fn compressed(
     fixed: bool,
     cap: int,
     window: int,
+    mut room: int,
+    mut total: int,
 ) -> () ! {invalid, truncated, limit} {
     let bases = length_base()
     loop {
         let s = if fixed then fixed_symbol(src, mut r)? else symbol(src, mut r, lt)?
         if s < 256 {
-            if out.len == cap { return limit }
+            if out.len == room {
+                if room == cap { return limit }
+                grow(mut out, mut room, cap, 1, mut total)
+            }
             (mut out).push(s as byte)
         } else if s == 256 {
             return
@@ -240,7 +257,10 @@ fn compressed(
             if dc > 29 { return invalid }
             let distance = distance_base(dc) + bits(src, mut r, distance_extra(dc))?
             if distance > out.len || distance > window { return invalid }
-            if length > cap - out.len { return limit }
+            if length > room - out.len {
+                if length > cap - out.len { return limit }
+                grow(mut out, mut room, cap, length, mut total)
+            }
             for _ in 0..length {
                 let b = out[out.len - distance]
                 (mut out).push(b)
@@ -259,9 +279,18 @@ fn decode(
     if cap < 0 { return invalid }
     var r = Bits { pos: start, bit: 0 }
     var out = List[byte]()
-    // A caller that knows the exact size reserves it once, so the output never
-    // regrows (each regrowth would leave its old buffer in the caller's region).
-    if reserve > 0 { (mut out).reserve(reserve) }
+    // A sized caller reserves once what it may trust (inflate_sized: the
+    // declared size, at most a MiB and what the input can make), and the
+    // output grows past it only as it is made (grow: doubling to an eighth of
+    // cap, then cap): a declared size is never reserved on its claim alone. An
+    // unsized caller reserves nothing and its output grows as lists do. Each
+    // regrowth leaves its old buffer in the caller's region until it ends.
+    var room = cap, total = 0
+    if reserve > 0 {
+        (mut out).reserve(reserve)
+        room = reserve
+        total = reserve
+    }
     var final_block = 0
     while final_block == 0 {
         final_block = bits(src, mut r, 1)?
@@ -272,7 +301,10 @@ fn decode(
             let inverse = bits(src, mut r, 16)?
             if length + inverse != 65535 { return invalid }
             if length > src.len - r.pos { return truncated }
-            if length > cap - out.len { return limit }
+            if length > room - out.len {
+                if length > cap - out.len { return limit }
+                grow(mut out, mut room, cap, length, mut total)
+            }
             for i in 0..length { (mut out).push(src[r.pos + i]) }
             r.pos += length
         } else if kind == 3 {
@@ -281,16 +313,38 @@ fn decode(
             region block_tables {
                 if kind == 1 {
                     let none = Tree { counts: List[int](), symbols: List[int]() }
-                    compressed(src, mut r, mut out, none, none, true, cap, window)?
+                    compressed(
+                        src,
+                        mut r,
+                        mut out,
+                        none,
+                        none,
+                        true,
+                        cap,
+                        window,
+                        mut room,
+                        mut total,
+                    )?
                 } else {
                     let (lt, dt) = dynamic(src, mut r)?
-                    compressed(src, mut r, mut out, lt, dt, false, cap, window)?
+                    compressed(
+                        src,
+                        mut r,
+                        mut out,
+                        lt,
+                        dt,
+                        false,
+                        cap,
+                        window,
+                        mut room,
+                        mut total,
+                    )?
                 }
             }
         }
     }
     align(mut r)
-    Inflated { data: out, consumed: r.pos, reserved: if reserve > 0 then reserve else 0 }
+    Inflated { data: out, consumed: r.pos, reserved: total }
 }
 
 /// Decode one RFC 1951 stream, leaving following whole bytes untouched.
@@ -317,11 +371,13 @@ pub fn inflate(src: List[byte], max_output: int) -> Inflated ! InflateErrors {
     result
 }
 
-/// One RFC 1950 stream of at most size bytes that begins at src[start], its
-/// output reserved once, to size or to what the bytes after start can make if
-/// that is less; the caller compares the length it expects. consumed counts
-/// from start through the checksum. Truncated means the stream runs past src's
-/// end: a caller reading a window may extend it.
+/// One RFC 1950 stream of at most size bytes that begins at src[start]. Its
+/// output is reserved once to the least of size, a MiB and what the bytes
+/// after start can make, and grows past that only as bytes are made (decode);
+/// the caller compares the length it expects, and reserved counts what was
+/// reserved, outgrown buffers included. consumed counts from start through the
+/// checksum. Truncated means the stream runs past src's end: a caller reading
+/// a window may extend it.
 pub fn inflate_sized(src: List[byte], start: int, size: int) -> Inflated ! InflateErrors {
     if size < 0 || start < 0 { return invalid }
     if src.len - start < 2 { return truncated }
@@ -332,16 +388,13 @@ pub fn inflate_sized(src: List[byte], start: int, size: int) -> Inflated ! Infla
     // A declared size is the entry's own claim, read before any check of its
     // bytes: a damaged one must not reserve what its stream cannot make. A
     // deflate stream makes at most 1,032 bytes a byte (a 258-byte copy in two
-    // bits), so the bytes after start bound the output; past that the list
-    // grows as bytes are made. A sound entry's size is always within it.
-    let most = (src.len - start) * 1032 + 258
-    var result = decode(
-        src,
-        start + 2,
-        size,
-        1 << (cmf >> 4) + 8,
-        if size < most then size else most,
-    )?
+    // bits), so the bytes after start bound the output, and no more than a
+    // MiB is reserved before any byte is made; past that the output grows as
+    // it is made (decode). A sound entry up to a MiB is reserved exactly.
+    var first = (src.len - start) * 1032 + 258
+    if first > 1048576 { first = 1048576 }
+    if size < first { first = size }
+    var result = decode(src, start + 2, size, 1 << (cmf >> 4) + 8, first)?
     if src.len - result.consumed < 4 { return truncated }
     var expected: int = 0
     for i in 0..4 { expected = expected * 256 + src[result.consumed + i] as int }
