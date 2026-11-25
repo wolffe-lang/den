@@ -612,10 +612,10 @@ pub fn prefix(gitdir: str, prefix: str) -> List[str] ! PackErrors {
 /// Every pack is structure- and binding-checked when the session loads, as
 /// read_object checks each pack it passes; each read reopens its pack and
 /// re-checks those bounds (rebound), so a replaced or truncated pack is never
-/// misread. ends holds each pack's bounds answer at load. opens, reads and
-/// pushed count what loading cost (the probe surface: probes/pack-client
-/// --open-counts): the indexes loaded, their positional reads, and the bytes
-/// copied one at a time.
+/// misread. ends holds each pack's bounds answer at load. opens, reads, pushed
+/// and sorted count what loading cost (the probe surface: probes/pack-client
+/// --open-counts): the indexes loaded, their positional reads, the bytes
+/// copied one at a time, and the work ordering their offsets took.
 pub struct Session {
     gitdir: str,
     paths: List[str],
@@ -626,6 +626,7 @@ pub struct Session {
     opens: int,
     reads: int,
     pushed: int,
+    sorted: int,
 }
 
 /// An unloaded session; indexes are listed and checked on the first read.
@@ -640,6 +641,7 @@ pub fn session(gitdir: str) -> Session {
         opens: 0,
         reads: 0,
         pushed: 0,
+        sorted: 0,
     }
 }
 
@@ -652,6 +654,7 @@ fn load_session(mut s: Session) -> () ! PackErrors {
         s.opens += 1
         s.reads += index.reads
         s.pushed += index.pushed
+        s.sorted += index.sorted
         (mut s.paths).push(copy path)
         // The index moves into the session: a plain push would copy it whole.
         (mut s.indexes).push(take index)
@@ -805,6 +808,7 @@ pub fn unloaded(gitdir: str) -> Session {
         opens: 0,
         reads: 0,
         pushed: 0,
+        sorted: 0,
     }
 }
 

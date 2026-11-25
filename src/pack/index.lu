@@ -11,8 +11,9 @@ use hash
 /// resolved; by_offset holds the slots in increasing offset order. Lookups are
 /// binary searches (the runtime Map is a linear scan, which made every idx
 /// parse quadratic). reads and pushed are what loading it cost: the positional
-/// reads of the file, and the bytes copied one at a time (pack.Session sums
-/// them for the probe surface).
+/// reads of the file, and the bytes copied one at a time; sorted is the work
+/// ordering the offsets took (list slots set up, counters zeroed and summed,
+/// keys counted and moved). pack.Session sums them for the probe surface.
 struct Index {
     data: List[List[byte]],
     count: int,
@@ -21,6 +22,7 @@ struct Index {
     pack_sum: List[byte],
     reads: int,
     pushed: int,
+    sorted: int,
 }
 
 /// The loaded file's byte at pos.
@@ -150,7 +152,7 @@ fn name_before(data: List[List[byte]], a: int, b: int) -> bool {
 /// and a scatter; the merge sort it replaces moved every slot through the
 /// entries, and copied it back, on each of about 19 passes for 390,000 objects.
 /// The pairs and the counts are the region's; only the order is kept.
-fn offset_order(offsets: List[int]) -> List[int] {
+fn offset_order(offsets: List[int], mut steps: int) -> List[int] {
     let n = offsets.len
     var order = List[int]()
     (mut order).reserve(n)
@@ -171,13 +173,30 @@ fn offset_order(offsets: List[int]) -> List[int] {
             (mut slots_b).push(0)
         }
         for _ in 0..65537 { (mut counts).push(0) }
+        steps += 4 * n + 65537
         var shift = 0, in_b = false
         while shift < 64 && top >> shift > 0 {
             var moved = false
             if in_b {
-                moved = radix_pass(keys_b, slots_b, mut keys_a, mut slots_a, shift, mut counts)
+                moved = radix_pass(
+                    keys_b,
+                    slots_b,
+                    mut keys_a,
+                    mut slots_a,
+                    shift,
+                    mut counts,
+                    mut steps,
+                )
             } else {
-                moved = radix_pass(keys_a, slots_a, mut keys_b, mut slots_b, shift, mut counts)
+                moved = radix_pass(
+                    keys_a,
+                    slots_a,
+                    mut keys_b,
+                    mut slots_b,
+                    shift,
+                    mut counts,
+                    mut steps,
+                )
             }
             if moved { in_b = !in_b }
             shift += 16
@@ -187,13 +206,15 @@ fn offset_order(offsets: List[int]) -> List[int] {
         } else {
             for s in slots_a { (mut order).push(s) }
         }
+        steps += n
     }
     order
 }
 
 /// One stable pass on the 16-bit digit at shift, from keys and slots into
 /// to_keys and to_slots. Answers false, moving nothing, when every key has the
-/// same digit there.
+/// same digit there. steps counts the counters zeroed and summed and the keys
+/// counted and moved.
 fn radix_pass(
     keys: List[int],
     slots: List[int],
@@ -201,13 +222,17 @@ fn radix_pass(
     mut to_slots: List[int],
     shift: int,
     mut counts: List[int],
+    mut steps: int,
 ) -> bool {
     for d in 0..65537 { counts[d] = 0 }
     for k in keys { counts[(k >> shift & 65535) + 1] += 1 }
+    steps += 65537 + keys.len
     for d in 1..65537 {
+        steps += 1
         if counts[d] == keys.len { return false }
         counts[d] += counts[d - 1]
     }
+    steps += keys.len
     for i in 0..keys.len {
         let digit = keys[i] >> shift & 65535
         let place = counts[digit]
@@ -315,7 +340,8 @@ fn parse_index(take data: List[List[byte]], size: int, summed: bool) -> Index ! 
     }
     if large_used.len != large_count { return Unsupported("pack index large offsets") }
     // Two entries at one offset: the former per-entry duplicate check, once.
-    let by_offset = offset_order(offsets)
+    var sort_steps: int = 0
+    let by_offset = offset_order(offsets, mut sort_steps)
     for rank in 1..by_offset.len {
         if offsets[by_offset[rank]] == offsets[by_offset[rank - 1]] {
             return Unsupported("pack index offsets")
@@ -332,5 +358,6 @@ fn parse_index(take data: List[List[byte]], size: int, summed: bool) -> Index ! 
         pack_sum: pack_sum,
         reads: 0,
         pushed: 0,
+        sorted: sort_steps,
     }
 }
