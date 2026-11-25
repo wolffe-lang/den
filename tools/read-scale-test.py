@@ -8,8 +8,8 @@ each measure is a tool's minimum. stdout, stderr and the exit status must equal 
 
 A read reserves its output at most a MiB before it makes any (a declared size is the entry's own claim) and
 grows it as it is made, doubling to an eighth of the size and then the size: about 1.2 times the size reserved
-in all (tools/pack-entry-test.py's big rows count it). Its window is read once to a MiB and then once to the
-size hint. Above those, the read keeps the body as the store hands it back, and cat-file writes it. The
+in all, once (tools/pack-entry-test.py's big rows count it). Its stream is read in windows of at most a MiB,
+one held at a time. Above those, the read keeps the body as the store hands it back, and cat-file writes it. The
 bounds are den's measured peak and CPU against Git's in the same take, stated for the native tier on Linux:
 den's peak at most RELATIVE's rss_factor times Git's plus rss_slack_kib, its CPU at most cpu_factor times
 Git's plus cpu_slack. The row prints both tools' figures and the ratios, the figures a change of the read
