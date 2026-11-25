@@ -318,9 +318,10 @@ pub fn inflate(src: List[byte], max_output: int) -> Inflated ! InflateErrors {
 }
 
 /// One RFC 1950 stream of at most size bytes that begins at src[start], its
-/// output reserved to size once; the caller compares the length it expects.
-/// consumed counts from start through the checksum. Truncated means the
-/// stream runs past src's end: a caller reading a window may extend it.
+/// output reserved once, to size or to what the bytes after start can make if
+/// that is less; the caller compares the length it expects. consumed counts
+/// from start through the checksum. Truncated means the stream runs past src's
+/// end: a caller reading a window may extend it.
 pub fn inflate_sized(src: List[byte], start: int, size: int) -> Inflated ! InflateErrors {
     if size < 0 || start < 0 { return invalid }
     if src.len - start < 2 { return truncated }
@@ -328,7 +329,19 @@ pub fn inflate_sized(src: List[byte], start: int, size: int) -> Inflated ! Infla
     let flg = src[start + 1] as int
     if cmf & 15 != 8 || cmf >> 4 > 7 || (cmf * 256 + flg) % 31 != 0 { return bad_header }
     if flg & 32 != 0 { return dictionary }
-    var result = decode(src, start + 2, size, 1 << (cmf >> 4) + 8, size)?
+    // A declared size is the entry's own claim, read before any check of its
+    // bytes: a damaged one must not reserve what its stream cannot make. A
+    // deflate stream makes at most 1,032 bytes a byte (a 258-byte copy in two
+    // bits), so the bytes after start bound the output; past that the list
+    // grows as bytes are made. A sound entry's size is always within it.
+    let most = (src.len - start) * 1032 + 258
+    var result = decode(
+        src,
+        start + 2,
+        size,
+        1 << (cmf >> 4) + 8,
+        if size < most then size else most,
+    )?
     if src.len - result.consumed < 4 { return truncated }
     var expected: int = 0
     for i in 0..4 { expected = expected * 256 + src[result.consumed + i] as int }
