@@ -269,7 +269,7 @@ pub fn scan_more(mut sc: Scan, data: List[byte]) -> int ! StreamErrors {
             let inflated = zlib.inflate_sized(data, pos, size) else |e| match e {
                 truncated => {
                     complete = false
-                    zlib.Inflated { data: List[byte](), consumed: 0 }
+                    zlib.Inflated { data: List[byte](), consumed: 0, reserved: 0 }
                 },
                 limit => {
                     return Unsupported("limit: a pack entry inflates past its declared size")

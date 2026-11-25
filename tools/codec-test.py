@@ -77,9 +77,17 @@ def main():
                 sized_error(data,size)
             else:
                 got,meta=call('inflate_sized',data,size,len(PRE))
-                assert got==row['decoded'] and meta==[row['consumed'],len(got)],(row['name'],meta)
+                assert got==row['decoded'] and meta[:2]==[row['consumed'],len(got)],(row['name'],meta)
             sized+=1
     print('PASS inflate_sized on',sized,'zlib vector inputs, alone and with trailing bytes',flush=True)
+    # A declared size far past what the stream can make reserves no more than the stream's bytes can produce:
+    # 1,032 output bytes for each input byte (two bits for a 258-byte copy) and one copy more.
+    small=zlib.compress(b'den reads')
+    got,meta=call('inflate_sized',PRE+small,400<<20,len(PRE))
+    most=len(small)*1032+258
+    ok=got==b'den reads' and meta[2]<=most
+    print(('PASS' if ok else 'FAIL'),f'inflate_sized-reservation: a {len(small)}-byte stream declared 400 MiB reserved',meta[2],'bytes; at most',most,flush=True)
+    assert ok
     if not a.vectors_only:
         for name,encoded,expected in v.bounds():
             assert zlib.decompress(encoded,-15)==expected,name

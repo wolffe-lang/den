@@ -4,10 +4,12 @@
 /// Malformed/truncated data, unsupported dictionary, checksum or output cap.
 pub error InflateErrors = {truncated, bad_header, dictionary, checksum, invalid, limit}
 
-/// Owned decoded bytes and whole source bytes through this stream's last byte.
+/// Owned decoded bytes and whole source bytes through this stream's last byte;
+/// reserved is the output bytes reserved up front, before any were decoded.
 pub struct Inflated {
     data: List[byte],
     consumed: int,
+    reserved: int,
 }
 
 struct Bits {
@@ -288,7 +290,7 @@ fn decode(
         }
     }
     align(mut r)
-    Inflated { data: out, consumed: r.pos }
+    Inflated { data: out, consumed: r.pos, reserved: if reserve > 0 then reserve else 0 }
 }
 
 /// Decode one RFC 1951 stream, leaving following whole bytes untouched.

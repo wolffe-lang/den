@@ -48,7 +48,7 @@ def main():
    # under it (refused as limit when there is output) and one over it (the output is shorter than the size).
    pre=rng.randbytes(rng.randrange(8));post=rng.randbytes(rng.randrange(8))
    result,out=den('inflate_sized',pre+encoded+post,n,len(pre));assert result.returncode==0 and out==data,(i,'sized',result.stderr)
-   assert result.stdout.split()==[str(len(encoded)).encode(),str(n).encode()],(i,'sized consumed',result.stdout)
+   assert result.stdout.split()[:2]==[str(len(encoded)).encode(),str(n).encode()],(i,'sized consumed',result.stdout)
    if n:result,_=den('inflate_sized',pre+encoded+post,n-1,len(pre));assert result.returncode==1 and result.stderr.strip()==b'limit',(i,result.stderr);sized_refused+=1
    result,out=den('inflate_sized',pre+encoded+post,n+1,len(pre));assert result.returncode==0 and out==data,(i,'sized over',result.stderr)
    for variant in range(3):

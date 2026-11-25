@@ -127,7 +127,10 @@ fn units() -> () ! pack.PackErrors {
     var cut = part(framed, 0, framed.len - 9)
     var truncated = false
     let _ = zlib.inflate_sized(cut, 3, input.len) else |e| match e {
-        truncated => { truncated = true; zlib.Inflated { data: List[byte](), consumed: 0 } },
+        truncated => {
+            truncated = true
+            zlib.Inflated { data: List[byte](), consumed: 0, reserved: 0 }
+        },
         _ => { return Unsupported("inflate_sized truncation") },
     }
     assert(truncated)
