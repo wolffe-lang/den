@@ -1,5 +1,35 @@
 # Changes
 
+## Unreleased — an index read as Git reads it
+
+- den refused an index whose trailing checksum was not the SHA-1 of its
+  content. Git reads an index without checking that checksum, and where
+  `index.skipHash` is set (`feature.manyFiles` sets it) Git writes twenty zero
+  bytes in its place. So den refused every index Git wrote with that setting,
+  with `fatal: checksum`. Every read also paid a SHA-1 of the whole index:
+  1.6 M of the 11.0 M instructions of a warm `diff --quiet` on the status-speed
+  leaf's fixture.
+- A read now checks the index's structure as before, but not its trailing
+  checksum. `fsck` checks the checksum as Git's does. It accepts the zeros and
+  the content's SHA-1. It refuses anything else with Git's two lines,
+  `error: bad index file sha1 signature` and `fatal: index file corrupt`, and
+  Git's exit, 128, where it exited 2 before.
+- What a read no longer catches: a damaged index whose structure still
+  parses. A flipped bit in an entry's stat words or object name is now read as
+  Git reads it, where den refused it as `checksum`. `fsck` still refuses it.
+- den's writes still compute the checksum where `index.skipHash` is set; Git
+  writes zeros there. Git reads either.
+- `ls-files` on an index den refuses names the cause, as `status` does
+  (`fatal: invalid_index`, and so on), not `fatal: den: invalid`. Its exit
+  stays 128, as Git's.
+- The stat pass of `diff` checked each index path's components again after
+  the index read had checked them. It now checks none again. It looks only at
+  the components past the directory it last verified, and copies a path only
+  when the result keeps it.
+- `diff` copied paths and file bodies a byte at a time; an owned path or body
+  is now copied in one copy. A string's bytes still go through the byte copy,
+  which wolf-lang#927 requires.
+
 ## Unreleased — status beside a large pack
 
 - Opening a pack index read the file 64 KiB at a time and copied every byte
