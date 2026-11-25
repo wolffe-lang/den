@@ -177,7 +177,7 @@ to a twentieth and never under a fifth. Seven takes on two core sets on
 their band is also 1.20 and no ceiling moved. Rows den already runs within 3
 times Git stand at 3. The rest stand where den is today: warm `status` in the
 native build at 3.5, `diff --cached --quiet` at 3.5 to 4, warm `diff --quiet` at
-4.5 in the native build and 3.5 in the release build (Git answers in about
+3.5 in both builds (Git answers in about
 0.6 ms; den's fixed start-up costs show), and warm `pull` in the native build
 at 4. A change that makes a row faster lowers its
 ceiling by the same rule in the same change; a ceiling rises only with a stated
