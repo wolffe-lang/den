@@ -234,26 +234,43 @@ def kinds_row(name, r, bodies):
     if not good: print(name, p.returncode, p.stdout[:400], 'expected', expected, p.stderr[:300], flush=True)
 kinds_row('kinds-unloaded-reader', repo('kinds-unloaded', pack, idx), [base, middle, last, base])
 # Opening a pack index costs one positional read for each MiB of it (the
-# runtime's read returns at most a MiB) and copies none of it a byte at a time:
-# the session's own counters, printed through the probe (--open-counts). The
-# large index holds 60,000 objects (1.68 MB): its name table crosses the first
-# MiB boundary, and the object whose name straddles it must read back.
-def open_counts_row(name, r, idx_len):
+# runtime's read returns at most a MiB), copies none of it a byte at a time,
+# and orders its offsets in work that grows with its entries, not with a fixed
+# table: the session's own counters, printed through the probe (--open-counts).
+# The large index holds 60,000 objects (1.68 MB): its name table crosses the
+# first MiB boundary, and the object whose name straddles it must read back.
+# The many-pack repository holds 20 packs of 50 objects, the shape a pull's
+# repository has (44 packs of about 1,600): there a sort's fixed cost is paid
+# on every index the command opens.
+def open_counts_row(name, r, idx_lens, objects):
     p = subprocess.run([str(CLIENT), '--open-counts', str(r)], capture_output=True, timeout=120)
     out = p.stdout.decode(errors='replace')
-    m = re.fullmatch(r'loaded=true opens=1 reads=(\d+) pushed=(\d+)\n', out)
-    bound = -(-idx_len // 1048576)
-    good = p.returncode == 0 and not p.stderr and m is not None and int(m.group(1)) <= bound and int(m.group(2)) == 0
-    rows.append(dict(name=name, ok=good, code=p.returncode, stdout=out, bound=f'reads<={bound} pushed=0', stderr=p.stderr.decode(errors='replace')))
-    if not good: print(name, p.returncode, out, f'bound reads<={bound} pushed=0', p.stderr[:300], flush=True)
-open_counts_row('open-counts-small', repo('open-counts-small', pack, idx), len(idx))
+    m = re.fullmatch(r'loaded=true opens=(\d+) reads=(\d+) pushed=(\d+) sorted=(\d+)\n', out)
+    reads = sum(-(-n // 1048576) for n in idx_lens)
+    # Per index: two lists set up and copied out, then up to three passes of at
+    # most 257 counters zeroed and summed and every key counted and moved.
+    sort = sum(3 * n + 257 + 3 * (514 + 2 * n) for n in objects)
+    good = (p.returncode == 0 and not p.stderr and m is not None and int(m.group(1)) == len(idx_lens)
+            and int(m.group(2)) <= reads and int(m.group(3)) == 0 and int(m.group(4)) <= sort)
+    bound = f'opens={len(idx_lens)} reads<={reads} pushed=0 sorted<={sort}'
+    rows.append(dict(name=name, ok=good, code=p.returncode, stdout=out, bound=bound, stderr=p.stderr.decode(errors='replace')))
+    if not good: print(name, p.returncode, out.strip(), 'bound', bound, p.stderr[:300], flush=True)
+open_counts_row('open-counts-small', repo('open-counts-small', pack, idx), [len(idx)], [3])
 many = [b'object %d\n' % i for i in range(60000)]
 pack_many, idx_many, records_many = make([(3, b, b, b'') for b in many])
 by_name = {oid('blob', b): b for b in many}
 r_many = repo('open-counts-large', pack_many, idx_many)
-open_counts_row('open-counts-large', r_many, len(idx_many))
+open_counts_row('open-counts-large', r_many, [len(idx_many)], [60000])
 straddle = next(i for i in range(len(records_many)) if (1032 + 20 * i) // 1048576 != (1032 + 20 * i + 19) // 1048576)
 check('open-counts-straddling-name', r_many, by_name[records_many[straddle][0]])
+r_packs = repo('open-counts-many-packs', pack, idx)
+(r_packs/'objects'/'pack'/'pack-fixture.pack').unlink(); (r_packs/'objects'/'pack'/'pack-fixture.idx').unlink()
+packs_idx = []
+for k in range(20):
+    pk, ik, _ = make([(3, b, b, b'') for b in (b'pack %d object %d\n' % (k, i) for i in range(50))])
+    (r_packs/'objects'/'pack'/f'pack-m{k:02d}.pack').write_bytes(pk); (r_packs/'objects'/'pack'/f'pack-m{k:02d}.idx').write_bytes(ik)
+    packs_idx.append(len(ik))
+open_counts_row('open-counts-many-packs', r_packs, packs_idx, [50] * 20)
 (OUT/'results.json').write_text(json.dumps(rows,indent=2)+'\n')
 print(f'pack structural: {sum(x["ok"] for x in rows)}/{len(rows)}; zero skips',flush=True)
 raise SystemExit(not all(x['ok'] for x in rows))
