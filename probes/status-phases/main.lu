@@ -1,6 +1,38 @@
 // Measure public read-only boundaries without changing production status.
 use std.time
+use index
 use worktree
+
+// path-work: the tracked stat pass a warm `diff --quiet` makes over the index
+// (diff's endpoints: each stage-0 entry that is no gitlink, intent-to-add or
+// skip-worktree entry, in index order, with one verified-ancestor list), and
+// what it spends on paths: its checks and the path bytes it builds or copies.
+fn path_work(root: str) -> () ! worktree.WorkErrors {
+    let ctx = worktree.discover(root)?
+    let value = worktree.read_index(ctx)?
+    let written = worktree.index_written(ctx)
+    let filemode = worktree.config_bool(ctx, "core.filemode", true)?
+    let symlinks = worktree.config_bool(ctx, "core.symlinks", true)?
+    var verified = List[List[byte]](), work = worktree.path_work(), files = 0, clean = 0
+    for entry in value.entries {
+        if index.stage(entry) != 0 || entry.stat[6] == 0o160000 { continue }
+        if entry.flags & 0x8000 != 0 || entry.extended & 0x4000 != 0 { continue }
+        let seen = worktree.tracked_stat_counted(
+            ctx,
+            entry,
+            written,
+            filemode,
+            symlinks,
+            mut verified,
+            mut work,
+        )?
+        files += 1
+        if seen.clean { clean += 1 }
+    }
+    print(
+        "path_work files={files} clean={clean} checks={work.checks} bytes={work.bytes} root={ctx.root.len}",
+    )
+}
 
 fn measured(root: str, untracked: bool, full: bool, paths: bool) -> () ! worktree.WorkErrors {
     var start = time.monotonic_ns()
@@ -47,7 +79,17 @@ fn measured(root: str, untracked: bool, full: bool, paths: bool) -> () ! worktre
 
 fn main() -> int {
     let args = env_args()
-    if args.len < 1 { eprint("usage: status-phases ROOT [no-untracked] [full] [paths]"); return 2 }
+    if args.len < 1 {
+        eprint("usage: status-phases ROOT [no-untracked] [full] [paths] | ROOT path-work")
+        return 2
+    }
+    if args.len == 2 && args[1] == "path-work" {
+        path_work(args[0]) else |error| {
+            eprint("path-work failure: {error}")
+            return 1
+        }
+        return 0
+    }
     var untracked = true, full = false, paths = false
     for i in 1..args.len {
         if args[i] == "no-untracked" { untracked = false }
