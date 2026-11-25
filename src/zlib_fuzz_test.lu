@@ -1,0 +1,128 @@
+//! member: false
+
+// The codec fuzz on every tier, the checked machine included. tools/codec-fuzz.py
+// drives the zpipe binary from Python, which the checked machine cannot run;
+// this program makes its own mutants instead. Three payloads are deflated by
+// den's own encoder (stored and level 1, zlib-wrapped, and level 1 raw); each
+// round mutates one of those streams, by a cut, one to four flipped bits, or a
+// run of seeded bytes, and runs the mutant through inflate (or inflate_raw)
+// and, for a zlib stream, through inflate_sized behind and before junk bytes,
+// at the stream's size. Every answer must be the decoded bytes or one of the
+// inflater's six named refusals; a trap ends the program, so the checked
+// machine's verdict is not exit(0). The rounds are sized to the checked
+// machine's step budget (rounds()); the native and release tiers run four
+// times as many (--more). There is no differential here: codec-fuzz.py holds the answers
+// against Python's zlib.
+use zlib
+
+// 300 rounds: on the pinned compiler's checked machine 360 fit its step
+// budget and 450 did not (measured 2026-11-25).
+fn rounds() -> int { 300 }
+
+fn step(seed: int) -> int { (seed * 1103515245 + 12345) % 2147483648 }
+
+fn payload(shape: int, n: int, seed0: int) -> List[byte] {
+    var out = List[byte]()
+    var seed = seed0
+    while out.len < n {
+        seed = step(seed)
+        let r = seed / 65536
+        if shape == 0 {
+            (mut out).push((r % 256) as byte)
+        } else if shape == 1 {
+            (mut out).push((r % 4 * 61) as byte)
+        } else {
+            let w = "tree blob commit parent author den pack\n".bytes()
+            let at = r % 30
+            for i in at..at + 8 { if out.len < n { (mut out).push(w[i]) } }
+        }
+    }
+    out
+}
+
+fn named(answer: str) -> bool {
+    answer == "ok" ||
+        answer == "truncated" ||
+        answer == "bad_header" ||
+        answer == "dictionary" ||
+        answer == "checksum" ||
+        answer == "invalid" ||
+        answer == "limit"
+}
+
+fn whole(input: List[byte], cap: int, raw: bool) -> str {
+    let _ = (if raw then zlib.inflate_raw(input, cap) else zlib.inflate(input, cap)) else |e| {
+        return "{e}"
+    }
+    "ok"
+}
+
+fn sized(input: List[byte], start: int, size: int) -> str {
+    let _ = zlib.inflate_sized(input, start, size) else |e| { return "{e}" }
+    "ok"
+}
+
+fn main() -> int ! {invalid, unsupported_level, limit} {
+    var streams = List[List[byte]](), raws = List[bool](), sizes = List[int]()
+    for shape in 0..3 {
+        let n = 300 + shape * 450
+        let src = payload(shape, n, 7919 * (shape + 1))
+        (mut streams).push(zlib.deflate(src, 0, n + n / 8 + 65536)?)
+        (mut raws).push(false)
+        (mut sizes).push(n)
+        (mut streams).push(zlib.deflate(src, 1, n + n / 8 + 65536)?)
+        (mut raws).push(false)
+        (mut sizes).push(n)
+        (mut streams).push(zlib.deflate_raw(src, 1, n + n / 8 + 65536)?)
+        (mut raws).push(true)
+        (mut sizes).push(n)
+    }
+    var seed = 1983, accepted = 0, refused = 0, sized_accepted = 0, sized_refused = 0
+    var total = rounds()
+    let args = env_args()
+    if args.len == 1 && args[0] == "--more" { total = rounds() * 4 }
+    for r in 0..total {
+        region one {
+            let k = r % streams.len
+            let s = copy streams[k]
+            var m = List[byte]()
+            seed = step(seed)
+            let kind = r / streams.len % 3
+            if kind == 0 {
+                let cut = seed / 65536 % s.len
+                for i in 0..cut { (mut m).push(s[i]) }
+            } else if kind == 1 {
+                for b in s { (mut m).push(b) }
+                let flips = 1 + seed / 65536 % 4
+                for _ in 0..flips {
+                    seed = step(seed)
+                    let at = seed / 65536 % m.len
+                    seed = step(seed)
+                    m[at] = (m[at] as int ^ 1 << seed / 65536 % 8) as byte
+                }
+            } else {
+                let len = seed / 65536 % 100
+                for _ in 0..len {
+                    seed = step(seed)
+                    (mut m).push((seed / 65536 % 256) as byte)
+                }
+            }
+            let answer = whole(m, sizes[k], raws[k])
+            assert(named(answer))
+            if answer == "ok" { accepted += 1 } else { refused += 1 }
+            if !raws[k] {
+                var framed = List[byte]()
+                for _ in 0..3 { (mut framed).push(165 as byte) }
+                for b in m { (mut framed).push(b) }
+                for _ in 0..5 { (mut framed).push(90 as byte) }
+                let got = sized(framed, 3, sizes[k])
+                assert(named(got))
+                if got == "ok" { sized_accepted += 1 } else { sized_refused += 1 }
+            }
+        }
+    }
+    print(
+        "PASS zlib-fuzz rounds={total} whole: {accepted} accepted, {refused} refused; sized: {sized_accepted} accepted, {sized_refused} refused\n",
+    )
+    0
+}
