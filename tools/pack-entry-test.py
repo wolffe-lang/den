@@ -27,6 +27,24 @@ with it left as it was. Each read of the damaged object must:
   - when den answers, answer as Git does, byte for byte;
   - when Git answers and den refuses, be refused as `pack entry CRC` (the CRC left as it was: a flipped bit the
     stream never reads) or as `pack object identity`, the two checks Git's read does not make.
+
+Then what reads cost, from the session's counters (probes/pack-client --read-counts: sorted, resolved, read, the
+pack bytes read for the entries, and reserved, the output bytes reserved for them):
+  read-counts-no-delta   a read of an object with no delta orders no offsets and resolves none
+  read-counts-delta      a delta's read orders its index once
+  gap-after-first|last   seven junk bytes after an entry: every read answers as Git's, and fsck and verify-pack
+                         fail as Git's do
+  unused-bit             a bit the stream never reads, flipped, the CRC as it was: den refuses it as `pack entry
+                         CRC` (its CRC is checked over the bytes the stream used); Git reads it
+  false-claim-counts     a declared size of 400 MiB in a pack running on past 8 MiB: refused, having read no more
+                         than a first window (4 KiB and a MiB) and reserved no more than a MiB or eight times what
+                         the stream decodes
+  residual-counts        the same claim on a stream that truly consumes more than a MiB (220,000 empty stored
+                         blocks) before its few bytes: refused as Git refuses it, its reservation at most a MiB; its
+                         read, which may run to the size hint capped by the pack's end, is printed beside the
+                         stream's own length
+  big-*                  a 16 MiB blob, incompressible and compressible: read back as Git reads it, its output
+                         reserved at most 1.4 times its size
 """
 import argparse
 import hashlib
@@ -209,9 +227,9 @@ def main():
     blob = {path: run([git, 'rev-parse', f'HEAD:{path}'], seed).decode().strip() for path in files}
     first_dynamic = run([git, 'rev-parse', 'HEAD~1:dynamic.txt'], seed).decode().strip()
 
-    def packed(name, args):
+    def packed(name, args, source=None):
         repo = out / name
-        shutil.copytree(seed, repo)
+        shutil.copytree(source or seed, repo)
         run([git, '-c', 'gc.writeCommitGraph=false', '-c', 'repack.writeBitmaps=false', 'repack', '-adq', *args], repo)
         run([git, 'prune-packed'], repo)
         idx = list((repo / '.git/objects/pack').glob('*.idx'))
@@ -314,6 +332,139 @@ def main():
     for path, label in (('stored.bin', 'stored'), ('fixed.txt', 'fixed'), ('dynamic.txt', 'dynamic')):
         sweep(label, plain, plain_repo, plain_idx, slot[path])
     sweep('ofs-delta', delta, delta_repo, delta_idx, ofs[0])
+
+    # What a read costs, from the session's own counters (probes/pack-client --read-counts).
+    client = str(root / 'target' / a.tier / 'pack-client')
+
+    def counts(repo, name):
+        p = subprocess.run([client, '--read-counts', str(repo / '.git'), name], capture_output=True, env=env,
+                           timeout=TIMEOUT)
+        line = p.stdout.decode(errors='replace').strip()
+        fields = dict(f.split('=', 1) for f in line.split() if '=' in f)
+        outcome = ' '.join(f for f in line.split() if '=' not in f)
+        return p.returncode, fields, outcome, line
+
+    def num(fields, key):
+        return int(fields.get(key, '-1'))
+
+    # A read of an object with no delta orders nothing and resolves no offset.
+    rc, f, outcome, line = counts(plain_repo, blob['stored.bin'])
+    row('entry-read-counts-no-delta', rc == 0 and outcome.startswith('read blob') and num(f, 'sorted') == 0 and
+        num(f, 'resolved') == 0, line)
+    # A delta's read orders its index once: the radix's work for its entries, every offset resolved once.
+    n = delta.count
+    rc, f, outcome, line = counts(delta_repo, delta.names[ofs[0]])
+    row('entry-read-counts-delta', rc == 0 and outcome.startswith('read ') and num(f, 'resolved') == n and
+        0 < num(f, 'sorted') <= 3 * n + 257 + 3 * (514 + 2 * n), line)
+
+    # Bytes between entries: Git reads every object, as it finds each entry's end from its own stream.
+    for name, after in (('gap-after-first', plain.order[0]), ('gap-after-last', plain.order[-1])):
+        kind_, size_, hend_, eend_ = plain.span(after)
+        pack, idx = plain.rewrite(after, plain.pack[plain.offsets[after]:eend_] + b'JUNK!!!', resign=False)
+        repo = install(plain_repo, plain_idx, 'case-' + name, pack, idx)
+        bad = []
+        for args in [['status', '--porcelain'], ['log', '--oneline']] + [['cat-file', '-p', x] for x in plain.names]:
+            g = subprocess.run([git, *args], cwd=repo, capture_output=True, env=env, timeout=TIMEOUT)
+            d = subprocess.run([den, *args], cwd=repo, capture_output=True, env=env, timeout=TIMEOUT)
+            if g.returncode != d.returncode or (g.returncode == 0 and (g.stdout, g.stderr) != (d.stdout, d.stderr)):
+                bad.append(f'{" ".join(args[:2])} {args[2][:12] if len(args) > 2 else ""}: git {g.returncode} den {d.returncode} {d.stderr[-100:]!r}')
+        for args in (['fsck', '--full'], ['verify-pack', str(repo / '.git/objects/pack' / plain_idx.name)]):
+            g = subprocess.run([git, *args], cwd=repo, capture_output=True, env=env, timeout=TIMEOUT)
+            d = subprocess.run([den, *args], cwd=repo, capture_output=True, env=env, timeout=TIMEOUT)
+            if (g.returncode == 0) != (d.returncode == 0):
+                bad.append(f'{args[0]}: git {g.returncode} den {d.returncode}')
+        row(f'entry-{name}-reads', not bad, '; '.join(bad[:4]))
+
+    # A bit the stream never reads: its output is the same, so only the CRC sees it. den refuses it (the
+    # CRC checked after the inflate, over the bytes the stream used); Git's read does not check the CRC.
+    found = None
+    for slot_ in plain.order:
+        kind_, size_, hend_, eend_ = plain.span(slot_)
+        stream_ = plain.pack[hend_:eend_]
+        want_ = zlib.decompress(stream_)
+        for bit in range(8):
+            m = bytearray(stream_)
+            m[-5] ^= 1 << bit
+            try:
+                same = zlib.decompress(bytes(m)) == want_
+            except zlib.error:
+                same = False
+            if same:
+                found = (slot_, plain.pack[plain.offsets[slot_]:hend_] + bytes(m))
+                break
+        if found:
+            break
+    if found is None:
+        row('entry-unused-bit', False, 'no entry has an unused bit in its last deflate byte')
+    else:
+        pack, idx = plain.rewrite(found[0], found[1], resign=False)
+        repo = install(plain_repo, plain_idx, 'case-unused-bit', pack, idx)
+        g, d = read(git, repo, plain.names[found[0]]), read(den, repo, plain.names[found[0]])
+        row('entry-unused-bit', g[0] == 0 and d[0] == 128 and b'Unsupported(pack entry CRC)' in d[2],
+            f'git {g[0]} den {d[0]} {d[2][-120:]!r}')
+
+    # A false declared size in a pack whose entries run on past 8 MiB: the read reads at most a first window
+    # and reserves at most a MiB or eight times what the stream decodes.
+    padded = out / 'padded-seed'
+    shutil.copytree(seed, padded)
+    (padded / 'pad.bin').write_bytes(rng.randbytes(8 << 20))
+    run([git, 'add', 'pad.bin'], padded)
+    run([git, 'commit', '-q', '--date', '1700000900 +0000', '-m', 'pad'], padded)
+    pad_repo, pad_idx = packed('padded', ['-f', '--window=0', '--depth=0'], padded)
+    padp = Pack(pad_idx.with_suffix('.pack').read_bytes(), pad_idx.read_bytes())
+    pad_name = run([git, 'rev-parse', 'HEAD:pad.bin'], padded).decode().strip()
+    small = [i for i in range(padp.count) if padp.span(i)[0] == 3 and padp.names[i] != pad_name]
+    victim = max(small, key=lambda i: padp.end - padp.offsets[i])
+    kind_, size_, hend_, eend_ = padp.span(victim)
+    rest = padp.end - padp.offsets[victim]
+    pack, idx = padp.rewrite(victim, entry_header(kind_, 400 << 20) + padp.pack[hend_:eend_])
+    repo = install(pad_repo, pad_idx, 'case-false-claim', pack, idx)
+    rc, f, outcome, line = counts(repo, padp.names[victim])
+    first = 4096 + (1 << 20)
+    row('entry-false-claim-counts', outcome.startswith('refused') and num(f, 'read') <= first and
+        0 < num(f, 'reserved') <= max(1 << 20, 8 * size_), f'{line} (the pack runs on {rest} bytes past the entry)')
+    print(f'  false claim: read={num(f, "read")} reserved={num(f, "reserved")}; decoded {size_}; the pack runs on {rest} bytes', flush=True)
+
+    # The residual, built: a stream that truly consumes more than a MiB (empty stored blocks) before it
+    # decodes its few bytes, under the same false claim. Its read may run to the hint, capped by the pack's
+    # end; its reservation stays at a MiB.
+    data_ = zlib.decompress(padp.pack[hend_:eend_])
+    blocks = 220000
+    crafted = b'\x78\x01' + b'\x00\x00\x00\xff\xff' * blocks + b'\x01' + struct.pack('<HH', len(data_), 0xffff ^ len(data_)) + \
+        data_ + zlib.adler32(data_).to_bytes(4, 'big')
+    assert zlib.decompress(crafted) == data_
+    pack, idx = padp.rewrite(victim, entry_header(kind_, 400 << 20) + crafted)
+    repo = install(pad_repo, pad_idx, 'case-residual', pack, idx)
+    rest = len(pack) - 20 - padp.offsets[victim]
+    rc, f, outcome, line = counts(repo, padp.names[victim])
+    g = read(git, repo, padp.names[victim])
+    row('entry-residual-counts', outcome.startswith('refused') and g[0] != 0 and
+        num(f, 'read') <= 2 * rest + first and 0 < num(f, 'reserved') <= 1 << 20,
+        f'{line}; Git {g[0]}')
+    print(f'  residual: read={num(f, "read")} reserved={num(f, "reserved")}; the stream is {len(crafted)} bytes '
+          f'(what Git inflates through); the pack runs on {rest} bytes past the entry', flush=True)
+
+    # A sound entry well over a MiB, incompressible and compressible: its output is reserved at most 1.4
+    # times its size (a MiB first, doubling to an eighth, then the size), and read back as Git reads it.
+    big = out / 'big-seed'
+    run([git, 'init', '-q', '-b', 'main', big], out)
+    lines = b''.join(b'%08d the compressible form of a 16 MiB blob, line by line\n' % i for i in range(300000))
+    bodies = {'incompressible.bin': rng.randbytes(16 << 20), 'compressible.txt': lines[:16 << 20]}
+    for path, body in bodies.items():
+        (big / path).write_bytes(body)
+    run([git, 'add', '-A'], big)
+    run([git, 'commit', '-q', '--date', '1700001000 +0000', '-m', 'big'], big)
+    run([git, 'repack', '-adq'], big)
+    run([git, 'prune-packed'], big)
+    for path, body in bodies.items():
+        name = run([git, 'rev-parse', f'HEAD:{path}'], big).decode().strip()
+        rc, f, outcome, line = counts(big, name)
+        g, d = read(git, big, name), read(den, big, name)
+        ratio = num(f, 'reserved') / len(body)
+        same = g[0] == 0 and d[0] == 0 and hashlib.sha256(d[1]).digest() == hashlib.sha256(g[1]).digest()
+        row(f'entry-big-{path.split(".")[0]}', outcome == f'read blob {len(body)}' and same and ratio <= 1.4,
+            f'{line}; ratio {ratio:.3f}; same as Git {same}')
+        print(f'  big {path}: reserved={num(f, "reserved")} ({ratio:.3f} of {len(body)}), read={num(f, "read")}', flush=True)
     failures = rows.count(False)
     print(f'pack-entry: {len(rows)} rows, {failures} failures; zero skips', flush=True)
     raise SystemExit(1 if failures else 0)
