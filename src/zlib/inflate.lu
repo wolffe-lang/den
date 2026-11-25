@@ -256,7 +256,7 @@ fn compressed(
             let dc = if fixed then fixed_distance(src, mut r)? else symbol(src, mut r, dt)?
             if dc > 29 { return invalid }
             let distance = distance_base(dc) + bits(src, mut r, distance_extra(dc))?
-            if distance > out.len || distance > window { return invalid }
+            if distance > window { return invalid }
             if length > room - out.len {
                 if length > cap - out.len { return limit }
                 grow(mut out, mut room, cap, length, mut total)
