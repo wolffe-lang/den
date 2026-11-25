@@ -178,27 +178,26 @@ pub fn path_work() -> PathWork { PathWork { checks: 0, bytes: 0 } }
 
 /// Each ancestor of path checked as safe_parents checks it, once per distinct
 /// ancestor across a sorted walk: verified holds the ancestors checked for
-/// the previous path, outermost first.
+/// the previous path, outermost first. path came from a parsed index, whose
+/// read has checked its components (index.parse), so they are not checked
+/// again; only the components past the deepest verified ancestor it lies
+/// under are looked at (in a sorted walk, usually the last).
 fn parents_verified(
     ctx: Context,
     path: List[byte],
     mut verified: List[List[byte]],
     mut work: PathWork,
 ) -> () ! WorkErrors {
-    work.checks += 1
-    if !valid_relative(path) { return invalid }
-    var depth = 0
-    for i in 0..path.len {
+    var depth = verified.len
+    while depth > 0 && !beneath(path, verified[depth - 1]) { depth -= 1 }
+    while verified.len > depth {
+        let _ = (mut verified).pop() else |_| { return invalid }
+    }
+    let from = if depth == 0 then 0 else verified[depth - 1].len + 1
+    for i in from..path.len {
         if path[i] != 47 as byte { continue }
         work.bytes += i
         let prefix = path[0..i]
-        if depth < verified.len && compare(verified[depth], prefix) == 0 {
-            depth += 1
-            continue
-        }
-        while verified.len > depth {
-            let _ = (mut verified).pop() else |_| { return invalid }
-        }
         work.bytes += ctx.root.len + 1 + 2 * i
         let info = fs_lstat(absolute(ctx, prefix)?) else |e| match e {
             not_found => { return not_found },
@@ -208,7 +207,27 @@ fn parents_verified(
         if info[0] == 3 { return Fatal("'{text(path)?}' is beyond a symbolic link") }
         if info[0] != 1 { return not_found }
         (mut verified).push(prefix)
-        depth += 1
+    }
+}
+
+/// Whether path lies under directory: directory's bytes, then a slash.
+fn beneath(path: List[byte], directory: List[byte]) -> bool {
+    if path.len <= directory.len || path[directory.len] != 47 as byte { return false }
+    for i in 0..directory.len { if path[i] != directory[i] { return false } }
+    true
+}
+
+/// An entry's worktree side unread: its path and the entry's id, no stat.
+fn unread(entry: index.Entry, mut work: PathWork) -> FileState {
+    work.bytes += entry.path.len
+    FileState {
+        path: copy entry.path,
+        mode: 0,
+        id: copy entry.id,
+        data: List[byte](),
+        stat: List[int](),
+        kind: -1,
+        dirt: 0,
     }
 }
 
@@ -217,7 +236,8 @@ fn parents_verified(
 /// matches the entry is clean and unread, whatever its attributes say, as Git
 /// takes it; anything else is present and not clean, its state unread, for
 /// tracked_read. Its ancestors are checked as read_file checks them, each
-/// once across a sorted walk (verified).
+/// once across a sorted walk (verified). entry comes from a parsed index, so
+/// its path's components are not checked again.
 pub fn tracked_stat(
     ctx: Context,
     entry: index.Entry,
@@ -240,23 +260,17 @@ pub fn tracked_stat_counted(
     mut verified: List[List[byte]],
     mut work: PathWork,
 ) -> Tracked ! WorkErrors {
-    work.bytes += entry.path.len
-    let none = FileState {
-        path: owned_bytes(entry.path),
-        mode: 0,
-        id: copy entry.id,
-        data: List[byte](),
-        stat: List[int](),
-        kind: -1,
-        dirt: 0,
-    }
     work.bytes += ctx.root.len + 1 + 2 * entry.path.len
     let full = absolute(ctx, entry.path)?
     let info = fs_lstat(full) else |e| match e {
-        not_found => { return Tracked { state: none, present: false, clean: false } },
+        not_found => {
+            return Tracked { state: unread(entry, mut work), present: false, clean: false }
+        },
         _ => { return io },
     }
-    if info[0] == 1 { return Tracked { state: none, present: false, clean: false } }
+    if info[0] == 1 {
+        return Tracked { state: unread(entry, mut work), present: false, clean: false }
+    }
     parents_verified(ctx, entry.path, mut verified, mut work)?
     if info[0] == 0 || link_judged(info, entry.stat[6], symlinks) {
         let kind = info[0]
@@ -269,7 +283,7 @@ pub fn tracked_stat_counted(
             work.bytes += entry.path.len
             return Tracked {
                 state: FileState {
-                    path: owned_bytes(entry.path),
+                    path: copy entry.path,
                     mode: mode,
                     id: copy entry.id,
                     data: List[byte](),
@@ -282,7 +296,7 @@ pub fn tracked_stat_counted(
             }
         }
     }
-    Tracked { state: none, present: true, clean: false }
+    Tracked { state: unread(entry, mut work), present: true, clean: false }
 }
 
 /// A present entry tracked_stat did not find clean, read and hashed with
