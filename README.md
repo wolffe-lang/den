@@ -714,8 +714,15 @@ index holds outside its bucket is not found.
 A read checks the entry it uses:
 - an offset of at least 12, inside the pack;
 - a large offset the table holds;
-- the entry's CRC, by its slot. So an offset-delta base that no index entry
-  names is refused; Git reads such a base at its pack offset.
+- the entry's CRC, by its slot, after the entry is inflated, over the bytes
+  its stream used. A read finds an entry's end from its own zlib stream, as
+  Git's does, so bytes between entries do not stop it.
+
+An offset-delta base is read at its offset, and its slot, for its CRC, is the
+one its rebuilt identity names at that offset. So no read orders an index, and
+a base that no index entry names is refused; Git reads such a base at its pack
+offset. A bit a stream never reads, flipped, is refused by its CRC; Git's read
+does not check the CRC.
 
 verify-pack, fsck and installation check every entry: fan-out against the
 names, sorted unique names, the large-offset table used exactly once, every
@@ -728,10 +735,17 @@ and its independent object identity. Corruption is a named error, not a
 missing-object fallback.
 
 An index is read a MiB at a time, because the runtime's positional read returns
-at most a MiB, and kept as read, never copied a byte at a time. Each entry's
-offset is resolved once. The offsets are ordered by a radix sort on 8-bit digits
-under 65,536 entries and 16-bit digits from there, so a command that opens many
-small indexes does not pay a large one's cost on each.
+at most a MiB, and kept as read, never copied a byte at a time. Opening it
+resolves no entry's offset and orders nothing. An index is ordered, its offsets
+resolved once and sorted by a radix sort (8-bit digits under 65,536 entries,
+16-bit from there), only when a check of every entry needs it, or a read that
+keeps its delta bases unhashed (a batch with a base cache) needs a base's slot
+by its offset.
+
+A read reads an entry's header in one read of at most 4 KiB, then its stream in
+one read of the least of the bytes left before the trailer, the size hint (the
+declared size, a sixteenth more and 64 bytes) and a MiB. Only when the stream
+runs past that window is it read again to the hint, capped by the pack's end.
 
 Pack hashing and other file reads use reclaimed 64-KiB offset windows without
 mmap.
@@ -739,7 +753,12 @@ Compressed entries and reconstructed bodies are bounded whole-object buffers:
 512 MiB per inflated entry/body (Git's `core.bigFileThreshold` default; it was
 16 MiB before vc23), that plus a sixteenth and 64 KiB compressed, 64 delta
 links and three objects' worth of charged reconstruction input/output per read.
-Inflated entries are reserved to their declared size. Indexes are bounded at
+An inflated entry's output is reserved before any byte is made to the least
+of its declared size, a MiB, and 1,032 bytes for each byte of input. Past that
+it grows as it is made: doubling to an eighth of the declared size, then to the
+size. A false declared size reserves at most a MiB, or eight times what its
+stream decodes; an entry over a MiB holds about 1.2 times its size while it is
+inflated. Indexes are bounded at
 16 MiB/400,000 objects, directories at 8,192 entries and 256 packs. No persistent
 verification cache or pack-size-independent CPU cost is claimed: checksums scan
 candidate packs again on each lookup.
