@@ -107,12 +107,17 @@ for name,p,i,reason in [('short-pack',pack[:11],idx,'pack truncated'),('bad-pack
 verify('bad-pack-trailer-verify-pack',OUT/'bad-pack-trailer','pack checksum')
 verify('bad-idx-trailer-verify-pack',OUT/'bad-idx-trailer','pack index checksum')
 # Malformed indexes, re-signed and with the checksum left stale: the
-# structure and CRC guards fire either way, not the SHA.
-for name,offset,value,reason in [('fanout',8,u32(999),'pack index fanout'),('crc',1032+20*3,b'\0'*4,'pack entry CRC'),('offset',1032+24*3+4*next(n for n,x in enumerate(records) if x[2]==12),u32(13),'pack index offsets'),('pack-binding',len(idx)-40,b'\0'*20,'pack index binding')]:
+# structure and CRC guards fire either way, not the SHA. A read checks the
+# entries it uses, as Git's reads do, and verify-pack every entry: with the
+# entry at 12 moved to 13, reading `last` reaches its chain's offset-delta base
+# at 12, which no idx entry names, and is refused there by name (Git reads the
+# base at its pack offset; den's read checks each entry's CRC, by its slot).
+for name,offset,value,reason,checked in [('fanout',8,u32(999),'pack index fanout','pack index fanout'),('crc',1032+20*3,b'\0'*4,'pack entry CRC','pack entry CRC'),('offset',1032+24*3+4*next(n for n,x in enumerate(records) if x[2]==12),u32(13),'pack OFS_DELTA base boundary','pack index offsets'),('pack-binding',len(idx)-40,b'\0'*20,'pack index binding','pack index binding')]:
     bad=idx[:offset]+value+idx[offset+len(value):]
     target = next(b for b in (base,middle,last) if oid('blob',b)==records[0][0]) if name=='crc' else last
     check(name,repo(name,pack,resign_idx(bad)),target,expected=reason)
     check(name+'-stale-sum',repo(name+'-stale-sum',pack,bad),target,expected=reason)
+    verify(name+'-verify-pack',OUT/name,checked)
 # Corrupt the delta instruction and repair every outer integrity layer.
 for name,delta,reason in [('zero-op',size(len(base))+b'\x00\x00','pack delta invalid'),('truncated-copy',size(len(base))+b'\x01\x91','pack delta invalid'),('base-size',b'\x01\x01\x01x','pack delta invalid')]:
     p,i,_=make([(3,base,base,b''),(6,last,delta,0)]); check(name,repo(name,p,i),last,expected=reason)
@@ -129,12 +134,15 @@ for marker,reason in [('multi-pack-index','multi-pack-index'),('pack-fixture.bit
 for suffix,reason in [('pack','pack missing companion'),('idx','pack missing index')]:
  rr=repo('missing-'+suffix,pack,idx); (rr/'objects/pack'/('pack-fixture.'+suffix)).unlink()
  check('missing-'+suffix,rr,last,expected=reason)
-# Signed idx structure mutations isolate sorted-name and large-offset validation.
-for name,bad,reason in [
- ('idx-order',idx[:1052]+idx[1032:1052]+idx[1072:],'pack index name order'),
- ('idx-large-slot',idx[:1032+24*3]+u32(0x80000000)+idx[1032+24*3+4:],'pack index large offsets'),
- ('idx-v1',idx[:4]+u32(1)+idx[8:],'pack index version')]:
+# Signed idx structure mutations isolate sorted-name and large-offset validation:
+# a read refuses the entry it uses (with two slots under one name, the slot found
+# holds another object, refused by its identity), verify-pack the whole index.
+for name,bad,reason,checked in [
+ ('idx-order',idx[:1052]+idx[1032:1052]+idx[1072:],'pack object identity','pack index name order'),
+ ('idx-large-slot',idx[:1032+24*3]+u32(0x80000000)+idx[1032+24*3+4:],'pack index large offsets','pack index large offsets'),
+ ('idx-v1',idx[:4]+u32(1)+idx[8:],'pack index version','pack index version')]:
  check(name,repo(name,pack,resign_idx(bad)),last,expected=reason)
+ verify(name+'-verify-pack',OUT/name,checked)
 # Independent copy/insert reconstruction with every optional copy field exercised.
 rng=random.Random(909)
 for case in range(96):
