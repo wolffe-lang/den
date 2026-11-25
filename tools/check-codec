@@ -41,6 +41,8 @@ for tier in native release; do
     tools/env python3 -I tools/codec-corpus.py --binary "target/$tier/zpipe" >"target/codec-corpus-$tier.log"
     tail -n 1 "target/codec-corpus-$tier.log"
     python3 -I tools/codec-fuzz.py --binary "target/$tier/zpipe"
+    # inflate_resume at every split point of four streams, against Python's zlib.
+    python3 -I tools/codec-resume-test.py --binary "target/$tier/zpipe"
 done
 # The checked program tests all block forms and malformed classes without fs.
 # Large file/100-MB tests are separate native measurements, not checked claims.
