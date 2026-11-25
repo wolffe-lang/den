@@ -165,6 +165,17 @@ pub struct Tracked { state: FileState, present: bool, clean: bool }
 /// The index file's mtime, for tracked's racy rule; [-1, -1] when unknown.
 pub fn index_written(ctx: Context) -> List[int] { index_time(ctx) }
 
+/// What the tracked stat pass spends on paths (tracked_stat_counted): checks,
+/// each call that checks a path's components again, and bytes, the path bytes
+/// it builds or copies. An owned path or a prefix costs its length; an
+/// absolute path costs the path twice (its validated text, then the joined
+/// string) and the root and a slash. probes/status-phases ROOT path-work
+/// prints them for a warm diff --quiet's pass.
+pub struct PathWork { checks: int, bytes: int }
+
+/// No path work yet.
+pub fn path_work() -> PathWork { PathWork { checks: 0, bytes: 0 } }
+
 /// Each ancestor of path checked as safe_parents checks it, once per distinct
 /// ancestor across a sorted walk: verified holds the ancestors checked for
 /// the previous path, outermost first.
@@ -172,11 +183,14 @@ fn parents_verified(
     ctx: Context,
     path: List[byte],
     mut verified: List[List[byte]],
+    mut work: PathWork,
 ) -> () ! WorkErrors {
+    work.checks += 1
     if !valid_relative(path) { return invalid }
     var depth = 0
     for i in 0..path.len {
         if path[i] != 47 as byte { continue }
+        work.bytes += i
         let prefix = path[0..i]
         if depth < verified.len && compare(verified[depth], prefix) == 0 {
             depth += 1
@@ -185,6 +199,7 @@ fn parents_verified(
         while verified.len > depth {
             let _ = (mut verified).pop() else |_| { return invalid }
         }
+        work.bytes += ctx.root.len + 1 + 2 * i
         let info = fs_lstat(absolute(ctx, prefix)?) else |e| match e {
             not_found => { return not_found },
             denied => { return denied },
@@ -211,6 +226,21 @@ pub fn tracked_stat(
     symlinks: bool,
     mut verified: List[List[byte]],
 ) -> Tracked ! WorkErrors {
+    var work = path_work()
+    tracked_stat_counted(ctx, entry, written, filemode, symlinks, mut verified, mut work)?
+}
+
+/// tracked_stat, adding to work what it spends on paths.
+pub fn tracked_stat_counted(
+    ctx: Context,
+    entry: index.Entry,
+    written: List[int],
+    filemode: bool,
+    symlinks: bool,
+    mut verified: List[List[byte]],
+    mut work: PathWork,
+) -> Tracked ! WorkErrors {
+    work.bytes += entry.path.len
     let none = FileState {
         path: owned_bytes(entry.path),
         mode: 0,
@@ -220,13 +250,14 @@ pub fn tracked_stat(
         kind: -1,
         dirt: 0,
     }
+    work.bytes += ctx.root.len + 1 + 2 * entry.path.len
     let full = absolute(ctx, entry.path)?
     let info = fs_lstat(full) else |e| match e {
         not_found => { return Tracked { state: none, present: false, clean: false } },
         _ => { return io },
     }
     if info[0] == 1 { return Tracked { state: none, present: false, clean: false } }
-    parents_verified(ctx, entry.path, mut verified)?
+    parents_verified(ctx, entry.path, mut verified, mut work)?
     if info[0] == 0 || link_judged(info, entry.stat[6], symlinks) {
         let kind = info[0]
         let mode = if kind == 3 {
@@ -235,6 +266,7 @@ pub fn tracked_stat(
             entry_disk_mode(info, entry.stat[6], filemode, symlinks)
         }
         if stat_clean(entry, info, mode, written) {
+            work.bytes += entry.path.len
             return Tracked {
                 state: FileState {
                     path: owned_bytes(entry.path),
