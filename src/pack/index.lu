@@ -146,100 +146,83 @@ fn name_before(data: List[List[byte]], a: int, b: int) -> bool {
 }
 
 /// Slots in increasing offset order, ties in slot order: a least-significant-
-/// digit radix sort on 16-bit digits of the offsets, each offset moving with
-/// its slot between two pairs of lists, a pass skipped where every offset has
-/// the same digit. Offsets under 2^32 take at most two passes, each a count
-/// and a scatter; the merge sort it replaces moved every slot through the
-/// entries, and copied it back, on each of about 19 passes for 390,000 objects.
-/// The pairs and the counts are the region's; only the order is kept.
-fn offset_order(offsets: List[int], mut steps: int) -> List[int] {
+/// digit radix sort over keys that carry their slot (offset * 2^19 + slot; an
+/// idx holds at most 400,000 objects, under 2^19), so one list moves each
+/// pass, not two. The digit is 16 bits for an index of 65,536 entries or more
+/// and 8 bits under that: a small index pays 257 counters a pass, not 65,537,
+/// and a pull opens about a thousand of them. A pass is skipped where every
+/// offset has the same digit. The second list and the counters are the
+/// region's; only the order is kept. steps counts the work: the list slots
+/// set up and the order copied out here, the rest in radix_pass. An offset of
+/// 2^44 or more is past any pack den reads, and structure would refuse it as
+/// this does.
+fn offset_order(offsets: List[int], mut steps: int) -> List[int] ! PackErrors {
     let n = offsets.len
     var order = List[int]()
     (mut order).reserve(n)
     var top: int = 0
     for o in offsets { if o > top { top = o } }
+    if top >= 17592186044416 { return Unsupported("pack index offsets") }
+    let bits = if n >= 65536 then 16 else 8
+    let buckets = if n >= 65536 then 65536 else 256
     region sort {
-        var keys_a = List[int](), slots_a = List[int](), keys_b = List[int](), slots_b = List[int]()
-        var counts = List[int]()
+        var keys_a = List[int](), keys_b = List[int](), counts = List[int]()
         (mut keys_a).reserve(n)
-        (mut slots_a).reserve(n)
         (mut keys_b).reserve(n)
-        (mut slots_b).reserve(n)
-        (mut counts).reserve(65537)
+        (mut counts).reserve(buckets + 1)
         for i in 0..n {
-            (mut keys_a).push(offsets[i])
-            (mut slots_a).push(i)
+            (mut keys_a).push(offsets[i] * 524288 + i)
             (mut keys_b).push(0)
-            (mut slots_b).push(0)
         }
-        for _ in 0..65537 { (mut counts).push(0) }
-        steps += 4 * n + 65537
+        for _ in 0..buckets + 1 { (mut counts).push(0) }
+        steps += 2 * n + buckets + 1
         var shift = 0, in_b = false
-        while shift < 64 && top >> shift > 0 {
+        while shift < 44 && top >> shift > 0 {
             var moved = false
             if in_b {
-                moved = radix_pass(
-                    keys_b,
-                    slots_b,
-                    mut keys_a,
-                    mut slots_a,
-                    shift,
-                    mut counts,
-                    mut steps,
-                )
+                moved = radix_pass(keys_b, mut keys_a, 19 + shift, buckets, mut counts, mut steps)
             } else {
-                moved = radix_pass(
-                    keys_a,
-                    slots_a,
-                    mut keys_b,
-                    mut slots_b,
-                    shift,
-                    mut counts,
-                    mut steps,
-                )
+                moved = radix_pass(keys_a, mut keys_b, 19 + shift, buckets, mut counts, mut steps)
             }
             if moved { in_b = !in_b }
-            shift += 16
+            shift += bits
         }
         if in_b {
-            for s in slots_b { (mut order).push(s) }
+            for k in keys_b { (mut order).push(k & 524287) }
         } else {
-            for s in slots_a { (mut order).push(s) }
+            for k in keys_a { (mut order).push(k & 524287) }
         }
         steps += n
     }
     order
 }
 
-/// One stable pass on the 16-bit digit at shift, from keys and slots into
-/// to_keys and to_slots. Answers false, moving nothing, when every key has the
-/// same digit there. steps counts the counters zeroed and summed and the keys
-/// counted and moved.
+/// One stable pass on the digit of buckets values at shift, from keys into to.
+/// Answers false, moving nothing, when every key has the same digit there.
+/// steps counts the counters zeroed and summed and the keys counted and moved.
 fn radix_pass(
     keys: List[int],
-    slots: List[int],
-    mut to_keys: List[int],
-    mut to_slots: List[int],
+    mut to: List[int],
     shift: int,
+    buckets: int,
     mut counts: List[int],
     mut steps: int,
 ) -> bool {
-    for d in 0..65537 { counts[d] = 0 }
-    for k in keys { counts[(k >> shift & 65535) + 1] += 1 }
-    steps += 65537 + keys.len
-    for d in 1..65537 {
+    let mask = buckets - 1
+    for d in 0..buckets + 1 { counts[d] = 0 }
+    for k in keys { counts[(k >> shift & mask) + 1] += 1 }
+    steps += buckets + 1 + keys.len
+    for d in 1..buckets + 1 {
         steps += 1
         if counts[d] == keys.len { return false }
         counts[d] += counts[d - 1]
     }
-    steps += keys.len
-    for i in 0..keys.len {
-        let digit = keys[i] >> shift & 65535
-        let place = counts[digit]
-        to_keys[place] = keys[i]
-        to_slots[place] = slots[i]
-        counts[digit] = place + 1
+    for k in keys {
+        let digit = k >> shift & mask
+        to[counts[digit]] = k
+        counts[digit] += 1
     }
+    steps += keys.len
     true
 }
 
@@ -341,7 +324,7 @@ fn parse_index(take data: List[List[byte]], size: int, summed: bool) -> Index ! 
     if large_used.len != large_count { return Unsupported("pack index large offsets") }
     // Two entries at one offset: the former per-entry duplicate check, once.
     var sort_steps: int = 0
-    let by_offset = offset_order(offsets, mut sort_steps)
+    let by_offset = offset_order(offsets, mut sort_steps)?
     for rank in 1..by_offset.len {
         if offsets[by_offset[rank]] == offsets[by_offset[rank - 1]] {
             return Unsupported("pack index offsets")
