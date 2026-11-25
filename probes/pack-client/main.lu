@@ -98,12 +98,13 @@ fn kinds(args: List[str]) -> () ! object.StoreErrors {
 
 // --open-counts REPO: open REPO's packs once (object.opened) and print what
 // opening them cost, from the session's own counters: the indexes loaded, the
-// positional reads they took and the bytes copied one at a time.
+// positional reads they took, the bytes copied one at a time and the work
+// ordering their offsets took.
 fn open_counts(args: List[str]) -> () ! object.StoreErrors {
     if args.len != 2 { return invalid }
     let repo = object.opened(repository.open(args[1])?)
     print(
-        "loaded={repo.packs.loaded} opens={repo.packs.opens} reads={repo.packs.reads} pushed={repo.packs.pushed}",
+        "loaded={repo.packs.loaded} opens={repo.packs.opens} reads={repo.packs.reads} pushed={repo.packs.pushed} sorted={repo.packs.sorted}",
     )
 }
 
