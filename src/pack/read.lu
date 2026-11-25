@@ -406,7 +406,7 @@ fn unpack(
                 }
                 if refused == 0 {
                     let edge = if consumed >= 0 then pos + consumed else pos + st.at
-                    crc = crc_part(crc, w, 0, edge - start)
+                    crc = if consumed >= 0 then crc_part(crc, w, 0, edge - start) else crc
                     start = edge
                 }
             }
