@@ -8,14 +8,19 @@ use hash
 /// slot's name at 1032 + 20 * slot, its CRC32 at 1032 + 20 * count + 4 *
 /// slot; a name is spelled in hex only when one is printed or matched by a
 /// prefix. offsets holds each slot's pack offset, the large-offset table
-/// resolved; by_offset holds the slots in increasing offset order. Lookups are
-/// binary searches (the runtime Map is a linear scan, which made every idx
-/// parse quadratic). reads and pushed are what loading it cost: the positional
-/// reads of the file, and the bytes copied one at a time; sorted is the work
-/// ordering the offsets took (list slots set up, counters zeroed and summed,
-/// keys counted and moved). pack.Session sums them for the probe surface.
+/// followed, or -1 where it cannot be followed; by_offset holds the slots with
+/// an offset in increasing offset order. Lookups are binary searches within a
+/// name's fanout bucket (the runtime Map is a linear scan, which made every
+/// idx parse quadratic). The open checks what any use of the index needs; an
+/// entry is checked where a read uses it (slot_offset), and every entry by
+/// verify-pack, fsck and installation (validate_entries). reads and pushed
+/// are what loading it cost: the positional reads of the file, and the bytes
+/// copied one at a time; sorted is the work ordering the offsets took (list
+/// slots set up, counters zeroed and summed, keys counted and moved).
+/// pack.Session sums them for the probe surface.
 struct Index {
     data: List[List[byte]],
+    size: int,
     count: int,
     offsets: List[int],
     by_offset: List[int],
@@ -93,13 +98,27 @@ fn slot_crc(index: Index, slot: int) -> int { word(index.data, 1032 + 20 * index
 fn slot_named(index: Index, name: str) -> int {
     let raw = raw_name(name)
     if raw.len != 20 { return -1 }
-    var lo = 0, hi = index.count
+    // Within the name's fanout bucket, as Git looks: a name the idx holds
+    // outside its bucket is not found, as Git does not find it.
+    let first = raw[0] as int
+    var lo = if first == 0 then 0 else word(index.data, 8 + 4 * (first - 1))
+    let end = word(index.data, 8 + 4 * first)
+    var hi = end
     while lo < hi {
         let mid = (lo + hi) / 2
         if name_cmp(index, mid, raw) < 0 { lo = mid + 1 } else { hi = mid }
     }
-    if lo < index.count && name_cmp(index, lo, raw) == 0 { return lo }
+    if lo < end && name_cmp(index, lo, raw) == 0 { return lo }
     -1
+}
+
+/// slot's pack offset for a read of it, below end (the pack's entries end):
+/// the entry's own checks, made where it is used as Git makes them.
+fn slot_offset(index: Index, slot: int, end: int) -> int ! PackErrors {
+    let offset = index.offsets[slot]
+    if offset < 0 { return Unsupported("pack index large offsets") }
+    if offset < 12 || offset >= end { return Unsupported("pack index offsets") }
+    offset
 }
 
 /// The first rank in by_offset whose entry starts at or after offset.
@@ -132,8 +151,8 @@ fn next_offset(index: Index, offset: int, end: int) -> int {
 
 /// The largest offset, or -1 for an index with no entries.
 fn last_offset(index: Index) -> int {
-    if index.count == 0 { return -1 }
-    index.offsets[index.by_offset[index.count - 1]]
+    if index.by_offset.len == 0 { return -1 }
+    index.offsets[index.by_offset[index.by_offset.len - 1]]
 }
 
 // Whether the 20 raw bytes at a sort before those at b (unsigned).
@@ -153,16 +172,17 @@ fn name_before(data: List[List[byte]], a: int, b: int) -> bool {
 /// and a pull opens about a thousand of them. A pass is skipped where every
 /// offset has the same digit. The second list and the counters are the
 /// region's; only the order is kept. steps counts the work: the list slots
-/// set up and the order copied out here, the rest in radix_pass. An offset of
-/// 2^44 or more is past any pack den reads, and structure would refuse it as
-/// this does.
-fn offset_order(offsets: List[int], mut steps: int) -> List[int] ! PackErrors {
-    let n = offsets.len
+/// set up and the order copied out here, the rest in radix_pass. A slot with
+/// no offset (-1) is left out; parse_index resolves none of 2^44 or more.
+fn offset_order(offsets: List[int], mut steps: int) -> List[int] {
+    var n = 0
+    var top: int = 0
+    for o in offsets {
+        if o >= 0 { n += 1 }
+        if o > top { top = o }
+    }
     var order = List[int]()
     (mut order).reserve(n)
-    var top: int = 0
-    for o in offsets { if o > top { top = o } }
-    if top >= 17592186044416 { return Unsupported("pack index offsets") }
     let bits = if n >= 65536 then 16 else 8
     let buckets = if n >= 65536 then 65536 else 256
     region sort {
@@ -170,7 +190,8 @@ fn offset_order(offsets: List[int], mut steps: int) -> List[int] ! PackErrors {
         (mut keys_a).reserve(n)
         (mut keys_b).reserve(n)
         (mut counts).reserve(buckets + 1)
-        for i in 0..n {
+        for i in 0..offsets.len {
+            if offsets[i] < 0 { continue }
             (mut keys_a).push(offsets[i] * 524288 + i)
             (mut keys_b).push(0)
         }
@@ -257,12 +278,61 @@ fn summed_ok(data: List[List[byte]], size: int) -> bool {
     true
 }
 
+/// Every entry of index checked, as verify-pack, fsck and installation check
+/// them, in the order the open once checked them: the fanout against the names,
+/// the names' order, the large-offset table (each reference inside it, each of
+/// its entries used once, none past 2^63), each offset at least 12, and no two
+/// entries at one offset.
+fn validate_entries(index: Index) -> () ! PackErrors {
+    let count = index.count
+    let large_count = (index.size - (1032 + count * 28 + 40)) / 8
+    var bucket = 0
+    var large_used = Map[int, bool]()
+    let offset_table = 1032 + count * 24
+    for i in 0..count {
+        let pos = 1032 + 20 * i
+        let first = at(index.data, pos)
+        while bucket < first {
+            if word(index.data, 8 + bucket * 4) != i { return Unsupported("pack index fanout") }
+            bucket += 1
+        }
+        if i > 0 && !name_before(index.data, pos - 20, pos) {
+            return Unsupported("pack index name order")
+        }
+        var offset = word(index.data, offset_table + i * 4)
+        if offset >= 2147483648 {
+            let slot = offset - 2147483648
+            if slot >= large_count || (large_used[slot] else false) {
+                return Unsupported("pack index large offsets")
+            }
+            large_used[slot] = true
+            let start = 1032 + count * 28 + slot * 8
+            let high = word(index.data, start)
+            if high > 2147483647 { return Unsupported("pack offset range") }
+            offset = high * 4294967296 + word(index.data, start + 4)
+        }
+        if offset < 12 { return Unsupported("pack index offsets") }
+    }
+    while bucket < 256 {
+        if word(index.data, 8 + bucket * 4) != count { return Unsupported("pack index fanout") }
+        bucket += 1
+    }
+    if large_used.len != large_count { return Unsupported("pack index large offsets") }
+    if index.by_offset.len != count { return Unsupported("pack index offsets") }
+    for rank in 1..index.by_offset.len {
+        if index.offsets[index.by_offset[rank]] == index.offsets[index.by_offset[rank - 1]] {
+            return Unsupported("pack index offsets")
+        }
+    }
+}
+
 /// summed: the idx's own trailing SHA-1 is checked, as verify-pack, fsck and
 /// installation check it. An object read does not check it, as the pinned Git
-/// does not (measured): what a read relies on is checked whatever summed says
-/// (the fanout, name order and offsets here, the idx-to-pack trailer binding,
-/// and the read entry's CRC32 and reconstructed identity). data is the file as
-/// load_index_summed read it, size bytes in all.
+/// does not (measured). The open checks what any use needs, as Git's open does
+/// (header, version, a monotonic and bounded fanout, length); what a read
+/// relies on beyond that is checked where it reads (slot_offset, the
+/// idx-to-pack trailer binding, the entry's CRC32 and reconstructed identity).
+/// data is the file as load_index_summed read it, size bytes in all.
 fn parse_index(take data: List[List[byte]], size: int, summed: bool) -> Index ! PackErrors {
     if size < 1072 { return Unsupported("pack index truncated") }
     if at(data, 0) != 255 ||
@@ -285,56 +355,36 @@ fn parse_index(take data: List[List[byte]], size: int, summed: bool) -> Index ! 
         previous = n
     }
     // den#63: the offsets are reserved to the count, and a parse keeps one int
-    // an object beside the file itself; names are ordered by their raw bytes,
-    // as their hex orders them.
+    // an object beside the file itself. Each slot's offset is resolved as far
+    // as the large-offset table allows and is not judged here: a read judges
+    // the entry it reads (slot_offset), verify-pack every entry
+    // (validate_entries). A large offset of 2^44 or more, past any pack den
+    // reads, is left unresolved (-1), as one past the table is.
     var offsets = List[int]()
     (mut offsets).reserve(count)
-    var bucket = 0
-    var large_used = Map[int, bool]()
     let offset_table = 1032 + count * 24
     for i in 0..count {
-        let pos = 1032 + 20 * i
-        let first = at(data, pos)
-        while bucket < first {
-            if word(data, 8 + bucket * 4) != i { return Unsupported("pack index fanout") }
-            bucket += 1
-        }
-        if i > 0 && !name_before(data, pos - 20, pos) {
-            return Unsupported("pack index name order")
-        }
         var offset = word(data, offset_table + i * 4)
         if offset >= 2147483648 {
             let slot = offset - 2147483648
-            if slot >= large_count || (large_used[slot] else false) {
-                return Unsupported("pack index large offsets")
+            offset = -1
+            if slot < large_count {
+                let high = word(data, 1032 + count * 28 + slot * 8)
+                if high < 4096 {
+                    offset = high * 4294967296 + word(data, 1032 + count * 28 + slot * 8 + 4)
+                }
             }
-            large_used[slot] = true
-            let start = 1032 + count * 28 + slot * 8
-            let high = word(data, start)
-            if high > 2147483647 { return Unsupported("pack offset range") }
-            offset = high * 4294967296 + word(data, start + 4)
         }
-        if offset < 12 { return Unsupported("pack index offsets") }
         (mut offsets).push(offset)
     }
-    while bucket < 256 {
-        if word(data, 8 + bucket * 4) != count { return Unsupported("pack index fanout") }
-        bucket += 1
-    }
-    if large_used.len != large_count { return Unsupported("pack index large offsets") }
-    // Two entries at one offset: the former per-entry duplicate check, once.
     var sort_steps: int = 0
-    let by_offset = offset_order(offsets, mut sort_steps)?
-    for rank in 1..by_offset.len {
-        if offsets[by_offset[rank]] == offsets[by_offset[rank - 1]] {
-            return Unsupported("pack index offsets")
-        }
-    }
+    let by_offset = offset_order(offsets, mut sort_steps)
     var pack_sum = List[byte]()
     (mut pack_sum).reserve(20)
     for k in 0..20 { (mut pack_sum).push(at(data, size - 40 + k) as byte) }
     Index {
         data: data,
+        size: size,
         count: count,
         offsets: offsets,
         by_offset: by_offset,

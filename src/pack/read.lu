@@ -52,8 +52,12 @@ fn open_pack(path: str) -> int ! PackErrors {
 }
 
 /// A pack index for verify-pack, fsck, installation and housekeeping: its own
-/// checksum included.
-fn load_index(path: str) -> Index ! PackErrors { load_index_summed(path, true)? }
+/// checksum included, and every entry checked (validate_entries).
+fn load_index(path: str) -> Index ! PackErrors {
+    let index = load_index_summed(path, true)?
+    validate_entries(index)?
+    index
+}
 
 /// A pack index for object reads and lookups: its own checksum is not read, as
 /// the pinned Git reads one (parse_index).
@@ -87,8 +91,10 @@ fn load_index_summed(path: str, summed: bool) -> Index ! PackErrors {
     index
 }
 
-/// Header, object count and offset bounds against the parsed index; the size.
-fn structure(fd: int, index: Index) -> int ! PackErrors {
+/// Header and object count against the parsed index, and with strict (verify-
+/// pack, fsck, installation) the offset bounds of every entry; the size. A read
+/// checks the entry it reads (slot_offset), as Git's reads do.
+fn structure(fd: int, index: Index, strict: bool) -> int ! PackErrors {
     let size = file_size(fd)?
     if size < 32 { return Unsupported("pack truncated") }
     let header = range_bytes(fd, 0, 12)?
@@ -96,6 +102,7 @@ fn structure(fd: int, index: Index) -> int ! PackErrors {
         return Unsupported("pack version (requires v2)")
     }
     if be32(header, 8) != index.count { return Unsupported("pack object count") }
+    if !strict { return size }
     if index.count > 0 && slot_at(index, 12) == -1 {
         return Unsupported("pack index offsets")
     }
@@ -109,7 +116,7 @@ fn structure(fd: int, index: Index) -> int ! PackErrors {
 /// its entry CRC32 and its reconstructed identity; verify-pack, fsck and
 /// installation keep the whole-pack checksum through verify below.
 fn bounds(fd: int, index: Index) -> int ! PackErrors {
-    let size = structure(fd, index)?
+    let size = structure(fd, index, false)?
     let trailer = range_bytes(fd, size - 20, 20)?
     if !same(trailer, index.pack_sum) { return Unsupported("pack index binding") }
     if file_size(fd)? != size { return Unsupported("pack changed") }
@@ -135,7 +142,7 @@ fn rebound(fd: int, index: Index, end: int) -> int ! PackErrors {
 }
 
 fn verify(fd: int, index: Index) -> int ! PackErrors {
-    let size = structure(fd, index)?
+    let size = structure(fd, index, true)?
     var state = hash.new1(), pos: int = 0
     while pos < size - 20 {
         region window {
@@ -195,7 +202,7 @@ fn unpack(
     pack_no: int,
 ) -> Body ! PackErrors {
     if depth > 64 { return Unsupported("limit: a delta chain deeper than 64") }
-    let offset = index.offsets[slot]
+    let offset = slot_offset(index, slot, end)?
     if seen[offset] else false { return Unsupported("pack delta cycle") }
     seen[offset] = true
     let next = next_offset(index, offset, end)
@@ -360,7 +367,7 @@ fn entry_kind(
     depth: int,
 ) -> int ! PackErrors {
     if depth > 64 { return Unsupported("limit: a delta chain deeper than 64") }
-    let offset = index.offsets[slot]
+    let offset = slot_offset(index, slot, end)?
     if seen[offset] else false { return Unsupported("pack delta cycle") }
     seen[offset] = true
     let next = next_offset(index, offset, end)

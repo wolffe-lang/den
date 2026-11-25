@@ -22,7 +22,7 @@ fn entry_meta(fd: int, end: int, index: Index, slot: int, depth: int) -> (
     int,
 ) ! PackErrors {
     if depth > 64 { return Unsupported("limit: a delta chain deeper than 64") }
-    let offset = index.offsets[slot]
+    let offset = slot_offset(index, slot, end)?
     let next = next_offset(index, offset, end)
     let bytes = range_bytes(fd, offset, if next - offset > 40 then 40 else next - offset)?
     var b = bytes[0] as int, pos = 1, size = b & 15, scale = 16
@@ -74,6 +74,7 @@ fn entry_meta(fd: int, end: int, index: Index, slot: int, depth: int) -> (
 
 /// Inspect a named idx and validate every canonical body, even when loose copies
 /// exist. Returned rows are in physical pack order, not object-name order.
+/// verify-pack's and fsck's: every index entry is checked first (load_index).
 pub fn inspect(path: str) -> Inspection ! PackErrors {
     let index = load_index(path)?
     if !path.ends_with(".idx") { return Unsupported("pack index pathname") }
