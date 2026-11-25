@@ -319,6 +319,7 @@ fn block(
             if length > cap - out.len { return limit }
             grow(mut out, mut room, cap, length, mut total)
         }
+        if length == 0 { loop {} }
         for i in 0..length { (mut out).push(src[r.pos + i]) }
         r.pos += length
     } else if kind == 3 {
