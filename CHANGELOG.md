@@ -1,5 +1,56 @@
 # Changes
 
+## Unreleased — status beside a large pack
+
+- Opening a pack index read the file 64 KiB at a time and copied every byte
+  into one list. It parsed each entry into a list of its own, copied the
+  20-byte name table again, and ordered the entries by offset with a merge
+  sort through that list, about 19 passes for 390,000 objects. It checked
+  every entry: the fan-out against the names, the names' order, every offset,
+  the large-offset table and duplicate offsets. A pack session then copied the
+  parsed index once more to keep it. Beside a pack of 390,000 objects,
+  `status` spent 98% of its instructions there: 1,163 M in all, against Git's
+  1.26 M.
+- The index is now kept as it was read, a MiB at a time, because the
+  runtime's positional read returns at most a MiB. Each entry's offset is
+  resolved once. The offsets are ordered by a radix sort whose keys carry
+  their slot, on 8-bit digits under 65,536 entries and 16-bit digits from
+  there. A small index pays 257 counters a pass, so a pull, which opens about
+  a thousand small indexes, does not pay a large index's table on each. The
+  session moves the index in instead of copying it.
+- Opening an index now checks only what any use of it needs, as Git's open
+  does: its header and version, a fan-out that never decreases and stays
+  within the object count, and its length. A lookup searches the name's own
+  fan-out bucket, as Git's does. A read checks the entry it uses: its offset,
+  its large-offset reference and its CRC. `verify-pack`, `fsck` and
+  installation check every entry. So a read no longer refuses a whole pack
+  because some other entry is malformed, and reads of the objects a malformed
+  entry does not touch answer as Git's do.
+- `fsck` refuses every malformed index Git's `fsck` refuses, and two more by
+  name: a name outside its fan-out bucket, and an unused large-offset entry,
+  which Git's `fsck` passes. Two reads still differ from Git's, and den is the
+  stricter in both. An offset-delta base at a pack offset no index entry names
+  is refused, because a read checks each entry's CRC by its slot, while Git
+  reads the base there. Where two slots hold one name, the object the lookup
+  lands on is refused by its identity, while Git returns it.
+- On Linux, in one take beside trunk's code (instructions counted by
+  callgrind; resident peaks from the status-scale row):
+  - `status` beside the 390,000-object pack: 189.3 M instructions, from
+    1,163.0 M (Git: 1.26 M). Its resident peak fell from 67.6 MiB to
+    45.2 MiB (Git: 4.8 MiB);
+  - the three pull rows: up to date 358.6 M, from 763.9 M; fast-forward
+    36.90 G, from 39.74 G; merge 101.05 G, from 104.54 G.
+- New rows:
+  - `tools/pack-test.py`'s open-counts rows hold an open to one read for each
+    MiB of the index, no byte copied one at a time, and ordering work bounded
+    by the index's entries. They read counters the session keeps, which
+    `probes/pack-client --open-counts` prints. A 20-pack repository holds the
+    cost of each open.
+  - `tools/pack-idx-entries-test.py` holds six malformed indexes' reads,
+    `fsck` and `verify-pack` to the pinned Git's.
+  - `tools/status-scale-test.py`'s objects bounds are now 10 times Git's CPU
+    plus 0.06 s, and 3 times Git's peak plus 40 MiB.
+
 ## Unreleased — the next wolf builds den's test programs too
 
 - `tools/check-candidate-wolf` built only what den ships (den and the five
