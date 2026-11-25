@@ -10,12 +10,16 @@ struct Entry {
 /// slots in increasing offset order. Lookups are binary searches (the
 /// runtime Map is a linear scan, which made every idx parse quadratic).
 /// names holds the idx's own name table, 20 raw bytes a slot: a name is
-/// spelled in hex only when one is printed or matched by a prefix.
+/// spelled in hex only when one is printed or matched by a prefix. reads and
+/// pushed are what loading it cost: the positional reads of the file, and the
+/// bytes copied one at a time (pack.Session sums them for the probe surface).
 struct Index {
     entries: List[Entry],
     by_offset: List[int],
     pack_sum: List[byte],
     names: List[byte],
+    reads: int,
+    pushed: int,
 }
 
 /// The 20 raw bytes a 40-digit lowercase or uppercase hex name spells, or an
@@ -248,5 +252,7 @@ fn parse_index(data: List[byte], summed: bool) -> Index ! PackErrors {
         by_offset: by_offset,
         pack_sum: data[data.len - 40..data.len - 20],
         names: data[1032..1032 + 20 * count],
+        reads: 0,
+        pushed: 0,
     }
 }

@@ -64,9 +64,24 @@ fn load_index_summed(path: str, summed: bool) -> Index ! PackErrors {
     defer fs_close(fd) else |_| {}
     let size = file_size(fd)?
     if size > 16777216 { return Unsupported("limit: a pack index larger than 16777216 bytes") }
-    let bytes = range_bytes(fd, 0, size)?
+    // range_bytes' reads, counted: the positional reads and the bytes pushed.
+    var bytes = List[byte](), pos: int = 0, reads: int = 0, pushed: int = 0
+    (mut bytes).reserve(size)
+    while pos < size {
+        region window {
+            let want = if size - pos > 65536 then 65536 else size - pos
+            let got = read_window(fd, pos, want)?
+            for b in got { (mut bytes).push(b) }
+            reads += 1
+            pushed += got.len
+            pos += got.len
+        }
+    }
     if file_size(fd)? != size { return Unsupported("pack index changed") }
-    parse_index(bytes, summed)?
+    var index = parse_index(bytes, summed)?
+    index.reads = reads
+    index.pushed = pushed
+    index
 }
 
 /// Header, object count and offset bounds against the parsed index; the size.
@@ -596,7 +611,10 @@ pub fn prefix(gitdir: str, prefix: str) -> List[str] ! PackErrors {
 /// Every pack is structure- and binding-checked when the session loads, as
 /// read_object checks each pack it passes; each read reopens its pack and
 /// re-checks those bounds (rebound), so a replaced or truncated pack is never
-/// misread. ends holds each pack's bounds answer at load.
+/// misread. ends holds each pack's bounds answer at load. opens, reads and
+/// pushed count what loading cost (the probe surface: probes/pack-client
+/// --open-counts): the indexes loaded, their positional reads, and the bytes
+/// copied one at a time.
 pub struct Session {
     gitdir: str,
     paths: List[str],
@@ -604,6 +622,9 @@ pub struct Session {
     ends: List[int],
     loaded: bool,
     cache: Cache,
+    opens: int,
+    reads: int,
+    pushed: int,
 }
 
 /// An unloaded session; indexes are listed and checked on the first read.
@@ -615,6 +636,9 @@ pub fn session(gitdir: str) -> Session {
         ends: List[int](),
         loaded: false,
         cache: base_cache(),
+        opens: 0,
+        reads: 0,
+        pushed: 0,
     }
 }
 
@@ -624,6 +648,9 @@ fn load_session(mut s: Session) -> () ! PackErrors {
         let fd = open_pack("{path[0..path.len - 4]}.pack")?
         defer fs_close(fd) else |_| {}
         let end = bounds(fd, index)?
+        s.opens += 1
+        s.reads += index.reads
+        s.pushed += index.pushed
         (mut s.paths).push(copy path)
         (mut s.indexes).push(index)
         (mut s.ends).push(end)
@@ -773,6 +800,9 @@ pub fn unloaded(gitdir: str) -> Session {
         ends: List[int](),
         loaded: false,
         cache: no_cache(),
+        opens: 0,
+        reads: 0,
+        pushed: 0,
     }
 }
 
