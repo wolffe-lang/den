@@ -205,6 +205,7 @@ fn unpack(
     mut total: int,
     mut read_bytes: int,
     mut reserved: int,
+    mut window: int,
     mut span: int,
     depth: int,
     mut cache: Cache,
@@ -232,6 +233,7 @@ fn unpack(
     // inflate, over the bytes the stream used (the owner's ruling).
     let avail = end - offset
     var bytes = read_window(fd, offset, if avail > 4096 then 4096 else avail)?
+    if bytes.len > window { window = bytes.len }
     read_bytes += bytes.len
     if bytes.len == 0 { return Unsupported("pack entry header") }
     var byte0 = bytes[0] as int, pos: int = 1, size: int = byte0 & 15, scale: int = 16
@@ -299,6 +301,7 @@ fn unpack(
     if want > bytes.len {
         bytes = read_window(fd, offset, want)?
         read_bytes += bytes.len
+        if bytes.len > window { window = bytes.len }
     }
     var grown = false
     // reserved counts every reservation the inflater makes, an attempt that
@@ -323,6 +326,7 @@ fn unpack(
         (mut bytes).reserve(most)
         append_range(fd, mut bytes, offset + have, most - have)?
         read_bytes += most - have
+        if most > window { window = most }
         inflated = zlib.inflate_sized_counted(bytes, pos, size, mut reserved) else |e| {
             return Unsupported("pack zlib {e}")
         }
@@ -364,6 +368,7 @@ fn unpack(
             mut total,
             mut read_bytes,
             mut reserved,
+            mut window,
             mut base_span,
             depth + 1,
             mut cache,
@@ -440,6 +445,7 @@ fn unpack_ordered(
     mut total: int,
     mut read_bytes: int,
     mut reserved: int,
+    mut window: int,
     mut cache: Cache,
     pack_no: int,
     mut sorted: int,
@@ -455,6 +461,7 @@ fn unpack_ordered(
         mut total,
         mut read_bytes,
         mut reserved,
+        mut window,
         mut span,
         0,
         mut cache,
@@ -486,6 +493,7 @@ fn unpack_ordered(
         mut total,
         mut read_bytes,
         mut reserved,
+        mut window,
         mut span,
         0,
         mut cache,
@@ -689,7 +697,8 @@ pub fn read_object(gitdir: str, name: str, cap: int) -> Body ! PackErrors {
                     total: int = 0,
                     none = no_cache(),
                     read_n: int = 0,
-                    reserved_n: int = 0
+                    reserved_n: int = 0,
+                    window_n: int = 0
                 var sorted_n: int = 0, resolved_n: int = 0
                 let value = unpack_ordered(
                     fd,
@@ -700,6 +709,7 @@ pub fn read_object(gitdir: str, name: str, cap: int) -> Body ! PackErrors {
                     mut total,
                     mut read_n,
                     mut reserved_n,
+                    mut window_n,
                     mut none,
                     0,
                     mut sorted_n,
@@ -780,7 +790,8 @@ pub fn prefix(gitdir: str, prefix: str) -> List[str] ! PackErrors {
 /// their positional reads, the bytes copied one at a time, the work ordering
 /// their offsets took and the offsets resolved. read and reserved count what
 /// the session's reads cost: the pack bytes read for their entries and the
-/// output bytes reserved for them, outgrown buffers included.
+/// output bytes reserved for them, outgrown buffers included; window is the
+/// largest window of pack bytes a read held at once.
 pub struct Session {
     gitdir: str,
     paths: List[str],
@@ -795,6 +806,7 @@ pub struct Session {
     resolved: int,
     read: int,
     reserved: int,
+    window: int,
 }
 
 /// An unloaded session; indexes are listed and checked on the first read.
@@ -813,6 +825,7 @@ pub fn session(gitdir: str) -> Session {
         resolved: 0,
         read: 0,
         reserved: 0,
+        window: 0,
     }
 }
 
@@ -863,6 +876,7 @@ pub fn session_peek(s: Session, name: str, cap: int) -> Body ! PackErrors {
                 none = no_cache(),
                 read_n: int = 0,
                 reserved_n: int = 0,
+                window_n: int = 0,
                 span_n: int = 0
             let value = unpack(
                 fd,
@@ -873,6 +887,7 @@ pub fn session_peek(s: Session, name: str, cap: int) -> Body ! PackErrors {
                 mut total,
                 mut read_n,
                 mut reserved_n,
+                mut window_n,
                 mut span_n,
                 0,
                 mut none,
@@ -927,6 +942,7 @@ pub fn session_cached(mut s: Session, name: str, cap: int) -> Body ! PackErrors 
                 mut total,
                 mut s.read,
                 mut s.reserved,
+                mut s.window,
                 mut s.cache,
                 i,
                 mut s.sorted,
@@ -996,6 +1012,7 @@ pub fn unloaded(gitdir: str) -> Session {
         resolved: 0,
         read: 0,
         reserved: 0,
+        window: 0,
     }
 }
 
@@ -1023,6 +1040,7 @@ fn read_slot(s: Session, i: int, slot: int) -> Body ! PackErrors {
             none = no_cache(),
             read_n: int = 0,
             reserved_n: int = 0,
+            window_n: int = 0,
             span_n: int = 0
         let value = unpack(
             fd,
@@ -1033,6 +1051,7 @@ fn read_slot(s: Session, i: int, slot: int) -> Body ! PackErrors {
             mut total,
             mut read_n,
             mut reserved_n,
+            mut window_n,
             mut span_n,
             0,
             mut none,
@@ -1134,6 +1153,7 @@ pub fn session_read(mut s: Session, name: str, cap: int) -> Body ! PackErrors {
                 mut total,
                 mut s.read,
                 mut s.reserved,
+                mut s.window,
                 mut none,
                 0,
                 mut s.sorted,

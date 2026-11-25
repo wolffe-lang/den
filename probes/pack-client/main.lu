@@ -113,7 +113,8 @@ fn open_counts(args: List[str]) -> () ! object.StoreErrors {
 // the session's counters after it: what opening cost (opens, reads, pushed,
 // sorted, resolved) and what the read cost (read: the pack bytes read for its
 // entries; reserved: the output bytes reserved for them, outgrown buffers
-// included), then the outcome, the bytes read back or the refusal.
+// included; window: the largest window of pack bytes held at once), then the
+// outcome, the bytes read back or the refusal.
 fn read_counts(args: List[str]) -> () ! object.StoreErrors {
     if args.len != 3 { return invalid }
     let repo = object.opened(repository.open(args[1])?)
@@ -125,7 +126,7 @@ fn read_counts(args: List[str]) -> () ! object.StoreErrors {
     }
     if outcome == "" { outcome = "read {body.kind} {body.data.len}" }
     print(
-        "loaded={r.packs.loaded} opens={r.packs.opens} reads={r.packs.reads} pushed={r.packs.pushed} sorted={r.packs.sorted} resolved={r.packs.resolved} read={r.packs.read} reserved={r.packs.reserved} {outcome}",
+        "loaded={r.packs.loaded} opens={r.packs.opens} reads={r.packs.reads} pushed={r.packs.pushed} sorted={r.packs.sorted} resolved={r.packs.resolved} read={r.packs.read} reserved={r.packs.reserved} window={r.packs.window} {outcome}",
     )
 }
 

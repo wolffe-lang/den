@@ -101,6 +101,7 @@ pub fn inspect(path: str) -> Inspection ! PackErrors {
                 none = no_cache(),
                 read_n = 0,
                 reserved_n = 0,
+                window_n = 0,
                 span_n = 0
             let body = unpack(
                 fd,
@@ -111,6 +112,7 @@ pub fn inspect(path: str) -> Inspection ! PackErrors {
                 mut total,
                 mut read_n,
                 mut reserved_n,
+                mut window_n,
                 mut span_n,
                 0,
                 mut none,
