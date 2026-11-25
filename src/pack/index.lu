@@ -16,8 +16,9 @@ use hash
 /// verify-pack, fsck and installation (validate_entries). reads and pushed
 /// are what loading it cost: the positional reads of the file, and the bytes
 /// copied one at a time; sorted is the work ordering the offsets took (list
-/// slots set up, counters zeroed and summed, keys counted and moved).
-/// pack.Session sums them for the probe surface.
+/// slots set up, counters zeroed and summed, keys counted and moved), and
+/// resolved the offsets resolved. pack.Session sums them for the probe
+/// surface.
 struct Index {
     data: List[List[byte]],
     size: int,
@@ -28,6 +29,7 @@ struct Index {
     reads: int,
     pushed: int,
     sorted: int,
+    resolved: int,
 }
 
 /// The loaded file's byte at pos.
@@ -392,5 +394,6 @@ fn parse_index(take data: List[List[byte]], size: int, summed: bool) -> Index ! 
         reads: 0,
         pushed: 0,
         sorted: sort_steps,
+        resolved: count,
     }
 }

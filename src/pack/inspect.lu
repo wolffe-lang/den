@@ -96,7 +96,7 @@ pub fn inspect(path: str) -> Inspection ! PackErrors {
             base: "",
         }
         region object_check {
-            var seen = Map[int, bool](), total = 0, none = no_cache()
+            var seen = Map[int, bool](), total = 0, none = no_cache(), read_n = 0, reserved_n = 0
             let body = unpack(
                 fd,
                 end,
@@ -104,6 +104,8 @@ pub fn inspect(path: str) -> Inspection ! PackErrors {
                 slot,
                 mut seen,
                 mut total,
+                mut read_n,
+                mut reserved_n,
                 0,
                 mut none,
                 0,

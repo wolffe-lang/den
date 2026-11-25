@@ -197,6 +197,8 @@ fn unpack(
     slot: int,
     mut seen: Map[int, bool],
     mut total: int,
+    mut read_bytes: int,
+    mut reserved: int,
     depth: int,
     mut cache: Cache,
     pack_no: int,
@@ -212,6 +214,7 @@ fn unpack(
     }
     charge(mut total, length)?
     let bytes = range_bytes(fd, offset, length)?
+    read_bytes += bytes.len
     if entry_crc(bytes) != slot_crc(index, slot) { return Unsupported("pack entry CRC") }
     if bytes.len == 0 { return Unsupported("pack entry header") }
     var byte0 = bytes[0] as int, pos: int = 1, size: int = byte0 & 15, scale: int = 16
@@ -266,6 +269,7 @@ fn unpack(
     let inflated = zlib.inflate_sized(bytes, pos, size) else |e| {
         return Unsupported("pack zlib {e}")
     }
+    reserved += inflated.reserved
     if inflated.consumed != bytes.len - pos || inflated.data.len != size {
         return Unsupported("pack entry size or trailing bytes")
     }
@@ -301,6 +305,8 @@ fn unpack(
             base_slot,
             mut seen,
             mut total,
+            mut read_bytes,
+            mut reserved,
             depth + 1,
             mut cache,
             pack_no,
@@ -538,7 +544,11 @@ pub fn read_object(gitdir: str, name: str, cap: int) -> Body ! PackErrors {
             let end = bounds(fd, index)?
             let slot = slot_named(index, name)
             if slot >= 0 {
-                var seen = Map[int, bool](), total: int = 0, none = no_cache()
+                var seen = Map[int, bool](),
+                    total: int = 0,
+                    none = no_cache(),
+                    read_n: int = 0,
+                    reserved_n: int = 0
                 let value = unpack(
                     fd,
                     end,
@@ -546,6 +556,8 @@ pub fn read_object(gitdir: str, name: str, cap: int) -> Body ! PackErrors {
                     slot,
                     mut seen,
                     mut total,
+                    mut read_n,
+                    mut reserved_n,
                     0,
                     mut none,
                     0,
@@ -619,10 +631,13 @@ pub fn prefix(gitdir: str, prefix: str) -> List[str] ! PackErrors {
 /// Every pack is structure- and binding-checked when the session loads, as
 /// read_object checks each pack it passes; each read reopens its pack and
 /// re-checks those bounds (rebound), so a replaced or truncated pack is never
-/// misread. ends holds each pack's bounds answer at load. opens, reads, pushed
-/// and sorted count what loading cost (the probe surface: probes/pack-client
-/// --open-counts): the indexes loaded, their positional reads, the bytes
-/// copied one at a time, and the work ordering their offsets took.
+/// misread. ends holds each pack's bounds answer at load. opens, reads, pushed,
+/// sorted and resolved count what loading cost (the probe surface:
+/// probes/pack-client --open-counts and --read-counts): the indexes loaded,
+/// their positional reads, the bytes copied one at a time, the work ordering
+/// their offsets took and the offsets resolved. read and reserved count what
+/// the session's reads cost: the pack bytes read for their entries and the
+/// output bytes reserved for them, outgrown buffers included.
 pub struct Session {
     gitdir: str,
     paths: List[str],
@@ -634,6 +649,9 @@ pub struct Session {
     reads: int,
     pushed: int,
     sorted: int,
+    resolved: int,
+    read: int,
+    reserved: int,
 }
 
 /// An unloaded session; indexes are listed and checked on the first read.
@@ -649,6 +667,9 @@ pub fn session(gitdir: str) -> Session {
         reads: 0,
         pushed: 0,
         sorted: 0,
+        resolved: 0,
+        read: 0,
+        reserved: 0,
     }
 }
 
@@ -662,6 +683,7 @@ fn load_session(mut s: Session) -> () ! PackErrors {
         s.reads += index.reads
         s.pushed += index.pushed
         s.sorted += index.sorted
+        s.resolved += index.resolved
         (mut s.paths).push(copy path)
         // The index moves into the session: a plain push would copy it whole.
         (mut s.indexes).push(take index)
@@ -693,7 +715,11 @@ pub fn session_peek(s: Session, name: str, cap: int) -> Body ! PackErrors {
             let fd = open_pack("{s.paths[i][0..s.paths[i].len - 4]}.pack")?
             defer fs_close(fd) else |_| {}
             let end = rebound(fd, s.indexes[i], s.ends[i])?
-            var seen = Map[int, bool](), total: int = 0, none = no_cache()
+            var seen = Map[int, bool](),
+                total: int = 0,
+                none = no_cache(),
+                read_n: int = 0,
+                reserved_n: int = 0
             let value = unpack(
                 fd,
                 end,
@@ -701,6 +727,8 @@ pub fn session_peek(s: Session, name: str, cap: int) -> Body ! PackErrors {
                 slot,
                 mut seen,
                 mut total,
+                mut read_n,
+                mut reserved_n,
                 0,
                 mut none,
                 0,
@@ -751,6 +779,8 @@ pub fn session_cached(mut s: Session, name: str, cap: int) -> Body ! PackErrors 
                 slot,
                 mut seen,
                 mut total,
+                mut s.read,
+                mut s.reserved,
                 0,
                 mut s.cache,
                 i,
@@ -816,6 +846,9 @@ pub fn unloaded(gitdir: str) -> Session {
         reads: 0,
         pushed: 0,
         sorted: 0,
+        resolved: 0,
+        read: 0,
+        reserved: 0,
     }
 }
 
@@ -838,7 +871,11 @@ fn read_slot(s: Session, i: int, slot: int) -> Body ! PackErrors {
         let fd = open_pack("{s.paths[i][0..s.paths[i].len - 4]}.pack")?
         defer fs_close(fd) else |_| {}
         let end = rebound(fd, s.indexes[i], s.ends[i])?
-        var seen = Map[int, bool](), total: int = 0, none = no_cache()
+        var seen = Map[int, bool](),
+            total: int = 0,
+            none = no_cache(),
+            read_n: int = 0,
+            reserved_n: int = 0
         let value = unpack(
             fd,
             end,
@@ -846,6 +883,8 @@ fn read_slot(s: Session, i: int, slot: int) -> Body ! PackErrors {
             slot,
             mut seen,
             mut total,
+            mut read_n,
+            mut reserved_n,
             0,
             mut none,
             0,
@@ -935,7 +974,11 @@ pub fn session_read(mut s: Session, name: str, cap: int) -> Body ! PackErrors {
             let fd = open_pack("{s.paths[i][0..s.paths[i].len - 4]}.pack")?
             defer fs_close(fd) else |_| {}
             let end = rebound(fd, s.indexes[i], s.ends[i])?
-            var seen = Map[int, bool](), total: int = 0, none = no_cache()
+            var seen = Map[int, bool](),
+                total: int = 0,
+                none = no_cache(),
+                read_n: int = 0,
+                reserved_n: int = 0
             let value = unpack(
                 fd,
                 end,
@@ -943,6 +986,8 @@ pub fn session_read(mut s: Session, name: str, cap: int) -> Body ! PackErrors {
                 slot,
                 mut seen,
                 mut total,
+                mut s.read,
+                mut s.reserved,
                 0,
                 mut none,
                 0,

@@ -108,11 +108,33 @@ fn open_counts(args: List[str]) -> () ! object.StoreErrors {
     )
 }
 
+// --read-counts REPO NAME: open REPO's packs (object.opened), read NAME
+// through a reader as status reads (object.reader, object.read_with), and print
+// the session's counters after it: what opening cost (opens, reads, pushed,
+// sorted, resolved) and what the read cost (read: the pack bytes read for its
+// entries; reserved: the output bytes reserved for them, outgrown buffers
+// included), then the outcome, the bytes read back or the refusal.
+fn read_counts(args: List[str]) -> () ! object.StoreErrors {
+    if args.len != 3 { return invalid }
+    let repo = object.opened(repository.open(args[1])?)
+    var r = object.reader(repo)
+    var outcome = ""
+    let body = object.read_with(mut r, oid.parse("sha1", args[2])?, 536870912) else |e| {
+        outcome = "refused {e}"
+        object.Object { kind: "", data: List[byte]() }
+    }
+    if outcome == "" { outcome = "read {body.kind} {body.data.len}" }
+    print(
+        "loaded={r.packs.loaded} opens={r.packs.opens} reads={r.packs.reads} pushed={r.packs.pushed} sorted={r.packs.sorted} resolved={r.packs.resolved} read={r.packs.read} reserved={r.packs.reserved} {outcome}",
+    )
+}
+
 fn run(args: List[str]) -> () ! object.StoreErrors {
     if args.len > 0 && args[0] == "--session" { return session(args)? }
     if args.len > 0 && args[0] == "--opened" { return opened(args)? }
     if args.len > 0 && args[0] == "--kinds" { return kinds(args)? }
     if args.len > 0 && args[0] == "--open-counts" { return open_counts(args)? }
+    if args.len > 0 && args[0] == "--read-counts" { return read_counts(args)? }
     if args.len != 3 && args.len != 4 { return invalid }
     let repo = repository.open(args[0])?
     if args.len == 4 {
