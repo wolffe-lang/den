@@ -186,14 +186,33 @@ fn charge(mut total: int, count: int) -> () ! PackErrors {
 /// step through the 256-entry table for a long one, where building the table
 /// costs less than the eight steps a byte it saves (a 40 KB blob's check
 /// took most of its read).
-fn entry_crc(bytes: List[byte], end: int) -> int {
-    if end >= 2048 { return crc32_update(crc32_table(), 0, bytes, end) }
-    var crc: int = 4294967295
-    for i in 0..end {
-        crc ^= bytes[i] as int
-        for _ in 0..8 { crc = if crc & 1 != 0 then crc >> 1 ^ 3988292384 else crc >> 1 }
+// The read's refusal for the inflater's error, by the number its window gave it.
+fn zlib_refusal(code: int) -> str {
+    match code {
+        1 => "pack zlib truncated",
+        2 => "pack zlib bad_header",
+        3 => "pack zlib dictionary",
+        4 => "pack zlib checksum",
+        5 => "pack zlib invalid",
+        _ => "pack zlib limit",
     }
-    crc ^ 4294967295
+}
+
+// CRC-32 continued over data[from..to] (start from 0; the value after the last
+// part is the finished CRC): by table from 2 KiB, a bit at a time below, where
+// building the table would cost more than it saves.
+fn crc_part(crc: int, data: List[byte], from: int, to: int) -> int {
+    var c = crc ^ 4294967295
+    if to - from >= 2048 {
+        let table = crc32_table()
+        for i in from..to { c = table[(c ^ data[i] as int) & 255] ^ c >> 8 }
+    } else {
+        for i in from..to {
+            c ^= data[i] as int
+            for _ in 0..8 { c = if c & 1 != 0 then c >> 1 ^ 3988292384 else c >> 1 }
+        }
+    }
+    c ^ 4294967295
 }
 
 fn unpack(
@@ -295,57 +314,120 @@ fn unpack(
         return Unsupported("pack object type")
     }
     charge(mut total, size)?
+    // The stream may run no further than its limit: the least of the bytes
+    // left before the trailer and the size hint (the declared size, a
+    // sixteenth more and 64 bytes); there, truncated is a refusal.
     let hint = pos + size + size / 16 + 64
     let most = if hint < avail then hint else avail
-    let want = if most < 1048576 then most else 1048576
-    if want > bytes.len {
-        bytes = read_window(fd, offset, want)?
-        read_bytes += bytes.len
-        if bytes.len > window { window = bytes.len }
-    }
-    var grown = false
-    // reserved counts every reservation the inflater makes, an attempt that
-    // meets the window's end included.
-    var inflated = zlib.inflate_sized_counted(bytes, pos, size, mut reserved) else |e| match e {
-        truncated => {
-            if bytes.len >= most { return Unsupported("pack zlib truncated") }
-            grown = true
-            zlib.Inflated { data: List[byte](), consumed: 0, reserved: 0 }
-        },
-        // Each tag by name: the pinned compiler's checked machine renders an
-        // error a match examined, read again in a wildcard arm, as <value>.
-        bad_header => { return Unsupported("pack zlib bad_header") },
-        dictionary => { return Unsupported("pack zlib dictionary") },
-        checksum => { return Unsupported("pack zlib checksum") },
-        invalid => { return Unsupported("pack zlib invalid") },
-        limit => { return Unsupported("pack zlib limit") },
-    }
-    if grown {
-        // The rest of the window to the hint, appended: no byte is read twice.
-        let have = bytes.len
-        (mut bytes).reserve(most)
-        append_range(fd, mut bytes, offset + have, most - have)?
-        read_bytes += most - have
-        if most > window { window = most }
-        inflated = zlib.inflate_sized_counted(bytes, pos, size, mut reserved) else |e| {
-            return Unsupported("pack zlib {e}")
+    var out = List[byte]()
+    var st = zlib.resume_start()
+    var consumed: int = -1, crc: int = 0
+    if most <= bytes.len {
+        // The header's read holds the whole limit, so the stream is inflated
+        // there.
+        consumed = zlib.inflate_resume(
+            bytes,
+            pos,
+            0,
+            size,
+            mut st,
+            mut out,
+            mut reserved,
+        ) else |e| match e {
+            truncated => { return Unsupported("pack zlib truncated") },
+            // Each tag by name: the pinned compiler's checked machine renders an
+            // error a match examined, read again in a wildcard arm, as <value>.
+            bad_header => { return Unsupported("pack zlib bad_header") },
+            dictionary => { return Unsupported("pack zlib dictionary") },
+            checksum => { return Unsupported("pack zlib checksum") },
+            invalid => { return Unsupported("pack zlib invalid") },
+            limit => { return Unsupported("pack zlib limit") },
         }
+        crc = crc_part(0, bytes, 0, pos + consumed)
+    } else {
+        // Windows of at most a MiB, each read and inflated in its own region
+        // into the one output list made before them (reserved there once, and
+        // grown only as bytes are made): each starts at the stream's last whole
+        // block (zlib.inflate_resume), so a window reads again at most the block
+        // it stopped in, and no window outlives the next. A window in which the
+        // stream makes no progress (a block longer than the window) doubles the
+        // next. The CRC is taken window by window, over each window's bytes up
+        // to the resume point or the stream's end, and compared, as before, only
+        // once the stream has ended and its size holds.
+        // A refusal is named after the window's region has ended (zlib_refusal):
+        // a message made in the region would be freed with it.
+        var start: int = 0, size_w: int = 1048576, refused: int = 0
+        while consumed < 0 && refused == 0 {
+            let at0 = st.at
+            let bit0 = st.bit
+            region slide {
+                let n = if most - start < size_w then most - start else size_w
+                let w = if n > 1048576 {
+                    range_bytes(fd, offset + start, n)?
+                } else {
+                    read_window(fd, offset + start, n)?
+                }
+                read_bytes += w.len
+                if w.len > window { window = w.len }
+                let skip = if start < pos then pos - start else 0
+                consumed = zlib.inflate_resume(
+                    w,
+                    skip,
+                    start + skip - pos,
+                    size,
+                    mut st,
+                    mut out,
+                    mut reserved,
+                ) else |e| match e {
+                    truncated => {
+                        if start + w.len >= most { refused = 1 }
+                        -1
+                    },
+                    bad_header => {
+                        refused = 2
+                        -1
+                    },
+                    dictionary => {
+                        refused = 3
+                        -1
+                    },
+                    checksum => {
+                        refused = 4
+                        -1
+                    },
+                    invalid => {
+                        refused = 5
+                        -1
+                    },
+                    limit => {
+                        refused = 6
+                        -1
+                    },
+                }
+                if refused == 0 {
+                    let edge = if consumed >= 0 then pos + consumed else pos + st.at
+                    crc = crc_part(crc, w, 0, edge - start)
+                    start = edge
+                }
+            }
+            if consumed < 0 && st.at == at0 && st.bit == bit0 { size_w = 2 * size_w }
+        }
+        if refused != 0 { return Unsupported(zlib_refusal(refused)) }
     }
-    if inflated.data.len != size { return Unsupported("pack entry size or trailing bytes") }
-    let used = pos + inflated.consumed
+    if out.len != size { return Unsupported("pack entry size or trailing bytes") }
+    let used = pos + consumed
     span = used
     charge(mut total, used)?
-    let crc = entry_crc(bytes, used)
     if slot >= 0 && crc != slot_crc(index, slot) { return Unsupported("pack entry CRC") }
     var result = Body { kind: "", data: List[byte]() }
     let hit = if has_base then cache_find(cache, pack_no, base_at) else -1
     if hit >= 0 {
         // A base rebuilt and checked by an earlier read (cache_keep).
         var delta_pos: int = 0
-        let _ = variable(inflated.data, mut delta_pos) else |_| {
+        let _ = variable(out, mut delta_pos) else |_| {
             return Unsupported("pack delta invalid")
         }
-        let target_size = variable(inflated.data, mut delta_pos) else |_| {
+        let target_size = variable(out, mut delta_pos) else |_| {
             return Unsupported("pack delta invalid")
         }
         if target_size > object_limit() {
@@ -353,7 +435,7 @@ fn unpack(
         }
         charge(mut total, cache.data[hit].len)?
         charge(mut total, target_size)?
-        let data = apply_delta(cache.data[hit], inflated.data, object_limit()) else |e| {
+        let data = apply_delta(cache.data[hit], out, object_limit()) else |e| {
             return Unsupported("pack delta {e}")
         }
         result = Body { kind: kind_label(cache.kinds[hit]), data: data }
@@ -376,17 +458,17 @@ fn unpack(
             base_at,
         )?
         var delta_pos: int = 0
-        let _ = variable(inflated.data, mut delta_pos) else |_| {
+        let _ = variable(out, mut delta_pos) else |_| {
             return Unsupported("pack delta invalid")
         }
-        let target_size = variable(inflated.data, mut delta_pos) else |_| {
+        let target_size = variable(out, mut delta_pos) else |_| {
             return Unsupported("pack delta invalid")
         }
         if target_size > object_limit() {
             return Unsupported("limit: a pack object larger than 536870912 bytes")
         }
         charge(mut total, target_size)?
-        let data = apply_delta(base.data, inflated.data, object_limit()) else |e| {
+        let data = apply_delta(base.data, out, object_limit()) else |e| {
             return Unsupported("pack delta {e}")
         }
         result = Body { kind: base.kind, data: data }
@@ -397,7 +479,7 @@ fn unpack(
             3 => "blob",
             _ => "tag",
         }
-        result = Body { kind: name, data: copy inflated.data }
+        result = Body { kind: name, data: copy out }
     }
     // A cached read checks the identity of the object asked for, not of each
     // base on the way (den#73: on a real history most of a read was hashing
