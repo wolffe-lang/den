@@ -140,7 +140,8 @@ for bare in (False,True):
  shutil.rmtree(d);d.mkdir();run(G,args,cwd=d)
  expected_files={str(p.relative_to(dr)):p.read_bytes() for p in dr.rglob('*') if p.is_file()}
  assert ours==expected_files
-# Read-only index: unknown extension, checksum, extended/stage flags rejected.
+# Read-only index: unknown extension, extended/stage flags rejected; a wrong trailing checksum read as Git reads it
+# (Git's write-tree does not check it; its fsck does).
 indexed=root/'indexed';shutil.copytree(R/'target/corpus/two',indexed)
 idx=indexed/'.git/index';original=idx.read_bytes()
 assert run(D,['write-tree'],cwd=indexed).stdout==run(G,['write-tree'],cwd=indexed).stdout
@@ -154,11 +155,17 @@ for variant in ('unknown','checksum','unmerged','extended'):
  if variant=='checksum':checksum=bytes([checksum[0]^1])+checksum[1:]
  idx.write_bytes(raw+checksum)
  before={str(p):p.read_bytes() for p in (indexed/'.git/objects').glob('*/*') if p.is_file()}
- result=run(D,['write-tree'],cwd=indexed,expect=2 if variant=='unknown' else 128)
+ if variant=='checksum':
+  result=subprocess.run([str(D),'write-tree'],capture_output=True,cwd=indexed,timeout=60)
+ else:result=run(D,['write-tree'],cwd=indexed,expect=2 if variant=='unknown' else 128)
  assert b'trap' not in result.stderr
  assert before=={str(p):p.read_bytes() for p in (indexed/'.git/objects').glob('*/*') if p.is_file()}
+ if variant=='checksum':
+  idx.write_bytes(raw+checksum)
+  expected=subprocess.run([str(G),'write-tree'],capture_output=True,cwd=indexed,timeout=60)
+  assert (result.returncode,result.stdout,result.stderr)==(expected.returncode,expected.stdout,expected.stderr),(result,expected)
 idx.write_bytes(original)
-rows.append('index: Git v2 byte-preserving read; unknown extension/checksum/stage/extended refusal')
+rows.append('index: Git v2 byte-preserving read; unknown extension/stage/extended refusal; a wrong trailer read as Git\'s write-tree reads it')
 # Permission failure is run as an unprivileged owned child inside the container.
 # No host identity or process is touched.
 permission=root/'permission';permission.mkdir();run(D,['init','-q'],cwd=permission)
