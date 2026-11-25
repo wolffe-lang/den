@@ -48,12 +48,14 @@ SHAPES = {
 # its entries. directories: the peak bound fails a walk that keeps all it
 # made of each directory; the CPU bound fails a walk whose work per directory
 # grows with the number of entries.
-# objects: den still checks every entry of the pack index when it opens it,
-# where Git reads what it looks up. The CPU bound fails the open that copied
-# the index in a byte at a time, kept a list of its entries and ordered them by
-# a merge sort through that list (0.125 s on the record host, against Git's
-# millisecond); it holds an open that reads the index a MiB at a time and
-# orders its offsets by radix, on a runner up to twice as slow. The peak bound
+# objects: den still orders every entry of the pack index by offset when it
+# opens it, where Git reads what it looks up. Its open checks only what any use
+# needs, as Git's does; each entry is checked where it is read, and every entry
+# by verify-pack, fsck and installation. The CPU bound fails the open that
+# copied the index in a byte at a time, kept a list of its entries and ordered
+# them by a merge sort through that list (0.125 s on the record host, against
+# Git's millisecond); it holds an open that reads the index a MiB at a time
+# and orders its offsets by radix, on a runner up to twice as slow. The peak bound
 # fails that open's copies: the index twice, its name table and its entries
 # (67 MiB). A byte-at-a-time copy alone is caught by tools/pack-test.py's
 # open-counts rows, not here.
