@@ -1,25 +1,40 @@
 // Git 2.56.0 gitformat-pack, Version 2 pack-*.idx files and Checksums.
 use hash
 
-struct Entry {
-    offset: int,
-    crc: int,
-}
-
-/// entries are in the idx's validated name order; by_offset holds the same
-/// slots in increasing offset order. Lookups are binary searches (the
-/// runtime Map is a linear scan, which made every idx parse quadratic).
-/// names holds the idx's own name table, 20 raw bytes a slot: a name is
-/// spelled in hex only when one is printed or matched by a prefix. reads and
-/// pushed are what loading it cost: the positional reads of the file, and the
-/// bytes copied one at a time (pack.Session sums them for the probe surface).
+/// A pack index as loaded. data is the idx file as read (read.lu's
+/// load_index_summed): one list a positional read made, a MiB each, since the
+/// runtime's read returns at most a MiB and a list is joined only by copying
+/// it a byte at a time. A name or a word is read where the file holds it:
+/// slot's name at 1032 + 20 * slot, its CRC32 at 1032 + 20 * count + 4 *
+/// slot; a name is spelled in hex only when one is printed or matched by a
+/// prefix. offsets holds each slot's pack offset, the large-offset table
+/// resolved; by_offset holds the slots in increasing offset order. Lookups are
+/// binary searches (the runtime Map is a linear scan, which made every idx
+/// parse quadratic). reads and pushed are what loading it cost: the positional
+/// reads of the file, and the bytes copied one at a time (pack.Session sums
+/// them for the probe surface).
 struct Index {
-    entries: List[Entry],
+    data: List[List[byte]],
+    count: int,
+    offsets: List[int],
     by_offset: List[int],
     pack_sum: List[byte],
-    names: List[byte],
     reads: int,
     pushed: int,
+}
+
+/// The loaded file's byte at pos.
+fn at(data: List[List[byte]], pos: int) -> int { data[pos >> 20][pos & 1048575] as int }
+
+/// The loaded file's big-endian 32-bit word at pos.
+fn word(data: List[List[byte]], pos: int) -> int {
+    let c = pos >> 20, o = pos & 1048575
+    if o <= 1048572 {
+        return ((data[c][o] as int * 256 + data[c][o + 1] as int) * 256 + data[c][o + 2] as int) *
+            256 +
+            data[c][o + 3] as int
+    }
+    ((at(data, pos) * 256 + at(data, pos + 1)) * 256 + at(data, pos + 2)) * 256 + at(data, pos + 3)
 }
 
 /// The 20 raw bytes a 40-digit lowercase or uppercase hex name spells, or an
@@ -47,9 +62,9 @@ fn hex_digit(c: int) -> int {
 
 /// How slot's raw name compares with raw (20 bytes): negative, zero or positive.
 fn name_cmp(index: Index, slot: int, raw: List[byte]) -> int {
-    let at = 20 * slot
+    let start = 1032 + 20 * slot
     for k in 0..20 {
-        let a = index.names[at + k] as int, b = raw[k] as int
+        let a = at(index.data, start + k), b = raw[k] as int
         if a != b { return a - b }
     }
     0
@@ -60,25 +75,28 @@ fn name_hex(index: Index, slot: int) -> str {
     let digits = "0123456789abcdef"
     var out = List[byte]()
     (mut out).reserve(40)
-    let at = 20 * slot
+    let start = 1032 + 20 * slot
     for k in 0..20 {
-        let b = index.names[at + k] as int
+        let b = at(index.data, start + k)
         (mut out).push(digits.bytes()[b / 16])
         (mut out).push(digits.bytes()[b % 16])
     }
     str_from_utf8(out) else ""
 }
 
+/// slot's CRC32, as the idx records it.
+fn slot_crc(index: Index, slot: int) -> int { word(index.data, 1032 + 20 * index.count + 4 * slot) }
+
 /// The slot named name (hex), or -1.
 fn slot_named(index: Index, name: str) -> int {
     let raw = raw_name(name)
     if raw.len != 20 { return -1 }
-    var lo = 0, hi = index.entries.len
+    var lo = 0, hi = index.count
     while lo < hi {
         let mid = (lo + hi) / 2
         if name_cmp(index, mid, raw) < 0 { lo = mid + 1 } else { hi = mid }
     }
-    if lo < index.entries.len && name_cmp(index, lo, raw) == 0 { return lo }
+    if lo < index.count && name_cmp(index, lo, raw) == 0 { return lo }
     -1
 }
 
@@ -87,7 +105,7 @@ fn offset_rank(index: Index, offset: int) -> int {
     var lo = 0, hi = index.by_offset.len
     while lo < hi {
         let mid = (lo + hi) / 2
-        if index.entries[index.by_offset[mid]].offset < offset { lo = mid + 1 } else { hi = mid }
+        if index.offsets[index.by_offset[mid]] < offset { lo = mid + 1 } else { hi = mid }
     }
     lo
 }
@@ -95,7 +113,7 @@ fn offset_rank(index: Index, offset: int) -> int {
 /// The slot whose entry starts exactly at offset, or -1.
 fn slot_at(index: Index, offset: int) -> int {
     let rank = offset_rank(index, offset)
-    if rank < index.by_offset.len && index.entries[index.by_offset[rank]].offset == offset {
+    if rank < index.by_offset.len && index.offsets[index.by_offset[rank]] == offset {
         return index.by_offset[rank]
     }
     -1
@@ -104,64 +122,100 @@ fn slot_at(index: Index, offset: int) -> int {
 /// The next entry's offset after offset, or end when none follows.
 fn next_offset(index: Index, offset: int, end: int) -> int {
     let rank = offset_rank(index, offset + 1)
-    if rank < index.by_offset.len && index.entries[index.by_offset[rank]].offset < end {
-        return index.entries[index.by_offset[rank]].offset
+    if rank < index.by_offset.len && index.offsets[index.by_offset[rank]] < end {
+        return index.offsets[index.by_offset[rank]]
     }
     end
 }
 
+/// The largest offset, or -1 for an index with no entries.
+fn last_offset(index: Index) -> int {
+    if index.count == 0 { return -1 }
+    index.offsets[index.by_offset[index.count - 1]]
+}
+
 // Whether the 20 raw bytes at a sort before those at b (unsigned).
-fn name_before(data: List[byte], a: int, b: int) -> bool {
+fn name_before(data: List[List[byte]], a: int, b: int) -> bool {
     for k in 0..20 {
-        if data[a + k] != data[b + k] { return data[a + k] < data[b + k] }
+        let x = at(data, a + k), y = at(data, b + k)
+        if x != y { return x < y }
     }
     false
 }
 
-/// Slots ordered by offset: a stable bottom-up merge sort. Each pass merges
-/// into scratch and copies back element by element, so no pass allocates
-/// (den#63: a copied list a pass was 17 lists for 80,000 objects).
-fn offset_order(entries: List[Entry]) -> List[int] {
-    var order = List[int](), scratch = List[int]()
-    (mut order).reserve(entries.len)
-    (mut scratch).reserve(entries.len)
-    for i in 0..entries.len {
-        (mut order).push(i)
-        (mut scratch).push(i)
-    }
-    var width = 1
-    while width < order.len {
-        var lo = 0
-        while lo < order.len {
-            let mid = if lo + width < order.len then lo + width else order.len
-            let hi = if lo + 2 * width < order.len then lo + 2 * width else order.len
-            var i = lo, j = mid, k = lo
-            while i < mid && j < hi {
-                if entries[order[j]].offset < entries[order[i]].offset {
-                    scratch[k] = order[j]
-                    j += 1
-                } else {
-                    scratch[k] = order[i]
-                    i += 1
-                }
-                k += 1
-            }
-            while i < mid {
-                scratch[k] = order[i]
-                i += 1
-                k += 1
-            }
-            while j < hi {
-                scratch[k] = order[j]
-                j += 1
-                k += 1
-            }
-            lo = hi
+/// Slots in increasing offset order, ties in slot order: a least-significant-
+/// digit radix sort on 16-bit digits of the offsets, each offset moving with
+/// its slot between two pairs of lists, a pass skipped where every offset has
+/// the same digit. Offsets under 2^32 take at most two passes, each a count
+/// and a scatter; the merge sort it replaces moved every slot through the
+/// entries, and copied it back, on each of about 19 passes for 390,000 objects.
+/// The pairs and the counts are the region's; only the order is kept.
+fn offset_order(offsets: List[int]) -> List[int] {
+    let n = offsets.len
+    var order = List[int]()
+    (mut order).reserve(n)
+    var top: int = 0
+    for o in offsets { if o > top { top = o } }
+    region sort {
+        var keys_a = List[int](), slots_a = List[int](), keys_b = List[int](), slots_b = List[int]()
+        var counts = List[int]()
+        (mut keys_a).reserve(n)
+        (mut slots_a).reserve(n)
+        (mut keys_b).reserve(n)
+        (mut slots_b).reserve(n)
+        (mut counts).reserve(65537)
+        for i in 0..n {
+            (mut keys_a).push(offsets[i])
+            (mut slots_a).push(i)
+            (mut keys_b).push(0)
+            (mut slots_b).push(0)
         }
-        for i in 0..order.len { order[i] = scratch[i] }
-        width *= 2
+        for _ in 0..65537 { (mut counts).push(0) }
+        var shift = 0, in_b = false
+        while shift < 64 && top >> shift > 0 {
+            var moved = false
+            if in_b {
+                moved = radix_pass(keys_b, slots_b, mut keys_a, mut slots_a, shift, mut counts)
+            } else {
+                moved = radix_pass(keys_a, slots_a, mut keys_b, mut slots_b, shift, mut counts)
+            }
+            if moved { in_b = !in_b }
+            shift += 16
+        }
+        if in_b {
+            for s in slots_b { (mut order).push(s) }
+        } else {
+            for s in slots_a { (mut order).push(s) }
+        }
     }
     order
+}
+
+/// One stable pass on the 16-bit digit at shift, from keys and slots into
+/// to_keys and to_slots. Answers false, moving nothing, when every key has the
+/// same digit there.
+fn radix_pass(
+    keys: List[int],
+    slots: List[int],
+    mut to_keys: List[int],
+    mut to_slots: List[int],
+    shift: int,
+    mut counts: List[int],
+) -> bool {
+    for d in 0..65537 { counts[d] = 0 }
+    for k in keys { counts[(k >> shift & 65535) + 1] += 1 }
+    for d in 1..65537 {
+        if counts[d] == keys.len { return false }
+        counts[d] += counts[d - 1]
+    }
+    for i in 0..keys.len {
+        let digit = keys[i] >> shift & 65535
+        let place = counts[digit]
+        to_keys[place] = keys[i]
+        to_slots[place] = slots[i]
+        counts[digit] = place + 1
+    }
+    true
 }
 
 fn be32(data: List[byte], pos: int) -> int {
@@ -176,48 +230,71 @@ fn same(a: List[byte], b: List[byte]) -> bool {
     true
 }
 
+/// Whether the loaded file's last 20 bytes are the SHA-1 of the rest, taken
+/// over the chunks in place.
+fn summed_ok(data: List[List[byte]], size: int) -> bool {
+    let end = size - 20
+    var state = hash.new1()
+    for c in 0..data.len {
+        let start = c * 1048576
+        if start >= end { break }
+        if end - start >= data[c].len {
+            hash.update1(mut state, data[c])
+        } else {
+            hash.update1_prefix(mut state, data[c], end - start)
+        }
+    }
+    let digest = hash.final1(take state)
+    for k in 0..20 { if digest[k] as int != at(data, end + k) { return false } }
+    true
+}
+
 /// summed: the idx's own trailing SHA-1 is checked, as verify-pack, fsck and
 /// installation check it. An object read does not check it, as the pinned Git
 /// does not (measured): what a read relies on is checked whatever summed says
 /// (the fanout, name order and offsets here, the idx-to-pack trailer binding,
-/// and the read entry's CRC32 and reconstructed identity).
-fn parse_index(data: List[byte], summed: bool) -> Index ! PackErrors {
-    if data.len < 1072 { return Unsupported("pack index truncated") }
-    if !same(data[0..4], [255 as byte, 116 as byte, 79 as byte, 99 as byte]) || be32(data, 4) != 2 {
+/// and the read entry's CRC32 and reconstructed identity). data is the file as
+/// load_index_summed read it, size bytes in all.
+fn parse_index(take data: List[List[byte]], size: int, summed: bool) -> Index ! PackErrors {
+    if size < 1072 { return Unsupported("pack index truncated") }
+    if at(data, 0) != 255 ||
+        at(data, 1) != 116 ||
+        at(data, 2) != 79 ||
+        at(data, 3) != 99 ||
+        word(data, 4) != 2 {
         return Unsupported("pack index version (requires v2)")
     }
-    if summed && !same(hash.sum1(data[0..data.len - 20]), data[data.len - 20..]) {
-        return Unsupported("pack index checksum")
-    }
-    let count = be32(data, 1028)
+    if summed && !summed_ok(data, size) { return Unsupported("pack index checksum") }
+    let count = word(data, 1028)
     if count > 400000 { return Unsupported("limit: more than 400000 objects in one pack index") }
     let fixed = 1032 + count * 28 + 40
-    if fixed > data.len || (data.len - fixed) % 8 != 0 { return Unsupported("pack index length") }
-    let large_count = (data.len - fixed) / 8
+    if fixed > size || (size - fixed) % 8 != 0 { return Unsupported("pack index length") }
+    let large_count = (size - fixed) / 8
     var previous: int = 0
     for i in 0..256 {
-        let n = be32(data, 8 + 4 * i)
+        let n = word(data, 8 + 4 * i)
         if n < previous || n > count { return Unsupported("pack index fanout") }
         previous = n
     }
-    // den#63: the entries are reserved to the count, and a parse keeps two
-    // ints an object and the name table as the idx holds it; names are
-    // ordered by their raw bytes, as their hex orders them.
-    var entries = List[Entry]()
-    (mut entries).reserve(count)
+    // den#63: the offsets are reserved to the count, and a parse keeps one int
+    // an object beside the file itself; names are ordered by their raw bytes,
+    // as their hex orders them.
+    var offsets = List[int]()
+    (mut offsets).reserve(count)
     var bucket = 0
     var large_used = Map[int, bool]()
+    let offset_table = 1032 + count * 24
     for i in 0..count {
         let pos = 1032 + 20 * i
-        let first = data[pos] as int
+        let first = at(data, pos)
         while bucket < first {
-            if be32(data, 8 + bucket * 4) != i { return Unsupported("pack index fanout") }
+            if word(data, 8 + bucket * 4) != i { return Unsupported("pack index fanout") }
             bucket += 1
         }
         if i > 0 && !name_before(data, pos - 20, pos) {
             return Unsupported("pack index name order")
         }
-        var offset = be32(data, 1032 + count * 24 + i * 4)
+        var offset = word(data, offset_table + i * 4)
         if offset >= 2147483648 {
             let slot = offset - 2147483648
             if slot >= large_count || (large_used[slot] else false) {
@@ -225,33 +302,34 @@ fn parse_index(data: List[byte], summed: bool) -> Index ! PackErrors {
             }
             large_used[slot] = true
             let start = 1032 + count * 28 + slot * 8
-            let high = be32(data, start)
+            let high = word(data, start)
             if high > 2147483647 { return Unsupported("pack offset range") }
-            offset = high * 4294967296 + be32(data, start + 4)
+            offset = high * 4294967296 + word(data, start + 4)
         }
         if offset < 12 { return Unsupported("pack index offsets") }
-        (mut entries).push(Entry {
-            offset: offset,
-            crc: be32(data, 1032 + count * 20 + i * 4),
-        })
+        (mut offsets).push(offset)
     }
     while bucket < 256 {
-        if be32(data, 8 + bucket * 4) != count { return Unsupported("pack index fanout") }
+        if word(data, 8 + bucket * 4) != count { return Unsupported("pack index fanout") }
         bucket += 1
     }
     if large_used.len != large_count { return Unsupported("pack index large offsets") }
     // Two entries at one offset: the former per-entry duplicate check, once.
-    let by_offset = offset_order(entries)
+    let by_offset = offset_order(offsets)
     for rank in 1..by_offset.len {
-        if entries[by_offset[rank]].offset == entries[by_offset[rank - 1]].offset {
+        if offsets[by_offset[rank]] == offsets[by_offset[rank - 1]] {
             return Unsupported("pack index offsets")
         }
     }
+    var pack_sum = List[byte]()
+    (mut pack_sum).reserve(20)
+    for k in 0..20 { (mut pack_sum).push(at(data, size - 40 + k) as byte) }
     Index {
-        entries: entries,
+        data: data,
+        count: count,
+        offsets: offsets,
         by_offset: by_offset,
-        pack_sum: data[data.len - 40..data.len - 20],
-        names: data[1032..1032 + 20 * count],
+        pack_sum: pack_sum,
         reads: 0,
         pushed: 0,
     }

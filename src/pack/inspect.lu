@@ -22,11 +22,8 @@ fn entry_meta(fd: int, end: int, index: Index, slot: int, depth: int) -> (
     int,
 ) ! PackErrors {
     if depth > 64 { return Unsupported("limit: a delta chain deeper than 64") }
-    let offset = index.entries[slot].offset
-    var next = end
-    for item in index.entries {
-        if item.offset > offset && item.offset < next { next = item.offset }
-    }
+    let offset = index.offsets[slot]
+    let next = next_offset(index, offset, end)
     let bytes = range_bytes(fd, offset, if next - offset > 40 then 40 else next - offset)?
     var b = bytes[0] as int, pos = 1, size = b & 15, scale = 16
     let kind = b >> 4 & 7
@@ -87,13 +84,13 @@ pub fn inspect(path: str) -> Inspection ! PackErrors {
     // An object's diagnostic is built in object_check: it is copied out and
     // raised once the region is freed.
     var error_payload = "", failed = false
-    for slot in 0..index.entries.len {
+    for slot in 0..index.count {
         var row = PackedEntry {
             name: name_hex(index, slot),
             kind: "",
             size: 0,
             stored: 0,
-            offset: index.entries[slot].offset,
+            offset: index.offsets[slot],
             depth: 0,
             base: "",
         }
@@ -151,7 +148,7 @@ pub fn retirement_names(path: str, expected: str) -> List[str] ! PackErrors {
     }
     if (oid.hex(id) else "") != expected { return Unsupported("retirement pack binding") }
     var names = List[str]()
-    for slot in 0..index.entries.len { (mut names).push(name_hex(index, slot)) }
+    for slot in 0..index.count { (mut names).push(name_hex(index, slot)) }
     names
 }
 
@@ -163,6 +160,6 @@ pub fn names(path: str) -> List[str] ! PackErrors {
     defer fs_close(fd) else |_| {}
     let _ = verify(fd, index)?
     var out = List[str]()
-    for slot in 0..index.entries.len { (mut out).push(name_hex(index, slot)) }
+    for slot in 0..index.count { (mut out).push(name_hex(index, slot)) }
     out
 }

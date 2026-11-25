@@ -10,7 +10,7 @@ fn validate_pair(pack_path: str, idx_path: str) -> () ! PackErrors {
     // An object's diagnostic is built in object_check: it is copied out and
     // raised once the region is freed.
     var error_payload = "", failed = false
-    for slot in 0..index.entries.len {
+    for slot in 0..index.count {
         region object_check {
             var seen = Map[int, bool](), total = 0, none = no_cache()
             let _ = unpack(

@@ -747,7 +747,7 @@ pub fn received_install(ix: Indexed) -> str ! PackErrors {
     defer { if rev_owned { fs.remove(rev_path) else |_| {} } }
     // The idx must read back through the unchanged reader before publication.
     let check = load_index(idx_path)?
-    if check.entries.len != ix.order.len || !same(check.pack_sum, ix.sum) {
+    if check.count != ix.order.len || !same(check.pack_sum, ix.sum) {
         return Unsupported("pack index readback")
     }
     if fs.exists("{stem}.pack") {

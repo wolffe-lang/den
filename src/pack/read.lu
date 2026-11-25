@@ -64,21 +64,24 @@ fn load_index_summed(path: str, summed: bool) -> Index ! PackErrors {
     defer fs_close(fd) else |_| {}
     let size = file_size(fd)?
     if size > 16777216 { return Unsupported("limit: a pack index larger than 16777216 bytes") }
-    // range_bytes' reads, counted: the positional reads and the bytes pushed.
-    var bytes = List[byte](), pos: int = 0, reads: int = 0, pushed: int = 0
-    (mut bytes).reserve(size)
+    // A MiB a read, each kept as the list the read made (index.lu's Index):
+    // the file is copied a byte at a time only to finish a short read.
+    var chunks = List[List[byte]](), pos: int = 0, reads: int = 0, pushed: int = 0
     while pos < size {
-        region window {
-            let want = if size - pos > 65536 then 65536 else size - pos
-            let got = read_window(fd, pos, want)?
-            for b in got { (mut bytes).push(b) }
+        let want = if size - pos > 1048576 then 1048576 else size - pos
+        var chunk = read_window(fd, pos, want)?
+        reads += 1
+        while chunk.len < want {
+            let more = read_window(fd, pos + chunk.len, want - chunk.len)?
             reads += 1
-            pushed += got.len
-            pos += got.len
+            pushed += more.len
+            for b in more { (mut chunk).push(b) }
         }
+        (mut chunks).push(take chunk)
+        pos += want
     }
     if file_size(fd)? != size { return Unsupported("pack index changed") }
-    var index = parse_index(bytes, summed)?
+    var index = parse_index(take chunks, size, summed)?
     index.reads = reads
     index.pushed = pushed
     index
@@ -92,14 +95,12 @@ fn structure(fd: int, index: Index) -> int ! PackErrors {
     if !same(header[0..4], "PACK".bytes()) || be32(header, 4) != 2 {
         return Unsupported("pack version (requires v2)")
     }
-    if be32(header, 8) != index.entries.len { return Unsupported("pack object count") }
-    if index.entries.len > 0 && slot_at(index, 12) == -1 {
+    if be32(header, 8) != index.count { return Unsupported("pack object count") }
+    if index.count > 0 && slot_at(index, 12) == -1 {
         return Unsupported("pack index offsets")
     }
-    if index.entries.len == 0 && size != 32 { return Unsupported("pack index offsets") }
-    for entry in index.entries {
-        if entry.offset >= size - 20 { return Unsupported("pack index offsets") }
-    }
+    if index.count == 0 && size != 32 { return Unsupported("pack index offsets") }
+    if last_offset(index) >= size - 20 { return Unsupported("pack index offsets") }
     size
 }
 
@@ -126,7 +127,7 @@ fn rebound(fd: int, index: Index, end: int) -> int ! PackErrors {
     if !same(header[0..4], "PACK".bytes()) || be32(header, 4) != 2 {
         return Unsupported("pack version (requires v2)")
     }
-    if be32(header, 8) != index.entries.len { return Unsupported("pack object count") }
+    if be32(header, 8) != index.count { return Unsupported("pack object count") }
     let trailer = range_bytes(fd, size - 20, 20)?
     if !same(trailer, index.pack_sum) { return Unsupported("pack index binding") }
     if file_size(fd)? != size { return Unsupported("pack changed") }
@@ -194,7 +195,7 @@ fn unpack(
     pack_no: int,
 ) -> Body ! PackErrors {
     if depth > 64 { return Unsupported("limit: a delta chain deeper than 64") }
-    let offset = index.entries[slot].offset
+    let offset = index.offsets[slot]
     if seen[offset] else false { return Unsupported("pack delta cycle") }
     seen[offset] = true
     let next = next_offset(index, offset, end)
@@ -204,7 +205,7 @@ fn unpack(
     }
     charge(mut total, length)?
     let bytes = range_bytes(fd, offset, length)?
-    if entry_crc(bytes) != index.entries[slot].crc { return Unsupported("pack entry CRC") }
+    if entry_crc(bytes) != slot_crc(index, slot) { return Unsupported("pack entry CRC") }
     if bytes.len == 0 { return Unsupported("pack entry header") }
     var byte0 = bytes[0] as int, pos: int = 1, size: int = byte0 & 15, scale: int = 16
     let kind = byte0 >> 4 & 7
@@ -263,7 +264,7 @@ fn unpack(
     }
     var result = Body { kind: "", data: List[byte]() }
     let hit = if base_slot >= 0 {
-        cache_find(cache, pack_no, index.entries[base_slot].offset)
+        cache_find(cache, pack_no, index.offsets[base_slot])
     } else {
         -1
     }
@@ -359,7 +360,7 @@ fn entry_kind(
     depth: int,
 ) -> int ! PackErrors {
     if depth > 64 { return Unsupported("limit: a delta chain deeper than 64") }
-    let offset = index.entries[slot].offset
+    let offset = index.offsets[slot]
     if seen[offset] else false { return Unsupported("pack delta cycle") }
     seen[offset] = true
     let next = next_offset(index, offset, end)
@@ -594,7 +595,7 @@ pub fn prefix(gitdir: str, prefix: str) -> List[str] ! PackErrors {
             let fd = open_pack("{path[0..path.len - 4]}.pack")?
             defer fs_close(fd) else |_| {}
             let _ = bounds(fd, index)?
-            for slot in 0..index.entries.len {
+            for slot in 0..index.count {
                 let name = name_hex(index, slot)
                 if name.starts_with(prefix) {
                     var duplicate = false
@@ -652,7 +653,8 @@ fn load_session(mut s: Session) -> () ! PackErrors {
         s.reads += index.reads
         s.pushed += index.pushed
         (mut s.paths).push(copy path)
-        (mut s.indexes).push(index)
+        // The index moves into the session: a plain push would copy it whole.
+        (mut s.indexes).push(take index)
         (mut s.ends).push(end)
     }
     s.loaded = true
@@ -891,12 +893,12 @@ pub fn session_prefix(s: Session, prefix_text: str) -> List[str] ! PackErrors {
     if !s.loaded || !same_listing(s)? { return prefix(s.gitdir, prefix_text)? }
     var out = List[str]()
     for index in s.indexes {
-        var lo = 0, hi = index.entries.len
+        var lo = 0, hi = index.count
         while lo < hi {
             let mid = (lo + hi) / 2
             if name_hex(index, mid) < prefix_text { lo = mid + 1 } else { hi = mid }
         }
-        while lo < index.entries.len && name_hex(index, lo).starts_with(prefix_text) {
+        while lo < index.count && name_hex(index, lo).starts_with(prefix_text) {
             let name = name_hex(index, lo)
             var duplicate = false
             for seen in out { if seen == name { duplicate = true } }
