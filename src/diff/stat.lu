@@ -182,7 +182,7 @@ fn render_stats(
         if options.stat_count > 0 && count > options.stat_count { count = options.stat_count }
         for i in 0..count {
             let row = copy rows[i]
-            var name = owned(row.name)
+            var name = copy row.name
             if name.len > name_width {
                 let keep = if name_width > 3 then name_width - 3 else 0
                 var at = name.len - keep

@@ -169,12 +169,12 @@ fn stat_only_names(
         let file = worktree.read_file(ctx, prior.path, [copy prior]) else |_| { continue }
         if stat_differs(fresh_stat(file, prior)?, prior) {
             let old = blob(ctx, worktree.
-                FlatEntry { path: owned(prior.path), mode: prior.stat[6], id: copy prior.id })?
+                FlatEntry { path: copy prior.path, mode: prior.stat[6], id: copy prior.id })?
             let new = File {
-                path: owned(file.path),
+                path: copy file.path,
                 mode: file.mode,
                 id: copy file.id,
-                data: owned(file.data),
+                data: copy file.data,
             }
             (mut result).push(Change { before: [old], after: [new], status: "M", percent: 0 })
         }

@@ -212,7 +212,7 @@ fn prefixed_files(files: List[File], name: str) -> List[File] {
             path: path,
             mode: file.mode,
             id: copy file.id,
-            data: owned(file.data),
+            data: copy file.data,
         })
     }
     out

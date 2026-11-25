@@ -5,7 +5,7 @@ use object
 use oid
 use worktree
 
-fn data(files: List[File]) -> List[byte] { if files.len == 0 { return [] }; owned(files[0].data) }
+fn data(files: List[File]) -> List[byte] { if files.len == 0 { return [] }; copy files[0].data }
 
 fn size(files: List[File]) -> int { if files.len == 0 { return 0 }; files[0].data.len }
 
@@ -89,14 +89,14 @@ fn patch_one(
     driver: str,
 ) -> () ! worktree.WorkErrors {
     let old_path = if change.before.len > 0 {
-        owned(change.before[0].path)
+        copy change.before[0].path
     } else {
-        owned(change.after[0].path)
+        copy change.after[0].path
     }
     let new_path = if change.after.len > 0 {
-        owned(change.after[0].path)
+        copy change.after[0].path
     } else {
-        owned(change.before[0].path)
+        copy change.before[0].path
     }
     add(mut out, "diff --git ".bytes())
     add(mut out, quoted(prefixed(if options.reverse then "b/" else "a/", old_path), options))
@@ -223,7 +223,7 @@ fn name_record(mut out: List[byte], change: Change, options: Options) {
             add(
                 mut out,
                 if options.nul {
-                    owned(change.before[0].path)
+                    copy change.before[0].path
                 } else {
                     quoted(change.before[0].path, options)
                 },
@@ -235,7 +235,7 @@ fn name_record(mut out: List[byte], change: Change, options: Options) {
         change.status == "M" &&
         change.before.len == 1 &&
         change.after.len == 1 {
-        owned(change.before[0].path)
+        copy change.before[0].path
     } else {
         path(change)
     }
@@ -431,9 +431,9 @@ fn submodule_patch(
     driver: str,
 ) -> () ! worktree.WorkErrors {
     let path = if change.after.len > 0 {
-        owned(change.after[0].path)
+        copy change.after[0].path
     } else {
-        owned(change.before[0].path)
+        copy change.before[0].path
     }
     if change.status == "T" {
         if change.before[0].mode == 0o160000 {
