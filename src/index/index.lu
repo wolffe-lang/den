@@ -164,7 +164,7 @@ pub fn trailer_holds(data: List[byte]) -> bool {
     let end = data.len - 20
     var zero = true
     for i in 0..20 { if data[end + i] != 0 as byte { zero = false } }
-    if zero { return true }
+    if zero { return false }
     var state = hash.new1()
     hash.update1_prefix(mut state, data, end)
     let digest = hash.final1(take state)
