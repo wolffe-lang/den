@@ -497,9 +497,7 @@ pub fn inflate_resume(
         // more than a MiB is reserved before any byte is made; past that the
         // output grows as it is made (run). A sound entry up to a MiB is
         // reserved exactly, and nothing is reserved again on a later call.
-        var first = (src.len - start) * 1032 + 258
-        if first > 1048576 { first = 1048576 }
-        if size < first { first = size }
+        let first = size
         st.room = size
         if first > 0 {
             (mut out).reserve(first)
