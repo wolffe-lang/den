@@ -18,6 +18,7 @@ for tier in native release; do
     tools/env python3 -I tools/pack-idx-sum-test.py --tier "$tier"
     tools/env python3 -I tools/pack-idx-entries-test.py --tier "$tier"
     tools/env python3 -I tools/pack-entry-test.py --tier "$tier"
+    tools/env python3 -I tools/read-scale-test.py --tier "$tier"
     for name in history refs merge replay; do
         DEN_PACKED_FIXTURES=1 tools/env python3 -I "tools/$name-test.py" --tier "$tier"
     done
