@@ -3,7 +3,10 @@
 it must to use the index at all (its header, version, monotonic fanout and length); each entry is checked when
 it is used, and every entry by verify-pack (fsck checks the objects it reads). So a read of an object the
 malformation does not touch answers as with a sound index, a lookup bounded by the fanout misses a name outside
-its bucket, and verify-pack refuses every one of these.
+its bucket, and verify-pack refuses every one of these. den's fsck checks the index as its verify-pack does
+(the owner's ruling: a malformed index is refused at first use, and in fsck and verify-pack), so where Git's fsck
+passes an index it does not check (a name outside its bucket, an unused large-offset entry), den's fsck refuses
+it by name; wherever Git's fsck refuses, den's must too.
 
 A repository of a few commits is packed by Git; each row group copies it and rewrites the idx one way, re-signed
 so its own checksum is right:
@@ -14,7 +17,8 @@ so its own checksum is right:
   offset-below-12   the last object's offset inside the pack header
   offset-past-end   the last object's offset past the pack's end
 For each, the reads (READS) must equal Git's exit status, and when Git's is 0 its standard output and error;
-fsck and verify-pack (CHECKS) must succeed or fail as Git's do.
+verify-pack must succeed or fail as Git's does; fsck must fail where Git's does, and may fail where Git's
+passes only with a named pack index refusal.
 """
 import argparse
 import hashlib
@@ -118,7 +122,10 @@ def main():
             argv = [str(target) if x == 'IDX' else x for x in argv]
             g = subprocess.run([git, *argv], cwd=repo, capture_output=True)
             d = subprocess.run([den, *argv], cwd=repo, capture_output=True)
-            ok = (g.returncode == 0) == (d.returncode == 0)
+            if argv[0] == 'fsck' and g.returncode == 0 and d.returncode != 0:
+                ok = b'pack index' in d.stderr
+            else:
+                ok = (g.returncode == 0) == (d.returncode == 0)
             print(('PASS ' if ok else 'FAIL ') + f'idx-entries-{name}-check-{argv[0]}: git {g.returncode} den {d.returncode}' +
                   ('' if ok else f' den {d.stderr[-160:]!r}'), flush=True)
             rows.append(ok)
