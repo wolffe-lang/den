@@ -310,6 +310,14 @@ by name. Higher merge-stage entries can be read and written. Resolving or deleti
 them through `add` records the original stages in REUC; unrelated higher-stage
 `rm`/`mv`/restore operations remain refused.
 
+An index is read as Git reads it: its structure is checked, but its trailing
+checksum is not. An index Git wrote with `index.skipHash` (twenty zero bytes in
+place of the checksum) reads like any other. A damaged index whose structure
+still parses is read as Git reads it, for example one with a flipped bit in an
+entry's stat words. `fsck` refuses it with Git's lines and exit 128, as Git's
+does, and accepts the zeros. den's writes compute the checksum even where
+`index.skipHash` is set.
+
 Config parsing handles quoting, escapes, continuation and precedence, but
 `include`/`includeIf` are named refusals. Config supports `--get` and legacy
 set, `--add`, `--unset`, `--unset-all` and `--replace-all`, with `--local`
