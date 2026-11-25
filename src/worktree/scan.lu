@@ -188,6 +188,8 @@ fn parents_verified(
     mut verified: List[List[byte]],
     mut work: PathWork,
 ) -> () ! WorkErrors {
+    work.checks += 1
+    if !valid_relative(path) { return invalid }
     var depth = verified.len
     while depth > 0 && !beneath(path, verified[depth - 1]) { depth -= 1 }
     while verified.len > depth {
