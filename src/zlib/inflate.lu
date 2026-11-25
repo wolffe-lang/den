@@ -24,7 +24,6 @@ fn bits(src: List[byte], mut r: Bits, width: int) -> int ! {truncated} {
     var value: int = 0
     var shift: int = 0
     while shift < width {
-        if r.pos >= src.len { return truncated }
         let avail = 8 - r.bit
         let n = if width - shift < avail then width - shift else avail
         value = value | (src[r.pos] as int >> r.bit & (1 << n) - 1) << shift
