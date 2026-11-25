@@ -15,16 +15,28 @@
 - A read reads an entry's header in one read of at most 4 KiB, then its
   stream in one read of the least of the bytes left before the trailer, the
   size hint (the declared size, a sixteenth more and 64 bytes) and a MiB. Only
-  when the stream runs past that window is it read again, to the hint capped
-  by the pack's end. The window is read with one positional read, not a byte
-  at a time.
+  when the stream runs past that window is the rest read, to the hint capped
+  by the pack's end, appended to it, and the entry inflated again; no byte is
+  read twice. The first window is read with one positional read, not a byte at
+  a time.
 - A declared size is the entry's own claim, read before any of its bytes are
   checked. The output is reserved to the least of the size, a MiB and what the
   input can make (1,032 bytes a byte), and grows as it is made: doubling to an
   eighth of the size, then the size. A false claim of 400 MiB now reserves a
   MiB; it reserved all of it when the stream behind it was over 400 KiB. A
-  sound 16 MiB entry reserves 19 MiB in all (1.19 times its size), against 16
-  MiB before.
+  sound 16 MiB entry whose stream fits the first window reserves 19 MiB in all
+  (1.19 times its size), against 16 MiB before.
+- What a read of a 16 MiB entry charges, its bytes read and its reservations
+  together, counted by the session:
+  - incompressible (a stream of 16.0 MiB): 2.25 times its size, against 2.0
+    before and for Git, which maps the entry and holds the output. Its first
+    window is held again beside the whole one, a MiB more;
+  - compressible (a stream of 0.66 MiB): 1.25 times its size, against 1.04
+    before and for Git;
+  - four symbols (a stream of 4.7 MiB, past the first window): it reads 17.0
+    MiB, to the size hint, and is inflated twice, so its output is reserved
+    twice (38 MiB): 3.44 times its size, against 1.29 for Git. This is the cost
+    of an entry whose stream runs past a MiB while staying well under its size.
 - What changes against Git, and against den before:
   - bytes between entries no longer stop a read; Git reads past them too.
     verify-pack and fsck still refuse a stream that does not end where the next
@@ -34,9 +46,10 @@
   - a damaged stream is now refused by the inflater's name (`pack zlib …`)
     where it was refused as `pack entry CRC`, since the inflate comes first;
   - a false declared size over a stream that truly consumes more than a MiB of
-    input is read to the size hint, capped by the pack's end: 10.5 MB for a
+    input is read to the size hint, capped by the pack's end: 9.5 MB for a
     crafted 1.1 MB stream with 9.5 MB of pack after it, where Git inflates
-    through the 1.1 MB. Its reservation stays at a MiB.
+    through the 1.1 MB. Its reservation stays at a MiB for each of its two
+    attempts.
 - New rows:
   - the inflater's robustness, before any of this: every zlib vector through
     `inflate_sized` (the pack reader's entry point), the codec fuzz through it
@@ -47,7 +60,8 @@
   - what a read costs, from the session's counters
     (`probes/pack-client --read-counts`): no order and no offset resolved for
     a read with or without a delta; a false claim's read and reservation; the
-    crafted stream's; two 16 MiB entries' reservations;
+    crafted stream's; three 16 MiB entries' reads and reservations, beside
+    what Git's read holds;
   - `tools/read-scale-test.py`: a 16 MiB blob, incompressible and
     compressible, read beside Git, its CPU and peak bounded against Git's.
 
