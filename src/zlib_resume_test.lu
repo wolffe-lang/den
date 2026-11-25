@@ -1,0 +1,136 @@
+//! member: false
+
+// inflate_resume at seeded splits, on every tier, the checked machine included.
+// tools/codec-resume-test.py resumes four streams at every split point through
+// the zpipe binary, which the checked machine cannot run; this program makes its
+// own. Three payloads are deflated by den's own encoder (stored and level 1,
+// zlib-wrapped), and each round takes one of those streams and a mutant of it
+// (a cut, one to four flipped bits, or a run of seeded bytes), and inflates
+// each twice: whole, by inflate_sized, and resumed, by inflate_resume over at
+// most three seeded windows, each from the resume point to a cut past the last
+// window's end, the third to the stream's end. The two must give the same
+// answer, and, when the stream is accepted, the same bytes and the same length
+// consumed; a trap ends the program, so the checked machine's verdict is not
+// exit(0). The rounds are sized to the checked machine's step budget (rounds());
+// the native and release tiers run four times as many (--more).
+use zlib
+
+// 60 rounds: on the pinned compiler's checked machine 80 fit its step budget
+// and 120 did not (measured 2026-11-25).
+fn rounds() -> int { 60 }
+
+fn step(seed: int) -> int { (seed * 1103515245 + 12345) % 2147483648 }
+
+fn payload(shape: int, n: int, seed0: int) -> List[byte] {
+    var out = List[byte]()
+    var seed = seed0
+    while out.len < n {
+        seed = step(seed)
+        let r = seed / 65536
+        if shape == 0 {
+            (mut out).push((r % 256) as byte)
+        } else if shape == 1 {
+            (mut out).push((r % 4 * 61) as byte)
+        } else {
+            let w = "tree blob commit parent author den pack\n".bytes()
+            let at = r % 30
+            for i in at..at + 8 { if out.len < n { (mut out).push(w[i]) } }
+        }
+    }
+    out
+}
+
+// The stream resumed over at most three seeded windows.
+fn resumed(
+    input: List[byte],
+    size: int,
+    mut seed: int,
+    mut out: List[byte],
+    mut consumed: int,
+) -> str {
+    var st = zlib.resume_start()
+    var reserved: int = 0, from: int = 0, reach: int = 0, calls: int = 0
+    loop {
+        seed = step(seed)
+        calls += 1
+        let span = input.len - reach
+        let to = if span <= 1 || calls == 3 then input.len else reach + 1 + seed / 65536 % span
+        reach = to
+        var w = List[byte]()
+        for i in from..to { (mut w).push(input[i]) }
+        consumed = zlib.inflate_resume(w, 0, from, size, mut st, mut out, mut reserved) else |e| {
+            let name = "{e}"
+            if name != "truncated" || to >= input.len { return name }
+            -1
+        }
+        if consumed >= 0 { return "ok" }
+        from = st.at
+    }
+}
+
+// Whole and resumed must agree: the answer, and when accepted, the bytes and
+// the length consumed. Returns whether the stream was accepted.
+fn agree(input: List[byte], size: int, mut seed: int) -> bool {
+    var rout = List[byte](), rconsumed: int = -1
+    let again = resumed(input, size, mut seed, mut rout, mut rconsumed)
+    let one = zlib.inflate_sized(input, 0, size) else |e| {
+        assert(again == "{e}")
+        return false
+    }
+    assert(again == "ok" && rconsumed == one.consumed && rout.len == one.data.len)
+    for i in 0..rout.len { assert(rout[i] == one.data[i]) }
+    true
+}
+
+fn main() -> int ! {invalid, unsupported_level, limit} {
+    var streams = List[List[byte]](), sizes = List[int]()
+    for shape in 0..3 {
+        let n = 200 + shape * 150
+        let src = payload(shape, n, 7919 * (shape + 1))
+        (mut streams).push(zlib.deflate(src, 0, n + n / 8 + 65536)?)
+        (mut sizes).push(n)
+        (mut streams).push(zlib.deflate(src, 1, n + n / 8 + 65536)?)
+        (mut sizes).push(n)
+    }
+    var seed = 2203, sound = 0, accepted = 0, refused = 0
+    var total = rounds()
+    let args = env_args()
+    if args.len == 1 && args[0] == "--more" { total = rounds() * 4 }
+    for r in 0..total {
+        region one {
+            let k = r % streams.len
+            let s = copy streams[k]
+            if agree(s, sizes[k], mut seed) { sound += 1 }
+            var m = List[byte]()
+            seed = step(seed)
+            let kind = r / streams.len % 3
+            if kind == 0 {
+                let cut = seed / 65536 % s.len
+                for i in 0..cut { (mut m).push(s[i]) }
+            } else if kind == 1 {
+                for b in s { (mut m).push(b) }
+                let flips = 1 + seed / 65536 % 4
+                for _ in 0..flips {
+                    seed = step(seed)
+                    let at = seed / 65536 % m.len
+                    seed = step(seed)
+                    m[at] = (m[at] as int ^ 1 << seed / 65536 % 8) as byte
+                }
+            } else {
+                for b in s { (mut m).push(b) }
+                let len = seed / 65536 % 40
+                let at = seed / 256 % s.len
+                for i in 0..len {
+                    seed = step(seed)
+                    if at + i < m.len { m[at + i] = (seed / 65536 % 256) as byte }
+                }
+            }
+            if agree(m, sizes[k], mut seed) { accepted += 1 } else { refused += 1 }
+        }
+    }
+    assert(sound == total)
+    print(
+        "PASS zlib-resume rounds={total}: every stream resumed as whole; mutants resumed as whole, {accepted} accepted, {refused} refused\n",
+    )
+    0
+}
