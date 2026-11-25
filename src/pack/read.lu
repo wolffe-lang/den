@@ -301,7 +301,9 @@ fn unpack(
         read_bytes += bytes.len
     }
     var grown = false
-    var inflated = zlib.inflate_sized(bytes, pos, size) else |e| match e {
+    // reserved counts every reservation the inflater makes, an attempt that
+    // meets the window's end included.
+    var inflated = zlib.inflate_sized_counted(bytes, pos, size, mut reserved) else |e| match e {
         truncated => {
             if bytes.len >= most { return Unsupported("pack zlib truncated") }
             grown = true
@@ -316,13 +318,15 @@ fn unpack(
         limit => { return Unsupported("pack zlib limit") },
     }
     if grown {
-        bytes = range_bytes(fd, offset, most)?
-        read_bytes += bytes.len
-        inflated = zlib.inflate_sized(bytes, pos, size) else |e| {
+        // The rest of the window to the hint, appended: no byte is read twice.
+        let have = bytes.len
+        (mut bytes).reserve(most)
+        append_range(fd, mut bytes, offset + have, most - have)?
+        read_bytes += most - have
+        inflated = zlib.inflate_sized_counted(bytes, pos, size, mut reserved) else |e| {
             return Unsupported("pack zlib {e}")
         }
     }
-    reserved += inflated.reserved
     if inflated.data.len != size { return Unsupported("pack entry size or trailing bytes") }
     let used = pos + inflated.consumed
     span = used
