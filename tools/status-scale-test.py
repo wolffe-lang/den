@@ -48,15 +48,19 @@ SHAPES = {
 # its entries. directories: the peak bound fails a walk that keeps all it
 # made of each directory; the CPU bound fails a walk whose work per directory
 # grows with the number of entries.
-# objects: den still reads every pack index whole where Git reads what it
-# looks up, and the peak bound is today's. Git's own time there is a
-# millisecond, so the CPU bound is nearly all slack: it fails a read that
-# hashes every index and spells every name in it, on a machine up to half
-# again as fast as the one it was set on.
+# objects: den still checks every entry of the pack index when it opens it,
+# where Git reads what it looks up. The CPU bound fails the open that copied
+# the index in a byte at a time, kept a list of its entries and ordered them by
+# a merge sort through that list (0.125 s on the record host, against Git's
+# millisecond); it holds an open that reads the index a MiB at a time and
+# orders its offsets by radix, on a runner up to twice as slow. The peak bound
+# fails that open's copies: the index twice, its name table and its entries
+# (67 MiB). A byte-at-a-time copy alone is caught by tools/pack-test.py's
+# open-counts rows, not here.
 RELATIVE = {
     'files': dict(cpu_factor=10.0, cpu_slack=0.05, rss_factor=5.0, rss_slack_kib=5120),
     'directories': dict(cpu_factor=10.0, cpu_slack=0.05, rss_factor=14.0, rss_slack_kib=16384),
-    'objects': dict(cpu_factor=10.0, cpu_slack=0.40, rss_factor=8.0, rss_slack_kib=98304),
+    'objects': dict(cpu_factor=10.0, cpu_slack=0.06, rss_factor=3.0, rss_slack_kib=40960),
 }
 
 
