@@ -745,7 +745,8 @@ by its offset.
 A read reads an entry's header in one read of at most 4 KiB, then its stream in
 one read of the least of the bytes left before the trailer, the size hint (the
 declared size, a sixteenth more and 64 bytes) and a MiB. Only when the stream
-runs past that window is it read again to the hint, capped by the pack's end.
+runs past that window is the rest read to the hint, capped by the pack's end,
+and the entry inflated again, with its output reserved anew.
 
 Pack hashing and other file reads use reclaimed 64-KiB offset windows without
 mmap.
@@ -757,8 +758,9 @@ An inflated entry's output is reserved before any byte is made to the least
 of its declared size, a MiB, and 1,032 bytes for each byte of input. Past that
 it grows as it is made: doubling to an eighth of the declared size, then to the
 size. A false declared size reserves at most a MiB, or eight times what its
-stream decodes; an entry over a MiB holds about 1.2 times its size while it is
-inflated. Indexes are bounded at
+stream decodes, for each attempt. An entry over a MiB holds about 1.2 times its
+size in output while it is inflated, and about 2.4 times when its stream runs
+past the first window, which inflates it twice. Indexes are bounded at
 16 MiB/400,000 objects, directories at 8,192 entries and 256 packs. No persistent
 verification cache or pack-size-independent CPU cost is claimed: checksums scan
 candidate packs again on each lookup.
