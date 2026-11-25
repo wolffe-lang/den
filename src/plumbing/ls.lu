@@ -193,7 +193,12 @@ fn ls_files(args: List[str]) -> int ! Errors {
         Fatal(message) => { return Fatal(message) },
         _ => { return invalid },
     }
-    let value = worktree.read_index(ctx) else |_| { return invalid }
+    // An index den refuses is named as status names it, not as a bare invalid.
+    let value = worktree.read_index(ctx) else |e| match e {
+        Fatal(message) => { return Fatal(message) },
+        Unsupported(feature) => { return Unsupported(feature) },
+        _ => { return Fatal("{e}") },
+    }
     var patterns = List[str]()
     for path in paths {
         if path.starts_with("/") || path.contains("..") {
