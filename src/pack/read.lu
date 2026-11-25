@@ -73,7 +73,9 @@ fn load_index_summed(path: str, summed: bool) -> Index ! PackErrors {
     var chunks = List[List[byte]](), pos: int = 0, reads: int = 0, pushed: int = 0
     while pos < size {
         let want = if size - pos > 1048576 then 1048576 else size - pos
-        var chunk = read_window(fd, pos, want)?
+        // PLANT: the first read of each chunk is capped at 64 KiB, as the old
+        // open's windows were; the rest is copied a byte at a time.
+        var chunk = read_window(fd, pos, if want > 65536 then 65536 else want)?
         reads += 1
         while chunk.len < want {
             let more = read_window(fd, pos + chunk.len, want - chunk.len)?
