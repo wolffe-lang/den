@@ -701,13 +701,40 @@ chains reconstruct owned bodies, including forward REF bases.
 
 The index's copy of the pack's SHA-1 trailer must equal the pack's own before
 lookup results are used. An object read checks neither file's whole SHA-1, as
-Git's reads do not; verify-pack, fsck and installation check both. The index
-validates fan-out, sorted unique names, CRC entries and 32/64-bit offsets. Each
-reconstructed entry checks CRC, zlib consumption, sizes, delta instructions and
-its independent object identity. Corruption is a named error, not a
+Git's reads do not; verify-pack, fsck and installation check both.
+
+Opening an index checks only what any use of it needs, as Git's open does:
+- its header and version;
+- a fan-out that never decreases and stays within the object count;
+- its length.
+
+A lookup searches the name's own fan-out bucket, as Git's does, so a name the
+index holds outside its bucket is not found.
+
+A read checks the entry it uses:
+- an offset of at least 12, inside the pack;
+- a large offset the table holds;
+- the entry's CRC, by its slot. So an offset-delta base that no index entry
+  names is refused; Git reads such a base at its pack offset.
+
+verify-pack, fsck and installation check every entry: fan-out against the
+names, sorted unique names, the large-offset table used exactly once, every
+offset, and no two entries at one offset. Git's fsck passes an index whose only
+faults are a name outside its bucket or an unused large-offset entry; den's
+refuses it by name.
+
+Each reconstructed entry checks CRC, zlib consumption, sizes, delta instructions
+and its independent object identity. Corruption is a named error, not a
 missing-object fallback.
 
-Pack hashing and file reads use reclaimed 64-KiB offset windows without mmap.
+An index is read a MiB at a time, because the runtime's positional read returns
+at most a MiB, and kept as read, never copied a byte at a time. Each entry's
+offset is resolved once. The offsets are ordered by a radix sort on 8-bit digits
+under 65,536 entries and 16-bit digits from there, so a command that opens many
+small indexes does not pay a large one's cost on each.
+
+Pack hashing and other file reads use reclaimed 64-KiB offset windows without
+mmap.
 Compressed entries and reconstructed bodies are bounded whole-object buffers:
 512 MiB per inflated entry/body (Git's `core.bigFileThreshold` default; it was
 16 MiB before vc23), that plus a sixteenth and 64 KiB compressed, 64 delta
