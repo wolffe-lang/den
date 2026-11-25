@@ -55,6 +55,31 @@ def main():
             data,meta=call(op,row['encoded'],len(row['decoded']))
             assert data==row['decoded'] and meta==[row['consumed'],len(data)],row['name']
         print('PASS',row['name'],flush=True)
+    # The pack reader's entry point, inflate_sized, on every zlib vector: the stream at START behind five junk
+    # bytes, SIZE the vector's output cap. Alone, each answers as the vector does; with seven junk bytes after it,
+    # each answers the same unless the vector is cut short, when it must still be refused by one of the names.
+    PRE,POST=b'\xa5'*5,b'\x5a'*7
+    def sized_error(data,size):
+        inp=work/'input';out=work/'output';inp.write_bytes(data);out.unlink(missing_ok=True)
+        c=subprocess.run([str(binary),'inflate_sized',str(inp),str(out),str(size),str(len(PRE))],capture_output=True,timeout=30)
+        assert c.returncode==1 and c.stdout==b'' and c.stderr.strip() in NAMES and not out.exists(),(c.returncode,c.stdout,c.stderr)
+        return c.stderr.strip().decode()
+    NAMES=[b'truncated',b'bad_header',b'dictionary',b'checksum',b'invalid',b'limit']
+    sized=0
+    for row in rows:
+        if row.get('raw'):continue
+        size=row.get('cap',len(row.get('decoded',b'')) if 'error' not in row else 100000)
+        for tail in (b'',POST):
+            data=PRE+row['encoded']+tail
+            if 'error' in row and (row['error']!='truncated' or not tail):
+                call('inflate_sized',data,size,len(PRE),error=row['error'])
+            elif 'error' in row:
+                sized_error(data,size)
+            else:
+                got,meta=call('inflate_sized',data,size,len(PRE))
+                assert got==row['decoded'] and meta==[row['consumed'],len(got)],(row['name'],meta)
+            sized+=1
+    print('PASS inflate_sized on',sized,'zlib vector inputs, alone and with trailing bytes',flush=True)
     if not a.vectors_only:
         for name,encoded,expected in v.bounds():
             assert zlib.decompress(encoded,-15)==expected,name

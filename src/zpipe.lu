@@ -29,6 +29,12 @@ fn run(args: List[str]) -> () ! {
         }
         fs_write_bytes(args[2], result.data) else |_| { return io }
         print("{result.consumed} {result.data.len}")
+    } else if args[0] == "inflate_sized" {
+        // inflate_sized IN OUT SIZE START: the pack reader's entry point, the
+        // stream at START, SIZE its declared size and output cap.
+        let result = zlib.inflate_sized(input, level, cap)?
+        fs_write_bytes(args[2], result.data) else |_| { return io }
+        print("{result.consumed} {result.data.len}")
     } else if args[0] == "deflate" || args[0] == "deflate_raw" {
         let result = if args[0] == "deflate" {
             zlib.deflate(input, level, cap)?
