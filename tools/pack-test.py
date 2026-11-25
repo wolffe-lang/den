@@ -89,7 +89,9 @@ check('depth-boundary',OUT/'depth',b'64')
 flipped=bytearray(pack); flipped[-25]^=1
 # R-vc18-3: a read checks the entry it reads (CRC32 and identity) and the
 # idx-to-pack trailer binding, never the whole-pack hash; verify-pack keeps it.
-check('flipped-delta',repo('flipped-delta',bytes(flipped),idx),last,expected='pack entry CRC')
+# A flipped bit in the last entry's stream: the inflate meets it first, as the CRC is checked after it, over
+# the bytes the stream used.
+check('flipped-delta',repo('flipped-delta',bytes(flipped),idx),last,expected='pack zlib limit')
 def verify(name, r, expected):
     p = subprocess.run([str(ROOT/'target'/A.tier/'den'), 'verify-pack', str(r/'objects'/'pack'/'pack-fixture.idx')], capture_output=True, timeout=60)
     good = p.returncode != 0 and expected.encode() in p.stderr and not p.stdout
@@ -135,10 +137,11 @@ for suffix,reason in [('pack','pack missing companion'),('idx','pack missing ind
  rr=repo('missing-'+suffix,pack,idx); (rr/'objects/pack'/('pack-fixture.'+suffix)).unlink()
  check('missing-'+suffix,rr,last,expected=reason)
 # Signed idx structure mutations isolate sorted-name and large-offset validation:
-# a read refuses the entry it uses (with two slots under one name, the slot found
-# holds another object, refused by its identity), verify-pack the whole index.
+# a read refuses the entry it uses (with two slots under one name, an offset
+# delta's base is found by its identity, and the slot that names it is not at its
+# offset), verify-pack the whole index.
 for name,bad,reason,checked in [
- ('idx-order',idx[:1052]+idx[1032:1052]+idx[1072:],'pack object identity','pack index name order'),
+ ('idx-order',idx[:1052]+idx[1032:1052]+idx[1072:],'pack OFS_DELTA base boundary','pack index name order'),
  ('idx-large-slot',idx[:1032+24*3]+u32(0x80000000)+idx[1032+24*3+4:],'pack index large offsets','pack index large offsets'),
  ('idx-v1',idx[:4]+u32(1)+idx[8:],'pack index version','pack index version')]:
  check(name,repo(name,pack,resign_idx(bad)),last,expected=reason)
@@ -184,7 +187,7 @@ def flip(at):
 for name, mutate, must in [('same', lambda b: b, 'second blob 9 '), ('shorter', lambda b: b[:-1], 'second error'),
                            ('longer', lambda b: b + b'\0', 'second error'),
                            ('header', flip(7), 'pack version'), ('count', flip(11), 'pack object count'),
-                           ('trailer', flip(-1), 'pack index binding'), ('entry', flip(-25), 'pack entry CRC')]:
+                           ('trailer', flip(-1), 'pack index binding'), ('entry', flip(-25), 'pack zlib limit')]:
     session_row('session-reread-' + name, repo('session-' + name, pack, idx), last, mutate, must=must)
 session_row('session-read', repo('session-read', pack, idx), middle, must='first blob')
 rr = repo('session-bitmap', pack, idx); (rr/'objects'/'pack'/'pack-fixture.bitmap').write_bytes(b'unsupported')
@@ -209,7 +212,7 @@ def opened_row(name, r, body, pairs=(), cap=16777216, must=None, abbrev=False):
 for name, mutate, must in [('same', lambda b: b, 'second blob 9 '), ('shorter', lambda b: b[:-1], 'second error'),
                            ('longer', lambda b: b + b'\0', 'second error'),
                            ('header', flip(7), 'pack version'), ('count', flip(11), 'pack object count'),
-                           ('trailer', flip(-1), 'pack index binding'), ('entry', flip(-25), 'pack entry CRC')]:
+                           ('trailer', flip(-1), 'pack index binding'), ('entry', flip(-25), 'pack zlib limit')]:
     rr = repo('opened-' + name, pack, idx); pack_path = rr/'objects'/'pack'/'pack-fixture.pack'
     source = OUT/('opened-' + name + '.source'); source.write_bytes(mutate(pack_path.read_bytes()))
     opened_row('opened-reread-' + name, rr, last, [(pack_path, source)], must=must)
