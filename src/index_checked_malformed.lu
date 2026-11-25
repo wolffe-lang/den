@@ -23,11 +23,16 @@ fn main() -> int ! index.IndexErrors {
         let _ = index.parse(raw[0..size]) else |_| { rejected = true; index.empty(2)? }
         assert(rejected)
     }
+    // A read accepts a body its trailer does not match, as Git's read does;
+    // trailer_holds, fsck's check, refuses it and takes the skipHash zeros.
     var corrupt = copy raw
     corrupt[20] = 99 as byte
-    var rejected = false
-    let _ = index.parse(corrupt) else |_| { rejected = true; index.empty(2)? }
-    assert(rejected)
-    print("PASS bounded checksum and truncation rejection")
+    let _ = index.parse(corrupt)?
+    assert(!index.trailer_holds(corrupt))
+    var zeros = copy raw
+    for i in raw.len - 20..raw.len { zeros[i] = 0 as byte }
+    assert(index.trailer_holds(zeros))
+    assert(index.trailer_holds(raw))
+    print("PASS bounded truncation rejection; the trailer held by trailer_holds, not by a read")
     0
 }

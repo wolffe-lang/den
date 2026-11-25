@@ -86,9 +86,21 @@ fn main() -> int ! index.IndexErrors {
             let _ = index.parse(encoded[0..length]) else |_| { continue }
             assert(false)
         }
+        // A read does not check the trailer, as Git's does not; fsck asks
+        // trailer_holds, which takes the SHA-1 and the skipHash zeros.
+        assert(index.trailer_holds(encoded))
         var checksum_bad = copy encoded
         checksum_bad[20] = (checksum_bad[20] as int + 1) as byte
-        assert(malformed(checksum_bad, "checksum"))
+        assert(!index.trailer_holds(checksum_bad))
+        let reread = index.parse(checksum_bad)?
+        assert(reread.entries.len == decoded.entries.len)
+        var zeros = copy encoded
+        for i in encoded.len - 20..encoded.len { zeros[i] = 0 as byte }
+        assert(index.trailer_holds(zeros))
+        let _ = index.parse(zeros)?
+        var trailer_bad = copy encoded
+        trailer_bad[encoded.len - 1] = (trailer_bad[encoded.len - 1] as int ^ 1) as byte
+        assert(!index.trailer_holds(trailer_bad))
     }
     var extended = index.empty(2)?
     var skip = fixture("skip".bytes(), 0)?
