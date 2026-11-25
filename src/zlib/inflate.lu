@@ -243,7 +243,6 @@ fn compressed(
         let s = if fixed then fixed_symbol(src, mut r)? else symbol(src, mut r, lt)?
         if s < 256 {
             if out.len == room {
-                if room == cap { return limit }
                 grow(mut out, mut room, cap, 1, mut total)
             }
             (mut out).push(s as byte)
