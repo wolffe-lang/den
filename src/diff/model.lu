@@ -81,7 +81,10 @@ pub fn defaults() -> Options {
 fn add(mut out: List[byte], value: List[byte]) { for b in value { (mut out).push(b) } }
 
 // One buffer of the value's size: grown a byte at a time, a body's copy kept
-// every smaller buffer it outgrew, about twice the body (den#145).
+// every smaller buffer it outgrew, about twice the body (den#145). It copies
+// byte by byte because callers pass a string's lent bytes() view, which `copy`
+// cannot take (wolf-lang#927); an owned value, such as an entry's path, is
+// copied with `copy`, in one copy.
 fn owned(value: List[byte]) -> List[byte] {
     var out = List[byte]()
     (mut out).reserve(value.len)
@@ -98,8 +101,8 @@ fn compare(a: List[byte], b: List[byte]) -> int {
 }
 
 fn path(change: Change) -> List[byte] {
-    if change.after.len > 0 { return owned(change.after[0].path) }
-    owned(change.before[0].path)
+    if change.after.len > 0 { return copy change.after[0].path }
+    copy change.before[0].path
 }
 
 fn under(value: List[byte], prefix: List[byte]) -> bool {

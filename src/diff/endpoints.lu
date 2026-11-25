@@ -10,7 +10,7 @@ fn blob(ctx: worktree.Context, entry: worktree.FlatEntry) -> File ! worktree.Wor
     // A gitlink diffs as Git's text for it (vc25), never as an object read.
     if entry.mode == 0o160000 {
         return File {
-            path: owned(entry.path),
+            path: copy entry.path,
             mode: entry.mode,
             id: copy entry.id,
             data: worktree.subproject_text(entry.id, false)?,
@@ -19,7 +19,7 @@ fn blob(ctx: worktree.Context, entry: worktree.FlatEntry) -> File ! worktree.Wor
     let stored = object.read_object(ctx.repo, entry.id, 1000000000)?
     if stored.kind != "blob" { return invalid_tree }
     // The read's body is the file's own: a second copy kept it twice (den#145).
-    File { path: owned(entry.path), mode: entry.mode, id: copy entry.id, data: stored.data }
+    File { path: copy entry.path, mode: entry.mode, id: copy entry.id, data: stored.data }
 }
 
 /// The bound on the bodies one diff holds, named as fetch, pull, merge and
@@ -63,7 +63,7 @@ fn from_worktree_ignoring(
             if parsed.len == 0 { (mut parsed).push(worktree.modules(ctx)?) }
             let setting = worktree.ignore_for(ctx, parsed[0], text(entry.path)?, ignore_option)
             if setting == "all" {
-                (mut out).push(blob(ctx, worktree.FlatEntry { path: owned(entry.path), mode: entry.stat[6], id: copy entry.id })?)
+                (mut out).push(blob(ctx, worktree.FlatEntry { path: copy entry.path, mode: entry.stat[6], id: copy entry.id })?)
                 continue
             }
             let state = worktree.submodule_state(
@@ -74,7 +74,7 @@ fn from_worktree_ignoring(
             )?
             let dirty = state.modified || setting == "none" && state.untracked
             (mut out).push(File {
-                path: owned(entry.path),
+                path: copy entry.path,
                 mode: 0o160000,
                 id: copy state.head,
                 data: worktree.subproject_text(state.head, dirty)?,
@@ -83,7 +83,7 @@ fn from_worktree_ignoring(
         }
         if entry.flags & 0x8000 != 0 || entry.extended & 0x4000 != 0 {
             let file = blob(ctx, worktree.
-                FlatEntry { path: owned(entry.path), mode: entry.stat[6], id: copy entry.id })?
+                FlatEntry { path: copy entry.path, mode: entry.stat[6], id: copy entry.id })?
             total += file.data.len
             if total > 134217728 { return Fatal(bodies_bound()) }
             (mut out).push(file)
@@ -99,10 +99,10 @@ fn from_worktree_ignoring(
         total += file.data.len
         if total > 134217728 { return Fatal(bodies_bound()) }
         (mut out).push(File {
-            path: owned(file.path),
+            path: copy file.path,
             mode: file.mode,
             id: copy file.id,
-            data: owned(file.data),
+            data: copy file.data,
         })
     }
     out
@@ -112,10 +112,10 @@ fn candidates(files: List[File], retained: bool) -> List[rename.Candidate] {
     var out = List[rename.Candidate]()
     for file in files {
         (mut out).push(rename.Candidate {
-            path: owned(file.path),
+            path: copy file.path,
             mode: file.mode,
             id: copy file.id,
-            data: owned(file.data),
+            data: copy file.data,
             retained: retained,
         })
     }
@@ -181,10 +181,10 @@ pub fn changes(
     for pair in pairs {
         let source = copy sources[pair.source]
         let old = File {
-            path: owned(source.path),
+            path: copy source.path,
             mode: source.mode,
             id: copy source.id,
-            data: owned(source.data),
+            data: copy source.data,
         }
         (mut out).push(Change {
             before: [old],
@@ -317,7 +317,7 @@ fn pending_entry(
     if entry.mode == 0o160000 { return Pending { file: blob(ctx, entry)?, source: 0, at: -1 } }
     Pending {
         file: File {
-            path: owned(entry.path),
+            path: copy entry.path,
             mode: entry.mode,
             id: copy entry.id,
             data: List[byte](),
@@ -346,7 +346,7 @@ fn pending_index(ctx: worktree.Context, value: index.Index) -> List[Pending] ! w
     for entry in value.entries {
         if index.stage(entry) != 0 { return Unsupported("diff unmerged index") }
         if entry.extended & 0x2000 != 0 { continue }
-        (mut out).push(pending_entry(ctx, worktree.FlatEntry { path: owned(entry.path), mode: entry.stat[6], id: copy entry.id })?)
+        (mut out).push(pending_entry(ctx, worktree.FlatEntry { path: copy entry.path, mode: entry.stat[6], id: copy entry.id })?)
     }
     out
 }
@@ -384,7 +384,7 @@ fn pending_worktree(
             if setting == "all" {
                 (mut out).push(Pending {
                     file: blob(ctx, worktree.FlatEntry {
-                        path: owned(entry.path),
+                        path: copy entry.path,
                         mode: entry.stat[6],
                         id: copy entry.id,
                     })?,
@@ -402,7 +402,7 @@ fn pending_worktree(
             let dirty = state.modified || setting == "none" && state.untracked
             (mut out).push(Pending {
                 file: File {
-                    path: owned(entry.path),
+                    path: copy entry.path,
                     mode: 0o160000,
                     id: copy state.head,
                     data: worktree.subproject_text(state.head, dirty)?,
@@ -413,7 +413,7 @@ fn pending_worktree(
             continue
         }
         if entry.flags & 0x8000 != 0 || entry.extended & 0x4000 != 0 {
-            (mut out).push(pending_entry(ctx, worktree.FlatEntry { path: owned(entry.path), mode: entry.stat[6], id: copy entry.id })?)
+            (mut out).push(pending_entry(ctx, worktree.FlatEntry { path: copy entry.path, mode: entry.stat[6], id: copy entry.id })?)
             continue
         }
         // A stat-clean entry is its blob, unread whatever its attributes
@@ -438,7 +438,7 @@ fn pending_worktree(
         if !seen.clean { (mut hashed).push(Hashed { entry: copy entry, state: copy seen.state }) }
         (mut out).push(Pending {
             file: File {
-                path: owned(entry.path),
+                path: copy entry.path,
                 mode: seen.state.mode,
                 id: copy seen.state.id,
                 data: List[byte](),
@@ -523,14 +523,14 @@ fn bodies(
             copy item.file
         } else if item.source == 1 {
             blob(ctx, worktree.FlatEntry {
-                path: owned(item.file.path),
+                path: copy item.file.path,
                 mode: item.file.mode,
                 id: copy item.file.id,
             })?
         } else {
             let read = worktree.read_file(ctx, item.file.path, [copy value.entries[item.at]])?
             File {
-                path: owned(read.path),
+                path: copy read.path,
                 mode: read.mode,
                 id: copy read.id,
                 data: read.data,
@@ -651,7 +651,7 @@ fn collect_known(ctx: worktree.Context, options: Options) -> Collected ! worktre
                     path: owned(options.revisions[0].bytes()),
                     mode: 0o100644,
                     id: a,
-                    data: owned(left.data),
+                    data: copy left.data,
                 },
             ]
             let new = [
@@ -659,7 +659,7 @@ fn collect_known(ctx: worktree.Context, options: Options) -> Collected ! worktre
                     path: owned(options.revisions[1].bytes()),
                     mode: 0o100644,
                     id: b,
-                    data: owned(right.data),
+                    data: copy right.data,
                 },
             ]
             if oid.equal(old[0].id, new[0].id) {
