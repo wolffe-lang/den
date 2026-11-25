@@ -376,7 +376,6 @@ fn run(
                 mut total,
             ) else |e| match e {
                 truncated => {
-                    cut(mut out, st.made)
                     return truncated
                 },
                 bad_header => { return bad_header },
