@@ -12,6 +12,8 @@ for tier in native release; do
     "target/$tier/index-test"
     "$WOLF" build $flag --deny-warnings probes/index-client/main.lu -o "target/$tier/index-client"
     tools/env python3 -I tools/index-test.py --tier "$tier"
+    # The index trailer as Git reads, writes and checks it (den#155), beside the pinned Git.
+    tools/env python3 -I tools/index-trailer-test.py --tier "$tier"
 done
 for part in format flags trees malformed stat; do
     "$WOLF" conform-run "src/index_checked_$part.lu" --checked --json > "target/index-checked-$part.json"
