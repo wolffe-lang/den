@@ -356,7 +356,7 @@ fn unpack(
         // once the stream has ended and its size holds.
         // A refusal is named after the window's region has ended (zlib_refusal):
         // a message made in the region would be freed with it.
-        var start: int = 0, size_w: int = 1048576, refused: int = 0
+        var start: int = 0, size_w: int = most, refused: int = 0
         while consumed < 0 && refused == 0 {
             let at0 = st.at
             let bit0 = st.bit
