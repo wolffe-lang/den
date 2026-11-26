@@ -1,0 +1,45 @@
+{
+  "assets": [
+    {
+      "digest": "sha256:8e6a14d7192170275af558f7258f1705c70ea9b7b7721ef87db9949d20d4482a",
+      "id": 786263637,
+      "name": "lupin-0.1.63-aarch64-apple-darwin.tar.gz",
+      "size": 2896557
+    },
+    {
+      "digest": "sha256:3a8e83f26cf24a3a40450e1508fe66b51abdf53d077107dcac33f3768fd92a6e",
+      "id": 786018040,
+      "name": "lupin-0.1.63-aarch64-unknown-linux-gnu.tar.gz",
+      "size": 3052817
+    },
+    {
+      "digest": "sha256:ef21106adcb8f9b4e3f026b8959ab5841c0909201e82187c4a6047392cf2f0f2",
+      "id": 786020120,
+      "name": "lupin-0.1.63-x86_64-pc-windows-msvc.zip",
+      "size": 2804351
+    },
+    {
+      "digest": "sha256:45e71c6f8f577f045312d58be28e70abd5f94f2160740043976da041501df554",
+      "id": 786018755,
+      "name": "lupin-0.1.63-x86_64-unknown-linux-gnu.tar.gz",
+      "size": 3228689
+    },
+    {
+      "digest": "sha256:a9bed175edd584610452d82810f07a5c4175ce03f8b5ca6435de7ce53c2e8d3e",
+      "id": 786019148,
+      "name": "lupin-0.1.63-x86_64-unknown-linux-musl.tar.gz",
+      "size": 3247088
+    },
+    {
+      "digest": "sha256:eb464cc9164fad51700e948692e6fd244b9a9dc04aea7829e0e35fce4a60b3a5",
+      "id": 786020114,
+      "name": "lupin.exe",
+      "size": 7328768
+    }
+  ],
+  "id": 456389804,
+  "name": "lupin 0.1.63",
+  "published_at": "2026-11-24T06:37:37Z",
+  "tag_name": "v0.1.63",
+  "target_commitish": "trunk"
+}

@@ -1,0 +1,39 @@
+{
+  "assets": [
+    {
+      "digest": "sha256:979dbb22b59268fb552081cfc5666da1f8e4adea831a286b396f78161cb893d5",
+      "id": 792703128,
+      "name": "wolf-0.2.41-aarch64-apple-darwin.tar.gz",
+      "size": 20517650
+    },
+    {
+      "digest": "sha256:a4319aab6203928960c632b37a95e58765bd51d343d7b376af49a3ac878b1fd3",
+      "id": 792694805,
+      "name": "wolf-0.2.41-aarch64-unknown-linux-gnu.tar.gz",
+      "size": 82897310
+    },
+    {
+      "digest": "sha256:55b116015b8c0da5807999193531aae1d28c2f88267160d8666d65d3077174e1",
+      "id": 792699373,
+      "name": "wolf-0.2.41-x86_64-pc-windows-msvc.tar.gz",
+      "size": 16886499
+    },
+    {
+      "digest": "sha256:e7ec4cde06db2f2235ae82e3dff1db06f6b8e37249c883a3a35bdee8c86b8c34",
+      "id": 792702904,
+      "name": "wolf-0.2.41-x86_64-unknown-linux-gnu.tar.gz",
+      "size": 87803900
+    },
+    {
+      "digest": "sha256:ceaa506246a8ed0ef004ad6c7754ab3cee6eb97bcc052014e08f220bb7c077b7",
+      "id": 792692810,
+      "name": "wolf-rt-0.2.41-x86_64-unknown-linux-musl.tar.gz",
+      "size": 10967363
+    }
+  ],
+  "id": 458496472,
+  "name": "v0.2.41",
+  "published_at": "2026-11-25T18:44:35Z",
+  "tag_name": "v0.2.41",
+  "target_commitish": "trunk"
+}

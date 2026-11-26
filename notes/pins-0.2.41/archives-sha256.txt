@@ -1,0 +1,6 @@
+979dbb22b59268fb552081cfc5666da1f8e4adea831a286b396f78161cb893d5  wolf-0.2.41-aarch64-apple-darwin.tar.gz
+a4319aab6203928960c632b37a95e58765bd51d343d7b376af49a3ac878b1fd3  wolf-0.2.41-aarch64-unknown-linux-gnu.tar.gz
+e7ec4cde06db2f2235ae82e3dff1db06f6b8e37249c883a3a35bdee8c86b8c34  wolf-0.2.41-x86_64-unknown-linux-gnu.tar.gz
+8e6a14d7192170275af558f7258f1705c70ea9b7b7721ef87db9949d20d4482a  lupin-0.1.63-aarch64-apple-darwin.tar.gz
+3a8e83f26cf24a3a40450e1508fe66b51abdf53d077107dcac33f3768fd92a6e  lupin-0.1.63-aarch64-unknown-linux-gnu.tar.gz
+45e71c6f8f577f045312d58be28e70abd5f94f2160740043976da041501df554  lupin-0.1.63-x86_64-unknown-linux-gnu.tar.gz
