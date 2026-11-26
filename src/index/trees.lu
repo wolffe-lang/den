@@ -50,6 +50,14 @@ fn cache_before(left: List[byte], right: List[byte]) -> bool {
 /// Index sorting and tree sorting are intentionally different. Raw path bytes
 /// never pass through UTF-8, and directory depth consumes no call stack.
 pub fn build_trees(value: Index) -> TreeAssembly ! IndexErrors {
+    var compares = 0
+    build_trees_counted(value, mut compares)?
+}
+
+/// build_trees, adding to compares each comparison of a directory's path that
+/// finding an entry's directories makes. probes/index-client trees-compares
+/// prints it for a generated index; a row bounds it per file and depth.
+pub fn build_trees_counted(value: Index, mut compares: int) -> TreeAssembly ! IndexErrors {
     check_version(value.version)?
     validate_entries(value.entries)?
     validate_extensions(value.extensions)?
@@ -68,6 +76,7 @@ pub fn build_trees(value: Index) -> TreeAssembly ! IndexErrors {
                 let component = entry.path[component_start..i]
                 var found = -1
                 for j in 1..dirs.len {
+                    compares += 1
                     if byte_compare(dirs[j].path, path) == 0 { found = j; break }
                 }
                 if found < 0 {
