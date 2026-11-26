@@ -286,10 +286,32 @@ fn budget() -> str {
     "limit: a file whose line diff passes 2000 differing lines in a three-way file merge"
 }
 
-fn at(files: List[diff.File], path: List[byte], mut compares: int) -> int {
-    for i in 0..files.len {
+// Whether files' paths ascend strictly, in compare's byte order: a side
+// flattened from a tree or an index does.
+fn ordered(files: List[diff.File]) -> bool {
+    for i in 1..files.len { if compare(files[i - 1].path, files[i].path) >= 0 { return false } }
+    true
+}
+
+// path's position in files, or -1: by binary search where files is ordered,
+// otherwise by a scan. compares counts the comparisons with path.
+fn at(files: List[diff.File], sorted: bool, path: List[byte], mut compares: int) -> int {
+    if !sorted {
+        for i in 0..files.len {
+            compares += 1
+            if compare(files[i].path, path) == 0 { return i }
+        }
+        return -1
+    }
+    var low = 0, high = files.len
+    while low < high {
+        let mid = low + (high - low) / 2
         compares += 1
-        if compare(files[i].path, path) == 0 { return i }
+        if compare(files[mid].path, path) < 0 { low = mid + 1 } else { high = mid }
+    }
+    if low < files.len {
+        compares += 1
+        if compare(files[low].path, path) == 0 { return low }
     }
     -1
 }
@@ -394,13 +416,15 @@ fn plan_inner(
     }
     if rename_failed { renamed = renamed_side(base, ours, theirs)? }
     if renamed { return Unsupported("merge rename topology") }
+    let in_base = ordered(base), in_ours = ordered(ours), in_theirs = ordered(theirs)
     var paths = List[List[byte]]()
     for entry in base { (mut paths).push(copy entry.path) }
     for entry in ours {
-        if at(base, entry.path, mut compares) < 0 { (mut paths).push(copy entry.path) }
+        if at(base, in_base, entry.path, mut compares) < 0 { (mut paths).push(copy entry.path) }
     }
     for entry in theirs {
-        if at(base, entry.path, mut compares) < 0 && at(ours, entry.path, mut compares) < 0 {
+        if at(base, in_base, entry.path, mut compares) < 0 &&
+            at(ours, in_ours, entry.path, mut compares) < 0 {
             (mut paths).push(copy entry.path)
         }
     }
@@ -415,9 +439,9 @@ fn plan_inner(
     }
     var result = Plan { files: [], stages: [], messages: [], conflicts: [] }
     for path in paths {
-        let b = at(base, path, mut compares),
-            o = at(ours, path, mut compares),
-            t = at(theirs, path, mut compares)
+        let b = at(base, in_base, path, mut compares),
+            o = at(ours, in_ours, path, mut compares),
+            t = at(theirs, in_theirs, path, mut compares)
         if same(ours, o, theirs, t) || same(base, b, theirs, t) {
             if o >= 0 { (mut result.files).push(copy ours[o]) }
             continue
