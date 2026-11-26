@@ -1,5 +1,26 @@
 # Changes
 
+## Unreleased — an index validated once per value
+
+- A scan of the work tree checks the index it is given, as `index.serialize`
+  does: the version, every entry, the extensions and the cache tree's spans.
+  It made that check twice, once itself and once more in its rows. A merge pull
+  scans five times, so on the pull rows' repository (den#138) it checked its
+  index 10 times and serialized it whole each time. Yet one of the two values
+  it scans is what `index.parse` just returned, which makes the same checks,
+  and the other is checked by its first scan.
+- A scan now checks at most once (`worktree.scan_index_held`). A caller that
+  holds a value as `index.parse` returned it, or as a scan checked it,
+  unchanged since, says so, and the scan makes no check. The merge command does
+  this for its dirt and staging checks, both transitions and a fast-forward's
+  safety scan, so a merge pull checks its index once, plus the write, and a
+  fast-forward only at the write. Every other caller is still checked, in one
+  pass where it was two, and a malformed index read from disk is still refused
+  by `index.parse`.
+- A scan counts its checks (`Snapshot.validations`), and the worktree leaf's
+  `scan-validations` rows hold them: none for a held value, one for any other,
+  and a value whose cache tree its entries disagree with still refused.
+
 ## Unreleased — a merge's transitions release what they read
 
 - A pull or merge moves the work tree and the index in a transition. A
