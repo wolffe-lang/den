@@ -132,7 +132,7 @@ fn transition_released(
                 raised = 4
             },
         }
-        if raised == 0 { value = copy next }
+        if raised < 0 { value = copy next }
     }
     if raised == 1 { return Unsupported(error_payload) }
     if raised == 2 { return Pathspec(error_payload) }
