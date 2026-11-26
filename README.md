@@ -51,7 +51,7 @@ known; preparation does not imply that either package is already available.
 | Role | Machine / identity |
 |---|---|
 | Behavioral oracle | Git 2.56.0, signed kernel.org tarball; default build, Ubuntu 24.04 image pinned by digest |
-| Development witnesses | hasu core blocks for local object/history work; kasumi CPUs 4–7 for wire protocols and 12–15 for the initial census; Linux x86-64, rootless containers under core locks |
+| Development witnesses | Two Linux x86-64 development hosts: one's core blocks for local object/history work; the other's CPUs 4–7 for wire protocols and 12–15 for the initial census; rootless containers under core locks |
 | CI PR gate | ubuntu-24.04, pinned container and oracle, including planner tests |
 | CI full field leg | macOS arm64 with Homebrew Git; nonblocking observation, not the oracle |
 | Toolchain | wolf 0.2.36 5adf3d91, lupin 0.1.58 tag 6240efe5 (binary embeds a5378e3), pinned std d4a4d4ca (release bundles 78b9d3cb) |
@@ -892,7 +892,7 @@ den push -u origin main
 den push --force-with-lease=refs/heads/main:EXPECTED_OID
 den pull --no-rebase
 den pull --rebase
-den clone -q --upload-pack=/owned/fixture/upload ssh://kasumi/owned/repo.git destination
+den clone -q --upload-pack=/owned/fixture/upload ssh://HOST/owned/repo.git destination
 den daemon --enable-receive-pack /dedicated/export/base 9418
 ```
 
@@ -1149,7 +1149,7 @@ name-reuse cleanup race has a dedicated concurrent-writer regression.
 `tools/check-objects` covers malformed input, API/checked witnesses, Git interop,
 write failures, permissions, races and interruption.
 
-Historical M1 measurements on hasu, three whole-object release runs per input
+Historical M1 measurements on a Linux x86-64 development host, three whole-object release runs per input
 with the first excluded, gave peak RSS at 100,000,000 bytes: random write/read
 **787,892/655,276 KiB**; zero write/read **461,368/426,968 KiB**. Doubling 50 MB to
 100 MB stayed below 2.7x for each path. `tools/objects-bench.py` and
@@ -1186,7 +1186,7 @@ Each native tier runs 250 deterministic fuzz rounds (1,250 calls); every
 malformed result must be a named row. The Adler CI plant failed as intended
 in run 40133795581 (closed-unmerged PR #3).
 
-Historical M1 measurements on hasu, three 100,000,000-byte file-driver runs with the first excluded:
+Historical M1 measurements on the same host, three 100,000,000-byte file-driver runs with the first excluded:
 
 | Release operation | Random bytes | Repeated zeroes |
 |---|---:|---:|
@@ -1229,7 +1229,7 @@ module-only pushes run no CI. The nightly and default dispatch still run
 the full set. `ci/tiers-test.py` checks planning and final verdicts, and a
 failed nightly opens or updates a `nightly-red` issue. Portable implementation
 measurements use Linux containers. The separate live SSH leg builds on macOS
-arm64 and interoperates with pinned Git on kasumi.
+arm64 and interoperates with pinned Git on a Linux x86-64 host.
 
 `packaging/den.rb` and `packaging/PKGBUILD` remain **drafts, not published**.
 They name a future v0.1.0 tag and have an unfilled source-archive digest. Do not
