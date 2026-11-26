@@ -20,6 +20,13 @@ floor the minimal parent gives (/bin/true started the same way) is printed
 beside them. den must stay under the stated bounds, which are well under what
 the issue's pulls took before this change (6 min 55 s for an up-to-date pull;
 3.2 GiB for a moved one).
+
+At the issue's size (the default --files and --commits), the ff and merge
+pulls are also held to a ratio of den's CPU to Git's in the same take
+(RATIO): 25 and 26 times, 1.25 times what finding an index entry's
+directories and a merged path by search, not by scanning, predicts (about 20
+and 21 times). A ratio holds on any host, where a time would hold only on the
+host it was set on. Smaller fixtures (a rig's dry) are not ratio-bounded.
 """
 import argparse
 import hashlib
@@ -35,6 +42,7 @@ BOUNDS = {
     'ff': dict(cpu=90.0, rss_kib=768 * 1024),
     'merge': dict(cpu=120.0, rss_kib=768 * 1024),
 }
+RATIO = {'ff': 25.0, 'merge': 26.0}
 
 
 def main():
@@ -180,11 +188,16 @@ def main():
         same = all(g[k] == d[k] for k in ('status', 'stdout', 'stderr', 'head'))
         bound = BOUNDS[name]
         bounded = best['den']['cpu'] <= bound['cpu'] and best['den']['maxrss_kib'] <= bound['rss_kib']
+        ratio = best['den']['cpu'] / max(best['git']['cpu'], 1e-9)
+        limit = RATIO.get(name) if (a.files, a.commits) == (10500, 5000) else None
+        if limit is not None:
+            bounded = bounded and ratio <= limit
         ok = same and bounded and d['status'] == 0
         print(('PASS ' if ok else 'FAIL ') + row +
               f" den wall {best['den']['wall']:.2f} s cpu {best['den']['cpu']:.2f} s peak {best['den']['maxrss_kib']} KiB;"
               f" git wall {best['git']['wall']:.3f} s cpu {best['git']['cpu']:.3f} s peak {best['git']['maxrss_kib']} KiB;"
-              f" bounds cpu {bound['cpu']} s peak {bound['rss_kib']} KiB; floor {floor_kib} KiB" +
+              f" bounds cpu {bound['cpu']} s peak {bound['rss_kib']} KiB; floor {floor_kib} KiB;"
+              f" den/git cpu {ratio:.1f}x" + (f" (bound {limit:g}x)" if limit is not None else '') +
               ('' if same else ' DIFFERS in ' + ', '.join(
                   f"{k}: git {g[k] if k in ('status', 'head') else bytes.fromhex(g[k])[-160:]!r}"
                   f" den {d[k] if k in ('status', 'head') else bytes.fromhex(d[k])[-160:]!r}"
