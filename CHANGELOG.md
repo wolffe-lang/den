@@ -1,5 +1,25 @@
 # Changes
 
+## Unreleased — wolf 0.2.41
+
+- den is built with wolf 0.2.41 (0261597), the std it bundles (32a1cd06) and
+  lupin 0.1.63 (2becebc4); the newest-release leaf builds with 0.2.41 too. Every
+  pinned archive was read twice from the release API and hashed
+  (`notes/pins-0.2.41/`). wolf's `Map` now finds keys through a hashed index,
+  where the 0.2.36 `Map` compared a key with every entry: the record states what
+  that does to the pulls' time.
+- `probes/pack-client` built an error inside a region and returned it with `?`
+  at two sites, which 0.2.41 refuses (E1010). Each name is now parsed before its
+  region opens, and a read that fails inside runs again outside, where its error
+  can leave.
+- The checked machine's one recorded exception (a pack-payload row it rendered as
+  `<value>`) held only for 0.2.36. 0.2.41's checked machine prints the tag, so the
+  table is empty.
+- The next-wolf candidate leaf and `candidate-wolf.toml` are retired: the build
+  they checked (1add9bb) is in 0.2.41. The newest-wolf leaf now reads the pins
+  against each other first (`tools/toolchain-pins-test.py`): the newest release is
+  never older than the pin, and a candidate must stay ahead of it.
+
 ## Unreleased — a pull's trees and merge plan without scans
 
 - A pull that moves the work tree builds the index's trees, and a merge pull
