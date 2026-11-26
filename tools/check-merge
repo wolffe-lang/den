@@ -19,10 +19,14 @@ for tier in native release; do
     tools/env python3 -I tools/merge-bases-test.py --tier "$tier"
     tools/env python3 -I tools/merge-file-test.py --tier "$tier"
     tools/env python3 -I tools/merge-test.py --tier "$tier"
+    # The merge planner's path lookups over a merge of a pull's size: their
+    # comparisons bounded per lookup, and the plan checked.
+    "$WOLF" build $flag --deny-warnings probes/mergetree-client/main.lu -o "target/$tier/mergetree-client"
+    python3 -I tools/mergetree-at-test.py --tier "$tier"
 done
 for unit in mergebase mergefile mergeundo; do
     "$WOLF" conform-run "src/${unit}_test.lu" --checked --json > "target/${unit}-checked.json"
     cat "target/${unit}-checked.json"
     python3 -I -c 'import json,sys; rows=[json.loads(x) for x in open(sys.argv[1]) if x.startswith("{")]; assert len(rows)==1 and rows[0]["verdict"]=="exit(0)",rows' "target/${unit}-checked.json"
 done
-echo 'merge: native/release exact matrices, named refusals separate, independent client, three actual checked exits; zero skips'
+echo 'merge: native/release exact matrices, mergetree-at rows, named refusals separate, independent client, three actual checked exits; zero skips'
