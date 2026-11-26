@@ -1,12 +1,4 @@
 {
   "about": "Rows of tools/pack-payload-test.py that one compiler's checked machine renders differently from native, release and later compilers. Each entry holds only for the compiler it names, which must be the pinned one, and only while that machine prints exactly what the entry records.",
-  "exceptions": [
-    {
-      "compiler": "wolf 0.2.36 (wolfgang, pin 5adf3d9)",
-      "machine": "checked",
-      "row": "received-scan-zlib",
-      "prints": "Unsupported(pack zlib <value>)",
-      "reason": "This checked machine moves an error matched by a match, so the wildcard arm of the received-pack scan, which names the error again in its message, renders it as <value>. Native and release, and the checked machine of later compilers, print the tag (bad_header)."
-    }
-  ]
+  "exceptions": []
 }
