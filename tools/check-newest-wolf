@@ -10,16 +10,22 @@
 #   newest-wolf-build-native   src/den.lu builds natively
 #   newest-wolf-build-release  src/den.lu builds on the release tier
 # A failing build's own compiler lines follow its row, two spaces in.
+# The toolchain-pins rows (tools/toolchain-pins-test.py) run first.
 set -eu
 DEN_ROOT=$(cd "$(dirname "$0")/.." && pwd)
 export DEN_ROOT
 cd "$DEN_ROOT"
 . tools/lib-toml.sh
+# The pins read against each other first (tools/toolchain-pins-test.py): the
+# newest release is never older than the pin, and a candidate the pin has
+# caught up with is retired. Its rows are this leaf's too.
+pins=0
+python3 -I tools/toolchain-pins-test.py || pins=1
 tools/fetch-newest-wolf
 wolf=$DEN_ROOT/.wolf-newest/wolf
 want=$(toml_value wolf-newest version_line)
 have=$("$wolf" --version 2>/dev/null | head -1)
-failed=0
+failed=$pins
 if [ "$have" = "$want" ]; then
     echo "PASS newest-wolf-version $have"
 else
