@@ -24,9 +24,10 @@ the issue's pulls took before this change (6 min 55 s for an up-to-date pull;
 Each row also prints den's and Git's user and system CPU apart, and the ratio
 of den's CPU to Git's in the same take, on every host; summary.json keeps
 them. The ratio is a reading, not a bound. Measured, it moved with the kind of
-core a take ran on, and with the share of a pull spent in the kernel, which
-instruction counts do not see (a sixth to a quarter of the merge's CPU). A
-bound on it is set later from held readings, never from a prediction.
+core a take ran on, and CPU is not proportional to instructions: some are
+cheaper than others, and about half a second of a merge pull's CPU is system
+time, which instruction counts do not see. A bound on it is set later from
+held readings, never from a prediction.
 """
 import argparse
 import hashlib
