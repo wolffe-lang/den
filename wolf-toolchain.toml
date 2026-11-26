@@ -1,41 +1,43 @@
-# r41p (2026-10-31): wolf release 427033151 and lupin release 425116893,
-# read twice from the release API, agreeing on asset ids and digests and
-# with r41's published table; linux x86-64 pair hashed twice on hasu.
-# (vc00's reads at 0.2.35: notes/vc00-evidence/*-release-read-*.json.)
+# 0.2.41 (2026-11-26): wolf release 458496472 (tag v0.2.41 at 0261597) and lupin
+# release 456389804 (tag v0.1.63 at 2becebc), each read twice from the tags
+# and the release API, agreeing on asset ids and digests; every archive below
+# downloaded and hashed, equal to the API's digest. The std is the one the wolf
+# archives bundle (std/STD-REV 32a1cd06).
+# The reads, the tags and the hashes: notes/pins-0.2.41/. (Earlier pins' reads:
+# notes/vc00-evidence/*-release-read-*.json and notes/vc1[345]-evidence/pins/.)
 # Whole release archives, including libwolf_rt.a and bundled std.
 
 [wolf]
-version = "0.2.36"
+version = "0.2.41"
 repo = "wolffe-lang/wolf-lang"
-rev = "5adf3d91f75b3545ff8d38e5b6693b0b9f367a05"
-version_line = "wolf 0.2.36 (wolfgang, pin 5adf3d9)"
-aarch64-apple-darwin = "b79d55845f349d56789d9d1cb057ee88b5a7128d3b6dd77ca070707cfa4aa632"
-x86_64-unknown-linux-gnu = "d383c74c8cd123b9d9dfaa268271d4f004294f85c2b230237d0ef07027d9500d"
-aarch64-unknown-linux-gnu = "3d5bd9ef47d3d198dd67fb3f995dff3ef7b169097529fa0e7ae8524e723be3d4"
+rev = "0261597230b46f17f7a894c5558452c19fa31b96"
+version_line = "wolf 0.2.41 (wolfgang, pin 0261597)"
+aarch64-apple-darwin = "979dbb22b59268fb552081cfc5666da1f8e4adea831a286b396f78161cb893d5"
+x86_64-unknown-linux-gnu = "e7ec4cde06db2f2235ae82e3dff1db06f6b8e37249c883a3a35bdee8c86b8c34"
+aarch64-unknown-linux-gnu = "a4319aab6203928960c632b37a95e58765bd51d343d7b376af49a3ac878b1fd3"
 
 [lupin]
-version = "0.1.58"
+version = "0.1.63"
 repo = "wolffe-lang/wolf-interp"
-rev = "6240efe5570dba1a33ba6269e3ba44bae33dd972"
-version_line = "lupin 0.1.58 (wolf-interp, reference interpreter at pin a5378e3)"
-aarch64-apple-darwin = "c1b0277133c052892be10539062666e873e874997cbb5be300cffe2c309ec055"
-x86_64-unknown-linux-gnu = "34f52792bb59bc7565e0edc1235cd47d9a6ad13d5e6528993627f2e699b62193"
-aarch64-unknown-linux-gnu = "00e40fa22d99046b28357f56092075cdb3e3e36a21cc44bf04d6b46605db432c"
+rev = "2becebc40bfb897de99c8e38f972566a5ae3059b"
+version_line = "lupin 0.1.63 (wolf-interp, reference interpreter at pin 5f1f1c9)"
+aarch64-apple-darwin = "8e6a14d7192170275af558f7258f1705c70ea9b7b7721ef87db9949d20d4482a"
+x86_64-unknown-linux-gnu = "45e71c6f8f577f045312d58be28e70abd5f94f2160740043976da041501df554"
+aarch64-unknown-linux-gnu = "3a8e83f26cf24a3a40450e1508fe66b51abdf53d077107dcac33f3768fd92a6e"
 
 [std]
 repo = "wolffe-lang/wolf-std"
-rev = "d4a4d4cab358e1e8c174f0206f9e13ad5cfe6c61"
+rev = "32a1cd062e215f80c97572f984e5bec2c927e6d8"
 
 # The newest wolf release, which den must also build with (tools/check-newest-wolf):
 # its own archive and the std it bundles, as a user or a system that ships the
-# release builds den. Raised by hand when wolf releases. 0.2.40 (release
-# 443798290): read twice from the release API, asset ids and digests agreeing;
-# each archive downloaded twice and hashed, equal to the API's digests.
+# release builds den. Raised by hand when wolf releases. 0.2.41 (release
+# 458496472) is also the pin above; read as the pin is.
 [wolf-newest]
-version = "0.2.40"
+version = "0.2.41"
 repo = "wolffe-lang/wolf-lang"
-version_line = "wolf 0.2.40 (wolfgang, pin b333b9d)"
-std_rev = "be1d10fa2798cc6bc2a1fd0b2e559e283469c9bf"
-aarch64-apple-darwin = "3f18a56562fb089da05a50a612e031cd297f20a617b9e6e7ada768fbeb69e72b"
-x86_64-unknown-linux-gnu = "bc2020e0b7400c18162a6072c299c65c0582ea74a0eba22aaa57ca04ae13e7e1"
-aarch64-unknown-linux-gnu = "cea26eea215e7cdba60db2870c0eb4d2c5738065046ec5fe6e0eec7da55e48cd"
+version_line = "wolf 0.2.41 (wolfgang, pin 0261597)"
+std_rev = "32a1cd062e215f80c97572f984e5bec2c927e6d8"
+aarch64-apple-darwin = "979dbb22b59268fb552081cfc5666da1f8e4adea831a286b396f78161cb893d5"
+x86_64-unknown-linux-gnu = "e7ec4cde06db2f2235ae82e3dff1db06f6b8e37249c883a3a35bdee8c86b8c34"
+aarch64-unknown-linux-gnu = "a4319aab6203928960c632b37a95e58765bd51d343d7b376af49a3ac878b1fd3"
