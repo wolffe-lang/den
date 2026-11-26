@@ -184,6 +184,24 @@ ceiling by the same rule in the same change; a ceiling rises only with a stated
 cause. `tools/speed-band-test.py` holds the rule, the sampling and the band to
 the recorded takes.
 
+`tools/pull-scale-test.py` (in `tools/check-porcelain`) pulls into a
+generated repository of 10,500 files in 5,000 directories, with 5,000 commits
+in 44 packs, beside the pinned Git: already up to date, a fast-forward and a
+merge. Each pull is bounded in CPU time and peak memory, and prints den's and
+Git's user and system CPU and the ratio of their CPU in the same take. The
+ratio is a reading, not a bound: it moves with the kind of core a take runs
+on and with the share of a pull spent in the kernel, so a bound on it waits
+for held readings. Two rows count the work a pull's size used to make
+quadratic. `index-trees-compares` bounds the directory comparisons that
+building the index's trees makes, at two per file and level. It now walks
+the directories the entry before left open; it used to compare each entry with
+every directory made so far (51 million comparisons for these 10,500 files).
+`mergetree-at-compares` bounds the path comparisons a merge plan's lookups
+make, at two per lookup per level of a binary search; each lookup used to
+scan the side (276 million for this merge). `index-trees-root` and
+`mergetree-at-plan` check that the faster search builds the same trees and the
+same plan.
+
 The warm `diff --quiet` row of the native build rose from 6.5 to 7 for the
 spread between takes on a row whose Git side is about 0.6 ms of CPU: three
 takes on two core sets read 4.89 and 5.57 (den at 54dc6c8 and at 4f73a20) and
