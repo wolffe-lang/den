@@ -19,6 +19,12 @@
   they checked (1add9bb) is in 0.2.41. The newest-wolf leaf now reads the pins
   against each other first (`tools/toolchain-pins-test.py`): the newest release is
   never older than the pin, and a candidate must stay ahead of it.
+- The newest-wolf leaf now builds what the candidate leaf built: den and the
+  five index-check programs on both tiers, and every test program under `src/`
+  (nested ones too) on native, with their E1010 counts held equal across tiers.
+  `src/mergefile/markers_test.lu` is built by no other leaf. The newest release
+  can be downloaded by a workflow's own token, so hosted CI builds them too, which
+  it could not do for the candidate.
 
 ## Unreleased — a pull's trees and merge plan without scans
 
