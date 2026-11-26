@@ -73,6 +73,88 @@ fn flat_files(files: List[diff.File]) -> List[worktree.FlatEntry] {
     out
 }
 
+/// One of the merge's transitions, in a region of its own. A transition scans
+/// the work tree, reads the target's trees and builds the next index's trees;
+/// in the command's arena all of that outlived it, and the second transition's
+/// stacked on the first's. Here only the index it made is copied out. A
+/// diagnostic built inside is copied out too (raised: 1 Unsupported,
+/// 2 Pathspec, 3 Fatal, 4 Failure) and raised once the region is freed: the
+/// transition is never run again, since it writes files.
+fn transition_released(
+    ctx: worktree.Context,
+    mut value: index.Index,
+    target: List[worktree.FlatEntry],
+    scanned: List[worktree.Snapshot],
+) -> () ! worktree.WorkErrors {
+    var error_payload = "", raised = 0
+    region transition {
+        var next = copy value
+        transition_either(ctx, mut next, target, scanned) else |e| match e {
+            invalid_index => { return invalid_index },
+            unmerged => { return unmerged },
+            invalid_tree => { return invalid_tree },
+            duplicate_name => { return duplicate_name },
+            invalid => { return invalid },
+            invalid_oid => { return invalid_oid },
+            unsupported_format => { return unsupported_format },
+            bad_header => { return bad_header },
+            bad_size => { return bad_size },
+            bad_oid => { return bad_oid },
+            truncated => { return truncated },
+            dictionary => { return dictionary },
+            checksum => { return checksum },
+            limit => { return limit },
+            trailing => { return trailing },
+            unsupported_level => { return unsupported_level },
+            not_found => { return not_found },
+            denied => { return denied },
+            io => { return io },
+            exists => { return exists },
+            unsupported => { return unsupported },
+            ambiguous => { return ambiguous },
+            cross_device => { return cross_device },
+            invalid_header => { return invalid_header },
+            utf8 => { return utf8 },
+            Unsupported(message) => {
+                error_payload = copy message
+                raised = 1
+            },
+            Pathspec(message) => {
+                error_payload = copy message
+                raised = 2
+            },
+            Fatal(message) => {
+                error_payload = copy message
+                raised = 3
+            },
+            Failure(message) => {
+                error_payload = copy message
+                raised = 4
+            },
+        }
+        if raised == 0 { value = copy next }
+    }
+    if raised == 1 { return Unsupported(error_payload) }
+    if raised == 2 { return Pathspec(error_payload) }
+    if raised == 3 { return Fatal(error_payload) }
+    if raised == 4 { return Failure(error_payload) }
+}
+
+/// The transition a merge takes: from the safety check's scan of the work
+/// tree when it has one (a fast-forward), or from a scan of its own.
+fn transition_either(
+    ctx: worktree.Context,
+    mut value: index.Index,
+    target: List[worktree.FlatEntry],
+    scanned: List[worktree.Snapshot],
+) -> () ! worktree.WorkErrors {
+    if scanned.len == 1 {
+        worktree.transition_scanned(ctx, mut value, target, "merge", scanned[0])?
+    } else {
+        worktree.transition(ctx, mut value, target, "merge")?
+    }
+}
+
 /// tree_objects in its own region, the assembly copied out (see
 /// merge_command_with); a failure is raised by a second run outside it.
 fn assembled_trees(
@@ -468,7 +550,9 @@ fn merge_command_with(args: List[str], reflog: str, label: str) -> int ! commit.
     }
     defer index.abort(mut tx)
     let flat = flat_files(plan.files)
-    if !fast { worktree.transition(ctx, mut tx.value, flat_files(inputs[0]), "merge")? }
+    if !fast {
+        transition_released(ctx, mut tx.value, flat_files(inputs[0]), List[worktree.Snapshot]())?
+    }
     var assembled = List[index.TreeAssembly]()
     if !fast { (mut assembled).push(assembled_trees(ctx, plan.files)?) }
     // A fast-forward writes nothing between its checks and its transition, so
@@ -518,11 +602,7 @@ fn merge_command_with(args: List[str], reflog: str, label: str) -> int ! commit.
         fs_close(file.fd)?
         fs_rename(path, "{ctx.repo.gitdir}/AUTO_MERGE")?
     }
-    if scanned.len == 1 {
-        worktree.transition_scanned(ctx, mut tx.value, flat, "merge", scanned[0])?
-    } else {
-        worktree.transition(ctx, mut tx.value, flat, "merge")?
-    }
+    transition_released(ctx, mut tx.value, flat, scanned)?
     conflict_index(mut tx.value, plan.stages)?
     index.commit(mut tx)?
     for line in plan.messages { print(line) }
