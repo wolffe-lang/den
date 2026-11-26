@@ -1224,7 +1224,9 @@ compiler reproducer tracks the returned lent-byte-view copy issue separately.
 Unlabelled pull requests run one cheap job that reports the local-evidence
 gate. The `ci` or `full-matrix` label runs the full set: Linux and the
 nonblocking macOS field observation. Trunk pushes run that set only when
-workflows, CI, shared tools, pins or other cross-cutting paths change;
+workflows, CI, shared tools, pins or other cross-cutting paths change, and
+leave out the macOS observation when a run at the same commit, over the same
+tree, already ran it green (the plan names that run);
 module-only pushes run no CI. The nightly and default dispatch still run
 the full set. `ci/tiers-test.py` checks planning and final verdicts, and a
 failed nightly opens or updates a `nightly-red` issue. Portable implementation
