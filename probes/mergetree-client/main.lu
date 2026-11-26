@@ -1,0 +1,90 @@
+// Independent API client for the merge planner's path lookups.
+use diff
+use mergetree
+use object
+use oid
+use worktree
+
+fn padded(n: int, width: int) -> str {
+    var text = "{n}"
+    while text.len() < width { text = "0{text}" }
+    text
+}
+
+fn side(files: int, changed: int, body: str, added: bool) -> List[diff.File] ! worktree.WorkErrors {
+    let same = object.identify("blob", "x".bytes())?
+    let other = object.identify("blob", body.bytes())?
+    var out = List[diff.File]()
+    for d in 0..1000 {
+        for s in 0..4 {
+            var k = 0
+            while d + 1000 * k < files {
+                let i = d + 1000 * k
+                if k % 4 == s {
+                    let text = "d{padded(d, 3)}/s{s}/f{padded(i, 5)}.txt"
+                    let path = text.bytes()
+                    (mut out).push(diff.File {
+                        path: path,
+                        mode: 0o100644,
+                        id: if i == changed then copy other else copy same,
+                        data: List[byte](),
+                    })
+                }
+                k += 1
+            }
+        }
+        if added && d == 999 {
+            let text = "d999/s9/added.txt"
+            let path = text.bytes()
+            (mut out).push(diff.
+                File { path: path, mode: 0o100644, id: copy other, data: List[byte]() })
+        }
+    }
+    out
+}
+
+// at-compares FILES: a merge plan over three generated sides in the pull rows'
+// fixture shape (tools/pull-scale-test.py), ours changing file 100's blob and
+// theirs file 7000's and adding one file. Prints the files planned, the
+// conflicts, which side's blob each changed file took, and the path
+// comparisons the planner's lookups made.
+fn at_compares(files: int) -> () ! worktree.WorkErrors {
+    let base = side(files, -1, "x", false)?
+    let ours = side(files, 100, "ours", false)?
+    let theirs = side(files, 7000, "theirs", true)?
+    var compares = 0
+    let plan = mergetree.plan_counted(
+        base,
+        ours,
+        theirs,
+        "ours",
+        "base",
+        "theirs",
+        "merge",
+        mut compares,
+    )?
+    let ours_id = object.identify("blob", "ours".bytes())?
+    let theirs_id = object.identify("blob", "theirs".bytes())?
+    var took_ours = 0, took_theirs = 0
+    for file in plan.files {
+        if oid.equal(file.id, ours_id) { took_ours += 1 }
+        if oid.equal(file.id, theirs_id) { took_theirs += 1 }
+    }
+    print(
+        "at-compares files={files} planned={plan.files.len} conflicts={plan.conflicts.len} ours={took_ours} theirs={took_theirs} compares={compares}",
+    )
+}
+
+fn work(args: List[str]) -> int ! worktree.WorkErrors {
+    if args.len == 2 && args[0] == "at-compares" {
+        let files = args[1].to_int() else |_| { return Unsupported("at-compares FILES") }
+        at_compares(files)?
+        return 0
+    }
+    eprint("usage: mergetree-client at-compares FILES")
+    2
+}
+
+fn main() -> int {
+    work(env_args()) else |e| { eprint("{e}"); 1 }
+}
