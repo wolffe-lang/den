@@ -124,7 +124,11 @@ each other (`tools/toolchain-pins-test.py`): the newest release is never older t
 the pin, and a next-wolf candidate (`candidate-wolf.toml`, built by a leaf of its
 own until wolf releases it) must stay ahead of the pin. The last candidate, the
 release workflow's build of 1add9bb (`wolf 0.2.40+dev.1add9bb`), is in 0.2.41, so
-its leaf and pin file are retired. `tools/mkden OUTDIR` checks ET_EXEC/no PT_INTERP
+its leaf and pin file are retired, and the newest-wolf leaf builds what it built:
+den and the five index-check programs on both tiers, and every test program under
+`src/` (each `*_test.lu`, nested ones too) on native. The programs built on both
+tiers must agree on their E1010 count, since that agreement is why the test
+programs build on native alone. `tools/mkden OUTDIR` checks ET_EXEC/no PT_INTERP
 and prints full/stripped binary digests. No host-specific glibc is substituted.
 
 ### Speed rows
