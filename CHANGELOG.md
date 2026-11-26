@@ -18,10 +18,12 @@
   that merge. A side that is not in order is still scanned.
 - On those pulls, instructions fall from 35.9 G to 29.8 G for the
   fast-forward and from 99.8 G to 50.3 G for the merge; the heap peaks fall
-  slightly (191.5 MB to 189.4 MB, 404.8 MB to 402.8 MB). CPU time falls by
-  less than the instructions: the removed loops were the cheapest
-  instructions, and a sixth to a quarter of a merge pull's CPU is in the
-  kernel, which this change does not touch.
+  slightly (191.5 MB to 189.4 MB, 404.8 MB to 402.8 MB). CPU falls by less,
+  measured beside the previous build on one performance core: from 2.34 s to
+  1.98 s for the fast-forward (15%; 25.4 to 21.5 times Git's) and from 5.72 s
+  to 3.57 s for the merge (38%; 41.3 to 25.8 times Git's). The removed loops
+  were the cheapest instructions, and the merge's system time, about half a
+  second, is untouched.
 - `index-trees-compares` and `mergetree-at-compares` bound those comparisons,
   and `index-trees-root` and `mergetree-at-plan` check that the trees and the
   plan are the same. The pull rows print den's and Git's user and system CPU
