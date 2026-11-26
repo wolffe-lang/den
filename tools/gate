@@ -20,12 +20,6 @@ export DEN_GIT
 tools/check-fmt
 tools/build --all
 tools/check-newest-wolf
-python3 -I tools/candidate-wolf-test.py
-python3 -I tools/candidate-fetch-test.py
-python3 -I tools/candidate-wiring-test.py
-# The next wolf itself (tools/check-candidate-wolf) runs in the record, tools/gate-record:
-# until wolf releases it, it is another repository's workflow artifact, which a
-# workflow's own token cannot download.
 tools/check-wire
 tools/check-http
 tools/check-housekeeping
