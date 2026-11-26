@@ -1,0 +1,12 @@
+pkg {
+    name: "mergetree-client",
+    edition: "1",
+    capabilities: [env, fs],
+    deps: {
+        diff: {path: "../../src/diff"},
+        mergetree: {path: "../../src/mergetree"},
+        object: {path: "../../src/object"},
+        oid: {path: "../../src/oid"},
+        worktree: {path: "../../src/worktree"},
+    },
+}
