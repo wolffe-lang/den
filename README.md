@@ -54,15 +54,14 @@ known; preparation does not imply that either package is already available.
 | Development witnesses | Two Linux x86-64 development hosts: one's core blocks for local object/history work; the other's CPUs 4–7 for wire protocols and 12–15 for the initial census; rootless containers under core locks |
 | CI PR gate | ubuntu-24.04, pinned container and oracle, including planner tests |
 | CI full field leg | macOS arm64 with Homebrew Git; nonblocking observation, not the oracle |
-| Toolchain | wolf 0.2.36 5adf3d91, lupin 0.1.58 tag 6240efe5 (binary embeds a5378e3), pinned std d4a4d4ca (release bundles 78b9d3cb) |
-| Newest wolf release | wolf 0.2.40 (b333b9d) with the std it bundles (be1d10fa): den must build with it too (`tools/check-newest-wolf`) |
-| Next wolf | the wolf-lang release workflow's build of 1add9bb (run 45097601683, `wolf 0.2.40+dev.1add9bb`) with the std it bundles (be1d10fa): den and the five index-check programs must build with it on both tiers, and every test program under `src/` on native (`tools/check-candidate-wolf`) |
+| Toolchain | wolf 0.2.41 02615972, lupin 0.1.63 tag 2becebc4 (binary embeds 5f1f1c9), pinned std 32a1cd06 (the std the wolf archives bundle) |
+| Newest wolf release | wolf 0.2.41, the pin itself, with the std it bundles: den must build with it too (`tools/check-newest-wolf`) |
 
-Archive and oracle pins are in `wolf-toolchain.toml` and `den-oracle.toml`; the
-next wolf's run, revision and archive digests are in `candidate-wolf.toml`.
-Downloads fail on a digest mismatch. Both release-metadata reads are retained
-in `notes/vc15-evidence/pins/`, including archive/staged-runtime and complete std
-comparisons for Linux and Mac. Earlier reads are in `notes/vc14-evidence/pins/`
+Archive and oracle pins are in `wolf-toolchain.toml` and `den-oracle.toml`.
+Downloads fail on a digest mismatch. The 0.2.41 and 0.1.63 release reads (two
+each), their tags and every pinned archive's hash are in `notes/pins-0.2.41/`.
+Earlier pins' reads, with archive/staged-runtime and complete std comparisons for
+Linux and Mac, are in `notes/vc15-evidence/pins/`, `notes/vc14-evidence/pins/`
 and `notes/vc13-evidence/pins/`; the original signature verification and matching
 oracle builds are in `notes/vc00-evidence/`.
 
@@ -120,15 +119,12 @@ its files use (`tools/module-deps.py`), builds native/release binaries, builds t
 again with the newest wolf release and the std it bundles (`tools/check-newest-wolf`;
 a release that refuses the tree fails the gate by name), runs actual checked
 programs, constructs the corpus twice, compares against the pinned oracle and
-builds the static Linux archive. The record (`tools/gate-record`) also builds den
-and the five index-check programs on both tiers, and every test program under `src/`
-(each `*_test.lu`, nested ones too) on native, with the next wolf (`tools/check-candidate-wolf`, every diagnostic shown,
-from the archive `DEN_CANDIDATE_ARCHIVE` names or a `gh run download`); the programs
-built on both tiers must agree on their E1010 count, since that agreement is why the
-test programs build on native alone. Hosted CI does not, since until wolf releases it the next wolf
-is another repository's workflow artifact, which a workflow's own token cannot
-download. When wolf releases it, it becomes the newest release above and the
-leaf and `candidate-wolf.toml` are retired. `tools/mkden OUTDIR` checks ET_EXEC/no PT_INTERP
+builds the static Linux archive. The newest-wolf leaf first reads the pins against
+each other (`tools/toolchain-pins-test.py`): the newest release is never older than
+the pin, and a next-wolf candidate (`candidate-wolf.toml`, built by a leaf of its
+own until wolf releases it) must stay ahead of the pin. The last candidate, the
+release workflow's build of 1add9bb (`wolf 0.2.40+dev.1add9bb`), is in 0.2.41, so
+its leaf and pin file are retired. `tools/mkden OUTDIR` checks ET_EXEC/no PT_INTERP
 and prints full/stripped binary digests. No host-specific glibc is substituted.
 
 ### Speed rows
