@@ -79,17 +79,20 @@ fn flat_files(files: List[diff.File]) -> List[worktree.FlatEntry] {
 /// stacked on the first's. Here only the index it made is copied out. A
 /// diagnostic built inside is copied out too (raised: 1 Unsupported,
 /// 2 Pathspec, 3 Fatal, 4 Failure) and raised once the region is freed: the
-/// transition is never run again, since it writes files.
+/// transition is never run again, since it writes files. validated: value is
+/// as index.parse returned it or as a scan validated it, unchanged since, so
+/// the transition's scan makes no validation pass (worktree.scan_index_held).
 fn transition_released(
     ctx: worktree.Context,
     mut value: index.Index,
     target: List[worktree.FlatEntry],
     scanned: List[worktree.Snapshot],
+    validated: bool,
 ) -> () ! worktree.WorkErrors {
     var error_payload = "", raised = 0
     region transition {
         var next = copy value
-        transition_either(ctx, mut next, target, scanned) else |e| match e {
+        transition_either(ctx, mut next, target, scanned, validated) else |e| match e {
             invalid_index => { return invalid_index },
             unmerged => { return unmerged },
             invalid_tree => { return invalid_tree },
@@ -147,11 +150,12 @@ fn transition_either(
     mut value: index.Index,
     target: List[worktree.FlatEntry],
     scanned: List[worktree.Snapshot],
+    validated: bool,
 ) -> () ! worktree.WorkErrors {
     if scanned.len == 1 {
         worktree.transition_scanned(ctx, mut value, target, "merge", scanned[0])?
     } else {
-        worktree.transition(ctx, mut value, target, "merge")?
+        worktree.transition_held(ctx, mut value, target, "merge", validated)?
     }
 }
 
@@ -182,17 +186,20 @@ fn tree_list(
 }
 
 /// Whether the scan finds a local change (untracked and ignored paths are not).
+/// value is as worktree.read_index parsed it, so the scan makes no validation
+/// pass.
 fn locally_changed(ctx: worktree.Context, value: index.Index) -> bool ! worktree.WorkErrors {
-    for row in worktree.scan_index(ctx, value)?.rows {
+    for row in worktree.scan_index_held(ctx, value, true)?.rows {
         if !row.untracked && !row.ignored && (row.x != " " || row.y != " ") { return true }
     }
     false
 }
 
-/// The staged paths a merge would overwrite, one indented line each.
+/// The staged paths a merge would overwrite, one indented line each. value is
+/// as worktree.read_index parsed it, so the scan makes no validation pass.
 fn staged_paths(ctx: worktree.Context, value: index.Index) -> str ! worktree.WorkErrors {
     var staged = ""
-    for row in worktree.scan_index(ctx, value)?.rows {
+    for row in worktree.scan_index_held(ctx, value, true)?.rows {
         if !row.untracked && !row.ignored && row.x != " " {
             staged += "  {str_from_utf8(row.path)?}\n"
         }
@@ -551,7 +558,14 @@ fn merge_command_with(args: List[str], reflog: str, label: str) -> int ! commit.
     defer index.abort(mut tx)
     let flat = flat_files(plan.files)
     if !fast {
-        transition_released(ctx, mut tx.value, flat_files(inputs[0]), List[worktree.Snapshot]())?
+        // tx.value is as index.begin parsed it.
+        transition_released(
+            ctx,
+            mut tx.value,
+            flat_files(inputs[0]),
+            List[worktree.Snapshot](),
+            true,
+        )?
     }
     var assembled = List[index.TreeAssembly]()
     if !fast { (mut assembled).push(assembled_trees(ctx, plan.files)?) }
@@ -560,7 +574,9 @@ fn merge_command_with(args: List[str], reflog: str, label: str) -> int ! commit.
     var refused = false, scanned = List[worktree.Snapshot]()
     region safety {
         if fast {
-            let found = worktree.merge_check_scan(ctx, tx.value, flat, false) else |_| {
+            // tx.value is as index.begin parsed it (a fast-forward makes no
+            // transition before this one).
+            let found = worktree.merge_check_scan(ctx, tx.value, flat, true) else |_| {
                 refused = true
                 List[worktree.Snapshot]()
             }
@@ -602,7 +618,10 @@ fn merge_command_with(args: List[str], reflog: str, label: str) -> int ! commit.
         fs_close(file.fd)?
         fs_rename(path, "{ctx.repo.gitdir}/AUTO_MERGE")?
     }
-    transition_released(ctx, mut tx.value, flat, scanned)?
+    // tx.value is unchanged since the safety check: a merge's check scanned and
+    // validated the first transition's index, and a fast-forward's held
+    // index.begin's parse.
+    transition_released(ctx, mut tx.value, flat, scanned, true)?
     conflict_index(mut tx.value, plan.stages)?
     index.commit(mut tx)?
     for line in plan.messages { print(line) }

@@ -1420,13 +1420,15 @@ pub fn scan_index(ctx: Context, value: index.Index) -> Snapshot ! WorkErrors {
 }
 
 /// scan_index for a caller that may hold value validated: as index.parse
-/// returned it, or as a scan validated it, unchanged since. validated is
-/// accepted here and not yet read: every scan validates as scan_index does.
+/// returned it (parse makes the checks serialize makes again), or as a scan
+/// validated it, unchanged since. Such a value is scanned without a validation
+/// pass; any other is validated once, before the scan. The rows make no pass of
+/// their own (status_rows): a merge pull scanned five times and checked its index
+/// twice in each.
 pub fn scan_index_held(ctx: Context, value: index.Index, validated: bool) -> Snapshot ! WorkErrors {
-    let _ = validated
     var warnings = List[str]()
     var validations = 0
-    validate_counted(value, mut validations)?
+    if !validated { validate_counted(value, mut validations)? }
     let current_head = head(ctx)?
     var entries = List[FlatEntry]()
     var copied = false
@@ -1436,14 +1438,20 @@ pub fn scan_index_held(ctx: Context, value: index.Index, validated: bool) -> Sna
     ensure_filters(ctx)?
     let walked = walk_transition(ctx, value, mut warnings)?
     supported_attributes(ctx, walked.files)?
-    let rows = compare_status_counted(
+    var ignores = ignore.cache()
+    var row_lookups = no_lookups()
+    var merge_counts = no_lookups()
+    let rows = status_rows(
         ctx,
         value,
         entries,
         walked.files,
         true,
+        mut ignores,
         mut warnings,
-        mut validations,
+        mut row_lookups,
+        mut merge_counts,
+        false,
     )?
     Snapshot {
         context: copy ctx,
@@ -1479,14 +1487,21 @@ pub fn scan_index_with_warnings(
     ensure_filters(ctx)?
     let walked = walk(ctx, value, include_untracked, [], false, mut warnings)?
     supported_attributes(ctx, walked.files)?
-    let rows = compare_status_counted(
+    // value was validated above: the rows make no second pass (status_rows).
+    var ignores = ignore.cache()
+    var row_lookups = no_lookups()
+    var merge_counts = no_lookups()
+    let rows = status_rows(
         ctx,
         value,
         entries,
         walked.files,
         include_untracked,
+        mut ignores,
         mut warnings,
-        mut validations,
+        mut row_lookups,
+        mut merge_counts,
+        false,
     )?
     Snapshot {
         context: copy ctx,
