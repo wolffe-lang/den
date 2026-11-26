@@ -19,7 +19,19 @@ pub fn transition(
     target: List[FlatEntry],
     mode: str,
 ) -> () ! WorkErrors {
-    transition_mode(ctx, mut value, target, mode, false, Map[str, List[byte]]())?
+    transition_mode(ctx, mut value, target, mode, false, Map[str, List[byte]](), false)?
+}
+
+/// transition for a caller that may hold value validated: as index.parse
+/// returned it, or as a scan validated it, unchanged since (scan_index_held).
+pub fn transition_held(
+    ctx: Context,
+    mut value: index.Index,
+    target: List[FlatEntry],
+    mode: str,
+    validated: bool,
+) -> () ! WorkErrors {
+    transition_mode(ctx, mut value, target, mode, false, Map[str, List[byte]](), validated)?
 }
 
 /// Validate merge worktree/index safety without publishing blobs or entries.
@@ -35,8 +47,9 @@ pub fn merge_check_scan(
     ctx: Context,
     value: index.Index,
     target: List[FlatEntry],
+    validated: bool,
 ) -> List[Snapshot] ! WorkErrors {
-    let snapshot = scan_index(ctx, value)?
+    let snapshot = scan_index_held(ctx, value, validated)?
     var scratch = copy value
     transition_from(ctx, mut scratch, target, "merge", true, Map[str, List[byte]](), snapshot)?
     [snapshot]
@@ -63,7 +76,7 @@ pub fn merge_check_supplied(
     supplied: Map[str, List[byte]],
 ) -> () ! WorkErrors {
     var scratch = copy value
-    transition_mode(ctx, mut scratch, target, "merge", true, supplied)?
+    transition_mode(ctx, mut scratch, target, "merge", true, supplied, false)?
 }
 
 // Install one target path (unless mixed) and return its index entry, stat
@@ -135,9 +148,10 @@ fn transition_mode(
     mode: str,
     dry: bool,
     supplied: Map[str, List[byte]],
+    validated: bool,
 ) -> () ! WorkErrors {
     if mode != "switch" && mode != "merge" && mode != "hard" && mode != "mixed" { return invalid }
-    let snapshot = scan_index(ctx, value)?
+    let snapshot = scan_index_held(ctx, value, validated)?
     transition_from(ctx, mut value, target, mode, dry, supplied, snapshot)?
 }
 

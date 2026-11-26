@@ -1,0 +1,56 @@
+// Independent API client for the validation passes a work-tree scan makes over
+// its index value (worktree.scan_index_held, Snapshot.validations): one scan of
+// the value index.parse returned, held validated; one of a value changed since
+// (an entry's stat word rewritten), not held validated; one of a value whose
+// cache tree its entries disagree with (an entry dropped), not held validated;
+// and a plain worktree.scan_index of the parsed value. Each scan's passes and
+// its status rows are printed for tools/scan-validations-test.py.
+use index
+use worktree
+
+fn rows_text(snapshot: worktree.Snapshot) -> str {
+    var text = ""
+    for row in snapshot.rows { text = "{text}{row.x}{row.y}:{str_from_utf8(row.path) else "?"};" }
+    text
+}
+
+fn scans(root: str) -> () ! worktree.WorkErrors {
+    let ctx = worktree.discover(root)?
+    let parsed = worktree.read_index(ctx)?
+    let held = worktree.scan_index_held(ctx, parsed, true)?
+    print("validations parsed-held={held.validations}")
+    var changed = copy parsed
+    changed.entries[0].stat[0] = changed.entries[0].stat[0] + 1
+    let once = worktree.scan_index_held(ctx, changed, false)?
+    print("validations changed={once.validations}")
+    let plain = worktree.scan_index(ctx, parsed)?
+    print("validations plain={plain.validations}")
+    var dropped = copy parsed
+    var kept = List[index.Entry]()
+    for i in 0..parsed.entries.len {
+        if i != parsed.entries.len - 1 { (mut kept).push(copy parsed.entries[i]) }
+    }
+    dropped.entries = kept
+    var refused = "none"
+    let _ = worktree.scan_index_held(ctx, dropped, false) else |error| {
+        refused = "{error}"
+        copy plain
+    }
+    print("malformed refused={refused}")
+    print("rows parsed-held={rows_text(held)}")
+    print("rows changed={rows_text(once)}")
+    print("rows plain={rows_text(plain)}")
+}
+
+fn main() -> int {
+    let args = env_args()
+    if args.len != 1 {
+        eprint("usage: scan-validate-client ROOT")
+        return 2
+    }
+    scans(args[0]) else |error| {
+        eprint("scan failure: {error}")
+        return 1
+    }
+    0
+}

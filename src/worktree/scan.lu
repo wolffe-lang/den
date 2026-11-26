@@ -1197,7 +1197,37 @@ pub fn compare_status_with_warnings(
     include_untracked: bool,
     mut warnings: List[str],
 ) -> List[StatusRow] ! WorkErrors {
+    var validations = 0
+    compare_status_counted(
+        ctx,
+        value,
+        tree,
+        files,
+        include_untracked,
+        mut warnings,
+        mut validations,
+    )?
+}
+
+/// One validation pass over an index value: index.serialize's version, entry,
+/// extension and cache-span checks, its bytes dropped. A scan counts each
+/// pass it makes into its Snapshot's validations.
+fn validate_counted(value: index.Index, mut validations: int) -> () ! WorkErrors {
     let _ = index.serialize(value)?
+    validations += 1
+}
+
+/// compare_status_with_warnings with its validation pass counted.
+fn compare_status_counted(
+    ctx: Context,
+    value: index.Index,
+    tree: List[FlatEntry],
+    files: List[FileState],
+    include_untracked: bool,
+    mut warnings: List[str],
+    mut validations: int,
+) -> List[StatusRow] ! WorkErrors {
+    validate_counted(value, mut validations)?
     var ignores = ignore.cache()
     var counts = no_lookups()
     var merged = no_lookups()
@@ -1386,8 +1416,17 @@ fn status_rows(
 /// words only; commit and stash, which store bodies, use
 /// scan_index_with_warnings.
 pub fn scan_index(ctx: Context, value: index.Index) -> Snapshot ! WorkErrors {
+    scan_index_held(ctx, value, false)?
+}
+
+/// scan_index for a caller that may hold value validated: as index.parse
+/// returned it, or as a scan validated it, unchanged since. validated is
+/// accepted here and not yet read: every scan validates as scan_index does.
+pub fn scan_index_held(ctx: Context, value: index.Index, validated: bool) -> Snapshot ! WorkErrors {
+    let _ = validated
     var warnings = List[str]()
-    let _ = index.serialize(value)?
+    var validations = 0
+    validate_counted(value, mut validations)?
     let current_head = head(ctx)?
     var entries = List[FlatEntry]()
     var copied = false
@@ -1397,46 +1436,14 @@ pub fn scan_index(ctx: Context, value: index.Index) -> Snapshot ! WorkErrors {
     ensure_filters(ctx)?
     let walked = walk_transition(ctx, value, mut warnings)?
     supported_attributes(ctx, walked.files)?
-    let rows = compare_status_with_warnings(ctx, value, entries, walked.files, true, mut warnings)?
-    Snapshot {
-        context: copy ctx,
-        head: current_head,
-        index: copy value,
-        head_entries: entries,
-        files: walked.files,
-        directories: walked.directories,
-        rows: rows,
-        walk_lookups: no_lookups(),
-        row_lookups: no_lookups(),
-        merge_counts: no_lookups(),
-        sort_counts: no_lookups(),
-    }
-}
-
-/// Read-only scan with explicit warning collection. include_untracked=false
-/// skips ignore queries, untracked/ignored rows and untracked file-body reads.
-/// files then contains observed tracked files only. Existing scan_index keeps
-/// the full silent snapshot. Never prints or clears caller diagnostics.
-pub fn scan_index_with_warnings(
-    ctx: Context,
-    value: index.Index,
-    include_untracked: bool,
-    mut warnings: List[str],
-) -> Snapshot ! WorkErrors {
-    let _ = index.serialize(value)?
-    let current_head = head(ctx)?
-    var entries = List[FlatEntry]()
-    if current_head.commits.len == 1 { entries = flatten_tree(ctx.repo, current_head.commits[0])? }
-    ensure_filters(ctx)?
-    let walked = walk(ctx, value, include_untracked, [], false, mut warnings)?
-    supported_attributes(ctx, walked.files)?
-    let rows = compare_status_with_warnings(
+    let rows = compare_status_counted(
         ctx,
         value,
         entries,
         walked.files,
-        include_untracked,
+        true,
         mut warnings,
+        mut validations,
     )?
     Snapshot {
         context: copy ctx,
@@ -1450,6 +1457,50 @@ pub fn scan_index_with_warnings(
         row_lookups: no_lookups(),
         merge_counts: no_lookups(),
         sort_counts: no_lookups(),
+        validations: validations,
+    }
+}
+
+/// Read-only scan with explicit warning collection. include_untracked=false
+/// skips ignore queries, untracked/ignored rows and untracked file-body reads.
+/// files then contains observed tracked files only. Existing scan_index keeps
+/// the full silent snapshot. Never prints or clears caller diagnostics.
+pub fn scan_index_with_warnings(
+    ctx: Context,
+    value: index.Index,
+    include_untracked: bool,
+    mut warnings: List[str],
+) -> Snapshot ! WorkErrors {
+    var validations = 0
+    validate_counted(value, mut validations)?
+    let current_head = head(ctx)?
+    var entries = List[FlatEntry]()
+    if current_head.commits.len == 1 { entries = flatten_tree(ctx.repo, current_head.commits[0])? }
+    ensure_filters(ctx)?
+    let walked = walk(ctx, value, include_untracked, [], false, mut warnings)?
+    supported_attributes(ctx, walked.files)?
+    let rows = compare_status_counted(
+        ctx,
+        value,
+        entries,
+        walked.files,
+        include_untracked,
+        mut warnings,
+        mut validations,
+    )?
+    Snapshot {
+        context: copy ctx,
+        head: current_head,
+        index: copy value,
+        head_entries: entries,
+        files: walked.files,
+        directories: walked.directories,
+        rows: rows,
+        walk_lookups: no_lookups(),
+        row_lookups: no_lookups(),
+        merge_counts: no_lookups(),
+        sort_counts: no_lookups(),
+        validations: validations,
     }
 }
 
@@ -1499,6 +1550,7 @@ pub fn scan_index_without_bodies(
                     row_lookups: no_lookups(),
                     merge_counts: no_lookups(),
                     sort_counts: no_lookups(),
+                    validations: found[0].validations,
                 },
             )
         }
@@ -1586,6 +1638,7 @@ pub fn scan_status_ignoring(
         row_lookups: row_lookups,
         merge_counts: merge_counts,
         sort_counts: copy walked.sorted,
+        validations: 0,
     }
 }
 

@@ -104,6 +104,11 @@ pub struct Snapshot {
     /// The walk's sort of its files into path order: the files, and the path
     /// compares.
     sort_counts: Lookups,
+    /// The validation passes the scan made over its index value, each one
+    /// index.serialize's version, entry, extension and cache-span checks.
+    /// probes/scan-validate-client prints it and a worktree row bounds it;
+    /// nothing reads it in a command.
+    validations: int,
 }
 
 /// Path work a status scan does, counted: calls (index lookups by path, steps

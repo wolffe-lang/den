@@ -20,6 +20,9 @@ for tier in native release; do
     tools/env python3 -I tools/embedded-test.py --tier "$tier"
     # The status scan's index lookups, counted: compares a lookup, bounded.
     tools/env python3 -I tools/status-lookups-test.py --tier "$tier" --wolf "$WOLF"
+    # A scan's validation passes over its index value, counted: none for a value
+    # its caller holds validated, one for any other, and a malformed value refused.
+    tools/env python3 -I tools/scan-validations-test.py --tier "$tier" --wolf "$WOLF"
     # A warm diff --quiet's stat pass, counted: no path checked again after the
     # index read, and each path's bytes built once.
     tools/env python3 -I tools/path-work-test.py --tier "$tier" --wolf "$WOLF"
@@ -41,4 +44,4 @@ import json,sys
 rows=[json.loads(line) for line in open(sys.argv[1]) if line.startswith('{')]
 assert len(rows)==1 and rows[0]['verdict']=='exit(0)',rows
 PY
-echo 'worktree: native/release unit, API exercise, strict repository matrix, unreadable-directory, status-lookups, path-work, status-refresh, add-scale and status-scale rows; actual checked exit(0)'
+echo 'worktree: native/release unit, API exercise, strict repository matrix, unreadable-directory, status-lookups, scan-validations, path-work, status-refresh, add-scale and status-scale rows; actual checked exit(0)'

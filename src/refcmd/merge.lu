@@ -560,7 +560,7 @@ fn merge_command_with(args: List[str], reflog: str, label: str) -> int ! commit.
     var refused = false, scanned = List[worktree.Snapshot]()
     region safety {
         if fast {
-            let found = worktree.merge_check_scan(ctx, tx.value, flat) else |_| {
+            let found = worktree.merge_check_scan(ctx, tx.value, flat, false) else |_| {
                 refused = true
                 List[worktree.Snapshot]()
             }

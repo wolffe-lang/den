@@ -1,0 +1,9 @@
+pkg {
+    name: "scan-validate-client",
+    edition: "1",
+    capabilities: [env, fs],
+    deps: {
+        index: {path: "../../src/index"},
+        worktree: {path: "../../src/worktree"},
+    },
+}
