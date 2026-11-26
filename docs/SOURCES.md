@@ -754,7 +754,7 @@ copies retained in the lane's documentation inputs:
   and `gitprotocol-common(5)` reserved ERR framing remain the wire references.
 
 The SSH fixtures select owned wrapper executables exporting protocol v2 because
-kasumi's ordinary sshd does not accept GIT_PROTOCOL. No sshd/key configuration
+the interop host's ordinary sshd does not accept GIT_PROTOCOL. No sshd/key configuration
 was changed and no protocol-v0 fallback was implemented. Full raw results,
 canonical object checks and exact-input-bound service stderr review remain
 separate from logical typed-policy parity. No VCS implementation source was read.
