@@ -716,8 +716,8 @@ only new objects written), and the bounded checked program.
 ## Surfaces
 
 The original surface census was measured on wolf 0.2.35 (`cf0c13d3`), bundled
-std `2386522e`, Ubuntu 24.04 on kasumi CPUs 12–15. M1/M2 implementation
-measurements use hasu CPUs 0–5; diff uses CPUs 6–11 with the same pinned toolchain/container. “Checked” below means the observation's
+std `2386522e`, Ubuntu 24.04 on a Linux x86-64 host's CPUs 12–15. M1/M2 implementation
+measurements use another Linux x86-64 host's CPUs 0–5; diff uses CPUs 6–11 with the same pinned toolchain/container. “Checked” below means the observation's
 `verdict` from `wolf conform-run --checked --json`, never its process status
 (which is 0 even for a static rejection). Full logs are tracked under
 `notes/vc00-evidence/probes/`.
