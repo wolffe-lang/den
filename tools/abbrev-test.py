@@ -51,11 +51,18 @@ def main():
         base.mkdir()
         origin, work = base / 'origin', base / 'work'
         run([git, 'init', '-q', origin], base)
+        # No background maintenance in either repository. After a commit or a
+        # fetch the pinned Git starts a detached `maintenance run --auto`,
+        # which holds objects/maintenance.lock while the row copies or removes
+        # the fixture: a copy can list the lock and then find it gone.
+        run([git, 'config', 'maintenance.auto', 'false'], origin)
+        run([git, 'config', 'gc.auto', '0'], origin)
         (origin / 'a').write_text('a\n')
         run([git, 'add', 'a'], origin)
         run([git, 'commit', '-qm', 'base'], origin)
         run([git, 'clone', '-q', origin, work], base)
         run([git, 'config', 'gc.auto', '0'], work)
+        run([git, 'config', 'maintenance.auto', 'false'], work)
         if config is not None:
             run([git, 'config', 'core.abbrev', config], work)
         run([git, 'repack', '-qad'], work)
