@@ -88,6 +88,10 @@ pub fn build_trees_counted(value: Index, mut compares: int) -> TreeAssembly ! In
         for i in 0..entry.path.len {
             if entry.path[i] == 47 as byte {
                 var found = -1
+                for j in 1..dirs.len {
+                    compares += 1
+                    if leads(dirs[j].path, entry.path, i) { found = j; break }
+                }
                 if depth < open.len {
                     compares += 1
                     if leads(dirs[open[depth]].path, entry.path, i) {
