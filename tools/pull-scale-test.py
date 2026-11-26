@@ -21,20 +21,16 @@ beside them. den must stay under the stated bounds, which are well under what
 the issue's pulls took before this change (6 min 55 s for an up-to-date pull;
 3.2 GiB for a moved one).
 
-At the issue's size (the default --files and --commits), the ff and merge
-pulls are also held to a ratio of den's CPU to Git's in the same take
-(RATIO): 25 and 26 times, 1.25 times what finding an index entry's
-directories and a merged path by search, not by scanning, predicts (about 20
-and 21 times) on Linux x86-64. A ratio moves less between hosts than a time,
-but it is a gate only where it was measured: on Linux x86-64. Every other
-host prints its ratio beside the bound as a reading, not a verdict, until a
-reading from that host sets its own bound. Smaller fixtures (a rig's dry)
-are not ratio-bounded.
+Each row also prints den's and Git's user and system CPU apart, and the ratio
+of den's CPU to Git's in the same take, on every host; summary.json keeps
+them. The ratio is a reading, not a bound. Measured, it moved with the kind of
+core a take ran on, and with the share of a pull spent in the kernel, which
+instruction counts do not see (a sixth to a quarter of the merge's CPU). A
+bound on it is set later from held readings, never from a prediction.
 """
 import argparse
 import hashlib
 import json
-import platform
 import os
 from pathlib import Path
 import shutil
@@ -46,9 +42,6 @@ BOUNDS = {
     'ff': dict(cpu=90.0, rss_kib=768 * 1024),
     'merge': dict(cpu=120.0, rss_kib=768 * 1024),
 }
-RATIO = {'ff': 25.0, 'merge': 26.0}
-# The hosts where RATIO was measured, and so gates; elsewhere it is printed only.
-RATIO_GATED = platform.system() == 'Linux' and platform.machine() in ('x86_64', 'amd64')
 
 
 def main():
@@ -161,7 +154,8 @@ def main():
         assert proc.wait() == 0, ('minimal parent', proc.returncode)
         status, maxrss, user, system, wall = report.read_text().split()
         return dict(status=int(status), stdout=chunks['out'].hex(), stderr=chunks['err'].hex(),
-                    wall=float(wall), cpu=float(user) + float(system), maxrss_kib=int(maxrss))
+                    wall=float(wall), cpu=float(user) + float(system), user=float(user), system=float(system),
+                    maxrss_kib=int(maxrss))
 
     floor_kib = min(measured(['/bin/true'], out)['maxrss_kib'] for _ in range(3))
     print(f'FLOOR resident set of a child of the minimal parent: {floor_kib} KiB', flush=True)
@@ -187,31 +181,32 @@ def main():
             for label, tool in (('git', git), ('den', den)):
                 r = take(tool, argv, seeds[name])
                 sample.setdefault(label, r)
-                b = best.setdefault(label, dict(wall=r['wall'], cpu=r['cpu'], maxrss_kib=r['maxrss_kib']))
-                for k in ('wall', 'cpu', 'maxrss_kib'):
+                b = best.setdefault(label, dict(wall=r['wall'], cpu=r['cpu'], user=r['user'], system=r['system'],
+                                                maxrss_kib=r['maxrss_kib']))
+                for k in ('wall', 'maxrss_kib'):
                     b[k] = min(b[k], r[k])
+                # user and system are the split of the take with the least CPU
+                if r['cpu'] < b['cpu']:
+                    b.update(cpu=r['cpu'], user=r['user'], system=r['system'])
         g, d = sample['git'], sample['den']
         same = all(g[k] == d[k] for k in ('status', 'stdout', 'stderr', 'head'))
         bound = BOUNDS[name]
         bounded = best['den']['cpu'] <= bound['cpu'] and best['den']['maxrss_kib'] <= bound['rss_kib']
         ratio = best['den']['cpu'] / max(best['git']['cpu'], 1e-9)
-        limit = RATIO.get(name) if (a.files, a.commits) == (10500, 5000) else None
-        if limit is not None and RATIO_GATED:
-            bounded = bounded and ratio <= limit
         ok = same and bounded and d['status'] == 0
         print(('PASS ' if ok else 'FAIL ') + row +
-              f" den wall {best['den']['wall']:.2f} s cpu {best['den']['cpu']:.2f} s peak {best['den']['maxrss_kib']} KiB;"
-              f" git wall {best['git']['wall']:.3f} s cpu {best['git']['cpu']:.3f} s peak {best['git']['maxrss_kib']} KiB;"
+              f" den wall {best['den']['wall']:.2f} s cpu {best['den']['cpu']:.2f} s"
+              f" (user {best['den']['user']:.2f} s, system {best['den']['system']:.2f} s) peak {best['den']['maxrss_kib']} KiB;"
+              f" git wall {best['git']['wall']:.3f} s cpu {best['git']['cpu']:.3f} s"
+              f" (user {best['git']['user']:.3f} s, system {best['git']['system']:.3f} s) peak {best['git']['maxrss_kib']} KiB;"
               f" bounds cpu {bound['cpu']} s peak {bound['rss_kib']} KiB; floor {floor_kib} KiB;"
-              f" den/git cpu {ratio:.1f}x" +
-              (f" (bound {limit:g}x)" if limit is not None and RATIO_GATED else
-               f" (a reading: the {limit:g}x bound gates Linux x86-64 only)" if limit is not None else '') +
+              f" den/git cpu {ratio:.1f}x (a reading)" +
               ('' if same else ' DIFFERS in ' + ', '.join(
                   f"{k}: git {g[k] if k in ('status', 'head') else bytes.fromhex(g[k])[-160:]!r}"
                   f" den {d[k] if k in ('status', 'head') else bytes.fromhex(d[k])[-160:]!r}"
                   for k in ('status', 'stdout', 'stderr', 'head') if g[k] != d[k])), flush=True)
         rows.append(dict(row=row, passed=ok, same=same, bounded=bounded, best=best, bound=bound,
-                         ratio=ratio, ratio_bound=limit, ratio_gated=limit is not None and RATIO_GATED,
+                         ratio=ratio,
                          floor_kib=floor_kib, git=g, den=d))
     assert rows, 'empty selection'
     (out / 'summary.json').write_text(json.dumps(dict(shape=shape, files=files, commits=commits, rows=rows), indent=2) + '\n')
