@@ -1,5 +1,20 @@
 # Changes
 
+## Unreleased — a merge's transitions release what they read
+
+- A pull or merge moves the work tree and the index in a transition. A
+  transition scans the work tree, reads the target's trees and builds the
+  next index's trees. All of that stayed in the command's memory until the
+  command ended, so a merge's second transition stacked on its first. On the
+  pull rows' repository (den#138) each transition kept 142.8 MB, and the
+  merge's peak was 390,604 KiB, 23.8 times Git's.
+- Each transition now runs in a region of its own, and only the index it
+  made is copied out. A diagnostic raised inside is copied out too and raised
+  once the region is freed. A transition is never run again to raise its
+  error, since it writes files.
+- No row bounds the merge's peak yet. The pull rows print it beside Git's,
+  and a bound follows from held readings.
+
 ## Unreleased — wolf 0.2.41
 
 - den is built with wolf 0.2.41 (0261597), the std it bundles (32a1cd06) and
