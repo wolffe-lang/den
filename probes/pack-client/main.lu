@@ -89,10 +89,19 @@ fn kinds(args: List[str]) -> () ! object.StoreErrors {
     var r = object.reader(repo)
     print("before loaded={r.packs.loaded}")
     for name in args[2..] {
+        // An error built inside the region could not leave it (E1010): the
+        // name is parsed before it opens, and a typing that fails inside runs
+        // again outside, where its error can leave.
+        let id = oid.parse("sha1", name)?
+        var failed = false
         region step {
-            let kind = object.kind_cached(mut r, oid.parse("sha1", name)?)?
-            print("{name} {kind} loaded={r.packs.loaded}")
+            let kind = object.kind_cached(mut r, copy id) else |_| {
+                failed = true
+                ""
+            }
+            if !failed { print("{name} {kind} loaded={r.packs.loaded}") }
         }
+        if failed { let _ = object.kind_cached(mut r, id)? }
     }
 }
 
@@ -148,10 +157,14 @@ fn run(args: List[str]) -> () ! object.StoreErrors {
             if name == "" { continue }
             count += 1
             if count > 10000 { return limit }
+            // As in --kinds: parsed before the region, and a read that fails
+            // inside it runs again outside, where its error can leave (E1010).
+            let id = oid.parse("sha1", name)?
+            var failed = false
             region object_read {
-                let id = oid.parse("sha1", name)?
-                emit(repo, id, cap, true)?
+                emit(repo, copy id, cap, true) else |_| { failed = true }
             }
+            if failed { emit(repo, id, cap, true)? }
         }
         return
     }
