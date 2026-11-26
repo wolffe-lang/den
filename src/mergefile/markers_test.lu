@@ -2,6 +2,7 @@
 
 // Attribute-selected widths use the same engine for merge/diff3/zdiff3.
 fn main() -> !int {
+    let plant: int = "markers"
     for style in ["merge", "diff3", "zdiff3"] {
         let merged = merge_markers(
             "old".bytes(),
