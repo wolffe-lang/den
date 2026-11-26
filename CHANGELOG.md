@@ -1,5 +1,32 @@
 # Changes
 
+## Unreleased — a pull's trees and merge plan without scans
+
+- A pull that moves the work tree builds the index's trees, and a merge pull
+  plans each path against three sides. Both scanned. Building the trees
+  compared each entry's directories with every directory made so far, and the
+  merge planner scanned a side for each path it looked up. On the pull rows'
+  repository (10,500 files in 5,000 directories, 5,000 commits in 44 packs;
+  den#138) that was 51 million comparisons for the trees and 276 million for
+  the merge's lookups.
+- Building the trees keeps open the directories of the entry before it.
+  Entries come in path order, so every entry under one directory is
+  contiguous, and an entry finds each of its directories by one comparison at
+  its level: 19,999 comparisons for those 10,500 files.
+- The merge planner finds a path by binary search where a side is in path
+  order, as a side read from a tree or an index is: 758,158 comparisons for
+  that merge. A side that is not in order is still scanned.
+- On those pulls, instructions fall from 35.9 G to 29.8 G for the
+  fast-forward and from 99.8 G to 50.3 G for the merge; the heap peaks fall
+  slightly (191.5 MB to 189.4 MB, 404.8 MB to 402.8 MB). CPU time falls by
+  less than the instructions: the removed loops were the cheapest
+  instructions, and a sixth to a quarter of a merge pull's CPU is in the
+  kernel, which this change does not touch.
+- `index-trees-compares` and `mergetree-at-compares` bound those comparisons,
+  and `index-trees-root` and `mergetree-at-plan` check that the trees and the
+  plan are the same. The pull rows print den's and Git's user and system CPU
+  and their ratio as a reading; they gate no ratio.
+
 ## Unreleased — an index read as Git reads it
 
 - den refused an index whose trailing checksum was not the SHA-1 of its
