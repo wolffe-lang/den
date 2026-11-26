@@ -39,6 +39,13 @@ fn directory(path: List[byte], component: List[byte], parent: int) -> Directory 
     }
 }
 
+// Whether directory is path's first n bytes, which end where path has a slash.
+fn leads(directory: List[byte], path: List[byte], n: int) -> bool {
+    if directory.len != n { return false }
+    for i in 0..n { if directory[i] != path[i] { return false } }
+    true
+}
+
 // den#123: the pinned Git writes a directory's TREE subtrees shorter name
 // first, and names of the same length by unsigned bytes.
 fn cache_before(left: List[byte], right: List[byte]) -> bool {
@@ -57,12 +64,19 @@ pub fn build_trees(value: Index) -> TreeAssembly ! IndexErrors {
 /// build_trees, adding to compares each comparison of a directory's path that
 /// finding an entry's directories makes. probes/index-client trees-compares
 /// prints it for a generated index; a row bounds it per file and depth.
+/// Entries come in path order (validate_entries), so every entry under one
+/// directory is contiguous: the directories of the entry before stay open
+/// (open[k] at depth k + 1), and an entry finds each of its directories by one
+/// comparison with the open one at that depth. A directory that differs closes
+/// it and every deeper one, and a new directory is made and opened; no closed
+/// directory comes back.
 pub fn build_trees_counted(value: Index, mut compares: int) -> TreeAssembly ! IndexErrors {
     check_version(value.version)?
     validate_entries(value.entries)?
     validate_extensions(value.extensions)?
     var dirs = List[Directory]()
     (mut dirs).push(directory(List[byte](), List[byte](), -1))
+    var open = List[int]()
     for entry in value.entries {
         if stage(entry) != 0 { return unmerged }
         // Intent-to-add is not a staged object. Its placeholder oid is not read.
@@ -70,17 +84,25 @@ pub fn build_trees_counted(value: Index, mut compares: int) -> TreeAssembly ! In
         var parent = 0
         if intent { dirs[0].invalidated = true } else { dirs[0].count += 1 }
         var component_start = 0
+        var depth = 0
         for i in 0..entry.path.len {
             if entry.path[i] == 47 as byte {
-                let path = entry.path[0..i]
-                let component = entry.path[component_start..i]
                 var found = -1
-                for j in 1..dirs.len {
+                if depth < open.len {
                     compares += 1
-                    if byte_compare(dirs[j].path, path) == 0 { found = j; break }
+                    if leads(dirs[open[depth]].path, entry.path, i) {
+                        found = open[depth]
+                    } else {
+                        while open.len > depth {
+                            let _ = (mut open).pop() else |_| { return invalid_index }
+                        }
+                    }
                 }
                 if found < 0 {
+                    let path = entry.path[0..i]
+                    let component = entry.path[component_start..i]
                     found = dirs.len
+                    (mut open).push(found)
                     (mut dirs).push(directory(path, component, parent))
                     // Cache children sort by component (cache_before), not by
                     // the index's slash-aware position among full path strings.
@@ -97,6 +119,7 @@ pub fn build_trees_counted(value: Index, mut compares: int) -> TreeAssembly ! In
                 parent = found
                 if intent { dirs[parent].invalidated = true } else { dirs[parent].count += 1 }
                 component_start = i + 1
+                depth += 1
             }
         }
         if intent { continue }
