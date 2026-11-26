@@ -286,8 +286,11 @@ fn budget() -> str {
     "limit: a file whose line diff passes 2000 differing lines in a three-way file merge"
 }
 
-fn at(files: List[diff.File], path: List[byte]) -> int {
-    for i in 0..files.len { if compare(files[i].path, path) == 0 { return i } }
+fn at(files: List[diff.File], path: List[byte], mut compares: int) -> int {
+    for i in 0..files.len {
+        compares += 1
+        if compare(files[i].path, path) == 0 { return i }
+    }
     -1
 }
 
@@ -307,6 +310,23 @@ pub fn plan(
     theirs_label: str,
     style: str,
 ) -> Plan ! worktree.WorkErrors {
+    var compares = 0
+    plan_counted(base, ours, theirs, ours_label, base_label, theirs_label, style, mut compares)?
+}
+
+/// plan, adding to compares each path comparison its lookups of a path in the
+/// three sides make. probes/mergetree-client at-compares prints it for a
+/// generated merge; a row bounds it per lookup.
+pub fn plan_counted(
+    base: List[diff.File],
+    ours: List[diff.File],
+    theirs: List[diff.File],
+    ours_label: str,
+    base_label: str,
+    theirs_label: str,
+    style: str,
+    mut compares: int,
+) -> Plan ! worktree.WorkErrors {
     plan_inner(
         [],
         index.empty(2)?,
@@ -317,6 +337,7 @@ pub fn plan(
         base_label,
         theirs_label,
         style,
+        mut compares,
     )?
 }
 
@@ -333,7 +354,19 @@ pub fn plan_with_policy(
     theirs_label: str,
     style: str,
 ) -> Plan ! worktree.WorkErrors {
-    plan_inner([ctx], value, base, ours, theirs, ours_label, base_label, theirs_label, style)?
+    var compares = 0
+    plan_inner(
+        [ctx],
+        value,
+        base,
+        ours,
+        theirs,
+        ours_label,
+        base_label,
+        theirs_label,
+        style,
+        mut compares,
+    )?
 }
 
 fn plan_inner(
@@ -346,6 +379,7 @@ fn plan_inner(
     base_label: str,
     theirs_label: str,
     style: str,
+    mut compares: int,
 ) -> Plan ! worktree.WorkErrors {
     // The rename check's pairing copies every changed body into its changes
     // and candidates: it runs in a region, and only its answer is kept
@@ -362,9 +396,11 @@ fn plan_inner(
     if renamed { return Unsupported("merge rename topology") }
     var paths = List[List[byte]]()
     for entry in base { (mut paths).push(copy entry.path) }
-    for entry in ours { if at(base, entry.path) < 0 { (mut paths).push(copy entry.path) } }
+    for entry in ours {
+        if at(base, entry.path, mut compares) < 0 { (mut paths).push(copy entry.path) }
+    }
     for entry in theirs {
-        if at(base, entry.path) < 0 && at(ours, entry.path) < 0 {
+        if at(base, entry.path, mut compares) < 0 && at(ours, entry.path, mut compares) < 0 {
             (mut paths).push(copy entry.path)
         }
     }
@@ -379,7 +415,9 @@ fn plan_inner(
     }
     var result = Plan { files: [], stages: [], messages: [], conflicts: [] }
     for path in paths {
-        let b = at(base, path), o = at(ours, path), t = at(theirs, path)
+        let b = at(base, path, mut compares),
+            o = at(ours, path, mut compares),
+            t = at(theirs, path, mut compares)
         if same(ours, o, theirs, t) || same(base, b, theirs, t) {
             if o >= 0 { (mut result.files).push(copy ours[o]) }
             continue
