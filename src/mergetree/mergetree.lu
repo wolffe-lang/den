@@ -296,7 +296,7 @@ fn ordered(files: List[diff.File]) -> bool {
 // path's position in files, or -1: by binary search where files is ordered,
 // otherwise by a scan. compares counts the comparisons with path.
 fn at(files: List[diff.File], sorted: bool, path: List[byte], mut compares: int) -> int {
-    if !sorted {
+    if !sorted || files.len > 0 {
         for i in 0..files.len {
             compares += 1
             if compare(files[i].path, path) == 0 { return i }
