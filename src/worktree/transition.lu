@@ -49,22 +49,34 @@ pub fn merge_check_scan(
     target: List[FlatEntry],
     validated: bool,
 ) -> List[Snapshot] ! WorkErrors {
-    let snapshot = scan_index_held(ctx, value, validated)?
+    let scanned = [scan_index_held(ctx, value, validated)?]
     var scratch = copy value
-    transition_from(ctx, mut scratch, target, "merge", true, Map[str, List[byte]](), snapshot)?
-    [snapshot]
+    transition_staged(
+        ctx,
+        mut scratch,
+        target,
+        "merge",
+        true,
+        Map[str, List[byte]](),
+        false,
+        scanned,
+    )?
+    scanned
 }
 
 /// transition from a merge_check_scan of the same index value, with nothing
-/// written between them: no second scan.
+/// written between them: no second scan. scanned is the list merge_check_scan
+/// answered, holding its one Snapshot.
 pub fn transition_scanned(
     ctx: Context,
     mut value: index.Index,
     target: List[FlatEntry],
     mode: str,
-    snapshot: Snapshot,
+    scanned: List[Snapshot],
 ) -> () ! WorkErrors {
-    transition_from(ctx, mut value, target, mode, false, Map[str, List[byte]](), snapshot)?
+    if mode != "switch" && mode != "merge" && mode != "hard" && mode != "mixed" { return invalid }
+    if scanned.len != 1 { return invalid }
+    transition_staged(ctx, mut value, target, mode, false, Map[str, List[byte]](), false, scanned)?
 }
 
 /// Validate merge safety before publishing newly synthesized blob bodies. Map
@@ -151,6 +163,144 @@ fn transition_mode(
     validated: bool,
 ) -> () ! WorkErrors {
     if mode != "switch" && mode != "merge" && mode != "hard" && mode != "mixed" { return invalid }
+    transition_staged(ctx, mut value, target, mode, dry, supplied, validated, List[Snapshot]())?
+}
+
+// What a transition's scratch region hands on. kind 0: nothing (a dry run
+// checks only); 1: mixed, next whole, its previous cache tree invalidated
+// where the entries changed; 2: switch, merge or hard, next's entries in path
+// order, its cache tree built after the region, and stale the kept staged
+// paths whose trees that build leaves invalid.
+struct Prepared {
+    kind: int,
+    next: index.Index,
+    stale: List[List[byte]],
+}
+
+// A transition up to its cache tree runs in one region: the scan (unless
+// scanned holds one already), the checks, the writes and the next index's
+// entries. Only what the build and the invalidations after it read is copied
+// out, so the transition's scratch (the Snapshot, the flat lists of the
+// index's and the target's paths, the keep map, the previous index, the
+// entries before their sort) is freed before the build, at whose end the
+// transition's peak was. The region writes files, so a failure inside is
+// never run again: a diagnostic built there is copied out (raised:
+// 1 Unsupported, 2 Pathspec, 3 Fatal, 4 Failure) and raised once the region
+// is freed, and the work tree and index are left as the failure left them.
+fn transition_staged(
+    ctx: Context,
+    mut value: index.Index,
+    target: List[FlatEntry],
+    mode: str,
+    dry: bool,
+    supplied: Map[str, List[byte]],
+    validated: bool,
+    scanned: List[Snapshot],
+) -> () ! WorkErrors {
+    var error_payload = "", raised = 0
+    var kind = 0
+    var next = index.Index {
+        version: value.version,
+        entries: List[index.Entry](),
+        extensions: List[index.Extension](),
+    }
+    var stale = List[List[byte]]()
+    region staged {
+        var one = List[Prepared]()
+        prepare_into(
+            ctx,
+            value,
+            target,
+            mode,
+            dry,
+            supplied,
+            validated,
+            scanned,
+            mut one,
+        ) else |e| match e {
+            invalid_index => { return invalid_index },
+            unmerged => { return unmerged },
+            invalid_tree => { return invalid_tree },
+            duplicate_name => { return duplicate_name },
+            invalid => { return invalid },
+            invalid_oid => { return invalid_oid },
+            unsupported_format => { return unsupported_format },
+            bad_header => { return bad_header },
+            bad_size => { return bad_size },
+            bad_oid => { return bad_oid },
+            truncated => { return truncated },
+            dictionary => { return dictionary },
+            checksum => { return checksum },
+            limit => { return limit },
+            trailing => { return trailing },
+            unsupported_level => { return unsupported_level },
+            not_found => { return not_found },
+            denied => { return denied },
+            io => { return io },
+            exists => { return exists },
+            unsupported => { return unsupported },
+            ambiguous => { return ambiguous },
+            cross_device => { return cross_device },
+            invalid_header => { return invalid_header },
+            utf8 => { return utf8 },
+            Unsupported(message) => {
+                error_payload = copy message
+                raised = 1
+            },
+            Pathspec(message) => {
+                error_payload = copy message
+                raised = 2
+            },
+            Fatal(message) => {
+                error_payload = copy message
+                raised = 3
+            },
+            Failure(message) => {
+                error_payload = copy message
+                raised = 4
+            },
+        }
+        if raised == 0 && one[0].kind != 0 {
+            kind = one[0].kind
+            next = copy one[0].next
+            stale = copy one[0].stale
+        }
+    }
+    if raised == 1 { return Unsupported(error_payload) }
+    if raised == 2 { return Pathspec(error_payload) }
+    if raised == 3 { return Fatal(error_payload) }
+    if raised == 4 { return Failure(error_payload) }
+    if kind == 0 { return }
+    value = next
+    if kind == 1 { return }
+    let tree = index.build_trees(value)?
+    value.extensions = [index.Extension { signature: "TREE", data: copy tree.cache }]
+    // A staged change kept through a switch, to a gitlink or a file, an
+    // addition or a removal, leaves its trees invalid, as Git's does
+    // (vc25 work and report rows).
+    for path in stale {
+        value = index.invalidate_tree(value, path)?
+    }
+}
+
+// prepare's Prepared pushed onto out, for transition_staged's region: from
+// the one Snapshot scanned holds, or from a scan of value made here.
+fn prepare_into(
+    ctx: Context,
+    value: index.Index,
+    target: List[FlatEntry],
+    mode: str,
+    dry: bool,
+    supplied: Map[str, List[byte]],
+    validated: bool,
+    scanned: List[Snapshot],
+    mut out: List[Prepared],
+) -> () ! WorkErrors {
+    if scanned.len == 1 {
+        let prepared = prepare(ctx, value, target, mode, dry, supplied, scanned[0])?
+        (mut out).push(prepared)
+        return
+    }
     // The scan's walk of the work tree is scratch: the scan runs in a region of
     // its own and only its Snapshot is copied out. A scan that fails there is
     // run again outside, where its error's message can leave (a message built
@@ -163,13 +313,15 @@ fn transition_mode(
     }
     if failed {
         let snapshot = scan_index_held(ctx, value, validated)?
-        transition_from(ctx, mut value, target, mode, dry, supplied, snapshot)?
+        let prepared = prepare(ctx, value, target, mode, dry, supplied, snapshot)?
+        (mut out).push(prepared)
         return
     }
-    transition_from(ctx, mut value, target, mode, dry, supplied, held[0])?
+    let prepared = prepare(ctx, value, target, mode, dry, supplied, held[0])?
+    (mut out).push(prepared)
 }
 
-// scan_index_held's Snapshot pushed onto out, for transition_mode's scan region.
+// scan_index_held's Snapshot pushed onto out, for prepare_into's scan region.
 fn scan_into(
     ctx: Context,
     value: index.Index,
@@ -180,16 +332,18 @@ fn scan_into(
     (mut out).push(snapshot)
 }
 
-// transition_mode from a scan of value already taken (scan_index).
-fn transition_from(
+// A transition up to its cache tree, from a scan of value: the checks, the
+// writes (unless dry) and the next index's entries in path order. value is
+// read only.
+fn prepare(
     ctx: Context,
-    mut value: index.Index,
+    value: index.Index,
     target: List[FlatEntry],
     mode: str,
     dry: bool,
     supplied: Map[str, List[byte]],
     snapshot: Snapshot,
-) -> () ! WorkErrors {
+) -> Prepared ! WorkErrors {
     if mode != "switch" && mode != "merge" && mode != "hard" && mode != "mixed" { return invalid }
     // A diagnostic built in a scratch region below is copied out of it (raised:
     // 1 Unsupported, 2 Pathspec, 3 Fatal, 4 Failure) and raised once the region
@@ -362,7 +516,17 @@ fn transition_from(
     if raised == 2 { return Pathspec(error_payload) }
     if raised == 3 { return Fatal(error_payload) }
     if raised == 4 { return Failure(error_payload) }
-    if dry { return }
+    if dry {
+        return Prepared {
+            kind: 0,
+            next: index.Index {
+                version: value.version,
+                entries: List[index.Entry](),
+                extensions: List[index.Extension](),
+            },
+            stale: List[List[byte]](),
+        }
+    }
     let filemode = config_bool(ctx, "core.filemode", true)?
     let symlinks = config_bool(ctx, "core.symlinks", true)?
     let previous = copy value
@@ -491,28 +655,31 @@ fn transition_from(
             path: List[byte](),
         }
     }
-    value.entries = sorted
+    var result = index.Index {
+        version: value.version,
+        entries: sorted,
+        extensions: List[index.Extension](),
+    }
     if mode == "mixed" {
-        value.extensions = copy previous.extensions
+        result.extensions = copy previous.extensions
         for path in paths {
             if !same_flat(indexed, flat_at(indexed, path), target, flat_at(target, path)) {
-                value = index.invalidate_tree(value, path)?
+                result = index.invalidate_tree(result, path)?
             }
         }
-    } else {
-        value.extensions = []
-        let tree = index.build_trees(value)?
-        value.extensions = [index.Extension { signature: "TREE", data: copy tree.cache }]
-        // A staged change kept through a switch, to a gitlink or a file, an
-        // addition or a removal, leaves its trees invalid, as Git's does
-        // (vc25 work and report rows).
-        for path in paths {
-            if !(keep[text(path)?] else false) { continue }
-            if !same_flat(indexed, flat_at(indexed, path), target, flat_at(target, path)) {
-                value = index.invalidate_tree(value, path)?
-            }
+        return Prepared { kind: 1, next: result, stale: List[List[byte]]() }
+    }
+    // The kept staged paths whose trees the build will leave invalid, found
+    // here, before it, so that indexed, paths and keep are not read after the
+    // region.
+    var stale = List[List[byte]]()
+    for path in paths {
+        if !(keep[text(path)?] else false) { continue }
+        if !same_flat(indexed, flat_at(indexed, path), target, flat_at(target, path)) {
+            (mut stale).push(copy path)
         }
     }
+    Prepared { kind: 2, next: result, stale: stale }
 }
 
 // A disappearing gitlink's directory goes only when empty; a populated one

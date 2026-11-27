@@ -153,7 +153,7 @@ fn transition_either(
     validated: bool,
 ) -> () ! worktree.WorkErrors {
     if scanned.len == 1 {
-        worktree.transition_scanned(ctx, mut value, target, "merge", scanned[0])?
+        worktree.transition_scanned(ctx, mut value, target, "merge", scanned)?
     } else {
         worktree.transition_held(ctx, mut value, target, "merge", validated)?
     }
