@@ -311,12 +311,7 @@ fn prepare_into(
         scan_into(ctx, value, validated, mut one) else |_| { failed = true }
         one
     }
-    if failed {
-        let snapshot = scan_index_held(ctx, value, validated)?
-        let prepared = prepare(ctx, value, target, mode, dry, supplied, snapshot)?
-        (mut out).push(prepared)
-        return
-    }
+    if failed { return invalid }
     let prepared = prepare(ctx, value, target, mode, dry, supplied, held[0])?
     (mut out).push(prepared)
 }
