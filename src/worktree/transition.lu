@@ -1,4 +1,5 @@
 use std.fs
+use std.os
 use ignore
 use index
 use object
@@ -413,10 +414,39 @@ fn prepare(
             }
             continue
         }
+        if mode == "hard" && at >= 0 && next >= 0 {
+            let _ = tracked_way(ctx, path, snapshot, disk, mode, mut expendable)?
+            continue
+        }
         if mode == "switch" || mode == "merge" {
             if same_flat(snapshot.head_entries, old, target, next) ||
                 same_flat(indexed, at, target, next) {
                 keep[text(path)?] = true
+                continue
+            }
+            // A tracked path the target writes, with something else where it
+            // or a directory it needs was: a local change, as Git lists it.
+            if at >= 0 &&
+                next >= 0 &&
+                tracked_way(ctx, path, snapshot, disk, mode, mut expendable)? {
+                (mut dirty).push(copy path)
+                continue
+            }
+            // A tracked path the target removes, become a directory: Git's
+            // "would lose untracked files" when it holds one, else removed.
+            if at >= 0 &&
+                next < 0 &&
+                (disk < 0 || snapshot.files[disk].kind == 1) &&
+                directory_way(
+                    ctx,
+                    path,
+                    indexed,
+                    mode,
+                    mut lost,
+                    mut expendable,
+                    mut ignores,
+                    mut warnings,
+                )? {
                 continue
             }
             if at < 0 && next >= 0 {
@@ -610,6 +640,15 @@ fn prepare(
                 let was = flat_at(indexed, path)
                 if was >= 0 && indexed[was].mode == 0o160000 {
                     remove_gitlink_directory(ctx, path)?
+                } else if mode == "hard" && is_directory(ctx, path)? {
+                    // Git's reset --hard cannot unlink a directory and says so
+                    // in the host's words, keeping it and what it holds.
+                    let reason = if os.name() == "linux" {
+                        "Is a directory"
+                    } else {
+                        "Operation not permitted"
+                    }
+                    eprint("warning: unable to unlink '{text(path)?}': {reason}")
                 } else {
                     remove_file(ctx, path)?
                 }
@@ -912,6 +951,47 @@ fn tracked_below(indexed: List[FlatEntry], path: List[byte]) -> bool {
         if compare(indexed[mid].path, key) < 0 { lo = mid + 1 } else { hi = mid }
     }
     lo < indexed.len && indexed[lo].path.len > path.len && under(indexed[lo].path, path)
+}
+
+// A tracked path the transition writes, when the scan did not see it as a file
+// (den#185): a file or symlink where a directory it needs was, or a directory
+// where it was, stands in its way. Under hard that is removed with the
+// removals. The directories it needs are probed first, so the path itself is
+// read only below real directories. Answers whether something stood there.
+fn tracked_way(
+    ctx: Context,
+    path: List[byte],
+    snapshot: Snapshot,
+    disk: int,
+    mode: str,
+    mut expendable: List[List[byte]],
+) -> bool ! WorkErrors {
+    if disk >= 0 && snapshot.files[disk].kind != 1 { return false }
+    for i in 0..path.len {
+        if path[i] != 47 as byte { continue }
+        let prefix = path[0..i]
+        let info = fs_lstat(absolute(ctx, prefix)?) else |e| match e {
+            not_found => { return false },
+            denied => { return denied },
+            io => { return io },
+        }
+        if info[0] == 1 { continue }
+        if mode == "hard" { (mut expendable).push(copy prefix) }
+        return true
+    }
+    if !is_directory(ctx, path)? { return false }
+    if mode == "hard" { (mut expendable).push(copy path) }
+    true
+}
+
+// Whether path is a directory on disk (not through a symlink).
+fn is_directory(ctx: Context, path: List[byte]) -> bool ! WorkErrors {
+    let info = fs_lstat(absolute(ctx, path)?) else |e| match e {
+        not_found => { return false },
+        denied => { return denied },
+        io => { return io },
+    }
+    info[0] == 1
 }
 
 // What Git removes from a new path's way (den#185): an ignored file or
