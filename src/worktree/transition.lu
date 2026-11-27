@@ -521,8 +521,7 @@ fn transition_from(
         }
         var cache = List[byte]()
         if failed {
-            let tree = index.build_trees(value)?
-            cache = copy tree.cache
+            return invalid
         } else {
             cache = copy caches[0]
         }
