@@ -217,7 +217,7 @@ fn paint(
         for i in queue {
             if graph.nodes[i].marks & below() == 0 { live = true }
         }
-        if !live { break }
+        if !live || results.len > 0 { break }
         var best = 0
         for k in 1..queue.len {
             if sooner(graph, queue[k], order[k], queue[best], order[best]) { best = k }
