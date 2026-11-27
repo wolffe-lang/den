@@ -317,7 +317,10 @@ fn prepare_into(
         (mut out).push(prepared)
         return
     }
-    let prepared = prepare(ctx, value, target, mode, dry, supplied, held[0])?
+    let prepared = prepare(ctx, value, target, mode, dry, supplied, held[0]) else |_| {
+        let again = scan_index_held(ctx, value, validated)?
+        prepare(ctx, value, target, mode, dry, supplied, again)?
+    }
     (mut out).push(prepared)
 }
 
