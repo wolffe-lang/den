@@ -373,6 +373,11 @@ fn prepare(
     }
     var keep = Map[str, bool]()
     var dirty = List[List[byte]](), untracked = List[List[byte]]()
+    // What stands in a new path's way (den#185), found here, before any write:
+    // expendable, what Git removes from the way (an ignored file), removed with
+    // the removals; seen, each leading path decided once.
+    var expendable = List[List[byte]]()
+    var seen = Map[str, bool]()
     for path in paths {
         let old = flat_at(snapshot.head_entries, path)
         let next = flat_at(target, path)
@@ -383,6 +388,21 @@ fn prepare(
                 same_flat(indexed, at, target, next) {
                 keep[text(path)?] = true
                 continue
+            }
+            if at < 0 && next >= 0 {
+                let led = leading_way(
+                    ctx,
+                    path,
+                    indexed,
+                    snapshot,
+                    mut keep,
+                    mut seen,
+                    mut untracked,
+                    mut expendable,
+                    mut ignores,
+                    mut warnings,
+                )?
+                if led { continue }
             }
             var present = disk >= 0
             if at < 0 && next >= 0 && !present {
@@ -530,8 +550,10 @@ fn prepare(
     let filemode = config_bool(ctx, "core.filemode", true)?
     let symlinks = config_bool(ctx, "core.symlinks", true)?
     let previous = copy value
-    // Remove first so a tracked directory-to-file change can be installed.
+    // Remove first so a tracked directory-to-file change can be installed; what
+    // Git removes from a new path's way goes before anything else (den#185).
     if mode != "mixed" {
+        for path in expendable { remove_in_way(ctx, path)? }
         for path in paths {
             if keep[text(path)?] else false { continue }
             if flat_at(target, path) < 0 {
@@ -680,6 +702,84 @@ fn prepare(
         }
     }
     Prepared { kind: 2, next: result, stale: stale }
+}
+
+// A new path's leading directories, before any write (den#185). The first that
+// is not a directory on disk stands in its way, decided once (seen): an index
+// entry the transition removes first is no obstruction; a staged addition it
+// keeps is dropped when its file is unchanged and refuses when changed, as
+// Git's; an untracked file or symlink refuses, unless ignored, and an ignored
+// one is removed with the removals. Answers whether something stood in the
+// way.
+fn leading_way(
+    ctx: Context,
+    path: List[byte],
+    indexed: List[FlatEntry],
+    snapshot: Snapshot,
+    mut keep: Map[str, bool],
+    mut seen: Map[str, bool],
+    mut untracked: List[List[byte]],
+    mut expendable: List[List[byte]],
+    mut ignores: ignore.Cache,
+    mut warnings: List[str],
+) -> bool ! WorkErrors {
+    for i in 0..path.len {
+        if path[i] != 47 as byte { continue }
+        let prefix = path[0..i]
+        let info = fs_lstat(absolute(ctx, prefix)?) else |e| match e {
+            not_found => { return false },
+            denied => { return denied },
+            io => { return io },
+        }
+        if info[0] == 1 { continue }
+        let key = text(prefix)?
+        if seen[key] else false { return true }
+        seen[key] = true
+        let at = flat_at(indexed, prefix)
+        if at >= 0 {
+            if !(keep[key] else false) { return true }
+            let disk = file_at(snapshot.files, prefix)
+            let clean = disk >= 0 &&
+                snapshot.files[disk].mode == indexed[at].mode &&
+                oid.equal(snapshot.files[disk].id, indexed[at].id)
+            if clean {
+                keep[key] = false
+            } else {
+                (mut untracked).push(copy prefix)
+            }
+            return true
+        }
+        let decision = ignore.query_cached(
+            ctx.repo,
+            ctx.root,
+            mut ignores,
+            key,
+            false,
+            mut warnings,
+        )?
+        if decision.ignored {
+            (mut expendable).push(copy prefix)
+        } else {
+            (mut untracked).push(copy prefix)
+        }
+        return true
+    }
+    false
+}
+
+// What Git removes from a new path's way (den#185): an ignored file.
+fn remove_in_way(ctx: Context, path: List[byte]) -> () ! WorkErrors {
+    let full = absolute(ctx, path)?
+    let info = fs_lstat(full) else |e| match e {
+        not_found => { return },
+        denied => { return denied },
+        io => { return io },
+    }
+    if info[0] == 1 {
+        fs.remove_dir_all(full)?
+    } else {
+        fs.remove(full)?
+    }
 }
 
 // A disappearing gitlink's directory goes only when empty; a populated one
