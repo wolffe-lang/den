@@ -17,6 +17,9 @@ for tier in native release; do
     "$WOLF" build $flag --deny-warnings probes/merge-client/main.lu -o "target/$tier/merge-client"
     "$WOLF" build $flag --deny-warnings probes/merge-bases-client/main.lu -o "target/$tier/merge-bases-client"
     tools/env python3 -I tools/merge-bases-test.py --tier "$tier"
+    # The merge base a pull and a merge walk for: the commits that walk reads,
+    # and its answer where history is incomplete or shallow.
+    tools/env python3 -I tools/ancestry-reads-test.py --tier "$tier" --wolf "$WOLF"
     tools/env python3 -I tools/merge-file-test.py --tier "$tier"
     tools/env python3 -I tools/merge-test.py --tier "$tier"
     # The merge planner's path lookups over a merge of a pull's size: their

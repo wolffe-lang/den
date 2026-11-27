@@ -1,0 +1,45 @@
+// Independent API client for the merge base a merge and a pull walk for, and
+// the commits that walk reads: `bases` prints mergetree.bases_counted's bases
+// and reads, `pull` prints wiregit.pull_ancestry's two answers and reads, and
+// either prints its refusal by name, for tools/ancestry-reads-test.py.
+use mergetree
+use object
+use oid
+use repository
+use wiregit
+use worktree
+
+fn bases(repo: repository.Repo, left: str, right: str) -> () ! worktree.WorkErrors {
+    let found = mergetree.bases_counted(repo, oid.parse("sha1", left)?, oid.parse("sha1", right)?)?
+    for id in found.ids { print("base={oid.hex(id)?}") }
+    print("read={found.read}")
+}
+
+fn pull(repo: repository.Repo, current: str, upstream: str) -> () ! object.StoreErrors {
+    let answer = wiregit.pull_ancestry(repo, current, upstream)?
+    print("forward={answer.forward} up_to_date={answer.up_to_date} read={answer.read}")
+}
+
+fn main() -> int {
+    let args = env_args()
+    if args.len != 4 || args[0] != "bases" && args[0] != "pull" {
+        eprint("usage: ancestry-reads-client bases|pull GITDIR LEFT RIGHT")
+        return 2
+    }
+    let repo = repository.open(args[1]) else |error| {
+        eprint("open failure: {error}")
+        return 1
+    }
+    if args[0] == "bases" {
+        bases(repo, args[2], args[3]) else |error| {
+            print("refused={error}")
+            return 0
+        }
+    } else {
+        pull(repo, args[2], args[3]) else |error| {
+            print("refused={error}")
+            return 0
+        }
+    }
+    0
+}

@@ -18,12 +18,25 @@ pub struct Plan {
     conflicts: List[str],
 }
 
+/// A merge's best bases, and how many commits the walk that found them read.
+pub struct Bases { ids: List[oid.Oid], read: int }
+
 /// Compute all best bases through the owned walker; never consult/write index.
 pub fn bases(
     repo: repository.Repo,
     left: oid.Oid,
     right: oid.Oid,
 ) -> List[oid.Oid] ! worktree.WorkErrors {
+    let found = bases_counted(repo, left, right)?
+    found.ids
+}
+
+/// bases, with the number of commits its walk read (the ancestry rows count it).
+pub fn bases_counted(
+    repo: repository.Repo,
+    left: oid.Oid,
+    right: oid.Oid,
+) -> Bases ! worktree.WorkErrors {
     let commits = walk.collect(repo, [copy left, copy right], 100001, 0, 100000, false)?
     var nodes = List[mergebase.Node]()
     for item in commits {
@@ -38,7 +51,7 @@ pub fn bases(
     }
     var out = List[oid.Oid]()
     for name in names { (mut out).push(oid.parse("sha1", name)?) }
-    out
+    Bases { ids: out, read: commits.len }
 }
 
 /// Whether a tree entry of `mode` is a blob a merge carries: a regular or

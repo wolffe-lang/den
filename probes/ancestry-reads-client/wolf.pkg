@@ -1,0 +1,13 @@
+pkg {
+    name: "ancestry-reads-client",
+    edition: "1",
+    capabilities: [env, fs, exec, net],
+    deps: {
+        mergetree: {path: "../../src/mergetree"},
+        object: {path: "../../src/object"},
+        oid: {path: "../../src/oid"},
+        repository: {path: "../../src/repository"},
+        wiregit: {path: "../../src/wiregit"},
+        worktree: {path: "../../src/worktree"},
+    },
+}
