@@ -1,5 +1,23 @@
 # Changes
 
+## Unreleased — a transition's scratch freed as it goes
+
+- A pull's merge or fast-forward moves the work tree in a transition, which
+  runs in a region of its own: what it allocates stays until it ends. At its
+  end it builds the next index's cache tree: every tree object of the index,
+  with copies of each directory, to keep only the TREE extension's bytes. At
+  its start a merge's transition scans the work tree, to keep only the scan's
+  result. On the pull rows' repository (den#138) those two held 39.9 MB and
+  32.5 MB of the 126.2 MB the last transition held at the merge's peak of
+  202.4 MB.
+- Each now runs in a region of its own and copies out only what the
+  transition reads. A failure inside is run again outside the region, where
+  its error's message can leave. The worktree leaf's `transition-rerun` rows
+  force a failure in each place and hold trunk's refusal: its text, its exit,
+  and the work tree and index after it.
+- No row bounds the merge's or the fast-forward's peak yet. One bounds-only
+  change, from this change's readings and the merge-base walk's, follows.
+
 ## Unreleased — a pull's ancestry walks stop at the merge base
 
 - A pull asks two questions before it merges: is HEAD an ancestor of
