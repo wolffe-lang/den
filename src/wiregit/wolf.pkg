@@ -17,6 +17,7 @@ pkg {
         transport: {path: "../transport"},
         wire: {path: "../wire"},
         index: {path: "../index"},
+        mergetree: {path: "../mergetree"},
         worktree: {path: "../worktree"},
         gitmodules: {path: "../gitmodules"},
         revset: {path: "../revset"},

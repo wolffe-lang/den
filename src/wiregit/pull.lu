@@ -1,4 +1,5 @@
 // git-pull policy selection and fetch provenance; history changes stay in M3.
+use mergetree
 use object
 use oid
 use refcmd
@@ -142,8 +143,9 @@ fn perform_pull(args: List[str]) -> int ! object.StoreErrors {
     if fetched != 0 { return 1 }
     let current = oid.hex(refs.read(repo, "HEAD")?)?
     let upstream = oid.hex(refs.read(repo, destination)?)?
-    let forward = ancestor(repo, current, upstream)?
-    let up_to_date = ancestor(repo, upstream, current)?
+    let ancestry = pull_ancestry(repo, current, upstream)?
+    let forward = ancestry.forward
+    let up_to_date = ancestry.up_to_date
     let divergent = !forward && !up_to_date
     if divergent && ff == "only" {
         if pull_bool(repo.config["advice.diverging"] else "true", "advice.diverging")? {
@@ -183,6 +185,72 @@ fn perform_pull(args: List[str]) -> int ! object.StoreErrors {
     }
     (mut merge_args).push(copy upstream)
     refcmd.run_pull(merge_args, action, upstream, quiet)
+}
+
+/// Whether a pull is a fast-forward (HEAD an ancestor of upstream) and whether
+/// it is already up to date (upstream an ancestor of HEAD), and how many
+/// commits the walk that answered read (the ancestry rows count it).
+pub struct PullAncestry { forward: bool, up_to_date: bool, read: int }
+
+/// Both answers from the merge base of HEAD and upstream: a fast-forward when
+/// that base is HEAD alone, up to date when it is upstream alone. Equal tips are
+/// both, with nothing read. The walk runs in a region and copies out only its
+/// answers; a walk that fails is run again outside it, where its error's
+/// message can leave (a message built inside would be freed).
+pub fn pull_ancestry(
+    repo: repository.Repo,
+    current: str,
+    upstream: str,
+) -> PullAncestry ! object.StoreErrors {
+    if current == upstream { return PullAncestry { forward: true, up_to_date: true, read: 0 } }
+    let ours = oid.parse("sha1", current)?, theirs = oid.parse("sha1", upstream)?
+    var forward = false, up_to_date = false, read = 0, failed = false
+    region ancestry {
+        let found = mergetree.bases_counted(repo, ours, theirs) else |_| {
+            failed = true
+            mergetree.Bases { ids: List[oid.Oid](), read: 0 }
+        }
+        forward = found.ids.len == 1 && oid.equal(found.ids[0], ours)
+        up_to_date = found.ids.len == 1 && oid.equal(found.ids[0], theirs)
+        read = found.read
+    }
+    if failed {
+        let found = mergetree.bases_counted(repo, ours, theirs) else |e| match e {
+            invalid_index => { return invalid },
+            unmerged => { return invalid },
+            invalid_tree => { return invalid },
+            duplicate_name => { return invalid },
+            invalid => { return invalid },
+            invalid_oid => { return invalid_oid },
+            unsupported_format => { return unsupported_format },
+            bad_header => { return bad_header },
+            bad_size => { return bad_size },
+            bad_oid => { return bad_oid },
+            truncated => { return truncated },
+            dictionary => { return dictionary },
+            checksum => { return checksum },
+            limit => { return limit },
+            trailing => { return trailing },
+            unsupported_level => { return unsupported_level },
+            not_found => { return not_found },
+            denied => { return denied },
+            io => { return io },
+            exists => { return exists },
+            unsupported => { return unsupported },
+            Unsupported(message) => { return Unsupported(message) },
+            ambiguous => { return ambiguous },
+            cross_device => { return cross_device },
+            invalid_header => { return invalid },
+            utf8 => { return invalid },
+            Pathspec(message) => { return Unsupported(message) },
+            Fatal(message) => { return Unsupported(message) },
+            Failure(message) => { return Unsupported(message) },
+        }
+        forward = found.ids.len == 1 && oid.equal(found.ids[0], ours)
+        up_to_date = found.ids.len == 1 && oid.equal(found.ids[0], theirs)
+        read = found.read
+    }
+    PullAncestry { forward: forward, up_to_date: up_to_date, read: read }
 }
 
 /// Fetch then delegate the selected bounded merge/rebase; explicit policy
