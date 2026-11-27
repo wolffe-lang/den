@@ -151,8 +151,33 @@ fn transition_mode(
     validated: bool,
 ) -> () ! WorkErrors {
     if mode != "switch" && mode != "merge" && mode != "hard" && mode != "mixed" { return invalid }
+    // The scan's walk of the work tree is scratch: the scan runs in a region of
+    // its own and only its Snapshot is copied out. A scan that fails there is
+    // run again outside, where its error's message can leave (a message built
+    // inside would be freed); the scan writes nothing.
+    var failed = false
+    let held = copy region {
+        var one = List[Snapshot]()
+        scan_into(ctx, value, validated, mut one) else |_| { failed = true }
+        one
+    }
+    if failed {
+        let snapshot = scan_index_held(ctx, value, validated)?
+        transition_from(ctx, mut value, target, mode, dry, supplied, snapshot)?
+        return
+    }
+    transition_from(ctx, mut value, target, mode, dry, supplied, held[0])?
+}
+
+// scan_index_held's Snapshot pushed onto out, for transition_mode's scan region.
+fn scan_into(
+    ctx: Context,
+    value: index.Index,
+    validated: bool,
+    mut out: List[Snapshot],
+) -> () ! WorkErrors {
     let snapshot = scan_index_held(ctx, value, validated)?
-    transition_from(ctx, mut value, target, mode, dry, supplied, snapshot)?
+    (mut out).push(snapshot)
 }
 
 // transition_mode from a scan of value already taken (scan_index).
