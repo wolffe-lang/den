@@ -1429,6 +1429,7 @@ pub fn scan_index_held(ctx: Context, value: index.Index, validated: bool) -> Sna
     var warnings = List[str]()
     var validations = 0
     if !validated { validate_counted(value, mut validations)? }
+    validate_counted(value, mut validations)?
     let current_head = head(ctx)?
     var entries = List[FlatEntry]()
     var copied = false
