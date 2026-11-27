@@ -1,5 +1,48 @@
 # Changes
 
+## Unreleased — a transition refuses or completes as Git does, never half-applied
+
+- A merge, checkout, switch, cherry-pick or `reset --hard` whose target adds a
+  path found its checks blind to what stood where that path needs a directory.
+  An untracked file `zz` where the target adds `zz/new.txt` passed the checks,
+  and the transition wrote other files before the write of `zz/new.txt` failed
+  with `fatal: not_found`: HEAD and the index unchanged, the work tree half
+  moved (den#185). Git refuses before writing anything.
+- Every check now runs before any write. A file, symlink or staged file in a
+  new directory's place is found by name. An untracked one refuses with Git's
+  "untracked working tree files would be overwritten" and its path. An
+  untracked directory where the target puts a file refuses with Git's
+  "Updating the following directories would lose untracked files in them".
+  `reset --hard` removes what is in the way and completes, as Git's does.
+- The same holds for a tracked path the target changes. Its directory may
+  have become an untracked file, a symlink or an ignored file, or the path
+  itself a directory holding an untracked file: Git lists the path among
+  its local changes and refuses, and so does den now, before writing. A
+  tracked path the target removes that has become such a directory refuses
+  with Git's "would lose untracked files"; under `reset --hard` it is kept,
+  with Git's "unable to unlink" warning, and the reset completes.
+- **Two of these remove what you had, as Git does.** An ignored file, or a
+  directory holding only ignored files, standing where the target adds a path
+  is deleted, and the merge, checkout, switch, cherry-pick or reset
+  completes. A file you staged with `add` but never committed, unchanged
+  since, standing where the target adds a directory, is dropped from the
+  index and deleted from the work tree, and a fast-forward, checkout or
+  switch completes; its content stays in the object store only. If you changed that file after staging it, the transition
+  refuses instead (and a true merge or cherry-pick refuses either way). A
+  staged file you deleted from the work tree, where the target adds a
+  directory, is dropped from the index the same way.
+- The worktree leaf's `transition-obstruction` rows hold each case to the
+  pinned Git: output, exit, HEAD, refs, index and work tree, and nothing
+  changed where Git refuses. The cases come from a sweep of every kind of
+  thing that can stand in a written path's way, against Git. The
+  `transition-rerun` rows' failure after writes began now comes from a
+  file-size limit on the probe's own process, a write no check before the
+  writes can foresee, since an untracked file in the way no longer gets
+  that far.
+- A name longer than the file system holds still refuses before writing,
+  with den's `not yet implemented: merge safety: io` where Git says
+  `cannot stat '…': File name too long`.
+
 ## Unreleased — a transition's scratch freed before its cache tree
 
 - A pull's merge or fast-forward moves the work tree in a transition. At
