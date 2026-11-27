@@ -1,5 +1,36 @@
 # Changes
 
+## Unreleased — a pull's ancestry walks stop at the merge base
+
+- A pull asks two questions before it merges: is HEAD an ancestor of
+  upstream (a fast-forward), and is upstream an ancestor of HEAD (already up
+  to date). Each had its own walk, and a walk whose answer is no read every
+  commit. On the pull rows' history of 5,000 commits (den#138), a merge pull
+  read them all twice and a fast-forward once. The merge command then read
+  every commit reachable from either tip again to find the merge base. The
+  pull moves 20 commits.
+- One walk now finds the merge base (`walk.common`, through
+  `mergetree.bases`). It takes commits newest first and marks which tips
+  reach each one. It stops when every queued commit is below a commit both
+  tips reach. It reads the commits down to the base and the base's parents,
+  and nothing under them. Dates only order the walk: a commit whose marks
+  grow is walked again, so the bases do not depend on them. A candidate that
+  another candidate reaches is dropped. The pull takes both answers from
+  that base (`wiregit.pull_ancestry`): HEAD alone is a fast-forward, and
+  upstream alone is up to date. Fetch and push keep their own ancestry check.
+- Two refusals no longer happen, where Git has neither:
+  - a history past 100,000 commits whose bases lie nearer no longer stops at
+    `limit: more than 100000 commits in the ancestry walk`;
+  - a commit absent deeper than the base's parents, as in a shallow clone
+    deep enough, is no longer read. The merge proceeds, with Git's result.
+
+  A commit absent on the walked path refuses as before. That includes a
+  shallow boundary at the base itself, since den does not read
+  `.git/shallow` here.
+- The merge leaf's `ancestry` rows hold the commits a walk reads and its
+  answers where history is incomplete or shallow. The merge-base rows add
+  skewed, wide, deep and unrelated graphs, each printed with its seed.
+
 ## Unreleased — an index validated once per value
 
 - A scan of the work tree checks the index it is given, as `index.serialize`
