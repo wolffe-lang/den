@@ -863,7 +863,7 @@ fn leading_way(
         if decision.ignored {
             (mut expendable).push(copy prefix)
         } else {
-            (mut untracked).push(copy prefix)
+            let _ = prefix.len
         }
         return true
     }
