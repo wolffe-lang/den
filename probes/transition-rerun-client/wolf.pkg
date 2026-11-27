@@ -1,0 +1,10 @@
+pkg {
+    name: "transition-rerun-client",
+    edition: "1",
+    capabilities: [env, fs],
+    deps: {
+        index: {path: "../../src/index"},
+        oid: {path: "../../src/oid"},
+        worktree: {path: "../../src/worktree"},
+    },
+}

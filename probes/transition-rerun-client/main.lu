@@ -1,0 +1,60 @@
+// Independent API client for a transition's refusals inside its scratch
+// regions: worktree.transition_held on a work tree, toward the tree TREE,
+// where the transition must fail in its scan or in building the next index's
+// cache tree. It prints the refusal as the transition raised it, for
+// tools/transition-rerun-test.py, which compares it with trunk's.
+//   scan-malformed ROOT TREE        the index value with its last entry dropped,
+//                                   so its cache tree names an entry it lacks;
+//                                   not held validated, so the scan refuses it
+//   scan-file ROOT TREE             the index as read; the work tree holds what
+//                                   the scan cannot read
+//   trees-twice ROOT TREE BLOB      the target names added/twice.txt (BLOB)
+//                                   twice: the transition writes it, then the
+//                                   cache tree refuses the doubled entry
+use index
+use oid
+use worktree
+
+fn transition(args: List[str]) -> () ! worktree.WorkErrors {
+    let ctx = worktree.discover(args[1])?
+    var value = worktree.read_index(ctx)?
+    var target = worktree.flatten_tree(ctx.repo, oid.parse("sha1", args[2])?)?
+    if args[0] == "scan-malformed" {
+        var kept = List[index.Entry]()
+        for i in 0..value.entries.len - 1 { (mut kept).push(copy value.entries[i]) }
+        value.entries = kept
+    } else if args[0] == "trees-twice" {
+        // The fixture's paths all sort after "added/", so the doubled entry
+        // leads the target and the target stays in path order.
+        let blob = oid.parse("sha1", args[3])?
+        var doubled = List[worktree.FlatEntry]()
+        for _ in 0..2 {
+            (mut doubled).push(worktree.FlatEntry {
+                path: "added/twice.txt".bytes(),
+                mode: 0o100644,
+                id: copy blob,
+            })
+        }
+        for entry in target { (mut doubled).push(copy entry) }
+        target = doubled
+    }
+    worktree.transition_held(ctx, mut value, target, "merge", false)?
+    print("transition ok entries={value.entries.len}")
+}
+
+fn main() -> int {
+    let args = env_args()
+    let shape = args.len == 3 && (args[0] == "scan-malformed" || args[0] == "scan-file") ||
+        args.len == 4 && args[0] == "trees-twice"
+    if !shape {
+        eprint(
+            "usage: transition-rerun-client scan-malformed|scan-file ROOT TREE | trees-twice ROOT TREE BLOB",
+        )
+        return 2
+    }
+    transition(args) else |error| {
+        print("refused={error}")
+        return 1
+    }
+    0
+}

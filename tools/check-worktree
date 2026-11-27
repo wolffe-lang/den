@@ -23,6 +23,9 @@ for tier in native release; do
     # A scan's validation passes over its index value, counted: none for a value
     # its caller holds validated, one for any other, and a malformed value refused.
     tools/env python3 -I tools/scan-validations-test.py --tier "$tier" --wolf "$WOLF"
+    # A transition's refusals inside its scan's and its cache tree's regions,
+    # beside trunk's: the same text, exit, work tree and index.
+    tools/env python3 -I tools/transition-rerun-test.py --tier "$tier" --wolf "$WOLF"
     # A warm diff --quiet's stat pass, counted: no path checked again after the
     # index read, and each path's bytes built once.
     tools/env python3 -I tools/path-work-test.py --tier "$tier" --wolf "$WOLF"
