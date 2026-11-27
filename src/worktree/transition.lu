@@ -864,7 +864,6 @@ fn leading_way(
             return true
         }
         if mode == "hard" {
-            (mut expendable).push(copy prefix)
             return true
         }
         let decision = ignore.query_cached(
