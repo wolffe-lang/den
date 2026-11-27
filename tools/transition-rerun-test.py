@@ -61,7 +61,7 @@ TRUNK = {
     'prepare-dirty': (1, 'refused=Failure(Your local changes to the following files would be overwritten by merge:\n'
                       '\td0/s0/f0.txt\nPlease commit your changes or stash them before you merge.\nAborting)\n',
                       '867babdf5cb42dff'),
-    'prepare-written': None,
+    'prepare-written': (1, 'refused=io\n', '9537d874b8bda078'),
     'trees-twice': (1, 'refused=invalid_index\n', '6043f2b44d5f702c'),
 }
 
