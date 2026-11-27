@@ -132,3 +132,157 @@ pub fn collect(
     }
     out
 }
+
+/// The best common ancestors of two commits, and how many commits were read
+/// to find them.
+pub struct Common { ids: List[oid.Oid], read: int }
+
+/// A commit a bounded walk has read: its parents, its committer date, and the
+/// walk's marks on it (REACHED_LEFT, REACHED_RIGHT, BELOW, FOUND).
+struct Node { id: oid.Oid, parents: List[oid.Oid], timestamp: int, marks: int }
+
+/// The commits a bounded walk has read, each once, by id.
+struct Graph { nodes: List[Node], slots: Map[str, int], read: int, bytes: int }
+
+// The marks: reached from the left tip, from the right tip, below a commit both
+// reach, and taken as a candidate.
+fn reached_left() -> int { 1 }
+
+fn reached_right() -> int { 2 }
+
+fn below() -> int { 4 }
+
+fn found() -> int { 8 }
+
+/// The node of a commit, read the first time it is needed. The ancestry
+/// walk's bounds hold on what is read: 100000 commits, 134217728 bytes.
+fn node_for(mut reader: object.Reader, mut graph: Graph, id: oid.Oid) -> int ! worktree.WorkErrors {
+    let key = oid.hex(id)?
+    let known = graph.slots[key] else -1
+    if known >= 0 { return known }
+    if graph.nodes.len >= 100000 { return Fatal(node_limit(100000)) }
+    let commit = read_from(mut reader, id)?
+    graph.bytes += commit.encoded_size
+    if graph.bytes > 134217728 {
+        return Fatal("limit: more than 134217728 bytes of commits in the ancestry walk")
+    }
+    graph.slots[key] = graph.nodes.len
+    (mut graph.nodes).push(Node {
+        id: copy id,
+        parents: copy commit.parents,
+        timestamp: commit.timestamp,
+        marks: 0,
+    })
+    graph.read += 1
+    graph.nodes.len - 1
+}
+
+/// Whether queue entry a comes before entry b: the newer committer date first,
+/// and among equal dates the one queued first.
+fn sooner(graph: Graph, a: int, a_order: int, b: int, b_order: int) -> bool {
+    let at = graph.nodes[a].timestamp, bt = graph.nodes[b].timestamp
+    at > bt || at == bt && a_order < b_order
+}
+
+/// Mark down from `ones` (reached from the left) and `twos` (from the right),
+/// newest commit first (git-merge-base(1), Discussion). A commit both reach is
+/// a candidate; its parents, and everything they mark, are below it. The walk
+/// stops when every queued commit is below a candidate, since nothing under
+/// those can be a best base. Dates only order the walk: a commit whose marks
+/// grow is queued again, so the candidates do not depend on them. Returns the
+/// candidates no later candidate marked below, in the order found; one that
+/// another candidate reaches may remain, and `common` drops it.
+fn paint(
+    mut reader: object.Reader,
+    mut graph: Graph,
+    ones: List[int],
+    twos: List[int],
+) -> List[int] ! worktree.WorkErrors {
+    for i in 0..graph.nodes.len { graph.nodes[i].marks = 0 }
+    var queue = List[int](), order = List[int](), next = 0, results = List[int]()
+    for i in ones {
+        graph.nodes[i].marks = graph.nodes[i].marks | reached_left()
+        (mut queue).push(i)
+        (mut order).push(next)
+        next += 1
+    }
+    for i in twos {
+        graph.nodes[i].marks = graph.nodes[i].marks | reached_right()
+        (mut queue).push(i)
+        (mut order).push(next)
+        next += 1
+    }
+    loop {
+        var live = false
+        for i in queue {
+            if graph.nodes[i].marks & below() == 0 { live = true }
+        }
+        if !live { break }
+        var best = 0
+        for k in 1..queue.len {
+            if sooner(graph, queue[k], order[k], queue[best], order[best]) { best = k }
+        }
+        let i = queue[best]
+        let last = queue.len - 1
+        queue[best] = queue[last]
+        order[best] = order[last]
+        let _ = (mut queue).pop() else 0
+        let _ = (mut order).pop() else 0
+        var marks = graph.nodes[i].marks & (reached_left() | reached_right() | below())
+        if marks == reached_left() | reached_right() {
+            if graph.nodes[i].marks & found() == 0 {
+                graph.nodes[i].marks = graph.nodes[i].marks | found()
+                (mut results).push(i)
+            }
+            marks = marks | below()
+        }
+        let parents = copy graph.nodes[i].parents
+        for parent in parents {
+            let j = node_for(mut reader, mut graph, parent)?
+            if graph.nodes[j].marks & marks == marks { continue }
+            graph.nodes[j].marks = graph.nodes[j].marks | marks
+            (mut queue).push(j)
+            (mut order).push(next)
+            next += 1
+        }
+    }
+    var kept = List[int]()
+    for i in results {
+        if graph.nodes[i].marks & below() == 0 { (mut kept).push(i) }
+    }
+    kept
+}
+
+/// Every best common ancestor of left and right, reading only the commits down
+/// to them and their parents (for their dates). A candidate another candidate
+/// reaches is not best: each is walked once more against the others, and
+/// dropped if they reach it. The same commit twice is its own base.
+pub fn common(
+    repo: repository.Repo,
+    left: oid.Oid,
+    right: oid.Oid,
+) -> Common ! worktree.WorkErrors {
+    var reader = object.reader_batch(repo)
+    var graph = Graph { nodes: List[Node](), slots: Map[str, int](), read: 0, bytes: 0 }
+    let one = node_for(mut reader, mut graph, left)?
+    let two = node_for(mut reader, mut graph, right)?
+    var ids = List[oid.Oid]()
+    if one == two {
+        (mut ids).push(copy left)
+        return Common { ids: ids, read: graph.read }
+    }
+    let candidates = paint(mut reader, mut graph, [one], [two])?
+    for c in 0..candidates.len {
+        var reached = false
+        if candidates.len > 1 {
+            var others = List[int]()
+            for k in 0..candidates.len {
+                if k != c { (mut others).push(candidates[k]) }
+            }
+            let _ = paint(mut reader, mut graph, [candidates[c]], others)?
+            reached = graph.nodes[candidates[c]].marks & reached_right() != 0
+        }
+        if !reached { (mut ids).push(copy graph.nodes[candidates[c]].id) }
+    }
+    Common { ids: ids, read: graph.read }
+}

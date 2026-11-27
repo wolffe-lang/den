@@ -2,7 +2,6 @@
 use diff
 use difftext
 use index
-use mergebase
 use mergefile
 use object
 use oid
@@ -32,26 +31,15 @@ pub fn bases(
 }
 
 /// bases, with the number of commits its walk read (the ancestry rows count it).
+/// The walk stops at the bases: it reads the commits down to them and their
+/// parents, never the whole history.
 pub fn bases_counted(
     repo: repository.Repo,
     left: oid.Oid,
     right: oid.Oid,
 ) -> Bases ! worktree.WorkErrors {
-    let commits = walk.collect(repo, [copy left, copy right], 100001, 0, 100000, false)?
-    var nodes = List[mergebase.Node]()
-    for item in commits {
-        var parents = List[str]()
-        for parent in item.parents { (mut parents).push(oid.hex(parent)?) }
-        (mut nodes).push(mergebase.Node { id: oid.hex(item.id)?, parents: parents })
-    }
-    let names = mergebase.bases(nodes, oid.hex(left)?, oid.hex(right)?, 100000) else |e| match e {
-        missing => { return not_found },
-        invalid => { return invalid },
-        limit => { return Fatal("limit: more than 100000 commits in the merge-base graph") },
-    }
-    var out = List[oid.Oid]()
-    for name in names { (mut out).push(oid.parse("sha1", name)?) }
-    Bases { ids: out, read: commits.len }
+    let found = walk.common(repo, left, right)?
+    Bases { ids: found.ids, read: found.read }
 }
 
 /// Whether a tree entry of `mode` is a blob a merge carries: a regular or
