@@ -429,7 +429,7 @@ fn prepare(
             if at >= 0 &&
                 next >= 0 &&
                 tracked_way(ctx, path, snapshot, disk, mode, mut expendable)? {
-                (mut dirty).push(copy path)
+                let _ = path.len
                 continue
             }
             // A tracked path the target removes, become a directory: Git's
