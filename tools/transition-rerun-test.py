@@ -65,9 +65,14 @@ def main():
     a = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
     out = root / 'target' / 'runs' / ('transition-rerun-' + a.tier)
-    if out.exists():
-        shutil.rmtree(out)
-    out.mkdir(parents=True)
+    # The rows' repositories stay out of target/runs, which CI uploads as
+    # evidence: the named-pipe case leaves a named pipe, which the evidence
+    # check refuses (tools/evidence-modes.py). Only the summary is evidence.
+    trees = root / 'target' / ('transition-rerun-' + a.tier)
+    for d in (out, trees):
+        if d.exists():
+            shutil.rmtree(d)
+        d.mkdir(parents=True)
     git = os.environ['DEN_GIT']
 
     def run(args, cwd, data=None, ok=True):
@@ -81,8 +86,8 @@ def main():
     flags = ['--release'] if a.tier == 'release' else []
     run([a.wolf, 'build', *flags, '--deny-warnings', root / 'probes/transition-rerun-client/main.lu', '-o', probe], root)
 
-    seed = out / 'seed'
-    run([git, 'init', '-q', '-b', 'main', seed], out)
+    seed = trees / 'seed'
+    run([git, 'init', '-q', '-b', 'main', seed], trees)
     for d in range(4):
         for s in range(2):
             for f in range(4):
@@ -122,7 +127,7 @@ def main():
         return hashlib.sha256(repr((files, index)).encode()).hexdigest()[:16]
 
     def case(name):
-        work = out / name
+        work = trees / name
         shutil.copytree(seed, work, symlinks=True)
         args = [probe, name, work, tree]
         if name.startswith('prepare-'):
@@ -161,9 +166,13 @@ def main():
          'a doubled target entry: %r (trunk %r)' % (got['trees-twice'], TRUNK['trees-twice'])),
     ]
     failed = 0
+    summary = []
     for name, ok, words in rows:
-        print(('PASS' if ok else 'FAIL'), 'transition-rerun-%s-%s' % (name, a.tier), words, flush=True)
+        line = '%s transition-rerun-%s-%s %s' % ('PASS' if ok else 'FAIL', name, a.tier, words)
+        print(line, flush=True)
+        summary.append(line)
         failed += not ok
+    (out / 'summary.txt').write_text('\n'.join(summary) + '\n')
     print('transition-rerun %s: %d/%d rows pass' % (a.tier, len(rows) - failed, len(rows)), flush=True)
     raise SystemExit(1 if failed else 0)
 
