@@ -816,6 +816,15 @@ fn leading_way(
     for i in 0..path.len {
         if path[i] != 47 as byte { continue }
         let prefix = path[0..i]
+        // A staged addition the work tree no longer holds, where a new path
+        // needs a directory: dropped, as Git drops it.
+        if mode != "hard" && flat_at(indexed, prefix) >= 0 && file_at(snapshot.files, prefix) < 0 {
+            let gone = text(prefix)?
+            if keep[gone] else false {
+                keep[gone] = false
+                return true
+            }
+        }
         let info = fs_lstat(absolute(ctx, prefix)?) else |e| match e {
             not_found => { return false },
             denied => { return denied },
