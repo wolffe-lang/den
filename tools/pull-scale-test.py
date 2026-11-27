@@ -4,11 +4,19 @@
 The fixture has the shape of the issue's repository: about 10,500 files in
 about 1,000 directories, 5,000 commits, the clone's objects in 44 packs. It is
 generated with Git's fast-import (or, with --source, copied from an existing
-repository). Three pulls, each in fresh copies for both tools:
+repository). Four pulls, each in fresh copies for both tools:
 
-  uptodate  the local branch is at the remote's tip;
-  ff        the remote is --moved commits ahead (a fast-forward);
-  merge     the same, with one local commit (a true merge).
+  uptodate     the local branch is at the remote's tip;
+  ff           the remote is --moved commits ahead (a fast-forward);
+  merge        the same, with one local commit (a true merge);
+  merge-dated  the merge, with its local commit dated one second after the
+               remote's tip, as a commit made now is.
+
+Every Git command here runs under tools/env, whose clock is pinned at
+1700000000, so the merge row's local commit is dated before its own parent
+(the generated history is dated by fast-import from 1700000000 on). A walk that takes
+the newest commit first meets the whole upstream history before that commit.
+merge-dated is the same pull with the local commit dated as a clock gives it.
 
 Each pull must equal the pinned Git's exit status, stdout, stderr and HEAD.
 Wall time, CPU time (user + system, from rusage) and peak resident set are the
@@ -42,6 +50,7 @@ BOUNDS = {
     'uptodate': dict(cpu=10.0, rss_kib=512 * 1024),
     'ff': dict(cpu=90.0, rss_kib=768 * 1024),
     'merge': dict(cpu=120.0, rss_kib=768 * 1024),
+    'merge-dated': dict(cpu=120.0, rss_kib=768 * 1024),
 }
 
 
@@ -70,8 +79,8 @@ def main():
     os.environ['GIT_MERGE_AUTOEDIT'] = 'no'
     branch = a.branch
 
-    def run(args, cwd, data=None):
-        p = subprocess.run([str(x) for x in args], cwd=cwd, capture_output=True, input=data)
+    def run(args, cwd, data=None, env=None):
+        p = subprocess.run([str(x) for x in args], cwd=cwd, capture_output=True, input=data, env=env)
         assert p.returncode == 0, (args, p.stdout[-300:], p.stderr[-300:])
         return p.stdout
 
@@ -117,16 +126,20 @@ def main():
     run([git, 'reflog', 'expire', '--expire=now', '--all'], behind)
     run([git, 'gc', '-q', '--prune=now'], behind)
     seeds = {}
-    for name, source in (('uptodate', origin), ('ff', behind), ('merge', behind)):
+    # One second after the remote's tip: after the local commit's parent and after every commit it will merge.
+    tip_time = int(run([git, 'log', '-1', '--format=%ct', tip], origin).strip())
+    dated = {**os.environ, 'GIT_AUTHOR_DATE': f'{tip_time + 1} +0000', 'GIT_COMMITTER_DATE': f'{tip_time + 1} +0000'}
+    for name, source in (('uptodate', origin), ('ff', behind), ('merge', behind), ('merge-dated', behind)):
         work = out / f'seed-{name}'
         run([git, 'clone', '-q', '--no-local', '-b', branch, source, work], out)
         run([git, 'config', 'gc.auto', '0'], work)
         run([git, 'config', 'maintenance.auto', 'false'], work)
         run([git, 'remote', 'set-url', 'origin', origin.as_uri()], work)
-        if name == 'merge':
+        if name in ('merge', 'merge-dated'):
             (work / 'local-witness.txt').write_text('local independent change\n')
             run([git, 'add', 'local-witness.txt'], work)
-            run([git, 'commit', '-qm', 'Add an independent local change'], work)
+            run([git, 'commit', '-qm', 'Add an independent local change'], work,
+                env=dated if name == 'merge-dated' else None)
         reshape(work, a.packs)
         seeds[name] = work
     shape = run([git, 'count-objects', '-v'], seeds['ff']).decode().replace('\n', ' ')
@@ -171,7 +184,7 @@ def main():
         return r
 
     rows = []
-    for name in ('uptodate', 'ff', 'merge'):
+    for name in ('uptodate', 'ff', 'merge', 'merge-dated'):
         row = f'pull-scale-{name}'
         if a.filter not in row:
             continue

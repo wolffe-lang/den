@@ -1,5 +1,16 @@
 # Changes
 
+## Unreleased — a merge pull row dated as a clock gives it
+
+- The pull rows run every Git command under `tools/env`, whose clock is
+  pinned at 1700000000, while the generated history is dated by fast-import
+  from 1700000000 on. So the merge row's local commit is dated before its own
+  parent, which a commit made after its parent never is. A walk that takes the
+  newest commit first meets the whole upstream history before that commit.
+- `pull-scale-merge-dated` is the same pull with the local commit dated one
+  second after the remote's tip, as a commit made now is. The merge row is
+  unchanged beside it.
+
 ## Unreleased — an index validated once per value
 
 - A scan of the work tree checks the index it is given, as `index.serialize`
