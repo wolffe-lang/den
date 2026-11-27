@@ -1,5 +1,35 @@
 # Changes
 
+## Unreleased — a transition refuses or completes as Git does, never half-applied
+
+- A merge, checkout, switch, cherry-pick or `reset --hard` whose target adds a
+  path found its checks blind to what stood where that path needs a directory.
+  An untracked file `zz` where the target adds `zz/new.txt` passed the checks,
+  and the transition wrote other files before the write of `zz/new.txt` failed
+  with `fatal: not_found`: HEAD and the index unchanged, the work tree half
+  moved (den#185). Git refuses before writing anything.
+- Every check now runs before any write. A file, symlink or staged file in a
+  new directory's place is found by name. An untracked one refuses with Git's
+  "untracked working tree files would be overwritten" and its path. An
+  untracked directory where the target puts a file refuses with Git's
+  "Updating the following directories would lose untracked files in them".
+  `reset --hard` removes what is in the way and completes, as Git's does.
+- **Two of these remove what you had, as Git does.** An ignored file, or a
+  directory holding only ignored files, standing where the target adds a path
+  is deleted, and the merge, checkout, switch, cherry-pick or reset
+  completes. A file you staged
+  with `add` but never committed, unchanged since, standing where the target
+  adds a directory, is dropped from the index and deleted from the work tree,
+  and a fast-forward, checkout or switch completes; its content stays in the
+  object store only. If you changed that file after staging it, the transition
+  refuses instead (and a true merge or cherry-pick refuses either way).
+- The worktree leaf's `transition-obstruction` rows hold each case to the
+  pinned Git: output, exit, HEAD, refs, index and work tree, and nothing
+  changed where Git refuses. The `transition-rerun` rows' failure after
+  writes began now comes from a target path whose 300-byte name no file
+  system here can hold, since an untracked file in the way no longer gets
+  that far.
+
 ## Unreleased — a transition's scratch freed before its cache tree
 
 - A pull's merge or fast-forward moves the work tree in a transition. At
