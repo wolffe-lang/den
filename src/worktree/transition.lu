@@ -374,9 +374,10 @@ fn prepare(
     var keep = Map[str, bool]()
     var dirty = List[List[byte]](), untracked = List[List[byte]]()
     // What stands in a new path's way (den#185), found here, before any write:
-    // expendable, what Git removes from the way (an ignored file), removed with
-    // the removals; seen, each leading path decided once.
-    var expendable = List[List[byte]]()
+    // lost, the untracked directories where the target puts a file; expendable,
+    // what Git removes from the way (an ignored file or directory), removed
+    // with the removals; seen, each leading path decided once.
+    var lost = List[List[byte]](), expendable = List[List[byte]]()
     var seen = Map[str, bool]()
     for path in paths {
         let old = flat_at(snapshot.head_entries, path)
@@ -403,6 +404,18 @@ fn prepare(
                     mut warnings,
                 )?
                 if led { continue }
+                if target[next].mode != 0o160000 &&
+                    directory_way(
+                        ctx,
+                        path,
+                        indexed,
+                        mut lost,
+                        mut expendable,
+                        mut ignores,
+                        mut warnings,
+                    )? {
+                    continue
+                }
             }
             var present = disk >= 0
             if at < 0 && next >= 0 && !present {
@@ -446,12 +459,18 @@ fn prepare(
             }
         }
     }
-    if dirty.len > 0 || untracked.len > 0 {
+    if dirty.len > 0 || untracked.len > 0 || lost.len > 0 {
         var message = ""
         if dirty.len > 0 {
             message = "Your local changes to the following files would be overwritten by checkout:\n"
             for path in dirty { message += "\t{text(path)?}\n" }
             message += "Please commit your changes or stash them before you switch branches.\n"
+        }
+        if lost.len > 0 {
+            if message != "" { message += "error: " }
+            message += "Updating the following directories would lose untracked files in them:\n"
+            for path in lost { message += "\t{text(path)?}\n" }
+            message += "\n"
         }
         if untracked.len > 0 {
             if message != "" { message += "error: " }
@@ -767,7 +786,95 @@ fn leading_way(
     false
 }
 
-// What Git removes from a new path's way (den#185): an ignored file.
+// A directory on disk where the target puts a file (den#185), when no tracked
+// path lies below it: one holding an untracked file that is not ignored is
+// lost (Git's "would lose untracked files"); one holding only ignored files,
+// or nothing, is removed with the removals. Answers whether a directory stood
+// there.
+fn directory_way(
+    ctx: Context,
+    path: List[byte],
+    indexed: List[FlatEntry],
+    mut lost: List[List[byte]],
+    mut expendable: List[List[byte]],
+    mut ignores: ignore.Cache,
+    mut warnings: List[str],
+) -> bool ! WorkErrors {
+    let info = fs_lstat(absolute(ctx, path)?) else |e| match e {
+        not_found => { return false },
+        denied => { return denied },
+        io => { return io },
+    }
+    if info[0] != 1 || tracked_below(indexed, path) { return false }
+    let whole = ignore.query_cached(
+        ctx.repo,
+        ctx.root,
+        mut ignores,
+        text(path)?,
+        true,
+        mut warnings,
+    )?
+    if whole.ignored {
+        (mut expendable).push(copy path)
+        return true
+    }
+    var queue = [copy path]
+    var i = 0
+    while i < queue.len {
+        let dir = copy queue[i]
+        i += 1
+        let names = fs.read_dir(absolute(ctx, dir)?) else |e| match e {
+            not_found => { continue },
+            denied => { return denied },
+            utf8 => { return utf8 },
+            io => { return io },
+        }
+        for name in names {
+            var child = copy dir
+            (mut child).push(47 as byte)
+            for b in name.bytes() { (mut child).push(b) }
+            let record = fs_lstat(absolute(ctx, child)?) else |e| match e {
+                not_found => { continue },
+                denied => { return denied },
+                io => { return io },
+            }
+            let directory = record[0] == 1
+            let decision = ignore.query_cached(
+                ctx.repo,
+                ctx.root,
+                mut ignores,
+                text(child)?,
+                directory,
+                mut warnings,
+            )?
+            if decision.ignored { continue }
+            if directory {
+                (mut queue).push(child)
+                continue
+            }
+            (mut lost).push(copy path)
+            return true
+        }
+    }
+    (mut expendable).push(copy path)
+    true
+}
+
+// Whether an index entry lies below path: the first entry at or after
+// "path/" in index order starts with it.
+fn tracked_below(indexed: List[FlatEntry], path: List[byte]) -> bool {
+    var key = copy path
+    (mut key).push(47 as byte)
+    var lo = 0, hi = indexed.len
+    while lo < hi {
+        let mid = (lo + hi) / 2
+        if compare(indexed[mid].path, key) < 0 { lo = mid + 1 } else { hi = mid }
+    }
+    lo < indexed.len && indexed[lo].path.len > path.len && under(indexed[lo].path, path)
+}
+
+// What Git removes from a new path's way (den#185): an ignored file or
+// directory.
 fn remove_in_way(ctx: Context, path: List[byte]) -> () ! WorkErrors {
     let full = absolute(ctx, path)?
     let info = fs_lstat(full) else |e| match e {
