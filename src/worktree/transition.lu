@@ -499,7 +499,7 @@ fn prepare(
         }
         if lost.len > 0 {
             if message != "" { message += "error: " }
-            message += "Updating the following directories would lose untracked files in them:\n"
+            message += "The following untracked working tree files would be overwritten by checkout:\n"
             for path in lost { message += "\t{text(path)?}\n" }
             message += "\n"
         }
