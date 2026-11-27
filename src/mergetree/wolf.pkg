@@ -6,7 +6,6 @@ pkg {
         diff: {path: "../diff"},
         difftext: {path: "../difftext"},
         index: {path: "../index"},
-        mergebase: {path: "../mergebase"},
         mergefile: {path: "../mergefile"},
         object: {path: "../object"},
         oid: {path: "../oid"},
