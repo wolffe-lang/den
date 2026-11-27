@@ -243,22 +243,10 @@ fn transition_staged(
             cross_device => { return cross_device },
             invalid_header => { return invalid_header },
             utf8 => { return utf8 },
-            Unsupported(message) => {
-                error_payload = copy message
-                raised = 1
-            },
-            Pathspec(message) => {
-                error_payload = copy message
-                raised = 2
-            },
-            Fatal(message) => {
-                error_payload = copy message
-                raised = 3
-            },
-            Failure(message) => {
-                error_payload = copy message
-                raised = 4
-            },
+            Unsupported(_) => { return invalid },
+            Pathspec(_) => { return invalid },
+            Fatal(_) => { return invalid },
+            Failure(_) => { return invalid },
         }
         if raised == 0 && one[0].kind != 0 {
             kind = one[0].kind
