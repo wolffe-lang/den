@@ -876,7 +876,7 @@ fn leading_way(
             mut warnings,
         )?
         if decision.ignored {
-            (mut expendable).push(copy prefix)
+            (mut untracked).push(copy prefix)
         } else {
             (mut untracked).push(copy prefix)
         }
