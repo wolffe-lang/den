@@ -22,11 +22,14 @@ in rows of their own:
       (its blob stays in the object store).
 
 The fixture is made with Git alone: main tracks d0/s0/f0.txt, d1/s0/f0.txt,
-keep.txt and tz; target changes d0/s0/f0.txt, makes tz a directory (tz/new.txt)
-and adds zz/new.txt, a/b/c/d.txt and yy.txt; local changes d1/s0/f0.txt, so
-merging target into it is a true merge. A true merge over a dirty or staged
-path is den's named limit (`merge dirty recursive recovery`); those cells are
-skipped by name.
+keep.txt, tz, lf, q/x and r.txt; target changes d0/s0/f0.txt, q/x and r.txt,
+makes tz and lf directories (tz/new.txt, lf/x.txt) and adds zz/new.txt,
+a/b/c/d.txt and yy.txt; local changes d1/s0/f0.txt, so merging target into it
+is a true merge. The cases come from a sweep of every kind of thing in a written
+path's way against Git (tracked unchanged, changed, deleted or replaced; staged;
+untracked; ignored; as a file, symlink, directory or nothing; at the path or at
+a directory it needs). A true merge over a dirty or staged path is den's named
+limit (`merge dirty recursive recovery`); those cells are skipped by name.
 """
 import argparse
 import hashlib
@@ -58,15 +61,28 @@ ROWS = {
     'ignored-deep-removed': (['ignored-deep'], 'nonreset'),
     'ignored-dir-removed': (['untracked-dir-ignored'], 'nonreset'),
     'staged-addition-dropped': (['index-lead'], 'nonreset'),
+    # the rest of the family, from the sweep against Git: a tracked path's directory, or the path itself, taken by
+    # something else; a tracked path the target removes, become a directory; a staged addition gone from disk.
+    'tracked-under-file': (['tracked-under-file'], 'nonreset'),
+    'tracked-under-symlink': (['tracked-under-symlink'], 'nonreset'),
+    'tracked-under-ignored': (['tracked-under-ignored'], 'nonreset'),
+    'tracked-became-directory': (['tracked-became-directory'], 'nonreset'),
+    'removed-became-directory': (['removed-became-directory'], 'nonreset'),
+    'staged-addition-gone': (['staged-addition-gone'], 'nonreset'),
     'reset': (['untracked-lead', 'symlink-lead', 'untracked-deep', 'two-untracked', 'untracked-dir', 'three-kinds',
-               'ignored-lead', 'ignored-deep', 'untracked-dir-ignored', 'index-lead', 'index-lead-dirty'], 'reset'),
+               'ignored-lead', 'ignored-deep', 'untracked-dir-ignored', 'index-lead', 'index-lead-dirty',
+               'tracked-under-file', 'tracked-under-symlink', 'tracked-under-ignored', 'tracked-became-directory',
+               'removed-became-directory', 'staged-addition-gone'], 'reset'),
     'dirty': (['dirty'], 'all'),
     'untracked-same': (['untracked-same'], 'all'),
     'index-same': (['index-same'], 'all'),
     'tracked-lead-dirty': (['tracked-lead-dirty'], 'all'),
 }
 NAMED_LIMIT = {('dirty', 'true'), ('index-same', 'true'), ('index-lead', 'true'), ('index-lead-dirty', 'true'),
-               ('tracked-lead-dirty', 'true'), ('three-kinds', 'true')}
+               ('tracked-lead-dirty', 'true'), ('three-kinds', 'true'), ('tracked-under-file', 'true'),
+               ('tracked-under-symlink', 'true'), ('tracked-under-ignored', 'true'),
+               ('tracked-became-directory', 'true'), ('removed-became-directory', 'true'),
+               ('staged-addition-gone', 'true')}
 PSEUDO = ('ORIG_HEAD', 'AUTO_MERGE', 'MERGE_HEAD', 'MERGE_MSG', 'MERGE_MODE', 'CHERRY_PICK_HEAD')
 
 
@@ -121,6 +137,26 @@ def obstruct(work, name, run):
         write('zz', 'staged, then changed\n')
     elif name == 'tracked-lead-dirty':
         write('tz', 'tz changed in the work tree\n')
+    elif name == 'tracked-under-file':
+        shutil.rmtree(work / 'q')
+        write('q', 'untracked\n')
+    elif name == 'tracked-under-symlink':
+        shutil.rmtree(work / 'q')
+        os.symlink('keep.txt', work / 'q')
+    elif name == 'tracked-under-ignored':
+        shutil.rmtree(work / 'q')
+        exclude(work, 'q')
+        write('q', 'ignored\n')
+    elif name == 'tracked-became-directory':
+        (work / 'r.txt').unlink()
+        write('r.txt/u', 'untracked\n')
+    elif name == 'removed-became-directory':
+        (work / 'lf').unlink()
+        write('lf/u', 'untracked\n')
+    elif name == 'staged-addition-gone':
+        write('zz', 'staged\n')
+        run(['add', 'zz'], work)
+        (work / 'zz').unlink()
     else:
         raise SystemExit('FAIL transition-obstruction: unknown case ' + name)
 
@@ -177,7 +213,8 @@ def main():
 
     seed = trees / 'seed'
     run(['init', '-q', '-b', 'main', str(seed)], trees)
-    for rel, text in (('d0/s0/f0.txt', 'f0\n'), ('d1/s0/f0.txt', 'f1\n'), ('keep.txt', 'keep\n'), ('tz', 'tz\n')):
+    for rel, text in (('d0/s0/f0.txt', 'f0\n'), ('d1/s0/f0.txt', 'f1\n'), ('keep.txt', 'keep\n'), ('tz', 'tz\n'),
+                      ('q/x', 'q/x\n'), ('r.txt', 'r\n'), ('lf', 'lf\n')):
         (seed / rel).parent.mkdir(parents=True, exist_ok=True)
         (seed / rel).write_text(text)
     run(['add', '-A'], seed)
@@ -185,7 +222,9 @@ def main():
     run(['switch', '-q', '-c', 'target'], seed)
     (seed / 'd0/s0/f0.txt').write_text('changed by target\n')
     (seed / 'tz').unlink()
-    for rel, text in (('tz/new.txt', 'tz is a directory\n'), ('zz/new.txt', 'new\n'), ('a/b/c/d.txt', 'deep\n'),
+    (seed / 'lf').unlink()
+    for rel, text in (('tz/new.txt', 'tz is a directory\n'), ('q/x', 'q/x changed by target\n'),
+                      ('r.txt', 'r changed by target\n'), ('lf/x.txt', 'lf is a directory\n'), ('zz/new.txt', 'new\n'), ('a/b/c/d.txt', 'deep\n'),
                       ('yy.txt', 'yy target\n')):
         (seed / rel).parent.mkdir(parents=True, exist_ok=True)
         (seed / rel).write_text(text)
