@@ -13,9 +13,10 @@ half-applied transition must leave what trunk's left.
 
 The fixture is made with Git alone: 32 files in d0..d3/s0..s1, committed on
 main, and a second commit, `target`, that changes d0/s0/f0.txt and adds
-zz/new.txt. probes/transition-rerun-client moves the work tree toward main's own
-tree (the scan and tree rows) or toward target's (the prepare row), as a merge's
-transition does:
+zz/new.txt; and a tree, `long`, which is target's plus a file whose name is 300
+bytes, which no file system here can hold. probes/transition-rerun-client moves
+the work tree toward main's own tree (the scan and tree rows) or toward target's
+or long's (the prepare row), as a merge's transition does:
 
   transition-rerun-scan   (a) the index value with its last entry dropped, so
                           its cache tree names an entry it lacks, not held
@@ -25,10 +26,10 @@ transition does:
   transition-rerun-prepare  (a) d0/s0/f0.txt changed in the work tree, which
                           target changes too: the checks refuse it before any
                           write, with Git's "would be overwritten by merge"
-                          message, built inside the region; (b) an untracked
-                          file named zz where target puts zz/new.txt: the
-                          checks pass, d0/s0/f0.txt is written, and the write of
-                          zz/new.txt fails, after writes have started;
+                          message, built inside the region; (b) toward long:
+                          the checks pass, d0/s0/f0.txt and zz/new.txt are
+                          written, and the write of the 300-byte name, sorted
+                          last, fails: a refusal after writes have started;
   transition-rerun-trees  the target names added/twice.txt twice: the
                           transition writes it, then the cache tree refuses the
                           doubled entry.
@@ -52,7 +53,7 @@ TRUNK = {
     'prepare-dirty': (1, 'refused=Failure(Your local changes to the following files would be overwritten by merge:\n'
                       '\td0/s0/f0.txt\nPlease commit your changes or stash them before you merge.\nAborting)\n',
                       '867babdf5cb42dff'),
-    'prepare-written': (1, 'refused=not_found\n', 'cdee04556f82bcc4'),
+    'prepare-written': (1, 'refused=io\n', '9537d874b8bda078'),
     'trees-twice': (1, 'refused=invalid_index\n', '6043f2b44d5f702c'),
 }
 
@@ -109,6 +110,15 @@ def main():
     target_tree = run([git, 'rev-parse', 'HEAD^{tree}'], seed).stdout.decode().strip()
     run([git, 'switch', '-q', 'main'], seed)
     assert not (seed / 'zz').exists()
+    # long: target's tree plus a 300-byte name (sorted after zz/new.txt), made in a scratch index.
+    blob = run([git, 'hash-object', '-w', '--stdin'], seed, b'a name no file system here can hold\n').stdout.decode().strip()
+    scratch = dict(os.environ, GIT_INDEX_FILE=str(trees / 'long.index'))
+    for args in (['read-tree', target_tree], ['update-index', '--add', '--cacheinfo', f'100644,{blob},' + 'z' * 300]):
+        p = subprocess.run([git, *args], cwd=seed, env=scratch, capture_output=True, timeout=120)
+        assert p.returncode == 0, (args, p.stderr[-300:])
+    p = subprocess.run([git, 'write-tree'], cwd=seed, env=scratch, capture_output=True, timeout=120)
+    assert p.returncode == 0, p.stderr[-300:]
+    long_tree = p.stdout.decode().strip()
 
     def state(work):
         """The work tree's files (kind and content) and the index's entries, as one digest."""
@@ -130,12 +140,12 @@ def main():
         work = trees / name
         shutil.copytree(seed, work, symlinks=True)
         args = [probe, name, work, tree]
-        if name.startswith('prepare-'):
+        if name == 'prepare-dirty':
             args = [probe, 'plain', work, target_tree]
+        if name == 'prepare-written':
+            args = [probe, 'plain', work, long_tree]
         if name == 'prepare-dirty':
             (work / 'd0/s0/f0.txt').write_text('changed in the work tree\n')
-        if name == 'prepare-written':
-            (work / 'zz').write_text('an untracked file where target puts a directory\n')
         if name == 'scan-file':
             target = work / 'd1/s0/f2.txt'
             target.unlink()
