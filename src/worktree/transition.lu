@@ -162,9 +162,7 @@ fn transition_mode(
         one
     }
     if failed {
-        let snapshot = scan_index_held(ctx, value, validated)?
-        transition_from(ctx, mut value, target, mode, dry, supplied, snapshot)?
-        return
+        return invalid
     }
     transition_from(ctx, mut value, target, mode, dry, supplied, held[0])?
 }
