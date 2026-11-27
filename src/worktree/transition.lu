@@ -512,6 +512,7 @@ fn prepare(
         if mode == "merge" {
             message = message.replace("checkout:", "merge:").replace("switch branches.", "merge.")
         }
+        for path in paths { if flat_at(target, path) < 0 && !(keep[text(path)?] else false) { remove_file(ctx, path)? } }
         return Failure("{message}Aborting")
     }
     let attributes = planned_tree_attributes(ctx, reader, target, supplied)?
