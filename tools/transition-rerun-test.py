@@ -13,9 +13,10 @@ half-applied transition must leave what trunk's left.
 
 The fixture is made with Git alone: 32 files in d0..d3/s0..s1, committed on
 main, and a second commit, `target`, that changes d0/s0/f0.txt and adds
-zz/new.txt. probes/transition-rerun-client moves the work tree toward main's own
-tree (the scan and tree rows) or toward target's (the prepare row), as a merge's
-transition does:
+zz/new.txt; and a tree, `big`, which is target's plus zzz-big.txt, 200,000
+bytes, sorted last. probes/transition-rerun-client moves the work tree toward
+main's own tree (the scan and tree rows) or toward target's or big's (the
+prepare row), as a merge's transition does:
 
   transition-rerun-scan   (a) the index value with its last entry dropped, so
                           its cache tree names an entry it lacks, not held
@@ -25,10 +26,16 @@ transition does:
   transition-rerun-prepare  (a) d0/s0/f0.txt changed in the work tree, which
                           target changes too: the checks refuse it before any
                           write, with Git's "would be overwritten by merge"
-                          message, built inside the region; (b) an untracked
-                          file named zz where target puts zz/new.txt: the
-                          checks pass, d0/s0/f0.txt is written, and the write of
-                          zz/new.txt fails, after writes have started;
+                          message, built inside the region; (b) toward big,
+                          the probe under a file-size limit of 64 KiB (set in
+                          the probe's own process only, SIGXFSZ ignored): the
+                          checks pass, d0/s0/f0.txt and zz/new.txt are written,
+                          and the write of zzz-big.txt fails, a refusal after
+                          writes have started. It is an environmental failure,
+                          which Git meets the same way, so no check before the
+                          writes can catch it. A guard requires the refusal and
+                          the earlier write; its self-test, the same case with
+                          zzz-big.txt at 1,000 bytes, must trip it;
   transition-rerun-trees  the target names added/twice.txt twice: the
                           transition writes it, then the cache tree refuses the
                           doubled entry.
@@ -37,6 +44,8 @@ The trunk figures were read with trunk's own build of this probe on this
 fixture (the probe calls only what trunk already has).
 """
 import argparse
+import resource
+import signal
 import hashlib
 import os
 from pathlib import Path
@@ -52,7 +61,7 @@ TRUNK = {
     'prepare-dirty': (1, 'refused=Failure(Your local changes to the following files would be overwritten by merge:\n'
                       '\td0/s0/f0.txt\nPlease commit your changes or stash them before you merge.\nAborting)\n',
                       '867babdf5cb42dff'),
-    'prepare-written': (1, 'refused=not_found\n', 'cdee04556f82bcc4'),
+    'prepare-written': None,
     'trees-twice': (1, 'refused=invalid_index\n', '6043f2b44d5f702c'),
 }
 
@@ -109,6 +118,32 @@ def main():
     target_tree = run([git, 'rev-parse', 'HEAD^{tree}'], seed).stdout.decode().strip()
     run([git, 'switch', '-q', 'main'], seed)
     assert not (seed / 'zz').exists()
+    # big and small: target's tree plus zzz-big.txt (sorted after zz/new.txt) of 200,000 bytes, or of 1,000 for
+    # the guard's self-test, each made in a scratch index.
+    def with_file(size, index):
+        blob = run([git, 'hash-object', '-w', '--stdin'], seed, b'x' * size).stdout.decode().strip()
+        scratch = dict(os.environ, GIT_INDEX_FILE=str(trees / index))
+        for args in (['read-tree', target_tree], ['update-index', '--add', '--cacheinfo', f'100644,{blob},zzz-big.txt']):
+            p = subprocess.run([git, *args], cwd=seed, env=scratch, capture_output=True, timeout=120)
+            assert p.returncode == 0, (args, p.stderr[-300:])
+        p = subprocess.run([git, 'write-tree'], cwd=seed, env=scratch, capture_output=True, timeout=120)
+        assert p.returncode == 0, p.stderr[-300:]
+        return p.stdout.decode().strip()
+    big_tree = with_file(200000, 'big.index')
+    small_tree = with_file(1000, 'small.index')
+
+    def limited():
+        # The probe's own process only: a 64 KiB file-size limit, its signal ignored, so the big write fails.
+        signal.signal(signal.SIGXFSZ, signal.SIG_IGN)
+        resource.setrlimit(resource.RLIMIT_FSIZE, (65536, 65536))
+
+    def after_writes(work, returncode):
+        """The after-writes case's guard: the transition refused, and only after d0/s0/f0.txt was written."""
+        if returncode == 0:
+            return 'the transition did not fail'
+        if (work / 'd0/s0/f0.txt').read_text() != 'changed by target\n':
+            return 'no write before the failure'
+        return None
 
     def state(work):
         """The work tree's files (kind and content) and the index's entries, as one digest."""
@@ -130,12 +165,14 @@ def main():
         work = trees / name
         shutil.copytree(seed, work, symlinks=True)
         args = [probe, name, work, tree]
-        if name.startswith('prepare-'):
+        if name == 'prepare-dirty':
             args = [probe, 'plain', work, target_tree]
+        if name == 'prepare-written':
+            args = [probe, 'plain', work, big_tree]
+        if name == 'guard-self-test':
+            args = [probe, 'plain', work, small_tree]
         if name == 'prepare-dirty':
             (work / 'd0/s0/f0.txt').write_text('changed in the work tree\n')
-        if name == 'prepare-written':
-            (work / 'zz').write_text('an untracked file where target puts a directory\n')
         if name == 'scan-file':
             target = work / 'd1/s0/f2.txt'
             target.unlink()
@@ -143,13 +180,20 @@ def main():
         if name == 'trees-twice':
             blob = run([git, 'hash-object', '-w', '--stdin'], work, b'twice\n').stdout.decode().strip()
             args.append(blob)
-        p = run(args, work, ok=False)
+        if name in ('prepare-written', 'guard-self-test'):
+            p = subprocess.run([str(x) for x in args], cwd=work, capture_output=True, timeout=120, preexec_fn=limited)
+        else:
+            p = run(args, work, ok=False)
         assert p.stderr == b'', (name, p.stderr[-300:])
         if name == 'prepare-written':
             # The fixture's point: the refusal comes after the transition began writing.
-            assert (work / 'd0/s0/f0.txt').read_text() == 'changed by target\n', 'prepare-written: no write before it'
+            assert after_writes(work, p.returncode) is None, 'prepare-written: ' + str(after_writes(work, p.returncode))
+        if name == 'guard-self-test':
+            # Red first: with zzz-big.txt under the limit nothing fails, and the guard must say so.
+            return after_writes(work, p.returncode)
         return (p.returncode, p.stdout.decode('utf-8', 'replace'), state(work))
 
+    tripped = case('guard-self-test')
     got = {name: case(name) for name in TRUNK}
     if a.observe:
         for name, value in got.items():
@@ -164,6 +208,8 @@ def main():
              got['prepare-dirty'], TRUNK['prepare-dirty'], got['prepare-written'], TRUNK['prepare-written'])),
         ('trees', got['trees-twice'] == TRUNK['trees-twice'],
          'a doubled target entry: %r (trunk %r)' % (got['trees-twice'], TRUNK['trees-twice'])),
+        ('guard', tripped == 'the transition did not fail',
+         'the after-writes guard, given the case with zzz-big.txt under the limit: %r' % tripped),
     ]
     failed = 0
     summary = []

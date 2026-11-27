@@ -26,6 +26,9 @@ for tier in native release; do
     # A transition's refusals inside its scan's and its cache tree's regions,
     # beside trunk's: the same text, exit, work tree and index.
     tools/env python3 -I tools/transition-rerun-test.py --tier "$tier" --wolf "$WOLF"
+    # den#185: a transition refuses or completes as Git does, never half-applied:
+    # what stands in a new path's way, beside the pinned Git (den follows Git).
+    tools/env python3 -I tools/transition-obstruction-test.py --tier "$tier"
     # A warm diff --quiet's stat pass, counted: no path checked again after the
     # index read, and each path's bytes built once.
     tools/env python3 -I tools/path-work-test.py --tier "$tier" --wolf "$WOLF"
@@ -47,4 +50,4 @@ import json,sys
 rows=[json.loads(line) for line in open(sys.argv[1]) if line.startswith('{')]
 assert len(rows)==1 and rows[0]['verdict']=='exit(0)',rows
 PY
-echo 'worktree: native/release unit, API exercise, strict repository matrix, unreadable-directory, status-lookups, scan-validations, path-work, status-refresh, add-scale and status-scale rows; actual checked exit(0)'
+echo 'worktree: native/release unit, API exercise, strict repository matrix, unreadable-directory, status-lookups, scan-validations, transition-obstruction, path-work, status-refresh, add-scale and status-scale rows; actual checked exit(0)'
