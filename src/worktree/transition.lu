@@ -856,7 +856,7 @@ fn leading_way(
                 oid.equal(snapshot.files[disk].id, indexed[at].id)
             // Git takes the file for its own index entry only where names
             // fold (core.ignorecase); elsewhere it is an untracked file.
-            if clean && config_bool(ctx, "core.ignorecase", false)? {
+            if clean {
                 keep[key] = false
             } else {
                 (mut untracked).push(copy prefix)
