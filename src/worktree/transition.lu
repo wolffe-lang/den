@@ -796,9 +796,10 @@ fn prepare(
 // A new path's leading directories, before any write (den#185). The first that
 // is not a directory on disk stands in its way, decided once (seen): an index
 // entry the transition removes first is no obstruction; a staged addition it
-// keeps is dropped when its file is unchanged and refuses when changed, as
-// Git's; an untracked file or symlink refuses, unless ignored, and an ignored
-// one is removed with the removals; under hard, anything untracked is removed.
+// keeps is dropped when its file is unchanged and core.ignorecase is set, and
+// refuses otherwise, as Git's; an untracked file or symlink refuses, unless
+// ignored, and an ignored one is removed with the removals; under hard,
+// anything untracked is removed.
 // Answers whether something stood in the way.
 fn leading_way(
     ctx: Context,
@@ -841,7 +842,9 @@ fn leading_way(
             let clean = disk >= 0 &&
                 snapshot.files[disk].mode == indexed[at].mode &&
                 oid.equal(snapshot.files[disk].id, indexed[at].id)
-            if clean {
+            // Git takes the file for its own index entry only where names
+            // fold (core.ignorecase); elsewhere it is an untracked file.
+            if clean && config_bool(ctx, "core.ignorecase", false)? {
                 keep[key] = false
             } else {
                 (mut untracked).push(copy prefix)
