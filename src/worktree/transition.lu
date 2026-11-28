@@ -1006,7 +1006,7 @@ fn tracked_way(
         if mode == "hard" { (mut expendable).push(copy prefix) }
         return true
     }
-    if gitlink || !is_directory(ctx, path)? { return false }
+    if !is_directory(ctx, path)? { return false }
     if mode == "hard" { (mut expendable).push(copy path) }
     true
 }
