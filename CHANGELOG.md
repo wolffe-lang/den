@@ -27,10 +27,14 @@
   completes. A file you staged with `add` but never committed, unchanged
   since, standing where the target adds a directory, is dropped from the
   index and deleted from the work tree, and a fast-forward, checkout or
-  switch completes; its content stays in the object store only. If you changed that file after staging it, the transition
-  refuses instead (and a true merge or cherry-pick refuses either way). A
-  staged file you deleted from the work tree, where the target adds a
-  directory, is dropped from the index the same way.
+  switch completes; its content stays in the object store only. That
+  happens only where `core.ignorecase` is set, as Git sets it in a
+  repository on a case-insensitive file system such as macOS's default;
+  where it is not set, as on Linux, the file refuses like an untracked one.
+  If you changed that file after staging it, the transition refuses
+  instead (and a true merge or cherry-pick refuses either way). A staged
+  file you deleted from the work tree, where the target adds a directory,
+  is dropped from the index the same way.
 - The worktree leaf's `transition-obstruction` rows hold each case to the
   pinned Git: output, exit, HEAD, refs, index and work tree, and nothing
   changed where Git refuses. The cases come from a sweep of every kind of
