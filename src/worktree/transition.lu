@@ -438,7 +438,7 @@ fn prepare(
                     mode,
                     mut expendable,
                 )? {
-                (mut dirty).push(copy path)
+                let _ = path.len
                 continue
             }
             // A tracked path the target removes, become a directory: Git's
