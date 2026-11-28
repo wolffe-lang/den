@@ -447,7 +447,6 @@ fn prepare(
             // with Git's "unable to rmdir" warning when it is not empty.
             if at >= 0 &&
                 next < 0 &&
-                indexed[at].mode != 0o160000 &&
                 (disk < 0 || snapshot.files[disk].kind == 1) &&
                 directory_way(
                     ctx,
