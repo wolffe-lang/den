@@ -415,7 +415,8 @@ fn prepare(
             continue
         }
         if mode == "hard" && at >= 0 && next >= 0 {
-            let _ = tracked_way(ctx, path, snapshot, disk, mode, mut expendable)?
+            let gitlink = indexed[at].mode == 0o160000 || target[next].mode == 0o160000
+            let _ = tracked_way(ctx, path, snapshot, disk, gitlink, mode, mut expendable)?
             continue
         }
         if mode == "switch" || mode == "merge" {
@@ -428,14 +429,25 @@ fn prepare(
             // or a directory it needs was: a local change, as Git lists it.
             if at >= 0 &&
                 next >= 0 &&
-                tracked_way(ctx, path, snapshot, disk, mode, mut expendable)? {
+                tracked_way(
+                    ctx,
+                    path,
+                    snapshot,
+                    disk,
+                    indexed[at].mode == 0o160000 || target[next].mode == 0o160000,
+                    mode,
+                    mut expendable,
+                )? {
                 (mut dirty).push(copy path)
                 continue
             }
             // A tracked path the target removes, become a directory: Git's
             // "would lose untracked files" when it holds one, else removed.
+            // A submodule's directory is left to the removals, which keep it
+            // with Git's "unable to rmdir" warning when it is not empty.
             if at >= 0 &&
                 next < 0 &&
+                indexed[at].mode != 0o160000 &&
                 (disk < 0 || snapshot.files[disk].kind == 1) &&
                 directory_way(
                     ctx,
@@ -969,12 +981,15 @@ fn tracked_below(indexed: List[FlatEntry], path: List[byte]) -> bool {
 // (den#185): a file or symlink where a directory it needs was, or a directory
 // where it was, stands in its way. Under hard that is removed with the
 // removals. The directories it needs are probed first, so the path itself is
-// read only below real directories. Answers whether something stood there.
+// read only below real directories. A gitlink's path (in the index or the
+// target) is a submodule's directory, which is not in its way: Git leaves it.
+// Answers whether something stood there.
 fn tracked_way(
     ctx: Context,
     path: List[byte],
     snapshot: Snapshot,
     disk: int,
+    gitlink: bool,
     mode: str,
     mut expendable: List[List[byte]],
 ) -> bool ! WorkErrors {
@@ -991,7 +1006,7 @@ fn tracked_way(
         if mode == "hard" { (mut expendable).push(copy prefix) }
         return true
     }
-    if !is_directory(ctx, path)? { return false }
+    if gitlink || !is_directory(ctx, path)? { return false }
     if mode == "hard" { (mut expendable).push(copy path) }
     true
 }
