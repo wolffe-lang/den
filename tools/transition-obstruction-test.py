@@ -17,9 +17,13 @@ in rows of their own:
       an ignored file, or a directory holding only ignored files, in the way is
       removed and the transition completes;
   staged-addition-dropped
-      a staged new file in the way, unchanged in the work tree, is dropped from
-      the index and the work tree, and the merge, checkout or switch completes
-      (its blob stays in the object store).
+      a staged new file in the way, unchanged in the work tree, where
+      core.ignorecase is set, is dropped from the index and the work tree, and
+      the merge, checkout or switch completes (its blob stays in the object
+      store). Git sets core.ignorecase in a repository on a case-insensitive
+      file system, as macOS's is by default; where it is unset, as on Linux,
+      Git refuses that file as untracked (staged-addition-refused). Each of the
+      two rows sets it, so every host reads both.
 
 The fixture is made with Git alone: main tracks d0/s0/f0.txt, d1/s0/f0.txt,
 keep.txt, tz, lf, q/x and r.txt; target changes d0/s0/f0.txt, q/x and r.txt,
@@ -30,6 +34,13 @@ path's way against Git (tracked unchanged, changed, deleted or replaced; staged;
 untracked; ignored; as a file, symlink, directory or nothing; at the path or at
 a directory it needs). A true merge over a dirty or staged path is den's named
 limit (`merge dirty recursive recovery`); those cells are skipped by name.
+
+gitlink-kept has a fixture of its own, made with Git alone: main tracks a.txt
+and three submodules, sm, same and gone, each checked out in the work tree (sm
+at main's commit); target changes a.txt, moves sm to a new commit and removes
+gone. A submodule's directory is a directory where its gitlink is, and Git
+leaves each as it is in every one of these commands (gone with its "unable to
+rmdir" warning).
 """
 import argparse
 import hashlib
@@ -61,6 +72,8 @@ ROWS = {
     'ignored-deep-removed': (['ignored-deep'], 'nonreset'),
     'ignored-dir-removed': (['untracked-dir-ignored'], 'nonreset'),
     'staged-addition-dropped': (['index-lead'], 'nonreset'),
+    # the same file where core.ignorecase is unset: Git refuses it as untracked.
+    'staged-addition-refused': (['index-lead-exact'], 'nonreset'),
     # the rest of the family, from the sweep against Git: a tracked path's directory, or the path itself, taken by
     # something else; a tracked path the target removes, become a directory; a staged addition gone from disk.
     'tracked-under-file': (['tracked-under-file'], 'nonreset'),
@@ -69,18 +82,20 @@ ROWS = {
     'tracked-became-directory': (['tracked-became-directory'], 'nonreset'),
     'removed-became-directory': (['removed-became-directory'], 'nonreset'),
     'staged-addition-gone': (['staged-addition-gone'], 'nonreset'),
+    # a submodule's checked-out directory is not in its gitlink's way, the gitlink moved, unchanged or removed.
+    'gitlink-kept': (['gitlink'], 'gitlink'),
     'reset': (['untracked-lead', 'symlink-lead', 'untracked-deep', 'two-untracked', 'untracked-dir', 'three-kinds',
-               'ignored-lead', 'ignored-deep', 'untracked-dir-ignored', 'index-lead', 'index-lead-dirty',
-               'tracked-under-file', 'tracked-under-symlink', 'tracked-under-ignored', 'tracked-became-directory',
-               'removed-became-directory', 'staged-addition-gone'], 'reset'),
+               'ignored-lead', 'ignored-deep', 'untracked-dir-ignored', 'index-lead', 'index-lead-exact',
+               'index-lead-dirty', 'tracked-under-file', 'tracked-under-symlink', 'tracked-under-ignored',
+               'tracked-became-directory', 'removed-became-directory', 'staged-addition-gone'], 'reset'),
     'dirty': (['dirty'], 'all'),
     'untracked-same': (['untracked-same'], 'all'),
     'index-same': (['index-same'], 'all'),
     'tracked-lead-dirty': (['tracked-lead-dirty'], 'all'),
 }
-NAMED_LIMIT = {('dirty', 'true'), ('index-same', 'true'), ('index-lead', 'true'), ('index-lead-dirty', 'true'),
-               ('tracked-lead-dirty', 'true'), ('three-kinds', 'true'), ('tracked-under-file', 'true'),
-               ('tracked-under-symlink', 'true'), ('tracked-under-ignored', 'true'),
+NAMED_LIMIT = {('dirty', 'true'), ('index-same', 'true'), ('index-lead', 'true'), ('index-lead-exact', 'true'),
+               ('index-lead-dirty', 'true'), ('tracked-lead-dirty', 'true'), ('three-kinds', 'true'),
+               ('tracked-under-file', 'true'), ('tracked-under-symlink', 'true'), ('tracked-under-ignored', 'true'),
                ('tracked-became-directory', 'true'), ('removed-became-directory', 'true'),
                ('staged-addition-gone', 'true')}
 PSEUDO = ('ORIG_HEAD', 'AUTO_MERGE', 'MERGE_HEAD', 'MERGE_MSG', 'MERGE_MODE', 'CHERRY_PICK_HEAD')
@@ -129,8 +144,15 @@ def obstruct(work, name, run):
         write('yy.txt', 'staged\n')
         run(['add', 'yy.txt'], work)
     elif name == 'index-lead':
+        run(['config', 'core.ignorecase', 'true'], work)
         write('zz', 'staged\n')
         run(['add', 'zz'], work)
+    elif name == 'index-lead-exact':
+        run(['config', 'core.ignorecase', 'false'], work)
+        write('zz', 'staged\n')
+        run(['add', 'zz'], work)
+    elif name == 'gitlink':
+        pass
     elif name == 'index-lead-dirty':
         write('zz', 'staged\n')
         run(['add', 'zz'], work)
@@ -233,13 +255,32 @@ def main():
     run(['switch', '-q', '-c', 'local', 'main'], seed)
     (seed / 'd1/s0/f0.txt').write_text('local\n')
     run(['commit', '-q', '-am', 'local'], seed)
+    gitlinks = trees / 'gitlink-seed'
+    run(['init', '-q', '-b', 'main', str(gitlinks)], trees)
+    (gitlinks / 'a.txt').write_text('a\n')
+    for sub, text in (('sm', 'one\n'), ('same', 'same\n'), ('gone', 'gone\n')):
+        run(['init', '-q', '-b', 'main', str(gitlinks / sub)], trees)
+        (gitlinks / sub / 'f.txt').write_text(text)
+        run(['add', 'f.txt'], gitlinks / sub)
+        run(['commit', '-q', '-m', sub], gitlinks / sub)
+    run(['add', 'a.txt', 'sm', 'same', 'gone'], gitlinks)
+    run(['commit', '-q', '-m', 'one'], gitlinks)
+    run(['switch', '-q', '-c', 'target'], gitlinks)
+    (gitlinks / 'sm/f.txt').write_text('two\n')
+    run(['commit', '-q', '-am', 'two'], gitlinks / 'sm')
+    (gitlinks / 'a.txt').write_text('a changed by target\n')
+    run(['add', 'a.txt', 'sm'], gitlinks)
+    run(['rm', '-q', '--cached', 'gone'], gitlinks)
+    run(['commit', '-q', '-m', 'two'], gitlinks)
+    run(['switch', '-q', 'main'], gitlinks)
+    run(['checkout', '-q', '--detach', 'HEAD~1'], gitlinks / 'sm')
 
     def cell(case, command):
         branch, argv = COMMANDS[command]
         got = {}
         for tool, exe in (('git', git), ('den', den)):
             work = trees / f'{case}.{command}.{tool}'
-            shutil.copytree(seed, work, symlinks=True)
+            shutil.copytree(gitlinks if case == 'gitlink' else seed, work, symlinks=True)
             run(['switch', '-q', branch], work)
             obstruct(work, case, run)
             before = state(work)
@@ -270,6 +311,8 @@ def main():
         for case in cases:
             for command in COMMANDS:
                 if which == 'reset' and command != 'reset' or which == 'nonreset' and command == 'reset':
+                    continue
+                if which == 'gitlink' and command == 'true':
                     continue
                 if (case, command) in NAMED_LIMIT:
                     continue
