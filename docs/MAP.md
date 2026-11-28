@@ -1330,7 +1330,7 @@ subsections); entries marked refusal controls do not imply feature support:
 |---|---|
 | Repository / init | `core.repositoryFormatVersion`, `extensions.objectFormat`, `core.bare`, `core.worktree`, `init.defaultBranch`, `init.templateDir`; unknown `extensions.*` refuse |
 | Loose storage | `core.compression`, `core.looseCompression` |
-| Worktree / ignore / index | `core.fileMode`, `core.symlinks`, `core.ignorecase` (attribute pattern matching), `core.excludesFile`, `core.quotePath`, `index.version` |
+| Worktree / ignore / index | `core.fileMode`, `core.symlinks`, `core.ignorecase` (attribute pattern matching; whether a transition drops a clean staged file in a new path's way, or refuses it as untracked), `core.excludesFile`, `core.quotePath`, `index.version` |
 | Status | `status.short`, `status.branch`, `status.showUntrackedFiles`, `status.relativePaths`, `status.renames`, `advice.statusHints`; `branch.<current>.merge` triggers the unsupported upstream-tracking path |
 | Diff | `diff.context`, `diff.indentHeuristic`, `diff.renames`, `diff.autoRefreshIndex`, `diff.statNameWidth`, `diff.statGraphWidth`, `core.abbrev`, `core.quotePath`, `core.fileMode`, `core.symlinks` |
 | Add diagnostics | `advice.addEmptyPathspec`, `advice.addIgnoredFile`, `advice.updateSparsePath` |
